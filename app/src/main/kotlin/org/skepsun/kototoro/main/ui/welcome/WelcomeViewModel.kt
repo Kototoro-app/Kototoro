@@ -55,11 +55,6 @@ class WelcomeViewModel @Inject constructor(
 	val heroTransitionsEnabled = _heroTransitionsEnabled.asStateFlow()
 	private val _panoramaAnimationEnabled = MutableStateFlow(settings.isPanoramaCoverAnimationEnabled)
 	val panoramaAnimationEnabled = _panoramaAnimationEnabled.asStateFlow()
-	private val _panoramaTransitionIntensity = MutableStateFlow(settings.panoramaTransitionIntensity)
-	val panoramaTransitionIntensity = _panoramaTransitionIntensity.asStateFlow()
-	private val _detailsPanoramaHalfScreenEnabled =
-		MutableStateFlow(settings.isDetailsPanoramaLimitedToInfoCardMidpoint)
-	val detailsPanoramaHalfScreenEnabled = _detailsPanoramaHalfScreenEnabled.asStateFlow()
 	private val _spaceSwitcherPosition = MutableStateFlow(settings.spaceSwitcherPosition)
 	val spaceSwitcherPosition = _spaceSwitcherPosition.asStateFlow()
 
@@ -261,16 +256,6 @@ class WelcomeViewModel @Inject constructor(
 	fun setPanoramaAnimationEnabled(enabled: Boolean) {
 		_panoramaAnimationEnabled.value = enabled
 		settings.isPanoramaCoverAnimationEnabled = enabled
-	}
-
-	fun setPanoramaTransitionIntensity(value: Int) {
-		_panoramaTransitionIntensity.value = value
-		settings.panoramaTransitionIntensity = value
-	}
-
-	fun setDetailsPanoramaHalfScreenEnabled(enabled: Boolean) {
-		_detailsPanoramaHalfScreenEnabled.value = enabled
-		settings.isDetailsPanoramaLimitedToInfoCardMidpoint = enabled
 	}
 
 	fun setSpaceSwitcherPosition(position: SpaceSwitcherPosition) {

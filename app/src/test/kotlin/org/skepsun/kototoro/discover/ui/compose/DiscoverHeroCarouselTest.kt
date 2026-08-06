@@ -18,9 +18,7 @@ class DiscoverHeroCarouselTest {
     }
 
     @Test
-    fun `background becomes transparent at full gradient strength`() {
-        assertEquals(1f, resolveDiscoverHeroBackgroundEndAlpha(0f))
-        assertEquals(0f, resolveDiscoverHeroBackgroundEndAlpha(1f))
-        assertEquals(0f, resolveDiscoverHeroBackgroundEndAlpha(1.4f))
+    fun `background always becomes transparent at the bottom`() {
+        assertEquals(0f, resolveDiscoverHeroBackgroundEndAlpha())
     }
 }

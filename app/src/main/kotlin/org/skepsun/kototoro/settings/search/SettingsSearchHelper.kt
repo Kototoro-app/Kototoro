@@ -38,17 +38,6 @@ class SettingsSearchHelper @Inject constructor(
 			"badges_bottom_right" to R.string.badge_bottom_right,
 			"description_collapse" to R.string.collapse_long_description,
 			"panorama_enabled" to R.string.pref_panorama_cover,
-			"details_panorama_limit_to_info_card_midpoint" to R.string.pref_details_panorama_limit_to_info_card_midpoint,
-			"details_panorama_scroll_linked" to R.string.pref_details_panorama_scroll_linked,
-			"panorama_transition_intensity" to R.string.pref_panorama_transition_intensity,
-			"panorama_blur" to R.string.pref_panorama_blur,
-			"panorama_animation_enabled" to R.string.pref_panorama_animation,
-			"panorama_animation_speed" to R.string.pref_panorama_animation_speed,
-			"panorama_extra_height" to R.string.pref_panorama_extra_height,
-			"panorama_bottom_gradient_alpha" to R.string.pref_panorama_gradient_alpha,
-			"browse_panorama_blend_height" to R.string.pref_browse_panorama_blend_height,
-			"browse_panorama_bottom_gradient_alpha" to R.string.pref_browse_panorama_gradient_alpha,
-			"panorama_downsample" to R.string.pref_panorama_downsample,
 			"pages_tab" to R.string.show_pages_thumbs,
 			"details_translate_button" to R.string.details_translate_button_visible,
 			"modern_details_dock" to R.string.modern_details_dock,
@@ -81,6 +70,30 @@ class SettingsSearchHelper @Inject constructor(
 					title = context.getString(titleRes),
 					breadcrumbs = appearanceBreadcrumbs,
 					destination = SettingsDestination.AppearanceSettings,
+				),
+			)
+		}
+
+		val panoramaBreadcrumbs = listOf(
+			context.getString(R.string.appearance),
+			context.getString(R.string.panorama_settings_title),
+		)
+		val panoramaKeys = listOf(
+			"panorama_layout_mode" to R.string.panorama_settings_layout_mode,
+			"panorama_style" to R.string.panorama_settings_style,
+			"details_panorama_scroll_linked" to R.string.pref_details_panorama_scroll_linked,
+			"panorama_animation_enabled" to R.string.pref_panorama_animation,
+			"panorama_blur" to R.string.pref_panorama_blur,
+			"panorama_top_opacity" to R.string.pref_panorama_top_opacity,
+			"panorama_transition_intensity" to R.string.pref_panorama_transition_intensity,
+		)
+		panoramaKeys.forEach { (key, titleRes) ->
+			result.add(
+				SettingsItem(
+					key = key,
+					title = context.getString(titleRes),
+					breadcrumbs = panoramaBreadcrumbs,
+					destination = SettingsDestination.PanoramaSettings,
 				),
 			)
 		}

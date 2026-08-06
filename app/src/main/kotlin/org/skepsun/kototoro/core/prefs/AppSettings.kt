@@ -433,9 +433,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_PANORAMA_BLUR, 35).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_BLUR, value.coerceIn(0, 100)) }
 
-	var panoramaTransitionIntensity: Int
+	var panoramaTransitionRange: Int
 		get() = prefs.getSafeInt(KEY_PANORAMA_TRANSITION_INTENSITY, 100).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_TRANSITION_INTENSITY, value.coerceIn(0, 100)) }
+
+	var panoramaTopOpacity: Int
+		get() = prefs.getSafeInt(KEY_PANORAMA_TOP_OPACITY, 90).coerceIn(0, 100)
+		set(value) = prefs.edit { putInt(KEY_PANORAMA_TOP_OPACITY, value.coerceIn(0, 100)) }
 
 	var isPanoramaCoverAnimationEnabled: Boolean
 		get() = prefs.getBoolean(KEY_PANORAMA_ANIMATION_ENABLED, true)
@@ -460,10 +464,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_PANORAMA_EXTRA_HEIGHT, 0).coerceIn(0, 100)
 		set(value) = prefs.edit { putInt(KEY_PANORAMA_EXTRA_HEIGHT, value.coerceIn(0, 100)) }
 
-	var panoramaBottomGradientAlpha: Int
-		get() = prefs.getSafeInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, 10).coerceIn(0, 100)
-		set(value) = prefs.edit { putInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, value.coerceIn(0, 100)) }
-
 	var browsePanoramaBottomGradientAlpha: Int
 		get() = prefs.getSafeInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, 100)
 			.coerceIn(0, 100)
@@ -479,21 +479,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	var isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean
 		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, false)
-		set(value) = prefs.edit {
-			putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, value)
-			if (!value) {
-				putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, false)
-			}
-		}
+		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, value) }
 
 	var isDetailsPanoramaScrollLinkedEnabled: Boolean
 		get() = prefs.getBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, true)
-		set(value) = prefs.edit {
-			putBoolean(
-				KEY_DETAILS_PANORAMA_SCROLL_LINKED,
-				value && isDetailsPanoramaLimitedToInfoCardMidpoint,
-			)
-		}
+		set(value) = prefs.edit { putBoolean(KEY_DETAILS_PANORAMA_SCROLL_LINKED, value) }
 
 
 	var historyListMode: ListMode
@@ -2081,10 +2071,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
 			putFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, pageThumbnailAspectRatio)
 			putInt(KEY_PANORAMA_BLUR, panoramaCoverBlur)
-			putInt(KEY_PANORAMA_TRANSITION_INTENSITY, panoramaTransitionIntensity)
+			putInt(KEY_PANORAMA_TRANSITION_INTENSITY, panoramaTransitionRange)
+			putInt(KEY_PANORAMA_TOP_OPACITY, panoramaTopOpacity)
 			putInt(KEY_PANORAMA_ANIMATION_SPEED, panoramaAnimationSpeed)
 			putInt(KEY_PANORAMA_EXTRA_HEIGHT, panoramaCoverExtraHeight)
-			putInt(KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA, panoramaBottomGradientAlpha)
 			putInt(KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA, browsePanoramaBottomGradientAlpha)
 			putInt(KEY_BROWSE_PANORAMA_BLEND_HEIGHT, browsePanoramaBlendHeight)
 			putBoolean(KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT, isDetailsPanoramaLimitedToInfoCardMidpoint)
@@ -2629,10 +2619,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_PANORAMA_ENABLED = "panorama_enabled"
 		const val KEY_PANORAMA_BLUR = "panorama_blur"
 		const val KEY_PANORAMA_TRANSITION_INTENSITY = "panorama_transition_intensity"
+		const val KEY_PANORAMA_TOP_OPACITY = "panorama_top_opacity"
 		const val KEY_PANORAMA_ANIMATION_ENABLED = "panorama_animation_enabled"
 		const val KEY_PANORAMA_ANIMATION_SPEED = "panorama_animation_speed"
 		const val KEY_PANORAMA_EXTRA_HEIGHT = "panorama_extra_height"
-		const val KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA = "panorama_bottom_gradient_alpha"
 		const val KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA = "browse_panorama_bottom_gradient_alpha"
 		const val KEY_BROWSE_PANORAMA_BLEND_HEIGHT = "browse_panorama_blend_height"
 		const val KEY_PANORAMA_DOWNSAMPLE = "panorama_downsample"

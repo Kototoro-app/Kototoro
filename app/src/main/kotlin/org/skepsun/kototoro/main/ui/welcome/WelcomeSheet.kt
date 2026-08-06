@@ -147,8 +147,6 @@ private fun WelcomeContent(
 	val interfaceStyle by viewModel.interfaceStyle.collectAsStateWithLifecycle()
 	val heroTransitionsEnabled by viewModel.heroTransitionsEnabled.collectAsStateWithLifecycle()
 	val panoramaAnimationEnabled by viewModel.panoramaAnimationEnabled.collectAsStateWithLifecycle()
-	val panoramaTransitionIntensity by viewModel.panoramaTransitionIntensity.collectAsStateWithLifecycle()
-	val detailsPanoramaHalfScreenEnabled by viewModel.detailsPanoramaHalfScreenEnabled.collectAsStateWithLifecycle()
 	val spaceSwitcherPosition by viewModel.spaceSwitcherPosition.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
 	val pagerState = rememberPagerState(pageCount = { 4 })
@@ -204,13 +202,9 @@ private fun WelcomeContent(
 						interfaceStyle = interfaceStyle,
 						heroTransitionsEnabled = heroTransitionsEnabled,
 						panoramaAnimationEnabled = panoramaAnimationEnabled,
-						panoramaTransitionIntensity = panoramaTransitionIntensity,
-						detailsPanoramaHalfScreenEnabled = detailsPanoramaHalfScreenEnabled,
 						onInterfaceStyleChange = viewModel::setInterfaceStyle,
 						onHeroTransitionsChange = viewModel::setHeroTransitionsEnabled,
 						onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
-						onPanoramaTransitionIntensityChange = viewModel::setPanoramaTransitionIntensity,
-						onDetailsPanoramaHalfScreenChange = viewModel::setDetailsPanoramaHalfScreenEnabled,
 					)
 
 					else -> WelcomeSpacesStep(
@@ -484,13 +478,9 @@ private fun WelcomeAppearanceStep(
 	interfaceStyle: InterfaceStyle,
 	heroTransitionsEnabled: Boolean,
 	panoramaAnimationEnabled: Boolean,
-	panoramaTransitionIntensity: Int,
-	detailsPanoramaHalfScreenEnabled: Boolean,
 	onInterfaceStyleChange: (InterfaceStyle) -> Unit,
 	onHeroTransitionsChange: (Boolean) -> Unit,
 	onPanoramaAnimationChange: (Boolean) -> Unit,
-	onPanoramaTransitionIntensityChange: (Int) -> Unit,
-	onDetailsPanoramaHalfScreenChange: (Boolean) -> Unit,
 ) {
 	SectionHeader(
 		title = stringResource(R.string.welcome_appearance_title),
@@ -521,18 +511,6 @@ private fun WelcomeAppearanceStep(
 		summary = stringResource(R.string.pref_panorama_animation_summary),
 		checked = panoramaAnimationEnabled,
 		onCheckedChange = onPanoramaAnimationChange,
-	)
-	WelcomeSliderRow(
-		title = stringResource(R.string.pref_panorama_transition_intensity),
-		summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
-		value = panoramaTransitionIntensity,
-		onValueChange = onPanoramaTransitionIntensityChange,
-	)
-	WelcomeSwitchRow(
-		title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
-		summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
-		checked = detailsPanoramaHalfScreenEnabled,
-		onCheckedChange = onDetailsPanoramaHalfScreenChange,
 	)
 }
 

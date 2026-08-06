@@ -503,6 +503,9 @@ class SettingsActivity :
 				SettingsDestination.AppearanceSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_SETTINGS)
 				}
+				SettingsDestination.PanoramaSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PANORAMA_SETTINGS)
+				}
 				SettingsDestination.UsersSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_USERS_SETTINGS)
 				}
@@ -659,6 +662,7 @@ class SettingsActivity :
 				pushCurrentToStack = false,
 			)
 			SettingsDestination.AppearanceSettings,
+			SettingsDestination.PanoramaSettings,
 			SettingsDestination.UsersSettings,
 			SettingsDestination.SpacesSettings,
 			SettingsDestination.AISettings,
@@ -816,6 +820,7 @@ class SettingsActivity :
 		return when (destination) {
 			SettingsDestination.Root -> COMPOSE_DESTINATION_ROOT
 			SettingsDestination.AppearanceSettings -> COMPOSE_DESTINATION_APPEARANCE_SETTINGS
+			SettingsDestination.PanoramaSettings -> COMPOSE_DESTINATION_PANORAMA_SETTINGS
 			SettingsDestination.UsersSettings -> COMPOSE_DESTINATION_USERS_SETTINGS
 			SettingsDestination.SpacesSettings -> COMPOSE_DESTINATION_SPACES_SETTINGS
 			SettingsDestination.AISettings -> COMPOSE_DESTINATION_AI_SETTINGS
@@ -854,6 +859,7 @@ class SettingsActivity :
 		return when (destination) {
 			SettingsDestination.Root -> getString(R.string.settings)
 			SettingsDestination.AppearanceSettings -> getString(R.string.appearance)
+			SettingsDestination.PanoramaSettings -> getString(R.string.panorama_settings_title)
 			SettingsDestination.UsersSettings -> getString(R.string.users)
 			SettingsDestination.SpacesSettings -> getString(R.string.spaces)
 			SettingsDestination.AISettings -> getString(R.string.ai_settings)
@@ -905,10 +911,18 @@ class SettingsActivity :
 					onOpenNavConfig = {
 						openDestination(SettingsDestination.NavConfigSettings, null, false)
 					},
+					onOpenPanoramaSettings = {
+						openDestination(SettingsDestination.PanoramaSettings, null, false)
+					},
 					onOpenProtectSetup = {
 						startActivity(Intent(this, ProtectSetupActivity::class.java))
 					},
 				)
+			}
+			SettingsDestination.PanoramaSettings -> RenderComposeSection(
+				title = getString(R.string.panorama_settings_title),
+			) {
+				PanoramaSettingsRoute(settings = kototoroAppSettings)
 			}
 			SettingsDestination.UsersSettings -> RenderComposeSection(title = getString(R.string.users)) {
 				val refreshKey by usersResumeTick.collectAsStateWithLifecycle()
@@ -1979,6 +1993,7 @@ class SettingsActivity :
 		private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
 		private const val COMPOSE_DESTINATION_ROOT = "root"
 		private const val COMPOSE_DESTINATION_APPEARANCE_SETTINGS = "appearance_settings"
+		private const val COMPOSE_DESTINATION_PANORAMA_SETTINGS = "panorama_settings"
 		private const val COMPOSE_DESTINATION_USERS_SETTINGS = "users_settings"
 		private const val COMPOSE_DESTINATION_SPACES_SETTINGS = "spaces_settings"
 		private const val COMPOSE_DESTINATION_AI_SETTINGS = "ai_settings"
@@ -2057,6 +2072,7 @@ class SettingsActivity :
 		return when (getString(STATE_COMPOSE_DESTINATION)) {
 			COMPOSE_DESTINATION_ROOT -> SettingsDestination.Root
 			COMPOSE_DESTINATION_APPEARANCE_SETTINGS -> SettingsDestination.AppearanceSettings
+			COMPOSE_DESTINATION_PANORAMA_SETTINGS -> SettingsDestination.PanoramaSettings
 			COMPOSE_DESTINATION_USERS_SETTINGS -> SettingsDestination.UsersSettings
 			COMPOSE_DESTINATION_SPACES_SETTINGS -> SettingsDestination.SpacesSettings
 			COMPOSE_DESTINATION_AI_SETTINGS -> SettingsDestination.AISettings

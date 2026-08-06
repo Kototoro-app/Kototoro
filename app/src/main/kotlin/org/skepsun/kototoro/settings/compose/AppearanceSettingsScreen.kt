@@ -17,8 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
-import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
@@ -63,18 +61,7 @@ data class AppearanceSettingsUiState(
     val mangaListBadges: Set<String>, // Keep for compatibility if needed, but we will use the others
     val isDescriptionExpanded: Boolean,
     val isPanoramaCoverEnabled: Boolean,
-    val panoramaCoverBlur: Int,
-    val panoramaTransitionIntensity: Int,
-    val isPanoramaCoverAnimationEnabled: Boolean,
-    val isPanoramaCoverAnimationSettingsEnabled: Boolean,
-    val panoramaAnimationSpeed: Int,
-    val panoramaCoverExtraHeight: Int,
-    val panoramaBottomGradientAlpha: Int,
-    val browsePanoramaBlendHeight: Int,
-    val browsePanoramaBottomGradientAlpha: Int,
-    val isPanoramaDownsampleEnabled: Boolean,
-    val isDetailsPanoramaScrollLinkedEnabled: Boolean,
-    val isDetailsPanoramaLimitedToInfoCardMidpoint: Boolean,
+    val panoramaCoverSummary: String,
     val isPagesTabEnabled: Boolean,
     val isDetailsTranslateButtonVisible: Boolean,
     val isModernDetailsDockEnabled: Boolean,
@@ -159,17 +146,7 @@ fun AppearanceSettingsScreen(
     onMangaListBadgesChange: (Set<String>) -> Unit,
     onDescriptionExpandedChange: (Boolean) -> Unit,
     onPanoramaCoverEnabledChange: (Boolean) -> Unit,
-    onPanoramaBlurChange: (Int) -> Unit,
-    onPanoramaTransitionIntensityChange: (Int) -> Unit,
-    onPanoramaAnimationEnabledChange: (Boolean) -> Unit,
-    onPanoramaAnimationSpeedChange: (Int) -> Unit,
-    onPanoramaExtraHeightChange: (Int) -> Unit,
-    onPanoramaGradientAlphaChange: (Int) -> Unit,
-    onBrowsePanoramaBlendHeightChange: (Int) -> Unit,
-    onBrowsePanoramaGradientAlphaChange: (Int) -> Unit,
-    onPanoramaDownsampleEnabledChange: (Boolean) -> Unit,
-    onDetailsPanoramaScrollLinkedChange: (Boolean) -> Unit,
-    onDetailsPanoramaLimitedToInfoCardMidpointChange: (Boolean) -> Unit,
+    onPanoramaSettingsClick: () -> Unit,
     onPagesTabEnabledChange: (Boolean) -> Unit,
     onDetailsTranslateButtonVisibleChange: (Boolean) -> Unit,
     onModernDetailsDockEnabledChange: (Boolean) -> Unit,
@@ -434,111 +411,13 @@ fun AppearanceSettingsScreen(
                     onCheckedChange = { onDescriptionExpandedChange(!it) },
                 )
                 SettingsSectionDivider()
-                SettingsSwitchPreference(
+                SettingsSplitSwitchPreference(
                     title = stringResource(R.string.pref_panorama_cover),
                     checked = state.isPanoramaCoverEnabled,
-                    summary = stringResource(R.string.pref_panorama_cover_summary),
+                    summary = state.panoramaCoverSummary,
+                    onClick = onPanoramaSettingsClick,
                     onCheckedChange = onPanoramaCoverEnabledChange,
                 )
-                if (state.isPanoramaCoverEnabled) {
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint),
-                        checked = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
-                        summary = stringResource(R.string.pref_details_panorama_limit_to_info_card_midpoint_summary),
-                        onCheckedChange = onDetailsPanoramaLimitedToInfoCardMidpointChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
-                        checked = state.isDetailsPanoramaScrollLinkedEnabled &&
-                            state.isDetailsPanoramaLimitedToInfoCardMidpoint,
-                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
-                        enabled = state.isDetailsPanoramaLimitedToInfoCardMidpoint,
-                        onCheckedChange = onDetailsPanoramaScrollLinkedChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_panorama_transition_intensity),
-                        value = state.panoramaTransitionIntensity,
-                        valueRange = 0..100,
-                        step = 5,
-                        summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
-                        valueText = { "$it%" },
-                        onValueChange = onPanoramaTransitionIntensityChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_panorama_blur),
-                        value = state.panoramaCoverBlur,
-                        valueRange = 0..100,
-                        step = 5,
-                        valueText = { "$it%" },
-                        onValueChange = onPanoramaBlurChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_panorama_animation),
-                        checked = state.isPanoramaCoverAnimationEnabled,
-                        summary = stringResource(R.string.pref_panorama_animation_summary),
-                        enabled = state.isPanoramaCoverAnimationSettingsEnabled,
-                        onCheckedChange = onPanoramaAnimationEnabledChange,
-                    )
-                    if (state.isPanoramaCoverAnimationEnabled) {
-                        SettingsSectionDivider()
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.pref_panorama_animation_speed),
-                            value = state.panoramaAnimationSpeed,
-                            valueRange = PanoramaAnimationSpeedMinPercent..PanoramaAnimationSpeedMaxPercent,
-                            step = 25,
-                            valueText = { "${it}%" },
-                            onValueChange = onPanoramaAnimationSpeedChange,
-                        )
-                    }
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_panorama_extra_height),
-                        value = state.panoramaCoverExtraHeight,
-                        valueRange = 0..100,
-                        step = 5,
-                        valueText = { "${it}dp" },
-                        onValueChange = onPanoramaExtraHeightChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_panorama_gradient_alpha),
-                        value = state.panoramaBottomGradientAlpha,
-                        valueRange = 0..100,
-                        step = 5,
-                        valueText = { "$it%" },
-                        onValueChange = onPanoramaGradientAlphaChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_browse_panorama_blend_height),
-                        value = state.browsePanoramaBlendHeight,
-                        valueRange = 48..220,
-                        step = 4,
-                        valueText = { "${it}dp" },
-                        onValueChange = onBrowsePanoramaBlendHeightChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
-                        title = stringResource(R.string.pref_browse_panorama_gradient_alpha),
-                        value = state.browsePanoramaBottomGradientAlpha,
-                        valueRange = 0..100,
-                        step = 5,
-                        valueText = { "$it%" },
-                        onValueChange = onBrowsePanoramaGradientAlphaChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_panorama_downsample),
-                        checked = state.isPanoramaDownsampleEnabled,
-                        summary = stringResource(R.string.pref_panorama_downsample_summary),
-                        onCheckedChange = onPanoramaDownsampleEnabledChange,
-                    )
-                }
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.show_pages_thumbs),

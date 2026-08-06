@@ -55,8 +55,8 @@ import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 data class PanoramaBackdropPrefs(
     val isEnabled: Boolean,
     val blurPercent: Int,
-    val transitionIntensityPercent: Int,
-    val bottomGradientAlphaPercent: Int,
+    val transitionRangePercent: Int,
+    val topOpacityPercent: Int,
     val isAnimationEnabled: Boolean,
     val isScrollLinkedEnabled: Boolean,
     val animationSpeedPercent: Int,
@@ -72,29 +72,26 @@ fun rememberPanoramaBackdropPrefs(settings: AppSettings): PanoramaBackdropPrefs 
         AppSettings.KEY_PANORAMA_ENABLED,
         AppSettings.KEY_PANORAMA_BLUR,
         AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY,
-        AppSettings.KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA,
+        AppSettings.KEY_PANORAMA_TOP_OPACITY,
         AppSettings.KEY_PANORAMA_ANIMATION_ENABLED,
-        AppSettings.KEY_PANORAMA_ANIMATION_SPEED,
-        AppSettings.KEY_PANORAMA_EXTRA_HEIGHT,
-        AppSettings.KEY_PANORAMA_DOWNSAMPLE,
         AppSettings.KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT,
         AppSettings.KEY_DETAILS_PANORAMA_SCROLL_LINKED,
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
-        val limitToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint
+        val halfScreen = isDetailsPanoramaLimitedToInfoCardMidpoint
         PanoramaBackdropPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
-            transitionIntensityPercent = panoramaTransitionIntensity,
-            bottomGradientAlphaPercent = panoramaBottomGradientAlpha,
+            transitionRangePercent = panoramaTransitionRange,
+            topOpacityPercent = panoramaTopOpacity,
             isAnimationEnabled = supportsRealtimeEffects &&
                 isPanoramaCoverAnimationEnabled &&
                 !isReducedVisualEffectsEnabled,
-            isScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled && limitToInfoCardMidpoint,
-            animationSpeedPercent = panoramaAnimationSpeed,
-            extraHeight = panoramaCoverExtraHeight,
-            downsampleEnabled = isPanoramaDownsampleEnabled,
-            limitToInfoCardMidpoint = limitToInfoCardMidpoint,
+            isScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled && halfScreen,
+            animationSpeedPercent = 100,
+            extraHeight = 0,
+            downsampleEnabled = true,
+            limitToInfoCardMidpoint = halfScreen,
         )
     }
     return prefs
@@ -119,8 +116,7 @@ fun AnimatedPanoramaBackdrop(
     if (!prefs.isEnabled) return
     val normalizedModel = (model as? String)?.takeIfUsableImageUri() ?: model.takeUnless { it is String }
 
-    val panoramaGradientAlphaFactor = (prefs.bottomGradientAlphaPercent / 100f).coerceIn(0f, 1f)
-    val panoramaTransitionIntensityFactor = (prefs.transitionIntensityPercent / 100f).coerceIn(0f, 1f)
+    val panoramaTransitionRangeFactor = (prefs.transitionRangePercent / 100f).coerceIn(0f, 1f)
     val animationDurations = panoramaAnimationDurations(prefs.animationSpeedPercent)
     val animationMotion = panoramaAnimationMotion()
     val density = LocalDensity.current
@@ -255,7 +251,10 @@ fun AnimatedPanoramaBackdrop(
             scaleX = backgroundScale
             scaleY = backgroundScale
             translationX = backgroundTranslationXState?.value ?: 0f
-            alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
+            alpha = resolvePanoramaContentAlpha(
+                contentAlpha = contentAlphaProvider?.invoke() ?: contentAlpha,
+                topOpacityPercent = prefs.topOpacityPercent,
+            )
             compositingStrategy = if (fadeToBackground) {
                 CompositingStrategy.Offscreen
             } else {
@@ -265,25 +264,15 @@ fun AnimatedPanoramaBackdrop(
         .then(
             if (fadeToBackground) {
                 Modifier.drawWithCache {
+                    val fadeStart = resolvePanoramaFadeStart(panoramaTransitionRangeFactor)
+                    val fadeLength = PanoramaFadeEnd - fadeStart
                     val alphaMask = Brush.verticalGradient(
                         colorStops = arrayOf(
                             0f to Color.White,
-                            0.20f to Color.White.copy(
-                                alpha = (1f - ((0.18f + panoramaGradientAlphaFactor * 0.22f) *
-                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
-                            ),
-                            0.45f to Color.White.copy(
-                                alpha = (1f - ((0.45f + panoramaGradientAlphaFactor * 0.35f) *
-                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
-                            ),
-                            0.70f to Color.White.copy(
-                                alpha = (1f - ((0.72f + panoramaGradientAlphaFactor * 0.25f) *
-                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
-                            ),
-                            0.88f to Color.White.copy(
-                                alpha = (1f - ((0.90f + panoramaGradientAlphaFactor * 0.10f) *
-                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
-                            ),
+                            fadeStart to Color.White,
+                            (fadeStart + fadeLength * 0.35f) to Color.White.copy(alpha = 0.82f),
+                            (fadeStart + fadeLength * 0.70f) to Color.White.copy(alpha = 0.28f),
+                            PanoramaFadeEnd to Color.Transparent,
                             1f to Color.Transparent,
                         ),
                     )
@@ -330,10 +319,26 @@ fun AnimatedPanoramaBackdrop(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        backgroundColor.copy(alpha = panoramaGradientAlphaFactor * panoramaTransitionIntensityFactor),
+                        backgroundColor.copy(alpha = HomeHeroBottomScrimAlpha),
                     ),
                 ),
             ),
         )
     }
 }
+
+internal fun resolvePanoramaFadeStart(transitionRange: Float): Float {
+    val normalizedRange = transitionRange.coerceIn(0f, 1f)
+    return PanoramaFadeStartMax - (PanoramaFadeStartMax - PanoramaFadeStartMin) * normalizedRange
+}
+
+internal fun resolvePanoramaContentAlpha(contentAlpha: Float, topOpacityPercent: Int): Float {
+    val normalizedContentAlpha = contentAlpha.coerceIn(0f, 1f)
+    val normalizedTopOpacity = topOpacityPercent.coerceIn(0, 100) / 100f
+    return normalizedContentAlpha * normalizedTopOpacity
+}
+
+private const val PanoramaFadeStartMin = 0.18f
+private const val PanoramaFadeStartMax = 0.82f
+private const val PanoramaFadeEnd = 0.96f
+private const val HomeHeroBottomScrimAlpha = 0.10f

@@ -1,0 +1,299 @@
+package org.skepsun.kototoro.settings.compose
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.R
+
+data class PanoramaSettingsUiState(
+    val enabled: Boolean,
+    val layoutMode: PanoramaLayoutMode,
+    val preset: PanoramaEffectPreset,
+    val blurPercent: Int,
+    val transitionRangePercent: Int,
+    val topOpacityPercent: Int,
+    val animationEnabled: Boolean,
+    val animationSettingsEnabled: Boolean,
+    val scrollLinked: Boolean,
+)
+
+@Composable
+fun PanoramaSettingsScreen(
+    state: PanoramaSettingsUiState,
+    onEnabledChange: (Boolean) -> Unit,
+    onLayoutModeChange: (PanoramaLayoutMode) -> Unit,
+    onPresetChange: (PanoramaEffectPreset) -> Unit,
+    onScrollLinkedChange: (Boolean) -> Unit,
+    onAnimationEnabledChange: (Boolean) -> Unit,
+    onBlurChange: (Int) -> Unit,
+    onTransitionRangeChange: (Int) -> Unit,
+    onTopOpacityChange: (Int) -> Unit,
+    onReset: () -> Unit,
+) {
+    var advancedExpanded by rememberSaveable { mutableStateOf(false) }
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = SettingsContentHorizontalPadding,
+                end = SettingsContentHorizontalPadding,
+                top = 8.dp,
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            item(key = "master") {
+                SettingsPreferenceSection(title = "") {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_panorama_cover),
+                        checked = state.enabled,
+                        summary = stringResource(R.string.pref_panorama_cover_summary),
+                        onCheckedChange = onEnabledChange,
+                    )
+                }
+            }
+            item(key = "appearance") {
+                SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_effect)) {
+                    PanoramaLayoutModePreference(
+                        selected = state.layoutMode,
+                        enabled = state.enabled,
+                        onSelected = onLayoutModeChange,
+                    )
+                    SettingsSectionDivider()
+                    PanoramaPresetPreference(
+                        selected = state.preset,
+                        enabled = state.enabled,
+                        onSelected = onPresetChange,
+                    )
+                }
+            }
+            item(key = "behavior") {
+                SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_behavior)) {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
+                        checked = state.scrollLinked,
+                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
+                        enabled = state.enabled && state.layoutMode == PanoramaLayoutMode.HALF_SCREEN,
+                        onCheckedChange = onScrollLinkedChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_panorama_animation),
+                        checked = state.animationEnabled,
+                        summary = stringResource(
+                            if (state.animationSettingsEnabled) {
+                                R.string.pref_panorama_animation_summary
+                            } else {
+                                R.string.panorama_animation_reduced_effects_summary
+                            },
+                        ),
+                        enabled = state.enabled && state.animationSettingsEnabled,
+                        onCheckedChange = onAnimationEnabledChange,
+                    )
+                }
+            }
+            item(key = "advanced_toggle") {
+                SettingsPreferenceSection(title = "") {
+                    PanoramaAdvancedToggle(
+                        expanded = advancedExpanded,
+                        enabled = state.enabled,
+                        onClick = { advancedExpanded = !advancedExpanded },
+                    )
+                }
+            }
+            if (advancedExpanded) {
+                item(key = "advanced") {
+                    SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_advanced)) {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_blur),
+                            value = state.blurPercent,
+                            valueRange = 0..100,
+                            step = 5,
+                            enabled = state.enabled,
+                            valueText = { "$it%" },
+                            onValueChange = onBlurChange,
+                        )
+                        SettingsSectionDivider()
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_top_opacity),
+                            value = state.topOpacityPercent,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.pref_panorama_top_opacity_summary),
+                            enabled = state.enabled,
+                            valueText = { "$it%" },
+                            onValueChange = onTopOpacityChange,
+                        )
+                        SettingsSectionDivider()
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_transition_intensity),
+                            value = state.transitionRangePercent,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
+                            enabled = state.enabled,
+                            valueText = { "$it%" },
+                            onValueChange = onTransitionRangeChange,
+                        )
+                        SettingsSectionDivider()
+                        SettingsActionPreference(
+                            title = stringResource(R.string.panorama_settings_restore_default),
+                            enabled = state.enabled,
+                            showChevron = false,
+                            onClick = onReset,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanoramaLayoutModePreference(
+    selected: PanoramaLayoutMode,
+    enabled: Boolean,
+    onSelected: (PanoramaLayoutMode) -> Unit,
+) {
+    val modes = PanoramaLayoutMode.entries
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.panorama_settings_layout_mode),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            modes.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    modifier = Modifier.weight(1f),
+                    selected = selected == mode,
+                    onClick = { onSelected(mode) },
+                    enabled = enabled,
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                    label = {
+                        Text(
+                            text = stringResource(
+                                when (mode) {
+                                    PanoramaLayoutMode.FULL_SCREEN -> R.string.panorama_mode_full_screen
+                                    PanoramaLayoutMode.HALF_SCREEN -> R.string.panorama_mode_half_screen
+                                },
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanoramaPresetPreference(
+    selected: PanoramaEffectPreset,
+    enabled: Boolean,
+    onSelected: (PanoramaEffectPreset) -> Unit,
+) {
+    val presets = PanoramaEffectPreset.entries
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.panorama_settings_style),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            presets.forEachIndexed { index, preset ->
+                SegmentedButton(
+                    modifier = Modifier.weight(1f),
+                    selected = selected == preset,
+                    onClick = { if (preset != PanoramaEffectPreset.CUSTOM) onSelected(preset) },
+                    enabled = enabled,
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = presets.size),
+                    label = {
+                        Text(
+                            text = panoramaPresetLabel(preset),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun panoramaPresetLabel(preset: PanoramaEffectPreset): String = stringResource(
+    when (preset) {
+        PanoramaEffectPreset.CLEAR -> R.string.panorama_preset_clear
+        PanoramaEffectPreset.BALANCED -> R.string.panorama_preset_balanced
+        PanoramaEffectPreset.SOFT -> R.string.panorama_preset_soft
+        PanoramaEffectPreset.CUSTOM -> R.string.panorama_preset_custom
+    },
+)
+
+@Composable
+private fun PanoramaAdvancedToggle(
+    expanded: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.panorama_settings_advanced),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}

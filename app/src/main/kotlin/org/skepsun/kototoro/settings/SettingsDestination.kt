@@ -6,6 +6,7 @@ sealed interface SettingsDestination {
 
 	data object Root : SettingsDestination
 	data object AppearanceSettings : SettingsDestination
+	data object PanoramaSettings : SettingsDestination
 	data object UsersSettings : SettingsDestination
 	data object SpacesSettings : SettingsDestination
 	data object AISettings : SettingsDestination

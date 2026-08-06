@@ -50,7 +50,10 @@ import org.skepsun.kototoro.parsers.util.toTitleCase
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsOptions
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsScreen
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsUiState
+import org.skepsun.kototoro.settings.compose.PanoramaEffectPreset
+import org.skepsun.kototoro.settings.compose.PanoramaLayoutMode
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.resolvePanoramaEffectPreset
 import org.skepsun.kototoro.settings.protect.ProtectSetupActivity
 
 @Composable
@@ -60,6 +63,7 @@ fun AppearanceSettingsRoute(
     appShortcutManager: AppShortcutManager,
     sourcePresetsRepository: SourcePresetsRepository,
     onOpenNavConfig: () -> Unit,
+    onOpenPanoramaSettings: () -> Unit,
     onOpenProtectSetup: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -70,6 +74,7 @@ fun AppearanceSettingsRoute(
         appShortcutManager,
         sourcePresetsRepository,
         onOpenNavConfig,
+        onOpenPanoramaSettings,
         onOpenProtectSetup,
     ) {
         AppearanceSettingsCoordinator(
@@ -79,6 +84,7 @@ fun AppearanceSettingsRoute(
             appShortcutManager = appShortcutManager,
             sourcePresetsRepository = sourcePresetsRepository,
             onOpenNavConfig = onOpenNavConfig,
+            onOpenPanoramaSettings = onOpenPanoramaSettings,
             onOpenProtectSetup = onOpenProtectSetup,
         )
     }
@@ -92,6 +98,7 @@ private class AppearanceSettingsCoordinator(
     private val appShortcutManager: AppShortcutManager,
     private val sourcePresetsRepository: SourcePresetsRepository,
     private val onOpenNavConfig: () -> Unit,
+    private val onOpenPanoramaSettings: () -> Unit,
     private val onOpenProtectSetup: () -> Unit,
 ) {
 
@@ -134,32 +141,21 @@ private class AppearanceSettingsCoordinator(
         val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
         val isPanoramaCoverEnabled = settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }.value
         val panoramaCoverBlur = settings.observeAsState(AppSettings.KEY_PANORAMA_BLUR) { panoramaCoverBlur }.value
-        val panoramaTransitionIntensity =
-            settings.observeAsState(AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY) { panoramaTransitionIntensity }.value
+        val panoramaTransitionRange =
+            settings.observeAsState(AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY) { panoramaTransitionRange }.value
+        val panoramaTopOpacity =
+            settings.observeAsState(AppSettings.KEY_PANORAMA_TOP_OPACITY) { panoramaTopOpacity }.value
         val isPanoramaCoverAnimationEnabled =
             settings.observeAsState(AppSettings.KEY_PANORAMA_ANIMATION_ENABLED) { isPanoramaCoverAnimationEnabled }.value
-        val panoramaAnimationSpeed =
-            settings.observeAsState(AppSettings.KEY_PANORAMA_ANIMATION_SPEED) { panoramaAnimationSpeed }.value
-        val panoramaCoverExtraHeight =
-            settings.observeAsState(AppSettings.KEY_PANORAMA_EXTRA_HEIGHT) { panoramaCoverExtraHeight }.value
-        val panoramaBottomGradientAlpha =
-            settings.observeAsState(AppSettings.KEY_PANORAMA_BOTTOM_GRADIENT_ALPHA) { panoramaBottomGradientAlpha }.value
-        val browsePanoramaBlendHeight =
-            settings.observeAsState(AppSettings.KEY_BROWSE_PANORAMA_BLEND_HEIGHT) { browsePanoramaBlendHeight }.value
-        val browsePanoramaBottomGradientAlpha =
-            settings.observeAsState(AppSettings.KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA) {
-                browsePanoramaBottomGradientAlpha
-            }.value
-        val isPanoramaDownsampleEnabled =
-            settings.observeAsState(AppSettings.KEY_PANORAMA_DOWNSAMPLE) { isPanoramaDownsampleEnabled }.value
-        val isDetailsPanoramaScrollLinkedEnabled =
-            settings.observeAsState(AppSettings.KEY_DETAILS_PANORAMA_SCROLL_LINKED) {
-                isDetailsPanoramaScrollLinkedEnabled
-            }.value
-        val isDetailsPanoramaLimitedToInfoCardMidpoint =
-            settings.observeAsState(AppSettings.KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT) {
-                isDetailsPanoramaLimitedToInfoCardMidpoint
-            }.value
+        val panoramaLayoutMode = settings.observeAsState(
+            AppSettings.KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT,
+        ) {
+            if (isDetailsPanoramaLimitedToInfoCardMidpoint) {
+                PanoramaLayoutMode.HALF_SCREEN
+            } else {
+                PanoramaLayoutMode.FULL_SCREEN
+            }
+        }.value
         val isPagesTabEnabled = settings.observeAsState(AppSettings.KEY_PAGES_TAB) { isPagesTabEnabled }.value
         val isDetailsTranslateButtonVisible =
             settings.observeAsState(AppSettings.KEY_DETAILS_TRANSLATE_BUTTON) { isDetailsTranslateButtonVisible }.value
@@ -208,6 +204,42 @@ private class AppearanceSettingsCoordinator(
             .value
         val effectivePanoramaCoverAnimationEnabled =
             isPanoramaCoverAnimationEnabled && !isReducedVisualEffectsEnabled
+        val panoramaPreset = resolvePanoramaEffectPreset(
+            panoramaLayoutMode,
+            panoramaCoverBlur,
+            panoramaTransitionRange,
+            panoramaTopOpacity,
+        )
+        val panoramaPresetLabel = context.getString(
+            when (panoramaPreset) {
+                PanoramaEffectPreset.CLEAR -> R.string.panorama_preset_clear
+                PanoramaEffectPreset.BALANCED -> R.string.panorama_preset_balanced
+                PanoramaEffectPreset.SOFT -> R.string.panorama_preset_soft
+                PanoramaEffectPreset.CUSTOM -> R.string.panorama_preset_custom
+            },
+        )
+        val panoramaLayoutModeLabel = context.getString(
+            when (panoramaLayoutMode) {
+                PanoramaLayoutMode.FULL_SCREEN -> R.string.panorama_mode_full_screen
+                PanoramaLayoutMode.HALF_SCREEN -> R.string.panorama_mode_half_screen
+            },
+        )
+        val panoramaCoverSummary = if (isPanoramaCoverEnabled) {
+            context.getString(
+                R.string.panorama_settings_entry_summary,
+                panoramaLayoutModeLabel,
+                panoramaPresetLabel,
+                context.getString(
+                    if (effectivePanoramaCoverAnimationEnabled) {
+                        R.string.panorama_animation_on
+                    } else {
+                        R.string.panorama_animation_off
+                    },
+                ),
+            )
+        } else {
+            context.getString(R.string.panorama_settings_disabled)
+        }
         val effectiveSharedElementTransitionsEnabled =
             isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
 
@@ -270,18 +302,7 @@ private class AppearanceSettingsCoordinator(
             mangaListBadges = mangaListBadges,
             isDescriptionExpanded = isDescriptionExpanded,
             isPanoramaCoverEnabled = isPanoramaCoverEnabled,
-            panoramaCoverBlur = panoramaCoverBlur,
-            panoramaTransitionIntensity = panoramaTransitionIntensity,
-            isPanoramaCoverAnimationEnabled = effectivePanoramaCoverAnimationEnabled,
-            isPanoramaCoverAnimationSettingsEnabled = !isReducedVisualEffectsEnabled,
-            panoramaAnimationSpeed = panoramaAnimationSpeed,
-            panoramaCoverExtraHeight = panoramaCoverExtraHeight,
-            panoramaBottomGradientAlpha = panoramaBottomGradientAlpha,
-            browsePanoramaBlendHeight = browsePanoramaBlendHeight,
-            browsePanoramaBottomGradientAlpha = browsePanoramaBottomGradientAlpha,
-            isPanoramaDownsampleEnabled = isPanoramaDownsampleEnabled,
-            isDetailsPanoramaScrollLinkedEnabled = isDetailsPanoramaScrollLinkedEnabled,
-            isDetailsPanoramaLimitedToInfoCardMidpoint = isDetailsPanoramaLimitedToInfoCardMidpoint,
+            panoramaCoverSummary = panoramaCoverSummary,
             isPagesTabEnabled = isPagesTabEnabled,
             isDetailsTranslateButtonVisible = isDetailsTranslateButtonVisible,
             isModernDetailsDockEnabled = isModernDetailsDockEnabled,
@@ -343,21 +364,7 @@ private class AppearanceSettingsCoordinator(
             onMangaListBadgesChange = { settings.mangaListBadges = it },
             onDescriptionExpandedChange = { settings.isDescriptionExpanded = it },
             onPanoramaCoverEnabledChange = { settings.isPanoramaCoverEnabled = it },
-            onPanoramaBlurChange = { settings.panoramaCoverBlur = it },
-            onPanoramaTransitionIntensityChange = { settings.panoramaTransitionIntensity = it },
-            onPanoramaAnimationEnabledChange = { settings.isPanoramaCoverAnimationEnabled = it },
-            onPanoramaAnimationSpeedChange = { settings.panoramaAnimationSpeed = it },
-            onPanoramaExtraHeightChange = { settings.panoramaCoverExtraHeight = it },
-            onPanoramaGradientAlphaChange = { settings.panoramaBottomGradientAlpha = it },
-            onBrowsePanoramaBlendHeightChange = { settings.browsePanoramaBlendHeight = it },
-            onBrowsePanoramaGradientAlphaChange = { settings.browsePanoramaBottomGradientAlpha = it },
-            onPanoramaDownsampleEnabledChange = { settings.isPanoramaDownsampleEnabled = it },
-            onDetailsPanoramaScrollLinkedChange = {
-                settings.isDetailsPanoramaScrollLinkedEnabled = it
-            },
-            onDetailsPanoramaLimitedToInfoCardMidpointChange = {
-                settings.isDetailsPanoramaLimitedToInfoCardMidpoint = it
-            },
+            onPanoramaSettingsClick = onOpenPanoramaSettings,
             onPagesTabEnabledChange = { settings.isPagesTabEnabled = it },
             onDetailsTranslateButtonVisibleChange = { settings.isDetailsTranslateButtonVisible = it },
             onModernDetailsDockEnabledChange = { settings.isModernDetailsDockEnabled = it },

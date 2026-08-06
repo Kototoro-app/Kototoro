@@ -46,10 +46,17 @@ class AppSettingsAppearanceDefaultsTest {
 	}
 
 	@Test
-	fun `panorama transition intensity is full strength by default`() {
+	fun `panorama transition range is full by default`() {
 		val settings = AppSettings(context)
 
-		settings.panoramaTransitionIntensity shouldBe 100
+		settings.panoramaTransitionRange shouldBe 100
+	}
+
+	@Test
+	fun `panorama top opacity defaults to preset value`() {
+		val settings = AppSettings(context)
+
+		settings.panoramaTopOpacity shouldBe 90
 	}
 
 	@Test

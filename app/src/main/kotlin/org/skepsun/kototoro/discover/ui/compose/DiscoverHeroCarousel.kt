@@ -124,11 +124,7 @@ internal fun discoverHeroHeight(
 private data class DiscoverHeroPanoramaPrefs(
     val isEnabled: Boolean,
     val blurPercent: Int,
-    val bottomGradientAlphaPercent: Int,
     val animationEnabled: Boolean,
-    val animationSpeedPercent: Int,
-    val blendHeight: Int,
-    val downsampleEnabled: Boolean,
 )
 
 @Composable
@@ -137,23 +133,15 @@ private fun rememberDiscoverHeroPanoramaPrefs(settings: AppSettings): DiscoverHe
     val prefs by settings.observeAsState(
         AppSettings.KEY_PANORAMA_ENABLED,
         AppSettings.KEY_PANORAMA_BLUR,
-        AppSettings.KEY_BROWSE_PANORAMA_BOTTOM_GRADIENT_ALPHA,
         AppSettings.KEY_PANORAMA_ANIMATION_ENABLED,
-        AppSettings.KEY_PANORAMA_ANIMATION_SPEED,
-        AppSettings.KEY_BROWSE_PANORAMA_BLEND_HEIGHT,
-        AppSettings.KEY_PANORAMA_DOWNSAMPLE,
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
     ) {
         DiscoverHeroPanoramaPrefs(
             isEnabled = isPanoramaCoverEnabled,
             blurPercent = panoramaCoverBlur,
-            bottomGradientAlphaPercent = browsePanoramaBottomGradientAlpha,
             animationEnabled = supportsRealtimeEffects &&
                 isPanoramaCoverAnimationEnabled &&
                 !isReducedVisualEffectsEnabled,
-            animationSpeedPercent = panoramaAnimationSpeed,
-            blendHeight = browsePanoramaBlendHeight,
-            downsampleEnabled = isPanoramaDownsampleEnabled,
         )
     }
     return prefs
@@ -203,14 +191,13 @@ fun DiscoverHeroCarousel(
         maxHeightPx = 1600,
         widthOverscan = 1.34f,
         heightOverscan = 0.64f,
-        downsample = panoramaPrefs.downsampleEnabled,
+        downsample = true,
     )
     val heroContentColor = Color.White
     val heroSecondaryContentColor = Color.White.copy(alpha = 0.82f)
     val heroControlContainerColor = Color.Black.copy(alpha = 0.42f)
 
-    val panoramaGradientAlphaFactor = (panoramaPrefs.bottomGradientAlphaPercent / 100f).coerceIn(0f, 1f)
-    val animationDurations = panoramaAnimationDurations(panoramaPrefs.animationSpeedPercent)
+    val animationDurations = panoramaAnimationDurations(100)
     val animationMotion = panoramaAnimationMotion()
     val density = LocalDensity.current
     val horizontalPanPx = with(density) { animationMotion.horizontalPan.toPx() }
@@ -220,13 +207,14 @@ fun DiscoverHeroCarousel(
             compositingStrategy = CompositingStrategy.Offscreen
         }
         .drawWithCache {
-            val backgroundEndAlpha = resolveDiscoverHeroBackgroundEndAlpha(panoramaGradientAlphaFactor)
+            val backgroundEndAlpha = resolveDiscoverHeroBackgroundEndAlpha()
             val alphaMask = Brush.verticalGradient(
                 colorStops = arrayOf(
                     0f to Color.White,
                     0.62f to Color.White,
                     0.86f to Color.White.copy(alpha = (backgroundEndAlpha + 1f) / 2f),
-                    1f to Color.White.copy(alpha = backgroundEndAlpha),
+                    0.96f to Color.White.copy(alpha = backgroundEndAlpha),
+                    1f to Color.Transparent,
                 ),
             )
             onDrawWithContent {
@@ -665,9 +653,7 @@ internal fun resolveDiscoverHeroBlendAlpha(alpha: Float, strength: Float): Float
     return (alpha.coerceIn(0f, 1f) * strength.coerceIn(0f, 1f)).coerceIn(0f, 1f)
 }
 
-internal fun resolveDiscoverHeroBackgroundEndAlpha(strength: Float): Float {
-    return 1f - strength.coerceIn(0f, 1f)
-}
+internal fun resolveDiscoverHeroBackgroundEndAlpha(): Float = 0f
 
 @Composable
 private fun DiscoverHeroPill(
