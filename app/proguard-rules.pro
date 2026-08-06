@@ -273,6 +273,8 @@
 # the host app's bundled runtime packages. Even with -dontobfuscate enabled,
 # R8 can still strip classes/members not referenced directly by the host app.
 # Keep only the runtime surface used by plugins and the host integration, not the full Cloudstream app shell.
+-keep class com.lagradost.cloudstream3.** { *; }
+-keep interface com.lagradost.cloudstream3.** { *; }
 -keep class com.lagradost.cloudstream3.MainAPI { *; }
 -keep class com.lagradost.cloudstream3.MainAPI$Companion { *; }
 -keep class com.lagradost.cloudstream3.MainAPIKt { *; }

@@ -253,9 +253,9 @@ def tsukiSanitizedJarTask = tasks.register('prepareTsukiRuntimeJar', Jar) {
 }
 def tsukiRuntimeJar = files(tsukiSanitizedJarTask.flatMap { it.archiveFile })
 
-def cloudstreamSourceJar = layout.projectDirectory.file('libs/cloudstream3-pre-release.jar')
-// Official pre-release classes.jar from recloudstream/cloudstream commit caf0db3dc13bd75a496d4a94152bb8f22f8fdb1e.
-def cloudstreamSourceSha256 = 'b5931f00a6799d02b804dd3566197b1f14f9be266ea875e6af43e9a6092891f4'
+def cloudstreamSourceJar = layout.projectDirectory.file('libs/cloudstream3-library-jvm-1.0.1.jar')
+// Official library:jvmJar built from recloudstream/cloudstream commit caf0db3dc13bd75a496d4a94152bb8f22f8fdb1e.
+def cloudstreamSourceSha256 = '0a281a34bc4335f024b9bf0ac55ba341d7ae99f5b8918c692c669d7d0bed600e'
 def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar', Jar) {
 	archiveBaseName.set('cloudstream3-runtime')
 	archiveVersion.set('pre-release')
@@ -271,59 +271,8 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		}
 		zipTree(sourceJar)
 	}) {
-		// The host app already ships these runtime pieces. Keep the Cloudstream runtime jar focused on
-		// the API/plugin classes we actually use and strip library/app generated glue that causes R8 duplicates.
-		exclude 'coil3/**'
-		exclude 'androidx/**'
-		// Coroutines must resolve to the host ABI; bundled copies break Mihon suspend calls.
-		exclude 'kotlinx/coroutines/**'
-		exclude 'com/google/android/material/**'
-		exclude 'com/lagradost/cloudstream3/databinding/**'
-		exclude 'com/lagradost/cloudstream3/metaproviders/**'
-		exclude 'com/lagradost/cloudstream3/plugins/PluginManager*.class'
-		exclude 'com/lagradost/cloudstream3/plugins/PluginManagerKt.class'
-		exclude 'com/lagradost/cloudstream3/plugins/RepositoryManager*.class'
-		exclude 'com/lagradost/cloudstream3/plugins/VotingApi*.class'
-		exclude 'com/lagradost/cloudstream3/receivers/**'
-		exclude 'com/lagradost/cloudstream3/services/**'
-		exclude 'com/lagradost/cloudstream3/syncproviders/AccountManager*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/Auth*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/PlainAuthRepo*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/SubtitleAPI*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/SubtitleRepo*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/SyncAPI*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/SyncRepo*.class'
-		exclude 'com/lagradost/cloudstream3/syncproviders/providers/**'
-		exclude 'com/lagradost/cloudstream3/ui/**'
-		exclude 'com/lagradost/cloudstream3/widget/**'
-		exclude 'com/lagradost/cloudstream3/actions/VideoClickActionHolder.class'
-		exclude 'com/lagradost/cloudstream3/actions/temp/**'
+		// Kototoro supplies an Android-aware YouTube extractor implementation.
 		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
-		exclude 'com/lagradost/cloudstream3/utils/ApkInstaller*.class'
-		exclude 'com/lagradost/cloudstream3/utils/BackupUtils*.class'
-		exclude 'com/lagradost/cloudstream3/utils/BatteryOptimizationChecker*.class'
-		exclude 'com/lagradost/cloudstream3/utils/BiometricAuthenticator*.class'
-		exclude 'com/lagradost/cloudstream3/utils/CastHelper*.class'
-		exclude 'com/lagradost/cloudstream3/utils/CastOptionsProvider*.class'
-		exclude 'com/lagradost/cloudstream3/utils/DataStoreHelper*.class'
-		exclude 'com/lagradost/cloudstream3/utils/FillerEpisodeCheck*.class'
-		exclude 'com/lagradost/cloudstream3/utils/InAppUpdater*.class'
-		exclude 'com/lagradost/cloudstream3/utils/SubtitleUtils*.class'
-		exclude 'com/lagradost/cloudstream3/utils/TestingUtils*.class'
-		exclude 'com/lagradost/cloudstream3/utils/TvChannelUtils*.class'
-		exclude 'com/lagradost/cloudstream3/utils/downloader/**'
-		exclude 'com/lagradost/cloudstream3/AcraApplication*.class'
-		exclude 'com/lagradost/cloudstream3/CloudStreamApp*.class'
-		exclude 'com/lagradost/cloudstream3/CommonActivity*.class'
-		exclude 'com/lagradost/cloudstream3/DownloaderTestImpl*.class'
-		exclude 'com/lagradost/cloudstream3/MainActivity.class'
-		exclude 'com/lagradost/cloudstream3/MainActivity$*.class'
-		exclude { details ->
-			def path = details.path
-			def isGeneratedGlue = (path ==~ /.*\/R(\$[^\/]+)?\.class$/) || path.endsWith('/BuildConfig.class')
-			def isCloudstreamOwned = path.startsWith('com/lagradost/cloudstream3/') || path.startsWith('com/lagradost/api/')
-			return isGeneratedGlue && !isCloudstreamOwned
-		}
 	}
 
 	doLast {
@@ -371,7 +320,6 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 		try {
 			[
 				'com/lagradost/cloudstream3/plugins/BasePlugin.class',
-				'com/lagradost/cloudstream3/utils/DataStore.class',
 				'com/lagradost/cloudstream3/utils/ExtractorApi.class',
 				'com/lagradost/cloudstream3/utils/JsInterpreterKt.class',
 			].each { requiredEntry ->
@@ -467,7 +415,9 @@ configurations.all {
 	implementation libs.okhttp.zstd
 	implementation libs.okhttp.dnsoverhttps
 	implementation libs.okio
-	implementation libs.nicehttp
+	implementation(libs.nicehttp) {
+		exclude group: 'org.json', module: 'json'
+	}
 	implementation libs.jsoup
 	implementation libs.ktor.http
 	implementation libs.kotlinx.datetime
