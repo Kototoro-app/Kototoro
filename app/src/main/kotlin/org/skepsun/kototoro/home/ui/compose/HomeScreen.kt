@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -92,8 +94,11 @@ import coil3.request.crossfade
 import dagger.hilt.android.EntryPointAccessors
 import java.util.Locale
 import kotlin.math.absoluteValue
+import kotlin.random.Random
+import androidx.core.text.HtmlCompat
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
@@ -102,7 +107,9 @@ import org.skepsun.kototoro.core.ui.compose.rememberDrawablePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.prefs.HomeHeroStyle
+import org.skepsun.kototoro.core.prefs.HomeHeroBackground
+import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
+import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
@@ -143,12 +150,15 @@ import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
 import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 
 @Immutable
 private data class HomeScreenPrefs(
     val gridScale: Float,
     val listMode: ListMode,
-    val heroStyle: HomeHeroStyle,
+    val heroMode: HomeHeroMode,
+    val heroBackground: HomeHeroBackground,
+    val heroContentLayout: HomeHeroContentLayout,
 )
 
 @Stable
@@ -193,16 +203,23 @@ fun HomeScreen(
         AppSettings.KEY_GRID_SIZE,
         AppSettings.KEY_LIST_MODE_HOME,
         AppSettings.KEY_HOME_HERO_STYLE,
+        AppSettings.KEY_HOME_HERO_MODE,
+        AppSettings.KEY_HOME_HERO_BACKGROUND,
+        AppSettings.KEY_HOME_HERO_CONTENT_LAYOUT,
     ) {
         HomeScreenPrefs(
             gridScale = gridSize / 100f,
             listMode = homeListMode,
-            heroStyle = homeHeroStyle,
+            heroMode = homeHeroMode,
+            heroBackground = homeHeroBackground,
+            heroContentLayout = homeHeroContentLayout,
         )
     }
     val gridScale = screenPrefs.gridScale
     val listMode = screenPrefs.listMode
-    val heroStyle = screenPrefs.heroStyle
+    val heroMode = screenPrefs.heroMode
+    val heroBackground = screenPrefs.heroBackground
+    val heroContentLayout = screenPrefs.heroContentLayout
     val posterStyle = remember(gridScale) { compactPosterCardStyle(gridScale) }
     val panoramaPrefs = rememberPanoramaBackdropPrefs(settings)
     val homeHeroPanoramaPrefs = remember(panoramaPrefs) {
@@ -263,7 +280,7 @@ fun HomeScreen(
                 top = scrollTopInset,
                 bottom = contentPadding.calculateBottomPadding() + 12.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(HOME_SECTION_GAP),
         ) {
             val hasHighlights = heroEntries.isNotEmpty() ||
                 state.recentHistoryItems.isNotEmpty() ||
@@ -309,7 +326,8 @@ fun HomeScreen(
         if (heroEntries.isNotEmpty()) {
             HomeHeroSection(
                 entries = heroEntries,
-                style = heroStyle,
+                mode = heroMode,
+                fixedPresentation = HomeHeroPresentation(heroBackground, heroContentLayout),
                 panoramaPrefs = homeHeroPanoramaPrefs,
                 onClick = onContentClick,
                 topContentInset = topInset + 8.dp,
@@ -411,7 +429,7 @@ private fun HomeHighlightsSections(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 0.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(HOME_SECTION_GAP),
     ) {
         if (historyItems.isNotEmpty()) {
             HomeHighlightSectionContainer(
@@ -511,7 +529,8 @@ private fun HomeHighlightSectionContainer(
 @Composable
 private fun HomeHeroSection(
     entries: List<HomeHeroEntry>,
-    style: HomeHeroStyle,
+    mode: HomeHeroMode,
+    fixedPresentation: HomeHeroPresentation,
     panoramaPrefs: PanoramaBackdropPrefs,
     onClick: (Content, Rect?, String?) -> Unit,
     topContentInset: Dp = 0.dp,
@@ -523,6 +542,7 @@ private fun HomeHeroSection(
     val selectedIndex by remember(entries, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, entries.lastIndex) }
     }
+    val mixedSeed = rememberSaveable(entries.map(HomeHeroEntry::groupKey)) { Random.nextInt() }
 
     HeroAutoAdvanceEffect(
         pagerState = pagerState,
@@ -536,7 +556,7 @@ private fun HomeHeroSection(
             .padding(top = topContentInset),
     ) {
         val edgePadding = CompactTopBarHorizontalPadding
-        val cardWidth = style.cardWidth.coerceAtMost(
+        val cardWidth = minOf(312.dp, maxWidth * 0.78f).coerceAtMost(
             (maxWidth - edgePadding * 2).coerceAtLeast(0.dp),
         )
         val pageSpacing = 6.dp
@@ -548,10 +568,11 @@ private fun HomeHeroSection(
         val pagerWidthPx = with(density) { viewportWidth.toPx() }
         val cardWidthPx = with(density) { cardWidth.toPx() }
 
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
             HorizontalPager(
                 state = pagerState,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -566,12 +587,22 @@ private fun HomeHeroSection(
                 modifier = Modifier.width(viewportWidth),
             ) { page ->
                 entries.getOrNull(page)?.let { entry ->
+                    val presentation = resolveHomeHeroPresentation(
+                        mode = mode,
+                        fixedPresentation = fixedPresentation,
+                        signals = HomeHeroStyleSignals(
+                            isNovel = entry.content.isNovelContent(),
+                            isResume = entry.kind == HomeHeroKind.RESUME,
+                            hasDistinctLargeCover = entry.content.hasDistinctLargeCover(),
+                            isRecommendation = entry.kind == HomeHeroKind.RECOMMENDATION,
+                        ),
+                        page = page,
+                        mixedSeed = mixedSeed,
+                    )
                     HomeHeroCard(
                         entry = entry,
-                        style = style,
-                        bottomInset = 10.dp,
-                        posterWidth = 82.dp,
-                        posterHeight = 114.dp,
+                        presentation = presentation,
+                        cardHeight = HOME_HERO_CARD_HEIGHT,
                         panoramaPrefs = panoramaPrefs,
                         onClick = onClick,
                         modifier = Modifier
@@ -600,27 +631,26 @@ private fun HomeHeroSection(
                     )
                 }
             }
-        }
-
-        if (entries.size > 1) {
-            val currentEntry = entries[selectedIndex]
-            HeroPagerIndicator(
-                pageCount = entries.size,
-                currentPage = selectedIndex,
-                pageCounter = "${selectedIndex + 1} / ${entries.size}",
-                counterColor = Color.White.copy(alpha = 0.78f),
-                trailingIcon = {
-                    Icon(
-                        painter = painterResource(currentEntry.kind.iconRes),
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.78f),
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 20.dp, bottom = 12.dp),
-            )
+            }
+            if (entries.size > 1) {
+                val currentEntry = entries[selectedIndex]
+                val indicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
+                HeroPagerIndicator(
+                    pageCount = entries.size,
+                    currentPage = selectedIndex,
+                    pageCounter = "${selectedIndex + 1} / ${entries.size}",
+                    counterColor = indicatorColor,
+                    trailingIcon = {
+                        Icon(
+                            painter = painterResource(currentEntry.kind.iconRes),
+                            contentDescription = null,
+                            tint = indicatorColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    },
+                    modifier = Modifier.padding(start = edgePadding, top = 6.dp),
+                )
+            }
         }
 
     }
@@ -630,10 +660,8 @@ private fun HomeHeroSection(
 @Composable
 private fun HomeHeroCard(
     entry: HomeHeroEntry,
-    style: HomeHeroStyle,
-    bottomInset: Dp,
-    posterWidth: Dp,
-    posterHeight: Dp,
+    presentation: HomeHeroPresentation,
+    cardHeight: Dp,
     panoramaPrefs: PanoramaBackdropPrefs,
     onClick: (Content, Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
@@ -664,122 +692,142 @@ private fun HomeHeroCard(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(style.cardHeight)
+            .height(cardHeight)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable { onClick(content, coverBounds, sharedElementKey) },
     ) {
-        if (panoramaPrefs.isEnabled && backdropRequest != null) {
-            AnimatedPanoramaBackdrop(
-                prefs = panoramaPrefs,
-                model = backdropRequest,
-                placeholderMemoryCacheKey = coverRequest?.memoryCacheKey,
-                snapshotKey = sharedElementKey,
-                contentAlpha = 0.94f,
-                backgroundColor = MaterialTheme.colorScheme.surface,
+        when (presentation.background) {
+            HomeHeroBackground.BLURRED_ARTWORK -> if (panoramaPrefs.isEnabled && backdropRequest != null) {
+                AnimatedPanoramaBackdrop(
+                    prefs = panoramaPrefs,
+                    model = backdropRequest,
+                    placeholderMemoryCacheKey = coverRequest?.memoryCacheKey,
+                    snapshotKey = sharedElementKey,
+                    contentAlpha = 0.94f,
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                )
+            } else if (backdropRequest != null) {
+                AsyncImage(
+                    model = backdropRequest,
+                    contentDescription = content.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            HomeHeroBackground.TONAL -> Box(
+                Modifier.fillMaxSize().background(homeHeroTonalColor(content.id, isSystemInDarkTheme())),
             )
-        } else if (backdropRequest != null) {
-            AsyncImage(
-                model = backdropRequest,
-                contentDescription = content.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
+            HomeHeroBackground.IMMERSIVE_ARTWORK -> if (coverRequest != null) {
+                AsyncImage(
+                    model = coverRequest,
+                    contentDescription = content.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            HomeHeroBackground.COVER_SPLIT -> Row(Modifier.fillMaxSize()) {
+                if (coverRequest != null) {
+                    AsyncImage(
+                        model = coverRequest,
+                        contentDescription = content.title,
+                        modifier = Modifier.weight(0.46f).fillMaxHeight(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(Modifier.weight(0.46f).fillMaxHeight().background(MaterialTheme.colorScheme.surfaceVariant))
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(0.54f)
+                        .fillMaxHeight()
+                        .background(homeHeroTonalColor(content.id, isSystemInDarkTheme())),
+                )
+            }
+            HomeHeroBackground.PLAIN -> Box(
+                Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHighest),
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawBehind {
-                    drawRect(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.22f),
-                                Color.Black.copy(alpha = 0.28f),
-                                Color.Black.copy(alpha = 0.48f),
-                            ),
-                        ),
-                    )
-                    drawRect(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Color.Black.copy(alpha = 0.18f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.14f),
-                            ),
-                        ),
-                    )
-                },
+        if (presentation.background == HomeHeroBackground.BLURRED_ARTWORK ||
+            presentation.background == HomeHeroBackground.IMMERSIVE_ARTWORK
+        ) {
+            Box(Modifier.fillMaxSize().drawBehind {
+                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.20f), Color.Black.copy(alpha = 0.52f))))
+            })
+        }
+        val textColor = if (presentation.background == HomeHeroBackground.PLAIN) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            Color.White
+        }
+        HomeHeroInfoLayout(
+            entry = entry,
+            content = content,
+            presentation = presentation,
+            coverRequest = coverRequest,
+            sharedElementKey = sharedElementKey,
+            textColor = textColor,
+            onBoundsChanged = { coverBounds = it },
         )
-        when (style) {
-            HomeHeroStyle.CINEMATIC -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.Bottom,
-                ) {
-                    HomeHeroText(entry, content, compact = false)
+
+    }
+}
+
+@Composable
+private fun HomeHeroInfoLayout(
+    entry: HomeHeroEntry,
+    content: Content,
+    presentation: HomeHeroPresentation,
+    coverRequest: ImageRequest?,
+    sharedElementKey: String,
+    textColor: Color,
+    onBoundsChanged: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isSplit = presentation.background == HomeHeroBackground.COVER_SPLIT
+    val contentModifier = modifier.fillMaxSize()
+    Row(modifier = contentModifier) {
+        if (isSplit) Spacer(Modifier.weight(0.46f))
+        Box(modifier = Modifier.weight(if (isSplit) 0.54f else 1f).fillMaxHeight()) {
+        when (presentation.contentLayout) {
+            HomeHeroContentLayout.STANDARD -> Row(
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!isSplit) {
+                    HomeHeroPoster(coverRequest, content, sharedElementKey, 72.dp, 112.dp, onBoundsChanged)
+                }
+                HomeHeroText(entry, content, compact = true, textColor = textColor, modifier = Modifier.weight(1f))
+            }
+            HomeHeroContentLayout.EDITORIAL -> Column(
+                modifier = Modifier.fillMaxSize().padding(18.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                HomeHeroText(entry, content, compact = false, textColor = textColor)
+                if (!isSplit) {
+                    HomeHeroPoster(coverRequest, content, sharedElementKey, 54.dp, 72.dp, onBoundsChanged,
+                        modifier = Modifier.align(Alignment.End))
                 }
             }
-            HomeHeroStyle.EDITORIAL -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 18.dp, top = 16.dp, end = 12.dp, bottom = bottomInset),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HomeHeroText(entry, content, compact = true, modifier = Modifier.weight(1f))
-                    HomeHeroPoster(
-                        request = coverRequest,
-                        content = content,
-                        snapshotKey = sharedElementKey,
-                        width = 116.dp,
-                        height = 174.dp,
-                        onBoundsChanged = { coverBounds = it },
-                    )
+            HomeHeroContentLayout.TEXT_QUOTE -> HomeHeroTextQuote(
+                entry, content, textColor = textColor, modifier = Modifier.fillMaxSize(),
+            )
+            HomeHeroContentLayout.MINIMAL_PROGRESS -> HomeHeroMinimal(
+                entry, content, textColor = textColor, modifier = Modifier.fillMaxSize(),
+            )
+            HomeHeroContentLayout.DETAILS -> Row(
+                modifier = Modifier.fillMaxSize().padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!isSplit) {
+                    HomeHeroPoster(coverRequest, content, sharedElementKey, 86.dp, 126.dp, onBoundsChanged)
                 }
-            }
-            HomeHeroStyle.GALLERY -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 14.dp, top = 12.dp, end = 14.dp, bottom = bottomInset),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HomeHeroPoster(
-                        request = coverRequest,
-                        content = content,
-                        snapshotKey = sharedElementKey,
-                        width = 126.dp,
-                        height = 184.dp,
-                        onBoundsChanged = { coverBounds = it },
-                    )
-                    HomeHeroText(entry, content, compact = false, modifier = Modifier.weight(1f))
-                }
-            }
-            HomeHeroStyle.CLASSIC -> {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(start = 14.dp, top = 12.dp, end = 14.dp, bottom = bottomInset),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    HomeHeroPoster(
-                        request = coverRequest,
-                        content = content,
-                        snapshotKey = sharedElementKey,
-                        width = posterWidth,
-                        height = posterHeight,
-                        onBoundsChanged = { coverBounds = it },
-                    )
-                    HomeHeroText(entry, content, compact = false, modifier = Modifier.weight(1f))
-                }
+                HomeHeroText(entry, content, compact = true, textColor = textColor, modifier = Modifier.weight(1f))
             }
         }
-
+        }
     }
 }
 
@@ -791,9 +839,10 @@ private fun HomeHeroPoster(
     width: Dp,
     height: Dp,
     onBoundsChanged: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(width = width, height = height)
             .onGloballyPositioned { onBoundsChanged(it.unclippedBoundsInWindow()) }
             .clip(ContentCoverShape)
@@ -823,6 +872,7 @@ private fun HomeHeroText(
     entry: HomeHeroEntry,
     content: Content,
     compact: Boolean,
+    textColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 5.dp else 6.dp)) {
@@ -830,7 +880,7 @@ private fun HomeHeroText(
         Text(
             text = content.title,
             style = if (compact) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
-            color = Color.White,
+            color = textColor,
             fontWeight = FontWeight.Bold,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -838,7 +888,7 @@ private fun HomeHeroText(
         Text(
             text = rememberResolvedSourceTitle(content.source),
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.86f),
+            color = textColor.copy(alpha = 0.86f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -846,10 +896,118 @@ private fun HomeHeroText(
             Text(
                 text = supportingText,
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.92f),
+                color = textColor.copy(alpha = 0.92f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+@Composable
+private fun HomeHeroTextQuote(
+    entry: HomeHeroEntry,
+    content: Content,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val parsedDescription = remember(content.description) { content.description?.toHeroExcerpt() }
+    val excerpt = parsedDescription ?: entry.supportingText()
+    Row(
+        modifier = modifier.padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(72.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            HomeBadge(text = stringResource(entry.kind.labelRes), iconRes = entry.kind.iconRes)
+            Text(
+                text = excerpt?.let { "\"$it\"" } ?: content.title,
+                style = MaterialTheme.typography.titleLarge,
+                color = textColor,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (excerpt != null) {
+                Text(
+                    text = content.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = content.authors.firstOrNull() ?: rememberResolvedSourceTitle(content.source),
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor.copy(alpha = 0.72f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun String.toHeroExcerpt(): String? = HtmlCompat.fromHtml(this, HtmlCompat.FROM_HTML_MODE_COMPACT)
+    .toString()
+    .replace(Regex("\\s+"), " ")
+    .trim()
+    .takeIf(String::isNotEmpty)
+
+@Composable
+private fun HomeHeroMinimal(
+    entry: HomeHeroEntry,
+    content: Content,
+    textColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        HomeBadge(text = stringResource(entry.kind.labelRes), iconRes = entry.kind.iconRes)
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = content.title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = textColor,
+            fontWeight = FontWeight.Bold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = entry.supportingText() ?: rememberResolvedSourceTitle(content.source),
+            style = MaterialTheme.typography.bodyMedium,
+            color = textColor.copy(alpha = 0.72f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        entry.progressPercent?.let { progress ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.outlineVariant),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0, 100) / 100f)
+                        .height(5.dp)
+                        .background(MaterialTheme.colorScheme.primary),
+                )
+            }
         }
     }
 }
@@ -915,7 +1073,7 @@ private fun HomeRecentSearchSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 6.dp),
+            .padding(top = 0.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
@@ -1461,22 +1619,28 @@ private data class HomeCoverSupportingText(
 
 private const val HOME_LIST_RAIL_PAGE_SIZE = 3
 private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
-private val HOME_HERO_CARD_WIDTH = 520.dp
-private val HomeHeroStyle.cardWidth: Dp
-    get() = when (this) {
-        HomeHeroStyle.GALLERY -> 328.dp
-        HomeHeroStyle.CLASSIC,
-        HomeHeroStyle.CINEMATIC,
-        HomeHeroStyle.EDITORIAL -> HOME_HERO_CARD_WIDTH
-    }
+private val HOME_HERO_CARD_HEIGHT = 184.dp
+private val HOME_SECTION_GAP = 4.dp
 
-private val HomeHeroStyle.cardHeight: Dp
-    get() = when (this) {
-        HomeHeroStyle.CLASSIC -> 208.dp
-        HomeHeroStyle.CINEMATIC -> 224.dp
-        HomeHeroStyle.EDITORIAL -> 224.dp
-        HomeHeroStyle.GALLERY -> 236.dp
-    }
+private fun Content.isNovelContent(): Boolean = when (source.getContentType()) {
+    ContentType.NOVEL,
+    ContentType.HENTAI_NOVEL -> true
+    else -> false
+}
+
+private fun Content.hasDistinctLargeCover(): Boolean {
+    val largeCover = largeCoverUrl?.takeIfUsableImageUri() ?: return false
+    return largeCover != coverUrl?.takeIfUsableImageUri()
+}
+
+private fun homeHeroTonalColor(contentId: Long, darkTheme: Boolean): Color {
+    val hue = (contentId.absoluteValue % 360L).toFloat()
+    return Color.hsv(
+        hue,
+        saturation = if (darkTheme) 0.42f else 0.28f,
+        value = if (darkTheme) 0.42f else 0.88f,
+    )
+}
 private val HOME_LIST_RAIL_PAGE_MIN_WIDTH = 280.dp
 private val HOME_LIST_RAIL_PAGE_MAX_WIDTH = 320.dp
 private val HOME_DETAILED_RAIL_PAGE_MAX_WIDTH = 368.dp

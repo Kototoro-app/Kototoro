@@ -23,7 +23,9 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
-import org.skepsun.kototoro.core.prefs.HomeHeroStyle
+import org.skepsun.kototoro.core.prefs.HomeHeroBackground
+import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
+import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
@@ -45,7 +47,9 @@ data class AppearanceSettingsUiState(
     val appLocale: String,
     val loadingCircleStyle: AppSettings.LoadingCircleStyle,
     val popupRadius: Int,
-    val homeHeroStyle: HomeHeroStyle,
+    val homeHeroMode: HomeHeroMode,
+    val homeHeroBackground: HomeHeroBackground,
+    val homeHeroContentLayout: HomeHeroContentLayout,
     val listMode: ListMode,
     val gridSize: Int,
     val railAnimationIntensityPercent: Int,
@@ -108,7 +112,9 @@ data class AppearanceSettingsOptions(
     val appLocales: List<SettingsChoiceOption<String>>,
     val loadingCircleStyles: List<SettingsChoiceOption<AppSettings.LoadingCircleStyle>>,
     val popupRadii: List<SettingsChoiceOption<Int>>,
-    val homeHeroStyles: List<SettingsChoiceOption<HomeHeroStyle>>,
+    val homeHeroModes: List<SettingsChoiceOption<HomeHeroMode>>,
+    val homeHeroBackgrounds: List<SettingsChoiceOption<HomeHeroBackground>>,
+    val homeHeroContentLayouts: List<SettingsChoiceOption<HomeHeroContentLayout>>,
     val listModes: List<SettingsChoiceOption<ListMode>>,
     val progressIndicatorModes: List<SettingsChoiceOption<ProgressIndicatorMode>>,
     val badgeOptions: List<SettingsChoiceOption<String>>,
@@ -138,7 +144,9 @@ fun AppearanceSettingsScreen(
     onAppLocaleChange: (String) -> Unit,
     onLoadingCircleStyleChange: (AppSettings.LoadingCircleStyle) -> Unit,
     onPopupRadiusChange: (Int) -> Unit,
-    onHomeHeroStyleChange: (HomeHeroStyle) -> Unit,
+    onHomeHeroModeChange: (HomeHeroMode) -> Unit,
+    onHomeHeroBackgroundChange: (HomeHeroBackground) -> Unit,
+    onHomeHeroContentLayoutChange: (HomeHeroContentLayout) -> Unit,
     onListModeChange: (ListMode) -> Unit,
     onGridSizeChange: (Int) -> Unit,
     onRailAnimationIntensityChange: (Int) -> Unit,
@@ -319,12 +327,28 @@ fun AppearanceSettingsScreen(
         item(key = "manga_list") {
             SettingsPreferenceSection(title = stringResource(R.string.manga_list)) {
                 SettingsChoicePreference(
-                    title = stringResource(R.string.pref_home_hero_style),
-                    value = state.homeHeroStyle,
-                    options = options.homeHeroStyles,
-                    summary = stringResource(R.string.pref_home_hero_style_summary),
-                    onValueChange = onHomeHeroStyleChange,
+                    title = stringResource(R.string.pref_home_hero_mode),
+                    value = state.homeHeroMode,
+                    options = options.homeHeroModes,
+                    summary = stringResource(R.string.pref_home_hero_mode_summary),
+                    onValueChange = onHomeHeroModeChange,
                 )
+                if (state.homeHeroMode == HomeHeroMode.FIXED) {
+                    SettingsSectionDivider()
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_home_hero_background),
+                        value = state.homeHeroBackground,
+                        options = options.homeHeroBackgrounds,
+                        onValueChange = onHomeHeroBackgroundChange,
+                    )
+                    SettingsSectionDivider()
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_home_hero_content_layout),
+                        value = state.homeHeroContentLayout,
+                        options = options.homeHeroContentLayouts,
+                        onValueChange = onHomeHeroContentLayoutChange,
+                    )
+                }
                 SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.list_mode),

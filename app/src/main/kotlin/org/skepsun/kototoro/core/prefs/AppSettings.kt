@@ -117,10 +117,67 @@ enum class SpaceSwitcherPosition {
 }
 
 enum class HomeHeroStyle {
+	AUTO,
 	CLASSIC,
 	CINEMATIC,
 	EDITORIAL,
 	GALLERY,
+	TEXT_QUOTE,
+	MINIMAL,
+	POSTER_FOCUS,
+	MIXED,
+}
+
+enum class HomeHeroMode {
+	AUTO,
+	FIXED,
+	MIXED,
+}
+
+enum class HomeHeroBackground {
+	BLURRED_ARTWORK,
+	TONAL,
+	IMMERSIVE_ARTWORK,
+	COVER_SPLIT,
+	PLAIN,
+}
+
+enum class HomeHeroContentLayout {
+	STANDARD,
+	EDITORIAL,
+	TEXT_QUOTE,
+	MINIMAL_PROGRESS,
+	DETAILS,
+}
+
+private fun HomeHeroStyle.legacyMode(): HomeHeroMode = when (this) {
+	HomeHeroStyle.AUTO -> HomeHeroMode.AUTO
+	HomeHeroStyle.MIXED -> HomeHeroMode.MIXED
+	else -> HomeHeroMode.FIXED
+}
+
+private fun HomeHeroStyle.legacyBackground(): HomeHeroBackground = when (this) {
+	HomeHeroStyle.CLASSIC -> HomeHeroBackground.BLURRED_ARTWORK
+	HomeHeroStyle.GALLERY -> HomeHeroBackground.IMMERSIVE_ARTWORK
+	HomeHeroStyle.POSTER_FOCUS -> HomeHeroBackground.COVER_SPLIT
+	HomeHeroStyle.EDITORIAL,
+	HomeHeroStyle.TEXT_QUOTE,
+	HomeHeroStyle.MINIMAL -> HomeHeroBackground.PLAIN
+	HomeHeroStyle.AUTO,
+	HomeHeroStyle.CINEMATIC,
+	HomeHeroStyle.MIXED -> HomeHeroBackground.TONAL
+}
+
+private fun HomeHeroStyle.legacyLayout(): HomeHeroContentLayout = when (this) {
+	HomeHeroStyle.EDITORIAL -> HomeHeroContentLayout.EDITORIAL
+	HomeHeroStyle.TEXT_QUOTE -> HomeHeroContentLayout.TEXT_QUOTE
+	HomeHeroStyle.MINIMAL -> HomeHeroContentLayout.MINIMAL_PROGRESS
+	HomeHeroStyle.POSTER_FOCUS -> HomeHeroContentLayout.DETAILS
+	HomeHeroStyle.AUTO,
+	HomeHeroStyle.CLASSIC,
+	HomeHeroStyle.CINEMATIC,
+	HomeHeroStyle.GALLERY,
+	HomeHeroStyle.MIXED -> HomeHeroContentLayout.STANDARD
 }
 
 @Singleton
@@ -151,8 +208,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_HOME, value) }
 
 	var homeHeroStyle: HomeHeroStyle
-		get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.CLASSIC)
+		get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.AUTO)
 		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_STYLE, value) }
+
+	var homeHeroMode: HomeHeroMode
+		get() = prefs.getEnumValue(KEY_HOME_HERO_MODE, homeHeroStyle.legacyMode())
+		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_MODE, value) }
+
+	var homeHeroBackground: HomeHeroBackground
+		get() = prefs.getEnumValue(KEY_HOME_HERO_BACKGROUND, homeHeroStyle.legacyBackground())
+		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_BACKGROUND, value) }
+
+	var homeHeroContentLayout: HomeHeroContentLayout
+		get() = prefs.getEnumValue(KEY_HOME_HERO_CONTENT_LAYOUT, homeHeroStyle.legacyLayout())
+		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_CONTENT_LAYOUT, value) }
 
 	var theme: Int
 		get() = prefs.getString(KEY_THEME, null)?.toIntOrNull()
@@ -2185,6 +2254,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LIST_MODE_BROWSE = "list_mode_browse"
 		const val KEY_LIST_MODE_HOME = "list_mode_home"
 		const val KEY_HOME_HERO_STYLE = "home_hero_style"
+		const val KEY_HOME_HERO_MODE = "home_hero_mode"
+		const val KEY_HOME_HERO_BACKGROUND = "home_hero_background"
+		const val KEY_HOME_HERO_CONTENT_LAYOUT = "home_hero_content_layout"
 		const val KEY_LIST_MODE_HISTORY = "list_mode_history"
 		const val KEY_LIST_MODE_FAVORITES = "list_mode_favorites"
 		const val KEY_LIST_MODE_SUGGESTIONS = "list_mode_suggestions"

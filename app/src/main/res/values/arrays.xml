@@ -22,10 +22,34 @@
 		<item>@string/compact_grid</item>
 	</string-array>
 	<string-array name="home_hero_styles" translatable="false">
+		<item>@string/home_hero_style_auto</item>
 		<item>@string/home_hero_style_classic</item>
 		<item>@string/home_hero_style_cinematic</item>
 		<item>@string/home_hero_style_editorial</item>
 		<item>@string/home_hero_style_gallery</item>
+		<item>@string/home_hero_style_text_quote</item>
+		<item>@string/home_hero_style_minimal</item>
+		<item>@string/home_hero_style_poster_focus</item>
+		<item>@string/home_hero_style_mixed</item>
+	</string-array>
+	<string-array name="home_hero_modes" translatable="false">
+		<item>@string/home_hero_mode_auto</item>
+		<item>@string/home_hero_mode_fixed</item>
+		<item>@string/home_hero_mode_mixed</item>
+	</string-array>
+	<string-array name="home_hero_backgrounds" translatable="false">
+		<item>@string/home_hero_background_blurred</item>
+		<item>@string/home_hero_background_tonal</item>
+		<item>@string/home_hero_background_immersive</item>
+		<item>@string/home_hero_background_cover_split</item>
+		<item>@string/home_hero_background_plain</item>
+	</string-array>
+	<string-array name="home_hero_content_layouts" translatable="false">
+		<item>@string/home_hero_layout_standard</item>
+		<item>@string/home_hero_layout_editorial</item>
+		<item>@string/home_hero_layout_text_quote</item>
+		<item>@string/home_hero_layout_minimal_progress</item>
+		<item>@string/home_hero_layout_details</item>
 	</string-array>
 	<string-array name="screenshots_policy" translatable="false">
 		<item>@string/screenshots_allow</item>
