@@ -164,10 +164,18 @@ class MpvPlayer(
 
 	fun play() {
 		mpv.setPropertyBoolean("pause", false)
+		updatePlayingState(true)
 	}
 
 	fun pause() {
 		mpv.setPropertyBoolean("pause", true)
+		updatePlayingState(false)
+	}
+
+	private fun updatePlayingState(value: Boolean) {
+		if (isPlaying == value) return
+		isPlaying = value
+		listeners.forEach { it.onIsPlayingChanged(value) }
 	}
 
 	fun seekTo(positionMs: Long) {
@@ -526,10 +534,7 @@ class MpvPlayer(
 
 	override fun eventProperty(property: String, value: Boolean) {
 		when (property) {
-			"pause" -> {
-				isPlaying = !value
-				listeners.forEach { it.onIsPlayingChanged(isPlaying) }
-			}
+			"pause" -> updatePlayingState(!value)
 		}
 	}
 
