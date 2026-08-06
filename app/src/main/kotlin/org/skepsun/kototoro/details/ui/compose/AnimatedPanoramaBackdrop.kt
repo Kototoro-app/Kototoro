@@ -111,8 +111,7 @@ fun AnimatedPanoramaBackdrop(
     backgroundColor: Color,
     crossfadeEnabled: Boolean = false,
     onLoadError: (() -> Unit)? = null,
-    fullOpacityAtY: Float? = null,
-    fullOpacityFadeDistancePx: Float = 0f,
+    fadeToBackground: Boolean = false,
     maxHeightPx: Float? = null,
     scrollLinkedTranslationYPx: Float = 0f,
     modifier: Modifier = Modifier,
@@ -222,9 +221,6 @@ fun AnimatedPanoramaBackdrop(
     val placeholderPainter = rememberDrawablePainter(stablePlaceholderImage?.asDrawable(context.resources))
     var hasResolvedBackground by remember(backgroundRequest) { mutableStateOf(false) }
     val boundedMaxHeightPx = maxHeightPx?.takeIf { it.isFinite() }
-    val hasTransparentBottomFade = fullOpacityAtY != null &&
-        fullOpacityAtY.isFinite() &&
-        fullOpacityFadeDistancePx > 0f
     val scrollLinkedModifier = if (scrollLinkedTranslationYPx.isFinite() && scrollLinkedTranslationYPx != 0f) {
         Modifier.graphicsLayer {
             translationY = scrollLinkedTranslationYPx
@@ -260,35 +256,36 @@ fun AnimatedPanoramaBackdrop(
             scaleY = backgroundScale
             translationX = backgroundTranslationXState?.value ?: 0f
             alpha = (contentAlphaProvider?.invoke() ?: contentAlpha).coerceIn(0f, 1f)
-            compositingStrategy = if (hasTransparentBottomFade) {
+            compositingStrategy = if (fadeToBackground) {
                 CompositingStrategy.Offscreen
             } else {
                 CompositingStrategy.Auto
             }
         }
         .then(
-            if (hasTransparentBottomFade) {
+            if (fadeToBackground) {
                 Modifier.drawWithCache {
-                    val fadeStartY = (size.height - fullOpacityFadeDistancePx).coerceAtLeast(0f)
                     val alphaMask = Brush.verticalGradient(
                         colorStops = arrayOf(
                             0f to Color.White,
-                            0.32f to Color.White.copy(
-                                alpha = (1f - ((0.16f + (panoramaGradientAlphaFactor * 0.18f)) *
+                            0.20f to Color.White.copy(
+                                alpha = (1f - ((0.18f + panoramaGradientAlphaFactor * 0.22f) *
                                     panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
                             ),
-                            0.62f to Color.White.copy(
-                                alpha = (1f - ((0.48f + (panoramaGradientAlphaFactor * 0.20f)) *
+                            0.45f to Color.White.copy(
+                                alpha = (1f - ((0.45f + panoramaGradientAlphaFactor * 0.35f) *
                                     panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
                             ),
-                            0.84f to Color.White.copy(
-                                alpha = (1f - ((0.78f + (panoramaGradientAlphaFactor * 0.16f)) *
+                            0.70f to Color.White.copy(
+                                alpha = (1f - ((0.72f + panoramaGradientAlphaFactor * 0.25f) *
+                                    panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
+                            ),
+                            0.88f to Color.White.copy(
+                                alpha = (1f - ((0.90f + panoramaGradientAlphaFactor * 0.10f) *
                                     panoramaTransitionIntensityFactor)).coerceIn(0f, 1f),
                             ),
                             1f to Color.Transparent,
                         ),
-                        startY = fadeStartY,
-                        endY = size.height,
                     )
                     onDrawWithContent {
                         drawContent()
@@ -327,7 +324,7 @@ fun AnimatedPanoramaBackdrop(
             },
         )
     }
-    if (!hasTransparentBottomFade) {
+    if (!fadeToBackground) {
         Box(
             modifier = backdropBoundsModifier.background(
                 Brush.verticalGradient(

@@ -140,6 +140,7 @@ import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
@@ -234,6 +235,8 @@ fun DetailsHeader(
 ) {
     val context = LocalContext.current
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val isDarkTheme = MaterialTheme.colorScheme.isDarkTheme()
+    val immersiveTitleColor = if (isDarkTheme) Color.White else Color.Black
     val content = mangaDetails?.toContent()
     val originalTitle = content?.title.orEmpty()
     val displayTitle = translatedTitle ?: originalTitle
@@ -502,7 +505,11 @@ fun DetailsHeader(
                             fontWeight = FontWeight.SemiBold,
                             lineHeight = 27.sp,
                         ),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = if (panoramaEnabled) {
+                            immersiveTitleColor
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .animateContentSize()
@@ -540,7 +547,11 @@ fun DetailsHeader(
                     Text(
                         text = alternateTitlesText,
                         style = MaterialTheme.typography.labelMedium.copy(lineHeight = 16.sp),
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = if (panoramaEnabled) {
+                            immersiveTitleColor.copy(alpha = 0.82f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )

@@ -998,33 +998,8 @@ private fun DetailsScreenContent(
     } else {
         infoCardMidPx
     }
-    val effectivePanoramaInfoCardTopPx = if (
-        panoramaPrefs.isScrollLinkedEnabled &&
-        initialInfoCardTopPx.isFinite()
-    ) {
-        initialInfoCardTopPx
-    } else {
-        infoCardTopPx
-    }
     val shouldLimitPanoramaToInfoCardMidpoint =
         panoramaPrefs.limitToInfoCardMidpoint && effectivePanoramaInfoCardMidPx.isFinite()
-    val panoramaFullOpacityAtY = if (shouldLimitPanoramaToInfoCardMidpoint) {
-        effectivePanoramaInfoCardMidPx
-    } else {
-        null
-    }
-    val panoramaFullOpacityFadeDistancePx = if (
-        shouldLimitPanoramaToInfoCardMidpoint &&
-        effectivePanoramaInfoCardTopPx.isFinite() &&
-        effectivePanoramaInfoCardMidPx.isFinite()
-    ) {
-        val infoCardUpperHalfHeight = effectivePanoramaInfoCardMidPx - effectivePanoramaInfoCardTopPx
-        val transitionExtension = with(density) { 120.dp.toPx() }
-        val minimumTransitionHeight = with(density) { 180.dp.toPx() }
-        (infoCardUpperHalfHeight + transitionExtension).coerceAtLeast(minimumTransitionHeight)
-    } else {
-        0f
-    }
     val panoramaMaxHeightPx = if (shouldLimitPanoramaToInfoCardMidpoint) {
         effectivePanoramaInfoCardMidPx
     } else {
@@ -1125,8 +1100,7 @@ private fun DetailsScreenContent(
                                     hasPanoramaLoadFailed = true
                                 }
                             },
-                            fullOpacityAtY = panoramaFullOpacityAtY,
-                            fullOpacityFadeDistancePx = panoramaFullOpacityFadeDistancePx,
+                            fadeToBackground = true,
                             maxHeightPx = panoramaMaxHeightPx,
                             scrollLinkedTranslationYPx = panoramaScrollLinkedTranslationPx,
                             modifier = Modifier,
