@@ -533,8 +533,7 @@ private fun HomeHeroSection(
             (maxWidth - edgePadding * 2).coerceAtLeast(0.dp),
         )
         val pageSpacing = 6.dp
-        val horizontalPadding = ((maxWidth - cardWidth) / 2).coerceAtLeast(edgePadding)
-        val contentPadding = PaddingValues(horizontal = horizontalPadding)
+        val contentPadding = PaddingValues(horizontal = edgePadding)
         val viewportWidth = maxWidth
         val density = LocalDensity.current
         val contentPadPx = with(density) { contentPadding.calculateLeftPadding(LocalLayoutDirection.current).toPx() }
