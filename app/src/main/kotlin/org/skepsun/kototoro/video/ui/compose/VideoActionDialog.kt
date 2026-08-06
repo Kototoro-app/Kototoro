@@ -11,11 +11,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -38,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import org.skepsun.kototoro.R
 import kotlin.math.roundToInt
 
 internal data class VideoActionDialogItem(
@@ -53,6 +60,8 @@ internal data class VideoActionDialogState(
     val title: String,
     val items: List<VideoActionDialogItem>,
     val anchorBounds: IntRect = IntRect.Zero,
+    val columns: Int = 1,
+    val onBack: (() -> Unit)? = null,
 )
 
 internal enum class PlayerMenuPlacement {
@@ -137,82 +146,116 @@ internal fun VideoActionDialog(
         ) {
             CompositionLocalProvider(LocalContentColor provides Color.White) {
                 Column {
-                    Text(
-                        text = state.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(state.items) { item ->
-                            var itemBounds = IntRect.Zero
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onGloballyPositioned { coordinates ->
-                                        val bounds = coordinates.boundsInWindow()
-                                        itemBounds = IntRect(
-                                            left = bounds.left.roundToInt(),
-                                            top = bounds.top.roundToInt(),
-                                            right = bounds.right.roundToInt(),
-                                            bottom = bounds.bottom.roundToInt(),
-                                        )
-                                    }
-                                    .clickable { onItemSelected(item, itemBounds) }
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                            ) {
-                                item.iconRes?.let {
-                                    Icon(
-                                        painter = painterResource(it),
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(22.dp),
-                                    )
-                                }
-                                item.leadingText?.let {
-                                    Text(
-                                        text = it,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(end = 12.dp),
-                                    )
-                                }
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = if (item.iconRes != null) 12.dp else 0.dp),
-                                ) {
-                                    Text(
-                                        text = item.title,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    item.subtitle?.takeIf(String::isNotBlank)?.let {
-                                        Text(
-                                            text = it,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.White.copy(alpha = 0.70f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                }
-                                item.checked?.takeIf { it }?.let {
-                                    Icon(
-                                        imageVector = Icons.Filled.Check,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        state.onBack?.let { onBack ->
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.back),
+                                )
+                            }
+                        }
+                        Text(
+                            text = state.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(
+                                    start = if (state.onBack == null) 16.dp else 0.dp,
+                                    end = 16.dp,
+                                    top = 12.dp,
+                                    bottom = 12.dp,
+                                ),
+                        )
+                    }
+                    if (state.columns > 1) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(state.columns),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            itemsIndexed(state.items) { _, item ->
+                                VideoActionItem(item = item, compact = true, onItemSelected = onItemSelected)
+                            }
+                        }
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                            items(state.items) { item ->
+                                VideoActionItem(item = item, compact = false, onItemSelected = onItemSelected)
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun VideoActionItem(
+    item: VideoActionDialogItem,
+    compact: Boolean,
+    onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
+) {
+    var itemBounds = IntRect.Zero
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (compact) 60.dp else 56.dp)
+            .onGloballyPositioned { coordinates ->
+                val bounds = coordinates.boundsInWindow()
+                itemBounds = IntRect(
+                    left = bounds.left.roundToInt(),
+                    top = bounds.top.roundToInt(),
+                    right = bounds.right.roundToInt(),
+                    bottom = bounds.bottom.roundToInt(),
+                )
+            }
+            .clickable { onItemSelected(item, itemBounds) }
+            .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 8.dp else 10.dp),
+    ) {
+        item.iconRes?.let {
+            Icon(
+                painter = painterResource(it),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(if (compact) 20.dp else 22.dp),
+            )
+        }
+        item.leadingText?.let {
+            Text(text = it, color = Color.White, modifier = Modifier.padding(end = 8.dp))
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = if (item.iconRes != null) 10.dp else 0.dp),
+        ) {
+            Text(
+                text = item.title,
+                style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                color = Color.White,
+                maxLines = if (compact) 2 else 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!compact) {
+                item.subtitle?.takeIf(String::isNotBlank)?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.70f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        item.checked?.takeIf { it }?.let {
+            Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         }
     }
 }

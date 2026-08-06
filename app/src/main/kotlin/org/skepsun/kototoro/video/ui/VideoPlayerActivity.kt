@@ -146,6 +146,8 @@ import org.skepsun.kototoro.video.ui.compose.VideoSeekFeedbackState
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogItem
 import org.skepsun.kototoro.video.ui.compose.VideoActionDialogState
+import org.skepsun.kototoro.video.ui.compose.VideoSubtitleSettingsDialog
+import org.skepsun.kototoro.video.ui.compose.VideoSubtitleSettingsDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialog
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
@@ -166,12 +168,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     companion object {
         private const val ENABLE_M3U8_PROXY_CACHE = true
     }
-
-    private data class PlayerOverflowAction(
-        val title: String,
-        val iconRes: Int,
-        val onClick: () -> Unit,
-    )
 
     private data class PlayerSettingsAction(
         val title: String,
@@ -247,6 +243,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var seekFeedbackState by mutableStateOf<VideoSeekFeedbackState?>(null)
     private var actionDialogState by mutableStateOf<VideoActionDialogState?>(null)
     private var chapterDialogState by mutableStateOf<VideoChapterDialogState?>(null)
+    private var subtitleSettingsDialogVisible by mutableStateOf(false)
     private var submenuAnchorBounds = IntRect.Zero
     private var submenuPlacement = PlayerMenuPlacement.BesideAnchor
     private var lastSettingsAnchorBounds = IntRect.Zero
@@ -294,6 +291,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var subtitlePollCounter = 0
     // Track user's manual subtitle selection to restore after file reload
     private var userManualSubtitleSelection: ManualSubtitleSelection? = null
+    // In-memory selected subtitle-track index (0 = off) for the subtitle panel, refreshed immediately on selection
+    private var subtitlePanelSelectedIndex: Int = 0
     private val mpvListener = object : MpvPlayer.Listener {
         override fun onDurationChanged(durationMs: Long) {
             runOnUiThread { syncComposeControlState() }
@@ -575,9 +574,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     @Inject
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
-    private fun isLandscapeOrientation(): Boolean =
-        resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-
     private fun installComposeContent() {
         setContent {
             KototoroTheme {
@@ -590,6 +586,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     VideoPlayerControls(
                         state = composeControlState,
                         onAction = ::onComposePlayerAction,
+                        onInteractionStart = ::pauseControlsAutoHide,
+                        onInteractionEnd = ::restartControlsAutoHide,
                     )
                     VideoGestureOverlays(state = gestureOverlayState)
                     VideoSubtitleOverlay(state = subtitleOverlayState)
@@ -609,12 +607,41 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 superResolutionDialogVisible = false
                             },
                             onItemSelected = { item, itemBounds ->
+                                val selectedDialog = actionDialogState
+                                val backAction = selectedDialog?.onBack
                                 submenuAnchorBounds = itemBounds
                                 submenuPlacement = PlayerMenuPlacement.BesideAnchor
                                 item.onClick()
-                                if (selectionDialogState == null && !superResolutionDialogVisible) {
+                                if (item.checked != null) {
+                                    showVideoSettingsPanel(lastSettingsAnchorBounds, backAction)
+                                    return@VideoActionDialog
+                                }
+                                if (
+                                    actionDialogState === selectedDialog &&
+                                    selectionDialogState == null &&
+                                    !superResolutionDialogVisible
+                                ) {
                                     actionDialogState = null
                                 }
+                            },
+                        )
+                    }
+                    if (subtitleSettingsDialogVisible) {
+                        VideoSubtitleSettingsDialog(
+                            state = buildSubtitleSettingsDialogState(),
+                            onDismissRequest = { subtitleSettingsDialogVisible = false },
+                            onSubtitleTrackSelected = ::selectSubtitleTrack,
+                            onStyleChanged = { newState ->
+                                appSettings.videoSubtitleFontSize = newState.fontSizeSp
+                                appSettings.videoSubtitleBold = newState.bold
+                                appSettings.videoSubtitleItalic = newState.italic
+                                appSettings.videoSubtitleTextColor = newState.textColor
+                                appSettings.videoSubtitleBorderColor = newState.borderColor
+                                appSettings.videoSubtitleBorderSize = newState.borderSize
+                                appSettings.videoSubtitleBgColor = newState.backgroundColor
+                                appSettings.videoSubtitleAlignX = newState.alignX
+                                appSettings.videoSubtitlePosition = newState.position
+                                applySubtitleOverlayStyle()
                             },
                         )
                     }
@@ -729,12 +756,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 if (player.isPlaying) player.pause() else player.play()
             }
             is VideoPlayerAction.SeekTo -> mpvPlayer?.seekTo(action.positionMs)
-            is VideoPlayerAction.SeekBy -> mpvPlayer?.let { it.seekTo((it.positionMs + action.offsetMs).coerceIn(0L, it.durationMs)) }
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
-            is VideoPlayerAction.OpenSubtitleTracks -> {
+            is VideoPlayerAction.OpenSubtitles -> {
+                lastSettingsAnchorBounds = action.anchorBounds
+                showSubtitleSettingsDialog()
+            }
+            is VideoPlayerAction.OpenAudioTracks -> {
                 prepareDirectMenu(action.anchorBounds)
-                showSubtitleTrackDialog()
+                showAudioTrackDialog()
             }
             is VideoPlayerAction.OpenChapterSelection -> showChapterSelectionPanel(action.anchorBounds)
             is VideoPlayerAction.OpenPlaybackSpeed -> {
@@ -747,7 +777,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 prepareDirectMenu(action.anchorBounds)
                 showQualityDialog()
             }
-            is VideoPlayerAction.OpenSettings -> showVideoSettingsPanel(action.anchorBounds)
             is VideoPlayerAction.OpenMore -> showOverflowMenu(action.anchorBounds)
             VideoPlayerAction.ToggleFullscreen -> {
                 orientationHelper.isLandscape = !orientationHelper.isLandscape
@@ -789,7 +818,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             chapterGroupLabel = currentChapter?.branch?.trim()?.takeIf(String::isNotEmpty),
             playbackSpeedLabel = "%.2fx".format(appSettings.videoPlaybackSpeed),
             qualityLabel = availableVideos.takeIf { it.isNotEmpty() }?.let { buildQualityButtonLabel() },
-            showChapterMarkers = isLandscapeOrientation(),
         )
     }
 
@@ -2007,6 +2035,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         applyPlayerUiState(if (visible) PlayerUiState.ControlsVisible else PlayerUiState.Hidden)
     }
 
+    private fun pauseControlsAutoHide() {
+        playerRoot.removeCallbacks(hideUiRunnable)
+    }
+
+    private fun restartControlsAutoHide() {
+        playerRoot.removeCallbacks(hideUiRunnable)
+        if (playerUiState == PlayerUiState.ControlsVisible) {
+            playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
+        }
+    }
+
     private fun applyPlayerUiState(state: PlayerUiState) {
         playerUiState = state
         isUiVisible = state == PlayerUiState.ControlsVisible
@@ -2096,80 +2135,67 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (anchorBounds != IntRect.Zero) {
             lastMoreAnchorBounds = anchorBounds
         }
-        val showMarkerActions = !isLandscapeOrientation()
-        val actions = buildList {
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.open_external_player),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_open_external,
-                    onClick = ::openInExternalPlayer,
-                ),
-            )
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.cast_to_device),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_cast,
-                    onClick = ::showDlnaDeviceSheet,
-                ),
-            )
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.video_picture_in_picture),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_picture_in_picture,
-                    onClick = ::enterPictureInPicture,
-                ),
-            )
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.video_detail),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_info_outline,
-                    onClick = ::openVideoDetails,
-                ),
-            )
-            if (showMarkerActions) {
-                add(
-                    PlayerOverflowAction(
-                        title = buildIntroMenuTitle(),
-                        iconRes = org.skepsun.kototoro.R.drawable.ic_prev,
-                        onClick = ::toggleIntroMarker,
-                    ),
-                )
-                add(
-                    PlayerOverflowAction(
-                        title = buildOutroMenuTitle(),
-                        iconRes = org.skepsun.kototoro.R.drawable.ic_next,
-                        onClick = ::toggleOutroMarker,
-                    ),
-                )
-            }
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.rotate_screen),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_screen_rotation,
-                    onClick = { orientationHelper.isLandscape = !orientationHelper.isLandscape },
-                ),
-            )
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.video_aspect_ratio),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_aspect_ratio,
-                    onClick = ::showAspectRatioDialog,
-                ),
-            )
-            add(
-                PlayerOverflowAction(
-                    title = getString(R.string.save_manga_video),
-                    iconRes = org.skepsun.kototoro.R.drawable.ic_download,
-                    onClick = ::downloadCurrentChapter,
-                ),
-            )
-        }
         actionDialogState = VideoActionDialogState(
             title = getString(R.string.options),
-            items = actions.map { action ->
-                VideoActionDialogItem(action.title, iconRes = action.iconRes, onClick = action.onClick)
-            },
+            items = listOf(
+                VideoActionDialogItem(
+                    title = getString(R.string.video_reload),
+                    iconRes = R.drawable.ic_retry,
+                    onClick = ::reloadPlayback,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.open_external_player),
+                    iconRes = R.drawable.ic_open_external,
+                    onClick = ::openInExternalPlayer,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.cast_to_device),
+                    iconRes = R.drawable.ic_cast,
+                    onClick = ::showDlnaDeviceSheet,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.video_picture_in_picture),
+                    iconRes = R.drawable.ic_picture_in_picture,
+                    onClick = ::enterPictureInPicture,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.video_super_resolution),
+                    iconRes = R.drawable.ic_auto_fix,
+                    onClick = ::showVideoSuperResolutionSheet,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.video_screenshot),
+                    iconRes = R.drawable.ic_save,
+                    onClick = ::takeScreenshot,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.video_aspect_ratio),
+                    iconRes = R.drawable.ic_aspect_ratio,
+                    onClick = ::showAspectRatioDialog,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.save_manga_video),
+                    iconRes = R.drawable.ic_download,
+                    onClick = ::downloadCurrentChapter,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.video_detail),
+                    iconRes = R.drawable.ic_info_outline,
+                    onClick = ::openVideoDetails,
+                ),
+                VideoActionDialogItem(
+                    title = getString(R.string.settings),
+                    iconRes = R.drawable.ic_settings,
+                    onClick = {
+                        showVideoSettingsPanel(
+                            anchorBounds = lastMoreAnchorBounds,
+                            onBack = { showOverflowMenu(lastMoreAnchorBounds) },
+                        )
+                    },
+                ),
+            ),
             anchorBounds = lastMoreAnchorBounds,
+            columns = 2,
         )
     }
 
@@ -2177,34 +2203,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val enabledText = getString(R.string.enabled)
         val disabledText = getString(R.string.disabled)
         return listOf(
-            PlayerSettingsAction(
-                title = getString(R.string.video_reload),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_retry,
-                onClick = ::reloadPlayback,
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_quality),
-                subtitle = currentQualityLabel(),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_network_cellular,
-                onClick = ::showQualityDialog,
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_super_resolution),
-                subtitle = appSettings.videoSuperResolutionMode.name,
-                iconRes = org.skepsun.kototoro.R.drawable.ic_auto_fix,
-                onClick = ::showVideoSuperResolutionSheet,
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_screenshot),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_save,
-                onClick = ::takeScreenshot,
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_playback_speed),
-                subtitle = "%.2fx".format(appSettings.videoPlaybackSpeed),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_timer,
-                onClick = ::showPlaybackSpeedDialog,
-            ),
             PlayerSettingsAction(
                 title = getString(R.string.video_default_speed),
                 subtitle = "%.2fx".format(appSettings.videoDefaultSpeed),
@@ -2232,12 +2230,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         currentMs = appSettings.videoSeekBackwardMs,
                     ) { appSettings.videoSeekBackwardMs = it }
                 },
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_aspect_ratio),
-                subtitle = currentAspectRatioLabel(),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_aspect_ratio,
-                onClick = ::showAspectRatioDialog,
             ),
             PlayerSettingsAction(
                 title = getString(R.string.video_danmaku_enabled),
@@ -2277,18 +2269,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     appSettings.videoAutoNextEnabled = !appSettings.videoAutoNextEnabled
                 },
             ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_subtitle_track),
-                subtitle = currentSubtitleTrackLabel(),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_subtitles,
-                onClick = ::showSubtitleTrackDialog,
-            ),
-            PlayerSettingsAction(
-                title = getString(R.string.video_audio_track),
-                subtitle = currentAudioTrackLabel(),
-                iconRes = org.skepsun.kototoro.R.drawable.ic_audiotrack,
-                onClick = ::showAudioTrackDialog,
-            ),
         )
     }
 
@@ -2313,22 +2293,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun playerChapterList(): List<ContentChapter> {
         return chaptersViewModel.getAllChapters().ifEmpty {
             currentMangaContent()?.chapters.orEmpty()
-        }
-    }
-
-    private fun buildIntroMenuTitle(): String {
-        return if (introEndMs > 0) {
-            getString(R.string.video_mark_intro) + ": " + formatTimeMs(introEndMs)
-        } else {
-            getString(R.string.video_mark_intro)
-        }
-    }
-
-    private fun buildOutroMenuTitle(): String {
-        return if (outroStartMs > 0) {
-            getString(R.string.video_mark_outro) + ": " + formatTimeMs(outroStartMs)
-        } else {
-            getString(R.string.video_mark_outro)
         }
     }
 
@@ -2732,12 +2696,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun showVideoSettingsPanel(anchorBounds: IntRect = lastSettingsAnchorBounds) {
+    private fun showVideoSettingsPanel(
+        anchorBounds: IntRect = lastSettingsAnchorBounds,
+        onBack: (() -> Unit)? = null,
+    ) {
         if (anchorBounds != IntRect.Zero) {
             lastSettingsAnchorBounds = anchorBounds
         }
         actionDialogState = VideoActionDialogState(
-            title = getString(R.string.options),
+            title = getString(R.string.settings),
             items = buildPlayerSettingsActions().map { action ->
                 VideoActionDialogItem(
                     title = action.title,
@@ -2748,6 +2715,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 )
             },
             anchorBounds = lastSettingsAnchorBounds,
+            onBack = onBack,
         )
     }
 
@@ -2789,30 +2757,50 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
-    private fun showSubtitleTrackDialog() {
+    private fun buildSubtitleSettingsDialogState(): VideoSubtitleSettingsDialogState {
+        val player = mpvPlayer
+        val tracks = player?.getSubtitleTracks().orEmpty()
+        val trackOptions = arrayOf(getString(org.skepsun.kototoro.R.string.video_subtitle_off)) +
+            tracks.map { it.displayName() }.toTypedArray()
+        return VideoSubtitleSettingsDialogState(
+            fontSizeSp = appSettings.videoSubtitleFontSize,
+            bold = appSettings.videoSubtitleBold,
+            italic = appSettings.videoSubtitleItalic,
+            textColor = appSettings.videoSubtitleTextColor,
+            borderColor = appSettings.videoSubtitleBorderColor,
+            borderSize = appSettings.videoSubtitleBorderSize,
+            backgroundColor = appSettings.videoSubtitleBgColor,
+            alignX = appSettings.videoSubtitleAlignX,
+            position = appSettings.videoSubtitlePosition,
+            subtitleTrackOptions = if (tracks.isEmpty()) emptyList() else trackOptions.toList(),
+            subtitleTrackSelectedIndex = subtitlePanelSelectedIndex,
+            anchorBounds = lastSettingsAnchorBounds,
+        )
+    }
+
+    private fun showSubtitleSettingsDialog() {
+        subtitlePanelSelectedIndex = mpvPlayer?.getSubtitleTracks()
+            ?.indexOfFirst { it.isSelected }
+            ?.takeIf { it >= 0 }
+            ?.let { it + 1 }
+            ?: 0
+        subtitleSettingsDialogVisible = true
+    }
+
+    private fun selectSubtitleTrack(which: Int) {
+        subtitlePanelSelectedIndex = which
         val player = mpvPlayer ?: return
         val tracks = player.getSubtitleTracks()
-        if (tracks.isEmpty()) {
-            showPlayerMessage(org.skepsun.kototoro.R.string.video_no_subtitle_tracks)
-            return
-        }
-        val labels = arrayOf(getString(org.skepsun.kototoro.R.string.video_subtitle_off)) +
-            tracks.map { it.displayName() }.toTypedArray()
-        val selectedTrack = tracks.indexOfFirst { it.isSelected }
-        val checked = if (selectedTrack >= 0) selectedTrack + 1 else 0
-
-        showSelectionDialog(R.string.video_subtitle_track, labels.asList(), checked) { which ->
-            if (which == 0) {
-                player.setSubtitleTrack(null)
-                userManualSubtitleSelection = ManualSubtitleSelection.Off
-            } else {
-                val track = tracks[which - 1]
-                player.setSubtitleTrack(track.id)
-                userManualSubtitleSelection = ManualSubtitleSelection.Track(
-                    language = track.language,
-                    title = track.title,
-                )
-            }
+        if (which == 0) {
+            player.setSubtitleTrack(null)
+            userManualSubtitleSelection = ManualSubtitleSelection.Off
+        } else {
+            val track = tracks.getOrNull(which - 1) ?: return
+            player.setSubtitleTrack(track.id)
+            userManualSubtitleSelection = ManualSubtitleSelection.Track(
+                language = track.language,
+                title = track.title,
+            )
         }
     }
 
@@ -3027,34 +3015,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             VideoSuperResolutionShader.CUSTOM -> R.string.video_super_resolution_mode_custom
         },
     )
-
-    private fun currentQualityLabel(): String? {
-        if (availableVideos.isEmpty()) return null
-        val index = currentVideoIndex.coerceIn(availableVideos.indices)
-        return availableVideos[index].qualityDisplayLabel(index)
-    }
-
-    private fun currentAspectRatioLabel(): String {
-        val labelRes = when (appSettings.videoAspectRatio) {
-            1 -> R.string.video_aspect_ratio_fill
-            2 -> R.string.video_aspect_ratio_16_9
-            3 -> R.string.video_aspect_ratio_4_3
-            4 -> R.string.video_aspect_ratio_stretch
-            else -> R.string.video_aspect_ratio_fit
-        }
-        return getString(labelRes)
-    }
-
-    private fun currentSubtitleTrackLabel(): String {
-        val player = mpvPlayer ?: return getString(R.string.video_subtitle_off)
-        return player.getSubtitleTracks().find { it.isSelected }?.displayName()
-            ?: getString(R.string.video_subtitle_off)
-    }
-
-    private fun currentAudioTrackLabel(): String? {
-        val player = mpvPlayer ?: return null
-        return player.getAudioTracks().find { it.isSelected }?.displayName()
-    }
 
     private fun updatePlaybackSpeedButton() {
         syncComposeControlState()

@@ -8,4 +8,13 @@
     <string name="video_subtitle_color_text">Text</string>
     <string name="video_subtitle_color_border">Border</string>
     <string name="video_subtitle_color_bg">Background</string>
+    <string name="video_subtitle_layout">Layout</string>
+    <string name="video_subtitle_colors">Colors</string>
+    <string name="video_subtitle_align_left">Left</string>
+    <string name="video_subtitle_align_center">Center</string>
+    <string name="video_subtitle_align_right">Right</string>
+    <string name="video_subtitle_color_alpha">Alpha</string>
+    <string name="video_subtitle_color_red">Red</string>
+    <string name="video_subtitle_color_green">Green</string>
+    <string name="video_subtitle_color_blue">Blue</string>
 </resources>

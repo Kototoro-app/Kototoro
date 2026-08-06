@@ -4,6 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,15 +20,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Subtitles
@@ -42,12 +45,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -55,9 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import org.skepsun.kototoro.R
 import kotlin.math.roundToInt
 
 /** Immutable projection of playback state consumed by the Compose player chrome. */
@@ -75,7 +81,6 @@ data class VideoPlayerControlState(
     val chapterGroupLabel: String? = null,
     val playbackSpeedLabel: String = "1.00x",
     val qualityLabel: String? = null,
-    val showChapterMarkers: Boolean = false,
 )
 
 /** Events emitted by Compose. The Activity or a ViewModel owns the MPV side effects. */
@@ -83,16 +88,15 @@ sealed interface VideoPlayerAction {
     data object NavigateBack : VideoPlayerAction
     data object TogglePlayback : VideoPlayerAction
     data class SeekTo(val positionMs: Long) : VideoPlayerAction
-    data class SeekBy(val offsetMs: Long) : VideoPlayerAction
     data object PreviousChapter : VideoPlayerAction
     data object NextChapter : VideoPlayerAction
-    data class OpenSubtitleTracks(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenSubtitles(val anchorBounds: IntRect) : VideoPlayerAction
+    data class OpenAudioTracks(val anchorBounds: IntRect) : VideoPlayerAction
     data class OpenChapterSelection(val anchorBounds: IntRect) : VideoPlayerAction
     data class OpenPlaybackSpeed(val anchorBounds: IntRect) : VideoPlayerAction
     data object ToggleIntroMarker : VideoPlayerAction
     data object ToggleOutroMarker : VideoPlayerAction
     data class OpenQuality(val anchorBounds: IntRect) : VideoPlayerAction
-    data class OpenSettings(val anchorBounds: IntRect) : VideoPlayerAction
     data class OpenMore(val anchorBounds: IntRect) : VideoPlayerAction
     data object ToggleFullscreen : VideoPlayerAction
     data object ToggleScreenLock : VideoPlayerAction
@@ -106,6 +110,8 @@ sealed interface VideoPlayerAction {
 fun VideoPlayerControls(
     state: VideoPlayerControlState,
     onAction: (VideoPlayerAction) -> Unit,
+    onInteractionStart: () -> Unit = {},
+    onInteractionEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -120,7 +126,12 @@ fun VideoPlayerControls(
         ) {
             VideoPlayerTopControls(state = state, onAction = onAction)
             Spacer(modifier = Modifier.weight(1f))
-            VideoPlayerBottomControls(state = state, onAction = onAction)
+            VideoPlayerBottomControls(
+                state = state,
+                onAction = onAction,
+                onInteractionStart = onInteractionStart,
+                onInteractionEnd = onInteractionEnd,
+            )
         }
     }
 }
@@ -131,9 +142,9 @@ fun VideoPlayerTopControls(
     onAction: (VideoPlayerAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var settingsAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     var subtitleAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
+    var audioAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -175,23 +186,23 @@ fun VideoPlayerTopControls(
             }
             PlayerIconButton(
                 icon = { Icon(Icons.Filled.Subtitles, contentDescription = null) },
-                contentDescription = "Subtitle tracks",
-                onClick = { onAction(VideoPlayerAction.OpenSubtitleTracks(subtitleAnchorBounds)) },
+                contentDescription = "Subtitles",
+                onClick = { onAction(VideoPlayerAction.OpenSubtitles(subtitleAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
                     subtitleAnchorBounds = it.boundsInWindowIntRect()
                 },
             )
             PlayerIconButton(
-                icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                contentDescription = "Player settings",
-                onClick = { onAction(VideoPlayerAction.OpenSettings(settingsAnchorBounds)) },
+                icon = { Icon(Icons.Filled.Audiotrack, contentDescription = null) },
+                contentDescription = "Audio tracks",
+                onClick = { onAction(VideoPlayerAction.OpenAudioTracks(audioAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
-                    settingsAnchorBounds = it.boundsInWindowIntRect()
+                    audioAnchorBounds = it.boundsInWindowIntRect()
                 },
             )
             PlayerIconButton(
                 icon = { Icon(Icons.Filled.MoreVert, contentDescription = null) },
-                contentDescription = "More options",
+                contentDescription = stringResource(R.string.options),
                 onClick = { onAction(VideoPlayerAction.OpenMore(moreAnchorBounds)) },
                 modifier = Modifier.onGloballyPositioned {
                     moreAnchorBounds = it.boundsInWindowIntRect()
@@ -205,6 +216,8 @@ fun VideoPlayerTopControls(
 fun VideoPlayerBottomControls(
     state: VideoPlayerControlState,
     onAction: (VideoPlayerAction) -> Unit,
+    onInteractionStart: () -> Unit = {},
+    onInteractionEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -227,6 +240,7 @@ fun VideoPlayerBottomControls(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .keepVisibleDuringTouch(onInteractionStart, onInteractionEnd)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.72f)),
@@ -262,6 +276,8 @@ fun VideoPlayerBottomControls(
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
                     enabled = state.canSeek,
                     colors = sliderColors,
+                    compactThumb = true,
+                    trackHeight = 2.dp,
                 )
                 Text(
                     text = formatDuration(state.positionMs),
@@ -275,60 +291,77 @@ fun VideoPlayerBottomControls(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PlayerIconButton(
-                    icon = { Icon(Icons.Filled.SkipPrevious, contentDescription = null) },
-                    contentDescription = "Previous chapter",
-                    enabled = state.hasPreviousChapter,
-                    onClick = { onAction(VideoPlayerAction.PreviousChapter) },
-                )
-                PlayerIconButton(
-                    icon = { Icon(Icons.Filled.SkipNext, contentDescription = null) },
-                    contentDescription = "Next chapter",
-                    enabled = state.hasNextChapter,
-                    onClick = { onAction(VideoPlayerAction.NextChapter) },
-                )
-                PlayerChapterButton(
-                    groupLabel = state.chapterGroupLabel,
-                    onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
-                    modifier = Modifier.onGloballyPositioned {
-                        chaptersAnchorBounds = it.boundsInWindowIntRect()
-                    },
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                PlayerTextButton(
-                    text = state.playbackSpeedLabel,
-                    onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
-                    modifier = Modifier.onGloballyPositioned {
-                        speedAnchorBounds = it.boundsInWindowIntRect()
-                    },
-                )
-                if (state.showChapterMarkers) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PlayerIconButton(
+                        icon = { Icon(Icons.Filled.SkipPrevious, contentDescription = null) },
+                        contentDescription = "Previous chapter",
+                        enabled = state.hasPreviousChapter,
+                        onClick = { onAction(VideoPlayerAction.PreviousChapter) },
+                    )
+                    PlayerIconButton(
+                        icon = { Icon(Icons.Filled.SkipNext, contentDescription = null) },
+                        contentDescription = "Next chapter",
+                        enabled = state.hasNextChapter,
+                        onClick = { onAction(VideoPlayerAction.NextChapter) },
+                    )
+                    PlayerChapterButton(
+                        groupLabel = state.chapterGroupLabel,
+                        onClick = { onAction(VideoPlayerAction.OpenChapterSelection(chaptersAnchorBounds)) },
+                        modifier = Modifier.onGloballyPositioned {
+                            chaptersAnchorBounds = it.boundsInWindowIntRect()
+                        },
+                    )
+                    state.qualityLabel?.let { label ->
+                        PlayerTextButton(
+                            text = label,
+                            onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
+                            modifier = Modifier.onGloballyPositioned {
+                                qualityAnchorBounds = it.boundsInWindowIntRect()
+                            },
+                        )
+                    }
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    PlayerTextButton(
+                        text = state.playbackSpeedLabel,
+                        onClick = { onAction(VideoPlayerAction.OpenPlaybackSpeed(speedAnchorBounds)) },
+                        modifier = Modifier.onGloballyPositioned {
+                            speedAnchorBounds = it.boundsInWindowIntRect()
+                        },
+                    )
                     PlayerTextButton(stringResource(R.string.video_mark_intro)) {
                         onAction(VideoPlayerAction.ToggleIntroMarker)
                     }
                     PlayerTextButton(stringResource(R.string.video_mark_outro)) {
                         onAction(VideoPlayerAction.ToggleOutroMarker)
                     }
-                }
-                state.qualityLabel?.let { label ->
-                    PlayerTextButton(
-                        text = label,
-                        onClick = { onAction(VideoPlayerAction.OpenQuality(qualityAnchorBounds)) },
-                        modifier = Modifier.onGloballyPositioned {
-                            qualityAnchorBounds = it.boundsInWindowIntRect()
+                    PlayerIconButton(
+                        icon = {
+                            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                         },
+                        contentDescription = "Lock controls",
+                        onClick = { onAction(VideoPlayerAction.ToggleScreenLock) },
+                    )
+                    PlayerIconButton(
+                        icon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_screen_rotation),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        },
+                        contentDescription = stringResource(R.string.rotate_screen),
+                        onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
                     )
                 }
-                PlayerIconButton(
-                    icon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-                    contentDescription = "Lock controls",
-                    onClick = { onAction(VideoPlayerAction.ToggleScreenLock) },
-                )
-                PlayerIconButton(
-                    icon = { Icon(Icons.Filled.Fullscreen, contentDescription = null) },
-                    contentDescription = "Toggle fullscreen",
-                    onClick = { onAction(VideoPlayerAction.ToggleFullscreen) },
-                )
             }
         }
     }
@@ -350,6 +383,23 @@ private fun PlayerIconButton(
         modifier = modifier.size(36.dp).semantics { this.contentDescription = contentDescription },
         content = icon,
     )
+}
+
+private fun Modifier.keepVisibleDuringTouch(
+    onInteractionStart: () -> Unit,
+    onInteractionEnd: () -> Unit,
+): Modifier = pointerInput(onInteractionStart, onInteractionEnd) {
+    awaitEachGesture {
+        awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+        onInteractionStart()
+        try {
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+            } while (event.changes.any { it.pressed })
+        } finally {
+            onInteractionEnd()
+        }
+    }
 }
 
 @Composable

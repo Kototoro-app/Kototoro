@@ -24,6 +24,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
@@ -49,6 +50,7 @@ fun KototoroSlider(
     onValueChangeFinished: (() -> Unit)? = null,
     colors: SliderColors = SliderDefaults.colors(),
     compactThumb: Boolean = false,
+    trackHeight: Dp? = null,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val stylePolicy = LocalInterfaceStylePolicy.current
@@ -76,13 +78,14 @@ fun KototoroSlider(
             )
         },
         track = { state ->
+            val resolvedTrackHeight = trackHeight ?: tokens.sliderTrackHeight
             SliderDefaults.Track(
                 sliderState = state,
-                modifier = Modifier.height(tokens.sliderTrackHeight),
+                modifier = Modifier.height(resolvedTrackHeight),
                 enabled = enabled,
                 colors = colors,
                 thumbTrackGapSize = 0.dp,
-                trackInsideCornerSize = tokens.sliderTrackHeight / 2,
+                trackInsideCornerSize = resolvedTrackHeight / 2,
             )
         },
     )
