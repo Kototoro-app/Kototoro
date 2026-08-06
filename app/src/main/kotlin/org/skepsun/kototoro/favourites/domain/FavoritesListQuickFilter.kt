@@ -51,6 +51,7 @@ class FavoritesListQuickFilter @AssistedInject constructor(
 			add(ListFilterOption.Macro.NEW_CHAPTERS)
 		}
 		add(ListFilterOption.Macro.MULTI_PROJECTION)
+		add(ListFilterOption.Macro.BROKEN_PROJECTION)
 		add(ListFilterOption.Macro.COMPLETED)
 		val hideNsfw = settings.isFavouritesExcludeNsfw
 		try {

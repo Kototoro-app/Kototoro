@@ -15,6 +15,7 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
 import org.skepsun.kototoro.explore.data.SourceRuleResolver
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
 
 class WorkAggregateSpaceQueryTest {
@@ -32,6 +33,7 @@ class WorkAggregateSpaceQueryTest {
 			TestSpaceCatalogRepository(),
 			mockk<SourceRuleResolver>(relaxed = true),
 		),
+		contentSourcesRepository = mockk<ContentSourcesRepository>(),
 	)
 
 	@Test

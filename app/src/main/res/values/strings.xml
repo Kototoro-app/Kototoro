@@ -655,6 +655,7 @@
     <string name="badge_score">Score (from tracker)</string>
     <string name="badge_projection_count">Projection count</string>
     <string name="filter_multi_projection">Multi-projection</string>
+    <string name="filter_broken_projection">Broken</string>
     <string name="badge_source_icon">Source icon</string>
     <string name="badge_language">Language</string>
     <string name="badge_favorite">Favorite</string>

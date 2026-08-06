@@ -429,6 +429,7 @@
     <string name="badge_score">打分</string>
     <string name="badge_projection_count">投影数量</string>
     <string name="filter_multi_projection">多投影</string>
+    <string name="filter_broken_projection">失效投影</string>
     <string name="badge_source_icon">内容源图标</string>
     <string name="badge_language">语言</string>
     <string name="badge_favorite">收藏</string>

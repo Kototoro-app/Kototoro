@@ -106,9 +106,32 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
+    quickFilterOverride: QuickFilter? = null,
     enableItemAnimations: Boolean = true,
 ) {
-    val items by viewModel.content.collectAsStateWithLifecycle()
+    val sourceItems by viewModel.content.collectAsStateWithLifecycle()
+    val items = remember(sourceItems, quickFilterOverride) {
+        if (quickFilterOverride == null) {
+            sourceItems
+        } else {
+            buildList(sourceItems.size + 1) {
+                var replaced = false
+                sourceItems.forEach { item ->
+                    if (item is QuickFilter) {
+                        if (!replaced) {
+                            add(quickFilterOverride)
+                            replaced = true
+                        }
+                    } else {
+                        add(item)
+                    }
+                }
+                if (!replaced) {
+                    add(0, quickFilterOverride)
+                }
+            }
+        }
+    }
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()

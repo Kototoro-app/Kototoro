@@ -1295,7 +1295,16 @@ class ContentSourcesRepository @Inject constructor(
 		return if (fallback == org.skepsun.kototoro.core.model.UnknownContentSource) null else fallback
 	}
 
-	fun isSourceAvailable(sourceName: String): Boolean = sourceName.toContentSourceOrNull(allowFallback = false) != null
+	fun isSourceAvailable(sourceName: String): Boolean {
+		val source = org.skepsun.kototoro.core.model.ContentSource(sourceName)
+		return when (source) {
+			LocalMangaSource,
+			LocalNovelSource,
+			LocalVideoSource -> true
+			is ExternalContentSource -> source.isAvailable(context)
+			else -> sourceName.toContentSourceOrNull(allowFallback = false) != null
+		}
+	}
 
 	private fun canonicalizeSourcesByName(sources: List<ContentSource>): List<ContentSource> {
 		if (sources.size <= 1) {

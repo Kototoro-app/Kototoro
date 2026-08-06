@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
@@ -27,6 +28,7 @@ class WorkAggregateRepository @Inject constructor(
 	private val db: MangaDatabase,
 	private val workResolver: WorkResolver,
 	private val spaceContentPolicy: SpaceContentPolicy,
+	private val contentSourcesRepository: ContentSourcesRepository,
 ) {
 
 	suspend fun findFavouriteAggregates(
@@ -278,10 +280,30 @@ class WorkAggregateRepository @Inject constructor(
 		} else {
 			emptySet()
 		}
+		val brokenProjectionSourceNames = if (ListFilterOption.Macro.BROKEN_PROJECTION in filterOptions) {
+			aggregates.asSequence()
+				.flatMap { aggregate ->
+					aggregate.projections
+						.ifEmpty { listOfNotNull(aggregate.displayProjection) }
+						.asSequence()
+				}
+				.map { it.source.name }
+				.distinct()
+				.filterNot(contentSourcesRepository::isSourceAvailable)
+				.toSet()
+		} else {
+			emptySet()
+		}
 		return aggregates
 			.filter { aggregate ->
 				val content = aggregate.displayProjection ?: return@filter false
-				matchesFavouriteFilters(content, filterOptions, downloadedIds)
+				matchesFavouriteFilters(
+					aggregate = aggregate,
+					content = content,
+					filterOptions = filterOptions,
+					downloadedIds = downloadedIds,
+					brokenProjectionSourceNames = brokenProjectionSourceNames,
+				)
 			}
 			.sortedWith(favouriteAggregateComparator(order))
 			.distinctBy { it.identity.entityId ?: it.displayProjection?.id }
@@ -580,14 +602,19 @@ class WorkAggregateRepository @Inject constructor(
 	}
 
 	private fun matchesFavouriteFilters(
+		aggregate: WorkAggregate,
 		content: Content,
 		filterOptions: Set<ListFilterOption>,
 		downloadedIds: Set<Long>,
+		brokenProjectionSourceNames: Set<String>,
 	): Boolean {
 		return filterOptions.all { option ->
 			when (option) {
 				ListFilterOption.Downloaded -> content.id in downloadedIds
-				ListFilterOption.Macro.NSFW -> content.isNsfw()
+				is ListFilterOption.Macro -> when (option) {
+					ListFilterOption.Macro.NSFW -> content.isNsfw()
+					else -> aggregate.matchesFavouriteMacroFilter(option, brokenProjectionSourceNames)
+				}
 				is ListFilterOption.Inverted -> when (option.option) {
 					ListFilterOption.Macro.NSFW -> !content.isNsfw()
 					else -> true

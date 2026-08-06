@@ -3,6 +3,8 @@ package org.skepsun.kototoro.favourites.ui.compose
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -46,6 +48,7 @@ fun KototoroFavoritesListScreen(
     LaunchedEffect(viewModel, spaceId) {
         viewModel.bindSpace(spaceId)
     }
+    val quickFilter by viewModel.topQuickFilter.collectAsStateWithLifecycle()
 
     AppContentListRoute(
         viewModel = viewModel,
@@ -109,6 +112,7 @@ fun KototoroFavoritesListScreen(
         },
         fixSelectionActionTitleRes = R.string.entity_organize_title,
         showQuickFilterInline = true,
+        quickFilterOverride = quickFilter,
         enableItemAnimations = false,
     )
 }
