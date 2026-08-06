@@ -180,6 +180,24 @@ class EntityGraphRepository @Inject constructor(
 		entity
 	}
 
+	suspend fun getWorkEntityWithInferredContentType(
+		entityId: Long,
+		fallback: ContentType,
+	): Entity? = withContext(Dispatchers.Default) {
+		db.withTransaction {
+			val dao = db.getEntityGraphDao()
+			val record = dao.findEntity(entityId) ?: return@withTransaction null
+			if (record.type != EntityType.WORK.name) {
+				return@withTransaction record.toModel()
+			}
+			val typedRecord = record.withInferredContentType(dao, fallback)
+			if (typedRecord != record) {
+				dao.updateEntity(typedRecord)
+			}
+			typedRecord.toModel()
+		}
+	}
+
 	suspend fun getEntitiesByIds(entityIds: Collection<Long>): List<Entity> = withContext(Dispatchers.Default) {
 		if (entityIds.isEmpty()) {
 			return@withContext emptyList()

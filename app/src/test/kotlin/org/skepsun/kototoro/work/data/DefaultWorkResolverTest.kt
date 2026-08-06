@@ -130,6 +130,25 @@ class DefaultWorkResolverTest {
 	}
 
 	@Test
+	fun `bindProjectionToEntity repairs a legacy target with missing content type`() = runTest {
+		val owners = mutableMapOf<Long, Long>()
+		val localIds = mutableMapOf(1L to mutableSetOf(10L))
+		stubBindingState(owners, localIds, targetContentType = null)
+		coEvery { entityGraphRepository.attachLocalWorkProjectionToEntity(1L, any(), 1f, true) } answers {
+			owners[30L] = 1L
+			localIds.getValue(1L).add(30L)
+			true
+		}
+
+		val result = resolver.bindProjectionToEntity(1L, content(30L))
+
+		assertEquals(WorkProjectionBindingAction.ATTACHED, result.success().action)
+		coVerify(exactly = 1) {
+			entityGraphRepository.getWorkEntityWithInferredContentType(1L, ContentType.MANGA)
+		}
+	}
+
+	@Test
 	fun `bindProjectionToEntity rejects an unbound projection from another media family`() = runTest {
 		val owners = mutableMapOf<Long, Long>()
 		val localIds = mutableMapOf(1L to mutableSetOf<Long>())
@@ -215,10 +234,11 @@ class DefaultWorkResolverTest {
 	private fun stubBindingState(
 		owners: MutableMap<Long, Long>,
 		localIds: MutableMap<Long, MutableSet<Long>>,
+		targetContentType: ContentType? = ContentType.MANGA,
 	) {
-		coEvery { entityGraphRepository.getEntity(any()) } answers {
+		coEvery { entityGraphRepository.getWorkEntityWithInferredContentType(any(), any()) } answers {
 			val id = firstArg<Long>()
-			domainEntity(id)
+			domainEntity(id, targetContentType ?: secondArg())
 		}
 		coEvery { dao.findEntity(any()) } answers {
 			val id = firstArg<Long>()
@@ -296,11 +316,11 @@ class DefaultWorkResolverTest {
 		)
 	}
 
-	private fun domainEntity(id: Long): Entity {
+	private fun domainEntity(id: Long, contentType: ContentType = ContentType.MANGA): Entity {
 		return Entity(
 			id = id,
 			type = EntityType.WORK,
-			contentType = ContentType.MANGA,
+			contentType = contentType,
 			primaryName = "Work $id",
 			aliases = emptyList(),
 			createdAt = 1L,

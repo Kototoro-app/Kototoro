@@ -121,7 +121,10 @@ class DefaultWorkResolver @Inject constructor(
 		targetEntityId: Long,
 		projection: Content,
 	): WorkProjectionBindingResult = withContext(Dispatchers.IO) {
-		val targetEntity = entityGraphRepository.getEntity(targetEntityId)
+		val targetEntity = entityGraphRepository.getWorkEntityWithInferredContentType(
+			entityId = targetEntityId,
+			fallback = projection.source.contentType,
+		)
 		if (targetEntity?.type != EntityType.WORK) {
 			return@withContext bindingConflict(
 				reason = WorkProjectionBindingConflict.TARGET_ENTITY_MISSING,

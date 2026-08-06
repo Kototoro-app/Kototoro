@@ -179,6 +179,7 @@ class ExternalBackupRepository @Inject constructor(
                 state = null,
                 authors = record.authors,
                 source = record.sourceName,
+                contentType = record.contentType.name,
             ),
             tags = tags,
         )

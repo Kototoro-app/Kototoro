@@ -159,7 +159,10 @@ fun ContentSource.getContentType(): ContentType = unwrap().contentType
 
 fun ContentSource.resolvedContentTypeForSnapshot(): ContentType? {
 	val resolved = unwrap()
-	return resolved.contentType.takeUnless { resolved is AnonymousContentSource || resolved === UnknownContentSource }
+	return resolved.contentType.takeUnless {
+		resolved === UnknownContentSource ||
+			(resolved is AnonymousContentSource && resolved.contentType == ContentType.OTHER)
+	}
 }
 
 fun ContentSource.getSummary(context: Context, contentType: ContentType? = null): String? = when (val source = unwrap()) {
