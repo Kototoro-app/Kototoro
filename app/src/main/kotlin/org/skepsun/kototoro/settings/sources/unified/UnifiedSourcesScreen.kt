@@ -164,6 +164,10 @@ private sealed interface UnifiedSourcesDialogState {
 	data class TrustRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesDialogState
 	data class DeleteRepository(val repository: UnifiedSourceRepositoryItem) : UnifiedSourcesDialogState
 	data class DeleteSelectedSources(val plan: UnifiedSelectedSourceDeletePlan) : UnifiedSourcesDialogState
+	data class SetFilteredSourcesEnabled(
+		val sourceIds: Set<String>,
+		val enabled: Boolean,
+	) : UnifiedSourcesDialogState
 	data class PackageDetails(val item: UnifiedSourcePackageItem) : UnifiedSourcesDialogState
 	data class ThirdPartyDisclaimer(val action: UnifiedThirdPartyAction) : UnifiedSourcesDialogState
 }
@@ -263,6 +267,16 @@ fun UnifiedSourcesRoute(
 		initialRepositoryHandled = true
 	}
 
+	fun confirmSetFilteredSourcesEnabled(enabled: Boolean) {
+		val sourceIds = (state as? UnifiedSourcesUiState.Ready)
+			?.sources
+			.orEmpty()
+			.mapTo(LinkedHashSet()) { it.id }
+		if (sourceIds.isNotEmpty()) {
+			activeDialog = UnifiedSourcesDialogState.SetFilteredSourcesEnabled(sourceIds, enabled)
+		}
+	}
+
 	UnifiedSourcesScreen(
 		state = state,
 		isLoading = isLoading,
@@ -279,6 +293,8 @@ fun UnifiedSourcesRoute(
 		onLanguageFilterClick = { onActivePanelChange(UnifiedToolbarFilterPanel.LANGUAGE) },
 		onMoreFiltersClick = { onActivePanelChange(UnifiedToolbarFilterPanel.MORE) },
 		onSourceEnabledChange = viewModel::setSourceEnabled,
+		onEnableAllSources = { confirmSetFilteredSourcesEnabled(true) },
+		onDisableAllSources = { confirmSetFilteredSourcesEnabled(false) },
 		selectedSourceIds = selectedSourceIds,
 		onSourceSelectionChange = { selectedSourceIdList = it.toList() },
 		onSelectAllVisibleSources = {
@@ -485,6 +501,16 @@ fun UnifiedSourcesRoute(
 			},
 		)
 
+		is UnifiedSourcesDialogState.SetFilteredSourcesEnabled -> UnifiedSetFilteredSourcesEnabledDialog(
+			enabled = dialog.enabled,
+			sourceCount = dialog.sourceIds.size,
+			onDismiss = { activeDialog = null },
+			onConfirm = {
+				viewModel.setSourcesEnabled(dialog.sourceIds, dialog.enabled)
+				activeDialog = null
+			},
+		)
+
 		is UnifiedSourcesDialogState.DeleteSelectedSources -> UnifiedDeleteSelectedSourcesDialog(
 			plan = dialog.plan,
 			onDismiss = { activeDialog = null },
@@ -682,6 +708,49 @@ private fun UnifiedDeleteRepositoryDialog(
 			)
 		},
 		text = { Text(stringResource(R.string.delete_repository_message, repository.name)) },
+	)
+}
+
+@Composable
+private fun UnifiedSetFilteredSourcesEnabledDialog(
+	enabled: Boolean,
+	sourceCount: Int,
+	onDismiss: () -> Unit,
+	onConfirm: () -> Unit,
+) {
+	SettingsAlertDialog(
+		title = stringResource(
+			if (enabled) {
+				R.string.unified_sources_enable_all
+			} else {
+				R.string.unified_sources_disable_all
+			},
+		),
+		onDismissRequest = onDismiss,
+		confirmButton = {
+			SettingsDialogActionButton(
+				text = stringResource(if (enabled) R.string.enable else R.string.disable),
+				onClick = onConfirm,
+			)
+		},
+		dismissButton = {
+			SettingsDialogActionButton(
+				text = stringResource(android.R.string.cancel),
+				onClick = onDismiss,
+			)
+		},
+		text = {
+			Text(
+				stringResource(
+					if (enabled) {
+						R.string.unified_sources_enable_all_confirmation
+					} else {
+						R.string.unified_sources_disable_all_confirmation
+					},
+					sourceCount,
+				),
+			)
+		},
 	)
 }
 
@@ -1134,6 +1203,8 @@ fun UnifiedSourcesScreen(
 	onKindClick: (UnifiedSourceKind?) -> Unit,
 	onContentTypeClick: (ContentType?) -> Unit,
 	onSourceEnabledChange: (String, Boolean) -> Unit,
+	onEnableAllSources: () -> Unit,
+	onDisableAllSources: () -> Unit,
 	selectedSourceIds: Set<String>,
 	onSourceSelectionChange: (Set<String>) -> Unit,
 	onSelectAllVisibleSources: () -> Unit,
@@ -1275,6 +1346,8 @@ fun UnifiedSourcesScreen(
 									onBrowseSource = onBrowseSource,
 									onOpenSourceSettings = onOpenSourceSettings,
 									onSourceEnabledChange = onSourceEnabledChange,
+									onEnableAllSources = onEnableAllSources,
+									onDisableAllSources = onDisableAllSources,
 									selectedSourceIds = activeSelectedSourceIds,
 									onSourceSelectionChange = onSourceSelectionChange,
 									onSourcePinnedChange = onSourcePinnedChange,
@@ -1474,6 +1547,8 @@ private fun UnifiedSourceList(
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
 	onSourceEnabledChange: (String, Boolean) -> Unit,
+	onEnableAllSources: () -> Unit,
+	onDisableAllSources: () -> Unit,
 	selectedSourceIds: Set<String>,
 	onSourceSelectionChange: (Set<String>) -> Unit,
 	onSourcePinnedChange: (String, Boolean) -> Unit,
@@ -1487,6 +1562,29 @@ private fun UnifiedSourceList(
 			vertical = 4.dp,
 		),
 	) {
+		item(key = "source_actions") {
+			LazyRow(
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(bottom = 4.dp),
+				horizontalArrangement = Arrangement.spacedBy(8.dp),
+			) {
+				item(key = "enable_all_sources") {
+					CompactActionChip(
+						onClick = onEnableAllSources,
+						enabled = sources.isNotEmpty(),
+						label = { Text(stringResource(R.string.unified_sources_enable_all)) },
+					)
+				}
+				item(key = "disable_all_sources") {
+					CompactActionChip(
+						onClick = onDisableAllSources,
+						enabled = sources.isNotEmpty(),
+						label = { Text(stringResource(R.string.unified_sources_disable_all)) },
+					)
+				}
+			}
+		}
 		items(sources, key = { it.id }) { item ->
 			val isSelected = item.id in selectedSourceIds
 			UnifiedSourceRow(
@@ -2135,9 +2233,11 @@ private fun CompactActionChip(
 	onClick: () -> Unit,
 	label: @Composable () -> Unit,
 	modifier: Modifier = Modifier,
+	enabled: Boolean = true,
 ) {
 	AssistChip(
 		onClick = onClick,
+		enabled = enabled,
 		modifier = modifier.defaultMinSize(minHeight = 30.dp),
 		label = {
 			Box(modifier = Modifier.padding(horizontal = 2.dp)) {

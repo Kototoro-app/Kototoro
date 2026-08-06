@@ -2697,6 +2697,10 @@
     <string name="unified_sources_delete_selected_with_skipped_jars">Delete %1$d package(s) for the selected sources?\n\nJAR packages were skipped to avoid accidental removal: %2$s</string>
     <string name="unified_sources_delete_selected_only_skipped_jars">The selection contains JAR sources. Their packages were skipped to avoid accidental removal: %1$s</string>
     <string name="unified_sources_delete_selected_no_packages">No removable packages were found in the current selection.</string>
+    <string name="unified_sources_enable_all">Enable all</string>
+    <string name="unified_sources_disable_all">Disable all</string>
+    <string name="unified_sources_enable_all_confirmation">Enable all %1$d sources in the current filter?</string>
+    <string name="unified_sources_disable_all_confirmation">Disable all %1$d sources in the current filter?</string>
     <string name="show_extensions_in_grid">Show extensions in two columns</string>
     <string name="show_extensions_in_list">Show extensions in one column</string>
     <string name="setup_wizard">Setup wizard</string>
