@@ -69,6 +69,10 @@
     <string name="various_languages">多语言</string>
     <string name="search_chapters">查找章节</string>
     <string name="suggestions_excluded_genres">屏蔽类别</string> <string name="suggestions_preferred_genres">偏好类别</string>
+    <string name="suggestions_preferred_sources">偏好源</string>
+    <string name="suggestions_preferred_sources_summary">优先展示所选源的推荐作品</string>
+    <string name="suggestions_excluded_sources">排除源</string>
+    <string name="suggestions_excluded_sources_summary">不从所选源获取推荐作品</string>
     <string name="suggestions_updating">作品推荐更新中</string>
     <string name="check_new_chapters_title">检查作品新章节并接收通知</string>
     <string name="discover_open_site">打开站点</string>
@@ -1473,7 +1477,7 @@
     <string name="filter_extensions_by_selected_content_languages">按语言过滤扩展：已选内容语言</string>
     <string name="filter_extensions_by_language_with_value">按语言过滤扩展：%1$s</string>
     <string name="use_setup_wizard_languages">使用向导语言</string>
-    <string name="availability_filter_title">可用性</string>
+    <string name="availability_filter_title">声明可用性</string>
     <string name="nsfw_filter_title">成人内容</string>
     <string name="unified_sources_refresh_timeout">刷新超时，请检查网络后重试。</string>
     <string name="unified_sources_refresh_partial_failed">部分仓库刷新失败：%1$s</string>
@@ -2529,6 +2533,12 @@
     <string name="hide_empty_sources">隐藏空源</string>
     <string name="source_mark_empty">标记为空</string>
     <string name="source_mark_available">标记为可用</string>
+    <string name="source_test_availability_filter_title">测试可用性</string>
+    <string name="source_test_action">测试源</string>
+    <string name="source_test_available">测试可用</string>
+    <string name="source_test_unavailable">测试不可用</string>
+    <string name="source_untested">未测试</string>
+    <string name="source_test_completed">源测试完成：%1$d 个可用，%2$d 个不可用</string>
     <string name="source_empty_badge">空源</string>
     <string name="source_empty_badge_short">空</string>
     <string name="show_empty_sources">显示空源</string>

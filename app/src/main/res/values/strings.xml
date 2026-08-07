@@ -664,6 +664,10 @@
     <string name="suggestions_excluded_genres_summary">Specify genres that you do not want to see in the suggestions</string>
     <string name="suggestions_preferred_genres">Preferred genres</string>
     <string name="suggestions_preferred_genres_summary">Specify genres that you want to see prioritized in the suggestions</string>
+    <string name="suggestions_preferred_sources">Preferred sources</string>
+    <string name="suggestions_preferred_sources_summary">Prioritize suggestions from selected sources</string>
+    <string name="suggestions_excluded_sources">Excluded sources</string>
+    <string name="suggestions_excluded_sources_summary">Do not fetch suggestions from selected sources</string>
     <string name="text_delete_local_manga_batch">Delete selected items from device permanently?</string>
     <string name="removal_completed">Removal completed</string>
     <string name="shikimori" translatable="false">Shikimori</string>
@@ -871,6 +875,12 @@
     <string name="source_disabled">Source disabled</string>
     <string name="source_mark_empty">Mark empty</string>
     <string name="source_mark_available">Mark available</string>
+    <string name="source_test_availability_filter_title">Test availability</string>
+    <string name="source_test_action">Test sources</string>
+    <string name="source_test_available">Tested available</string>
+    <string name="source_test_unavailable">Tested unavailable</string>
+    <string name="source_untested">Untested</string>
+    <string name="source_test_completed">Source test completed: %1$d available, %2$d unavailable</string>
     <string name="source_empty_badge">Empty source</string>
     <string name="source_empty_badge_short">Empty</string>
     <string name="show_empty_sources">Show empty sources</string>
@@ -2671,7 +2681,7 @@
     <string name="all_content">All content</string>
     <string name="all_sources">All sources</string>
     <string name="more_filters">More filters</string>
-    <string name="availability_filter_title">Availability</string>
+    <string name="availability_filter_title">Declared availability</string>
     <string name="nsfw_filter_title">Adult content</string>
     <string name="repository_source">Repository source</string>
     <string name="repository_url">Repository URL</string>

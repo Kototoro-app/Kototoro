@@ -150,7 +150,6 @@ import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
 import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.parsers.model.ContentType
 
 @Immutable
 private data class HomeScreenPrefs(
@@ -591,7 +590,7 @@ private fun HomeHeroSection(
                         mode = mode,
                         fixedPresentation = fixedPresentation,
                         signals = HomeHeroStyleSignals(
-                            isNovel = entry.content.isNovelContent(),
+                            contentType = entry.content.source.getContentType(),
                             isResume = entry.kind == HomeHeroKind.RESUME,
                             hasDistinctLargeCover = entry.content.hasDistinctLargeCover(),
                             isRecommendation = entry.kind == HomeHeroKind.RECOMMENDATION,
@@ -1621,12 +1620,6 @@ private const val HOME_LIST_RAIL_PAGE_SIZE = 3
 private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
 private val HOME_HERO_CARD_HEIGHT = 184.dp
 private val HOME_SECTION_GAP = 4.dp
-
-private fun Content.isNovelContent(): Boolean = when (source.getContentType()) {
-    ContentType.NOVEL,
-    ContentType.HENTAI_NOVEL -> true
-    else -> false
-}
 
 private fun Content.hasDistinctLargeCover(): Boolean {
     val largeCover = largeCoverUrl?.takeIfUsableImageUri() ?: return false

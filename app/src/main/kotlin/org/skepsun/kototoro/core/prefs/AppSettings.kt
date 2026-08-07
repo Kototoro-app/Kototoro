@@ -208,7 +208,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_HOME, value) }
 
 	var homeHeroStyle: HomeHeroStyle
-		get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.AUTO)
+		get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.CLASSIC)
 		set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_STYLE, value) }
 
 	var homeHeroMode: HomeHeroMode
@@ -1627,6 +1627,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			return string.split(',').mapToSet { it.trim() }
 		}
 
+	val suggestionsPreferredSources: Set<String>
+		get() = prefs.getStringSet(KEY_SUGGESTIONS_PREFERRED_SOURCES, emptySet()).orEmpty()
+
+	val suggestionsExcludedSources: Set<String>
+		get() = prefs.getStringSet(KEY_SUGGESTIONS_EXCLUDED_SOURCES, emptySet()).orEmpty()
+
 	val isReaderBarEnabled: Boolean
 		get() = prefs.getBoolean(KEY_READER_BAR, true)
 
@@ -2427,6 +2433,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SUGGESTIONS_EXCLUDE_NSFW = "suggestions_exclude_nsfw"
 		const val KEY_SUGGESTIONS_EXCLUDE_TAGS = "suggestions_exclude_tags"
 		const val KEY_SUGGESTIONS_PREFERRED_TAGS = "suggestions_preferred_tags"
+		const val KEY_SUGGESTIONS_PREFERRED_SOURCES = "suggestions_preferred_sources"
+		const val KEY_SUGGESTIONS_EXCLUDED_SOURCES = "suggestions_excluded_sources"
 		const val KEY_SUGGESTIONS_DISABLED_SOURCES = "suggestions_disabled_sources"
 		const val KEY_SUGGESTIONS_NOTIFICATIONS = "suggestions_notifications"
 		const val KEY_SHIKIMORI = "shikimori"

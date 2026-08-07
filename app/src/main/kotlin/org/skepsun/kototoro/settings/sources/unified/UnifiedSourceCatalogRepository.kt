@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.jsonsource.JsonSourceListSource
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
 import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isBroken
@@ -40,6 +41,7 @@ import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
@@ -60,6 +62,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 	private val database: MangaDatabase,
 	private val settings: AppSettings,
 	private val contentSourcesRepository: ContentSourcesRepository,
+	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 	private val jsonSourceManager: JsonSourceManager,
 	private val extensionRepoRepository: ExternalExtensionRepoRepository,
 	private val mihonExtensionManager: MihonExtensionManager,
@@ -294,6 +297,13 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		}
 		return combine(dbChanges, runtimeChanges, settingsChanges) { _, _, _ -> Unit }
 			.mapLatest { buildSourceItems() }
+			.combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
+				sources.map { source ->
+					source.copy(
+						testAvailability = availability[source.id] ?: ContentSourceAvailability.UNKNOWN,
+					)
+				}
+			}
 	}
 
 	private fun observeRuntimeSourceChanges(): Flow<Unit> {

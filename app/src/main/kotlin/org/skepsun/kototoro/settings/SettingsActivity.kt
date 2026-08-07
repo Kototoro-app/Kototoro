@@ -76,6 +76,7 @@ import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.FileSize
@@ -207,6 +208,9 @@ class SettingsActivity :
 
 	@Inject
 	lateinit var suggestionsScheduler: SuggestionsWorker.Scheduler
+
+	@Inject
+	lateinit var contentSourcesRepository: ContentSourcesRepository
 
 	@Inject
 	lateinit var googleDriveSyncSettings: GoogleDriveSyncSettings
@@ -1055,6 +1059,7 @@ class SettingsActivity :
 				SuggestionsSettingsRoute(
 					settings = kototoroAppSettings,
 					suggestionsScheduler = suggestionsScheduler,
+					contentSourcesRepository = contentSourcesRepository,
 					excludeTagsFlow = suggestionsExcludeTagsFlow,
 					preferredTagsFlow = suggestionsPreferredTagsFlow,
 				)

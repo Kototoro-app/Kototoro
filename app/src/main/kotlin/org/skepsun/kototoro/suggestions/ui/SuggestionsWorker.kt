@@ -80,7 +80,7 @@ import org.skepsun.kototoro.suggestions.domain.ContentSuggestion
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.domain.TagsBlacklist
 import org.skepsun.kototoro.suggestions.domain.collectSourceResults
-import org.skepsun.kototoro.suggestions.domain.selectBalancedBySource
+import org.skepsun.kototoro.suggestions.domain.selectBalancedByPreferredSource
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.pow
@@ -205,9 +205,10 @@ class SuggestionsWorker @AssistedInject constructor(
 			}.toList()
 			.sortedByDescending { it.relevance }
 			.distinctBy { it.manga.id }
-			.selectBalancedBySource(
+			.selectBalancedByPreferredSource(
 				limit = MAX_RESULTS,
 				perSourceLimit = MAX_RESULTS_PER_SOURCE,
+				preferredSources = appSettings.suggestionsPreferredSources - appSettings.suggestionsExcludedSources,
 			) { it.manga.source.name }
 			.mapIndexed { index, suggestion ->
 				// Room 按 relevance 排序，因此将打散后的名次编码进持久化分数。
@@ -250,14 +251,16 @@ class SuggestionsWorker @AssistedInject constructor(
 	}
 
 	private suspend fun getSources(): List<ContentSource> {
-		if (appSettings.isSuggestionsIncludeDisabledSources) {
+		val sources = if (appSettings.isSuggestionsIncludeDisabledSources) {
 			val result = sourcesRepository.getAllAvailableSourcesUnfiltered().toMutableList()
 			result.shuffle()
 			result.sortWith(compareBy(nullsLast(LocaleComparator())) { it.getLocale() })
-			return result
+			result
 		} else {
-			return sourcesRepository.getEnabledSources().shuffled()
+			sourcesRepository.getEnabledSources().shuffled()
 		}
+		val excludedSources = appSettings.suggestionsExcludedSources
+		return sources.filterNot { it.name in excludedSources }
 	}
 
 	private suspend fun getList(

@@ -612,6 +612,8 @@ class SettingsSearchHelper @Inject constructor(
 			"suggestions_notifications" to R.string.notifications_enable,
 			"suggestions_exclude_tags" to R.string.suggestions_excluded_genres,
 			"suggestions_preferred_tags" to R.string.suggestions_preferred_genres,
+			"suggestions_preferred_sources" to R.string.suggestions_preferred_sources,
+			"suggestions_excluded_sources" to R.string.suggestions_excluded_sources,
 			"track_warning" to R.string.suggestions_info
 		)
 		suggestionsKeys.forEach { (key, titleRes) ->

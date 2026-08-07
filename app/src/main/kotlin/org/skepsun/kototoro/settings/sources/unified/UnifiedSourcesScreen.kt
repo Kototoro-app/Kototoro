@@ -84,6 +84,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getSummary
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
@@ -296,6 +297,10 @@ fun UnifiedSourcesRoute(
 			viewModel.setSourcesEnabled(selectedSourceIds, false)
 			selectedSourceIdList = emptyList()
 		},
+		onTestSelectedSources = {
+			viewModel.testSources(selectedSourceIds)
+			selectedSourceIdList = emptyList()
+		},
 		onDeleteSelectedSources = {
 			val readyStateForDelete = state as? UnifiedSourcesUiState.Ready ?: return@UnifiedSourcesScreen
 			activeDialog = UnifiedSourcesDialogState.DeleteSelectedSources(
@@ -369,6 +374,15 @@ fun UnifiedSourcesRoute(
 						CompactFilterChip(
 							selected = readyState.filters.availabilityFilter == filter,
 							onClick = { viewModel.setAvailabilityFilter(filter) },
+							text = filter.displayLabel(),
+						)
+					}
+				}
+				FilterSection(title = stringResource(R.string.source_test_availability_filter_title)) {
+					items(UnifiedTestAvailabilityFilter.entries) { filter ->
+						CompactFilterChip(
+							selected = readyState.filters.testAvailabilityFilter == filter,
+							onClick = { viewModel.setTestAvailabilityFilter(filter) },
 							text = filter.displayLabel(),
 						)
 					}
@@ -1140,6 +1154,7 @@ fun UnifiedSourcesScreen(
 	onClearSourceSelection: () -> Unit,
 	onEnableSelectedSources: () -> Unit,
 	onDisableSelectedSources: () -> Unit,
+	onTestSelectedSources: () -> Unit,
 	onDeleteSelectedSources: () -> Unit,
 	onSourcePinnedChange: (String, Boolean) -> Unit,
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
@@ -1254,6 +1269,7 @@ fun UnifiedSourcesScreen(
 							onClearSelection = onClearSourceSelection,
 							onEnableSelectedSources = onEnableSelectedSources,
 							onDisableSelectedSources = onDisableSelectedSources,
+							onTestSelectedSources = onTestSelectedSources,
 							onDeleteSelectedSources = onDeleteSelectedSources,
 						)
 					}
@@ -1409,6 +1425,7 @@ private fun UnifiedSourceSelectionBar(
 	onClearSelection: () -> Unit,
 	onEnableSelectedSources: () -> Unit,
 	onDisableSelectedSources: () -> Unit,
+	onTestSelectedSources: () -> Unit,
 	onDeleteSelectedSources: () -> Unit,
 ) {
 	LazyRow(
@@ -1444,6 +1461,12 @@ private fun UnifiedSourceSelectionBar(
 			CompactActionChip(
 				onClick = onDisableSelectedSources,
 				label = { Text(stringResource(R.string.disable)) },
+			)
+		}
+		item(key = "test_selected") {
+			CompactActionChip(
+				onClick = onTestSelectedSources,
+				label = { Text(stringResource(R.string.source_test_action)) },
 			)
 		}
 		item(key = "delete_selected") {
@@ -1607,6 +1630,16 @@ private fun UnifiedSourceRow(
 				CompactTag(text = item.kind.displayLabel())
 				if (!item.isAvailable || item.isBroken) {
 					CompactTag(text = stringResource(R.string.unavailable), isWarning = true)
+				}
+				when (item.testAvailability) {
+					ContentSourceAvailability.AVAILABLE -> CompactTag(
+						text = stringResource(R.string.source_test_available),
+					)
+					ContentSourceAvailability.EMPTY -> CompactTag(
+						text = stringResource(R.string.source_test_unavailable),
+						isWarning = true,
+					)
+					ContentSourceAvailability.UNKNOWN -> Unit
 				}
 			}
 			Text(
@@ -2269,6 +2302,16 @@ private fun UnifiedAvailabilityFilter.displayLabel(): String {
 }
 
 @Composable
+private fun UnifiedTestAvailabilityFilter.displayLabel(): String {
+	return when (this) {
+		UnifiedTestAvailabilityFilter.ALL -> stringResource(R.string.all)
+		UnifiedTestAvailabilityFilter.UNTESTED -> stringResource(R.string.source_untested)
+		UnifiedTestAvailabilityFilter.AVAILABLE -> stringResource(R.string.available)
+		UnifiedTestAvailabilityFilter.UNAVAILABLE -> stringResource(R.string.unavailable)
+	}
+}
+
+@Composable
 private fun UnifiedNsfwFilter.displayLabel(): String {
 	return when (this) {
 		UnifiedNsfwFilter.ALL -> stringResource(R.string.all)
@@ -2281,6 +2324,7 @@ private fun UnifiedSourcesFilterState.otherFilterCount(): Int {
 	return locationTypes.size +
 		(if (enabledFilter == UnifiedEnabledFilter.ALL) 0 else 1) +
 		(if (availabilityFilter == UnifiedAvailabilityFilter.ALL) 0 else 1) +
+		(if (testAvailabilityFilter == UnifiedTestAvailabilityFilter.ALL) 0 else 1) +
 		(if (nsfwFilter == UnifiedNsfwFilter.ALL) 0 else 1)
 }
 

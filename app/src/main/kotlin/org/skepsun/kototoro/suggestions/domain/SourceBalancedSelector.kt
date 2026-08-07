@@ -35,3 +35,20 @@ internal fun <T, K> List<T>.selectBalancedBySource(
 	}
 	return result
 }
+
+internal fun <T, K> List<T>.selectBalancedByPreferredSource(
+	limit: Int,
+	perSourceLimit: Int,
+	preferredSources: Set<K>,
+	sourceOf: (T) -> K,
+): List<T> {
+	if (preferredSources.isEmpty()) {
+		return selectBalancedBySource(limit, perSourceLimit, sourceOf)
+	}
+	val (preferred, remaining) = partition { sourceOf(it) in preferredSources }
+	val result = preferred.selectBalancedBySource(limit, perSourceLimit, sourceOf)
+	if (result.size >= limit) {
+		return result
+	}
+	return result + remaining.selectBalancedBySource(limit - result.size, perSourceLimit, sourceOf)
+}

@@ -12,6 +12,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -25,6 +27,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
@@ -36,6 +41,8 @@ import org.skepsun.kototoro.core.lnreader.LNReaderPluginInfo
 import org.skepsun.kototoro.core.lnreader.LNReaderRepository
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
+import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.network.jsonsource.JsonSourceHttpClient
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -43,6 +50,7 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import org.skepsun.kototoro.extensions.install.ExtensionInstallDownloadState
 import org.skepsun.kototoro.extensions.install.ExtensionInstallMode
@@ -56,6 +64,8 @@ import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.model.ContentListFilter
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.settings.sources.extensions.ExtensionBatchUpdateStateMachine
 import org.skepsun.kototoro.settings.sources.extensions.isNewerThanInstalled
@@ -66,12 +76,16 @@ import javax.inject.Inject
 
 private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
+private const val SOURCE_TEST_TIMEOUT_MS = 45_000L
+private const val SOURCE_TEST_MAX_PARALLELISM = 3
 
 @HiltViewModel
 class UnifiedSourcesViewModel @Inject constructor(
 	@ApplicationContext private val appContext: Context,
 	private val catalogRepository: UnifiedSourceCatalogRepository,
 	private val contentSourcesRepository: ContentSourcesRepository,
+	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
+	private val contentRepositoryFactory: ContentRepository.Factory,
 	private val jsonSourceManager: JsonSourceManager,
 	private val legadoHttpClient: LegadoHttpClient,
 	@JsonSourceHttpClient private val okHttpClient: OkHttpClient,
@@ -177,6 +191,10 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 	fun setAvailabilityFilter(filter: UnifiedAvailabilityFilter) {
 		filterState.update { it.copy(availabilityFilter = filter) }
+	}
+
+	fun setTestAvailabilityFilter(filter: UnifiedTestAvailabilityFilter) {
+		filterState.update { it.copy(testAvailabilityFilter = filter) }
 	}
 
 	fun setNsfwFilter(filter: UnifiedNsfwFilter) {
@@ -583,6 +601,52 @@ class UnifiedSourcesViewModel @Inject constructor(
 				settings.isAllSourcesEnabled = false
 			}
 			contentSourcesRepository.setSourcesEnabled(sourceItems.map { it.source }, enabled)
+		}
+	}
+
+	fun testSources(sourceIds: Set<String>) {
+		if (sourceIds.isEmpty()) {
+			return
+		}
+		val sourceItems = (uiState.value as? UnifiedSourcesUiState.Ready)
+			?.allSources
+			.orEmpty()
+			.filter { it.id in sourceIds }
+		if (sourceItems.isEmpty()) {
+			return
+		}
+		launchLoadingJob(Dispatchers.IO) {
+			val semaphore = Semaphore(SOURCE_TEST_MAX_PARALLELISM)
+			val results = sourceItems.map { item ->
+				async {
+					val isAvailable = runCatchingCancellable {
+						withTimeoutOrNull(SOURCE_TEST_TIMEOUT_MS) {
+							semaphore.withPermit {
+								val repository = contentRepositoryFactory.create(item.source)
+								repository.getList(
+									offset = 0,
+									order = repository.defaultSortOrder,
+									filter = ContentListFilter.EMPTY,
+								).isNotEmpty()
+							}
+						} ?: false
+					}.getOrDefault(false)
+					item to isAvailable
+				}
+			}.awaitAll()
+			results.forEach { (item, isAvailable) ->
+				sourceAvailabilityRepository.setAvailability(
+					item.source,
+					if (isAvailable) ContentSourceAvailability.AVAILABLE else ContentSourceAvailability.EMPTY,
+				)
+			}
+			emitMessage(
+				appContext.getString(
+					R.string.source_test_completed,
+					results.count { it.second },
+					results.count { !it.second },
+				),
+			)
 		}
 	}
 
@@ -1329,6 +1393,14 @@ class UnifiedSourcesViewModel @Inject constructor(
 				}
 			}
 			.filter {
+				when (filters.testAvailabilityFilter) {
+					UnifiedTestAvailabilityFilter.ALL -> true
+					UnifiedTestAvailabilityFilter.UNTESTED -> it.testAvailability == ContentSourceAvailability.UNKNOWN
+					UnifiedTestAvailabilityFilter.AVAILABLE -> it.testAvailability == ContentSourceAvailability.AVAILABLE
+					UnifiedTestAvailabilityFilter.UNAVAILABLE -> it.testAvailability == ContentSourceAvailability.EMPTY
+				}
+			}
+			.filter {
 				when (filters.nsfwFilter) {
 					UnifiedNsfwFilter.ALL -> true
 					UnifiedNsfwFilter.SFW -> !it.isNsfw
@@ -1358,6 +1430,7 @@ data class UnifiedSourcesFilterState(
 	val locationTypes: Set<UnifiedRepositoryLocationType> = emptySet(),
 	val enabledFilter: UnifiedEnabledFilter = UnifiedEnabledFilter.ALL,
 	val availabilityFilter: UnifiedAvailabilityFilter = UnifiedAvailabilityFilter.AVAILABLE,
+	val testAvailabilityFilter: UnifiedTestAvailabilityFilter = UnifiedTestAvailabilityFilter.ALL,
 	val nsfwFilter: UnifiedNsfwFilter = UnifiedNsfwFilter.ALL,
 )
 
@@ -1369,6 +1442,13 @@ enum class UnifiedEnabledFilter {
 
 enum class UnifiedAvailabilityFilter {
 	ALL,
+	AVAILABLE,
+	UNAVAILABLE,
+}
+
+enum class UnifiedTestAvailabilityFilter {
+	ALL,
+	UNTESTED,
 	AVAILABLE,
 	UNAVAILABLE,
 }

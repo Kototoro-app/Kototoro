@@ -11,13 +11,19 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.settings.compose.SuggestionSourceOption
 import org.skepsun.kototoro.settings.compose.SuggestionsSettingsScreen
 import org.skepsun.kototoro.suggestions.domain.SuggestionRepository
 import org.skepsun.kototoro.suggestions.ui.SuggestionsWorker
@@ -27,9 +33,11 @@ import javax.inject.Inject
 fun SuggestionsSettingsRoute(
     settings: AppSettings,
     suggestionsScheduler: SuggestionsWorker.Scheduler,
+    contentSourcesRepository: ContentSourcesRepository,
     excludeTagsFlow: MutableStateFlow<String>,
     preferredTagsFlow: MutableStateFlow<String>,
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val listener = remember(settings, suggestionsScheduler, coroutineScope) {
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -41,6 +49,8 @@ fun SuggestionsSettingsRoute(
                     key == AppSettings.KEY_SUGGESTIONS ||
                         key == AppSettings.KEY_SUGGESTIONS_EXCLUDE_TAGS ||
                         key == AppSettings.KEY_SUGGESTIONS_PREFERRED_TAGS ||
+                        key == AppSettings.KEY_SUGGESTIONS_PREFERRED_SOURCES ||
+                        key == AppSettings.KEY_SUGGESTIONS_EXCLUDED_SOURCES ||
                         key == AppSettings.KEY_SUGGESTIONS_EXCLUDE_NSFW
                     )
             ) {
@@ -58,15 +68,38 @@ fun SuggestionsSettingsRoute(
     }
     val excludeTags by excludeTagsFlow.collectAsState()
     val preferredTags by preferredTagsFlow.collectAsState()
+    val sourceOptions by produceState<List<SuggestionSourceOption>>(emptyList(), contentSourcesRepository, context) {
+        value = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            contentSourcesRepository.getAllAvailableSourcesUnfiltered()
+                .distinctBy { it.name }
+                .map { SuggestionSourceOption(id = it.name, title = it.getTitle(context)) }
+                .sortedBy { it.title.lowercase() }
+        }
+    }
+    val preferredSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_PREFERRED_SOURCES) {
+        suggestionsPreferredSources
+    }
+    val excludedSources by settings.observeAsState(AppSettings.KEY_SUGGESTIONS_EXCLUDED_SOURCES) {
+        suggestionsExcludedSources
+    }
     SuggestionsSettingsScreen(
         settings = settings,
         excludeTags = excludeTags,
         preferredTags = preferredTags,
+        sourceOptions = sourceOptions,
+        preferredSources = preferredSources,
+        excludedSources = excludedSources,
         onExcludeTagsChanged = { value ->
             settings.prefs.edit().putString(AppSettings.KEY_SUGGESTIONS_EXCLUDE_TAGS, value).apply()
         },
         onPreferredTagsChanged = { value ->
             settings.prefs.edit().putString(AppSettings.KEY_SUGGESTIONS_PREFERRED_TAGS, value).apply()
+        },
+        onPreferredSourcesChanged = { sourceIds ->
+            settings.prefs.edit().putStringSet(AppSettings.KEY_SUGGESTIONS_PREFERRED_SOURCES, sourceIds).apply()
+        },
+        onExcludedSourcesChanged = { sourceIds ->
+            settings.prefs.edit().putStringSet(AppSettings.KEY_SUGGESTIONS_EXCLUDED_SOURCES, sourceIds).apply()
         },
     )
 }

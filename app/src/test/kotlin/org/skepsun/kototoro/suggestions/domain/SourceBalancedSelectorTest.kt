@@ -28,4 +28,17 @@ class SourceBalancedSelectorTest {
 		assertEquals(emptyList<String>(), listOf("a1").selectBalancedBySource(0, 1) { it.first() })
 		assertEquals(emptyList<String>(), listOf("a1").selectBalancedBySource(1, 0) { it.first() })
 	}
+
+	@Test
+	fun `preferred sources fill their existing per-source allowance first`() {
+		val candidates = listOf("a1", "a2", "b1", "b2", "c1", "c2")
+
+		val result = candidates.selectBalancedByPreferredSource(
+			limit = 5,
+			perSourceLimit = 2,
+			preferredSources = setOf('c'),
+		) { it.first() }
+
+		assertEquals(listOf("c1", "c2", "a1", "b1", "a2"), result)
+	}
 }

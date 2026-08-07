@@ -842,7 +842,12 @@ private fun PremiumNavigationIcon(
         badge = {
             if (badge?.isVisible == true) {
                 if (badge.number > 0) {
-                    Badge { Text(badge.number.toString()) }
+                    Badge {
+                        Text(
+                            text = formatBottomNavBadgeNumber(badge.number),
+                            maxLines = 1,
+                        )
+                    }
                 } else {
                     Badge()
                 }
@@ -856,6 +861,12 @@ private fun PremiumNavigationIcon(
             contentDescription = contentDescription,
         )
     }
+}
+
+internal fun formatBottomNavBadgeNumber(number: Int): String = when {
+    number > 999 -> "999+"
+    number > 0 -> number.toString()
+    else -> ""
 }
 
 @Composable

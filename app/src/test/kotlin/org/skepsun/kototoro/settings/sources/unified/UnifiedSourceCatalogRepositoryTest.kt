@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
@@ -158,6 +159,7 @@ private fun testRepository(): UnifiedSourceCatalogRepository {
         database = mockk<MangaDatabase>(relaxed = true),
         settings = mockk<AppSettings>(relaxed = true),
         contentSourcesRepository = mockk<ContentSourcesRepository>(relaxed = true),
+        sourceAvailabilityRepository = mockk<SourceAvailabilityRepository>(relaxed = true),
         jsonSourceManager = mockk<JsonSourceManager>(relaxed = true),
         extensionRepoRepository = mockk<ExternalExtensionRepoRepository>(relaxed = true),
         mihonExtensionManager = mockk<MihonExtensionManager>(relaxed = true),

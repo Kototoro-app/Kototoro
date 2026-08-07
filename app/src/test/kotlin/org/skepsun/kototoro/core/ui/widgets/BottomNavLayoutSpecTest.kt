@@ -7,6 +7,16 @@ import org.junit.jupiter.api.Test
 class BottomNavLayoutSpecTest {
 
 	@Test
+	fun `badge number is capped before it can overflow navigation item`() {
+		formatBottomNavBadgeNumber(7) shouldBe "7"
+		formatBottomNavBadgeNumber(99) shouldBe "99"
+		formatBottomNavBadgeNumber(100) shouldBe "100"
+		formatBottomNavBadgeNumber(999) shouldBe "999"
+		formatBottomNavBadgeNumber(1000) shouldBe "999+"
+		formatBottomNavBadgeNumber(Int.MAX_VALUE) shouldBe "999+"
+	}
+
+	@Test
 	fun `five items with fab use compact density before minimum density`() {
 		resolveBottomNavLayout(
 			availableWidth = 360.dp,

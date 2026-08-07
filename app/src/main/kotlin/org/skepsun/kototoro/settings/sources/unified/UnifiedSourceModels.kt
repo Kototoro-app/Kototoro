@@ -4,6 +4,7 @@ import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginInfo
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.core.model.ContentSourceAvailability
 
 enum class UnifiedSourceKind {
 	NATIVE,
@@ -118,6 +119,7 @@ data class UnifiedSourceItem(
 	val isInstalled: Boolean,
 	val isNsfw: Boolean,
 	val isBroken: Boolean,
+	val testAvailability: ContentSourceAvailability = ContentSourceAvailability.UNKNOWN,
 )
 
 data class UnifiedSourceCatalogState(
