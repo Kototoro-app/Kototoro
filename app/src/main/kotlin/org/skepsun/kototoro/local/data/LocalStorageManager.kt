@@ -318,6 +318,7 @@ class LocalStorageManager @Inject constructor(
 				context.getExternalFilesDirs(cache.dir).filterNotNullTo(result)
 			}
 			CacheDir.DANMAKU,
+			CacheDir.TORRENT,
 			CacheDir.HTTP,
 			CacheDir.SUPER_RESOLUTION,
 			CacheDir.THUMBS,

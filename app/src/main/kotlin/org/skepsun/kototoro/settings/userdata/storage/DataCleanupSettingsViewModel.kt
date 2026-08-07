@@ -30,6 +30,7 @@ import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
 import org.skepsun.kototoro.search.domain.ContentSearchRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
+import org.skepsun.kototoro.video.data.TorrentStreamService
 import java.util.EnumMap
 import javax.inject.Inject
 import javax.inject.Provider
@@ -46,7 +47,8 @@ class DataCleanupSettingsViewModel @Inject constructor(
     private val deleteReadChaptersUseCase: DeleteReadChaptersUseCase,
     private val localContentRepository: LocalMangaRepository,
     private val mangaDataRepositoryProvider: Provider<ContentDataRepository>,
-    private val coil: ImageLoader,
+	    private val coil: ImageLoader,
+	    private val torrentStreamService: TorrentStreamService,
 ) : BaseViewModel() {
 
     data class LocalContentCleanupResult(
@@ -104,6 +106,19 @@ class DataCleanupSettingsViewModel @Inject constructor(
                 onStorageChanged.call(Unit)
             } finally {
                 loadingKeys.update { it - key }
+            }
+        }
+    }
+
+    fun clearTorrentCache() {
+        launchJob(Dispatchers.Default) {
+            try {
+                loadingKeys.update { it + AppSettings.KEY_TORRENT_CACHE_CLEAR }
+                torrentStreamService.clearCache()
+                checkNotNull(cacheSizes[CacheDir.TORRENT]).value = storageManager.computeCacheSize(CacheDir.TORRENT)
+                onStorageChanged.call(Unit)
+            } finally {
+                loadingKeys.update { it - AppSettings.KEY_TORRENT_CACHE_CLEAR }
             }
         }
     }

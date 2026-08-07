@@ -146,6 +146,7 @@
     <string name="error">Error</string>
     <string name="clear_video_cache">Clear video cache</string>
     <string name="clear_video_proxy_cache">Clear video proxy cache</string>
+    <string name="clear_torrent_cache">Clear torrent cache</string>
     <string name="clear_danmaku_cache">Clear danmaku cache</string>
     <string name="clear_thumbs_cache">Clear thumbnails cache</string>
     <string name="clear_favicons_cache">Clear favicons cache</string>
@@ -507,6 +508,8 @@
     <string name="torrent_stream_warning">Torrent streaming shares data with other peers and may expose your IP address. Continue only if you understand the privacy and legal implications.</string>
     <string name="torrent_stream_rejected">Torrent streaming was not enabled for this playback session</string>
     <string name="torrent_stream_failed">Unable to start torrent stream</string>
+    <string name="torrent_seeders_total">Seeds: %1$d</string>
+    <string name="torrent_seeders_connected">Connected seeds: %1$d</string>
     <string name="cast_to_device">Cast to device</string>
     <string name="casting_to">Casting to %s</string>
     <string name="cast_failed">Failed to cast</string>
@@ -800,6 +803,7 @@
     <string name="novel_reader_cache">Novel cache</string>
     <string name="video_playback_cache">Video playback cache</string>
     <string name="video_proxy_cache">Video proxy cache</string>
+    <string name="torrent_cache">Torrent cache</string>
     <string name="danmaku_cache">Danmaku cache</string>
     <string name="tts_audio_cache">TTS audio cache</string>
     <string name="reader_super_resolution_cache">SR image cache</string>
@@ -1177,6 +1181,7 @@
     <string name="tts_audio_cache_limit">TTS audio cache limit</string>
     <string name="video_playback_cache_limit">Video playback cache limit</string>
     <string name="video_proxy_cache_limit">Video proxy cache limit</string>
+    <string name="torrent_cache_limit">Torrent cache limit</string>
     <string name="danmaku_cache_limit">Danmaku cache limit</string>
     <string name="network_cache_limit">Network cache limit</string>
     <string name="video_controls_alpha">Controls opacity (%)</string>

@@ -24,6 +24,7 @@ fun DataCleanupSettingsScreen(
     novelCacheSummary: String,
     videoCacheSummary: String,
     videoProxyCacheSummary: String,
+    torrentCacheSummary: String,
     danmakuCacheSummary: String,
     ttsCacheSummary: String,
     superResolutionCacheSummary: String,
@@ -40,6 +41,7 @@ fun DataCleanupSettingsScreen(
     isNovelCacheEnabled: Boolean,
     isVideoCacheEnabled: Boolean,
     isVideoProxyCacheEnabled: Boolean,
+    isTorrentCacheEnabled: Boolean,
     isDanmakuCacheEnabled: Boolean,
     isTtsCacheEnabled: Boolean,
     isSuperResolutionCacheEnabled: Boolean,
@@ -58,6 +60,7 @@ fun DataCleanupSettingsScreen(
     onClearNovelCache: () -> Unit,
     onClearVideoCache: () -> Unit,
     onClearVideoProxyCache: () -> Unit,
+    onClearTorrentCache: () -> Unit,
     onClearDanmakuCache: () -> Unit,
     onClearTtsCache: () -> Unit,
     onClearSuperResolutionCache: () -> Unit,
@@ -144,6 +147,14 @@ fun DataCleanupSettingsScreen(
                 enabled = isVideoProxyCacheEnabled,
                 showChevron = false,
                 onClick = onClearVideoProxyCache,
+            )
+            SettingsSectionDivider()
+            SettingsActionPreference(
+                title = stringResource(R.string.clear_torrent_cache),
+                summary = torrentCacheSummary,
+                enabled = isTorrentCacheEnabled,
+                showChevron = false,
+                onClick = onClearTorrentCache,
             )
             SettingsSectionDivider()
             SettingsActionPreference(

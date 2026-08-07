@@ -45,6 +45,7 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
         val novelsCacheSize = storageManager.computeCacheSize(CacheDir.NOVELS)
         val videoCacheSize = storageManager.computeCacheSize(CacheDir.VIDEO)
         val videoProxyCacheSize = storageManager.computeCacheSize(CacheDir.VIDEO_PROXY)
+        val torrentCacheSize = storageManager.computeCacheSize(CacheDir.TORRENT)
         val danmakuCacheSize = storageManager.computeCacheSize(CacheDir.DANMAKU)
         val ttsCacheSize = storageManager.computeCacheSize(CacheDir.TtsAudio)
         val srCacheSize = storageManager.computeCacheSize(CacheDir.SUPER_RESOLUTION)
@@ -59,6 +60,7 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
             novelsCacheSize +
             videoCacheSize +
             videoProxyCacheSize +
+            torrentCacheSize +
             danmakuCacheSize +
             ttsCacheSize +
             srCacheSize +
@@ -74,6 +76,7 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
             novelsCacheSize +
             videoCacheSize +
             videoProxyCacheSize +
+            torrentCacheSize +
             danmakuCacheSize +
             ttsCacheSize +
             srCacheSize +
@@ -102,6 +105,7 @@ class StorageAndNetworkSettingsViewModel @Inject constructor(
                 item(StorageUsageCategory.NOVELS_CACHE, novelsCacheSize),
                 item(StorageUsageCategory.VIDEO_CACHE, videoCacheSize),
                 item(StorageUsageCategory.VIDEO_PROXY_CACHE, videoProxyCacheSize),
+                item(StorageUsageCategory.TORRENT_CACHE, torrentCacheSize),
                 item(StorageUsageCategory.DANMAKU_CACHE, danmakuCacheSize),
                 item(StorageUsageCategory.TTS_CACHE, ttsCacheSize),
                 item(StorageUsageCategory.SUPER_RESOLUTION_CACHE, srCacheSize),

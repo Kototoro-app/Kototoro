@@ -84,6 +84,13 @@ fun DataCleanupSettingsRoute(
         FileSize.BYTES.format(context, videoProxyCacheSize)
     }
 
+    val torrentCacheSize by viewModel.cacheSizes[CacheDir.TORRENT]!!.collectAsState(initial = -1L)
+    val torrentCacheSummary = if (torrentCacheSize < 0) {
+        context.getString(R.string.computing_)
+    } else {
+        FileSize.BYTES.format(context, torrentCacheSize)
+    }
+
     val danmakuCacheSize by viewModel.cacheSizes[CacheDir.DANMAKU]!!.collectAsState(initial = -1L)
     val danmakuCacheSummary = if (danmakuCacheSize < 0) {
         context.getString(R.string.computing_)
@@ -124,6 +131,7 @@ fun DataCleanupSettingsRoute(
         novelCacheSummary = novelCacheSummary,
         videoCacheSummary = videoCacheSummary,
         videoProxyCacheSummary = videoProxyCacheSummary,
+        torrentCacheSummary = torrentCacheSummary,
         danmakuCacheSummary = danmakuCacheSummary,
         ttsCacheSummary = ttsCacheSummary,
         superResolutionCacheSummary = superResolutionCacheSummary,
@@ -140,6 +148,7 @@ fun DataCleanupSettingsRoute(
         isNovelCacheEnabled = AppSettings.KEY_NOVEL_CACHE_CLEAR !in loadingKeys,
         isVideoCacheEnabled = AppSettings.KEY_VIDEO_CACHE_CLEAR !in loadingKeys,
         isVideoProxyCacheEnabled = AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR !in loadingKeys,
+        isTorrentCacheEnabled = AppSettings.KEY_TORRENT_CACHE_CLEAR !in loadingKeys,
         isDanmakuCacheEnabled = AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR !in loadingKeys,
         isTtsCacheEnabled = AppSettings.KEY_TTS_CACHE_CLEAR !in loadingKeys,
         isSuperResolutionCacheEnabled = AppSettings.KEY_SR_CACHE_CLEAR !in loadingKeys,
@@ -174,6 +183,7 @@ fun DataCleanupSettingsRoute(
         onClearVideoProxyCache = {
             viewModel.clearCache(AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR, CacheDir.VIDEO_PROXY)
         },
+        onClearTorrentCache = viewModel::clearTorrentCache,
         onClearDanmakuCache = {
             viewModel.clearCache(AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR, CacheDir.DANMAKU)
         },

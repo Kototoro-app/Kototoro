@@ -227,6 +227,7 @@
     <string name="video_cache_size">缓存大小 (MB)</string>
     <string name="video_cache_size_summary">%1$d MB</string>
     <string name="clear_video_cache">清除缓存</string>
+    <string name="clear_torrent_cache">清除 Torrent 缓存</string>
     <string name="video_controls_alpha">控件不透明度 (%)</string>
     
     <!-- Mihon 扩展源 -->
@@ -2620,7 +2621,9 @@ SHA-256 指纹:
     <string name="video_play">播放</string>
     <string name="video_play_pause">播放/暂停</string>
     <string name="video_playback_cache">视频播放缓存</string>
+    <string name="torrent_cache">Torrent 缓存</string>
     <string name="video_playback_cache_limit">视频播放缓存限制</string>
+    <string name="torrent_cache_limit">Torrent 缓存限制</string>
     <string name="video_playback_speed">播放速度</string>
     <string name="video_player_native_init_failed">视频播放引擎在此设备上初始化失败。请检查绑定的原生库和 C++ 运行时打包。</string>
     <string name="video_proxy_cache">视频代理缓存</string>

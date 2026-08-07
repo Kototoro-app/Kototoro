@@ -102,6 +102,8 @@ import org.skepsun.kototoro.local.data.output.LocalContentDirOutput
 import org.skepsun.kototoro.local.domain.ContentLock
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.video.data.VideoDownloadIndex
+import org.skepsun.kototoro.video.data.TorrentResolvedStream
+import org.skepsun.kototoro.video.data.TorrentStreamService
 import org.skepsun.kototoro.video.domain.resolveVideoCandidates
 import org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions
 import org.skepsun.kototoro.parsers.model.Content
@@ -156,6 +158,7 @@ class DownloadWorker @AssistedInject constructor(
 	private val epubStorageManager: org.skepsun.kototoro.local.epub.EpubStorageManager,
 	private val localStorageManager: org.skepsun.kototoro.local.data.LocalStorageManager,
 	private val videoDownloadIndex: VideoDownloadIndex,
+	private val torrentStreamService: TorrentStreamService,
 	private val translationProcessor: ReaderPageTranslationProcessor,
 	private val novelTranslationProcessor: NovelTranslationProcessor,
 	private val novelContentLoader: NovelContentLoader,
@@ -1633,15 +1636,20 @@ class DownloadWorker @AssistedInject constructor(
 				),
 			)
 			val target = resolveVideoTarget(repo, chapter.value, task) ?: continue
-			val fileName = buildVideoFileName(chapter, target.extension)
-			val outputFile = File(mangaDir, fileName)
-			if (outputFile.exists() && outputFile.length() > 0L) {
-				videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.absolutePath)
-				downloaded += 1
-				continue
+			val torrentStream = if (target.isTorrent) {
+				torrentStreamService.openStream(target.url, target.headers.orEmpty())
+			} else {
+				null
 			}
-			outputFile.parentFile?.mkdirs()
+			val fileName = buildVideoFileName(chapter, target.extension(torrentStream))
+			val outputFile = File(mangaDir, fileName)
 			try {
+				if (outputFile.exists() && outputFile.length() > 0L) {
+					videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.absolutePath)
+					downloaded += 1
+					continue
+				}
+				outputFile.parentFile?.mkdirs()
 				val progress: suspend (Int, Int) -> Unit = { cur, total ->
 					publishState(
 						currentState.copy(
@@ -1654,7 +1662,9 @@ class DownloadWorker @AssistedInject constructor(
 						),
 					)
 				}
-				if (target.isHls) {
+				if (torrentStream != null) {
+					downloadDirectVideo(repo.source, torrentStream.streamUrl, null, outputFile, progress)
+				} else if (target.isHls) {
 					downloadHls(repo.source, target.url, target.headers, outputFile, progress)
 				} else {
 					downloadDirectVideo(repo.source, target.url, target.headers, outputFile, progress)
@@ -1700,6 +1710,8 @@ class DownloadWorker @AssistedInject constructor(
 			} catch (e: Exception) {
 				outputFile.delete()
 				throw e
+			} finally {
+				torrentStream?.let { torrentStreamService.release(it.streamUrl) }
 			}
 		}
 		publishState(currentState.copy(isIndeterminate = true, eta = -1L, isStuck = false))
@@ -1726,6 +1738,7 @@ class DownloadWorker @AssistedInject constructor(
 				headers = selected.headers,
 				subtitles = selected.subtitleTracks,
 				audios = selected.audioTracks,
+				isTorrent = selected.isTorrent,
 			)
 		}
 		val pages = repo.getPages(chapter, nextChapterUrl = null)
@@ -2108,13 +2121,18 @@ class DownloadWorker @AssistedInject constructor(
 		val headers: Map<String, String>?,
 		val subtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
 		val audios: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
+		val isTorrent: Boolean = false,
 	) {
 		val isHls: Boolean = url.contains(".m3u8", ignoreCase = true)
-		val extension: String = if (isHls) "ts" else guessExt(url)
+		fun extension(torrentStream: TorrentResolvedStream?): String = when {
+			torrentStream != null -> guessExt(torrentStream.fileName, fallback = "mkv")
+			isHls -> "ts"
+			else -> guessExt(url, fallback = "mp4")
+		}
 
-		private fun guessExt(u: String): String {
+		private fun guessExt(u: String, fallback: String): String {
 			val ext = u.substringAfterLast('.', "").lowercase()
-			return if (ext.isNotBlank() && ext.length <= 5) ext else "mp4"
+			return if (ext.isNotBlank() && ext.length <= 5) ext else fallback
 		}
 	}
 

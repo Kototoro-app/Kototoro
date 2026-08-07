@@ -2124,6 +2124,7 @@
     <string name="group_sources_by_language_summary">将内容源按其语言区域进行分组显示，而不是平铺展示。</string>
     <string name="_continue_play">继续播放</string>
     <string name="clear_video_cache">清除缓存</string>
+    <string name="clear_torrent_cache">清除 Torrent 缓存</string>
     <string name="reader_progress_template">第 %1$d/%2$d 话 · %3$d%%</string>
     <string name="reader_font_size">字体大小</string>
     <string name="reader_line_height">行距</string>
@@ -2791,7 +2792,9 @@ SHA-256 指纹:
     <string name="video_no_audio_tracks">无可用音轨</string>
     <string name="video_no_subtitle_tracks">无可用字幕轨道</string>
     <string name="video_playback_cache">视频播放缓存</string>
+    <string name="torrent_cache">Torrent 缓存</string>
     <string name="video_playback_cache_limit">视频播放缓存限制</string>
+    <string name="torrent_cache_limit">Torrent 缓存限制</string>
     <string name="video_player_native_init_failed">视频播放引擎在此设备上初始化失败。请检查绑定的原生库和 C++ 运行时打包。</string>
     <string name="video_proxy_cache">视频代理缓存</string>
     <string name="video_proxy_cache_limit">视频代理缓存限制</string>

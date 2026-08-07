@@ -353,6 +353,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             savePlaybackProgress(completed = true)
             saveHistoryProgressAsync(completed = true)
+            torrentStreamService.pause(currentMediaUrl)
             suspiciousAdRetryCount = 0
             runOnUiThread {
                 setKeepScreenOn(false)
@@ -1170,14 +1171,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun buildQualityButtonLabel(): String {
-        availableVideos.getOrNull(currentVideoIndex)?.qualityDisplayLabel(currentVideoIndex)?.let {
-            return it
-        }
-        return if (availableVideos.isNotEmpty()) {
-            getString(org.skepsun.kototoro.R.string.video_quality_line, currentVideoIndex + 1)
-        } else {
-            getString(org.skepsun.kototoro.R.string.video_quality)
-        }
+        val qualityLabel = availableVideos.getOrNull(currentVideoIndex)?.qualityDisplayLabel(currentVideoIndex)
+            ?: if (availableVideos.isNotEmpty()) {
+                getString(org.skepsun.kototoro.R.string.video_quality_line, currentVideoIndex + 1)
+            } else {
+                getString(org.skepsun.kototoro.R.string.video_quality)
+            }
+        return listOfNotNull(qualityLabel, currentTorrentSeederLabel()).joinToString(" · ")
     }
 
     private fun Video.qualityDisplayLabel(index: Int): String {
@@ -1198,9 +1198,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun Video.sourceDisplayLabel(index: Int): String {
         val title = videoTitle.trim()
         val quality = resolution?.takeIf { it > 0 }?.let { "${it}p" }
-        return listOfNotNull(title.takeIf { it.isNotEmpty() }, quality)
+        return listOfNotNull(quality, currentTorrentSeederLabel(), title.takeIf { it.isNotEmpty() })
             .joinToString(" - ")
             .ifEmpty { qualityDisplayLabel(index) }
+    }
+
+    private fun currentTorrentSeederLabel(): String? {
+        val streamUrl = currentMediaUrl ?: return null
+        val stats = torrentStreamService.peerStats(streamUrl) ?: return null
+        return stats.totalSeeds?.let { getString(R.string.torrent_seeders_total, it) }
+            ?: getString(R.string.torrent_seeders_connected, stats.connectedSeeds)
     }
 
     private fun observeFoldableStateForOrientation() {
@@ -1259,6 +1266,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lowerUrl.startsWith("mms://")
         val isResolvedPlaybackUrl = isDirectStream || isDirectLocator || (isHttpLike && headers != null && !isHtmlPlaybackPage)
         val currentState = currentReaderStateOrIntent()
+        val shouldResolveAniyomiVideoList = manga?.source?.name?.startsWith("ANIYOMI_") == true &&
+            !manga.chapters.isNullOrEmpty() &&
+            currentState != null
         val indexedLocalUrl = resolveIndexedLocalVideoUrl(normalizedUrl, currentState)
         val explicitLocalUrl = normalizedUrl.takeIf {
             it.startsWith("file://", ignoreCase = true) &&
@@ -1331,7 +1341,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
 
-        if (isResolvedPlaybackUrl) {
+        if (isResolvedPlaybackUrl && !shouldResolveAniyomiVideoList) {
             currentVideoSource = source
             availableVideos = emptyList()
             currentVideoIndex = 0
@@ -1373,6 +1383,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     val videos = repo.getVideoListForChapter(currentChapter)
                                         .filter { it.videoUrl.isNotBlank() }
                                     if (videos.isNotEmpty()) {
+                                        Log.d(
+                                            "VideoPlayerActivity",
+                                            "Resolved ${videos.size} Aniyomi video(s): " +
+                                                videos.joinToString { it.videoTitle.ifBlank { "<untitled>" } },
+                                        )
                                         availableVideos = videos
                                         updateQualityButtonVisibility()
                                         currentVideoSource = manga.source
@@ -1442,7 +1457,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         currentVideoIndex = 0
                                         updateQualityButtonVisibility()
                                         currentVideoSource = manga.source
-                                        prepareAndPlay(streamUrl, manga.source, streamHeaders, startMs = startMs)
+                                        if (streamUrl.isTorrentLocator()) {
+                                            startMpvPlayback(
+                                                url = streamUrl,
+                                                source = manga.source,
+                                                headers = streamHeaders,
+                                                startMs = startMs,
+                                            )
+                                        } else {
+                                            prepareAndPlay(streamUrl, manga.source, streamHeaders, startMs = startMs)
+                                        }
                                         true
                                     } else {
                                         false
@@ -1602,6 +1626,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (isTorrent) {
             startTorrentPlayback(url, source, headers, startMs)
             return
+        }
+        if (currentMediaUrl != url) {
+            torrentStreamService.release(currentMediaUrl)
         }
         hasRestoredProgress = false
         hasCurrentMediaLoaded = false
@@ -3118,6 +3145,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        torrentStreamService.resume(currentMediaUrl)
+    }
+
     override fun onStop() {
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
@@ -3131,6 +3163,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         finishReadingSession()
         videoLocalCacheProxy.logSessionStats("onStop")
         mpvPlayer?.pause()
+        torrentStreamService.pause(currentMediaUrl)
         setKeepScreenOn(false)
         danmakuController.pause()
     }
@@ -3152,6 +3185,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         finishReadingSession()
         mpvPlayer?.release()
         mpvPlayer = null
+        torrentStreamService.release(currentMediaUrl)
         runCatching { mpvView.destroy() }
         danmakuController.release()
         super.onDestroy()

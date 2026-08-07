@@ -43,6 +43,7 @@ class ChildFirstPathClassLoader(
         "rx.",
         "eu.kanade.tachiyomi.animesource.",
         "eu.kanade.tachiyomi.network.",
+        "eu.kanade.tachiyomi.torrentutils.",
         "eu.kanade.tachiyomi.util.",
         "uy.kohesive.injekt.",
     )

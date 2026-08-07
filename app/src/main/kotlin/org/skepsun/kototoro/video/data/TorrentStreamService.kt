@@ -11,13 +11,17 @@ import com.frostwire.jlibtorrent.TorrentHandle
 import com.frostwire.jlibtorrent.TorrentInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.prefs.AppSettings
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -32,14 +36,71 @@ import kotlin.math.min
 class TorrentStreamService @Inject constructor(
     @ApplicationContext context: Context,
     @ContentHttpClient private val httpClient: OkHttpClient,
+    private val settings: AppSettings,
 ) {
     private val cacheRoot = File(context.applicationContext.cacheDir, TORRENT_CACHE_DIRECTORY)
     private val runtimeMutex = Mutex()
+    private val torrentMutex = Mutex()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile
     private var runtime: TorrentRuntime? = null
 
+    fun peerStats(streamUrl: String): TorrentPeerStats? {
+        val token = streamToken(streamUrl) ?: return null
+        return runtime?.server?.peerStats(token)
+    }
+
+    fun pause(streamUrl: String?) {
+        val token = streamUrl?.let(::streamToken) ?: return
+        runtime?.server?.pause(token)
+    }
+
+    fun resume(streamUrl: String?) {
+        val token = streamUrl?.let(::streamToken) ?: return
+        runtime?.server?.resume(token)
+    }
+
+    fun release(streamUrl: String?) {
+        val token = streamUrl?.let(::streamToken) ?: return
+        val torrentRuntime = runtime ?: return
+        val releasedTorrentId = torrentRuntime.server.unregister(token) ?: return
+        scope.launch {
+            torrentMutex.withLock {
+                pruneCache(torrentRuntime, protectedIds = setOf(releasedTorrentId))
+            }
+        }
+    }
+
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
+        torrentMutex.withLock {
+            val activeIds = runtime?.server?.activeTorrentIds().orEmpty()
+            runtime?.let { torrentRuntime ->
+                torrentRuntime.manager.getTorrentHandles()
+                    .filter { handle ->
+                        handle.isValid && runCatching { torrentCacheKey(handle.torrentFile()) !in activeIds }.getOrDefault(false)
+                    }
+                    .forEach { handle ->
+                        runCatching {
+                            handle.clearPieceDeadlines()
+                            handle.pause()
+                            torrentRuntime.manager.remove(handle)
+                            waitUntilRemoved(handle)
+                        }
+                    }
+            }
+            cacheRoot.listFiles().orEmpty().forEach { entry ->
+                if (entry.name !in activeIds) {
+                    check(entry.deleteRecursively() || !entry.exists()) { "Unable to clear torrent cache entry" }
+                }
+            }
+        }
+    }
+
     suspend fun resolve(locator: String, headers: Map<String, String> = emptyMap()): String =
+        openStream(locator, headers).streamUrl
+
+    suspend fun openStream(locator: String, headers: Map<String, String> = emptyMap()): TorrentResolvedStream =
         withContext(Dispatchers.IO) {
             val torrentRuntime = ensureRuntime()
             val metadata = loadMetadata(torrentRuntime.manager, locator, headers)
@@ -52,44 +113,114 @@ class TorrentStreamService @Inject constructor(
             val selectedIndex = selectTorrentFileIndex(torrentFileIndex(locator), availableIndices)
             check(selectedIndex in availableIndices) { "Torrent did not contain any streamable files" }
 
-            val priorities = Priority.array(Priority.IGNORE, files.numFiles()).apply {
-                this[selectedIndex] = Priority.SEVEN
-            }
-            val token = UUID.randomUUID().toString()
-            val requestedSaveDirectory = File(cacheRoot, token).apply {
-                check(mkdirs() || isDirectory) { "Unable to create torrent cache directory" }
-            }
-            torrentRuntime.manager.download(
-                metadata,
-                requestedSaveDirectory,
-                null,
-                priorities,
-                null,
-                TorrentFlags.SEQUENTIAL_DOWNLOAD,
-            )
-            val handle = waitForHandle(torrentRuntime.manager, metadata)
-            handle.prioritizeFiles(priorities)
-            handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
-            handle.resume()
+            torrentMutex.withLock {
+                val priorities = Priority.array(Priority.IGNORE, files.numFiles()).apply {
+                    this[selectedIndex] = Priority.SEVEN
+                }
+                val torrentId = torrentCacheKey(metadata)
+                pruneCache(torrentRuntime, protectedIds = setOf(torrentId))
+                val requestedSaveDirectory = File(cacheRoot, torrentId).apply {
+                    check(mkdirs() || isDirectory) { "Unable to create torrent cache directory" }
+                    setLastModified(System.currentTimeMillis())
+                }
+                val existingHandle = torrentRuntime.manager.find(metadata)?.takeIf(TorrentHandle::isValid)
+                val handle = if (existingHandle != null) {
+                    Log.d(TAG, "Reusing torrent handle for $torrentId")
+                    existingHandle
+                } else {
+                    Log.d(TAG, "Loading torrent into stable cache $torrentId")
+                    torrentRuntime.manager.download(
+                        metadata,
+                        requestedSaveDirectory,
+                        null,
+                        priorities,
+                        null,
+                        TorrentFlags.SEQUENTIAL_DOWNLOAD,
+                    )
+                    waitForHandle(torrentRuntime.manager, metadata)
+                }
+                handle.prioritizeFiles(priorities)
+                handle.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
+                handle.resume()
+                runCatching { handle.scrapeTracker() }
 
-            val saveDirectory = File(handle.savePath()).canonicalFile
-            val streamFile = File(saveDirectory, files.filePath(selectedIndex)).canonicalFile
-            check(streamFile.path.startsWith(saveDirectory.path + File.separator)) {
-                "Torrent file resolved outside its cache directory"
-            }
-            torrentRuntime.server.register(
-                token = token,
-                entry = TorrentStreamEntry(
-                    handle = handle,
-                    files = files,
-                    fileIndex = selectedIndex,
-                    file = streamFile,
+                val saveDirectory = File(handle.savePath()).canonicalFile
+                val streamFile = File(saveDirectory, files.filePath(selectedIndex)).canonicalFile
+                check(streamFile.path.startsWith(saveDirectory.path + File.separator)) {
+                    "Torrent file resolved outside its cache directory"
+                }
+                val token = UUID.randomUUID().toString()
+                torrentRuntime.server.register(
+                    token = token,
+                    entry = TorrentStreamEntry(
+                        torrentId = torrentId,
+                        handle = handle,
+                        files = files,
+                        fileIndex = selectedIndex,
+                        file = streamFile,
+                        length = files.fileSize(selectedIndex),
+                        mimeType = mimeTypeFor(files.fileName(selectedIndex)),
+                    ),
+                )
+                TorrentResolvedStream(
+                    streamUrl = "http://127.0.0.1:${torrentRuntime.server.listeningPort}/stream/$token",
+                    fileName = files.fileName(selectedIndex),
                     length = files.fileSize(selectedIndex),
-                    mimeType = mimeTypeFor(files.fileName(selectedIndex)),
-                ),
-            )
-            "http://127.0.0.1:${torrentRuntime.server.listeningPort}/stream/$token"
+                )
+            }
         }
+
+    private fun streamToken(streamUrl: String): String? = streamUrl
+        .substringAfter("/stream/", missingDelimiterValue = "")
+        .substringBefore('?')
+        .takeIf { it.isNotBlank() && '/' !in it }
+
+    private fun torrentCacheKey(metadata: TorrentInfo): String {
+        val v1 = metadata.infoHashV1()
+        if (!v1.isAllZeros) return v1.toHex().lowercase()
+        val v2 = metadata.infoHashV2()
+        check(!v2.isAllZeros) { "Torrent metadata did not contain an info hash" }
+        return v2.toHex().lowercase()
+    }
+
+    private fun pruneCache(torrentRuntime: TorrentRuntime, protectedIds: Set<String>) {
+        val limitBytes = settings.torrentCacheSizeMb * 1024L * 1024L
+        val activeIds = torrentRuntime.server.activeTorrentIds() + protectedIds
+        val directories = cacheRoot.listFiles()
+            .orEmpty()
+            .filter(File::isDirectory)
+            .sortedBy(File::lastModified)
+        var totalBytes = directories.sumOf(::directorySize)
+        for (directory in directories) {
+            if (totalBytes <= limitBytes) break
+            if (directory.name in activeIds) continue
+            torrentRuntime.manager.getTorrentHandles()
+                .firstOrNull { handle ->
+                    handle.isValid && runCatching { torrentCacheKey(handle.torrentFile()) == directory.name }.getOrDefault(false)
+                }
+                ?.let { handle ->
+                    runCatching {
+                        handle.clearPieceDeadlines()
+                        handle.pause()
+                        torrentRuntime.manager.remove(handle)
+                        waitUntilRemoved(handle)
+                    }
+                }
+            val bytes = directorySize(directory)
+            if (directory.deleteRecursively()) totalBytes -= bytes
+        }
+    }
+
+    private fun directorySize(directory: File): Long = directory.walkTopDown()
+        .filter(File::isFile)
+        .sumOf(File::length)
+
+    private fun waitUntilRemoved(handle: TorrentHandle) {
+        repeat(REMOVE_WAIT_ATTEMPTS) {
+            if (!handle.inSession()) return
+            Thread.sleep(REMOVE_WAIT_INTERVAL_MILLIS)
+        }
+    }
 
     private suspend fun ensureRuntime(): TorrentRuntime = runtimeMutex.withLock {
         runtime?.let { return it }
@@ -114,6 +245,10 @@ class TorrentStreamService @Inject constructor(
         headers: Map<String, String>,
     ): TorrentInfo {
         if (locator.startsWith("magnet:", ignoreCase = true)) {
+            TorrentMetadataRegistry.find(locator)?.let { metadata ->
+                Log.d(TAG, "Using cached torrent metadata for magnet playback")
+                return TorrentInfo(metadata)
+            }
             val metadata = manager.fetchMagnet(locator, MAGNET_METADATA_TIMEOUT_SECONDS, cacheRoot)
                 ?: error("Timed out while fetching magnet metadata")
             return TorrentInfo(metadata)
@@ -159,6 +294,7 @@ class TorrentStreamService @Inject constructor(
     )
 
     private data class TorrentStreamEntry(
+        val torrentId: String,
         val handle: TorrentHandle,
         val files: FileStorage,
         val fileIndex: Int,
@@ -172,6 +308,42 @@ class TorrentStreamService @Inject constructor(
 
         fun register(token: String, entry: TorrentStreamEntry) {
             streams[token] = entry
+        }
+
+        fun unregister(token: String): String? {
+            val removed = streams.remove(token) ?: return null
+            if (streams.values.none { it.torrentId == removed.torrentId }) {
+                runCatching {
+                    removed.handle.clearPieceDeadlines()
+                    removed.handle.pause()
+                }
+            }
+            return removed.torrentId
+        }
+
+        fun activeTorrentIds(): Set<String> = streams.values.mapTo(mutableSetOf(), TorrentStreamEntry::torrentId)
+
+        fun pause(token: String) {
+            streams[token]?.handle?.takeIf(TorrentHandle::isValid)?.let { handle ->
+                runCatching { handle.pause() }
+            }
+        }
+
+        fun resume(token: String) {
+            streams[token]?.handle?.takeIf(TorrentHandle::isValid)?.let { handle ->
+                runCatching { handle.resume() }
+            }
+        }
+
+        fun peerStats(token: String): TorrentPeerStats? {
+            val handle = streams[token]?.handle?.takeIf(TorrentHandle::isValid) ?: return null
+            return runCatching {
+                val status = handle.status()
+                TorrentPeerStats(
+                    connectedSeeds = status.numSeeds().coerceAtLeast(0),
+                    totalSeeds = status.numComplete().takeIf { it >= 0 },
+                )
+            }.getOrNull()
         }
 
         override fun serve(session: IHTTPSession): Response {
@@ -294,6 +466,8 @@ class TorrentStreamService @Inject constructor(
         const val POLL_INTERVAL_MILLIS = 100L
         const val PIECE_LOOKAHEAD = 16
         const val PIECE_DEADLINE_STEP_MILLIS = 100
+        const val REMOVE_WAIT_ATTEMPTS = 20
+        const val REMOVE_WAIT_INTERVAL_MILLIS = 25L
         const val HANDLE_TIMEOUT_NANOS = 15_000_000_000L
         const val PIECE_TIMEOUT_NANOS = 300_000_000_000L
         val TRACKERS = listOf(
@@ -308,3 +482,14 @@ class TorrentStreamService @Inject constructor(
         )
     }
 }
+
+data class TorrentPeerStats(
+    val connectedSeeds: Int,
+    val totalSeeds: Int?,
+)
+
+data class TorrentResolvedStream(
+    val streamUrl: String,
+    val fileName: String,
+    val length: Long,
+)

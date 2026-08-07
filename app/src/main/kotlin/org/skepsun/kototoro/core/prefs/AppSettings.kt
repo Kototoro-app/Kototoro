@@ -898,6 +898,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getSafeInt(KEY_VIDEO_PROXY_CACHE_MB, 1024)
 		set(value) = prefs.edit { putInt(KEY_VIDEO_PROXY_CACHE_MB, value.coerceIn(128, 4096)) }
 
+	var torrentCacheSizeMb: Int
+		get() = prefs.getSafeInt(KEY_TORRENT_CACHE_MB, 4096)
+		set(value) = prefs.edit { putInt(KEY_TORRENT_CACHE_MB, value.coerceIn(512, 16384)) }
+
 	var videoDanmakuCacheSizeMb: Int
 		get() = prefs.getSafeInt(KEY_VIDEO_DANMAKU_CACHE_MB, 64)
 		set(value) = prefs.edit { putInt(KEY_VIDEO_DANMAKU_CACHE_MB, value.coerceIn(16, 1024)) }
@@ -2263,7 +2267,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
 		const val KEY_NOVEL_CACHE_CLEAR = "novel_cache_clear"
 		const val KEY_VIDEO_CACHE_CLEAR = "video_cache_clear"
-		const val KEY_VIDEO_PROXY_CACHE_CLEAR = "video_proxy_cache_clear"
+			const val KEY_VIDEO_PROXY_CACHE_CLEAR = "video_proxy_cache_clear"
+			const val KEY_TORRENT_CACHE_CLEAR = "torrent_cache_clear"
 		const val KEY_VIDEO_DANMAKU_CACHE_CLEAR = "video_danmaku_cache_clear"
 		const val KEY_HTTP_CACHE_CLEAR = "http_cache_clear"
 		const val KEY_FAVICONS_CACHE_CLEAR = "favicons_cache_clear"
@@ -2505,7 +2510,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_VIDEO_AUTO_NEXT = "video_auto_next"
 		const val KEY_VIDEO_LANDSCAPE_SENSOR = "video_landscape_sensor"
 		const val KEY_VIDEO_CACHE_MB = "video_cache_mb"
-		const val KEY_VIDEO_PROXY_CACHE_MB = "video_proxy_cache_mb"
+			const val KEY_VIDEO_PROXY_CACHE_MB = "video_proxy_cache_mb"
+			const val KEY_TORRENT_CACHE_MB = "torrent_cache_mb"
 		const val KEY_THUMBS_CACHE_MB = "thumbs_cache_mb"
 		const val KEY_FAVICON_CACHE_MB = "favicon_cache_mb"
 		const val KEY_PAGES_CACHE_MB = "pages_cache_mb"

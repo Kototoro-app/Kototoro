@@ -89,6 +89,7 @@ fun StorageAndNetworkSettingsRoute(
 
     val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
     val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value
+    val torrentCacheMb = settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value
     val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) { videoDanmakuCacheSizeMb }.value
     val thumbsCacheMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value
     val faviconCacheMb = settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value
@@ -262,6 +263,15 @@ fun StorageAndNetworkSettingsRoute(
                 step = 128,
                 valueText = { "$it MB" },
                 onValueChange = { settings.videoProxyCacheSizeMb = it },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.torrent_cache_limit),
+                value = torrentCacheMb,
+                valueRange = 512..16384,
+                step = 512,
+                valueText = { "$it MB" },
+                onValueChange = { settings.torrentCacheSizeMb = it },
             )
             SettingsSectionDivider()
             SettingsSliderPreference(
@@ -502,6 +512,14 @@ fun StorageAndNetworkSettingsRoute(
             )
             SettingsSectionDivider()
             SettingsActionPreference(
+                title = context.getString(R.string.clear_torrent_cache),
+                summary = storageSummary(context, storageUsage, StorageUsageCategory.TORRENT_CACHE),
+                enabled = AppSettings.KEY_TORRENT_CACHE_CLEAR !in loadingKeys,
+                showChevron = false,
+                onClick = dataCleanupViewModel::clearTorrentCache,
+            )
+            SettingsSectionDivider()
+            SettingsActionPreference(
                 title = context.getString(R.string.clear_danmaku_cache),
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.DANMAKU_CACHE),
                 enabled = AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR !in loadingKeys,
@@ -610,6 +628,7 @@ fun CacheLimitsSettingsRoute(
     val context = LocalContext.current
     val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
     val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value
+    val torrentCacheMb = settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value
     val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) {
         videoDanmakuCacheSizeMb
     }.value
@@ -728,6 +747,15 @@ fun CacheLimitsSettingsRoute(
                 step = 128,
                 valueText = { "$it MB" },
                 onValueChange = { settings.videoProxyCacheSizeMb = it },
+            )
+            SettingsSectionDivider()
+            SettingsSliderPreference(
+                title = context.getString(R.string.torrent_cache_limit),
+                value = torrentCacheMb,
+                valueRange = 512..16384,
+                step = 512,
+                valueText = { "$it MB" },
+                onValueChange = { settings.torrentCacheSizeMb = it },
             )
             SettingsSectionDivider()
             SettingsSliderPreference(

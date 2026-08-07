@@ -196,6 +196,7 @@ private fun storageCategoryLabel(
     StorageUsageCategory.NOVELS_CACHE -> context.getString(R.string.novel_reader_cache)
     StorageUsageCategory.VIDEO_CACHE -> context.getString(R.string.video_playback_cache)
     StorageUsageCategory.VIDEO_PROXY_CACHE -> context.getString(R.string.video_proxy_cache)
+    StorageUsageCategory.TORRENT_CACHE -> context.getString(R.string.torrent_cache)
     StorageUsageCategory.DANMAKU_CACHE -> context.getString(R.string.danmaku_cache)
     StorageUsageCategory.TTS_CACHE -> context.getString(R.string.tts_audio_cache)
     StorageUsageCategory.SUPER_RESOLUTION_CACHE -> context.getString(R.string.reader_super_resolution_cache)
