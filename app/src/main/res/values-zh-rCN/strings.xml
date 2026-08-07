@@ -2741,6 +2741,10 @@ SHA-256 指纹:
     <string name="unified_sources_cannot_open_selected_jar">无法打开选定的 JAR 文件</string>
     <string name="unified_sources_delete_selected_message">删除选中的 %1$d 个扩展包？</string>
     <string name="unified_sources_delete_selected_no_packages">当前选择中未找到可删除的扩展包。</string>
+    <string name="unified_sources_enable_all">全部启用</string>
+    <string name="unified_sources_disable_all">全部禁用</string>
+    <string name="unified_sources_enable_all_confirmation">启用当前筛选结果中的 %1$d 个源？</string>
+    <string name="unified_sources_disable_all_confirmation">禁用当前筛选结果中的 %1$d 个源？</string>
     <string name="unified_sources_delete_selected_only_skipped_jars">选择中包含 JAR 源。为避免意外删除，已跳过其扩展包: %1$s</string>
     <string name="unified_sources_delete_selected_with_skipped_jars">删除选中的 %1$d 个扩展包？
 
