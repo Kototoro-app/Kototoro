@@ -105,6 +105,13 @@
 -keep class com.squareup.zstd.** { *; }
 -keep interface com.squareup.zstd.** { *; }
 
+# FrostWire jlibtorrent is a SWIG-generated Java/JNI binding. The native
+# library resolves classes and native method names at runtime, and SWIG
+# director callbacks can call back into Java without a static reference that
+# R8 can see. Keep both the public facade and the generated binding package.
+-keep class com.frostwire.jlibtorrent.** { *; }
+-keep interface com.frostwire.jlibtorrent.** { *; }
+
 # Keep the Mihon / Aniyomi bridge and model classes - preserve constructors for reflection
 -keep class org.skepsun.kototoro.mihon.** { *; }
 -keepclassmembers class org.skepsun.kototoro.mihon.** {
