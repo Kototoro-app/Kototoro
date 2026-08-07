@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,8 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -26,12 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.jsonsource.SourceType
+import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.parsers.model.ContentType
 
 data class SuggestionSourceOption(
     val id: String,
     val title: String,
+    val contentType: ContentType,
+    val sourceType: SourceType,
 )
 
 @Composable
@@ -202,11 +210,16 @@ private fun SuggestionSourcesDialog(
 ) {
     var query by remember { mutableStateOf("") }
     var pendingIds by remember(selectedIds) { mutableStateOf(selectedIds) }
-    val visibleOptions = remember(options, query) {
-        val normalizedQuery = query.trim()
-        if (normalizedQuery.isEmpty()) options else options.filter {
-            it.title.contains(normalizedQuery, ignoreCase = true) || it.id.contains(normalizedQuery, ignoreCase = true)
-        }
+    var selectedContentTypes by remember { mutableStateOf(emptySet<ContentType>()) }
+    var selectedSourceTypes by remember { mutableStateOf(emptySet<SourceType>()) }
+    val availableContentTypes = remember(options) {
+        options.map { it.contentType }.distinct().sortedBy { it.ordinal }
+    }
+    val availableSourceTypes = remember(options) {
+        options.map { it.sourceType }.distinct().sortedBy { it.ordinal }
+    }
+    val visibleOptions = remember(options, query, selectedContentTypes, selectedSourceTypes) {
+        filterSuggestionSourceOptions(options, query, selectedContentTypes, selectedSourceTypes)
     }
     SettingsAlertDialog(
         title = title,
@@ -237,6 +250,26 @@ private fun SuggestionSourcesDialog(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search)) },
+            )
+            SuggestionSourceFilterRow(
+                title = stringResource(R.string.content_types),
+                allLabel = stringResource(R.string.all_content),
+                options = availableContentTypes,
+                selectedOptions = selectedContentTypes,
+                optionKey = ContentType::name,
+                optionLabel = { stringResource(it.titleResId) },
+                onAllClick = { selectedContentTypes = emptySet() },
+                onOptionClick = { type -> selectedContentTypes = selectedContentTypes.toggled(type) },
+            )
+            SuggestionSourceFilterRow(
+                title = stringResource(R.string.source_types),
+                allLabel = stringResource(R.string.all_sources),
+                options = availableSourceTypes,
+                selectedOptions = selectedSourceTypes,
+                optionKey = SourceType::name,
+                optionLabel = { stringResource(it.titleResId) },
+                onAllClick = { selectedSourceTypes = emptySet() },
+                onOptionClick = { type -> selectedSourceTypes = selectedSourceTypes.toggled(type) },
             )
             LazyColumn(
                 modifier = Modifier
@@ -272,3 +305,70 @@ private fun SuggestionSourcesDialog(
         }
     }
 }
+
+@Composable
+private fun <T> SuggestionSourceFilterRow(
+    title: String,
+    allLabel: String,
+    options: List<T>,
+    selectedOptions: Set<T>,
+    optionKey: (T) -> String,
+    optionLabel: @Composable (T) -> String,
+    onAllClick: () -> Unit,
+    onOptionClick: (T) -> Unit,
+) {
+    Text(
+        text = title,
+        modifier = Modifier.padding(top = 10.dp),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        item(key = "all") {
+            FilterChip(
+                selected = selectedOptions.isEmpty(),
+                onClick = onAllClick,
+                label = { Text(allLabel) },
+            )
+        }
+        items(options, key = optionKey) { option ->
+            FilterChip(
+                selected = option in selectedOptions,
+                onClick = { onOptionClick(option) },
+                label = { Text(optionLabel(option)) },
+            )
+        }
+    }
+}
+
+internal fun filterSuggestionSourceOptions(
+    options: List<SuggestionSourceOption>,
+    query: String,
+    contentTypes: Set<ContentType>,
+    sourceTypes: Set<SourceType>,
+): List<SuggestionSourceOption> {
+    val normalizedQuery = query.trim()
+    return options.filter { option ->
+        (contentTypes.isEmpty() || option.contentType in contentTypes) &&
+            (sourceTypes.isEmpty() || option.sourceType in sourceTypes) &&
+            (normalizedQuery.isEmpty() ||
+                option.title.contains(normalizedQuery, ignoreCase = true) ||
+                option.id.contains(normalizedQuery, ignoreCase = true))
+    }
+}
+
+private fun <T> Set<T>.toggled(value: T): Set<T> = if (value in this) this - value else this + value
+
+private val SourceType.titleResId: Int
+    get() = when (this) {
+        SourceType.NATIVE -> R.string.source_type_native
+        SourceType.JSON_LEGADO -> R.string.source_type_legado
+        SourceType.JSON_TVBOX -> R.string.source_type_tvbox
+        SourceType.JSON_JS -> R.string.source_type_js
+        SourceType.JSON_LNREADER -> R.string.source_type_lnreader
+        SourceType.EXTERNAL -> R.string.external_source
+        SourceType.MIHON -> R.string.source_type_mihon
+        SourceType.ANIYOMI -> R.string.source_type_aniyomi
+        SourceType.IREADER -> R.string.source_type_ireader
+        SourceType.CLOUDSTREAM -> R.string.source_type_cloudstream
+    }

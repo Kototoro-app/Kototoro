@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
+import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.model.getTitle
@@ -68,11 +70,19 @@ fun SuggestionsSettingsRoute(
     }
     val excludeTags by excludeTagsFlow.collectAsState()
     val preferredTags by preferredTagsFlow.collectAsState()
+    val sourceTypeIdentifier = remember { SourceTypeIdentifier() }
     val sourceOptions by produceState<List<SuggestionSourceOption>>(emptyList(), contentSourcesRepository, context) {
         value = kotlinx.coroutines.withContext(Dispatchers.IO) {
             contentSourcesRepository.getAllAvailableSourcesUnfiltered()
                 .distinctBy { it.name }
-                .map { SuggestionSourceOption(id = it.name, title = it.getTitle(context)) }
+                .map {
+                    SuggestionSourceOption(
+                        id = it.name,
+                        title = it.getTitle(context),
+                        contentType = it.getContentType(),
+                        sourceType = sourceTypeIdentifier.getSourceType(it.name),
+                    )
+                }
                 .sortedBy { it.title.lowercase() }
         }
     }
