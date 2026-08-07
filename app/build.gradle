@@ -273,22 +273,29 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 	}) {
 		// Kototoro supplies an Android-aware YouTube extractor implementation.
 		exclude 'com/lagradost/cloudstream3/extractors/Youtube*.class'
+		// library:jvmJar contains a no-op JVM resolver. Kototoro supplies the Android implementation.
+		exclude 'com/lagradost/cloudstream3/network/WebViewResolver*.class'
+		// The JVM context helper always returns null. Kototoro supplies the Android implementation.
+		exclude 'com/lagradost/api/ContextHelper_jvmKt.class'
 	}
 
 	doLast {
-		def sourceJar = cloudstreamSourceJar.asFile
-		def digest = java.security.MessageDigest.getInstance('SHA-256')
-		sourceJar.withInputStream { input ->
-			byte[] buffer = new byte[8192]
-			for (int read = input.read(buffer); read != -1; read = input.read(buffer)) {
-				digest.update(buffer, 0, read)
+		[
+			(cloudstreamSourceJar.asFile): cloudstreamSourceSha256,
+		].each { inputJar, expectedSha256 ->
+			def digest = java.security.MessageDigest.getInstance('SHA-256')
+			inputJar.withInputStream { input ->
+				byte[] buffer = new byte[8192]
+				for (int read = input.read(buffer); read != -1; read = input.read(buffer)) {
+					digest.update(buffer, 0, read)
+				}
 			}
-		}
-		def actualSourceSha256 = digest.digest().encodeHex().toString()
-		if (actualSourceSha256 != cloudstreamSourceSha256) {
-			throw new GradleException(
-				"Unexpected Cloudstream source jar SHA-256: ${actualSourceSha256}; expected ${cloudstreamSourceSha256}",
-			)
+			def actualSha256 = digest.digest().encodeHex().toString()
+			if (actualSha256 != expectedSha256) {
+				throw new GradleException(
+					"Unexpected Cloudstream jar SHA-256 for ${inputJar.name}: ${actualSha256}; expected ${expectedSha256}",
+				)
+			}
 		}
 
 		def outputJar = archiveFile.get().asFile

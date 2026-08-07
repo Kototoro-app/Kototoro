@@ -37,7 +37,11 @@ class CloudFlareInterceptor : Interceptor {
 
 			CloudFlareHelper.PROTECTION_CAPTCHA -> response.closeThrowing(
 				CloudFlareProtectedException(
-					url = CloudFlareHelper.getChallengeUrl(request.url.toString()),
+					url = if (source?.name?.startsWith(CLOUDSTREAM_SOURCE_PREFIX) == true) {
+						request.url.toString()
+					} else {
+						CloudFlareHelper.getChallengeUrl(request.url.toString())
+					},
 					source = source,
 					headers = request.headers,
 				),
@@ -58,5 +62,6 @@ class CloudFlareInterceptor : Interceptor {
 
 	private companion object {
 		const val TAG = "CloudFlareInterceptor"
+		const val CLOUDSTREAM_SOURCE_PREFIX = "CLOUDSTREAM_"
 	}
 }

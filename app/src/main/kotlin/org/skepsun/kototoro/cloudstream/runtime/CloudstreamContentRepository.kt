@@ -632,16 +632,7 @@ class CloudstreamContentRepository(
 					"requestData=${request.data} slot=$slot page=$requestPage url=${cfError.url}",
 				error,
 			)
-			val resolved = resolveCloudflare(cfError, request, slot, requestPage)
-			if (!resolved) {
-				throw cfError
-			}
-			Log.i(
-				TAG,
-				"main page retry after cloudflare source=${source.displayName} requestName=${request.name} " +
-					"requestData=${request.data} slot=$slot page=$requestPage cookies=${cookieSummary(request.data)}",
-			)
-			getMainPageResponse(request, requestPage)
+			throw cfError
 		}
 	}
 
@@ -669,22 +660,6 @@ class CloudstreamContentRepository(
 			enriched.addSuppressed(cause)
 		}
 		return enriched
-	}
-
-	private suspend fun resolveCloudflare(
-		error: CloudFlareException,
-		request: MainPageRequest,
-		slot: Int,
-		requestPage: Int,
-	): Boolean {
-		val resolved = webViewExecutor.tryResolveCaptcha(error, timeout = 30_000)
-		Log.w(
-			TAG,
-			"main page cloudflare resolve result source=${source.displayName} requestName=${request.name} " +
-				"requestData=${request.data} slot=$slot page=$requestPage resolved=$resolved " +
-				"cookies=${cookieSummary(request.data)}",
-		)
-		return resolved
 	}
 
 	private suspend fun <T> executeWithCloudflare(

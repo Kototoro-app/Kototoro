@@ -1250,6 +1250,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val lowerUrl = normalizedUrl.lowercase()
         val isHttpLike = lowerUrl.startsWith("http://") || lowerUrl.startsWith("https://")
         val isHtmlPlaybackPage = isHttpLike && TVBoxPlayback.looksLikeHtmlPlaybackPage(normalizedUrl)
+        val isCloudstreamChapterPage = manga?.source is CloudstreamSource && manga.chapters.orEmpty().any { chapter ->
+            TVBoxPlayback.normalizeLocator(chapter.url) == normalizedUrl
+        }
         val isDirectPlaybackUrl = !requiresCloudstreamResolution &&
             TVBoxPlayback.looksLikeDirectPlaybackUrl(normalizedUrl)
         val isDirectStream = !requiresCloudstreamResolution && (
@@ -1332,7 +1335,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         android.util.Log.d("VideoPlayer", "prepareAndPlay: url=$normalizedUrl, manga=${manga?.title}, chapters=${manga?.chapters?.size}, state=$currentState, isDirectStream=$isDirectStream")
 
-        if (isHtmlPlaybackPage) {
+        if (isHtmlPlaybackPage && !isCloudstreamChapterPage) {
             resolvePlaybackPageAndPlay(
                 url = normalizedUrl,
                 source = source,

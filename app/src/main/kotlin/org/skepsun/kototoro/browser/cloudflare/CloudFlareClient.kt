@@ -21,16 +21,18 @@ open class CloudFlareClient(
 
 	override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
 		super.onPageStarted(view, url, favicon)
-		checkClearance()
+		checkClearance(countFailure = true)
 	}
 
 	override fun onPageCommitVisible(view: WebView, url: String) {
 		super.onPageCommitVisible(view, url)
+		checkClearance(countFailure = false)
 		callback.onPageLoaded()
 	}
 
 	override fun onPageFinished(webView: WebView, url: String) {
 		super.onPageFinished(webView, url)
+		checkClearance(countFailure = false)
 		callback.onPageLoaded()
 	}
 
@@ -38,17 +40,21 @@ open class CloudFlareClient(
 		counter = 0
 	}
 
-	private fun checkClearance() {
+	fun checkClearance(): Boolean = checkClearance(countFailure = false)
+
+	private fun checkClearance(countFailure: Boolean): Boolean {
 		val clearance = getClearance()
 		if (clearance != null && clearance != oldClearance) {
 			callback.onCheckPassed()
-		} else {
+			return true
+		} else if (countFailure) {
 			counter++
 			if (counter >= LOOP_COUNTER) {
 				reset()
 				callback.onLoopDetected()
 			}
 		}
+		return false
 	}
 
     override fun onReceivedSslError(

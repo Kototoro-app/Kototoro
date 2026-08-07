@@ -990,26 +990,30 @@ class WebViewExecutor @Inject constructor(
                 continuation.resume(result)
             }
         }
-		val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-		val challengeDeadline = System.currentTimeMillis() + MAX_CHALLENGE_MS
-		val check = object : Runnable {
-			override fun run() {
-				if (finished) return
-				val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-				webView.evaluateJavascript(CF_STATE_JS) { raw ->
-					if (finished) return@evaluateJavascript
-	                    val state = raw?.removeSurrounding("\"")
-	                    when (state) {
-	                        "ok" -> resumeOnce(true)
-	                        "error" -> resumeOnce(false)
-	                        else -> if (System.currentTimeMillis() >= challengeDeadline) {
-	                            Log.w(
-									TAG,
-									"Captcha auto-resolve deadline reached for ${exception.url}, " +
-										"state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
-								)
-	                            resumeOnce(false)
-	                        } else {
+        val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+        val challengeDeadline = System.currentTimeMillis() + MAX_CHALLENGE_MS
+        val check = object : Runnable {
+            override fun run() {
+                if (finished) return
+                val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+                if (clearance != null && clearance != initialClearance) {
+                    resumeOnce(true)
+                    return
+                }
+                webView.evaluateJavascript(CF_STATE_JS) { raw ->
+                    if (finished) return@evaluateJavascript
+                    val state = raw?.removeSurrounding("\"")
+                    when (state) {
+                        "ok" -> resumeOnce(true)
+                        "error" -> resumeOnce(false)
+                        else -> if (System.currentTimeMillis() >= challengeDeadline) {
+                            Log.w(
+                                TAG,
+                                "Captcha auto-resolve deadline reached for ${exception.url}, " +
+                                    "state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
+                            )
+                            resumeOnce(false)
+                        } else {
                             handler.removeCallbacks(this)
                             handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
                         }
@@ -1029,10 +1033,10 @@ class WebViewExecutor @Inject constructor(
             }
 
             override fun onCheckPassed() {
-				if (finished) return
-				handler.removeCallbacks(check)
-				handler.postDelayed(check, 100L)
-			}
+                if (finished) return
+                handler.removeCallbacks(check)
+                handler.postDelayed(check, 100L)
+            }
 
             override fun onLoopDetected() = Unit
         }
