@@ -7,6 +7,9 @@ import android.graphics.Bitmap
 import android.content.ContentValues
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -24,9 +27,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.OkHttpClient
@@ -68,6 +73,7 @@ import android.provider.Settings
 import android.content.Context
 import java.io.File
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import okhttp3.Headers
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -99,6 +105,9 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
+import org.skepsun.kototoro.video.domain.isRejectedCloudstreamProbe
+import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
+import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
@@ -169,6 +178,8 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 @AndroidEntryPoint
 class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
+        private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
+        private const val CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES = 256L * 1024L
         private const val ENABLE_M3U8_PROXY_CACHE = true
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
     }
@@ -199,6 +210,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private val shownPlaybackErrorHints = mutableSetOf<PlaybackFailureCategory>()
     private val playbackDiagnostics = PlaybackSessionDiagnostics()
     private var hasCurrentMediaLoaded = false
+    private var playbackHealthCheckGeneration = 0L
     private var suspiciousAdRetryCount = 0
 
     private var mpvPlayer: MpvPlayer? = null
@@ -222,9 +234,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var lastScrubPosition: Long = 0L
     private var availableVideos: List<Video> = emptyList()
     private var cloudstreamLinkJob: Job? = null
+    private var cloudstreamFallbackJob: Job? = null
+    private var externalTrackLoadingJob: Job? = null
     private var torrentResolutionJob: Job? = null
     private var torrentConsent: Boolean? = null
     private var cloudstreamPlaybackInstance: Long = 0L
+    private val rejectedCloudstreamVideoUrls = mutableSetOf<String>()
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
@@ -328,7 +343,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onPlaybackEnded() {
             val dur = mpvPlayer?.durationMs ?: 0L
-            if (dur in 1L..90_000L && suspiciousAdRetryCount < 1) {
+            val isCloudstreamShortPlayback = currentVideoSource is CloudstreamSource &&
+                isSuspiciousCloudstreamPlaybackDuration(dur)
+            if (
+                isCloudstreamShortPlayback &&
+                handlePlaybackFallback("suspicious_short_playback", "durationMs=$dur")
+            ) {
+                return
+            }
+            val shouldRetrySuspiciousPlayback = dur in 1L..90_000L || isCloudstreamShortPlayback
+            if (shouldRetrySuspiciousPlayback && suspiciousAdRetryCount < 1) {
                 if (currentVideoSource != null) {
                     suspiciousAdRetryCount++
                     android.util.Log.i("VideoPlayerActivity", "Suspiciously short playback (${dur} ms) ended. Assuming ad and refetching.")
@@ -351,6 +375,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     return
                 }
             }
+            if (isCloudstreamShortPlayback) return
             savePlaybackProgress(completed = true)
             saveHistoryProgressAsync(completed = true)
             torrentStreamService.pause(currentMediaUrl)
@@ -369,6 +394,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 danmakuController.start()
                 loadPendingExternalTracks()
                 syncComposeControlState()
+                scheduleCloudstreamPlaybackHealthCheck()
             }
         }
 
@@ -1626,6 +1652,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         startMs: Long? = null,
         isTorrent: Boolean = url.isTorrentLocator(),
     ) {
+        externalTrackLoadingJob?.cancel()
+        playbackHealthCheckGeneration++
         if (isTorrent) {
             startTorrentPlayback(url, source, headers, startMs)
             return
@@ -1664,7 +1692,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         Log.d("VideoPlayerActivity", "Loading media. URL: $url, Headers: ${mergedHeaders.keys}")
         val isHttpSource = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
-        val useProxy = shouldUseLocalProxy(url, isHttpSource)
+        val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
             url = url,
             headers = mergedHeaders,
@@ -1766,8 +1794,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun shouldUseLocalProxy(
         url: String,
         isHttpSource: Boolean,
+        source: ParsersContentSource?,
     ): Boolean {
         if (!isHttpSource) return false
+        if (source is CloudstreamSource) {
+            Log.d("VideoPlayerActivity", "Bypass local proxy for Cloudstream source: $url")
+            return false
+        }
         val host = runCatching { Uri.parse(url).host.orEmpty().lowercase() }.getOrDefault("")
         if (host == "127.0.0.1" || host == "localhost") {
             Log.d("VideoPlayerActivity", "Bypass local proxy for loopback URL: $url")
@@ -2041,6 +2074,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             cloudstreamLinkJob?.cancel()
             cloudstreamLinkJob = loadingJob
         }
+        cloudstreamFallbackJob?.cancel()
+        cloudstreamFallbackJob = null
+        rejectedCloudstreamVideoUrls.clear()
         selectionDialogState = null
         actionDialogState = null
         currentVideoSource = source
@@ -2051,6 +2087,57 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         updateQualityButtonVisibility()
         val videosByUrl = LinkedHashMap<String, Video>()
         val subtitlesByUrl = LinkedHashMap<String, eu.kanade.tachiyomi.animesource.model.Track>()
+        var startedVideoUrl: String? = null
+
+        fun refreshVideos(): List<Video> {
+            val sortedVideos = videosByUrl.values
+                .toList()
+                .filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
+                .sortedCloudstreamVideos()
+                .sortedBy { video -> video.internalData == TORRENT_VIDEO_MARKER }
+            availableVideos = sortedVideos
+            val activeVideoUrl = currentMediaUrl.takeIf { startedVideoUrl != null } ?: startedVideoUrl
+            currentVideoIndex = activeVideoUrl
+                ?.let { url -> sortedVideos.indexOfFirst { it.videoUrl == url } }
+                ?.takeIf { it >= 0 }
+                ?: 0
+            updateQualityButtonVisibility()
+            return sortedVideos
+        }
+
+        suspend fun startPlayerFromAvailableLink(): Boolean {
+            if (startedVideoUrl != null) return true
+            var selected = refreshVideos().firstOrNull() ?: return false
+            while (!probeCloudstreamVideo(selected)) {
+                rejectedCloudstreamVideoUrls += selected.videoUrl
+                Log.w(
+                    "VideoPlayer",
+                    "Skipping Cloudstream link rejected by media probe url=${selected.videoUrl}",
+                )
+                selected = refreshVideos().firstOrNull() ?: return false
+            }
+            startedVideoUrl = selected.videoUrl
+            currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == selected.videoUrl }
+                .takeIf { it >= 0 }
+                ?: 0
+            pendingExternalSubtitles = subtitlesByUrl.values.toList()
+            pendingExternalAudio = selected.audioTracks
+            Log.d(
+                "VideoPlayerActivity",
+                "Starting Cloudstream playback from incremental link url=${selected.videoUrl} " +
+                    "available=${availableVideos.size}",
+            )
+            onFirstVideo()
+            startMpvPlayback(
+                selected.videoUrl,
+                source,
+                headersToMap(selected.headers),
+                startMs,
+                isTorrent = selected.internalData == TORRENT_VIDEO_MARKER || selected.videoUrl.isTorrentLocator(),
+            )
+            return true
+        }
+
         repo.getPlaybackEvents(chapter, clearCache).collect { event ->
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
@@ -2069,8 +2156,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         },
                     )
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
+                    refreshVideos()
+                    startPlayerFromAvailableLink()
                 }
                 is CloudstreamPlaybackEvent.Subtitle -> {
+                    if (!event.track.url.startsWith("http://") && !event.track.url.startsWith("https://")) {
+                        Log.w(
+                            "VideoPlayerActivity",
+                            "Ignoring Cloudstream subtitle with unsupported URL: ${event.track.url}",
+                        )
+                        return@collect
+                    }
                     val track = eu.kanade.tachiyomi.animesource.model.Track(
                         url = resolveExternalSubtitleUrl(event.track.url, event.track.headers),
                         lang = event.track.lang,
@@ -2084,29 +2180,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     }
                     videosByUrl.clear()
                     updatedVideos.forEach { videosByUrl[it.videoUrl] = it }
+                    pendingExternalSubtitles = subtitlesByUrl.values.toList()
+                    refreshVideos()
                 }
             }
         }
         if (playbackInstance != cloudstreamPlaybackInstance) return false
-        val sortedVideos = videosByUrl.values
-            .toList()
-            .sortedCloudstreamVideos()
-            .sortedBy { video -> video.internalData == TORRENT_VIDEO_MARKER }
-        val selected = sortedVideos.firstOrNull() ?: return false
-        availableVideos = sortedVideos
-        currentVideoIndex = 0
-        pendingExternalSubtitles = subtitlesByUrl.values.toList()
-        pendingExternalAudio = selected.audioTracks
-        updateQualityButtonVisibility()
-        onFirstVideo()
-        startMpvPlayback(
-            selected.videoUrl,
-            source,
-            headersToMap(selected.headers),
-            startMs,
-            isTorrent = selected.internalData == TORRENT_VIDEO_MARKER || selected.videoUrl.isTorrentLocator(),
-        )
-        return true
+        refreshVideos()
+        return startPlayerFromAvailableLink()
     }
 
     private fun mergeHeaders(
@@ -2530,7 +2611,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
      */
     private fun loadPendingExternalTracks() {
         val player = mpvPlayer ?: return
-        val subs = pendingExternalSubtitles.toList()
+        val subs = selectExternalSubtitlesForCurrentMedia(pendingExternalSubtitles)
         val audios = pendingExternalAudio.toList()
         pendingExternalSubtitles = emptyList()
         pendingExternalAudio = emptyList()
@@ -2540,10 +2621,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
 
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        externalTrackLoadingJob?.cancel()
+        externalTrackLoadingJob = lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             if (subs.isNotEmpty()) {
                 android.util.Log.d("VideoPlayerActivity", "Loading ${subs.size} external subtitle tracks")
                 for (track in subs) {
+                    currentCoroutineContext().ensureActive()
                     player.addSubtitleTrack(track.url, track.lang, track.lang)
                 }
             }
@@ -2551,6 +2634,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 android.util.Log.d("VideoPlayerActivity", "Loading ${audios.size} external audio tracks")
                 val needsExternalAudioSelection = player.getAudioTracks().none { it.isSelected }
                 for ((index, track) in audios.withIndex()) {
+                    currentCoroutineContext().ensureActive()
                     player.addAudioTrack(
                         url = track.url,
                         title = track.lang,
@@ -2565,6 +2649,37 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 }
             }
         }
+    }
+
+    private fun selectExternalSubtitlesForCurrentMedia(
+        tracks: List<eu.kanade.tachiyomi.animesource.model.Track>,
+    ): List<eu.kanade.tachiyomi.animesource.model.Track> {
+        if (currentVideoSource !is CloudstreamSource || tracks.size <= 1) return tracks
+        val selected = when (val selection = userManualSubtitleSelection) {
+            ManualSubtitleSelection.Off -> null
+            is ManualSubtitleSelection.Track -> tracks.firstOrNull { track ->
+                track.lang.equals(selection.language, ignoreCase = true) ||
+                    track.lang.equals(selection.title, ignoreCase = true)
+            }
+            null -> {
+                val locale = java.util.Locale.getDefault()
+                val languageNames = listOf(
+                    locale.language,
+                    locale.getDisplayLanguage(java.util.Locale.ENGLISH),
+                    locale.displayLanguage,
+                ).filter { it.isNotBlank() }
+                tracks.firstOrNull { track ->
+                    languageNames.any { language ->
+                        track.lang.contains(language, ignoreCase = true)
+                    }
+                } ?: tracks.firstOrNull()
+            }
+        }
+        Log.d(
+            "VideoPlayerActivity",
+            "Cloudstream subtitle auto-selection available=${tracks.size} selected=${selected?.lang}",
+        )
+        return listOfNotNull(selected)
     }
 
     private fun resolveExternalSubtitleUrl(url: String, headers: Map<String, String>? = null): String {
@@ -2761,23 +2876,169 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun handlePlaybackFallback(trigger: String, detail: String?) {
-        if (currentVideoSource !is CloudstreamSource) return
-        val nextVideo = availableVideos.getOrNull(currentVideoIndex + 1)
-        if (nextVideo == null) {
+    private fun handlePlaybackFallback(trigger: String, detail: String?): Boolean {
+        if (currentVideoSource !is CloudstreamSource) return false
+        if (cloudstreamFallbackJob?.isActive == true) return true
+        val activeVideoIndex = availableVideos
+            .indexOfFirst { it.videoUrl == currentMediaUrl }
+            .takeIf { it >= 0 }
+            ?: currentVideoIndex
+        currentVideoIndex = activeVideoIndex
+        val firstCandidate = availableVideos.getOrNull(activeVideoIndex + 1) ?: run {
             Log.w(
                 "VideoPlayer",
-                "Cloudstream playback failed without another mirror trigger=$trigger detail=$detail",
+                "Cloudstream playback failed without another mirror trigger=$trigger " +
+                    "index=$activeVideoIndex available=${availableVideos.size} detail=$detail",
             )
             showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
-            return
+            return false
         }
-        Log.w(
-            "VideoPlayer",
-            "Cloudstream playback failed, trying next mirror trigger=$trigger " +
-                "from=$currentVideoIndex to=${currentVideoIndex + 1} detail=$detail",
-        )
-        switchVideoQuality(nextVideo, currentMediaStartMs)
+        cloudstreamFallbackJob = lifecycleScope.launch {
+            var candidate = firstCandidate
+            while (true) {
+                val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == candidate.videoUrl }
+                if (candidateIndex < 0) return@launch
+                if (probeCloudstreamVideo(candidate)) {
+                    Log.w(
+                        "VideoPlayer",
+                        "Cloudstream playback failed, trying next mirror trigger=$trigger " +
+                            "from=$activeVideoIndex to=$candidateIndex " +
+                            "available=${availableVideos.size} detail=$detail",
+                    )
+                    switchVideoQuality(candidate, currentMediaStartMs)
+                    return@launch
+                }
+                rejectedCloudstreamVideoUrls += candidate.videoUrl
+                Log.w(
+                    "VideoPlayer",
+                    "Skipping Cloudstream fallback rejected by media probe index=$candidateIndex " +
+                        "url=${candidate.videoUrl}",
+                )
+                availableVideos = availableVideos.filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
+                currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == currentMediaUrl }
+                    .takeIf { it >= 0 }
+                    ?: 0
+                candidate = availableVideos.getOrNull(currentVideoIndex + 1) ?: run {
+                    Log.w(
+                        "VideoPlayer",
+                        "Cloudstream playback failed without another mirror after probing " +
+                            "trigger=$trigger available=${availableVideos.size} detail=$detail",
+                    )
+                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
+                    return@launch
+                }
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (cloudstreamFallbackJob === job) cloudstreamFallbackJob = null
+            }
+        }
+        return true
+    }
+
+    private suspend fun probeCloudstreamVideo(video: Video): Boolean {
+        val url = video.videoUrl
+        if (video.internalData == TORRENT_VIDEO_MARKER || url.isTorrentLocator()) return true
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return true
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                probeCloudstreamVideoBlocking(video)
+            }.onFailure { error ->
+                Log.d("VideoPlayer", "Cloudstream media probe inconclusive url=$url", error)
+            }.getOrDefault(true)
+        }
+    }
+
+    @androidx.media3.common.util.UnstableApi
+    private fun probeCloudstreamVideoBlocking(video: Video): Boolean {
+        val client = contentHttpClient.newBuilder()
+            .callTimeout(6, TimeUnit.SECONDS)
+            .build()
+        val request = cloudstreamProbeRequest(video.videoUrl, video.headers, head = false)
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return false
+            val contentType = response.header("Content-Type")
+            val responseUrl = response.request.url.toString()
+            val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
+            if (isRejectedCloudstreamProbe(contentType, body.copyOf(minOf(body.size, 64)))) return false
+            if (!contentType.orEmpty().contains("mpegurl", ignoreCase = true) &&
+                !body.toString(Charsets.UTF_8).trimStart().startsWith("#EXTM3U")
+            ) {
+                return true
+            }
+            val playlist = HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream())
+            val mediaPlaylist = when (playlist) {
+                is HlsMediaPlaylist -> playlist
+                is HlsMultivariantPlaylist -> {
+                    val variantUrl = playlist.variants
+                        .maxByOrNull { it.format.bitrate }
+                        ?.url
+                        ?.toString()
+                        ?: return true
+                    loadCloudstreamMediaPlaylist(client, variantUrl, video.headers) ?: return true
+                }
+                else -> return true
+            }
+            val segmentUrl = mediaPlaylist.segments.firstOrNull()?.url ?: return true
+            val resolvedSegmentUrl = URI(mediaPlaylist.baseUri).resolve(segmentUrl).toString()
+            client.newCall(cloudstreamProbeRequest(resolvedSegmentUrl, video.headers, head = true))
+                .execute()
+                .use { segmentResponse ->
+                    if (!segmentResponse.isSuccessful) return true
+                    return !isRejectedCloudstreamProbe(
+                        segmentResponse.header("Content-Type"),
+                        byteArrayOf(),
+                    )
+                }
+        }
+    }
+
+    @androidx.media3.common.util.UnstableApi
+    private fun loadCloudstreamMediaPlaylist(
+        client: OkHttpClient,
+        url: String,
+        headers: Headers?,
+    ): HlsMediaPlaylist? {
+        return client.newCall(cloudstreamProbeRequest(url, headers, head = false))
+            .execute()
+            .use { response ->
+                if (!response.isSuccessful) return null
+                val responseUrl = response.request.url.toString()
+                val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
+                HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream()) as? HlsMediaPlaylist
+            }
+    }
+
+    private fun cloudstreamProbeRequest(url: String, headers: Headers?, head: Boolean): Request {
+        return Request.Builder()
+            .url(url)
+            .apply { headers?.let { videoHeaders -> headers(videoHeaders) } }
+            .apply { if (head) head() else header("Range", "bytes=0-262143") }
+            .build()
+    }
+
+    private fun scheduleCloudstreamPlaybackHealthCheck() {
+        if (currentVideoSource !is CloudstreamSource) return
+        val generation = playbackHealthCheckGeneration
+        val initialPositionMs = mpvPlayer?.positionMs ?: return
+        playerRoot.postDelayed({
+            if (generation != playbackHealthCheckGeneration || currentVideoSource !is CloudstreamSource) {
+                return@postDelayed
+            }
+            val player = mpvPlayer ?: return@postDelayed
+            if (
+                isStalledCloudstreamPlayback(
+                    durationMs = player.durationMs,
+                    initialPositionMs = initialPositionMs,
+                    currentPositionMs = player.positionMs,
+                )
+            ) {
+                handlePlaybackFallback(
+                    trigger = "stalled_after_file_loaded",
+                    detail = "durationMs=${player.durationMs} positionMs=${player.positionMs}",
+                )
+            }
+        }, CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS)
     }
 
     private fun showFallbackHintOnce(reason: PlaybackFallbackReason) {
@@ -3175,6 +3436,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null
+        cloudstreamFallbackJob?.cancel()
+        cloudstreamFallbackJob = null
+        externalTrackLoadingJob?.cancel()
+        externalTrackLoadingJob = null
         torrentResolutionJob?.cancel()
         torrentResolutionJob = null
         playerRoot.removeCallbacks(hideUiRunnable)
