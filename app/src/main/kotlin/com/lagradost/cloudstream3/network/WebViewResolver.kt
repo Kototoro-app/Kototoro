@@ -3,6 +3,8 @@ package com.lagradost.cloudstream3.network
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.http.SslError
+import android.os.Handler
+import android.os.Looper
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -14,17 +16,18 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.debugException
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.mvvm.safe
-import com.lagradost.cloudstream3.utils.Coroutines.main
-import com.lagradost.cloudstream3.utils.Coroutines.mainWork
-import com.lagradost.cloudstream3.utils.Coroutines.runOnMainThread
 import com.lagradost.cloudstream3.utils.Coroutines.atomicListOf
 import com.lagradost.nicehttp.requestCreator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import java.net.URI
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /** Android WebView resolver used by Cloudstream plugins and CloudflareKiller. */
 class WebViewResolver(
@@ -46,11 +49,9 @@ class WebViewResolver(
 		@JvmName("getWebViewUserAgent1")
 		fun getWebViewUserAgent(): String? {
 			return webViewUserAgent ?: (getContext() as? Context)?.let { context ->
-				runBlocking {
-					mainWork {
-						WebView(context).settings.userAgentString.also { userAgent ->
-							webViewUserAgent = userAgent
-						}
+				runBlocking(Dispatchers.Main.immediate) {
+					WebView(context).settings.userAgentString.also { userAgent ->
+						webViewUserAgent = userAgent
 					}
 				}
 			}
@@ -106,22 +107,23 @@ class WebViewResolver(
 		val headers = request.headers
 		Log.i(TAG, "Initial web-view request: $url")
 		var webView: WebView? = null
-		var shouldExit = false
+		val shouldExit = AtomicBoolean(false)
+		val mainHandler = Handler(Looper.getMainLooper())
 
 		fun destroyWebView() {
-			main {
+			mainHandler.post {
 				webView?.stopLoading()
 				webView?.destroy()
 				webView = null
-				shouldExit = true
+				shouldExit.set(true)
 				Log.i(TAG, "Destroyed webview")
 			}
 		}
 
-		var fixedRequest: Request? = null
+		val fixedRequest = AtomicReference<Request?>()
 		val extraRequestList = atomicListOf<Request>()
 
-		main {
+		withContext(Dispatchers.Main.immediate) {
 			try {
 				webView = WebView(
 					(getContext() as? Context)
@@ -145,13 +147,15 @@ class WebViewResolver(
 						Log.i(TAG, "Loading WebView URL: $webViewUrl")
 
 						if (script != null) {
-							runOnMainThread {
-								view.evaluateJavascript(script) { scriptCallback?.invoke(it) }
+							mainHandler.post {
+								if (webView === view) {
+									view.evaluateJavascript(script) { scriptCallback?.invoke(it) }
+								}
 							}
 						}
 
 						if (interceptUrl.containsMatchIn(webViewUrl)) {
-							fixedRequest = request.toRequest()?.also { requestCallBack(it) }
+							fixedRequest.set(request.toRequest()?.also { requestCallBack(it) })
 							Log.i(TAG, "Web-view request finished: $webViewUrl")
 							destroyWebView()
 							return@runBlocking null
@@ -209,21 +213,22 @@ class WebViewResolver(
 				}
 				webView?.loadUrl(url, headers.toMap())
 			} catch (e: Exception) {
+				shouldExit.set(true)
 				logError(e)
 			}
 		}
 
 		var loop = 0
 		val delayTime = 100L
-		while (loop < timeout / delayTime && !shouldExit) {
-			if (fixedRequest != null) return fixedRequest to extraRequestList
+		while (loop < timeout / delayTime && !shouldExit.get()) {
+			fixedRequest.get()?.let { return it to extraRequestList }
 			delay(delayTime)
 			loop += 1
 		}
 
 		Log.i(TAG, "Web-view timeout after ${timeout / 1000}s")
 		destroyWebView()
-		return fixedRequest to extraRequestList
+		return fixedRequest.get() to extraRequestList
 	}
 }
 
