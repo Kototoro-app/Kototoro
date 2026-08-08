@@ -21,6 +21,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.main.ui.MainActivity
+import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import androidx.compose.runtime.saveable.rememberSaveable
 import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
@@ -390,6 +391,25 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         }
     }
 
+    LaunchedEffect(viewModel.onContentMessage) {
+        viewModel.onContentMessage.collect { event ->
+            event?.consume(eventCollector { message ->
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            })
+        }
+    }
+
+    LaunchedEffect(viewModel.onContentActionHostRequest) {
+        viewModel.onContentActionHostRequest.collect { event ->
+            event?.consume(eventCollector { request ->
+                val hostActivity = activity ?: return@eventCollector
+                TVBoxActionHostActivity.start(hostActivity) { host ->
+                    request.execute(host::complete)
+                }
+            })
+        }
+    }
+
     // Menu Provider
     if (onAddMenuProvider != null) {
         DisposableEffect(viewModel, activity, lifecycleOwner) {
@@ -493,12 +513,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         selectedItemsIds = composeSelectionIds,
         onPrepareItemTransition = { item, coverBounds ->
         },
-        onItemClick = { item ->
+        onItemClick = itemClick@{ item ->
             if (composeSelectionIds.isNotEmpty()) {
                 hapticFeedback.performSelectionHapticFeedback()
                 composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
             } else {
                 val content = item.toContentWithOverride()
+                if (viewModel.onContentClick(content)) return@itemClick
                 val sharedElementKey = contentCoverSharedKey(
                     item.source.name,
                     item.coverUrl.orEmpty(),

@@ -405,6 +405,8 @@ configurations.all {
 	implementation libs.androidx.work.runtime
 	implementation libs.guava
 	implementation libs.gson
+	// TVBox spider settings commonly render login/cookie QR codes through the host ABI.
+	implementation libs.zxing.core
 	implementation libs.google.play.services.auth
 
 	// Foldable/Window layout
@@ -506,6 +508,7 @@ configurations.all {
 	implementation libs.acra.dialog
 
 	implementation libs.conscrypt.android
+	implementation libs.hidden.api.bypass
 	
 	// Mihon / Aniyomi extension compatibility
 	implementation libs.injekt.core

@@ -18,6 +18,7 @@ import kotlinx.coroutines.plus
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
+import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelection
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
@@ -95,6 +96,9 @@ class ExploreViewModel @Inject constructor(
 		key = AppSettings.KEY_EXPLORE_HIDE_EMPTY_SOURCES,
 		valueProducer = { isEmptySourcesHiddenInExplore },
 	)
+
+	val tvBoxRepositorySelection: StateFlow<TVBoxRepositorySelection> =
+		sourcesRepository.observeTvBoxRepositorySelection()
 
 	private val isSuggestionsEnabled = settings.observeAsFlow(
 		key = AppSettings.KEY_SUGGESTIONS,
@@ -226,6 +230,10 @@ class ExploreViewModel @Inject constructor(
 
 	fun setEmptySourcesHidden(isHidden: Boolean) {
 		settings.isEmptySourcesHiddenInExplore = isHidden
+	}
+
+	fun selectTvBoxRepository(repositoryId: String) {
+		sourcesRepository.selectTvBoxRepository(repositoryId)
 	}
 
 	fun respondSuggestionTip(isAccepted: Boolean) {

@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.search.ui.compose
 
+import android.app.Activity
+import android.widget.Toast
 import androidx.core.text.HtmlCompat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -154,6 +156,7 @@ import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.parser.favicon.directFaviconUriOrNull
+import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.MainActivity
@@ -379,6 +382,7 @@ fun AppSearchContentListRoute(
     }
 
     val context = LocalContext.current
+    val activity = context as? Activity
     val mainActivity = context as? MainActivity
     val configuration = LocalConfiguration.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
@@ -482,6 +486,25 @@ fun AppSearchContentListRoute(
                     content,
                     contentCoverSharedKey(content, content.coverUrl),
                 )
+            }
+        }
+    }
+
+    LaunchedEffect(viewModel.onContentMessage) {
+        viewModel.onContentMessage.collect { event ->
+            event?.consume { message ->
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    LaunchedEffect(viewModel.onContentActionHostRequest) {
+        viewModel.onContentActionHostRequest.collect { event ->
+            event?.consume { request ->
+                val hostActivity = activity ?: return@consume
+                TVBoxActionHostActivity.start(hostActivity) { host ->
+                    request.execute(host::complete)
+                }
             }
         }
     }
@@ -718,12 +741,14 @@ fun AppSearchContentListRoute(
                                     .fillMaxSize()
                                     .nestedScroll(nestedScrollConnection),
                                 onPrepareItemTransition = { _, _ -> },
-                                onItemClick = { item ->
+                                onItemClick = itemClick@{ item ->
                                     if (selectedItemsIds.isNotEmpty()) {
                                         hapticFeedback.performSelectionHapticFeedback()
                                         selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                                     } else {
-                                        previewContent = item.toContentWithOverride()
+                                        val content = item.toContentWithOverride()
+                                        if (viewModel.onContentClick(content)) return@itemClick
+                                        previewContent = content
                                         sidePaneMode = SearchSidePaneMode.Preview
                                     }
                                 },
@@ -883,12 +908,13 @@ fun AppSearchContentListRoute(
                             sharedTransitionEnabled = sharedTransitionEnabled,
                             modifier = Modifier.nestedScroll(nestedScrollConnection),
                             onPrepareItemTransition = { _, _ -> },
-                            onItemClick = { item ->
+                            onItemClick = itemClick@{ item ->
                                 if (selectedItemsIds.isNotEmpty()) {
                                     hapticFeedback.performSelectionHapticFeedback()
                                     selectedItemsIds = if (item.id in selectedItemsIds) selectedItemsIds - item.id else selectedItemsIds + item.id
                                 } else {
                                     val content = item.toContentWithOverride()
+                                    if (viewModel.onContentClick(content)) return@itemClick
                                     val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
                                     openDetailsHandler(
                                         content,

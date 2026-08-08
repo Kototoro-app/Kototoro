@@ -1040,7 +1040,9 @@ class JsonSourceManager @Inject constructor(
 	}
 
 	private fun preprocessTvBoxJson(rawContent: String): String {
-		val withoutBom = rawContent.removePrefix("\uFEFF")
+		val decoded = runCatching { TVBoxConfigDecoder.decode(rawContent) }
+			.getOrElse { rawContent }
+		val withoutBom = decoded.removePrefix("\uFEFF")
 		val cleaned = withoutBom.replace(Regex(""",(?=\s*[\}\]])"""), "")
 		val lines = cleaned.lines()
 		var started = false

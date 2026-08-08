@@ -1201,6 +1201,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, false)
 		set(value) = prefs.edit { putBoolean(KEY_EXPLORE_HIDE_EMPTY_SOURCES, value) }
 
+	var activeTvBoxRepositoryId: String?
+		get() = prefs.getString(KEY_ACTIVE_TVBOX_REPOSITORY, null)
+		set(value) = prefs.edit { putString(KEY_ACTIVE_TVBOX_REPOSITORY, value) }
+
 	var isShowSourceOnCards: Boolean
 		get() = prefs.getBoolean(KEY_SHOW_SOURCE_ON_CARDS, false)
 		set(value) {
@@ -2245,6 +2249,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_ACTIVE_SOURCE_PRESET_ID = "active_source_preset_id"
 		const val KEY_SOURCES_GROUPED_BY_LANGUAGE = "sources_grouped_by_language"
 		const val KEY_EXPLORE_HIDE_EMPTY_SOURCES = "explore_hide_empty_sources"
+		const val KEY_ACTIVE_TVBOX_REPOSITORY = "active_tvbox_repository"
 
 		const val TRACK_HISTORY = "history"
 		const val TRACK_FAVOURITES = "favourites"

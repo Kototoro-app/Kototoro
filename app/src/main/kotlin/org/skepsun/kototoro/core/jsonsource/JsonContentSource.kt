@@ -5,6 +5,7 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceSummary
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
+import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.json.JSONObject
 
 /**
@@ -44,7 +45,14 @@ data class JsonContentSource(
 	 * The display name for the source (the original, user-friendly name).
 	 */
 	val displayName: String
-		get() = entity.name
+		get() {
+			val provider = tvBoxProviderName(entity.type, entity.config)
+			return if (provider.isNullOrBlank() || entity.name.endsWith("（$provider）")) {
+				entity.name
+			} else {
+				"${entity.name}（$provider）"
+			}
+		}
 	
 	/**
 	 * Whether this source is currently enabled.
@@ -57,6 +65,9 @@ data class JsonContentSource(
 	 */
 	val isPinned: Boolean
 		get() = entity.isPinned
+
+	internal fun isVisibleForTvBoxRepository(activeId: String?): Boolean =
+		TVBoxRepositorySelector.isVisible(entity.type, entity.config, activeId)
 	
 	override fun equals(other: Any?): Boolean {
 		if (this === other) return true
@@ -71,6 +82,17 @@ data class JsonContentSource(
 	override fun toString(): String {
 		return "JsonContentSource(id=${entity.id}, name=${entity.name}, type=${entity.type})"
 	}
+}
+
+private fun tvBoxProviderName(type: JsonSourceType, config: String): String? {
+	if (type != JsonSourceType.TVBOX) {
+		return null
+	}
+	return runCatching {
+		TVBoxStoredConfig.parse(config).meta.sourceTitle
+			?.trim()
+			?.takeIf { it.isNotBlank() }
+	}.getOrNull()
 }
 
 data class JsonSourceListSource(
@@ -90,7 +112,14 @@ data class JsonSourceListSource(
 		get() = summary.id
 
 	val displayName: String
-		get() = summary.name
+		get() {
+			val provider = tvBoxProviderName(summary.type, summary.config)
+			return if (provider.isNullOrBlank() || summary.name.endsWith("（$provider）")) {
+				summary.name
+			} else {
+				"${summary.name}（$provider）"
+			}
+		}
 
 	val isEnabled: Boolean
 		get() = summary.enabled
@@ -103,4 +132,7 @@ data class JsonSourceListSource(
 
 	val iconUrl: String?
 		get() = summary.iconUrl
+
+	internal fun isVisibleForTvBoxRepository(activeId: String?): Boolean =
+		TVBoxRepositorySelector.isVisible(summary.type, summary.config, activeId)
 }

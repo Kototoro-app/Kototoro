@@ -6,6 +6,13 @@ import org.junit.jupiter.api.Test
 class VideoLocalCacheProxyTest {
 
     @Test
+    fun `dynamic source key ignores endpoint subpath`() {
+        assertEquals("abc123", dynamicSourceKey("/dynamic/abc123/proxy"))
+        assertEquals("abc123", dynamicSourceKey("/dynamic/abc123"))
+        assertEquals(null, dynamicSourceKey("/video/abc123"))
+    }
+
+    @Test
     fun `rewrites media lines and every HLS URI attribute`() {
         val playlist = """
             #EXTM3U

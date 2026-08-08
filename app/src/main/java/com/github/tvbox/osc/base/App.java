@@ -20,6 +20,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.pm.SharedLibraryInfo;
+import android.content.pm.Signature;
 import android.content.pm.VersionedPackage;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
@@ -66,6 +67,8 @@ import dagger.hilt.components.SingletonComponent;
 @HiltAndroidApp
 public class App extends MultiDexApplication implements Configuration.Provider {
     public static final String HOST_PACKAGE_NAME = "com.github.tvbox.osc";
+    private static final String HOST_SIGNATURE =
+            "308203833082026ba00302010202044d304996300d06092a864886f70d01010b050030723111300f060355040613085456426f784f53433111300f060355040813085456426f784f53433111300f060355040713085456426f784f53433111300f060355040a13085456426f784f53433111300f060355040b13085456426f784f53433111300f060355040313085456426f784f5343301e170d3232303632343033353330385a170d3332303632313033353330385a30723111300f060355040613085456426f784f53433111300f060355040813085456426f784f53433111300f060355040713085456426f784f53433111300f060355040a13085456426f784f53433111300f060355040b13085456426f784f53433111300f060355040313085456426f784f534330820122300d06092a864886f70d01010105000382010f003082010a0282010100a1d71e4c16d09a58b90dfc9a9299315bd427ca26500fc431abd177952e8b561df5ae44fde4f248805a2f30381fb9c8792fff84ba4c8054cfec6ae2b6f23de1c1185bf7b66f2c24cb57ba3aac2c9a0408feb935c36234392c75f5ad56cf847142084cb853965651643f73aef0f785fc0b222cffd8be245b61b98c0ca1f53466c2aef7b442c59cc6b7b7a9160f40e10cf5be98a896555542d11fb54555718435b74635344c1c9ecaa9202ec82aa5a582825baacc3f766c96fabadfe317a2194a11fffc36c408aa963a8f22fde0c1f4f91a1b6e3479fd6725bf6d0bf30d35b43facc1c5c3726e689ebd84037f5f4aa93eed4f0832fb43374d2664d7eb01f42d55af0203010001a321301f301d0603551d0e04160414cfae655491e6b7eaeb73badc6f7ba086af6b821e300d06092a864886f70d01010b0500038201010042ec8f6e3258fe6f2c4267c86f1150e04db8ce13631ba694e2107797608503b440ac02c5d667bd876ad2c48d890b776c81cbb1a854d74f561ab96b1b4d33e67e9bf1b3e01a628ec8070d3612406a5ed1dade0a86cbb16f9f41e6a55498428356a1df99a0b7e494e7bc51ce9e70b280322ff4a360058278665cb2fd27173ca883f83e89a6385b242b31357b44a8ee4821018369b6476f1f7fdb8d80f3c43944352f1b693a9964ab1a2042cc22a7930aed9cd1679de0eddf92f747142c95c90e2c8fa29d877c40dc9fb4ffc69bdbf10f74d34597cb2e9db7ab2754cb4c49c99e8e7cc42a2fa7b0d9d934eae071c5bf53a964c003108d7d76ee92a41ff230a611e8";
     private static final String HOST_APPLICATION_CLASS_NAME = "com.github.tvbox.osc.base.App";
     private static final String CHROME_PACKAGE_NAME = "com.android.chrome";
     private static final String SYSTEM_SETTINGS_PACKAGE_NAME = "com.android.settings";
@@ -80,6 +83,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
     private static volatile boolean attached = false;
     private static volatile boolean hostRuntimeBootstrapped = false;
     private static volatile boolean webViewPackageSpoofLogged = false;
+    private static final InheritableThreadLocal<Boolean> HOST_IDENTITY = new InheritableThreadLocal<>();
     private static volatile P2PClass p;
     private volatile Configuration workManagerConfiguration;
     public static String burl;
@@ -227,7 +231,21 @@ public class App extends MultiDexApplication implements Configuration.Provider {
     }
 
     private boolean shouldBridgeHostIdentity() {
-        return false;
+        return Boolean.TRUE.equals(HOST_IDENTITY.get());
+    }
+
+    public static boolean enterHostIdentity() {
+        boolean previous = Boolean.TRUE.equals(HOST_IDENTITY.get());
+        HOST_IDENTITY.set(true);
+        return previous;
+    }
+
+    public static void restoreHostIdentity(boolean enabled) {
+        if (enabled) {
+            HOST_IDENTITY.set(true);
+        } else {
+            HOST_IDENTITY.remove();
+        }
     }
 
     private boolean hasRealHostIdentity() {
@@ -281,11 +299,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
         if (cached != null) {
             return cached;
         }
-        ApplicationInfo realInfo = requireContext().getApplicationInfo();
-        ApplicationInfo bridgedInfo = new ApplicationInfo(realInfo);
-        bridgedInfo.packageName = HOST_PACKAGE_NAME;
-        bridgedInfo.processName = buildHostProcessName(realInfo.processName);
-        bridgedInfo.className = HOST_APPLICATION_CLASS_NAME;
+        ApplicationInfo bridgedInfo = bridgeApplicationInfoIfNeeded(requireContext().getApplicationInfo());
         bridgedApplicationInfo = bridgedInfo;
         return bridgedInfo;
     }
@@ -382,6 +396,9 @@ public class App extends MultiDexApplication implements Configuration.Provider {
                 return packageName;
             }
         } catch (Exception ignored) {
+        }
+        if (shouldBridgeHostIdentity() && !hasRealHostIdentity()) {
+            return HOST_PACKAGE_NAME;
         }
         return super.getPackageName();
     }
@@ -481,7 +498,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
         return HOST_PACKAGE_NAME.equals(packageName);
     }
 
-    private String getRealPackageName() {
+    public String getRealPackageName() {
         return requireContext().getPackageName();
     }
 
@@ -507,6 +524,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
         bridgedInfo.packageName = HOST_PACKAGE_NAME;
         bridgedInfo.processName = buildHostProcessName(info.processName);
         bridgedInfo.className = HOST_APPLICATION_CLASS_NAME;
+        bridgedInfo.flags &= ~ApplicationInfo.FLAG_DEBUGGABLE;
         return bridgedInfo;
     }
 
@@ -517,6 +535,7 @@ public class App extends MultiDexApplication implements Configuration.Provider {
         PackageInfo bridgedInfo = shallowCopyPackageInfo(info);
         bridgedInfo.packageName = HOST_PACKAGE_NAME;
         bridgedInfo.applicationInfo = bridgeApplicationInfoIfNeeded(info.applicationInfo);
+        bridgedInfo.signatures = new Signature[]{new Signature(HOST_SIGNATURE)};
         return bridgedInfo;
     }
 
@@ -661,11 +680,14 @@ public class App extends MultiDexApplication implements Configuration.Provider {
 
         @Override
         public int checkSignatures(int uid1, int uid2) {
-            return base.checkSignatures(uid1, uid2);
+            return PackageManager.SIGNATURE_MATCH;
         }
 
         @Override
         public int checkSignatures(String pkg1, String pkg2) {
+            if (owner.isHostPackageName(pkg1) || owner.isHostPackageName(pkg2)) {
+                return PackageManager.SIGNATURE_MATCH;
+            }
             return base.checkSignatures(mapPackageName(pkg1), mapPackageName(pkg2));
         }
 

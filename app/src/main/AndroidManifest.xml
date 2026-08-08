@@ -114,6 +114,12 @@
 				android:value="org.skepsun.kototoro.search.ui.multi.MultiSearchActivity" />
 		</activity>
 		<activity
+			android:name="org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity"
+			android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:theme="@style/Theme.Kototoro.TVBoxActionHost" />
+		<activity
 			android:name="org.skepsun.kototoro.details.ui.DetailsActivity"
 			android:exported="true"
 			android:windowLayoutInDisplayCutoutMode="always">

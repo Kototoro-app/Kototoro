@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
@@ -32,6 +33,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -90,6 +95,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelection
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
@@ -321,6 +327,7 @@ fun KototoroExploreHostRoute(
     onOpenSourceList: ((org.skepsun.kototoro.parsers.model.ContentSource) -> Unit)? = null,
 ) {
     val sourceItems by exploreViewModel.content.collectAsStateWithLifecycle()
+    val tvBoxRepositorySelection by exploreViewModel.tvBoxRepositorySelection.collectAsStateWithLifecycle()
     val discoverItems by discoverViewModel.content.collectAsStateWithLifecycle()
     val isDiscoverLoading by discoverViewModel.isLoading.collectAsStateWithLifecycle()
     val availableServices by discoverViewModel.availableServices.collectAsStateWithLifecycle()
@@ -755,6 +762,8 @@ fun KototoroExploreHostRoute(
                     hasMoreSources = hasMoreSources,
                     isExpanded = areSourcesExpanded,
                     topBackgroundOverlap = heroOverlapDp,
+                    tvBoxRepositorySelection = tvBoxRepositorySelection,
+                    onTvBoxRepositorySelected = exploreViewModel::selectTvBoxRepository,
                     onToggleExpanded = { isSourcesExpanded = !isSourcesExpanded },
                     onManageClick = appRouter::openManageSources,
                     onSourceClick = { source ->
@@ -1218,6 +1227,8 @@ private fun LazyListScope.sourceQuickAccessItems(
     hasMoreSources: Boolean,
     isExpanded: Boolean,
     topBackgroundOverlap: androidx.compose.ui.unit.Dp,
+    tvBoxRepositorySelection: TVBoxRepositorySelection,
+    onTvBoxRepositorySelected: (String) -> Unit,
     onToggleExpanded: () -> Unit,
     onManageClick: () -> Unit,
     onSourceClick: (ContentSourceItem) -> Unit,
@@ -1225,6 +1236,8 @@ private fun LazyListScope.sourceQuickAccessItems(
 ) {
     item(key = "source_quick_access_header", contentType = "source_quick_access_header") {
         SourceQuickAccessHeader(
+            tvBoxRepositorySelection = tvBoxRepositorySelection,
+            onTvBoxRepositorySelected = onTvBoxRepositorySelected,
             onManageClick = onManageClick,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1316,6 +1329,8 @@ private fun LazyListScope.sourceQuickAccessItems(
 
 @Composable
 private fun SourceQuickAccessHeader(
+    tvBoxRepositorySelection: TVBoxRepositorySelection,
+    onTvBoxRepositorySelected: (String) -> Unit,
     onManageClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -1325,6 +1340,7 @@ private fun SourceQuickAccessHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
+            modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1341,15 +1357,76 @@ private fun SourceQuickAccessHeader(
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (tvBoxRepositorySelection.options.isNotEmpty()) {
+                TVBoxRepositorySelector(
+                    selection = tvBoxRepositorySelection,
+                    onRepositorySelected = onTvBoxRepositorySelected,
+                )
+            }
+            TextButton(
+                onClick = onManageClick,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.extension_management),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TVBoxRepositorySelector(
+    selection: TVBoxRepositorySelection,
+    onRepositorySelected: (String) -> Unit,
+) {
+    var expanded by rememberSaveable(selection.activeId) { mutableStateOf(false) }
+    Box {
         TextButton(
-            onClick = onManageClick,
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+            onClick = { expanded = true },
+            modifier = Modifier.widthIn(max = 200.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
         ) {
             Text(
-                text = stringResource(R.string.extension_management),
+                text = stringResource(
+                    R.string.tvbox_repository_selector,
+                    selection.active?.title.orEmpty(),
+                ),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            selection.options.forEach { repository ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = repository.title,
+                            fontWeight = if (repository.id == selection.activeId) {
+                                FontWeight.Bold
+                            } else {
+                                FontWeight.Normal
+                            },
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onRepositorySelected(repository.id)
+                    },
+                )
+            }
         }
     }
 }

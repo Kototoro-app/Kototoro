@@ -45,6 +45,8 @@ abstract class ContentListViewModel(
 	open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 	val onActionDone = MutableEventFlow<ReversibleAction>()
+	val onContentMessage = MutableEventFlow<String>()
+	val onContentActionHostRequest = MutableEventFlow<ContentActionHostRequest>()
 	val gridScale = settings.observeAsStateFlow(
 		scope = viewModelScope + Dispatchers.Default,
 		key = AppSettings.KEY_GRID_SIZE,
@@ -103,6 +105,8 @@ abstract class ContentListViewModel(
 
 	abstract fun onRetry()
 
+	open fun onContentClick(content: Content): Boolean = false
+
 	protected fun List<Content>.skipNsfwIfNeeded() = if (settings.isNsfwContentDisabled) {
 		filterNot { it.isNsfw() }
 	} else {
@@ -135,4 +139,9 @@ abstract class ContentListViewModel(
 	) { mode, _, _ ->
 		mode
 	}
+}
+
+fun interface ContentActionHostRequest {
+
+	fun execute(onComplete: () -> Unit)
 }

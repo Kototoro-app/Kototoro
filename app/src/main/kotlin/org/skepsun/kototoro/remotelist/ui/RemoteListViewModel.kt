@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
@@ -25,6 +26,7 @@ import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.core.model.distinctById
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.parser.ContentActionRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -40,6 +42,7 @@ import org.skepsun.kototoro.explore.domain.ExploreRepository
 import org.skepsun.kototoro.filter.ui.FilterCoordinator
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.ui.ContentListViewModel
+import org.skepsun.kototoro.list.ui.ContentActionHostRequest
 import org.skepsun.kototoro.list.ui.model.ButtonFooter
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
@@ -83,6 +86,7 @@ open class RemoteListViewModel @Inject constructor(
 	private val listError = MutableStateFlow<Throwable?>(null)
 	private var loadingJob: Job? = null
 	private var randomJob: Job? = null
+	private var contentActionJob: Job? = null
 	private var lastLoadedPageIndex: Int = -1
 	private var lastRequestedPageIndex: Int = 0
 
@@ -169,6 +173,50 @@ open class RemoteListViewModel @Inject constructor(
 				"current=${mangaList.value.sizeOrZero()} hasNext=${hasNextPage.value} error=${listError.value != null}",
 		)
 		loadList(filterCoordinator.snapshot(), append = !mangaList.value.isNullOrEmpty())
+	}
+
+	override fun onContentClick(content: Content): Boolean {
+		val actionRepository = repository as? ContentActionRepository
+		val isAction = actionRepository?.isAction(content) == true
+		Log.d(
+			RemoteListPaginationLogTag,
+			"contentClick source=${source.name} repository=${repository::class.simpleName} " +
+				"sourceDataLength=${content.sourceData?.length ?: 0} isAction=$isAction",
+		)
+		if (actionRepository == null || !isAction) return false
+		val requiresActivityHost = actionRepository.requiresActivityHost(content)
+		Log.d(
+			RemoteListPaginationLogTag,
+			"contentClick source=${source.name} requiresActivityHost=$requiresActivityHost",
+		)
+		if (requiresActivityHost) {
+			onContentActionHostRequest.call(
+				ContentActionHostRequest { onComplete ->
+					executeContentAction(actionRepository, content, onComplete)
+				},
+			)
+			return true
+		}
+		executeContentAction(actionRepository, content)
+		return true
+	}
+
+	private fun executeContentAction(
+		actionRepository: ContentActionRepository,
+		content: Content,
+		onComplete: () -> Unit = {},
+	) {
+		if (contentActionJob?.isActive == true) return
+		contentActionJob = viewModelScope.launch(Dispatchers.IO) {
+			runCatching { actionRepository.executeAction(content) }
+				.onSuccess { result ->
+					val message = result?.message?.takeIf { it.isNotBlank() }
+					if (message != null) onContentMessage.call(message)
+					if (result != null) onRefresh()
+				}
+				.onFailure(errorEvent::call)
+			onComplete()
+		}
 	}
 
 	fun loadNextPage() {

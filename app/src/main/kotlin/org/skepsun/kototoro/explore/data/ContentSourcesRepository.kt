@@ -37,6 +37,8 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.jsonsource.JsonSourceListSource
+import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelection
+import org.skepsun.kototoro.core.jsonsource.TVBoxRepositorySelector
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.getTitle
@@ -102,6 +104,19 @@ class ContentSourcesRepository @Inject constructor(
 	private val jsonDao get() = db.getJsonSourceDao()
 	private val isNewSourcesAssimilated = AtomicBoolean(false)
 	private val cachedKotatsuSources = java.util.concurrent.ConcurrentHashMap<String, org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource>()
+	private val tvBoxRepositorySelection: StateFlow<TVBoxRepositorySelection> = combine(
+		jsonDao.observeEnabledSummaries(),
+		settings.observeAsFlow(AppSettings.KEY_ACTIVE_TVBOX_REPOSITORY) { activeTvBoxRepositoryId },
+	) { summaries, preferredId ->
+		TVBoxRepositorySelector.resolve(
+			options = summaries.mapNotNull { TVBoxRepositorySelector.option(it.type, it.config) },
+			preferredId = preferredId,
+		)
+	}.distinctUntilChanged().stateIn(
+		scope = processLifecycleScope,
+		started = SharingStarted.Eagerly,
+		initialValue = TVBoxRepositorySelection(),
+	)
 	private val enabledSources: StateFlow<List<ContentSourceInfo>> =
 		createEnabledSourcesFlow()
 			.distinctUntilChanged()
@@ -196,7 +211,8 @@ class ContentSourcesRepository @Inject constructor(
 		return dao.findAll(!settings.isAllSourcesEnabled, order).toSources(settings.isNsfwContentDisabled, order)
 			.let { enabledSources ->
 				val external = getExternalSources()
-				val jsonSources = getEnabledJsonSources()
+				val jsonSnapshot = getEnabledJsonSources()
+				val jsonSources = jsonSnapshot.sources
 				val mihonSources = getEnabledMihonSources()
 				val aniyomiSources = getEnabledAniyomiSources()
 				val ireaderSources = getEnabledIReaderSources()
@@ -218,9 +234,21 @@ class ContentSourcesRepository @Inject constructor(
 				if (!settings.isShowBrokenSources) {
 					list.retainAll { !it.isBroken }
 				}
+				list.retainAll { it.isVisibleForTvBoxRepository(jsonSnapshot.activeRepositoryId) }
 				
 				canonicalizeSourcesByName(list)
 			}
+	}
+
+	fun observeTvBoxRepositorySelection(): StateFlow<TVBoxRepositorySelection> = tvBoxRepositorySelection
+
+	fun selectTvBoxRepository(repositoryId: String) {
+		if (tvBoxRepositorySelection.value.options.any { it.id == repositoryId }) {
+			if (settings.activeTvBoxRepositoryId != repositoryId) {
+				org.skepsun.kototoro.core.parser.tvbox.TVBoxJarSpiderRuntime.clearAll()
+			}
+			settings.activeTvBoxRepositoryId = repositoryId
+		}
 	}
 	
 	/**
@@ -286,11 +314,18 @@ class ContentSourcesRepository @Inject constructor(
 	 * 
 	 * @return List of enabled JSON sources wrapped as ContentSource
 	 */
-	private suspend fun getEnabledJsonSources(): List<org.skepsun.kototoro.core.jsonsource.JsonContentSource> {
-		val jsonSources = jsonSourceManager.observeEnabledJsonSources()
-			.map { entities -> entities.map(::JsonContentSource) }
-			.first()
-		return jsonSources
+	private suspend fun getEnabledJsonSources(): EnabledJsonSourcesSnapshot {
+		val entities = jsonSourceManager.observeEnabledJsonSources().first()
+		val selection = TVBoxRepositorySelector.resolve(
+			options = entities.mapNotNull { TVBoxRepositorySelector.option(it.type, it.config) },
+			preferredId = settings.activeTvBoxRepositoryId,
+		)
+		return EnabledJsonSourcesSnapshot(
+			sources = entities
+				.filter { TVBoxRepositorySelector.isVisible(it.type, it.config, selection.activeId) }
+				.map(::JsonContentSource),
+			activeRepositoryId = selection.activeId,
+		)
 	}
 
 	suspend fun getPinnedSources(): Set<ContentSource> {
@@ -777,6 +812,9 @@ class ContentSourcesRepository @Inject constructor(
 				traceBrowseSources { "availability_stage entries=${availability.size} total=${it.size}" }
 			}
 		}
+		.combine(tvBoxRepositorySelection) { sources, selection ->
+			sources.filter { it.mangaSource.isVisibleForTvBoxRepository(selection.activeId) }
+		}
 
 	/**
 	 * 对齐 legado-with-MD3：浏览(发现)仅展示具备 exploreUrl 的源；仅提供 searchUrl 的源不应出现在浏览页。
@@ -821,8 +859,10 @@ class ContentSourcesRepository @Inject constructor(
 		return combine(
 			jsonDao.observeEnabledSummaries(),
 			observeIsNsfwDisabled(),
-		) { entities, skipNsfw ->
+			tvBoxRepositorySelection,
+		) { entities, skipNsfw, selection ->
 			entities
+				.filter { TVBoxRepositorySelector.isVisible(it.type, it.config, selection.activeId) }
 				.map(::JsonSourceListSource)
 				.filter { source -> !skipNsfw || !source.isNsfw() }
 		}
@@ -1236,6 +1276,19 @@ class ContentSourcesRepository @Inject constructor(
 	private fun observeIsNsfwDisabled() = settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) {
 		isNsfwContentDisabled
 	}
+
+	private fun ContentSource.isVisibleForTvBoxRepository(activeId: String?): Boolean {
+		return when (val source = unwrap()) {
+			is JsonContentSource -> source.isVisibleForTvBoxRepository(activeId)
+			is JsonSourceListSource -> source.isVisibleForTvBoxRepository(activeId)
+			else -> true
+		}
+	}
+
+	private data class EnabledJsonSourcesSnapshot(
+		val sources: List<JsonContentSource>,
+		val activeRepositoryId: String?,
+	)
 
 	private fun observeSortOrder() = settings.observeAsFlow(AppSettings.KEY_SOURCES_ORDER) {
 		sourcesSortOrder

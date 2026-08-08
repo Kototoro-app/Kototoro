@@ -44,6 +44,11 @@ internal fun rewriteHlsPlaylistUris(
     }
     .joinToString("\n")
 
+internal fun dynamicSourceKey(uri: String): String? {
+    if (!uri.startsWith("/dynamic/")) return null
+    return uri.removePrefix("/dynamic/").substringBefore('/').takeIf { it.isNotBlank() }
+}
+
 @Singleton
 class VideoLocalCacheProxy @Inject constructor(
     @ApplicationContext context: Context,
@@ -94,6 +99,12 @@ class VideoLocalCacheProxy @Inject constructor(
             return result
         }
     }
+
+    data class DynamicEndpoint(
+        val localUrl: String,
+        val lanUrl: String?,
+        val port: Int,
+    )
 
     data class SessionStats(
         val hit: Long,
@@ -155,11 +166,25 @@ class VideoLocalCacheProxy @Inject constructor(
     }
 
     fun getDynamicProxyUrl(id: String, handler: DynamicSourceHandler): String {
+        return registerDynamicEndpoint(id, handler).localUrl
+    }
+
+    fun registerDynamicEndpoint(id: String, handler: DynamicSourceHandler): DynamicEndpoint {
         val key = sha256("dynamic:$id")
         dynamicSourceMap[key] = DynamicSourceEntry(handler = handler)
         val runningServer = ensureServer()
         Log.d(TAG, "register dynamic source key=$key id=$id")
-        return "http://127.0.0.1:${runningServer.listeningPort}/dynamic/$key"
+        val path = "/dynamic/$key"
+        return DynamicEndpoint(
+            localUrl = "http://127.0.0.1:${runningServer.listeningPort}$path",
+            lanUrl = NetworkUtils.getWifiIpAddress(appContext)
+                ?.let { "http://$it:${runningServer.listeningPort}$path" },
+            port = runningServer.listeningPort,
+        )
+    }
+
+    fun unregisterDynamicEndpoint(id: String) {
+        dynamicSourceMap.remove(sha256("dynamic:$id"))
     }
 
     fun resetSessionStats(reason: String) {
@@ -529,7 +554,8 @@ class VideoLocalCacheProxy @Inject constructor(
         }
 
         private fun serveDynamic(session: IHTTPSession): Response {
-            val key = session.uri.removePrefix("/dynamic/")
+            val key = dynamicSourceKey(session.uri)
+                ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Dynamic key not found")
             val dynamicSource = dynamicSourceMap[key]
                 ?: return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Dynamic key not found")
             val request = DynamicRequest(

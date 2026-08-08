@@ -63,6 +63,18 @@ internal object TVBoxPlayback {
 		}
 	}
 
+	fun resolveDetailItemId(explicitId: String?, requestedId: String): String? {
+		return explicitId?.trim()?.takeIf { it.isNotBlank() }
+			?: requestedId.trim().takeIf { it.isNotBlank() }
+	}
+
+	fun resolvePlayerUrl(playerUrl: String?, episodeUrl: String): String? {
+		playerUrl?.takeIf { it.isNotBlank() }?.let { return normalizeLocator(it) }
+		return normalizeLocator(episodeUrl).takeIf {
+			it.startsWith("http://", ignoreCase = true) || it.startsWith("https://", ignoreCase = true)
+		}
+	}
+
 	fun looksLikeDirectPlaybackUrl(value: String): Boolean {
 		val normalized = normalizeLocator(value).lowercase(Locale.ROOT)
 		return directMediaMarkers.any { normalized.contains(it) }

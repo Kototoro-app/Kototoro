@@ -111,9 +111,9 @@ internal class TVBoxQuickJsSpiderRuntime(
 		}.getOrNull()
 	}
 
-	override suspend fun getDetails(manga: Content): Content? {
+	override suspend fun getDetails(manga: Content, forceRefresh: Boolean): Content? {
 		return runCatching {
-			val detail = loadDetail(manga) ?: return manga
+			val detail = loadDetail(manga, forceRefresh) ?: return manga
 			detail.toContent(source).copy(
 				id = manga.id,
 				url = manga.url,
@@ -136,22 +136,8 @@ internal class TVBoxQuickJsSpiderRuntime(
 						source = source,
 					),
 				)
-			val directLocator = TVBoxPlayback.normalizeLocator(locator.id)
-			if (directLocator.startsWith("http://", ignoreCase = true) || directLocator.startsWith("https://", ignoreCase = true)) {
-				return listOf(
-					ContentPage(
-						id = positiveHash("${chapter.url}|page"),
-						url = directLocator,
-						preview = null,
-						headers = buildHeadersForUrl(directLocator, emptyMap()),
-						source = source,
-					),
-				)
-			}
 			val playResult = loadPlay(locator.flag, locator.id)
-			val finalUrl = TVBoxPlayback.normalizeLocator(
-				playResult?.url?.takeIf { it.isNotBlank() } ?: locator.id,
-			)
+			val finalUrl = TVBoxPlayback.resolvePlayerUrl(playResult?.url, locator.id) ?: return emptyList()
 			listOf(
 				ContentPage(
 					id = positiveHash("${chapter.url}|page"),
@@ -193,6 +179,18 @@ internal class TVBoxQuickJsSpiderRuntime(
 				filterOptionsCache = it
 			}
 		}
+	}
+
+	override suspend fun executeAction(action: String): TVBoxActionResult? {
+		return runCatching {
+			val raw = executeSpiderCall(
+				action = "action",
+				argsLiteral = action.toJsStringLiteral(),
+			).orEmpty()
+			TVBoxActionResult.parse(raw)
+		}.onFailure {
+			logQuickJsFailure("action", it)
+		}.getOrNull()
 	}
 
 	override fun getRequestHeaders(): Map<String, String>? {
@@ -276,16 +274,16 @@ internal class TVBoxQuickJsSpiderRuntime(
 		return items.map { it.toContent(source) }
 	}
 
-	private suspend fun loadDetail(manga: Content): TVBoxDetailResult? {
+	private suspend fun loadDetail(manga: Content, forceRefresh: Boolean = false): TVBoxDetailResult? {
 		val itemId = (manga.url ?: manga.publicUrl).orEmpty().ifBlank { manga.id.toString() }
-		detailCache[itemId]?.let { return it }
+		if (!forceRefresh) detailCache[itemId]?.let { return it }
 		return detailMutex.withLock {
-			detailCache[itemId]?.let { return it }
+			if (!forceRefresh) detailCache[itemId]?.let { return it }
 			val raw = executeSpiderCall(
 				action = "detail",
 				argsLiteral = itemId.toJsStringLiteral(),
 			).orEmpty()
-			(parseDetailResult(raw) ?: buildFallbackDetailResult(raw, manga))
+			(parseDetailResult(raw, itemId) ?: buildFallbackDetailResult(raw, manga))
 				?.also { detailCache[itemId] = it }
 		}
 	}
@@ -698,8 +696,12 @@ internal class TVBoxQuickJsSpiderRuntime(
 		}
 	}
 
-	private fun parseVodItem(node: JSONObject): TVBoxVodItem? {
-		val itemId = node.firstNonBlank("vod_id", "id", "vodId", "url") ?: return null
+	private fun parseVodItem(node: JSONObject, requestedId: String = ""): TVBoxVodItem? {
+		val action = node.firstNonBlank("action")
+		val itemId = TVBoxPlayback.resolveDetailItemId(
+			explicitId = node.firstNonBlank("vod_id", "id", "vodId", "url"),
+			requestedId = requestedId,
+		) ?: action?.let { "tvbox-action:${it.hashCode()}" } ?: return null
 		val title = node.firstNonBlank("vod_name", "title", "name") ?: itemId
 		val cover = node.firstNonBlank(
 			"vod_pic",
@@ -749,10 +751,11 @@ internal class TVBoxQuickJsSpiderRuntime(
 			coverUrl = cover,
 			description = description,
 			tags = tags,
+			action = action,
 		)
 	}
 
-	private fun parseDetailResult(raw: String): TVBoxDetailResult? {
+	private fun parseDetailResult(raw: String, requestedId: String): TVBoxDetailResult? {
 		val jsonValue = raw.toJsonValue() ?: return null
 		val root = when (jsonValue) {
 			is JSONObject -> jsonValue
@@ -768,7 +771,7 @@ internal class TVBoxQuickJsSpiderRuntime(
 			root.has("vod_id") || root.has("vod_name") -> root
 			else -> null
 		} ?: return null
-		val item = parseVodItem(itemNode) ?: return null
+		val item = parseVodItem(itemNode, requestedId) ?: return null
 		val playSources = parsePlaySources(itemNode)
 		val chapters = if (playSources.isNotEmpty()) {
 			playSources.flatMapIndexed { groupIndex, sourceGroup ->
@@ -1370,6 +1373,7 @@ internal class TVBoxQuickJsSpiderRuntime(
 		val coverUrl: String?,
 		val description: String?,
 		val tags: Set<ContentTag>,
+		val action: String? = null,
 	) {
 		fun toContent(source: JsonContentSource): Content = Content(
 			id = id,
@@ -1387,6 +1391,7 @@ internal class TVBoxQuickJsSpiderRuntime(
 			description = description,
 			chapters = null,
 			source = source,
+			sourceData = action?.let(TVBoxActionMetadata::encode),
 		)
 	}
 

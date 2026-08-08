@@ -29,6 +29,8 @@ fragment = "1.8.9"
 gradle = "8.12.0"
 guava = "33.4.8-android"
 gson = "2.13.1"
+hiddenApiBypass = "6.1"
+zxingCore = "3.5.4"
 gmsAuth = "21.6.0"
 hilt = "1.3.0"
 json = "20250517"
@@ -142,6 +144,7 @@ androidx-transition = { module = "androidx.transition:transition-ktx", version.r
 androidx-viewpager2 = { module = "androidx.viewpager2:viewpager2", version.ref = "viewpager2" }
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
 androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "workRuntime" }
+hidden-api-bypass = { module = "org.lsposed.hiddenapibypass:hiddenapibypass", version.ref = "hiddenApiBypass" }
 avif-decoder = { module = "org.aomedia.avif.android:avif", version.ref = "avifDecoder" }
 coil-core = { module = "io.coil-kt.coil3:coil-core", version.ref = "coil" }
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
@@ -155,6 +158,7 @@ desugar_jdk_libs = { module = "com.android.tools:desugar_jdk_libs", version.ref 
 disk-lru-cache = { module = "com.github.solkin:disk-lru-cache", version.ref = "diskLruCache" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxingCore" }
 google-play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "gmsAuth" }
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "dagger" }
 hilt-android-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "dagger" }

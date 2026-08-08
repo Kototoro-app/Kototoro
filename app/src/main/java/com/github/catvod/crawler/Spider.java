@@ -4,6 +4,8 @@ import android.content.Context;
 
 import com.github.catvod.net.OkHttp;
 
+import org.json.JSONObject;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +15,20 @@ import okhttp3.OkHttpClient;
 
 public abstract class Spider {
 
+    public static JSONObject empty = new JSONObject();
     public String siteKey;
 
-    public void init(Context context) throws Exception {}
+    protected static Context mContext;
+
+    public void init(Context context) throws Exception {
+        mContext = context;
+    }
 
     public void init(Context context, String extend) throws Exception {
         init(context);
     }
+
+    public void initApi(SpiderApi api) {}
 
     public String homeContent(boolean filter) throws Exception {
         return "";
@@ -42,7 +51,7 @@ public abstract class Spider {
     }
 
     public String searchContent(String key, boolean quick, String pg) throws Exception {
-        return "";
+        return searchContent(key, quick);
     }
 
     public String playerContent(String flag, String id, List<String> vipFlags) throws Exception {

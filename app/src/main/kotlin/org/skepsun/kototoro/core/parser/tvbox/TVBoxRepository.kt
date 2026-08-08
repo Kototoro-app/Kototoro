@@ -12,6 +12,8 @@ import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
+import org.skepsun.kototoro.core.parser.ContentActionRepository
+import org.skepsun.kototoro.core.parser.ContentActionResult
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
 import org.skepsun.kototoro.parsers.model.Content
@@ -40,7 +42,7 @@ class TVBoxRepository(
 	private val context: Context,
 	private val httpClient: LegadoHttpClient,
 	private val videoLocalCacheProxy: VideoLocalCacheProxy,
-) : ContentRepository {
+) : ContentRepository, ContentActionRepository {
 
 	companion object {
 		private const val TAG = "TVBoxRepository"
@@ -93,6 +95,29 @@ class TVBoxRepository(
 		isTagsExclusionSupported = true,
 		isSearchWithFiltersSupported = true,
 	)
+
+	override fun isAction(content: Content): Boolean {
+		return TVBoxActionMetadata.decode(content) != null || isConfigurationSource()
+	}
+
+	override fun requiresActivityHost(content: Content): Boolean {
+		return TVBoxActionMetadata.decode(content) == null && isConfigurationSource()
+	}
+
+	override suspend fun executeAction(content: Content): ContentActionResult? {
+		val action = TVBoxActionMetadata.decode(content)
+		if (action != null) {
+			val result = spiderRuntime?.executeAction(action) ?: return null
+			return ContentActionResult(message = result.message)
+		}
+		if (!isConfigurationSource()) return null
+		spiderRuntime?.getDetails(content, forceRefresh = true) ?: return null
+		return ContentActionResult(message = null)
+	}
+
+	private fun isConfigurationSource(): Boolean {
+		return config.site.api.removePrefix("csp_").contains("config", ignoreCase = true)
+	}
 
 	override suspend fun getList(
 		offset: Int,
@@ -787,10 +812,14 @@ class TVBoxRepository(
 			)
 		}
 		logRepositoryFailure("buildCatalog", null, "no_supported_candidate")
-		throw UnsupportedSourceException(
-			"TVBox site is imported but the runtime only supports direct media, M3U playlists, plain-text channel lists, or simple JSON play lists",
-			null,
-		)
+		throw if (requiresSpiderRuntime()) {
+			unsupportedSpiderSource()
+		} else {
+			UnsupportedSourceException(
+				"TVBox site is imported but the runtime only supports direct media, M3U playlists, plain-text channel lists, or simple JSON play lists",
+				null,
+			)
+		}
 	}
 
 	private fun buildResourceCandidates(): List<ResourceCandidate> {

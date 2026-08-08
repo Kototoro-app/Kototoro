@@ -36,6 +36,7 @@ data class JsonSourceSummary(
 	val id: String,
 	val name: String,
 	val type: JsonSourceType,
+	val config: String = "",
 	val enabled: Boolean,
 	val lastUsedAt: Long = 0,
 	val isPinned: Boolean = false,

@@ -2670,6 +2670,7 @@
     <string name="remove_from_favourites">取消收藏</string>
     <string name="rename">重命名</string>
     <string name="repositories">仓库</string>
+    <string name="tvbox_repository_selector">tvbox仓库: %1$s</string>
     <string name="repositories_tab_title">仓库（%1$d）</string>
     <string name="repository_location_inline">内联</string>
     <string name="repository_location_preset">预设</string>

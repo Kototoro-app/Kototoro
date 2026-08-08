@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.ContentLoaderContextImpl
 import org.skepsun.kototoro.core.parser.favicon.FaviconFetcher
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.parser.tvbox.TVBoxActivityLifecycleCallbacks
 import org.skepsun.kototoro.core.ui.image.CoilImageGetter
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.ui.util.ForegroundActivityHolder
@@ -215,12 +216,14 @@ interface AppModule {
 			acraScreenLogger: AcraScreenLogger,
 			screenshotPolicyHelper: ScreenshotPolicyHelper,
 			foregroundActivityHolder: ForegroundActivityHolder,
+			tvBoxActivityLifecycleCallbacks: TVBoxActivityLifecycleCallbacks,
 		): Set<@JvmSuppressWildcards Application.ActivityLifecycleCallbacks> = arraySetOf(
 			appProtectHelper,
 			activityRecreationHandle,
 			acraScreenLogger,
 			screenshotPolicyHelper,
 			foregroundActivityHolder,
+			tvBoxActivityLifecycleCallbacks,
 		)
 
 		@Provides
