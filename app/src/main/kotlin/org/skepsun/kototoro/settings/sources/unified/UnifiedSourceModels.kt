@@ -127,3 +127,13 @@ data class UnifiedSourceCatalogState(
 	val packages: List<UnifiedSourcePackageItem>,
 	val sources: List<UnifiedSourceItem>,
 )
+
+/**
+ * Keeps package identity stable across repository catalogs.
+ *
+ * Multiple repositories may publish the same package. Once those entries are matched to one
+ * installed package, they share its id and must be represented by a single UI item.
+ */
+internal fun List<UnifiedSourcePackageItem>.withUniquePackageIds(): List<UnifiedSourcePackageItem> {
+	return distinctBy(UnifiedSourcePackageItem::id)
+}

@@ -1155,7 +1155,8 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 		return copy(
 			packages = (installedWithoutCatalogMatch + availablePackages)
-				.sortedWith(packageItemComparator),
+				.sortedWith(packageItemComparator)
+				.withUniquePackageIds(),
 		)
 	}
 
@@ -1187,7 +1188,8 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 		return copy(
 			packages = (installedWithoutCatalogMatch + availablePackages)
-				.sortedWith(packageItemComparator),
+				.sortedWith(packageItemComparator)
+				.withUniquePackageIds(),
 		)
 	}
 
@@ -1268,7 +1270,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 	private fun UnifiedSourceCatalogState.toUiState(filters: UnifiedSourcesFilterState): UnifiedSourcesUiState.Ready {
 		val repositoriesById = repositories.associateBy { it.id }
-		val enrichedPackages = packages.enrichWithSourceCoverage(sources)
+		val enrichedPackages = packages.withUniquePackageIds().enrichWithSourceCoverage(sources)
 		val packagesById = enrichedPackages.associateBy { it.id }
 		val visibleRepositories = repositories.filterBy(filters)
 		val visiblePackages = enrichedPackages.filterBy(filters, repositoriesById)
