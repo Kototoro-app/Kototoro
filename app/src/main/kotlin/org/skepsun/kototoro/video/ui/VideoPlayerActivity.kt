@@ -3354,11 +3354,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun selectSuperResolutionMode(mode: VideoSuperResolutionMode) {
+        val disablesGpuNext = mode != VideoSuperResolutionMode.OFF &&
+            appSettings.videoRendererMode == VideoRendererMode.GPU_NEXT
         appSettings.videoSuperResolutionMode = mode
         if (mode == VideoSuperResolutionMode.ADVANCED) {
             appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
         }
-        applySuperResolutionFromSettings()
+        if (disablesGpuNext) {
+            showPlayerMessage(R.string.video_super_resolution_disabled_gpu_next)
+            reloadPlayback()
+        } else {
+            applySuperResolutionFromSettings()
+        }
         superResolutionDialogVersion++
     }
 
@@ -3375,6 +3382,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun toggleCustomSuperResolutionShader(fileName: String, selected: Boolean) {
+        val disablesGpuNext = appSettings.videoRendererMode == VideoRendererMode.GPU_NEXT
         val shaders = appSettings.videoSuperResolutionCustomShaders
             .split(',')
             .map(String::trim)
@@ -3384,7 +3392,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         appSettings.videoSuperResolutionCustomShaders = shaders.joinToString(",")
         appSettings.videoSuperResolutionMode = VideoSuperResolutionMode.ADVANCED
         appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
-        applySuperResolutionFromSettings()
+        if (disablesGpuNext) {
+            showPlayerMessage(R.string.video_super_resolution_disabled_gpu_next)
+            reloadPlayback()
+        } else {
+            applySuperResolutionFromSettings()
+        }
         superResolutionDialogVersion++
     }
 

@@ -2,6 +2,7 @@ package org.skepsun.kototoro.video.performance
 
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.VideoDecoderMode
+import org.skepsun.kototoro.core.prefs.VideoEnhancementCompatibility
 import org.skepsun.kototoro.core.prefs.VideoRendererMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 
@@ -51,12 +52,26 @@ object VideoPlaybackPolicy {
 				)
 			}
 
-			DevicePerformanceTier.HIGH -> EffectiveVideoPlaybackConfig(
-				rendererMode = userRendererMode,
-				decoderMode = userDecoderMode,
-				superResolutionMode = userSuperResolutionMode,
-				allowShaderPipeline = userSuperResolutionMode != VideoSuperResolutionMode.OFF,
-			)
+			DevicePerformanceTier.HIGH -> {
+				val effectiveSuperResolutionMode = VideoEnhancementCompatibility.superResolutionForRenderer(
+					userRendererMode,
+					userSuperResolutionMode,
+				)
+				val effectiveRendererMode = if (
+					userRendererMode == VideoRendererMode.AUTO &&
+					effectiveSuperResolutionMode != VideoSuperResolutionMode.OFF
+				) {
+					VideoRendererMode.GPU
+				} else {
+					userRendererMode
+				}
+				EffectiveVideoPlaybackConfig(
+					rendererMode = effectiveRendererMode,
+					decoderMode = userDecoderMode,
+					superResolutionMode = effectiveSuperResolutionMode,
+					allowShaderPipeline = effectiveSuperResolutionMode != VideoSuperResolutionMode.OFF,
+				)
+			}
 		}
 	}
 }

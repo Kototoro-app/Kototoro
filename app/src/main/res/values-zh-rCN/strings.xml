@@ -1398,6 +1398,8 @@
     <string name="video_super_resolution_advanced">高级</string>
     <string name="video_super_resolution_advanced_settings">高级设置</string>
     <string name="video_super_resolution_advanced_shader">高级算法</string>
+    <string name="video_gpu_next_disabled_super_resolution">GPU Next 与 Anime4K 不兼容，已关闭视频超分。</string>
+    <string name="video_super_resolution_disabled_gpu_next">Anime4K 与 GPU Next 不兼容，已将视频输出切换为 GPU。</string>
     <string name="video_super_resolution_mode_a">模式 A</string>
     <string name="video_super_resolution_mode_a_desc">正向：减少压缩伪影 重建线条 减少模糊 降噪\n负向：可能会放大振铃 放大带状 模糊纹理</string>
     <string name="video_super_resolution_mode_b">模式 B</string>

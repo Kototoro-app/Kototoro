@@ -2483,6 +2483,8 @@ SHA-256 指紋:
     <string name="video_super_resolution_advanced">高級</string>
     <string name="video_super_resolution_advanced_settings">高級設置</string>
     <string name="video_super_resolution_advanced_shader">高級算法</string>
+    <string name="video_gpu_next_disabled_super_resolution">GPU Next 與 Anime4K 不相容，已關閉影片超解析度。</string>
+    <string name="video_super_resolution_disabled_gpu_next">Anime4K 與 GPU Next 不相容，已將影片輸出切換為 GPU。</string>
     <string name="video_super_resolution_balanced">均衡</string>
     <string name="video_super_resolution_custom_settings">配置自定義模式</string>
     <string name="video_super_resolution_mode">模式</string>

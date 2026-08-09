@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontFamily
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.VideoRendererMode
+import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.video.player.MpvConfigManager
 
@@ -90,7 +92,19 @@ fun PlaybackSettingsScreen(
                     title = stringResource(R.string.video_renderer_mode),
                     options = rendererModeOptions,
                     value = rendererMode.name,
-                    onValueChange = { settings.videoRendererMode = org.skepsun.kototoro.core.prefs.VideoRendererMode.valueOf(it) },
+                    onValueChange = {
+                        val selectedMode = VideoRendererMode.valueOf(it)
+                        val disablesSuperResolution = selectedMode == VideoRendererMode.GPU_NEXT &&
+                            settings.videoSuperResolutionMode != VideoSuperResolutionMode.OFF
+                        settings.videoRendererMode = selectedMode
+                        if (disablesSuperResolution) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    context.getString(R.string.video_gpu_next_disabled_super_resolution),
+                                )
+                            }
+                        }
+                    },
                 )
 
                 SettingsChoicePreference(

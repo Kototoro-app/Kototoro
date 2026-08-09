@@ -456,6 +456,8 @@
     <string name="video_super_resolution_advanced">Advanced</string>
     <string name="video_super_resolution_advanced_settings">Advanced settings</string>
     <string name="video_super_resolution_advanced_shader">Advanced shader</string>
+    <string name="video_gpu_next_disabled_super_resolution">GPU Next is incompatible with Anime4K. Video super resolution was turned off.</string>
+    <string name="video_super_resolution_disabled_gpu_next">Anime4K is incompatible with GPU Next. Video output was switched to GPU.</string>
     <string name="video_mpv_conf">Edit mpv.conf</string>
     <string name="video_mpv_conf_hint">One option per line. Changes apply the next time the video player starts.</string>
     <string name="video_mpv_conf_guide"><![CDATA[<b>Common options:</b><br/>• <tt>deband=yes</tt> (Reduce banding artifacts)<br/>• <tt>interpolation=yes</tt> (Smooth playback)<br/>• <tt>hwdec=mediacodec</tt> (Hardware decoding)<br/><br/><a href="https://mpv.io/manual/master/#options">View detailed MPV documentation</a>]]></string>

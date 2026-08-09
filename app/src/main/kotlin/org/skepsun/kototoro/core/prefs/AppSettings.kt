@@ -189,6 +189,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	init {
 		clearDeprecatedAllSourcesEnabledFlag()
+		normalizeVideoEnhancementCompatibility()
 	}
 
 	var hasSeenPluginWelcome: Boolean
@@ -752,7 +753,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	var videoRendererMode: VideoRendererMode
 		get() = prefs.getEnumValue(KEY_VIDEO_RENDERER_MODE, VideoRendererMode.AUTO)
-		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_RENDERER_MODE, value) }
+		set(value) = prefs.edit {
+			putEnumValue(KEY_VIDEO_RENDERER_MODE, value)
+			putEnumValue(
+				KEY_VIDEO_SUPER_RES_MODE,
+				VideoEnhancementCompatibility.superResolutionForRenderer(value, videoSuperResolutionMode),
+			)
+		}
 
 	var videoBackground: ReaderBackground
 		get() = prefs.getEnumValue(KEY_VIDEO_BACKGROUND, ReaderBackground.DEFAULT)
@@ -760,7 +767,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	var videoSuperResolutionMode: VideoSuperResolutionMode
 		get() = prefs.getEnumValue(KEY_VIDEO_SUPER_RES_MODE, VideoSuperResolutionMode.BALANCED)
-		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_SUPER_RES_MODE, value) }
+		set(value) = prefs.edit {
+			putEnumValue(KEY_VIDEO_SUPER_RES_MODE, value)
+			putEnumValue(
+				KEY_VIDEO_RENDERER_MODE,
+				VideoEnhancementCompatibility.rendererForSuperResolution(value, videoRendererMode),
+			)
+		}
 
 	var videoSuperResolutionShader: VideoSuperResolutionShader
 		get() = prefs.getEnumValue(KEY_VIDEO_SUPER_RES_SHADER, VideoSuperResolutionShader.MODE_A)
@@ -2072,6 +2085,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	}
 
 	private fun migrateLegacyUiPreferences() {
+		normalizeVideoEnhancementCompatibility()
 		val sanitizedSearchSuggestionTypes = searchSuggestionTypes
 		val sanitizedBadges = mangaListBadges
 		val sanitizedSelectedGroupTab = BrowseGroupTab.fromId(getSelectedGroupTab() ?: BrowseGroupTab.All.id).id
@@ -2112,6 +2126,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 				KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
 				isBackupWebDavAutoUploadBlockedByLegacyRestore,
 			)
+		}
+	}
+
+	private fun normalizeVideoEnhancementCompatibility() {
+		val compatibleMode = VideoEnhancementCompatibility.superResolutionForRenderer(
+			videoRendererMode,
+			videoSuperResolutionMode,
+		)
+		if (compatibleMode != videoSuperResolutionMode) {
+			prefs.edit { putEnumValue(KEY_VIDEO_SUPER_RES_MODE, compatibleMode) }
 		}
 	}
 
