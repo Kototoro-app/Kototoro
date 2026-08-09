@@ -839,6 +839,7 @@ private fun PremiumNavigationIcon(
     contentDescription: String,
 ) {
     BadgedBox(
+        modifier = Modifier.wrapContentSize(unbounded = true),
         badge = {
             if (badge?.isVisible == true) {
                 if (badge.number > 0) {
