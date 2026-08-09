@@ -72,11 +72,11 @@ Android CLI 是面向 Agent 的 Android 终端工具层，而不是另一个 AI 
 ./gradlew :app:assembleNightly
 
 # 仅编译 Kotlin 代码（最快的验证方式）
-./gradlew :app:compileDebugKotlin --no-daemon
+./gradlew :app:compileDebugKotlin
 
 # 本机完整编译命令（需 Java 17 + 代理）
 JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
-./gradlew :app:compileDebugKotlin --no-daemon \
+./gradlew :app:compileDebugKotlin \
   -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 \
   -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890
 

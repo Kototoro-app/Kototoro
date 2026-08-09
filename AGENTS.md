@@ -6,7 +6,7 @@ See `CLAUDE.md` for comprehensive project architecture, dependency details, and 
 Use the bundled wrappers and keep commands scoped:
 
 - `./gradlew :app:assembleDebug` builds a debug APK (ABI-split: arm64-v8a, armeabi-v7a, x86_64, x86 + universal).
-- `./gradlew :app:compileDebugKotlin --no-daemon` is the fastest compile-only validation for Kotlin changes.
+- `./gradlew :app:compileDebugKotlin` is the fastest compile-only validation for Kotlin changes.
 - `./gradlew :app:testDebugUnitTest --no-daemon` runs JVM unit tests.
 - `./gradlew :app:testDebugUnitTest --tests "org.skepsun.kototoro.ClassName.methodName" --no-daemon` runs a single test.
 - `./gradlew :app:connectedDebugAndroidTest` runs instrumented tests on a device or emulator.

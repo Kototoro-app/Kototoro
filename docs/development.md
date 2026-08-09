@@ -26,7 +26,7 @@ Release build:
 Compile Kotlin only:
 
 ```bash
-./gradlew :app:compileDebugKotlin --no-daemon
+./gradlew :app:compileDebugKotlin
 ```
 
 Run unit tests:
