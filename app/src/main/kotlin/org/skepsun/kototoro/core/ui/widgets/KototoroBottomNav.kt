@@ -720,10 +720,10 @@ private fun FloatingBottomNavRow(
                         },
                     )
                 if (useExpressivePill) {
+                    val hasNumberBadge = badges[item.id]?.let { it.isVisible && it.number > 0 } == true
                     Box(
                         modifier = itemModifier
                             .height(48.dp)
-                            .animateContentSize(alignment = Alignment.Center)
                             .padding(vertical = 4.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -731,7 +731,6 @@ private fun FloatingBottomNavRow(
                             modifier = Modifier
                                 .height(40.dp)
                                 .widthIn(min = 40.dp)
-                                .animateContentSize(alignment = Alignment.Center)
                                 .then(
                                     if (useSharedLiquidGlassPill) {
                                         Modifier
@@ -780,7 +779,7 @@ private fun FloatingBottomNavRow(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier
-                                        .padding(start = 8.dp)
+                                        .padding(start = if (hasNumberBadge) 20.dp else 8.dp)
                                         .then(
                                             labelMaxWidth?.let { Modifier.widthIn(max = it) } ?: Modifier,
                                         ),
