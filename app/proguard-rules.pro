@@ -223,6 +223,8 @@
 # TVBox jar runtime classes loaded via reflection / DexClassLoader
 -keep class com.github.catvod.** { *; }
 -keep class com.github.tvbox.osc.** { *; }
+# TVBox spiders may access ZXing dynamically through DexClassLoader.
+-keep class com.google.zxing.** { *; }
 
 # Bangumi tracking discovery – prevent R8 from stripping HTML-parsing code paths
 -keep class org.skepsun.kototoro.scrobbling.bangumi.data.BangumiRepository { *; }

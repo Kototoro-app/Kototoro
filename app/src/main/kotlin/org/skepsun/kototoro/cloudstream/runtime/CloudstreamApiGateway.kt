@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 
 internal class CloudstreamApiGateway(
@@ -45,9 +46,19 @@ internal class CloudstreamApiGateway(
 		isCasting: Boolean,
 		subtitleCallback: (SubtitleFile) -> Unit,
 		linkCallback: (ExtractorLink) -> Unit,
-	): Boolean = execute(source.api.loadLinksTimeoutMs) {
+	): Boolean = executeOrNull(source.api.loadLinksTimeoutMs) {
 		CloudstreamRequestContext.withLoadLinksCompatibility {
 			source.api.loadLinks(data, isCasting, subtitleCallback, linkCallback)
+		}
+	} ?: false
+
+	private suspend fun <T> executeOrNull(timeoutMillis: Long?, block: suspend () -> T): T? {
+		return CloudstreamRequestContext.withSource(source) {
+			withContext(Dispatchers.IO) {
+				withTimeoutOrNull(timeoutMillis.coerceCloudstreamTimeout()) {
+					block()
+				}
+			}
 		}
 	}
 
