@@ -842,10 +842,16 @@ private fun PremiumNavigationIcon(
         badge = {
             if (badge?.isVisible == true) {
                 if (badge.number > 0) {
-                    Badge {
+                    Badge(
+                        modifier = Modifier
+                            .heightIn(min = 16.dp)
+                            .widthIn(min = 24.dp),
+                    ) {
                         Text(
                             text = formatBottomNavBadgeNumber(badge.number),
                             maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
                 } else {

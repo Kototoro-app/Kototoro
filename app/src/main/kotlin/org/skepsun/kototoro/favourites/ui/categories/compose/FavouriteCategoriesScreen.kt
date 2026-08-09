@@ -1,10 +1,10 @@
 package org.skepsun.kototoro.favourites.ui.categories.compose
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +42,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,7 +52,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -59,8 +66,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
@@ -91,6 +97,7 @@ internal fun FavouriteCategoriesScreen(
 	val localItems = remember { mutableStateListOf<ListModel>() }
 	val listState = rememberLazyListState()
 	var pendingDelete by remember { mutableStateOf(false) }
+	var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
 
 	LaunchedEffect(items) {
 		localItems.clear()
@@ -185,7 +192,7 @@ internal fun FavouriteCategoriesScreen(
 				items = localItems,
 				key = { _, item -> itemKey(item) },
 				contentType = { _, item -> item::class },
-			) { index, item ->
+			) { _, item ->
 				when (item) {
 					LoadingState -> Unit
 					is EmptyState -> EmptyCategoryState(item)
@@ -195,8 +202,14 @@ internal fun FavouriteCategoriesScreen(
 						onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
 					)
 					is CategoryListModel -> CategoryRow(
+						modifier = Modifier
+							.then(
+								if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
+							)
+							.zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
 						item = item,
 						isSelected = item.category.id in selectedIds,
+						isDragging = draggedCategoryId == item.category.id,
 						actionsEnabled = selectedIds.isEmpty() && item.isActionsEnabled,
 						onClick = {
 							if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
@@ -207,9 +220,17 @@ internal fun FavouriteCategoriesScreen(
 							else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
 						},
 						onMove = { targetIndex ->
-							if (selectedIds.isEmpty() && moveItem(localItems, index, targetIndex)) {
-								onSaveOrder(localItems.toList())
+							val currentIndex = localItems.indexOfFirst {
+								(it as? CategoryListModel)?.category?.id == item.category.id
 							}
+							selectedIds.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
+						},
+						onDragStateChanged = { isDragging ->
+							draggedCategoryId = item.category.id.takeIf { isDragging }
+						},
+						onDragFinished = { moved ->
+							draggedCategoryId = null
+							if (moved) onSaveOrder(localItems.toList())
 						},
 						listState = listState,
 					)
@@ -242,20 +263,44 @@ internal fun FavouriteCategoriesScreen(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryRow(
+	modifier: Modifier = Modifier,
 	item: CategoryListModel,
 	isSelected: Boolean,
+	isDragging: Boolean,
 	actionsEnabled: Boolean,
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 	onEdit: () -> Unit,
-	onMove: (Int) -> Unit,
+	onMove: (Int) -> Boolean,
+	onDragStateChanged: (Boolean) -> Unit,
+	onDragFinished: (Boolean) -> Unit,
 	listState: LazyListState,
 ) {
 	val shape = RoundedCornerShape(dimensionResource(R.dimen.list_selector_corner))
-	val rowModifier = Modifier
+	val hapticFeedback = LocalHapticFeedback.current
+	val density = LocalDensity.current
+	var dragOffsetY by remember(item.category.id) { mutableFloatStateOf(0f) }
+	val backgroundColor by animateColorAsState(
+		targetValue = when {
+			isDragging -> MaterialTheme.colorScheme.secondaryContainer
+			isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+			else -> Color.Transparent
+		},
+		label = "categoryDragBackground",
+	)
+	val rowModifier = modifier
 		.fillMaxWidth()
+		.graphicsLayer {
+			val scale = if (isDragging) 1.02f else 1f
+			scaleX = scale
+			scaleY = scale
+			translationY = if (isDragging) dragOffsetY else 0f
+			shadowElevation = if (isDragging) with(density) { 8.dp.toPx() } else 0f
+			this.shape = shape
+			clip = false
+		}
 		.clip(shape)
-		.background(if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+		.background(backgroundColor)
 		.combinedClickable(onClick = onClick, onLongClick = onLongClick)
 		.padding(start = dimensionResource(androidx.appcompat.R.dimen.abc_action_bar_content_inset_material), top = 4.dp, bottom = 4.dp)
 
@@ -285,20 +330,44 @@ private fun CategoryRow(
 				modifier = Modifier
 					.size(48.dp)
 					.pointerInput(item.category.id) {
-						var currentIndex = -1
+						var dragStarted = false
+						var hasMoved = false
 						detectDragGestures(
 							onDragStart = {
-								currentIndex = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey(item) }?.index ?: -1
+								dragStarted = listState.layoutInfo.visibleItemsInfo.any { it.key == itemKey(item) }
+								dragOffsetY = 0f
+								if (dragStarted) {
+									onDragStateChanged(true)
+									hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+								}
 							},
 							onDrag = { change, dragAmount ->
-								// The drag gesture is handled locally; no parent consumes this change.
-								if (currentIndex < 0) return@detectDragGestures
-								val center = (listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentIndex }?.offset ?: 0) + dragAmount.y.toInt()
-								val target = listState.layoutInfo.visibleItemsInfo.minByOrNull { kotlin.math.abs(it.offset + it.size / 2 - center) }?.index ?: return@detectDragGestures
-								if (target != currentIndex && target > 0) {
-									onMove(target)
-									currentIndex = target
+								change.consume()
+								if (!dragStarted) return@detectDragGestures
+								dragOffsetY += dragAmount.y
+								val currentItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey(item) }
+									?: return@detectDragGestures
+								val center = currentItem.offset + currentItem.size / 2 + dragOffsetY.toInt()
+								val targetItem = listState.layoutInfo.visibleItemsInfo.minByOrNull {
+									kotlin.math.abs(it.offset + it.size / 2 - center)
+								} ?: return@detectDragGestures
+								if (targetItem.index != currentItem.index && targetItem.index > 0) {
+									if (onMove(targetItem.index)) {
+										dragOffsetY += currentItem.offset - targetItem.offset
+										hasMoved = true
+										hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+									}
 								}
+							},
+							onDragCancel = {
+								dragOffsetY = 0f
+								onDragStateChanged(false)
+								onDragFinished(hasMoved)
+							},
+							onDragEnd = {
+								dragOffsetY = 0f
+								onDragStateChanged(false)
+								onDragFinished(hasMoved)
 							},
 						)
 					}

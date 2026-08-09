@@ -329,10 +329,6 @@ class FeedViewModel @Inject constructor(
 		}
 	}
 
-	fun markFeedAsOpened() {
-		settings.feedLastOpenTime = System.currentTimeMillis()
-	}
-
 	fun update() {
 		manualRefreshRequested.value = true
 		scheduler.startNow()

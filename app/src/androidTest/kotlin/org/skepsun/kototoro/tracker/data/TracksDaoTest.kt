@@ -38,17 +38,17 @@ class TracksDaoTest {
 		insertLog(mangaId = 101L, entityId = 10L, createdAt = 220L, unread = true)
 		insertLog(mangaId = 200L, entityId = 20L, createdAt = 230L, unread = true)
 
-		db.getTracksDao().observeUnreadWorkCount(lastOpenTime = 100L).first() shouldBe 2
+		db.getTracksDao().observeUnreadWorkCount().first() shouldBe 2
 	}
 
 	@Test
-	fun unreadWorkCountExcludesLegacyReadAndOldRows() = runTest {
+	fun unreadWorkCountIncludesExistingUnreadRegardlessOfTimestamps() = runTest {
 		insertTrack(ownerId = -100L, mangaId = 100L, entityId = null, newChapters = 3, checkedAt = 300L)
 		insertTrack(ownerId = 20L, mangaId = 200L, entityId = 20L, newChapters = 1, checkedAt = 100L)
 		insertLog(mangaId = 300L, entityId = 30L, createdAt = 300L, unread = false)
 		insertLog(mangaId = 400L, entityId = null, createdAt = 300L, unread = true)
 
-		db.getTracksDao().observeUnreadWorkCount(lastOpenTime = 100L).first() shouldBe 0
+		db.getTracksDao().observeUnreadWorkCount().first() shouldBe 3
 	}
 
 	@Test
