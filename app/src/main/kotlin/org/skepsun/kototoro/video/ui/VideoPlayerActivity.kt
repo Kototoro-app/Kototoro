@@ -180,7 +180,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
         private const val CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES = 256L * 1024L
-        private const val ENABLE_M3U8_PROXY_CACHE = true
+        private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
     }
 
@@ -1811,7 +1811,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (isMpd) return false
         val isM3u8 = lower.contains(".m3u8")
         if (isM3u8 && !ENABLE_M3U8_PROXY_CACHE) {
-            Log.d("VideoPlayerActivity", "m3u8 proxy cache disabled by feature flag")
+            Log.d(
+                "VideoPlayerActivity",
+                "Bypass local proxy for HLS; mpv playback cache=${appSettings.videoCacheSizeMb}MB: $url",
+            )
             return false
         }
         return true
