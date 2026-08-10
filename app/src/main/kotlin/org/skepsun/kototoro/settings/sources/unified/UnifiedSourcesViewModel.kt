@@ -32,6 +32,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
@@ -820,7 +821,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
 				}
 			} catch (e: Throwable) {
-				errorEvent.call(e)
+				_events.emit(UnifiedSourcesEvent.InstallFailed(e.getDisplayMessage(appContext.resources)))
 				if (fromBatch) {
 					emitMessage(appContext.getString(R.string.extension_update_failed, item.name))
 					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
@@ -1416,6 +1417,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 sealed interface UnifiedSourcesEvent {
 	data class Message(val message: String) : UnifiedSourcesEvent
+	data class InstallFailed(val message: String) : UnifiedSourcesEvent
 	data class TrustExternalRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesEvent
 	data class StartInstall(val intent: Intent) : UnifiedSourcesEvent
 	data class StartUninstall(val intent: Intent) : UnifiedSourcesEvent

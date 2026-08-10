@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.local.data.output
 
-import androidx.core.net.toFile
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
@@ -13,6 +12,7 @@ import org.skepsun.kototoro.core.util.ext.MimeType
 import org.skepsun.kototoro.core.util.ext.deleteAwait
 import org.skepsun.kototoro.core.util.ext.takeIfReadable
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.zip.ZipOutput
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
@@ -120,12 +120,17 @@ class LocalContentDirOutput(
 		}.withIndex()
 		val victimsIds = ids.toMutableSet()
 		for (chapter in chapters) {
-			if (!victimsIds.remove(chapter.value.id)) {
+			if (chapter.value.id !in victimsIds) {
 				continue
 			}
 			val chapterFile = index.getChapterFileName(chapter.value.id)?.let {
 				File(rootFile, it)
-			} ?: chapter.value.url.toUri().toFile()
+			} ?: chapter.value.url?.toUri()?.toFileOrNull()
+			if (chapterFile == null) {
+				// A cancelled download can leave remote chapter metadata without a completed local file.
+				victimsIds.remove(chapter.value.id)
+				continue
+			}
 			val contentRoot = rootFile.canonicalFile.toPath()
 			val chapterPath = chapterFile.canonicalFile.toPath()
 			check(chapterFile.exists() && chapterPath != contentRoot && chapterPath.startsWith(contentRoot)) {
@@ -133,6 +138,7 @@ class LocalContentDirOutput(
 			}
 			chapterFile.deleteAwait()
 			index.removeChapter(chapter.value.id)
+			victimsIds.remove(chapter.value.id)
 		}
 		check(victimsIds.isEmpty()) {
 			"${victimsIds.size} of ${ids.size} chapters was not removed: not found"

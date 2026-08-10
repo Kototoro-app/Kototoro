@@ -170,6 +170,7 @@ private sealed interface UnifiedSourcesDialogState {
 		val enabled: Boolean,
 	) : UnifiedSourcesDialogState
 	data class PackageDetails(val item: UnifiedSourcePackageItem) : UnifiedSourcesDialogState
+	data class InstallError(val message: String) : UnifiedSourcesDialogState
 	data class ThirdPartyDisclaimer(val action: UnifiedThirdPartyAction) : UnifiedSourcesDialogState
 }
 
@@ -244,6 +245,9 @@ fun UnifiedSourcesRoute(
 			when (event) {
 				is UnifiedSourcesEvent.Message -> {
 					Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+				}
+				is UnifiedSourcesEvent.InstallFailed -> {
+					activeDialog = UnifiedSourcesDialogState.InstallError(event.message)
 				}
 				is UnifiedSourcesEvent.TrustExternalRepository -> {
 					activeDialog = UnifiedSourcesDialogState.TrustRepository(event.repo)
@@ -553,6 +557,26 @@ fun UnifiedSourcesRoute(
 			onUninstall = {
 				viewModel.uninstallPackage(dialog.item.id)
 				activeDialog = null
+			},
+		)
+
+		is UnifiedSourcesDialogState.InstallError -> SettingsAlertDialog(
+			title = stringResource(R.string.error),
+			onDismissRequest = { activeDialog = null },
+			confirmButton = {
+				SettingsDialogActionButton(
+					text = stringResource(R.string.close),
+					onClick = { activeDialog = null },
+				)
+			},
+			text = {
+				Text(
+					text = dialog.message,
+					modifier = Modifier
+						.fillMaxWidth()
+						.heightIn(max = 360.dp)
+						.verticalScroll(rememberScrollState()),
+				)
 			},
 		)
 

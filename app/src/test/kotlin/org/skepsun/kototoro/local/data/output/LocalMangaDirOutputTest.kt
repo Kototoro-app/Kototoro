@@ -42,6 +42,23 @@ class LocalMangaDirOutputTest {
 		assertTrue(updatedIndex.getChapterFileName(chapters[1].id) == secondFile.name)
 	}
 
+	@Test
+	fun `deleting incomplete chapter with remote id url does not require file uri`() = runTest {
+		val incompleteChapter = chapter(7009L).copy(url = "7009")
+		val manga = content(listOf(incompleteChapter))
+		val index = ContentIndex(null).apply {
+			setContentInfo(manga)
+		}
+		File(root, LocalContentOutput.ENTRY_NAME_INDEX).writeText(index.toString())
+
+		LocalContentDirOutput(root, manga).use { output ->
+			output.deleteChapters(setOf(incompleteChapter.id))
+			output.finish()
+		}
+
+		assertTrue(File(root, LocalContentOutput.ENTRY_NAME_INDEX).isFile)
+	}
+
 	private fun chapter(id: Long) = ContentChapter(
 		id = id,
 		title = "Chapter $id",
