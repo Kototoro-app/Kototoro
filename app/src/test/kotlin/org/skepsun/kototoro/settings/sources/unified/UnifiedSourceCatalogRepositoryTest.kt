@@ -54,6 +54,20 @@ class UnifiedSourceCatalogRepositoryTest : FunSpec({
         item.language shouldBe "zh"
     }
 
+    test("lnreader installed package exposes plugin metadata version and language") {
+        val entity = lnReaderEntity(
+            id = "JSON_LNREADER_VERSIONED",
+            name = "Versioned",
+            lang = "zh-CN",
+            version = "2.3.1",
+        )
+
+        val item = testRepository().invokeToJsonPackageItems(listOf(entity)).single()
+
+        item.versionName shouldBe "2.3.1"
+        item.language shouldBe "zh"
+    }
+
     test("protobuf extension repository keeps its index url") {
         val repository = testRepository()
         val item = repository.invokeToUnifiedRepositoryItem(
@@ -174,6 +188,7 @@ private fun lnReaderEntity(
     id: String,
     name: String,
     lang: String = "en",
+    version: String = "1.0.0",
 ): JsonSourceEntity {
     return JsonSourceEntity(
         id = id,
@@ -184,7 +199,7 @@ private fun lnReaderEntity(
                 id: '+a+',
                 name: '$name',
                 site: 'https://example.org/$name',
-                version: '1.0.0',
+                version: '$version',
                 lang: '$lang'
             }
         """.trimIndent(),

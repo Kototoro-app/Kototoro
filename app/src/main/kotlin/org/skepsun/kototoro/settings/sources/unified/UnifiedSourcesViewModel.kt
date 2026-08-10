@@ -37,6 +37,7 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.jsonsource.JsonSourceImportMetadata
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
+import org.skepsun.kototoro.core.github.VersionId
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginInfo
 import org.skepsun.kototoro.core.lnreader.LNReaderRepository
 import org.skepsun.kototoro.core.lnreader.LNReaderPluginMetadata
@@ -1096,7 +1097,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 					)
 				}
 		}
-		availableLnReaderPlugins.value = plugins.distinctBy { it.repoUrl to it.plugin.id }
+		availableLnReaderPlugins.value = plugins.withPreferredLnReaderVersions()
 		fillMissingLnReaderIcons(availableLnReaderPlugins.value.map { it.plugin })
 	}
 
@@ -1193,11 +1194,6 @@ class UnifiedSourcesViewModel @Inject constructor(
 		)
 	}
 
-	private fun lnReaderSourceId(plugin: LNReaderPluginInfo): String {
-		val sourceKey = plugin.site.ifBlank { plugin.id }
-		return "JSON_LNREADER_${sourceKey.hashCode().toUInt().toString(16).uppercase()}"
-	}
-
 	private fun RepoAvailableExtension.toUnifiedPackageItem(
 		installedPackage: UnifiedSourcePackageItem?,
 		downloadState: ExtensionInstallDownloadState?,
@@ -1244,8 +1240,10 @@ class UnifiedSourcesViewModel @Inject constructor(
 	): UnifiedSourcePackageItem {
 		val state = when {
 			isInstalling -> UnifiedSourcePackageState.INSTALLING
-			installedPackage != null -> UnifiedSourcePackageState.INSTALLED
-			else -> UnifiedSourcePackageState.AVAILABLE
+			installedPackage == null -> UnifiedSourcePackageState.AVAILABLE
+			isNewerLnReaderVersion(plugin.version, installedPackage.versionName) ->
+				UnifiedSourcePackageState.UPDATE_AVAILABLE
+			else -> UnifiedSourcePackageState.INSTALLED
 		}
 		return UnifiedSourcePackageItem(
 			id = installedPackage?.id ?: packageId,
@@ -1664,12 +1662,42 @@ private fun lnReaderPackageIdForAction(repoUrl: String, pluginId: String): Strin
 	return packageIdForAction(UnifiedSourceKind.LNREADER, "${normalizeRepositoryUrlForAction(repoUrl)}:${pluginId.trim()}")
 }
 
-private data class LnReaderAvailablePlugin(
+internal data class LnReaderAvailablePlugin(
 	val plugin: LNReaderPluginInfo,
 	val repoUrl: String,
 	val repoName: String,
 ) {
 	val packageId: String = lnReaderPackageIdForAction(repoUrl, plugin.id)
+}
+
+internal fun List<LnReaderAvailablePlugin>.withPreferredLnReaderVersions(): List<LnReaderAvailablePlugin> {
+	val preferredBySourceId = LinkedHashMap<String, LnReaderAvailablePlugin>()
+	forEach { candidate ->
+		val sourceId = lnReaderSourceId(candidate.plugin)
+		val current = preferredBySourceId[sourceId]
+		if (current == null || compareLnReaderVersions(candidate.plugin.version, current.plugin.version) > 0) {
+			preferredBySourceId[sourceId] = candidate
+		}
+	}
+	return preferredBySourceId.values.toList()
+}
+
+internal fun isNewerLnReaderVersion(candidate: String, installed: String?): Boolean {
+	if (installed.isNullOrBlank() || candidate.isBlank()) return false
+	return compareLnReaderVersions(candidate, installed) > 0
+}
+
+private fun compareLnReaderVersions(left: String, right: String): Int {
+	return VersionId(left.normalizedLnReaderVersion()).compareTo(VersionId(right.normalizedLnReaderVersion()))
+}
+
+private fun String.normalizedLnReaderVersion(): String {
+	return trim().removePrefix("v").removePrefix("V")
+}
+
+private fun lnReaderSourceId(plugin: LNReaderPluginInfo): String {
+	val sourceKey = plugin.site.ifBlank { plugin.id }
+	return "JSON_LNREADER_${sourceKey.hashCode().toUInt().toString(16).uppercase()}"
 }
 
 private data class LnReaderPackageSnapshot(

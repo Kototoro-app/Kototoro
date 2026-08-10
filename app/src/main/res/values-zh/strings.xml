@@ -1470,6 +1470,7 @@
     <string name="pinned_sources_only">仅固定源</string>
     <string name="plugin_incompatible">插件不兼容或出现了外部错误，请确保你已经将 Kototoro 以及插件更新至最新版本</string>
     <string name="plugin_incompatible_with_cause">插件错误： %s\n请确认正在使用的插件及Kototoro是否为最新版本</string>
+    <string name="plugin_missing_host_classes">无法安装 %1$s，因为它依赖 Kototoro 不支持的 %2$s 宿主类：\n%3$s</string>
     <string name="popular">热度（降序）</string>
     <string name="popular_in_hour">一小时内热门</string>
     <string name="popular_in_month">本月热门</string>

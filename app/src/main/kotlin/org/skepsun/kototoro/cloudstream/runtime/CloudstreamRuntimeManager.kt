@@ -78,16 +78,45 @@ class CloudstreamRuntimeManager @Inject constructor(
 			.forEach(::unloadPlugin)
 
 		pluginFiles.forEach { file ->
+			val compatibility = CloudstreamPluginCompatibilityChecker.inspect(file, context.classLoader)
+			if (compatibility is CloudstreamPluginCompatibility.Incompatible) {
+				quarantinePlugin(file, compatibility.reason)
+				return@forEach
+			}
 			runCatching { loadPlugin(file) }
 				.onFailure { error ->
 					Log.e(TAG, "Failed to load Cloudstream plugin ${file.name}", error)
 					writeDiagnostic("load:failed file=${file.name} error=${error.javaClass.name}:${error.message}")
-					unloadPlugin(file.absolutePath)
+					quarantinePlugin(
+						file = file,
+						reason = "Plugin load failed: ${error.javaClass.name}:${error.message}",
+					)
 				}
 		}
 		publishSources()
 		writeDiagnostic(
 			"initialize:done loaded=${loadedPlugins.size} sources=${_sources.value.joinToString(",") { "${it.pluginPackageName}/${it.name}" }}",
+		)
+	}
+
+	private fun quarantinePlugin(
+		file: File,
+		reason: String,
+	) {
+		unloadPlugin(file.absolutePath)
+		val quarantineDir = File(File(context.filesDir, "cloudstream"), "quarantine").apply { mkdirs() }
+		val quarantineFile = File(
+			quarantineDir,
+			"${file.nameWithoutExtension}-${file.runtimeSignatureHash()}.${file.extension}.incompatible",
+		)
+		val moved = file.renameTo(quarantineFile)
+		Log.e(
+			TAG,
+			"Rejected incompatible Cloudstream plugin ${file.name}: $reason; quarantined=$moved",
+		)
+		writeDiagnostic(
+			"load:rejected file=${file.name} reason=$reason " +
+				"quarantined=$moved target=${quarantineFile.absolutePath}",
 		)
 	}
 

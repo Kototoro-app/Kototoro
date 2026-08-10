@@ -608,6 +608,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		}
 
 		filter { it.type == JsonSourceType.LNREADER }.forEach { entity ->
+			val metadata = LNReaderPluginMetadata.extractFromCode(entity.config, entity.id)
 			result += UnifiedSourcePackageItem(
 				id = packageId(UnifiedSourceKind.LNREADER, entity.id),
 				kind = UnifiedSourceKind.LNREADER,
@@ -615,9 +616,9 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 				packageName = entity.id,
 				repositoryId = null,
 				repositoryName = null,
-				versionName = null,
+				versionName = metadata?.version?.takeIf { it.isNotBlank() },
 				versionCode = null,
-				language = null,
+				language = metadata?.lang?.normalizeExtensionLanguageCode(),
 				isInstalled = true,
 				isNsfw = false,
 				sourceCount = 1,

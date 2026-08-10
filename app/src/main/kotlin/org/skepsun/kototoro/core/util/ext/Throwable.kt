@@ -26,6 +26,7 @@ import org.skepsun.kototoro.core.exceptions.EmptyHistoryException
 import org.skepsun.kototoro.core.exceptions.EmptyContentException
 import org.skepsun.kototoro.core.exceptions.IncompatiblePluginException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
+import org.skepsun.kototoro.core.exceptions.MissingPluginHostClassesException
 import org.skepsun.kototoro.core.exceptions.NoDataReceivedException
 import org.skepsun.kototoro.core.exceptions.NonFileUriException
 import org.skepsun.kototoro.core.exceptions.ProxyConfigException
@@ -157,6 +158,12 @@ private fun Throwable.getDisplayMessageOrNull(resources: Resources): String? = w
             resources.getString(R.string.plugin_incompatible_with_cause, it)
         } ?: resources.getString(R.string.plugin_incompatible)
     }
+    is MissingPluginHostClassesException -> resources.getString(
+        R.string.plugin_missing_host_classes,
+        pluginName,
+        hostName,
+        missingClassNames.joinToString(separator = "\n"),
+    )
 
     is WrongPasswordException -> resources.getString(R.string.wrong_password)
     is NotFoundException -> resources.getString(R.string.not_found_404)

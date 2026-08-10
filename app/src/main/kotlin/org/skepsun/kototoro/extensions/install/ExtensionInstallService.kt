@@ -17,6 +17,10 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibility
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibilityChecker
+import org.skepsun.kototoro.core.exceptions.IncompatiblePluginException
+import org.skepsun.kototoro.core.exceptions.MissingPluginHostClassesException
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
@@ -118,6 +122,21 @@ class ExtensionInstallService @Inject constructor(
 		}
 
 		if (extension.type == ExternalExtensionType.CLOUDSTREAM) {
+			val compatibility = CloudstreamPluginCompatibilityChecker.inspect(outputFile, context.classLoader)
+			if (compatibility is CloudstreamPluginCompatibility.Incompatible) {
+				outputFile.delete()
+				if (compatibility.missingHostClasses.isNotEmpty()) {
+					throw MissingPluginHostClassesException(
+						pluginName = extension.name,
+						hostName = "Cloudstream",
+						missingClassNames = compatibility.missingHostClasses,
+					)
+				}
+				throw IncompatiblePluginException(
+					name = extension.name,
+					cause = IllegalStateException(compatibility.reason),
+				)
+			}
 			val pluginsDir = File(File(context.filesDir, "cloudstream"), "plugins").apply { mkdirs() }
 			val pluginFile = File(pluginsDir, extension.archiveName)
 			outputFile.copyTo(pluginFile, overwrite = true)

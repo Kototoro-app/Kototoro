@@ -1192,6 +1192,7 @@
     <string name="screen_orientation">屏幕方向</string>
     <string name="portrait">竖屏</string>
     <string name="plugin_incompatible_with_cause">插件错误： %s\n请确认正在使用的插件及Kototoro是否为最新版本</string>
+    <string name="plugin_missing_host_classes">无法安装 %1$s，因为它依赖 Kototoro 不支持的 %2$s 宿主类：\n%3$s</string>
     <string name="max_backups_count">最大备份数</string>
     <string name="access_denied_403">拒绝访问 (403)</string>
     <string name="error_not_image">无效格式：预期是图片但得到了 %s</string>
