@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +38,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -59,7 +63,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -73,13 +76,13 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.dimensionResource
@@ -101,7 +104,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalScrollToTopEvents
 import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
-import org.skepsun.kototoro.core.ui.compose.DynamicArtworkRequestSize
+import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -140,6 +143,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationRailDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -159,8 +163,6 @@ import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import org.skepsun.kototoro.core.ui.theme.artworkOverlayColor
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
@@ -1226,9 +1228,13 @@ fun KototoroApp(
     } else {
         0
     }
+    val layoutDirection = LocalLayoutDirection.current
     val displayCutoutPadding = WindowInsets.displayCutout.asPaddingValues()
-    val displayCutoutStartDp = displayCutoutPadding.calculateLeftPadding(LayoutDirection.Ltr)
-    val displayCutoutEndDp = displayCutoutPadding.calculateRightPadding(LayoutDirection.Ltr)
+    val displayCutoutStartDp = displayCutoutPadding.calculateStartPadding(layoutDirection)
+    val displayCutoutEndDp = displayCutoutPadding.calculateEndPadding(layoutDirection)
+    val applyRootDisplayCutoutPadding = !isDetailsRoute
+    val rootDisplayCutoutStartDp = if (applyRootDisplayCutoutPadding) displayCutoutStartDp else 0.dp
+    val rootDisplayCutoutEndDp = if (applyRootDisplayCutoutPadding) displayCutoutEndDp else 0.dp
     val extraPinnedBottomInsetPx = with(density) {
         if (isNavBarPinned && !isFloating) 12.dp.roundToPx() else 0
     }
@@ -1541,52 +1547,33 @@ fun KototoroApp(
                     )
                 }
             }
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
-                .nestedScroll(nestedScrollConnection)
-                .onGloballyPositioned { coordinates ->
-                    rootContentBounds = coordinates.boundsInRoot()
+            DynamicArtworkBackdrop(
+                content = lastReadContent,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection)
+                    .nestedScroll(nestedScrollConnection)
+                    .onGloballyPositioned { coordinates ->
+                        rootContentBounds = coordinates.boundsInRoot()
+                    },
+            ) {
+                if (shouldShowChrome && isLandscapeNavigation && displayCutoutStartDp > 0.dp) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .fillMaxHeight()
+                            .width(displayCutoutStartDp),
+                        color = NavigationRailDefaults.ContainerColor,
+                        tonalElevation = 3.dp,
+                    ) {}
                 }
-                .padding(start = displayCutoutStartDp, end = displayCutoutEndDp)) {
-                if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
-                    val cover = lastReadContent?.coverUrl ?: lastReadContent?.publicUrl
-                    if (!cover.isNullOrEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .drawWithCache {
-                                    onDrawWithContent {
-                                        drawContent()
-                                    }
-                                }
-                        ) {
-                            androidx.compose.foundation.Image(
-                                painter = rememberAsyncImagePainter(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(cover)
-                                        .size(DynamicArtworkRequestSize)
-                                        .crossfade(true)
-                                        .build()
-                                ),
-                                contentDescription = null,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .graphicsLayer {
-                                        renderEffect = androidx.compose.ui.graphics.BlurEffect(35f, 35f)
-                                    }
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.artworkOverlayColor())
-                            )
-                        }
-                    }
-                }
-                SharedTransitionLayout {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = rootDisplayCutoutStartDp, end = rootDisplayCutoutEndDp),
+                ) {
+                    SharedTransitionLayout {
                     SideEffect {
                         chromeSharedTransitionScope = if (effectiveSharedElementTransitionsEnabled) {
                             this@SharedTransitionLayout
@@ -1848,6 +1835,7 @@ fun KototoroApp(
                     onCoverFinished = onSpaceCurtainCoverFinished,
                     onRevealFinished = onSpaceCurtainRevealFinished,
                 )
+                }
             }
         }
     }

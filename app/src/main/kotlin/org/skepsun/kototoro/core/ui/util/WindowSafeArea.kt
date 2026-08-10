@@ -17,7 +17,7 @@ fun Activity.configureSafeAreaWindow() {
             }
         }
     }
-    val surfaceColor = getThemeColor(com.google.android.material.R.attr.colorSurface, Color.BLACK)
-    window.setBackgroundDrawable(ColorDrawable(surfaceColor))
-    window.decorView.setBackgroundColor(surfaceColor)
+    val backgroundColor = getThemeColor(android.R.attr.colorBackground, Color.BLACK)
+    window.setBackgroundDrawable(ColorDrawable(backgroundColor))
+    window.decorView.setBackgroundColor(backgroundColor)
 }
