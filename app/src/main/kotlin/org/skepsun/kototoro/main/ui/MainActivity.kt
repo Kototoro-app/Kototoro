@@ -519,8 +519,11 @@ class MainActivity : BaseComposeActivity() {
         }
 
         installSpaceResumeObserverIfEnabled()
-        viewModel.onOpenReader.observeEvent(this) { content ->
-            router.openReader(content)
+        viewModel.onOpenReader.observeEvent(this) { request ->
+            router.openReader(
+                manga = request.content,
+                state = request.state,
+            )
         }
         viewModel.onFirstStart.observeEvent(this) { this.router.showWelcomeSheet() }
         viewModel.isBottomNavPinned.observe(this, ::setNavbarPinned)
@@ -713,7 +716,11 @@ class MainActivity : BaseComposeActivity() {
         if (spaceResumeObserverInstalled || !settings.isEntitySpaceEnabled) return
         spaceResumeObserverInstalled = true
         spaceResumeViewModel.onOpenReader.observeEvent(this) { request ->
-            router.openReader(request.content, contentTypeOverride = request.contentType)
+            router.openReader(
+                manga = request.content,
+                contentTypeOverride = request.contentType,
+                state = request.state,
+            )
         }
     }
 

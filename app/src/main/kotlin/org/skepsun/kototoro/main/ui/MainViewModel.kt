@@ -28,9 +28,15 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.main.domain.ReadingResumeEnabledUseCase
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
+
+data class MainReaderRequest(
+	val content: Content,
+	val state: ReaderState?,
+)
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -44,7 +50,7 @@ class MainViewModel @Inject constructor(
 	private val workResolver: WorkResolver,
 ) : BaseViewModel() {
 
-	val onOpenReader = MutableEventFlow<Content>()
+	val onOpenReader = MutableEventFlow<MainReaderRequest>()
 	val onFirstStart = MutableEventFlow<Unit>()
 
 	private val _topBarHeightPx = MutableStateFlow(0)
@@ -130,6 +136,7 @@ class MainViewModel @Inject constructor(
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
 			val rawContent = historyRepository.getLastOrNull() ?: throw EmptyHistoryException()
+			val history = historyRepository.getOne(rawContent)
 			val entityId = workResolver.resolveByMangaId(rawContent.id).entityId
 			val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
 			val resolvedBase = preferredLocalMangaId
@@ -157,7 +164,12 @@ class MainViewModel @Inject constructor(
 			} else {
 				resolvedBase
 			}
-			onOpenReader.call(content)
+			onOpenReader.call(
+				MainReaderRequest(
+					content = content,
+					state = history?.let(::ReaderState),
+				),
+			)
 		}
 	}
 

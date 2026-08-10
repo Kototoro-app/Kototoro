@@ -4,6 +4,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.mockk.every
+import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,8 +23,10 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.util.Event
+import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -32,6 +35,7 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.TestSpaceCatalogRepository
+import java.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SpaceResumeViewModelTest {
@@ -116,7 +120,21 @@ class SpaceResumeViewModelTest {
 			every { observe() } returns flowOf(state)
 		}
 		val repository = RecordingSpaceRepository()
-		val viewModel = SpaceResumeViewModel(source, repository, TestSpaceCatalogRepository())
+		val history = ContentHistory(
+			createdAt = Instant.EPOCH,
+			updatedAt = Instant.EPOCH,
+			chapterId = 42L,
+			page = 3,
+			scroll = 4,
+			percent = 0.5f,
+			chaptersCount = 10,
+		)
+		val viewModel = SpaceResumeViewModel(
+			source,
+			repository,
+			TestSpaceCatalogRepository(),
+			historyRepository(history),
+		)
 
 		withContext(Dispatchers.Default) {
 			withTimeout(2_000) { viewModel.uiState.first { it == state } }
@@ -126,7 +144,11 @@ class SpaceResumeViewModelTest {
 		}
 		viewModel.resume(BuiltInSpaces.Anime)
 
-		opened.await() shouldBe SpaceResumeRequest(content, ContentType.VIDEO)
+		opened.await() shouldBe SpaceResumeRequest(
+			content = content,
+			contentType = ContentType.VIDEO,
+			state = org.skepsun.kototoro.reader.ui.ReaderState(42L, 3, 4),
+		)
 		repository.activations shouldContainExactly listOf(BuiltInSpaces.Anime)
 	}
 
@@ -138,7 +160,12 @@ class SpaceResumeViewModelTest {
 			every { observe() } returns states
 		}
 		val repository = RecordingSpaceRepository()
-		val viewModel = SpaceResumeViewModel(source, repository, TestSpaceCatalogRepository())
+		val viewModel = SpaceResumeViewModel(
+			source,
+			repository,
+			TestSpaceCatalogRepository(),
+			emptyHistoryRepository(),
+		)
 		val opened = async(Dispatchers.Default) {
 			withTimeout(2_000) { viewModel.onOpenReader.filterNotNull().first().request() }
 		}
@@ -155,7 +182,7 @@ class SpaceResumeViewModelTest {
 			),
 		)
 
-		opened.await() shouldBe SpaceResumeRequest(content, ContentType.NOVEL)
+		opened.await() shouldBe SpaceResumeRequest(content, ContentType.NOVEL, state = null)
 		repository.activations shouldContainExactly listOf(BuiltInSpaces.Novel)
 	}
 
@@ -163,6 +190,12 @@ class SpaceResumeViewModelTest {
 		var request: SpaceResumeRequest? = null
 		consume(FlowCollector { request = it })
 		return checkNotNull(request)
+	}
+
+	private fun emptyHistoryRepository() = historyRepository(null)
+
+	private fun historyRepository(history: ContentHistory?) = mockk<HistoryRepository> {
+		coEvery { getOne(any()) } returns history
 	}
 
 	private fun content(id: Long, title: String, type: ContentType): Content {

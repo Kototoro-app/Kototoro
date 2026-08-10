@@ -406,6 +406,7 @@ class AppRouter private constructor(
 		manga: Content,
 		anchor: View? = null,
 		contentTypeOverride: ContentType? = null,
+		state: ReaderState? = null,
 	) {
 		val source = manga.source.unwrap()
         val contentType = contentTypeOverride ?: if (manga.looksLikeLocalVideoContent()) {
@@ -414,100 +415,58 @@ class AppRouter private constructor(
             getContentType(source)
         }
         if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
+            val intent = Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
+                .putExtra(KEY_MANGA, ParcelableContent(manga))
+                .putExtra(KEY_ID, manga.id)
+            state?.let { intent.putExtra(ReaderIntent.EXTRA_STATE, it) }
             startActivity(
-                prepareImmersiveIntent(
-                    Intent(contextOrNull() ?: return, NovelReaderActivity::class.java)
-                        .putExtra(KEY_MANGA, ParcelableContent(manga))
-                        .putExtra(KEY_ID, manga.id),
-                ),
+                prepareImmersiveIntent(intent),
                 anchor?.let { scaleUpActivityOptionsOf(it) },
             )
             return
         }
         if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-            val url = manga.publicUrl
-            val lastSegment = url.toUriOrNull()?.lastPathSegment ?: url
-            val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-                lastSegment.endsWith(".mp4", ignoreCase = true)
-
-            if (isDirectStream) {
-                // 鐩撮摼瑙嗛锛氳嫢宸插姞杞界珷鑺傦紝鍒欓檮甯﹂?ReaderState 浠ヤ究缁熻/淇濆瓨杩涘害
-                val state = runCatching {
-                    val chapters = manga.chapters
-                    if (!chapters.isNullOrEmpty()) {
-                        org.skepsun.kototoro.reader.ui.ReaderState(manga, null)
-                    } else null
-                }.getOrNull()
-                openVideo(
-                    url = url,
-                    manga = manga,
-                    anchor = anchor,
-                    state = state,
-                )
-            } else {
-                // 闈炵洿閾撅細闇€瑕佸姞杞界珷鑺傛墠鑳借В鏋怳RL
-                // 濡傛灉绔犺妭鏈姞杞斤紝鍏堝姞杞界珷?
-                if (manga.chapters.isNullOrEmpty()) {
-                    // 寮傛鍔犺浇绔犺妭鍚庡啀鎵撳紑鎾斁?
-                    val lifecycleOwner = (activity as? LifecycleOwner) ?: (fragment as? LifecycleOwner)
-                    lifecycleOwner?.lifecycleScope?.launch {
-                        try {
-                            val repo = mangaRepositoryFactory.create(manga.source)
-                            val details = repo.getDetails(manga)
-                            val mangaWithChapters = details.copy(chapters = details.chapters)
-                            
-                            openVideo(
-                                url = url,
-                                manga = mangaWithChapters,
-                                anchor = anchor,
-                                state = runCatching {
-                                    val chapters = mangaWithChapters.chapters
-                                    if (!chapters.isNullOrEmpty()) {
-                                        org.skepsun.kototoro.reader.ui.ReaderState(mangaWithChapters, null)
-                                    } else null
-                                }.getOrNull(),
-                            )
-                        } catch (e: Exception) {
-                            android.util.Log.e("AppRouter", "Failed to load chapters for video", e)
-                            // 鍏滃簳锛氫粛鐒跺皾璇曟墦寮€锛岃VideoPlayerActivity澶勭悊閿欒
-                            openVideo(
-                                url = url,
-                                manga = manga,
-                                anchor = anchor,
-                                state = null,
-                            )
-                        }
-                    }
-                } else {
-                    // 绔犺妭宸插姞杞斤紝鐩存帴鎵撳?
-                    openVideo(
-                        url = url,
-                        manga = manga,
-                        anchor = anchor,
-                        state = runCatching {
-                            val chapters = manga.chapters
-                            if (!chapters.isNullOrEmpty()) {
-                                org.skepsun.kototoro.reader.ui.ReaderState(manga, null)
-                            } else null
-                        }.getOrNull(),
-                    )
-                }
-            }
+			openVideoContent(manga, anchor, state)
         } else {
             openReader(
                 ReaderIntent.Builder(contextOrNull() ?: return)
                     .manga(manga)
+					.state(state)
                     .build(),
                 anchor,
             )
         }
     }
 
-	private fun resolveVideoStartUrl(manga: Content, state: ReaderState?): String {
-		return state
-			?.let { currentState -> manga.chapters?.firstOrNull { it.id == currentState.chapterId }?.url }
-			?.takeIf { it.isNotBlank() }
-			?: manga.publicUrl
+	private fun openVideoContent(
+		manga: Content,
+		anchor: View?,
+		state: ReaderState?,
+	) {
+		val target = resolveVideoLaunchTarget(manga, state)
+		val lastSegment = target.url.toUriOrNull()?.lastPathSegment ?: target.url
+		val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
+			lastSegment.endsWith(".mp4", ignoreCase = true)
+		if (isDirectStream || !manga.chapters.isNullOrEmpty()) {
+			openVideo(target.url, manga, anchor, target.state)
+			return
+		}
+
+		val lifecycleOwner = (activity as? LifecycleOwner) ?: (fragment as? LifecycleOwner)
+		if (lifecycleOwner == null) {
+			openVideo(target.url, manga, anchor, target.state)
+			return
+		}
+		lifecycleOwner.lifecycleScope.launch {
+			try {
+				val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
+				val resolvedTarget = resolveVideoLaunchTarget(details, state)
+				openVideo(resolvedTarget.url, details, anchor, resolvedTarget.state)
+			} catch (e: Exception) {
+				Log.e("AppRouter", "Failed to load chapters for video", e)
+				openVideo(target.url, manga, anchor, target.state)
+			}
+		}
 	}
 
 	fun openReader(intent: ReaderIntent, anchor: View? = null) {
@@ -559,58 +518,7 @@ class AppRouter private constructor(
                 }
 				if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
                     val state = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-                    val url = resolveVideoStartUrl(manga, state)
-                    val lastSegment = url.toUriOrNull()?.lastPathSegment ?: url
-                    val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-                        lastSegment.endsWith(".mp4", ignoreCase = true)
-
-                    if (isDirectStream) {
-                        openVideo(
-                            url = url,
-                            manga = manga,
-                            anchor = anchor,
-                            state = state,
-                        )
-                    } else {
-                        // 闈炵洿閾撅細闇€瑕佸姞杞界珷鑺傛墠鑳借В鏋怳RL
-                        // 濡傛灉绔犺妭鏈姞杞斤紝鍏堝姞杞界珷?
-                        if (manga.chapters.isNullOrEmpty()) {
-                            // 寮傛鍔犺浇绔犺妭鍚庡啀鎵撳紑鎾斁?
-                            val lifecycleOwner = (activity as? LifecycleOwner) ?: (fragment as? LifecycleOwner)
-                            lifecycleOwner?.lifecycleScope?.launch {
-                                try {
-                                    val repo = mangaRepositoryFactory.create(manga.source)
-                                    val details = repo.getDetails(manga)
-                                    val mangaWithChapters = details.copy(chapters = details.chapters)
-                                    val resolvedUrl = resolveVideoStartUrl(mangaWithChapters, state)
-                                    
-                                    openVideo(
-                                        url = resolvedUrl,
-                                        manga = mangaWithChapters,
-                                        anchor = anchor,
-                                        state = state,
-                                    )
-                                } catch (e: Exception) {
-                                    android.util.Log.e("AppRouter", "Failed to load chapters for video", e)
-                                    // 鍏滃簳锛氫粛鐒跺皾璇曟墦寮€锛岃VideoPlayerActivity澶勭悊閿欒
-                                    openVideo(
-                                        url = url,
-                                        manga = manga,
-                                        anchor = anchor,
-                                        state = state,
-                                    )
-                                }
-                            }
-                        } else {
-                            // 绔犺妭宸插姞杞斤紝鐩存帴鎵撳?
-                            openVideo(
-                                url = url,
-                                manga = manga,
-                                anchor = anchor,
-                                state = state,
-                            )
-                        }
-                    }
+					openVideoContent(manga, anchor, state)
                     return
                 }
             }

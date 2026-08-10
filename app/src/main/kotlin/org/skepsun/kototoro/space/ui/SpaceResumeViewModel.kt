@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 import org.skepsun.kototoro.space.domain.SpaceFeatureFlagsRepository
@@ -49,6 +50,7 @@ data class SpaceResumeUiState(
 data class SpaceResumeRequest(
 	val content: Content,
 	val contentType: ContentType?,
+	val state: ReaderState?,
 )
 
 @Reusable
@@ -89,6 +91,7 @@ class SpaceResumeViewModel @Inject constructor(
 	stateSource: SpaceResumeStateSource,
 	private val spaceRepository: SpaceRepository,
 	private val catalogRepository: SpaceCatalogRepository,
+	private val historyRepository: HistoryRepository,
 ) : BaseViewModel() {
 
 	val onOpenReader = MutableEventFlow<SpaceResumeRequest>()
@@ -109,10 +112,12 @@ class SpaceResumeViewModel @Inject constructor(
 				}
 				?: return@launchLoadingJob
 			spaceRepository.activate(spaceId)
+			val history = historyRepository.getOne(item.content)
 			onOpenReader.call(
 				SpaceResumeRequest(
 					content = item.content.normalizeLocalVideoSource(),
 					contentType = catalogRepository.find(spaceId)?.kind?.toContentType(),
+					state = history?.let(::ReaderState),
 				),
 			)
 		}

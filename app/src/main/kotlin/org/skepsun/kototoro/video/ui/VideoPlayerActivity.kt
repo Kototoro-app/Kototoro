@@ -1167,16 +1167,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private suspend fun resolveLaunchContent(): Content? {
+        val intentContent = intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
         val mangaId = intent.getLongExtra(AppRouter.KEY_ID, -1L)
         if (mangaId > 0L) {
             contentDataRepository.findPreferredLocalContentById(mangaId, withChapters = true)?.let { current ->
-                return current
+                return preferCompleteLaunchContent(current, intentContent)
             }
             contentDataRepository.findContentById(mangaId, withChapters = true)?.let { current ->
-                return current
+                return preferCompleteLaunchContent(current, intentContent)
             }
         }
-        return intent.getParcelableExtraCompat<ParcelableContent>(AppRouter.KEY_MANGA)?.manga
+        return intentContent
     }
 
     override fun finishAfterTransition() {
