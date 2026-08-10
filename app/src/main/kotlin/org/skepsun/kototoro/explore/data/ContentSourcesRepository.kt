@@ -175,15 +175,35 @@ class ContentSourcesRepository @Inject constructor(
 		}
 
 	suspend fun getAllAvailableSourcesUnfiltered(): List<ContentSource> {
+		return getAllAvailableSources(filterToActiveTvBoxRepository = false)
+	}
+
+	suspend fun getAllAvailableSourcesForActiveTvBoxRepository(): List<ContentSource> {
+		return getAllAvailableSources(filterToActiveTvBoxRepository = true)
+	}
+
+	private suspend fun getAllAvailableSources(filterToActiveTvBoxRepository: Boolean): List<ContentSource> {
 		assimilateNewSources()
-		val sources = canonicalizeSourcesByName(buildList {
+		val candidates = buildList {
 			addAll(allContentSources)
 			addAll(getExternalSources())
 			addAll(jsonSourceManager.observeAllJsonSources().first().map(::JsonContentSource))
 			addAll(getEnabledMihonSources())
 			addAll(getEnabledAniyomiSources())
 			addAll(getEnabledIReaderSources())
-		})
+		}
+		val filteredCandidates = if (filterToActiveTvBoxRepository) {
+			val selection = TVBoxRepositorySelector.resolve(
+				options = jsonDao.observeEnabledSummaries().first().mapNotNull { summary ->
+					TVBoxRepositorySelector.option(summary.type, summary.config)
+				},
+				preferredId = settings.activeTvBoxRepositoryId,
+			)
+			candidates.filter { it.isVisibleForTvBoxRepository(selection.activeId) }
+		} else {
+			candidates
+		}
+		val sources = canonicalizeSourcesByName(filteredCandidates)
 		projectionContentTypeBackfill.backfillAll(
 			resolvedSources = sources + listOf(LocalMangaSource, LocalNovelSource, LocalVideoSource),
 		)
