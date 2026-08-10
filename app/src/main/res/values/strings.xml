@@ -3267,10 +3267,12 @@
     <string name="font_preset_system">System default</string>
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
-    <string name="font_preset_sarasa_gothic">Sarasa Gothic</string>
+    <string name="font_preset_sarasa_gothic">Sarasa UI Gothic</string>
     <string name="font_preset_lxgw_wenkai">LXGW WenKai</string>
     <string name="font_preset_noto_sans_cjk_sc">Noto Sans CJK SC</string>
     <string name="font_preset_source_han_serif_sc">Source Han Serif SC</string>
+    <string name="font_preset_gen_ryu_min_tw_s2t">GenRyuMin TW (Simplified to Traditional)</string>
+    <string name="font_preset_kai_gen_gothic_tw_s2t">KaiGen Gothic TW (Simplified to Traditional)</string>
     <string name="font_downloading">Downloading %1$s font…</string>
     <string name="font_download_ready">%1$s font is ready</string>
     <string name="font_download_failed">Unable to download %1$s. Using the system font.</string>

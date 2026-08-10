@@ -143,6 +143,8 @@ private suspend fun AppFontPreset.toFontFamily(
         AppFontPreset.LXGW_WENKAI -> return onlineFontLoader.load(OnlineFontPreset.LXGW_WENKAI)
         AppFontPreset.NOTO_SANS_CJK_SC -> return onlineFontLoader.load(OnlineFontPreset.NOTO_SANS_CJK_SC)
         AppFontPreset.SOURCE_HAN_SERIF_SC -> return onlineFontLoader.load(OnlineFontPreset.SOURCE_HAN_SERIF_SC)
+        AppFontPreset.GEN_RYU_MIN_TW_S2T -> return onlineFontLoader.load(OnlineFontPreset.GEN_RYU_MIN_TW_S2T)
+        AppFontPreset.KAI_GEN_GOTHIC_TW_S2T -> return onlineFontLoader.load(OnlineFontPreset.KAI_GEN_GOTHIC_TW_S2T)
         AppFontPreset.SYSTEM -> return null
         AppFontPreset.ROBOTO -> "Roboto"
         AppFontPreset.ROBOTO_FLEX -> "Roboto Flex"

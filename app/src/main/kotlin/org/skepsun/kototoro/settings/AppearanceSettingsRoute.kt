@@ -482,6 +482,14 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(AppFontPreset.LXGW_WENKAI, context.getString(R.string.font_preset_lxgw_wenkai)),
             SettingsChoiceOption(AppFontPreset.NOTO_SANS_CJK_SC, context.getString(R.string.font_preset_noto_sans_cjk_sc)),
             SettingsChoiceOption(AppFontPreset.SOURCE_HAN_SERIF_SC, context.getString(R.string.font_preset_source_han_serif_sc)),
+            SettingsChoiceOption(
+                AppFontPreset.GEN_RYU_MIN_TW_S2T,
+                context.getString(R.string.font_preset_gen_ryu_min_tw_s2t),
+            ),
+            SettingsChoiceOption(
+                AppFontPreset.KAI_GEN_GOTHIC_TW_S2T,
+                context.getString(R.string.font_preset_kai_gen_gothic_tw_s2t),
+            ),
         )
     }
 

@@ -107,6 +107,8 @@ enum class AppFontPreset {
 	LXGW_WENKAI,
 	NOTO_SANS_CJK_SC,
 	SOURCE_HAN_SERIF_SC,
+	GEN_RYU_MIN_TW_S2T,
+	KAI_GEN_GOTHIC_TW_S2T,
 }
 
 enum class SpaceSwitcherPosition {

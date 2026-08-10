@@ -42,10 +42,10 @@ enum class OnlineFontPreset(
 	val extension: String,
 ) {
 	SARASA_GOTHIC(
-		displayName = "Sarasa Gothic",
+		displayName = "Sarasa UI Gothic",
 		cacheName = "sarasa-gothic-sc",
-		url = "https://unpkg.com/@fontpkg/sarasa-gothic-sc@0.36.0/sarasa-gothic-sc-regular.ttf",
-		sha256 = "ce122dd0cc3bf33f32ccf48e30c0779ddf8bf3c5a3b30b335b5f5d7916caafab",
+		url = "https://unpkg.com/@fontpkg/sarasa-ui-sc@0.36.0/sarasa-ui-sc-regular.ttf",
+		sha256 = "f99998c75b440fa71c926c0565805c162ddab615dc82a380a53f0b68ac71d19e",
 		extension = "ttf",
 	),
 	LXGW_WENKAI(
@@ -68,6 +68,20 @@ enum class OnlineFontPreset(
 		url = "https://unpkg.com/@fontpkg/source-han-serif-sc@2.3.2/SourceHanSerifSC-Regular.otf",
 		sha256 = "0bf165efa014db063f2d62a12cec1c237038dfad3d67fb2c77818a540f016180",
 		extension = "otf",
+	),
+	GEN_RYU_MIN_TW_S2T(
+		displayName = "GenRyuMin TW (S2T)",
+		cacheName = "gen-ryu-min-tw-medium-s2t",
+		url = "https://here.vixual.net/files/fonts/choice/GenRyuMinTW-Medium-Simp2Trad.ttf",
+		sha256 = "8631dcfd12b03de5d9b1af6d7e11811fe85db0ab2fad12847d8803c8c192a356",
+		extension = "ttf",
+	),
+	KAI_GEN_GOTHIC_TW_S2T(
+		displayName = "KaiGen Gothic TW (S2T)",
+		cacheName = "kai-gen-gothic-tw-medium-s2t",
+		url = "https://here.vixual.net/files/fonts/choice/KaiGenGothicTW-Medium-Simp2Trad.ttf",
+		sha256 = "f59aa7f2680b5065deb080c7bd8f3083a1ee76654f65a1327d62b40e697cd0e7",
+		extension = "ttf",
 	),
 }
 
