@@ -175,13 +175,6 @@ object UnifiedRecommendedRepositories {
 			),
 			UnifiedRecommendedRepository(
 				kind = UnifiedSourceKind.CLOUDSTREAM,
-				name = "Vietnamese Extension",
-				url = "https://gitlab.com/tearrs/cloudstream-vietnamese/-/raw/main/repo.json",
-				locationType = UnifiedRepositoryLocationType.REMOTE_URL,
-				capabilities = cloudstreamRepoCapabilities,
-			),
-			UnifiedRecommendedRepository(
-				kind = UnifiedSourceKind.CLOUDSTREAM,
 				name = "zzikozz",
 				url = "https://codeberg.org/zzikozz/frencharchive/raw/branch/Release/repo.json",
 				locationType = UnifiedRepositoryLocationType.REMOTE_URL,
