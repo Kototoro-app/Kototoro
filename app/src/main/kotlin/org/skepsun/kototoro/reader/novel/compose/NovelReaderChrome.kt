@@ -11,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -192,7 +194,7 @@ internal fun NovelReaderTopChrome(
 	}
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun NovelReaderBottomChrome(
 	state: NovelComposeReaderUiState,
@@ -200,6 +202,10 @@ internal fun NovelReaderBottomChrome(
 	animationsEnabled: Boolean = true,
 ) {
 	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val navigationBarBottomInset = WindowInsets.navigationBarsIgnoringVisibility
+		.asPaddingValues()
+		.calculateBottomPadding()
+	val bottomChromeHeight = 84.dp + NovelBottomGradientExtension + navigationBarBottomInset
 	val toolsPanelVisible = state.toolsSheetVisible || state.ttsControlsVisible
 	val dismissiblePanelVisible = state.settingsSheetVisible || state.chaptersSheetVisible || toolsPanelVisible
 	BackHandler(enabled = dismissiblePanelVisible) {
@@ -212,7 +218,7 @@ internal fun NovelReaderBottomChrome(
 
 	Box(
 		contentAlignment = Alignment.BottomCenter,
-		modifier = Modifier.fillMaxWidth().height(84.dp + NovelBottomGradientExtension),
+		modifier = Modifier.fillMaxWidth().height(bottomChromeHeight),
 	) {
 		AnimatedVisibility(
 			visible = state.controlsVisible && state.progressMax > 0f,
@@ -224,10 +230,10 @@ internal fun NovelReaderBottomChrome(
 			val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
 			Box(
 				contentAlignment = Alignment.BottomCenter,
-				modifier = Modifier.fillMaxWidth().height(84.dp + NovelBottomGradientExtension),
+				modifier = Modifier.fillMaxWidth().height(bottomChromeHeight),
 			) {
 				ImmersiveEdgeGradient(
-					height = 84.dp + NovelBottomGradientExtension,
+					height = bottomChromeHeight,
 					colors = listOf(
 						immersiveBaseColor.toTransparentImmersiveColor(),
 						immersiveBaseColor.copy(alpha = 0.035f),
@@ -240,7 +246,12 @@ internal fun NovelReaderBottomChrome(
 				)
 				ReaderProgressDock(
 					isIosStyle = isIosStyle,
-					modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+					modifier = Modifier.padding(
+						start = 12.dp,
+						top = 4.dp,
+						end = 12.dp,
+						bottom = navigationBarBottomInset + 4.dp,
+					),
 				) {
 					NovelProgressPanel(state, callbacks, isIosStyle)
 				}
@@ -274,7 +285,12 @@ internal fun NovelReaderBottomChrome(
 				Row(
 					horizontalArrangement = Arrangement.SpaceBetween,
 					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+					modifier = Modifier.padding(
+						start = 14.dp,
+						top = 5.dp,
+						end = 14.dp,
+						bottom = navigationBarBottomInset + 5.dp,
+					),
 				) {
 					Text(
 						text = state.chapterTitle,

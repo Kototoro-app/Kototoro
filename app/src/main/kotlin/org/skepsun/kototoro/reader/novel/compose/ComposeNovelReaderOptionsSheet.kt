@@ -393,13 +393,14 @@ private fun NovelTypographyRows(
 	ReaderOptionDivider()
 	ReaderOptionValueRow(
 		label = stringResource(R.string.novel_paragraph_spacing),
-		value = "%.0fdp".format(settings.paragraphSpacing),
+		value = stringResource(R.string.novel_paragraph_spacing_value, settings.paragraphSpacingLines),
 		onClick = {
 			onEditSlider(
 				SliderEditor(
 					R.string.novel_paragraph_spacing,
 					settings.paragraphSpacing,
 					NovelReaderSettings.PARAGRAPH_SPACING_RANGE,
+					steps = 2,
 				) { update { copy(paragraphSpacing = it) } },
 			)
 		},
@@ -486,13 +487,18 @@ private fun NovelThemeSwatch(preset: NovelReaderThemePreset) {
 			modifier = Modifier.padding(top = 4.dp),
 		)
 		Text(
-			stringResource(R.string.novel_preview_body),
+			formatNovelParagraphText(
+				text = stringResource(R.string.novel_preview_body),
+				indentEnabled = settings.enableParagraphIndent,
+				spacingLines = settings.paragraphSpacingLines,
+			),
+			style = MaterialTheme.typography.bodyLarge,
 			fontSize = settings.fontSizeSp.sp,
 			lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
 			color = textColor,
 			maxLines = 3,
 			overflow = TextOverflow.Ellipsis,
-			modifier = Modifier.padding(top = settings.paragraphSpacing.dp.coerceAtLeast(8.dp)),
+			modifier = Modifier.padding(top = 8.dp),
 		)
 		if (settings.translationDisplayMode == NovelTranslationDisplayMode.BILINGUAL) {
 			Text(
@@ -513,7 +519,13 @@ private fun NovelThemeSwatch(preset: NovelReaderThemePreset) {
 }
 
 private fun IntRange.asFloatRange() = first.toFloat()..last.toFloat()
-private data class SliderEditor(val title: Int, val value: Float, val range: ClosedFloatingPointRange<Float>, val onChange: (Float) -> Unit)
+private data class SliderEditor(
+	val title: Int,
+	val value: Float,
+	val range: ClosedFloatingPointRange<Float>,
+	val steps: Int = 0,
+	val onChange: (Float) -> Unit,
+)
 
 @Composable private fun SliderEditorDialog(editor: SliderEditor?, onDismiss: () -> Unit) {
 	if (editor == null) return
@@ -521,7 +533,14 @@ private data class SliderEditor(val title: Int, val value: Float, val range: Clo
 	AlertDialog(
 		onDismissRequest = onDismiss,
 		title = { Text(stringResource(editor.title)) },
-		text = { Slider(value = value, onValueChange = { value = it; editor.onChange(it) }, valueRange = editor.range) },
+		text = {
+			Slider(
+				value = value,
+				onValueChange = { value = it; editor.onChange(it) },
+				valueRange = editor.range,
+				steps = editor.steps,
+			)
+		},
 		confirmButton = { FilledTonalButton(onClick = onDismiss) { Text(stringResource(android.R.string.ok)) } },
 	)
 }

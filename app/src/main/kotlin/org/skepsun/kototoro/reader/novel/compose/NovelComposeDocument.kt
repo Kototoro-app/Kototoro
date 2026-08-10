@@ -3,7 +3,30 @@ package org.skepsun.kototoro.reader.novel.compose
 import org.skepsun.kototoro.reader.novel.NovelChapterTranslation
 import org.skepsun.kototoro.reader.novel.NovelParagraphSplitter
 import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
+import org.skepsun.kototoro.reader.novel.NovelTypography
 import org.skepsun.kototoro.reader.novel.parseNovelImages
+
+internal const val NOVEL_PARAGRAPH_INDENT = "　　"
+
+internal fun formatNovelParagraphText(
+	text: String,
+	indentEnabled: Boolean,
+	spacingLines: Int,
+): String {
+	val separator = "\n".repeat(spacingLines.coerceIn(0, 3) + 1)
+	return text
+		.replace("\r\n", "\n")
+		.split(Regex("\\n+"))
+		.map(String::trim)
+		.filter(String::isNotEmpty)
+		.joinToString(separator) { paragraph ->
+			if (indentEnabled && !NovelTypography.isChapterTitleLine(paragraph)) {
+				NOVEL_PARAGRAPH_INDENT + paragraph.trimStart()
+			} else {
+				paragraph
+			}
+		}
+}
 
 /**
  * Immutable, View-independent chapter projection consumed by the Compose novel reader.

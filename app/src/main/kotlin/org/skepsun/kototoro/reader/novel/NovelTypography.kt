@@ -6,8 +6,6 @@ import android.text.TextPaint
 import android.text.style.LeadingMarginSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
-import kotlin.math.ceil
-import kotlin.math.max
 
 object NovelTypography {
 
@@ -20,7 +18,7 @@ object NovelTypography {
         textPaint: TextPaint,
     ): String {
         val normalized = normalizeParagraphs(text)
-        val spaced = if (settings.paragraphSpacing <= 0f) normalized else applyParagraphSpacing(normalized, settings, textPaint)
+        val spaced = if (settings.paragraphSpacingLines == 0) normalized else applyParagraphSpacing(normalized, settings)
         val indented = applyParagraphIndent(spaced, settings)
         return optimizeChineseTypography(indented)
     }
@@ -120,15 +118,8 @@ object NovelTypography {
     private fun applyParagraphSpacing(
         text: String,
         settings: NovelReaderSettings,
-        textPaint: TextPaint,
     ): String {
-        val spacingPx = if (settings.paragraphSpacing <= 0f) {
-            ((settings.lineSpacing - 1f).coerceAtLeast(0f) * textPaint.textSize)
-        } else {
-            settings.paragraphSpacing * textPaint.density
-        }
-        val lineHeight = (textPaint.fontMetrics.descent - textPaint.fontMetrics.ascent) * settings.lineSpacing
-        val extraLines = if (spacingPx > 0) max(1, ceil(spacingPx / lineHeight).toInt()) else 0
+        val extraLines = settings.paragraphSpacingLines
         if (extraLines == 0) return text
         val spacer = "\n".repeat(extraLines)
         return text.split(Regex("\\n+")).joinToString(separator = "\n$spacer")
@@ -167,7 +158,7 @@ object NovelTypography {
         }
     }
 
-    private fun isChapterTitleLine(line: String): Boolean {
+    internal fun isChapterTitleLine(line: String): Boolean {
         val trimmed = line.trim()
         if (trimmed.isBlank()) return false
         if (trimmed.length > 40) return false

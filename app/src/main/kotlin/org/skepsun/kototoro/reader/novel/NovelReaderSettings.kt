@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Color
 import androidx.core.content.edit
 import org.skepsun.kototoro.core.util.ext.getSafeFloat
+import kotlin.math.roundToInt
 
 /**
  * 小说阅读器设置
@@ -27,6 +28,12 @@ data class NovelReaderSettings(
     val isTranslationEnabled: Boolean = false,
     val translationDisplayMode: NovelTranslationDisplayMode = NovelTranslationDisplayMode.TRANSLATION_ONLY,
 ) {
+
+    val paragraphSpacingLines: Int
+        get() = paragraphSpacing.roundToInt().coerceIn(
+            PARAGRAPH_SPACING_RANGE.start.roundToInt(),
+            PARAGRAPH_SPACING_RANGE.endInclusive.roundToInt(),
+        )
 
     fun normalized(): NovelReaderSettings {
         return copy(
@@ -63,7 +70,8 @@ data class NovelReaderSettings(
         getPrefs(context).edit {
             putFloat(KEY_FONT_SIZE, normalized.fontSizeSp)
             putFloat(KEY_LINE_SPACING, normalized.lineSpacing)
-            putFloat(KEY_PARAGRAPH_SPACING, normalized.paragraphSpacing)
+            putInt(KEY_PARAGRAPH_SPACING_LINES, normalized.paragraphSpacing.roundToInt())
+            remove(KEY_PARAGRAPH_SPACING)
             putInt(KEY_MARGIN_HORIZONTAL, normalized.marginHorizontal)
             putInt(KEY_MARGIN_VERTICAL, normalized.marginVertical)
             putString(KEY_THEME_PRESET, normalized.themePreset.name)
@@ -87,13 +95,14 @@ data class NovelReaderSettings(
         const val MARGIN_STEP = 4
         val FONT_SIZE_RANGE = 14f..24f
         val LINE_SPACING_RANGE = 1.2f..2.0f
-        val PARAGRAPH_SPACING_RANGE = 0f..24f
+        val PARAGRAPH_SPACING_RANGE = 0f..3f
         val MARGIN_RANGE = 12..120
 
         private const val PREF_NAME = "novel_reader_settings"
         private const val KEY_FONT_SIZE = "font_size"
         private const val KEY_LINE_SPACING = "line_spacing"
         private const val KEY_PARAGRAPH_SPACING = "paragraph_spacing"
+        private const val KEY_PARAGRAPH_SPACING_LINES = "paragraph_spacing_lines"
         private const val KEY_MARGIN_HORIZONTAL = "margin_horizontal"
         private const val KEY_MARGIN_VERTICAL = "margin_vertical"
         private const val KEY_THEME_PRESET = "theme_preset"
@@ -113,7 +122,11 @@ data class NovelReaderSettings(
             return NovelReaderSettings(
                 fontSizeSp = prefs.getSafeFloat(KEY_FONT_SIZE, 17f),
                 lineSpacing = prefs.getSafeFloat(KEY_LINE_SPACING, 1.6f),
-                paragraphSpacing = prefs.getSafeFloat(KEY_PARAGRAPH_SPACING, 0f),
+                paragraphSpacing = if (prefs.contains(KEY_PARAGRAPH_SPACING_LINES)) {
+                    prefs.getInt(KEY_PARAGRAPH_SPACING_LINES, 0).toFloat()
+                } else {
+                    migrateLegacyParagraphSpacing(prefs.getSafeFloat(KEY_PARAGRAPH_SPACING, 0f))
+                },
                 marginHorizontal = prefs.getInt(KEY_MARGIN_HORIZONTAL, 36),
                 marginVertical = prefs.getInt(KEY_MARGIN_VERTICAL, 36),
                 themePreset = runCatching {
@@ -166,6 +179,11 @@ data class NovelReaderSettings(
             val remainder = (clamped - min) % step
             val rounded = if (remainder >= step / 2f) snappedSteps + 1 else snappedSteps
             return (min + rounded * step).coerceIn(min, max)
+        }
+
+        private fun migrateLegacyParagraphSpacing(spacingDp: Float): Float {
+            if (spacingDp <= 0f) return 0f
+            return (spacingDp / 8f).roundToInt().coerceIn(1, 3).toFloat()
         }
     }
 }

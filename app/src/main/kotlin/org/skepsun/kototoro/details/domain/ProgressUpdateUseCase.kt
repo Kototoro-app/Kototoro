@@ -9,6 +9,7 @@ import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentType
 import javax.inject.Inject
 
@@ -36,23 +37,25 @@ class ProgressUpdateUseCase @Inject constructor(
 			seed
 		}
 		val chapter = details.findChapterById(history.chapterId)
-			?: return estimateFromCounts(manga, details, history.percent, history.chaptersCount)
-		// Use all chapters for global progress calculation, not just current branch
+			?: return estimateFromCounts(
+				manga = manga,
+				details = details,
+				previousDetails = seed,
+				chapterId = history.chapterId,
+				percent = history.percent,
+				chaptersCount = history.chaptersCount,
+			)
 		val chapters = details.chapters ?: emptyList()
 		if (details.source.getContentType() in VIDEO_CONTENT_TYPES) {
-			val branchChapters = chapters.filter { it.branch == chapter.branch }
-			val chapterIndex = branchChapters.indexOfFirst { it.id == history.chapterId }
-			if (chapterIndex < 0) {
-				return PROGRESS_NONE
-			}
-			val result = history.percent.takeIf {
-				ReadingProgress.isValid(it) && history.chaptersCount == branchChapters.size
-			} ?: calculateVideoSeriesProgress(
-				chapterIndex = chapterIndex,
-				chaptersCount = branchChapters.size,
-				episodeScroll = history.scroll,
+			val calculated = calculateGroupedChapterProgress(
+				chapters = chapters,
+				chapterId = history.chapterId,
+				chapterPercent = history.scroll.coerceIn(0, 10_000) / 10_000f,
 			) ?: return PROGRESS_NONE
-			historyRepository.updateProgress(manga.id, result, branchChapters.size)
+			val result = history.percent.takeIf {
+				ReadingProgress.isValid(it) && history.chaptersCount == calculated.chaptersCount
+			} ?: calculated.percent
+			historyRepository.updateProgress(manga.id, result, calculated.chaptersCount)
 			return result
 		}
 		val chapterRepo = if (repo.source == chapter.source) {
@@ -60,32 +63,32 @@ class ProgressUpdateUseCase @Inject constructor(
 		} else {
 			mangaRepositoryFactory.create(chapter.source)
 		}
-		val chaptersCount = chapters.size
-		if (chaptersCount == 0) {
-			return PROGRESS_NONE
-		}
-		val chapterIndex = chapters.indexOfFirst { x -> x.id == history.chapterId }
-		if (chapterIndex < 0) {
-			return estimateFromCounts(manga, details, history.percent, history.chaptersCount)
-		}
 		val pagesCount = chapterRepo.getPages(chapter).size
 		if (pagesCount == 0) {
 			return PROGRESS_NONE
 		}
 		val pagePercent = (history.page + 1) / pagesCount.toFloat()
-		val ppc = 1f / chaptersCount
-		val result = ppc * chapterIndex + ppc * pagePercent
-		historyRepository.updateProgress(manga.id, result, chaptersCount)
-		return result
+		val calculated = calculateGroupedChapterProgress(
+			chapters = chapters,
+			chapterId = history.chapterId,
+			chapterPercent = pagePercent,
+		) ?: return PROGRESS_NONE
+		historyRepository.updateProgress(manga.id, calculated.percent, calculated.chaptersCount)
+		return calculated.percent
 	}
 
 	private suspend fun estimateFromCounts(
 		manga: Content,
 		details: Content,
+		previousDetails: Content,
+		chapterId: Long,
 		percent: Float,
 		chaptersCount: Int,
 	): Float {
-		val newTotal = details.chapters?.size ?: 0
+		val previousChapter = previousDetails.findChapterById(chapterId)
+			?: manga.findChapterById(chapterId)
+			?: return percent.takeIf(ReadingProgress::isValid) ?: PROGRESS_NONE
+		val newTotal = details.chapters.orEmpty().count { it.branch == previousChapter.branch }
 		if (newTotal == 0 || chaptersCount <= 0 || !ReadingProgress.isValid(percent)) {
 			return PROGRESS_NONE
 		}
@@ -99,12 +102,22 @@ class ProgressUpdateUseCase @Inject constructor(
 	}
 }
 
-internal fun calculateVideoSeriesProgress(
-	chapterIndex: Int,
-	chaptersCount: Int,
-	episodeScroll: Int,
-): Float? {
-	if (chapterIndex !in 0 until chaptersCount) return null
-	val episodePercent = episodeScroll.coerceIn(0, 10_000) / 10_000f
-	return ((chapterIndex + episodePercent) / chaptersCount).coerceIn(0f, 1f)
+internal data class GroupedChapterProgress(
+	val percent: Float,
+	val chaptersCount: Int,
+)
+
+internal fun calculateGroupedChapterProgress(
+	chapters: List<ContentChapter>,
+	chapterId: Long,
+	chapterPercent: Float,
+): GroupedChapterProgress? {
+	val currentChapter = chapters.firstOrNull { it.id == chapterId } ?: return null
+	val branchChapters = chapters.filter { it.branch == currentChapter.branch }
+	val chapterIndex = branchChapters.indexOfFirst { it.id == chapterId }
+	if (chapterIndex < 0 || branchChapters.isEmpty()) return null
+	return GroupedChapterProgress(
+		percent = ((chapterIndex + chapterPercent.coerceIn(0f, 1f)) / branchChapters.size).coerceIn(0f, 1f),
+		chaptersCount = branchChapters.size,
+	)
 }

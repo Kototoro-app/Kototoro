@@ -3,24 +3,58 @@ package org.skepsun.kototoro.details.domain
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.TestContentSource
+import org.skepsun.kototoro.parsers.model.ContentChapter
 
 class ProgressUpdateUseCaseTest {
 
 	@Test
-	fun `video progress uses chapter index and normalized episode scroll`() {
-		assertEquals(0.17781667f, requireNotNull(calculateVideoSeriesProgress(1, 6, 669)), 0.000001f)
+	fun `chapter progress only counts chapters in the current branch`() {
+		val progress = calculateGroupedChapterProgress(
+			chapters = listOf(
+				chapter(1, "English"),
+				chapter(2, "Spanish"),
+				chapter(3, "English"),
+				chapter(4, "Spanish"),
+			),
+			chapterId = 3,
+			chapterPercent = 0.5f,
+		)
+
+		assertEquals(0.75f, requireNotNull(progress).percent, 0.000001f)
+		assertEquals(2, progress.chaptersCount)
 	}
 
 	@Test
-	fun `video progress clamps persisted episode scroll`() {
-		assertEquals(1f / 6f, requireNotNull(calculateVideoSeriesProgress(0, 6, 88_006)), 0.000001f)
-		assertEquals(0f, requireNotNull(calculateVideoSeriesProgress(0, 6, -1)), 0.000001f)
+	fun `chapter progress treats null branch as its own group`() {
+		val progress = calculateGroupedChapterProgress(
+			chapters = listOf(
+				chapter(1, null),
+				chapter(2, "English"),
+				chapter(3, null),
+			),
+			chapterId = 3,
+			chapterPercent = 0f,
+		)
+
+		assertEquals(0.5f, requireNotNull(progress).percent, 0.000001f)
+		assertEquals(2, progress.chaptersCount)
 	}
 
 	@Test
-	fun `video progress rejects invalid chapter coordinates`() {
-		assertNull(calculateVideoSeriesProgress(-1, 6, 5000))
-		assertNull(calculateVideoSeriesProgress(6, 6, 5000))
-		assertNull(calculateVideoSeriesProgress(0, 0, 5000))
+	fun `chapter progress rejects a chapter outside the supplied catalogue`() {
+		assertNull(calculateGroupedChapterProgress(listOf(chapter(1, "English")), 2, 0.5f))
 	}
+
+	private fun chapter(id: Long, branch: String?) = ContentChapter(
+		id = id,
+		title = "Chapter $id",
+		number = id.toFloat(),
+		volume = 0,
+		url = "/chapter/$id",
+		scanlator = null,
+		uploadDate = 0L,
+		branch = branch,
+		source = TestContentSource,
+	)
 }

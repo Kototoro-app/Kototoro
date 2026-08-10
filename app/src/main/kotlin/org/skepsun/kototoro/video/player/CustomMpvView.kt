@@ -12,7 +12,7 @@ class CustomMpvView @JvmOverloads constructor(
 	override fun initOptions() {
 		setVo("gpu")
 		mpv.setOptionString("hwdec", "auto")
-		mpv.setOptionString("ao", "audiotrack,opensles")
+		mpv.setOptionString("ao", MpvPlaybackOptions.AUDIO_OUTPUT)
 		mpv.setOptionString("gpu-context", "android")
 		mpv.setOptionString("keep-open", "yes")
 		mpv.setOptionString("config", "yes")

@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.util.ext.requireValue
 import org.skepsun.kototoro.core.util.ext.sortedWithSafe
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.details.domain.DetailsInteractor
+import org.skepsun.kototoro.details.domain.calculateGroupedChapterProgress
 import org.skepsun.kototoro.details.ui.DetailsActivity
 import org.skepsun.kototoro.details.ui.DetailsViewModel
 import org.skepsun.kototoro.details.ui.mapChapters
@@ -310,17 +311,17 @@ abstract class ChaptersPagesViewModel(
 	fun markChapterAsCurrent(chapterId: Long) {
 		launchJob(Dispatchers.Default) {
 			val manga = mangaDetails.requireValue()
-			// Use all chapters for global progress calculation
-			val allChapters = manga.allChapters
-			val chapterIndex = allChapters.indexOfFirst { it.id == chapterId }
-			check(chapterIndex in allChapters.indices) { "Chapter not found" }
-			val percent = chapterIndex / allChapters.size.toFloat()
+			val progress = calculateGroupedChapterProgress(
+				chapters = manga.allChapters,
+				chapterId = chapterId,
+				chapterPercent = 0f,
+			) ?: error("Chapter not found")
 			historyRepository.addOrUpdate(
 				manga = manga.toContent(),
 				chapterId = chapterId,
 				page = 0,
 				scroll = 0,
-				percent = percent,
+				percent = progress.percent,
 				force = true,
 			)
 		}

@@ -959,7 +959,8 @@
     <!-- Novel reader strings -->
     <string name="novel_font_size">字体大小</string>
     <string name="novel_line_spacing">行距</string>
-    <string name="novel_paragraph_spacing">段落间距</string>
+	<string name="novel_paragraph_spacing">段落间距</string>
+	<string name="novel_paragraph_spacing_value">%1$d 行</string>
     <string name="novel_margins">页边距</string>
     <string name="novel_margin_horizontal">左右边距</string>
     <string name="novel_margin_vertical">上下边距</string>

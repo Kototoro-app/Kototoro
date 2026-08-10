@@ -11,6 +11,42 @@ import org.skepsun.kototoro.reader.novel.NovelTranslationDisplayMode
 class NovelComposeDocumentTest {
 
 	@Test
+	fun `formats every source line as an indented paragraph`() {
+		assertEquals(
+			"　　First paragraph\n　　Second paragraph",
+			formatNovelParagraphText(
+				text = "First paragraph\nSecond paragraph",
+				indentEnabled = true,
+				spacingLines = 0,
+			),
+		)
+	}
+
+	@Test
+	fun `keeps chapter titles flush while indenting body paragraphs`() {
+		assertEquals(
+			"第一章 开始\n　　正文",
+			formatNovelParagraphText(
+				text = "第一章 开始\n正文",
+				indentEnabled = true,
+				spacingLines = 0,
+			),
+		)
+	}
+
+	@Test
+	fun `inserts the selected number of blank paragraph lines`() {
+		assertEquals(
+			"First\n\n\nSecond",
+			formatNovelParagraphText(
+				text = "First\nSecond",
+				indentEnabled = false,
+				spacingLines = 2,
+			),
+		)
+	}
+
+	@Test
 	fun `keeps block images as independent declarative blocks`() {
 		val document = buildNovelComposeDocument("Opening\n\n📷 [图片: https://example.com/cover.jpg]\n\nEnding")
 

@@ -589,7 +589,8 @@
     <!-- Novel reader strings -->
     <string name="novel_font_size">Text Size</string>
     <string name="novel_line_spacing">Line Height</string>
-    <string name="novel_paragraph_spacing">Paragraph Spacing</string>
+	<string name="novel_paragraph_spacing">Paragraph Spacing</string>
+	<string name="novel_paragraph_spacing_value">%1$d lines</string>
     <string name="novel_paragraph_spacing_follow_line">Follow line height</string>
     <string name="novel_margins">Page Margins</string>
     <string name="novel_margin_horizontal">Horizontal Margins</string>

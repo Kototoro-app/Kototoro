@@ -37,7 +37,7 @@ import androidx.glance.layout.padding
 import androidx.glance.appwidget.provideContent
 import androidx.glance.unit.ColorProvider
 import coil3.ImageLoader
-import coil3.executeBlocking
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.transformations
 import coil3.size.Size
@@ -45,6 +45,7 @@ import coil3.transform.RoundedCornersTransformation
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -54,6 +55,10 @@ import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+
+private const val WIDGET_ITEM_LIMIT = 10
+private const val COVER_CACHE_READ_TIMEOUT_MILLIS = 500L
 
 class ShelfWidgetProvider : GlanceAppWidgetReceiver() {
 
@@ -118,11 +123,11 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 		if (!settings.appPassword.isNullOrEmpty()) {
 			return@withContext emptyList()
 		}
-		val content = runCatching {
+		val content = runCatchingCancellable {
 			if (categoryId == 0L) {
-				favouritesRepository.getAllContent()
+				favouritesRepository.getLastContent(WIDGET_ITEM_LIMIT)
 			} else {
-				favouritesRepository.getContent(categoryId)
+				favouritesRepository.getContent(categoryId).take(WIDGET_ITEM_LIMIT)
 			}
 		}.getOrDefault(emptyList())
 		content.map { item ->
@@ -137,23 +142,28 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 		}
 	}
 
-	private fun loadCover(context: Context, imageLoader: ImageLoader, content: Content): Bitmap? = runCatching {
-		val size = Size(
-			context.resources.getDimensionPixelSize(R.dimen.widget_cover_width),
-			context.resources.getDimensionPixelSize(R.dimen.widget_cover_height),
-		)
-		val transformation = RoundedCornersTransformation(
-			context.resources.getDimension(R.dimen.appwidget_corner_radius_inner),
-		)
-		imageLoader.executeBlocking(
-			ImageRequest.Builder(context)
-				.data(content.coverUrl)
-				.size(size)
-				.mangaExtra(content)
-				.transformations(transformation, TrimTransformation())
-				.build(),
-		).getDrawableOrThrow().toBitmap()
-	}.getOrNull()
+	private suspend fun loadCover(context: Context, imageLoader: ImageLoader, content: Content): Bitmap? {
+		return withTimeoutOrNull(COVER_CACHE_READ_TIMEOUT_MILLIS) {
+			runCatchingCancellable {
+				val size = Size(
+					context.resources.getDimensionPixelSize(R.dimen.widget_cover_width),
+					context.resources.getDimensionPixelSize(R.dimen.widget_cover_height),
+				)
+				val transformation = RoundedCornersTransformation(
+					context.resources.getDimension(R.dimen.appwidget_corner_radius_inner),
+				)
+				imageLoader.execute(
+					ImageRequest.Builder(context)
+						.data(content.coverUrl)
+						.size(size)
+						.networkCachePolicy(CachePolicy.DISABLED)
+						.mangaExtra(content)
+						.transformations(transformation, TrimTransformation())
+						.build(),
+				).getDrawableOrThrow().toBitmap()
+			}.getOrNull()
+		}
+	}
 }
 
 private data class ShelfWidgetItem(

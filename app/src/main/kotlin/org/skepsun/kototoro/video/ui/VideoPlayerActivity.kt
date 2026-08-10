@@ -90,6 +90,7 @@ import org.skepsun.kototoro.core.prefs.VideoRendererMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
 import org.skepsun.kototoro.video.player.CustomMpvView
+import org.skepsun.kototoro.video.player.MpvPlaybackOptions
 import org.skepsun.kototoro.video.player.MpvPlayer
 import org.skepsun.kototoro.video.player.MpvShaderManager
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
@@ -1675,11 +1676,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         effectivePlaybackConfig = playbackConfigOverride ?: VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
         logEffectivePlaybackConfig()
         mpvPlayer?.setVideoOutput(resolveVideoRenderer(effectivePlaybackConfig.rendererMode))
-        if (effectivePlaybackConfig.decoderMode == VideoDecoderMode.SOFTWARE) {
-            mpvPlayer?.setHardwareDecodingMode("no")
-        } else {
-            mpvPlayer?.setHardwareDecodingMode("auto")
-        }
+        applyStableHardwareDecoder()
         
         // Apply optimized streaming options for network stability
         mpvPlayer?.setStreamingOptions(appSettings.videoCacheSizeMb)
@@ -2825,21 +2822,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (isMediacodecEmbed || !effectivePlaybackConfig.allowShaderPipeline) {
             android.util.Log.d("MpvPlayer", "SuperResolution disabled: vo=$voCombined hwdec=$hwdec")
             mpvPlayer?.applyShaderList(null)
-            if (effectivePlaybackConfig.decoderMode == VideoDecoderMode.SOFTWARE) {
-                mpvPlayer?.setHardwareDecodingMode("no")
-            } else {
-                mpvPlayer?.setHardwareDecodingMode("auto")
-            }
+            applyStableHardwareDecoder()
             return
         }
         if (effectivePlaybackConfig.superResolutionMode == VideoSuperResolutionMode.OFF) {
             android.util.Log.d("MpvPlayer", "SuperResolution disabled: mode=OFF")
             mpvPlayer?.applyShaderList(null)
-            if (effectivePlaybackConfig.decoderMode == VideoDecoderMode.SOFTWARE) {
-                mpvPlayer?.setHardwareDecodingMode("no")
-            } else {
-                mpvPlayer?.setHardwareDecodingMode("auto")
-            }
+            applyStableHardwareDecoder()
             return
         }
         if (effectivePlaybackConfig.decoderMode == VideoDecoderMode.SOFTWARE) {
@@ -2867,6 +2856,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             MpvShaderManager.buildShaderPathList(dir, shaderList)
         }
         mpvPlayer?.applyShaderList(shaderPaths)
+    }
+
+    private fun applyStableHardwareDecoder() {
+        mpvPlayer?.setHardwareDecodingMode(
+            MpvPlaybackOptions.hardwareDecoder(
+                rendererMode = effectivePlaybackConfig.rendererMode,
+                decoderMode = effectivePlaybackConfig.decoderMode,
+            ),
+        )
     }
 
     private fun logEffectivePlaybackConfig() {

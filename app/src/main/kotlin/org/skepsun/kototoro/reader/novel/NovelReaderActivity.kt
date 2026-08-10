@@ -556,6 +556,10 @@ class NovelReaderActivity :
                                     )
                                 }
                             },
+							onLongPress = {
+								showConfigSheet()
+								setUiVisible(true)
+							},
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
@@ -569,8 +573,7 @@ class NovelReaderActivity :
                         }
                         Box(
                             modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .navigationBarsPadding(),
+                                .align(Alignment.BottomCenter),
                         ) {
                             NovelReaderBottomChrome(
                                 state = state,

@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -59,7 +58,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +65,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -85,6 +84,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 import org.skepsun.kototoro.reader.novel.NovelPage
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
@@ -176,7 +176,11 @@ private fun NovelPageText(
 	val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
 	Box(modifier = modifier.padding(PaddingValues(horizontal = horizontal, vertical = vertical))) {
 		Text(
-			text = page.text,
+			text = formatNovelParagraphText(
+				text = page.text,
+				indentEnabled = settings.enableParagraphIndent,
+				spacingLines = settings.paragraphSpacingLines,
+			),
 			style = MaterialTheme.typography.bodyLarge.copy(
 				fontSize = settings.fontSizeSp.sp,
 				lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
@@ -201,6 +205,7 @@ fun ComposeNovelChapter(
 	imageContext: NovelComposeImageContext? = null,
 	onImageClick: ((String) -> Unit)? = null,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
+	onLongPress: (() -> Unit)? = null,
 	listState: LazyListState? = null,
 	modifier: Modifier = Modifier,
 ) {
@@ -211,23 +216,21 @@ fun ComposeNovelChapter(
 	}
 	val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
 	val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
-	var viewport = androidx.compose.runtime.remember { IntSize.Zero }
-	val tapModifier = if (onTap == null) Modifier else Modifier
-		.onSizeChanged { viewport = it }
-		.pointerInput(onTap) {
-			detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
-		}
+	val paragraphSpacing = with(LocalDensity.current) {
+		(settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
+	}
+	val gestureModifier = Modifier.novelReaderGestures(onTap, onLongPress)
 	LazyColumn(
 		state = listState ?: rememberLazyListState(),
 		modifier = modifier
 			.fillMaxSize()
 			.background(Color(palette.backgroundColor))
-			.then(tapModifier),
+			.then(gestureModifier),
 		contentPadding = PaddingValues(
 			horizontal = settings.marginHorizontal.dp,
 			vertical = settings.marginVertical.dp,
 		),
-		verticalArrangement = Arrangement.spacedBy(settings.paragraphSpacing.dp),
+		verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
 	) {
 		items(count = blocks.size, key = { index ->
 			when (val block = blocks[index]) {
@@ -244,6 +247,18 @@ fun ComposeNovelChapter(
 				)
 
 				is NovelComposeBlock.Text -> {
+					val original = formatNovelParagraphText(
+						text = block.original,
+						indentEnabled = settings.enableParagraphIndent,
+						spacingLines = settings.paragraphSpacingLines,
+					)
+					val translated = block.translation?.let {
+						formatNovelParagraphText(
+							text = it,
+							indentEnabled = settings.enableParagraphIndent,
+							spacingLines = settings.paragraphSpacingLines,
+						)
+					}
 					val style = MaterialTheme.typography.bodyLarge.copy(
 						fontSize = settings.fontSizeSp.sp,
 						lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
@@ -252,7 +267,7 @@ fun ComposeNovelChapter(
 					)
 					if (block.translation == null) {
 						NovelTextWithImageBlocks(
-							text = block.original,
+							text = original,
 							inlineImages = block.inlineImages,
 							imageModel = imageModel,
 							imageContext = imageContext,
@@ -262,13 +277,13 @@ fun ComposeNovelChapter(
 						)
 					} else if (block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY) {
 						Text(
-							text = block.translation,
+							text = translated.orEmpty(),
 							style = style,
 							textAlign = alignment,
 						)
 					} else {
 						NovelTextWithImageBlocks(
-							text = block.original,
+							text = original,
 							inlineImages = block.inlineImages,
 							imageModel = imageModel,
 							imageContext = imageContext,
@@ -278,7 +293,7 @@ fun ComposeNovelChapter(
 							textAlign = alignment,
 						)
 						Text(
-							text = block.translation,
+							text = translated.orEmpty(),
 							style = style,
 							textAlign = alignment,
 							modifier = Modifier.padding(top = 4.dp),
@@ -304,6 +319,7 @@ private fun ComposeNovelChapterWindow(
 	imageModel: (String) -> Any?,
 	onImageClick: ((String) -> Unit)?,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)?,
+	onLongPress: (() -> Unit)?,
 	listState: LazyListState,
 	modifier: Modifier,
 	onVisibleChapterChanged: (Int) -> Unit,
@@ -329,23 +345,21 @@ private fun ComposeNovelChapterWindow(
 	}
 	val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
 	val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
-	var viewport = androidx.compose.runtime.remember { IntSize.Zero }
-	val tapModifier = if (onTap == null) Modifier else Modifier
-		.onSizeChanged { viewport = it }
-		.pointerInput(onTap) {
-			detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
-		}
+	val paragraphSpacing = with(LocalDensity.current) {
+		(settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
+	}
+	val gestureModifier = Modifier.novelReaderGestures(onTap, onLongPress)
 	LazyColumn(
 		state = listState,
 		modifier = modifier
 			.fillMaxSize()
 			.background(Color(palette.backgroundColor))
-			.then(tapModifier),
+			.then(gestureModifier),
 		contentPadding = PaddingValues(
 			horizontal = settings.marginHorizontal.dp,
 			vertical = settings.marginVertical.dp,
 		),
-		verticalArrangement = Arrangement.spacedBy(settings.paragraphSpacing.dp),
+		verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
 	) {
 		items(
 			count = blocks.size,
@@ -368,6 +382,18 @@ private fun ComposeNovelChapterWindow(
 				)
 
 				is NovelComposeBlock.Text -> {
+					val original = formatNovelParagraphText(
+						text = block.original,
+						indentEnabled = settings.enableParagraphIndent,
+						spacingLines = settings.paragraphSpacingLines,
+					)
+					val translated = block.translation?.let {
+						formatNovelParagraphText(
+							text = it,
+							indentEnabled = settings.enableParagraphIndent,
+							spacingLines = settings.paragraphSpacingLines,
+						)
+					}
 					val style = MaterialTheme.typography.bodyLarge.copy(
 						fontSize = settings.fontSizeSp.sp,
 						lineHeight = (settings.fontSizeSp * settings.lineSpacing).sp,
@@ -377,7 +403,7 @@ private fun ComposeNovelChapterWindow(
 					if (block.translation == null) {
 						if (block.inlineImages.isEmpty()) Text(
 							text = highlightedNovelText(
-								text = block.original,
+								text = original,
 								sourceRange = block.sourceRange,
 								highlightRange = ttsHighlightRange,
 								highlightColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -385,7 +411,7 @@ private fun ComposeNovelChapterWindow(
 							style = style,
 							textAlign = alignment,
 						) else NovelTextWithImageBlocks(
-							text = block.original,
+							text = original,
 							inlineImages = block.inlineImages,
 							imageModel = imageModel,
 							imageContext = item.chapter.imageContext,
@@ -394,10 +420,10 @@ private fun ComposeNovelChapterWindow(
 							textAlign = alignment,
 						)
 					} else if (block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY) {
-						Text(text = block.translation, style = style, textAlign = alignment)
+						Text(text = translated.orEmpty(), style = style, textAlign = alignment)
 					} else {
 						NovelTextWithImageBlocks(
-							text = block.original,
+							text = original,
 							inlineImages = block.inlineImages,
 							imageModel = imageModel,
 							imageContext = item.chapter.imageContext,
@@ -407,7 +433,7 @@ private fun ComposeNovelChapterWindow(
 							color = MaterialTheme.colorScheme.onSurfaceVariant,
 						)
 						Text(
-							text = block.translation,
+							text = translated.orEmpty(),
 							style = style,
 							textAlign = alignment,
 							modifier = Modifier.padding(top = 4.dp),
@@ -468,6 +494,7 @@ fun ComposeNovelReaderRoute(
 	renderContent: Boolean = true,
 	onImageClick: ((String) -> Unit)? = null,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)? = null,
+	onLongPress: (() -> Unit)? = null,
 	modifier: Modifier = Modifier,
 ) {
 	val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -482,6 +509,7 @@ fun ComposeNovelReaderRoute(
 				imageModel = imageModel,
 				onImageClick = onImageClick,
 				onTap = onTap,
+				onLongPress = onLongPress,
 				onBookmark = onBookmark,
 					onRequestPreviousChapter = onRequestPreviousChapter,
 					onRequestNextChapter = onRequestNextChapter,
@@ -536,6 +564,7 @@ fun ComposeNovelReaderRoute(
 					imageModel = imageModel,
 					onImageClick = onImageClick,
 					onTap = onTap,
+					onLongPress = onLongPress,
 					listState = listState,
 					modifier = modifier,
 					onVisibleChapterChanged = {
@@ -556,6 +585,7 @@ fun ComposeNovelReaderRoute(
 					imageContext = state.imageContext,
 					onImageClick = onImageClick,
 					onTap = onTap,
+					onLongPress = onLongPress,
 					listState = listState,
 					modifier = modifier,
 				)
@@ -618,7 +648,7 @@ private sealed interface NovelComposePage {
 	val charEnd: Int
 
 	data class Text(
-		val value: String,
+		val value: AnnotatedString,
 		override val chapterId: Long,
 		override val chapterIndex: Int,
 		override val charStart: Int,
@@ -731,6 +761,7 @@ private fun ComposeNovelPagedChapter(
 	imageModel: (String) -> Any?,
 	onImageClick: ((String) -> Unit)?,
 	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)?,
+	onLongPress: (() -> Unit)?,
 	onBookmark: () -> Unit,
 	onRequestPreviousChapter: () -> Unit,
 	onRequestNextChapter: () -> Unit,
@@ -781,21 +812,12 @@ private fun ComposeNovelPagedChapter(
 			onCancel = { settlePull(toggleBookmark = false) },
 		)
 	}
-	var viewport by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(IntSize.Zero) }
-	val tapModifier = if (onTap == null) {
-		Modifier
-	} else {
-		Modifier
-			.onSizeChanged { viewport = it }
-			.pointerInput(onTap) {
-				detectUnconsumedTapGestures { offset -> onTap(offset.x, offset.y, viewport) }
-			}
-	}
+	val gestureModifier = Modifier.novelReaderGestures(onTap, onLongPress)
 	BoxWithConstraints(
 		modifier = modifier
 			.fillMaxSize()
 			.background(Color(palette.backgroundColor))
-			.then(tapModifier),
+			.then(gestureModifier),
 	) {
 		val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 		val contentWidthPx = with(density) {
@@ -853,6 +875,8 @@ private fun ComposeNovelPagedChapter(
 					style = style,
 					widthPx = contentWidthPx,
 					heightPx = contentHeightPx,
+					paragraphSpacingLines = settings.paragraphSpacingLines,
+					paragraphIndentEnabled = settings.enableParagraphIndent,
 				)
 			}
 			paginationResult = NovelPaginationResult(paginationRequest, pages)
@@ -987,7 +1011,7 @@ private fun ComposeNovelPagedChapter(
 							localPageCount,
 							page.charStart,
 							page.charEnd,
-							page.value,
+							page.value.text,
 						)
 						is NovelComposePage.Image -> onPositionChanged(
 							page.chapterId,
@@ -1259,16 +1283,18 @@ private suspend fun paginateNovelComposeDocument(
 	style: androidx.compose.ui.text.TextStyle,
 	widthPx: Int,
 	heightPx: Int,
+	paragraphSpacingLines: Int,
+	paragraphIndentEnabled: Boolean,
 ): List<NovelComposePage> {
 	if (widthPx <= 0 || heightPx <= 0) return emptyList()
 	val pages = mutableListOf<NovelComposePage>()
-	val textBatch = StringBuilder()
+	var textBatch = AnnotatedString.Builder()
 	var textBatchSourceStart = 0
 
 	suspend fun flushTextBatch() {
-		if (textBatch.isEmpty()) return
-		val text = textBatch.toString()
-		textBatch.clear()
+		if (textBatch.length == 0) return
+		val text = textBatch.toAnnotatedString()
+		textBatch = AnnotatedString.Builder()
 		currentCoroutineContext().ensureActive()
 		val layout = textMeasurer.measure(
 			text = text,
@@ -1285,8 +1311,10 @@ private suspend fun paginateNovelComposeDocument(
 			currentCoroutineContext().ensureActive()
 			val start = layout.getLineStart(lineRange.first)
 			val end = layout.getLineEnd(lineRange.last)
-			val value = text.substring(start, end).trimEnd()
-			if (value.isNotBlank()) {
+			var trimmedEnd = end
+			while (trimmedEnd > start && text[trimmedEnd - 1].isWhitespace()) trimmedEnd--
+			val value = text.subSequence(start, trimmedEnd)
+			if (value.text.isNotBlank()) {
 				pages += NovelComposePage.Text(
 					value = value,
 					chapterId = chapterId,
@@ -1314,13 +1342,25 @@ private suspend fun paginateNovelComposeDocument(
 			}
 			is NovelComposeBlock.Text -> {
 				val displayed = when {
-					block.translation == null -> block.original
-					block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY -> block.translation
-					else -> "${block.original}\n\n${block.translation}"
+					block.translation == null -> formatNovelParagraphText(
+						block.original,
+						paragraphIndentEnabled,
+						paragraphSpacingLines,
+					)
+					block.displayMode == NovelTranslationDisplayMode.TRANSLATION_ONLY -> formatNovelParagraphText(
+						block.translation,
+						paragraphIndentEnabled,
+						paragraphSpacingLines,
+					)
+					else -> listOf(block.original, block.translation).joinToString(
+						separator = "\n".repeat(paragraphSpacingLines + 1),
+					) { text ->
+						formatNovelParagraphText(text, paragraphIndentEnabled, paragraphSpacingLines)
+					}
 				}
 				if (displayed.isNotBlank()) {
-					if (textBatch.isNotEmpty()) {
-						textBatch.append("\n\n")
+					if (textBatch.length > 0) {
+						textBatch.append("\n".repeat(paragraphSpacingLines + 1))
 					} else {
 						textBatchSourceStart = block.sourceRange?.first ?: 0
 					}
@@ -1352,6 +1392,8 @@ private suspend fun paginateNovelComposeChapterWindow(
 	style: androidx.compose.ui.text.TextStyle,
 	widthPx: Int,
 	heightPx: Int,
+	paragraphSpacingLines: Int,
+	paragraphIndentEnabled: Boolean,
 ): List<NovelComposePage> {
 	return buildList {
 		for (chapter in chapters) {
@@ -1365,6 +1407,8 @@ private suspend fun paginateNovelComposeChapterWindow(
 					style = style,
 					widthPx = widthPx,
 					heightPx = heightPx,
+					paragraphSpacingLines = paragraphSpacingLines,
+					paragraphIndentEnabled = paragraphIndentEnabled,
 				),
 			)
 		}
@@ -1484,12 +1528,66 @@ private fun NovelComposeImage(
 	}
 }
 
-private suspend fun PointerInputScope.detectUnconsumedTapGestures(onTap: (Offset) -> Unit) {
+private fun Modifier.novelReaderGestures(
+	onTap: ((x: Float, y: Float, viewport: IntSize) -> Unit)?,
+	onLongPress: (() -> Unit)?,
+): Modifier = if (onTap == null && onLongPress == null) {
+	this
+} else {
+	pointerInput(onTap, onLongPress) {
+		detectUnconsumedNovelReaderGestures(
+			onTap = { offset -> onTap?.invoke(offset.x, offset.y, size) },
+			onLongPress = { onLongPress?.invoke() },
+		)
+	}
+}
+
+private suspend fun PointerInputScope.detectUnconsumedNovelReaderGestures(
+	onTap: (Offset) -> Unit,
+	onLongPress: () -> Unit,
+) = kotlinx.coroutines.coroutineScope {
 	awaitEachGesture {
 		val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
 		if (down.isConsumed) return@awaitEachGesture
-		val up = waitForUpOrCancellation(pass = PointerEventPass.Final)
-		if (up != null && !up.isConsumed) onTap(up.position)
+
+		var moved = false
+		var cancelled = false
+		var longPressDispatched = false
+		var upPosition: Offset? = null
+		val longPressJob = launch {
+			delay(viewConfiguration.longPressTimeoutMillis)
+			if (!moved && !cancelled) {
+				longPressDispatched = true
+				onLongPress()
+			}
+		}
+
+		do {
+			val event = awaitPointerEvent(PointerEventPass.Final)
+			val change = event.changes.firstOrNull { it.id == down.id } ?: run {
+				cancelled = true
+				break
+			}
+			if (event.changes.count { it.pressed } > 1 || change.isConsumed) {
+				cancelled = true
+				longPressJob.cancel()
+			}
+			if (change.pressed) {
+				val distanceX = abs(change.position.x - down.position.x)
+				val distanceY = abs(change.position.y - down.position.y)
+				if (distanceX > viewConfiguration.touchSlop || distanceY > viewConfiguration.touchSlop) {
+					moved = true
+					longPressJob.cancel()
+				}
+			} else {
+				upPosition = change.position
+			}
+		} while (change.pressed)
+
+		longPressJob.cancel()
+		if (!moved && !cancelled && !longPressDispatched) {
+			upPosition?.let(onTap)
+		}
 	}
 }
 
