@@ -265,9 +265,12 @@ private val ModernDetailsDockBottomClearance = 16.dp
 private val DetailsDockContentHorizontalPadding = 8.dp
 private val ModernDetailsDockCompactPrimaryWidth = 112.dp
 private val ModernDetailsDockToolsWidth = 92.dp
-private val ModernDetailsDockMoreToolsWidth = 42.dp
-private val ModernDetailsDockTabSlotWidth = 50.dp
-private val DualPaneDetailsPrimaryDockMinWidth = 194.dp
+private val ModernDetailsDockTabButtonWidth = 42.dp
+private val ModernDetailsDockTabSpacing = 2.dp
+private val DualPaneDetailsReadDockMinWidth = 146.dp
+private val DualPaneDetailsDockGap = 6.dp
+private val DualPaneDetailsPrimaryDockMinWidth =
+    DualPaneDetailsReadDockMinWidth + DualPaneDetailsDockGap + ModernDetailsDockToolsWidth
 private val ModernDetailsDockMoreButtonWidth = 40.dp
 private val ModernDetailsDockChromeHeight = 52.dp
 private val GridSizeControlsHeight = 84.dp
@@ -3308,13 +3311,16 @@ private fun DetailsPaneActionsRow(
                 val visibleDockTabCount = 1 +
                     (if (showPagesTab) 1 else 0) +
                     (if (showBookmarksTab) 1 else 0)
-                val tabSlotWidth = if (isModernDockEnabled) ModernDetailsDockTabSlotWidth else 52.dp
-                val tabsDockPadding = if (isModernDockEnabled) 12.dp else 4.dp
+                val tabsDockPadding = if (isModernDockEnabled) 10.dp else 4.dp
                 val dockGap = if (isModernDockEnabled) 8.dp else 4.dp
-                val expandedTabsDockWidth = tabsDockPadding + (tabSlotWidth * visibleDockTabCount)
+                val tabButtonWidth = if (isModernDockEnabled) ModernDetailsDockTabButtonWidth else 52.dp
+                val tabSpacing = if (isModernDockEnabled) ModernDetailsDockTabSpacing else 0.dp
+                val expandedTabsDockWidth = tabsDockPadding +
+                    (tabButtonWidth * visibleDockTabCount) +
+                    (tabSpacing * (visibleDockTabCount - 1))
                 val isDualPaneChapterTools = !showCollapsedHandle &&
                     topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools
-                val minimumTabsDockWidth = tabsDockPadding + tabSlotWidth
+                val minimumTabsDockWidth = tabsDockPadding + tabButtonWidth
                 val desiredTabsDockWidth = if (showAllDockTabs) {
                     expandedTabsDockWidth
                 } else {
@@ -3325,17 +3331,25 @@ private fun DetailsPaneActionsRow(
                 } else {
                     ModernDetailsDockCompactPrimaryWidth
                 }
-                val tabsDockWidth = desiredTabsDockWidth.coerceAtMost(
+                val tabsDockTargetWidth = desiredTabsDockWidth.coerceAtMost(
                     (maxWidth - primaryDockMinWidth - dockGap).coerceAtLeast(minimumTabsDockWidth),
                 )
-                val expandedPrimaryDockWidth = (maxWidth - tabsDockWidth - dockGap).coerceAtLeast(0.dp)
+                val tabsDockWidth by animateDpAsState(
+                    targetValue = tabsDockTargetWidth,
+                    animationSpec = tween(
+                        durationMillis = ModernDetailsDockAnimationDurationMillis,
+                        easing = FastOutSlowInEasing,
+                    ),
+                    label = "detailsTabsDockWidth",
+                )
+                val expandedPrimaryDockWidth = (maxWidth - tabsDockTargetWidth - dockGap).coerceAtLeast(0.dp)
                 val primaryDockWidth by animateDpAsState(
                     targetValue = when {
                         compactModernDock -> ModernDetailsDockCompactPrimaryWidth
                         isModernDockEnabled &&
                             topBarMode == DetailsPaneTopBarMode.ExpandedChapterTools &&
                             !isDualPaneChapterTools -> {
-                            ModernDetailsDockMoreToolsWidth
+                            ModernDetailsDockToolsWidth
                         }
                         isModernDockEnabled && topBarMode == DetailsPaneTopBarMode.ExpandedGridTools -> {
                             ModernDetailsDockToolsWidth
@@ -3354,10 +3368,12 @@ private fun DetailsPaneActionsRow(
                     DETAILS_TAB_BOOKMARKS -> visibleDockTabCount - 1
                     else -> 0
                 }
-                val tabSlotWidthPx = with(LocalDensity.current) { tabSlotWidth.roundToPx() }
-                LaunchedEffect(selectedDockTabIndex, tabsScrollState.maxValue, tabSlotWidthPx) {
+                val tabScrollStepPx = with(LocalDensity.current) {
+                    (tabButtonWidth + tabSpacing).roundToPx()
+                }
+                LaunchedEffect(selectedDockTabIndex, tabsScrollState.maxValue, tabScrollStepPx) {
                     tabsScrollState.animateScrollTo(
-                        (selectedDockTabIndex * tabSlotWidthPx).coerceAtMost(tabsScrollState.maxValue),
+                        (selectedDockTabIndex * tabScrollStepPx).coerceAtMost(tabsScrollState.maxValue),
                     )
                 }
 
@@ -3488,9 +3504,9 @@ private fun DetailsPaneActionsRow(
                                         onDownloadClick = { onActionClick(DetailsAction.Download) },
                                         onBranchSelected = { onActionClick(DetailsAction.SelectBranch(it)) },
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(DualPaneDetailsDockGap))
                                     ExpandedPaneUtilityDock(
-                                        modifier = Modifier.width(ModernDetailsDockMoreToolsWidth),
+                                        modifier = Modifier.width(ModernDetailsDockToolsWidth),
                                         modernStyle = isModernDockEnabled,
                                         sheetExpansionProgress = paneOpacityProgress,
                                         isSearchEnabled = isChapterSearchAvailable,
@@ -3863,56 +3879,46 @@ private fun ExpandedPaneUtilityDock(
         Row(
             modifier = Modifier
                 .height(ModernDetailsDockChromeHeight)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         ) {
+            IconButton(
+                onClick = onSearchClick,
+                enabled = isSearchEnabled,
+                modifier = Modifier
+                    .width(42.dp)
+                    .height(42.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = stringResource(R.string.search_chapters),
+                    tint = if (isSearchActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
             Box {
                 IconButton(
                     onClick = { expanded = true },
                     modifier = Modifier
                         .width(42.dp)
                         .height(42.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.options),
-                            tint = if (isSearchActive) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.options),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 GlassDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                     offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
                 ) {
-                    CompactDropdownMenuItem(
-                        text = { Text(stringResource(R.string.search_chapters)) },
-                        enabled = isSearchEnabled,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = if (isSearchActive) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                            )
-                        },
-                        trailingIcon = if (isSearchActive) {
-                            { MenuSelectionIndicator(selected = true) }
-                        } else {
-                            null
-                        },
-                        onClick = {
-                            expanded = false
-                            onSearchClick()
-                        },
-                    )
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.reverse)) },
                         leadingIcon = {
