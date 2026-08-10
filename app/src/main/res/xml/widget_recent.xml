@@ -15,4 +15,5 @@
 	android:targetCellHeight="2"
 	android:updatePeriodMillis="0"
 	android:widgetCategory="home_screen"
+	android:widgetFeatures="reconfigurable"
 	tools:ignore="UnusedAttribute" />

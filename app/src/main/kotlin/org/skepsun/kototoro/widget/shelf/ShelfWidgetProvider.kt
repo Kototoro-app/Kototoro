@@ -4,21 +4,20 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Build
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.background
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -27,15 +26,15 @@ import androidx.glance.appwidget.lazy.GridCells
 import androidx.glance.appwidget.lazy.LazyVerticalGrid
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
-import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.appwidget.provideContent
-import androidx.glance.unit.ColorProvider
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -56,6 +55,10 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.widget.WidgetEmptyState
+import org.skepsun.kototoro.widget.WidgetHeader
+import org.skepsun.kototoro.widget.WidgetPrimaryTextColor
+import org.skepsun.kototoro.widget.widgetRootModifier
 
 private const val WIDGET_ITEM_LIMIT = 10
 private const val COVER_CACHE_READ_TIMEOUT_MILLIS = 500L
@@ -86,6 +89,7 @@ private fun copyConfigs(
 }
 
 private object ShelfGlanceWidget : GlanceAppWidget() {
+	override val sizeMode: SizeMode = SizeMode.Exact
 
 	override suspend fun provideGlance(context: Context, id: GlanceId) {
 		val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -102,6 +106,7 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 			ShelfWidgetContent(
 				items = items,
 				hasBackground = config.hasBackground,
+				title = context.getString(R.string.manga_shelf),
 				emptyText = context.getString(R.string.you_have_not_favourites_yet),
 			)
 		}
@@ -132,6 +137,7 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 		}.getOrDefault(emptyList())
 		content.map { item ->
 			ShelfWidgetItem(
+				id = item.id,
 				title = item.title,
 				cover = loadCover(context, imageLoader, item),
 				readerIntent = ReaderIntent.Builder(context)
@@ -167,6 +173,7 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 }
 
 private data class ShelfWidgetItem(
+	val id: Long,
 	val title: String,
 	val cover: Bitmap?,
 	val readerIntent: Intent,
@@ -176,43 +183,34 @@ private data class ShelfWidgetItem(
 private fun ShelfWidgetContent(
 	items: List<ShelfWidgetItem>,
 	hasBackground: Boolean,
+	title: String,
 	emptyText: String,
 ) {
-	val rootModifier = if (hasBackground) {
-		GlanceModifier
-			.fillMaxSize()
-			.background(ImageProvider(R.drawable.bg_appwidget_root))
-			.cornerRadius(R.dimen.appwidget_corner_radius_background)
-			.padding(4.dp)
-	} else {
-		GlanceModifier
-			.fillMaxSize()
-			.padding(4.dp)
-	}
+	val rootModifier = widgetRootModifier(hasBackground)
 	if (items.isEmpty()) {
-		Box(
-			modifier = rootModifier,
-			contentAlignment = Alignment.Center,
-		) {
-			Text(
-				text = emptyText,
-				style = TextStyle(
-					color = ColorProvider(Color.Black),
-				),
-			)
-		}
+		WidgetEmptyState(text = emptyText, modifier = rootModifier)
 	} else {
-		val gridCells = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-			GridCells.Adaptive(92.dp)
-		} else {
-			GridCells.Fixed(2)
+		val size = LocalSize.current
+		val gridCells = when {
+			size.width < 180.dp -> GridCells.Fixed(1)
+			size.width < 340.dp -> GridCells.Fixed(2)
+			else -> GridCells.Fixed(3)
 		}
-		LazyVerticalGrid(
-			gridCells = gridCells,
-			modifier = rootModifier,
-		) {
-			items(items) { item ->
-				ShelfCard(item)
+		val showHeader = hasBackground && size.height >= 160.dp
+		Column(modifier = rootModifier) {
+			if (showHeader) {
+				WidgetHeader(title = title, itemCount = items.size)
+			}
+			LazyVerticalGrid(
+				gridCells = gridCells,
+				modifier = GlanceModifier.defaultWeight(),
+			) {
+				items(
+					items = items,
+					itemId = { it.id },
+				) { item ->
+					ShelfCard(item)
+				}
 			}
 		}
 	}
@@ -230,7 +228,7 @@ private fun ShelfCard(item: ShelfWidgetItem) {
 	) {
 		Image(
 			provider = item.cover?.let { ImageProvider(it) } ?: ImageProvider(R.drawable.ic_placeholder),
-			contentDescription = null,
+			contentDescription = item.title,
 			contentScale = ContentScale.Crop,
 			modifier = GlanceModifier
 				.fillMaxWidth()
@@ -240,7 +238,9 @@ private fun ShelfCard(item: ShelfWidgetItem) {
 			text = item.title,
 			maxLines = 2,
 			style = TextStyle(
-				color = ColorProvider(Color.Black),
+				color = WidgetPrimaryTextColor,
+				fontSize = 13.sp,
+				fontWeight = FontWeight.Medium,
 			),
 			modifier = GlanceModifier
 				.fillMaxWidth()
@@ -252,5 +252,5 @@ private fun ShelfCard(item: ShelfWidgetItem) {
 @Preview
 @Composable
 private fun ShelfWidgetContentPreview() {
-	ShelfWidgetContent(items = emptyList(), hasBackground = true, emptyText = "No favourites")
+	ShelfWidgetContent(items = emptyList(), hasBackground = true, title = "Shelf", emptyText = "No favourites")
 }

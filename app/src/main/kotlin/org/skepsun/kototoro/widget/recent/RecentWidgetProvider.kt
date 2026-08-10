@@ -5,19 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalSize
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.background
-import androidx.glance.text.Text
-import androidx.glance.text.TextStyle
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -26,13 +26,16 @@ import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
+import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
-import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.unit.ColorProvider
+import androidx.glance.layout.width
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
@@ -51,6 +54,11 @@ import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
+import org.skepsun.kototoro.widget.WidgetEmptyState
+import org.skepsun.kototoro.widget.WidgetHeader
+import org.skepsun.kototoro.widget.WidgetPrimaryTextColor
+import org.skepsun.kototoro.widget.WidgetSecondaryTextColor
+import org.skepsun.kototoro.widget.widgetRootModifier
 
 private const val WIDGET_ITEM_LIMIT = 10
 private const val COVER_CACHE_READ_TIMEOUT_MILLIS = 500L
@@ -81,6 +89,7 @@ private fun copyConfigs(
 }
 
 private object RecentGlanceWidget : GlanceAppWidget() {
+	override val sizeMode: SizeMode = SizeMode.Exact
 
 	override suspend fun provideGlance(context: Context, id: GlanceId) {
 		val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -91,6 +100,7 @@ private object RecentGlanceWidget : GlanceAppWidget() {
 			RecentWidgetContent(
 				items = items,
 				hasBackground = config.hasBackground,
+				title = context.getString(R.string.recent_manga),
 				emptyText = context.getString(R.string.history_is_empty),
 			)
 		}
@@ -115,6 +125,9 @@ private object RecentGlanceWidget : GlanceAppWidget() {
 			.getOrDefault(emptyList())
 			.map { content ->
 				RecentWidgetItem(
+					id = content.id,
+					title = content.title,
+					metadata = content.authors.firstOrNull() ?: content.source.name,
 					cover = loadCover(context, imageLoader, content),
 					readerIntent = ReaderIntent.Builder(context)
 						.manga(content)
@@ -149,6 +162,9 @@ private object RecentGlanceWidget : GlanceAppWidget() {
 }
 
 private data class RecentWidgetItem(
+	val id: Long,
+	val title: String,
+	val metadata: String,
 	val cover: Bitmap?,
 	val readerIntent: Intent,
 )
@@ -157,44 +173,73 @@ private data class RecentWidgetItem(
 private fun RecentWidgetContent(
 	items: List<RecentWidgetItem>,
 	hasBackground: Boolean,
+	title: String,
 	emptyText: String,
 ) {
-	val rootModifier = if (hasBackground) {
-		GlanceModifier
-			.fillMaxSize()
-			.background(ImageProvider(R.drawable.bg_appwidget_root))
-			.cornerRadius(R.dimen.appwidget_corner_radius_background)
-			.padding(4.dp)
-	} else {
-		GlanceModifier
-			.fillMaxSize()
-			.padding(4.dp)
-	}
+	val rootModifier = widgetRootModifier(hasBackground)
 	if (items.isEmpty()) {
-		Box(
-			modifier = rootModifier,
-			contentAlignment = Alignment.Center,
+		WidgetEmptyState(text = emptyText, modifier = rootModifier)
+	} else {
+		val showHeader = hasBackground && LocalSize.current.height >= 140.dp
+		Column(modifier = rootModifier) {
+			if (showHeader) {
+				WidgetHeader(title = title, itemCount = items.size)
+			}
+			LazyColumn(modifier = GlanceModifier.defaultWeight()) {
+				items(
+					items = items,
+					itemId = { it.id },
+				) { item ->
+					RecentCard(item)
+				}
+			}
+		}
+	}
+}
+
+@Composable
+private fun RecentCard(item: RecentWidgetItem) {
+	Row(
+		modifier = GlanceModifier
+			.fillMaxWidth()
+			.padding(4.dp)
+			.background(ImageProvider(R.drawable.bg_appwidget_card))
+			.cornerRadius(R.dimen.appwidget_corner_radius_inner)
+			.clickable(actionStartActivity(item.readerIntent)),
+		verticalAlignment = Alignment.CenterVertically,
+	) {
+		Image(
+			provider = item.cover?.let { ImageProvider(it) } ?: ImageProvider(R.drawable.ic_placeholder),
+			contentDescription = item.title,
+			contentScale = ContentScale.Crop,
+			modifier = GlanceModifier
+				.width(64.dp)
+				.height(88.dp),
+		)
+		Column(
+			modifier = GlanceModifier
+				.defaultWeight()
+				.padding(horizontal = 10.dp, vertical = 8.dp),
+			verticalAlignment = Alignment.CenterVertically,
 		) {
 			Text(
-				text = emptyText,
+				text = item.title,
+				maxLines = 2,
 				style = TextStyle(
-					color = ColorProvider(Color.Black),
+					color = WidgetPrimaryTextColor,
+					fontSize = 15.sp,
+					fontWeight = FontWeight.Bold,
 				),
 			)
-		}
-	} else {
-		LazyColumn(modifier = rootModifier) {
-			items(items) { item ->
-				Image(
-					provider = item.cover?.let { ImageProvider(it) } ?: ImageProvider(R.drawable.ic_placeholder),
-					contentDescription = null,
-					contentScale = ContentScale.Crop,
-					modifier = GlanceModifier
-						.fillMaxWidth()
-						.height(116.dp)
-						.clickable(actionStartActivity(item.readerIntent)),
-				)
-			}
+			Text(
+				text = item.metadata,
+				maxLines = 1,
+				style = TextStyle(
+					color = WidgetSecondaryTextColor,
+					fontSize = 12.sp,
+				),
+				modifier = GlanceModifier.padding(top = 5.dp),
+			)
 		}
 	}
 }
@@ -202,5 +247,5 @@ private fun RecentWidgetContent(
 @Preview
 @Composable
 private fun RecentWidgetContentPreview() {
-	RecentWidgetContent(items = emptyList(), hasBackground = true, emptyText = "No history")
+	RecentWidgetContent(items = emptyList(), hasBackground = true, title = "Recent", emptyText = "No history")
 }

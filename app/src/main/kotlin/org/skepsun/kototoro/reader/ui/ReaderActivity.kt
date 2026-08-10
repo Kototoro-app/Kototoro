@@ -157,7 +157,7 @@ class ReaderActivity :
     private val bookmarksViewModel: BookmarksViewModel by viewModels()
 
     override val readerMode: ReaderMode?
-        get() = composeReaderController.readerMode
+        get() = if (::composeReaderController.isInitialized) composeReaderController.readerMode else null
 
     private lateinit var scrollTimer: ScrollTimer
     private lateinit var pageSaveHelper: PageSaveHelper
@@ -772,14 +772,18 @@ class ReaderActivity :
 
     override fun onUserInteraction() {
         super.onUserInteraction()
-        scrollTimer.onUserInteraction()
-        idlingDetector.onUserInteraction()
+        if (::scrollTimer.isInitialized) {
+            scrollTimer.onUserInteraction()
+            idlingDetector.onUserInteraction()
+        }
     }
 
     override fun onPause() {
         super.onPause()
-        viewModel.saveCurrentState(composeReaderController.getCurrentState())
-        viewModel.onPause()
+        if (::composeReaderController.isInitialized) {
+            viewModel.saveCurrentState(composeReaderController.getCurrentState())
+            viewModel.onPause()
+        }
     }
 
     override fun onStop() {
