@@ -44,6 +44,7 @@ internal class ComposeReaderController(
 	private var requestedPageKey by mutableStateOf<Long?>(null)
 	private var requestedPositionSmooth by mutableStateOf(false)
 	private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
+	private var cumulativeScrollDelta = 0L
 	private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
 	private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
 	var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
@@ -523,7 +524,8 @@ internal class ComposeReaderController(
 
 	override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
 		if (readerMode != ReaderMode.WEBTOON) return false
-		scrollRequest = ComposeReaderScrollRequest(++nextCommandId, delta, smooth)
+		cumulativeScrollDelta += delta
+		scrollRequest = ComposeReaderScrollRequest(++nextCommandId, delta, cumulativeScrollDelta, smooth)
 		return true
 	}
 

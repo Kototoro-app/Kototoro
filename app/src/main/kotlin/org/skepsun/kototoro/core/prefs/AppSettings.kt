@@ -1786,7 +1786,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	@get:FloatRange(from = 0.0, to = 1.0)
 	var readerAutoscrollSpeed: Float
-		get() = prefs.getSafeFloat(KEY_READER_AUTOSCROLL_SPEED, 0f)
+		get() = prefs.getSafeFloat(KEY_READER_AUTOSCROLL_SPEED, DEFAULT_READER_AUTOSCROLL_SPEED)
 		set(@FloatRange(from = 0.0, to = 1.0) value) = prefs.edit {
 			putFloat(
 				KEY_READER_AUTOSCROLL_SPEED,
@@ -2594,6 +2594,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_TIPS_CLOSED = "tips_closed"
 		const val KEY_SSL_BYPASS = "ssl_bypass"
 		const val KEY_READER_AUTOSCROLL_SPEED = "as_speed"
+		const val DEFAULT_READER_AUTOSCROLL_SPEED = 0.24f
 		const val KEY_READER_AUTOSCROLL_FAB = "as_fab"
 		const val KEY_READER_AUTOSCROLL_PAUSE_ON_UI = "as_pause_ui"
 		const val KEY_MIRROR_SWITCHING = "mirror_switching"

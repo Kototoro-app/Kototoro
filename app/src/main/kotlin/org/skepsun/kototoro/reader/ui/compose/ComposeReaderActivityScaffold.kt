@@ -96,6 +96,7 @@ import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_PAGES
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionBar
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -109,6 +110,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.ui.ReaderActionsCallbacks
 import org.skepsun.kototoro.reader.ui.ReaderActionsUiState
+import org.skepsun.kototoro.reader.ui.autoScrollSpeedMultiplier
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination
 import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
@@ -186,7 +188,7 @@ internal data class ReaderAutoScrollUiState(
 	val visible: Boolean = false,
 	val active: Boolean = false,
 	val manuallyPaused: Boolean = false,
-	val speed: Float = 0.5f,
+	val speed: Float = AppSettings.DEFAULT_READER_AUTOSCROLL_SPEED,
 	val fabVisible: Boolean = false,
 	val pauseOnUi: Boolean = true,
 	val showPageDelay: Boolean = false,
@@ -791,7 +793,7 @@ private fun ReaderAutoScrollPanel(state: ReaderAutoScrollUiState, callbacks: Rea
 			Text(if (state.manuallyPaused) stringResource(R.string.play) else stringResource(R.string.pause), modifier = Modifier.weight(1f))
 			Switch(checked = !state.manuallyPaused, onCheckedChange = { callbacks.onPausedChanged(!it) })
 		}
-		Text(text = stringResource(R.string.speed_value, 0.1f + state.speed * 10f))
+		Text(text = stringResource(R.string.speed_value, autoScrollSpeedMultiplier(state.speed)))
 		Slider(value = state.speed, onValueChange = callbacks.onSpeedChanged, valueRange = 0f..1f)
 		Row(verticalAlignment = Alignment.CenterVertically) {
 			Text(stringResource(R.string.reader_autoscroll_fab), modifier = Modifier.weight(1f))

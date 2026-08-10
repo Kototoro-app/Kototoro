@@ -26,10 +26,24 @@ import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.resolveDp
 import kotlin.math.roundToLong
 
-private const val MAX_DELAY = 32L
-private const val MAX_SWITCH_DELAY = 10_000L
+private const val BASE_SCROLL_DELAY_MS = 32L
+private const val BASE_PAGE_SWITCH_DELAY_MS = 10_000L
+private const val MIN_SPEED_MULTIPLIER = 0.1f
+private const val SPEED_MULTIPLIER_RANGE = 10f
 private const val INTERACTION_SKIP_MS = 2_000L
 private const val SPEED_FACTOR_DELTA = 0.02f
+
+internal fun autoScrollSpeedMultiplier(speed: Float): Float {
+	return MIN_SPEED_MULTIPLIER + speed.coerceIn(0f, 1f) * SPEED_MULTIPLIER_RANGE
+}
+
+internal fun autoScrollDelayMs(speed: Float): Long {
+	return (BASE_SCROLL_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
+}
+
+internal fun autoPageSwitchDelayMs(speed: Float): Long {
+	return (BASE_PAGE_SWITCH_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
+}
 
 class ScrollTimer @AssistedInject constructor(
 	@Assisted resources: Resources,
@@ -92,17 +106,8 @@ class ScrollTimer @AssistedInject constructor(
 	}
 
 	private fun onSpeedChanged(speed: Float) {
-		if (speed <= 0f) {
-			delayMs = 0L
-			pageSwitchDelay = 0L
-		} else {
-			val speedFactor = 1f - speed
-			delayMs = (MAX_DELAY * speedFactor).roundToLong()
-			pageSwitchDelay = (MAX_SWITCH_DELAY * speedFactor).roundToLong()
-		}
-		if ((job == null) != (delayMs == 0L)) {
-			restartJob()
-		}
+		delayMs = autoScrollDelayMs(speed)
+		pageSwitchDelay = autoPageSwitchDelayMs(speed)
 	}
 
 	private fun restartJob() {

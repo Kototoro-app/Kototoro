@@ -863,20 +863,23 @@ fun ComposeWebtoonReader(
 			}
 		}
 	}
+	var previousWebtoonScrollRequest by remember { mutableStateOf<ComposeReaderScrollRequest?>(null) }
 	LaunchedEffect(webtoonScrollRequest) {
 		webtoonScrollRequest?.let { request ->
+			val requestDelta = resolveScrollRequestDelta(previousWebtoonScrollRequest, request)
+			previousWebtoonScrollRequest = request
 			fun dispatchScroll(delta: Float) = dispatchWebtoonScroll(delta)
 			if (request.smooth) {
 				var previousValue = 0f
 				animate(
 					initialValue = 0f,
-					targetValue = request.delta.toFloat(),
+					targetValue = requestDelta.toFloat(),
 				) { value, _ ->
 					dispatchScroll(value - previousValue)
 					previousValue = value
 				}
 			} else {
-				dispatchScroll(request.delta.toFloat())
+				dispatchScroll(requestDelta.toFloat())
 			}
 		}
 	}
