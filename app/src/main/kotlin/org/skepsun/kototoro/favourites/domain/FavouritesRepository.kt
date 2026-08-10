@@ -15,6 +15,7 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
 import org.skepsun.kototoro.core.db.TABLE_MANGA
 import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
+import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_TAGS
 import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
@@ -44,6 +45,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
+import org.skepsun.kototoro.work.domain.matchesPublicationStateFilters
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -565,6 +567,7 @@ class FavouritesRepository @Inject constructor(
 			TABLE_TAGS,
 			TABLE_MANGA_TAGS,
 			TABLE_WORK_HISTORY,
+			TABLE_PREFERENCES,
 			"tracks",
 			"local_index",
 			emitInitialState = true,
@@ -589,6 +592,7 @@ class FavouritesRepository @Inject constructor(
 			TABLE_TAGS,
 			TABLE_MANGA_TAGS,
 			TABLE_WORK_HISTORY,
+			TABLE_PREFERENCES,
 			"tracks",
 			"local_index",
 			emitInitialState = true,
@@ -698,6 +702,9 @@ class FavouritesRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption>,
 		downloadedIds: Set<Long>,
 	): Boolean {
+		if (!content.matchesPublicationStateFilters(filterOptions)) {
+			return false
+		}
 		return filterOptions.all { option ->
 			when (option) {
 				ListFilterOption.Downloaded -> content.id in downloadedIds
@@ -708,6 +715,8 @@ class FavouritesRepository @Inject constructor(
 				}
 				is ListFilterOption.Tag -> content.tags.any { tag -> tag.title == option.tag.title && tag.key == option.tag.key }
 				is ListFilterOption.Source -> content.source.name == option.mangaSource.name
+				is ListFilterOption.PublicationState -> true
+				is ListFilterOption.ReadingStatus -> true
 				else -> true
 			}
 		}

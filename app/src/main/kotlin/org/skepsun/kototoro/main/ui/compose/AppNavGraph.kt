@@ -2236,6 +2236,9 @@ internal fun FavoritesTopLevelRouteContent(
             RouteScopedTopBarMenuActions(
                 ownerRoute = TOP_BAR_OWNER_FAVORITES,
                 actions = listOf(
+                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.reset_filter) {
+                        viewModel.resetFilters()
+                    },
                     KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
                         appRouter.openFavoriteCategories()
                     },

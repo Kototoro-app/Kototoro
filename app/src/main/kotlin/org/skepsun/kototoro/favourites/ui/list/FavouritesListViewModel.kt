@@ -234,7 +234,10 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     override fun toggleFilterOption(option: ListFilterOption) = quickFilter.toggleFilterOption(option)
 
-    override fun clearFilter() = quickFilter.clearFilter()
+    override fun clearFilter() {
+        globalFavoritesState.resetFilters(clearGroupTab = activeSpaceScope.value == null)
+        selectedCategoryIds.value = emptySet()
+    }
 
     fun markAsRead(items: Set<Content>) {
         launchLoadingJob(Dispatchers.Default) {

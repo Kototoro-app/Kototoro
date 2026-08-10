@@ -92,4 +92,12 @@ class GlobalFavoritesState @Inject constructor(
 		_selectedSourceTags.value = emptySet()
 		settings.setSelectedSourceTags(emptySet())
 	}
+
+	fun resetFilters(clearGroupTab: Boolean) {
+		clearFilter()
+		clearSourceTags()
+		if (clearGroupTab) {
+			clearSelectedGroupTab()
+		}
+	}
 }

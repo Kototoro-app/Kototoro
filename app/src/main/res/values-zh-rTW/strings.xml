@@ -2707,4 +2707,14 @@ SHA-256 指紋:
     <string name="content_types">內容類型</string>
     <string name="source_types">內容來源類型</string>
     <string name="custom_space_rule_summary">%1$d 種內容類型 · %2$d 種語言 · %3$d 種內容來源類型</string>
+    <string name="filter_group_reading_status">閱讀</string>
+    <string name="filter_group_publication_status">連載</string>
+    <string name="filter_group_content_rating">分級</string>
+    <string name="filter_group_work_relations">關聯</string>
+    <string name="reading_status_planned">想讀</string>
+    <string name="reading_status_reading">在讀</string>
+    <string name="reading_status_re_reading">重讀</string>
+    <string name="reading_status_completed">已讀完</string>
+    <string name="reading_status_on_hold">擱置</string>
+    <string name="reading_status_dropped">棄讀</string>
 </resources>

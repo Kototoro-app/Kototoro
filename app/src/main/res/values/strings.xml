@@ -692,6 +692,17 @@
     <string name="badge_projection_count">Projection count</string>
     <string name="filter_multi_projection">Multi-projection</string>
     <string name="filter_broken_projection">Broken</string>
+    <string name="filter_group_reading_status">Reading</string>
+    <string name="filter_group_publication_status">Release</string>
+    <string name="filter_group_content_rating">Rating</string>
+    <string name="filter_group_work_relations">Links</string>
+    <string name="filter_group_selected_count">%1$s · %2$d</string>
+    <string name="reading_status_planned">Plan to read</string>
+    <string name="reading_status_reading">Reading</string>
+    <string name="reading_status_re_reading">Re-reading</string>
+    <string name="reading_status_completed">Finished reading</string>
+    <string name="reading_status_on_hold">On hold</string>
+    <string name="reading_status_dropped">Dropped</string>
     <string name="badge_source_icon">Source icon</string>
     <string name="badge_language">Language</string>
     <string name="badge_favorite">Favorite</string>

@@ -589,7 +589,12 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             if (onEmptyActionClick != null) {
                 onEmptyActionClick.invoke()
             } else {
-                resolveCloudflareAndRetry()
+                val quickFilterListener = viewModel as? org.skepsun.kototoro.list.domain.QuickFilterListener
+                if (quickFilterListener != null) {
+                    quickFilterListener.clearFilter()
+                } else {
+                    resolveCloudflareAndRetry()
+                }
             }
         },
         onRetry = ::resolveCloudflareAndRetry,

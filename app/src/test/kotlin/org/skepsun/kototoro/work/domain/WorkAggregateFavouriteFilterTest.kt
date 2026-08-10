@@ -1,14 +1,17 @@
 package org.skepsun.kototoro.work.domain
 
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 class WorkAggregateFavouriteFilterTest {
 
@@ -42,6 +45,47 @@ class WorkAggregateFavouriteFilterTest {
 				brokenProjectionSourceNames = emptySet(),
 			),
 		)
+	}
+
+	@Test
+	fun `publication state filters use OR within their group`() {
+		val content = content(2L, "available", ContentState.PAUSED)
+		val filters = setOf(
+			ListFilterOption.PublicationState(ContentState.ONGOING),
+			ListFilterOption.PublicationState(ContentState.PAUSED),
+		)
+
+		assertTrue(content.matchesPublicationStateFilters(filters))
+		assertFalse(
+			content(3L, "available", ContentState.FINISHED)
+				.matchesPublicationStateFilters(filters),
+		)
+		assertFalse(content(4L, "available", null).matchesPublicationStateFilters(filters))
+		assertTrue(content.matchesPublicationStateFilters(emptySet()))
+	}
+
+	@Test
+	fun `reading status falls back to history progress`() {
+		assertEquals(ScrobblingStatus.PLANNED, aggregate().resolveReadingStatus(null))
+		assertEquals(ScrobblingStatus.READING, aggregate(percent = 0.5f).resolveReadingStatus(null))
+		assertEquals(ScrobblingStatus.COMPLETED, aggregate(percent = 1f).resolveReadingStatus(null))
+		assertEquals(
+			ScrobblingStatus.ON_HOLD,
+			aggregate(percent = 0.5f).resolveReadingStatus(ScrobblingStatus.ON_HOLD),
+		)
+	}
+
+	@Test
+	fun `reading status filters use OR within their group`() {
+		val filters = setOf(
+			ListFilterOption.ReadingStatus(ScrobblingStatus.READING),
+			ListFilterOption.ReadingStatus(ScrobblingStatus.RE_READING),
+		)
+
+		assertTrue(ScrobblingStatus.READING.matchesReadingStatusFilters(filters))
+		assertTrue(ScrobblingStatus.RE_READING.matchesReadingStatusFilters(filters))
+		assertFalse(ScrobblingStatus.COMPLETED.matchesReadingStatusFilters(filters))
+		assertTrue(ScrobblingStatus.COMPLETED.matchesReadingStatusFilters(emptySet()))
 	}
 
 	private fun aggregate(
@@ -83,7 +127,11 @@ class WorkAggregateFavouriteFilterTest {
 		},
 	)
 
-	private fun content(id: Long, sourceName: String): Content = Content(
+	private fun content(
+		id: Long,
+		sourceName: String,
+		state: ContentState? = null,
+	): Content = Content(
 		id = id,
 		title = "Work $id",
 		altTitles = emptySet(),
@@ -93,7 +141,7 @@ class WorkAggregateFavouriteFilterTest {
 		contentRating = null,
 		coverUrl = null,
 		tags = emptySet(),
-		state = null,
+		state = state,
 		authors = emptySet(),
 		source = object : ContentSource {
 			override val name = sourceName

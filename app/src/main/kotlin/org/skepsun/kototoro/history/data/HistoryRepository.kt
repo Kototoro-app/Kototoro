@@ -536,6 +536,8 @@ class HistoryRepository @Inject constructor(
 				}
 				is ListFilterOption.Tag -> item.manga.tags.any { tag -> tag.title == option.tag.title && tag.key == option.tag.key }
 				is ListFilterOption.Source -> item.manga.source.name == option.mangaSource.name
+				is ListFilterOption.PublicationState -> item.manga.state == option.state
+				is ListFilterOption.ReadingStatus -> true
 				is ListFilterOption.Favorite -> option.category.id in favouriteCategoryIds
 				is ListFilterOption.Branch -> {
 					val branch = item.manga.findChapterById(item.history.chapterId)?.branch

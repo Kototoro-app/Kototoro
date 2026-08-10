@@ -2855,4 +2855,14 @@ SHA-256 指纹:
     <string name="content_types">内容类型</string>
     <string name="source_types">内容源类型</string>
     <string name="custom_space_rule_summary">%1$d 种内容类型 · %2$d 种语言 · %3$d 种内容源类型</string>
+    <string name="filter_group_reading_status">阅读</string>
+    <string name="filter_group_publication_status">连载</string>
+    <string name="filter_group_content_rating">分级</string>
+    <string name="filter_group_work_relations">关联</string>
+    <string name="reading_status_planned">想读</string>
+    <string name="reading_status_reading">在读</string>
+    <string name="reading_status_re_reading">重读</string>
+    <string name="reading_status_completed">已读完</string>
+    <string name="reading_status_on_hold">搁置</string>
+    <string name="reading_status_dropped">弃读</string>
 </resources>

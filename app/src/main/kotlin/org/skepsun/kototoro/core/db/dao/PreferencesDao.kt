@@ -12,6 +12,9 @@ abstract class PreferencesDao {
 	@Query("SELECT * FROM preferences WHERE manga_id = :mangaId")
 	abstract suspend fun find(mangaId: Long): MangaPrefsEntity?
 
+	@Query("SELECT * FROM preferences WHERE manga_id IN (:mangaIds)")
+	abstract suspend fun findByIds(mangaIds: Collection<Long>): List<MangaPrefsEntity>
+
 	@Query("SELECT * FROM preferences WHERE manga_id = :mangaId")
 	abstract fun observe(mangaId: Long): Flow<MangaPrefsEntity?>
 

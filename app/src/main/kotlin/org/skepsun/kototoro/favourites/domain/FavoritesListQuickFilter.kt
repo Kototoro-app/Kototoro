@@ -9,6 +9,10 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ContentListQuickFilter
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.list.ui.model.QuickFilter
+import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 class FavoritesListQuickFilter @AssistedInject constructor(
 	@Assisted private val categoryId: Long,
@@ -41,6 +45,9 @@ class FavoritesListQuickFilter @AssistedInject constructor(
 		globalFilterState.clearFilter()
 	}
 
+	override fun createFilterModel(chips: List<ChipsView.ChipModel>): QuickFilter =
+		buildFavoritesQuickFilter(chips)
+
 	override suspend fun getAvailableFilterOptions(): List<ListFilterOption> = buildList {
 		add(ListFilterOption.Downloaded)
 		if (!settings.isFavouritesExcludeNsfw) {
@@ -52,7 +59,8 @@ class FavoritesListQuickFilter @AssistedInject constructor(
 		}
 		add(ListFilterOption.Macro.MULTI_PROJECTION)
 		add(ListFilterOption.Macro.BROKEN_PROJECTION)
-		add(ListFilterOption.Macro.COMPLETED)
+		ScrobblingStatus.entries.mapTo(this) { ListFilterOption.ReadingStatus(it) }
+		ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
 		val hideNsfw = settings.isFavouritesExcludeNsfw
 		try {
 			repository.findPopularTags(categoryId, 3)

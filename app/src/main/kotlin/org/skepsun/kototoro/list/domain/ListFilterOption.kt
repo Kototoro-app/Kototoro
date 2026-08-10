@@ -6,11 +6,15 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.iconResId
+import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.parser.favicon.faviconUri
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentTag
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 sealed interface ListFilterOption {
 
@@ -156,6 +160,54 @@ sealed interface ListFilterOption {
 			get() = "_source"
 
 		override fun getIconData() = mangaSource.faviconUri()
+	}
+
+	data class PublicationState(
+		val state: ContentState,
+	) : ListFilterOption {
+
+		override val titleResId: Int
+			get() = state.titleResId
+
+		override val iconResId: Int
+			get() = state.iconResId
+
+		override val titleText: CharSequence?
+			get() = null
+
+		override val groupKey: String
+			get() = "_publication_state"
+	}
+
+	data class ReadingStatus(
+		val status: ScrobblingStatus,
+	) : ListFilterOption {
+
+		override val titleResId: Int
+			get() = when (status) {
+				ScrobblingStatus.PLANNED -> R.string.reading_status_planned
+				ScrobblingStatus.READING -> R.string.reading_status_reading
+				ScrobblingStatus.RE_READING -> R.string.reading_status_re_reading
+				ScrobblingStatus.COMPLETED -> R.string.reading_status_completed
+				ScrobblingStatus.ON_HOLD -> R.string.reading_status_on_hold
+				ScrobblingStatus.DROPPED -> R.string.reading_status_dropped
+			}
+
+		override val iconResId: Int
+			get() = when (status) {
+				ScrobblingStatus.PLANNED -> R.drawable.ic_bookmark
+				ScrobblingStatus.READING -> R.drawable.ic_read
+				ScrobblingStatus.RE_READING -> R.drawable.ic_history
+				ScrobblingStatus.COMPLETED -> R.drawable.ic_state_finished
+				ScrobblingStatus.ON_HOLD -> R.drawable.ic_action_pause
+				ScrobblingStatus.DROPPED -> R.drawable.ic_state_abandoned
+			}
+
+		override val titleText: CharSequence?
+			get() = null
+
+		override val groupKey: String
+			get() = "_reading_status"
 	}
 
 	data class Inverted(

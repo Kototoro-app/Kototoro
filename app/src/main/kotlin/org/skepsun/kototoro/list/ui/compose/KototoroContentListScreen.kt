@@ -21,8 +21,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.TextButton
@@ -34,6 +37,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -81,6 +85,7 @@ import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
+import org.skepsun.kototoro.list.ui.model.QuickFilterGroup
 
 private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
@@ -632,8 +637,12 @@ fun QuickFilterSection(
     val orderedChips = remember(quickFilter.items) {
         quickFilter.items.sortedBy { chip -> !chip.isChecked }
     }
-    LaunchedEffect(orderedChips) {
-        if (orderedChips.firstOrNull()?.isChecked == true && listState.firstVisibleItemIndex > 0) {
+    val hasSelectedFilter = remember(quickFilter.groups, orderedChips) {
+        quickFilter.groups.any { group -> group.items.any(ChipsView.ChipModel::isChecked) } ||
+            orderedChips.firstOrNull()?.isChecked == true
+    }
+    LaunchedEffect(hasSelectedFilter) {
+        if (hasSelectedFilter && listState.firstVisibleItemIndex > 0) {
             listState.animateScrollToItem(0)
         }
     }
@@ -643,6 +652,19 @@ fun QuickFilterSection(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier.fillMaxWidth(),
     ) {
+        items(
+            items = quickFilter.groups,
+            key = { group -> "filter_group:${group.key}" },
+            contentType = { "filter_group" },
+        ) { group ->
+            QuickFilterGroupChip(
+                group = group,
+                isIosStyle = isIosStyle,
+                context = context,
+                entryPoint = entryPoint,
+                onQuickFilterOptionClick = onQuickFilterOptionClick,
+            )
+        }
         items(
             items = orderedChips,
             key = { chip ->
@@ -711,6 +733,143 @@ fun QuickFilterSection(
                         )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickFilterGroupChip(
+    group: QuickFilterGroup,
+    isIosStyle: Boolean,
+    context: android.content.Context,
+    entryPoint: BaseApp.BaseAppEntryPoint?,
+    onQuickFilterOptionClick: (ListFilterOption) -> Unit,
+) {
+    var expanded by remember(group.key) { mutableStateOf(false) }
+    val selectedItems = group.items.filter(ChipsView.ChipModel::isChecked)
+    val isSelected = selectedItems.isNotEmpty()
+    val contentColor = when {
+        isIosStyle && isSelected -> MaterialTheme.colorScheme.inverseOnSurface
+        isSelected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val chipShape = RoundedCornerShape(999.dp)
+    Box {
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Row(
+                modifier = Modifier
+                    .then(
+                        if (isIosStyle) {
+                            Modifier
+                                .background(
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.inverseSurface
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                    shape = chipShape,
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.inverseSurface
+                                    } else {
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    },
+                                    shape = chipShape,
+                                )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { expanded = true }
+                    .height(QuickFilterChipHeight)
+                    .padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(group.iconResId),
+                    contentDescription = null,
+                    modifier = Modifier.size(QuickFilterChipIconSize),
+                )
+                Text(
+                    text = when (selectedItems.size) {
+                        0 -> stringResource(group.titleResId)
+                        1 -> buildChipLabel(context, selectedItems.single(), entryPoint)
+                        else -> stringResource(
+                            R.string.filter_group_selected_count,
+                            stringResource(group.titleResId),
+                            selectedItems.size,
+                        )
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = contentColor,
+                    fontWeight = if (isSelected) {
+                        androidx.compose.ui.text.font.FontWeight.SemiBold
+                    } else {
+                        androidx.compose.ui.text.font.FontWeight.Normal
+                    },
+                    maxLines = 1,
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    modifier = Modifier.size(QuickFilterChipIconSize),
+                )
+            }
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            group.items.forEach { chip ->
+                val option = chip.data as? ListFilterOption ?: return@forEach
+                val itemColor = if (chip.isChecked) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = buildChipLabel(context, chip, entryPoint),
+                            color = itemColor,
+                            fontWeight = if (chip.isChecked) {
+                                androidx.compose.ui.text.font.FontWeight.SemiBold
+                            } else {
+                                androidx.compose.ui.text.font.FontWeight.Normal
+                            },
+                        )
+                    },
+                    onClick = { onQuickFilterOptionClick(option) },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(
+                                if (chip.isChecked) R.drawable.ic_check else chip.icon,
+                            ),
+                            contentDescription = null,
+                            tint = itemColor,
+                        )
+                    },
+                )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.reset_filter)) },
+                onClick = {
+                    selectedItems.forEach { chip ->
+                        (chip.data as? ListFilterOption)?.let(onQuickFilterOptionClick)
+                    }
+                },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_clear_all),
+                        contentDescription = null,
+                    )
+                },
+                enabled = selectedItems.isNotEmpty(),
+            )
         }
     }
 }
@@ -994,7 +1153,7 @@ private fun listModelComposeKey(
         append(index)
     }
     is ListHeader -> "header:${listModel.hashCode()}:$index"
-    is QuickFilter -> "quick_filter:${listModel.hashCode()}:$index"
+    is QuickFilter -> "quick_filter:$index"
     is InfoModel -> "info:${listModel.hashCode()}:$index"
     is EmptyState -> "empty_state:${listModel.hashCode()}:$index"
     is ErrorState -> "error_state:${listModel.hashCode()}:$index"

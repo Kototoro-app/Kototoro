@@ -110,6 +110,10 @@ class FavouritesContainerViewModel @Inject constructor(
 		globalFavoritesState.toggleSourceTag(tag)
 	}
 
+	fun resetFilters() {
+		globalFavoritesState.resetFilters(clearGroupTab = spaceBinding.spaceId.value == null)
+	}
+
 	private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> = combine(
 		settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
 	) { filters, skipNsfw ->

@@ -16,6 +16,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.stats.data.WorkStatsSummaryRow
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
@@ -294,6 +295,11 @@ class WorkAggregateRepository @Inject constructor(
 		} else {
 			emptySet()
 		}
+		val readingStatuses = if (filterOptions.any { it is ListFilterOption.ReadingStatus }) {
+			findEffectiveReadingStatuses(aggregates)
+		} else {
+			emptyMap()
+		}
 		return aggregates
 			.filter { aggregate ->
 				val content = aggregate.displayProjection ?: return@filter false
@@ -303,12 +309,43 @@ class WorkAggregateRepository @Inject constructor(
 					filterOptions = filterOptions,
 					downloadedIds = downloadedIds,
 					brokenProjectionSourceNames = brokenProjectionSourceNames,
+					readingStatus = aggregate.identity.entityId?.let(readingStatuses::get),
 				)
 			}
 			.sortedWith(favouriteAggregateComparator(order))
 			.distinctBy { it.identity.entityId ?: it.displayProjection?.id }
 			.take(limit)
 	}
+
+	private suspend fun findEffectiveReadingStatuses(
+		aggregates: List<WorkAggregate>,
+	): Map<Long, ScrobblingStatus> {
+		val entityIds = aggregates.mapNotNull { it.identity.entityId }.distinct()
+		val entityStatuses = db.getEntityGraphDao().findEntityPrefsByIds(entityIds)
+			.mapNotNull { prefs -> prefs.readingStatus.toScrobblingStatusOrNull()?.let { prefs.entityId to it } }
+			.toMap()
+		val fallbackMangaIds = aggregates.asSequence()
+			.filter { aggregate -> aggregate.identity.entityId !in entityStatuses }
+			.mapNotNull { it.displayProjection?.id }
+			.distinct()
+			.toList()
+		val legacyStatuses = if (fallbackMangaIds.isEmpty()) {
+			emptyMap()
+		} else {
+			db.getPreferencesDao().findByIds(fallbackMangaIds)
+				.mapNotNull { prefs -> prefs.readingStatus.toScrobblingStatusOrNull()?.let { prefs.mangaId to it } }
+				.toMap()
+		}
+		return aggregates.mapNotNull { aggregate ->
+			val entityId = aggregate.identity.entityId ?: return@mapNotNull null
+			val explicitStatus = entityStatuses[entityId]
+				?: aggregate.displayProjection?.id?.let(legacyStatuses::get)
+			entityId to aggregate.resolveReadingStatus(explicitStatus)
+		}.toMap()
+	}
+
+	private fun String?.toScrobblingStatusOrNull(): ScrobblingStatus? =
+		this?.let { value -> runCatching { ScrobblingStatus.valueOf(value) }.getOrNull() }
 
 	private suspend fun buildFavouriteAggregates(
 		entries: List<WorkFavouriteEntity>,
@@ -607,7 +644,17 @@ class WorkAggregateRepository @Inject constructor(
 		filterOptions: Set<ListFilterOption>,
 		downloadedIds: Set<Long>,
 		brokenProjectionSourceNames: Set<String>,
+		readingStatus: ScrobblingStatus?,
 	): Boolean {
+		if (!content.matchesPublicationStateFilters(filterOptions)) {
+			return false
+		}
+		val hasReadingStatusFilter = filterOptions.any { it is ListFilterOption.ReadingStatus }
+		if (hasReadingStatusFilter &&
+			(readingStatus == null || !readingStatus.matchesReadingStatusFilters(filterOptions))
+		) {
+			return false
+		}
 		return filterOptions.all { option ->
 			when (option) {
 				ListFilterOption.Downloaded -> content.id in downloadedIds
@@ -621,6 +668,8 @@ class WorkAggregateRepository @Inject constructor(
 				}
 				is ListFilterOption.Tag -> content.tags.any { tag -> tag.title == option.tag.title && tag.key == option.tag.key }
 				is ListFilterOption.Source -> content.source.name == option.mangaSource.name
+				is ListFilterOption.PublicationState -> true
+				is ListFilterOption.ReadingStatus -> true
 				else -> true
 			}
 		}
