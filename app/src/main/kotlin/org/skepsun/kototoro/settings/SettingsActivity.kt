@@ -106,6 +106,7 @@ import org.skepsun.kototoro.settings.about.AppUpdateActivity
 import org.skepsun.kototoro.settings.about.changelog.ChangelogRoute
 import org.skepsun.kototoro.settings.about.changelog.ChangelogViewModel
 import org.skepsun.kototoro.settings.compose.SettingsAdaptiveShell
+import org.skepsun.kototoro.settings.compose.AppearanceSettingsPage
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
@@ -507,6 +508,15 @@ class SettingsActivity :
 				SettingsDestination.AppearanceSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_SETTINGS)
 				}
+				SettingsDestination.AppearanceBadgesSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS)
+				}
+				SettingsDestination.AppearanceSearchFiltersSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS)
+				}
+				SettingsDestination.AppearanceNavigationSettings -> {
+					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS)
+				}
 				SettingsDestination.PanoramaSettings -> {
 					outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_PANORAMA_SETTINGS)
 				}
@@ -666,6 +676,9 @@ class SettingsActivity :
 				pushCurrentToStack = false,
 			)
 			SettingsDestination.AppearanceSettings,
+			SettingsDestination.AppearanceBadgesSettings,
+			SettingsDestination.AppearanceSearchFiltersSettings,
+			SettingsDestination.AppearanceNavigationSettings,
 			SettingsDestination.PanoramaSettings,
 			SettingsDestination.UsersSettings,
 			SettingsDestination.SpacesSettings,
@@ -824,6 +837,9 @@ class SettingsActivity :
 		return when (destination) {
 			SettingsDestination.Root -> COMPOSE_DESTINATION_ROOT
 			SettingsDestination.AppearanceSettings -> COMPOSE_DESTINATION_APPEARANCE_SETTINGS
+			SettingsDestination.AppearanceBadgesSettings -> COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS
+			SettingsDestination.AppearanceSearchFiltersSettings -> COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS
+			SettingsDestination.AppearanceNavigationSettings -> COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS
 			SettingsDestination.PanoramaSettings -> COMPOSE_DESTINATION_PANORAMA_SETTINGS
 			SettingsDestination.UsersSettings -> COMPOSE_DESTINATION_USERS_SETTINGS
 			SettingsDestination.SpacesSettings -> COMPOSE_DESTINATION_SPACES_SETTINGS
@@ -863,6 +879,9 @@ class SettingsActivity :
 		return when (destination) {
 			SettingsDestination.Root -> getString(R.string.settings)
 			SettingsDestination.AppearanceSettings -> getString(R.string.appearance)
+			SettingsDestination.AppearanceBadgesSettings -> getString(R.string.badges_in_lists)
+			SettingsDestination.AppearanceSearchFiltersSettings -> getString(R.string.search_bar_filters)
+			SettingsDestination.AppearanceNavigationSettings -> getString(R.string.appearance_navigation_group)
 			SettingsDestination.PanoramaSettings -> getString(R.string.panorama_settings_title)
 			SettingsDestination.UsersSettings -> getString(R.string.users)
 			SettingsDestination.SpacesSettings -> getString(R.string.spaces)
@@ -901,27 +920,51 @@ class SettingsActivity :
 	}
 
 	@Composable
+	private fun RenderAppearanceSettings(page: AppearanceSettingsPage) {
+		AppearanceSettingsRoute(
+			page = page,
+			settings = kototoroAppSettings,
+			activityRecreationHandle = activityRecreationHandle,
+			appShortcutManager = appShortcutManager,
+			sourcePresetsRepository = sourcePresetsRepository,
+			onOpenNavConfig = { openDestination(SettingsDestination.NavConfigSettings, null, false) },
+			onOpenPanoramaSettings = { openDestination(SettingsDestination.PanoramaSettings, null, false) },
+			onOpenProtectSetup = { startActivity(Intent(this, ProtectSetupActivity::class.java)) },
+			onOpenBadgesSettings = {
+				openDestination(SettingsDestination.AppearanceBadgesSettings, null, false)
+			},
+			onOpenSearchFiltersSettings = {
+				openDestination(SettingsDestination.AppearanceSearchFiltersSettings, null, false)
+			},
+			onOpenNavigationSettings = {
+				openDestination(SettingsDestination.AppearanceNavigationSettings, null, false)
+			},
+		)
+	}
+
+	@Composable
 	private fun RenderComposeDestination(destination: SettingsDestination) {
 		when (destination) {
 			SettingsDestination.Root -> {
 				RenderSettingsRootContent(modifier = Modifier.fillMaxSize())
 			}
 			SettingsDestination.AppearanceSettings -> RenderComposeSection(title = getString(R.string.appearance)) {
-				AppearanceSettingsRoute(
-					settings = kototoroAppSettings,
-					activityRecreationHandle = activityRecreationHandle,
-					appShortcutManager = appShortcutManager,
-					sourcePresetsRepository = sourcePresetsRepository,
-					onOpenNavConfig = {
-						openDestination(SettingsDestination.NavConfigSettings, null, false)
-					},
-					onOpenPanoramaSettings = {
-						openDestination(SettingsDestination.PanoramaSettings, null, false)
-					},
-					onOpenProtectSetup = {
-						startActivity(Intent(this, ProtectSetupActivity::class.java))
-					},
-				)
+				RenderAppearanceSettings(AppearanceSettingsPage.OVERVIEW)
+			}
+			SettingsDestination.AppearanceBadgesSettings -> RenderComposeSection(
+				title = getString(R.string.badges_in_lists),
+			) {
+				RenderAppearanceSettings(AppearanceSettingsPage.BADGES)
+			}
+			SettingsDestination.AppearanceSearchFiltersSettings -> RenderComposeSection(
+				title = getString(R.string.search_bar_filters),
+			) {
+				RenderAppearanceSettings(AppearanceSettingsPage.SEARCH_FILTERS)
+			}
+			SettingsDestination.AppearanceNavigationSettings -> RenderComposeSection(
+				title = getString(R.string.appearance_navigation_group),
+			) {
+				RenderAppearanceSettings(AppearanceSettingsPage.NAVIGATION)
 			}
 			SettingsDestination.PanoramaSettings -> RenderComposeSection(
 				title = getString(R.string.panorama_settings_title),
@@ -1998,6 +2041,9 @@ class SettingsActivity :
 		private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
 		private const val COMPOSE_DESTINATION_ROOT = "root"
 		private const val COMPOSE_DESTINATION_APPEARANCE_SETTINGS = "appearance_settings"
+		private const val COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS = "appearance_badges_settings"
+		private const val COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS = "appearance_search_filters_settings"
+		private const val COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS = "appearance_navigation_settings"
 		private const val COMPOSE_DESTINATION_PANORAMA_SETTINGS = "panorama_settings"
 		private const val COMPOSE_DESTINATION_USERS_SETTINGS = "users_settings"
 		private const val COMPOSE_DESTINATION_SPACES_SETTINGS = "spaces_settings"
@@ -2077,6 +2123,10 @@ class SettingsActivity :
 		return when (getString(STATE_COMPOSE_DESTINATION)) {
 			COMPOSE_DESTINATION_ROOT -> SettingsDestination.Root
 			COMPOSE_DESTINATION_APPEARANCE_SETTINGS -> SettingsDestination.AppearanceSettings
+			COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS -> SettingsDestination.AppearanceBadgesSettings
+			COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS ->
+				SettingsDestination.AppearanceSearchFiltersSettings
+			COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS -> SettingsDestination.AppearanceNavigationSettings
 			COMPOSE_DESTINATION_PANORAMA_SETTINGS -> SettingsDestination.PanoramaSettings
 			COMPOSE_DESTINATION_USERS_SETTINGS -> SettingsDestination.UsersSettings
 			COMPOSE_DESTINATION_SPACES_SETTINGS -> SettingsDestination.SpacesSettings

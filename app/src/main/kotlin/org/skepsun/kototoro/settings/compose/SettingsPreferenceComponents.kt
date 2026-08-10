@@ -22,10 +22,17 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Reorder
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ToggleOn
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -69,6 +77,27 @@ data class SettingsChoiceOption<T>(
     val value: T,
     val label: String,
 )
+
+@Composable
+private fun SettingsLeadingIcon(
+    imageVector: ImageVector,
+    @DrawableRes iconRes: Int? = null,
+) {
+    if (iconRes != null) {
+        Icon(
+            painter = rememberSafePainter(iconRes),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    Spacer(modifier = Modifier.width(16.dp))
+}
 
 @Composable
 private fun settingsSwitchColors(): SwitchColors {
@@ -175,14 +204,7 @@ fun SettingsActionPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (iconRes != null) {
-            Icon(
-                painter = rememberSafePainter(iconRes),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-        }
+        SettingsLeadingIcon(imageVector = Icons.Filled.Settings, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -238,14 +260,7 @@ fun SettingsSplitSwitchPreference(
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (iconRes != null) {
-                Icon(
-                    painter = rememberSafePainter(iconRes),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-            }
+            SettingsLeadingIcon(imageVector = Icons.Filled.Tune, iconRes = iconRes)
             Column(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -284,14 +299,7 @@ fun SettingsInfoPreference(
             .settingsPreferenceLayout(enabled = true),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (iconRes != null) {
-            Icon(
-                painter = rememberSafePainter(iconRes),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-        }
+        SettingsLeadingIcon(imageVector = Icons.Filled.Info, iconRes = iconRes)
         Column(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -315,6 +323,7 @@ fun SettingsSwitchPreference(
     checked: Boolean,
     summary: String? = null,
     styleHint: String? = null,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
@@ -329,6 +338,7 @@ fun SettingsSwitchPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SettingsLeadingIcon(imageVector = Icons.Filled.ToggleOn, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -370,6 +380,7 @@ fun <T> SettingsChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     summary: String? = null,
     styleHint: String? = null,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
 	onSettingsClick: (() -> Unit)? = null,
 	settingsContentDescription: String? = null,
@@ -386,6 +397,7 @@ fun <T> SettingsChoicePreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SettingsLeadingIcon(imageVector = Icons.AutoMirrored.Filled.ListAlt, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -506,6 +518,7 @@ fun <T> SettingsMultiChoicePreference(
     options: List<SettingsChoiceOption<T>>,
     emptySelectionText: String,
     summary: String? = null,
+    @DrawableRes iconRes: Int? = null,
     maxSelections: Int? = null,
     enabled: Boolean = true,
     onValueChange: (Set<T>) -> Unit,
@@ -527,6 +540,7 @@ fun <T> SettingsMultiChoicePreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SettingsLeadingIcon(imageVector = Icons.Filled.Checklist, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -649,6 +663,7 @@ fun SettingsSliderPreference(
     valueRange: IntRange,
     step: Int,
     summary: String? = null,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     valueText: (Int) -> String,
     onValueChange: (Int) -> Unit,
@@ -663,22 +678,27 @@ fun SettingsSliderPreference(
             .settingsPreferenceLayout(enabled),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = valueText(currentValue),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (summary != null) {
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsLeadingIcon(imageVector = Icons.Filled.Tune, iconRes = iconRes)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = valueText(currentValue),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         KototoroSlider(
             value = sliderValue,
@@ -711,6 +731,7 @@ fun SettingsTextInputPreference(
     summary: String? = null,
     placeholder: String? = null,
     isPassword: Boolean = false,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
@@ -721,17 +742,22 @@ fun SettingsTextInputPreference(
             .settingsPreferenceLayout(enabled),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (summary != null) {
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            SettingsLeadingIcon(imageVector = Icons.Filled.Edit, iconRes = iconRes)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (summary != null) {
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         OutlinedTextField(
             value = currentValue,
@@ -761,6 +787,7 @@ fun SettingsDialogTextPreference(
     placeholder: String? = null,
     suggestions: List<SettingsChoiceOption<String>> = emptyList(),
     isPassword: Boolean = false,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
@@ -784,6 +811,7 @@ fun SettingsDialogTextPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SettingsLeadingIcon(imageVector = Icons.Filled.Edit, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -901,6 +929,7 @@ fun SettingsReorderPreference(
     value: List<String>,
     summary: String? = null,
     emptyValueText: String,
+    @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     onValueChange: (List<String>) -> Unit,
 ) {
@@ -920,6 +949,7 @@ fun SettingsReorderPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SettingsLeadingIcon(imageVector = Icons.Filled.Reorder, iconRes = iconRes)
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),

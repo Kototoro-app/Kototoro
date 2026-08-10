@@ -48,6 +48,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.util.toTitleCase
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsOptions
+import org.skepsun.kototoro.settings.compose.AppearanceSettingsPage
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsScreen
 import org.skepsun.kototoro.settings.compose.AppearanceSettingsUiState
 import org.skepsun.kototoro.settings.compose.PanoramaEffectPreset
@@ -58,6 +59,7 @@ import org.skepsun.kototoro.settings.protect.ProtectSetupActivity
 
 @Composable
 fun AppearanceSettingsRoute(
+    page: AppearanceSettingsPage = AppearanceSettingsPage.OVERVIEW,
     settings: AppSettings,
     activityRecreationHandle: ActivityRecreationHandle,
     appShortcutManager: AppShortcutManager,
@@ -65,6 +67,9 @@ fun AppearanceSettingsRoute(
     onOpenNavConfig: () -> Unit,
     onOpenPanoramaSettings: () -> Unit,
     onOpenProtectSetup: () -> Unit,
+    onOpenBadgesSettings: () -> Unit = {},
+    onOpenSearchFiltersSettings: () -> Unit = {},
+    onOpenNavigationSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val coordinator = remember(
@@ -76,6 +81,10 @@ fun AppearanceSettingsRoute(
         onOpenNavConfig,
         onOpenPanoramaSettings,
         onOpenProtectSetup,
+        onOpenBadgesSettings,
+        onOpenSearchFiltersSettings,
+        onOpenNavigationSettings,
+        page,
     ) {
         AppearanceSettingsCoordinator(
             context = context,
@@ -86,6 +95,10 @@ fun AppearanceSettingsRoute(
             onOpenNavConfig = onOpenNavConfig,
             onOpenPanoramaSettings = onOpenPanoramaSettings,
             onOpenProtectSetup = onOpenProtectSetup,
+            onOpenBadgesSettings = onOpenBadgesSettings,
+            onOpenSearchFiltersSettings = onOpenSearchFiltersSettings,
+            onOpenNavigationSettings = onOpenNavigationSettings,
+            page = page,
         )
     }
     coordinator.Render()
@@ -100,6 +113,10 @@ private class AppearanceSettingsCoordinator(
     private val onOpenNavConfig: () -> Unit,
     private val onOpenPanoramaSettings: () -> Unit,
     private val onOpenProtectSetup: () -> Unit,
+    private val onOpenBadgesSettings: () -> Unit,
+    private val onOpenSearchFiltersSettings: () -> Unit,
+    private val onOpenNavigationSettings: () -> Unit,
+    private val page: AppearanceSettingsPage,
 ) {
 
     @Composable
@@ -331,6 +348,7 @@ private class AppearanceSettingsCoordinator(
         )
 
         AppearanceSettingsScreen(
+            page = page,
             state = uiState,
             options = options,
             emptySelectionText = context.getString(R.string.none),
@@ -393,6 +411,9 @@ private class AppearanceSettingsCoordinator(
             onDynamicShortcutsChange = { settings.isDynamicShortcutsEnabled = it },
             onAppProtectionChange = { updateAppProtection(it) },
             onScreenshotsPolicyChange = { settings.screenshotsPolicy = it },
+            onBadgesSettingsClick = onOpenBadgesSettings,
+            onSearchFiltersSettingsClick = onOpenSearchFiltersSettings,
+            onNavigationSettingsClick = onOpenNavigationSettings,
         )
     }
 

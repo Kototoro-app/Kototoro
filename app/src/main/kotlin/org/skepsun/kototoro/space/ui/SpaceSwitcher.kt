@@ -146,6 +146,7 @@ fun BoxScope.SpaceSidekick(
 				onAction = onAction,
 				resumeItems = resumeItems,
 				onResume = onResume,
+				onDismiss = { onAction(SpaceAction.DismissSwitcher) },
 				isLeft = isLeft,
 			)
 		}
@@ -267,8 +268,11 @@ private fun SpaceSidekickPanel(
 	onAction: (SpaceAction) -> Unit,
 	resumeItems: Map<SpaceId, SpaceResumeItem>,
 	onResume: (SpaceId) -> Unit,
+	onDismiss: () -> Unit,
 	isLeft: Boolean,
 ) {
+	var horizontalDragOffset by remember(isLeft) { mutableFloatStateOf(0f) }
+	val dismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
 	val shape = if (isLeft) {
 		RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
 	} else {
@@ -278,7 +282,30 @@ private fun SpaceSidekickPanel(
 		modifier = Modifier
 			.fillMaxHeight()
 			.fillMaxWidth(0.68f)
-			.widthIn(max = 280.dp),
+			.widthIn(max = 280.dp)
+			.graphicsLayer { translationX = horizontalDragOffset }
+			.pointerInput(isLeft, onDismiss) {
+				detectHorizontalDragGestures(
+					onHorizontalDrag = { change, amount ->
+						val isOutwardDrag = (isLeft && amount < 0f) || (!isLeft && amount > 0f)
+						if (isOutwardDrag || horizontalDragOffset != 0f) {
+							change.consume()
+							horizontalDragOffset = if (isLeft) {
+								(horizontalDragOffset + amount).coerceAtMost(0f)
+							} else {
+								(horizontalDragOffset + amount).coerceAtLeast(0f)
+							}
+						}
+					},
+					onDragEnd = {
+						if (kotlin.math.abs(horizontalDragOffset) >= dismissThreshold) {
+							onDismiss()
+						}
+						horizontalDragOffset = 0f
+					},
+					onDragCancel = { horizontalDragOffset = 0f },
+				)
+			},
 		style = GlassDefaults.topBarChromeStyle().copy(
 			containerAlpha = 0.94f,
 			borderAlpha = 0.22f,
