@@ -7,10 +7,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.withTimeoutOrNull
@@ -68,12 +68,20 @@ class SpaceResumeStateSource @Inject constructor(
 		contexts.takeIf { flags.effectiveSwitcherEnabled }.orEmpty()
 	}
 
-	private val recentBySpace = activeContexts.flatMapLatest { contexts ->
+	private val recentBySpace = combine(
+		activeContexts,
+		settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw },
+	) { contexts, excludeNsfw ->
+		contexts to excludeNsfw
+	}.flatMapLatest { (contexts, excludeNsfw) ->
 		if (contexts.isEmpty()) {
 			flowOf(emptyMap())
 		} else {
 			combine(contexts.map { context ->
-				historyRepository.observeLast(context.id).map { context.id to it }
+				historyRepository.observeLast(
+					spaceId = context.id,
+					excludeNsfw = excludeNsfw,
+				).map { context.id to it }
 			}) { entries -> entries.toMap() }
 		}
 	}

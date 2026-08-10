@@ -53,6 +53,8 @@ import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import javax.inject.Inject
 import javax.inject.Provider
 
+private const val RESUME_HISTORY_FILTER_BATCH_SIZE = 32
+
 @Reusable
 class HistoryRepository @Inject constructor(
 	private val db: MangaDatabase,
@@ -120,17 +122,30 @@ class HistoryRepository @Inject constructor(
 			.toList()
 	}
 
-	suspend fun getLastOrNull(spaceId: SpaceId? = null): Content? {
-		return findRecentContentsByWorkAnchor(offset = 0, limit = 1, spaceId = spaceId).firstOrNull()
+	suspend fun getLastOrNull(
+		spaceId: SpaceId? = null,
+		excludeNsfw: Boolean = false,
+	): Content? {
+		return findRecentContentsByWorkAnchor(
+			offset = 0,
+			limit = 1,
+			spaceId = spaceId,
+			excludeNsfw = excludeNsfw,
+		).firstOrNull()
 	}
 
-	fun observeLast(spaceId: SpaceId? = null): Flow<Content?> {
+	fun observeLast(
+		spaceId: SpaceId? = null,
+		excludeNsfw: Boolean = false,
+	): Flow<Content?> {
 		val invalidations = db.invalidationTracker.createFlow(
 			tables = arrayOf(
 				TABLE_WORK_HISTORY,
 				TABLE_ENTITY_GRAPH_BINDING,
 				TABLE_ENTITY_PREFERENCES,
 				TABLE_MANGA,
+				TABLE_TAGS,
+				TABLE_MANGA_TAGS,
 			),
 			emitInitialState = true,
 		)
@@ -142,6 +157,7 @@ class HistoryRepository @Inject constructor(
 				limit = 1,
 				spaceId = spaceId,
 				allowedSourceNames = sources,
+				excludeNsfw = excludeNsfw,
 			).firstOrNull()
 		}.distinctUntilChanged()
 	}
@@ -448,17 +464,39 @@ class HistoryRepository @Inject constructor(
 		limit: Int?,
 		spaceId: SpaceId? = null,
 		allowedSourceNames: Set<String>? = spaceId?.let(spaceContentPolicy::allowedSourceNames),
+		excludeNsfw: Boolean = false,
 	): List<Content> {
 		if (limit != null && limit <= 0) {
 			return emptyList()
 		}
 		val targetSize = if (limit == null) Int.MAX_VALUE else offset + limit
-		return workAggregateRepository.findRecentHistoryAggregates(targetSize, spaceId, allowedSourceNames)
-			.drop(offset)
-			.let { list ->
-				if (limit == null) list else list.take(limit)
+		if (!excludeNsfw) {
+			return workAggregateRepository.findRecentHistoryAggregates(targetSize, spaceId, allowedSourceNames)
+				.drop(offset)
+				.let { list -> if (limit == null) list else list.take(limit) }
+				.mapNotNull { it.displayProjection }
+		}
+		var queryLimit = if (limit == null) targetSize else maxOf(targetSize, RESUME_HISTORY_FILTER_BATCH_SIZE)
+		while (true) {
+			val aggregates = workAggregateRepository.findRecentHistoryAggregates(
+				queryLimit,
+				spaceId,
+				allowedSourceNames,
+			)
+			val visible = aggregates.mapNotNull { it.displayProjection }
+				.let { contents -> if (excludeNsfw) contents.filterNot { it.isNsfw() } else contents }
+			if (
+				limit == null ||
+				visible.size >= targetSize ||
+				aggregates.size < queryLimit ||
+				queryLimit == Int.MAX_VALUE
+			) {
+				return visible.drop(offset).let { list -> if (limit == null) list else list.take(limit) }
 			}
-			.mapNotNull { it.displayProjection }
+			queryLimit = (queryLimit.toLong() * 2L)
+				.coerceAtMost(Int.MAX_VALUE.toLong())
+				.toInt()
+		}
 	}
 
 	private suspend fun getAllRecentContents(maxCount: Int = Int.MAX_VALUE): List<Content> {

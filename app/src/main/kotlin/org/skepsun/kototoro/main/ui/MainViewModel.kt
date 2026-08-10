@@ -3,8 +3,9 @@ package org.skepsun.kototoro.main.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -81,7 +82,12 @@ class MainViewModel @Inject constructor(
 	val isResumeEnabled = readingResumeEnabledUseCase()
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5000), false)
 
-	val lastReadContent = historyRepository.observeLast()
+	val lastReadContent = settings.observeAsFlow(
+		AppSettings.KEY_HISTORY_EXCLUDE_NSFW,
+	) { isHistoryExcludeNsfw }
+		.flatMapLatest { excludeNsfw ->
+			historyRepository.observeLast(excludeNsfw = excludeNsfw)
+		}
 		.withErrorHandling()
 		.stateIn(
 			scope = viewModelScope + Dispatchers.Default,
@@ -135,7 +141,9 @@ class MainViewModel @Inject constructor(
 
 	fun openLastReader() {
 		launchLoadingJob(Dispatchers.Default) {
-			val rawContent = historyRepository.getLastOrNull() ?: throw EmptyHistoryException()
+			val rawContent = historyRepository.getLastOrNull(
+				excludeNsfw = settings.isHistoryExcludeNsfw,
+			) ?: throw EmptyHistoryException()
 			val history = historyRepository.getOne(rawContent)
 			val entityId = workResolver.resolveByMangaId(rawContent.id).entityId
 			val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
