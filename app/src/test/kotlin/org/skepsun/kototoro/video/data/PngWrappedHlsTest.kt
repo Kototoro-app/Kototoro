@@ -20,6 +20,7 @@ class PngWrappedHlsTest {
         val result = unwrapPngPrefixedStream(ByteArrayInputStream(png + transportStream))
 
         assertTrue(result.wasUnwrapped)
+        assertTrue(result.isTransportStream)
         assertArrayEquals(transportStream, result.stream.readBytes())
     }
 
@@ -30,6 +31,18 @@ class PngWrappedHlsTest {
         val result = unwrapPngPrefixedStream(ByteArrayInputStream(transportStream))
 
         assertFalse(result.wasUnwrapped)
+        assertTrue(result.isTransportStream)
         assertArrayEquals(transportStream, result.stream.readBytes())
+    }
+
+    @Test
+    fun `real image is not classified as a transport stream`() {
+        val jpeg = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte())
+
+        val result = unwrapPngPrefixedStream(ByteArrayInputStream(jpeg))
+
+        assertFalse(result.wasUnwrapped)
+        assertFalse(result.isTransportStream)
+        assertArrayEquals(jpeg, result.stream.readBytes())
     }
 }

@@ -127,14 +127,18 @@ class MpvPlayer(
 		}
 		mpv.setPropertyString("http-header-fields", headerValue)
 		
-		Log.d("MpvPlayer", "load: $url with headers count=${headers.size}, forceHls=$forceHls")
-		if (forceHls) {
+		val loadFileOptions = MpvPlaybackOptions.hlsLoadFileOptions(url, forceHls)
+		Log.d(
+			"MpvPlayer",
+			"load: $url with headers count=${headers.size}, forceHls=$forceHls, options=$loadFileOptions",
+		)
+		if (loadFileOptions != null) {
 			mpv.command(
 				"loadfile",
 				url,
 				"replace",
 				"-1",
-				"demuxer-lavf-format=hls,demuxer-lavf-o=extension_picky=0",
+				loadFileOptions,
 			)
 		} else {
 			mpv.command("loadfile", url, "replace")

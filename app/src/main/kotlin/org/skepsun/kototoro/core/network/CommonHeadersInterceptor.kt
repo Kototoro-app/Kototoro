@@ -62,14 +62,15 @@ class CommonHeadersInterceptor @Inject constructor(
 		if (userAgent.contains("Chrome", ignoreCase = true)) {
 			val chromeVersionRegex = Regex("Chrome/(\\d+)\\.", RegexOption.IGNORE_CASE)
 			val majorVersion = chromeVersionRegex.find(userAgent)?.groupValues?.get(1) ?: "124"
+			val clientHints = browserClientHints(userAgent)
 			if (headersBuilder["sec-ch-ua"] == null) {
 				headersBuilder["sec-ch-ua"] = "\"Chromium\";v=\"$majorVersion\", \"Google Chrome\";v=\"$majorVersion\", \"Not-A.Brand\";v=\"99\""
 			}
 			if (headersBuilder["sec-ch-ua-mobile"] == null) {
-				headersBuilder["sec-ch-ua-mobile"] = "?1"
+				headersBuilder["sec-ch-ua-mobile"] = clientHints.mobile
 			}
 			if (headersBuilder["sec-ch-ua-platform"] == null) {
-				headersBuilder["sec-ch-ua-platform"] = "\"Android\""
+				headersBuilder["sec-ch-ua-platform"] = "\"${clientHints.platform}\""
 			}
 		}
 		
@@ -145,5 +146,21 @@ class CommonHeadersInterceptor @Inject constructor(
 	) : Chain by delegate {
 
 		override fun request(): Request = request
+	}
+}
+
+internal data class BrowserClientHints(
+	val mobile: String,
+	val platform: String,
+)
+
+internal fun browserClientHints(userAgent: String): BrowserClientHints {
+	return when {
+		userAgent.contains("Android", ignoreCase = true) -> BrowserClientHints("?1", "Android")
+		userAgent.contains("iPhone", ignoreCase = true) ||
+			userAgent.contains("iPad", ignoreCase = true) -> BrowserClientHints("?1", "iOS")
+		userAgent.contains("Windows", ignoreCase = true) -> BrowserClientHints("?0", "Windows")
+		userAgent.contains("Macintosh", ignoreCase = true) -> BrowserClientHints("?0", "macOS")
+		else -> BrowserClientHints("?0", "Linux")
 	}
 }

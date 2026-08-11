@@ -18,6 +18,7 @@ import android.os.Looper
 import android.app.PictureInPictureParams
 import android.provider.MediaStore
 import android.util.Rational
+import android.util.Base64
 import android.view.PixelCopy
 import android.view.WindowManager
 import android.util.Log
@@ -245,6 +246,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var cloudstreamPlaybackInstance: Long = 0L
     private val rejectedCloudstreamVideoUrls = mutableSetOf<String>()
     private val pngWrappedCloudstreamVideoUrls = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val resolvedCloudstreamHlsUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
@@ -1695,29 +1697,39 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         appSettings.videoPlaybackSpeed = defaultSpeed
         mpvPlayer?.setRate(defaultSpeed.toDouble())
 
-        Log.d("VideoPlayerActivity", "Loading media. URL: $url, Headers: ${mergedHeaders.keys}")
-        val isHttpSource = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
-        val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
+        val resolvedUrl = if (source is CloudstreamSource && forceHls) {
+            resolvedCloudstreamHlsUrls[url] ?: url
+        } else {
+            url
+        }
+        Log.d(
+            "VideoPlayerActivity",
+            "Loading media. URL: $url, resolvedUrl=$resolvedUrl, Headers: ${mergedHeaders.keys}",
+        )
+        val isHttpSource = resolvedUrl.startsWith("http://", ignoreCase = true) ||
+            resolvedUrl.startsWith("https://", ignoreCase = true)
+        val useProxy = shouldUseLocalProxy(resolvedUrl, isHttpSource, source)
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
-            url = url,
+            url = resolvedUrl,
             headers = mergedHeaders,
             source = source,
+            forceHls = forceHls,
             unwrapPngSegments = forceHls && url in pngWrappedCloudstreamVideoUrls,
         )
         val (playUrl, playHeaders) = if (dynamicCloudstreamPlaylistUrl != null) {
-            Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $url")
+            Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $resolvedUrl")
             dynamicCloudstreamPlaylistUrl to emptyMap<String, String>()
         } else if (useProxy) {
             runCatching {
-                val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, mergedHeaders, source)
+                val proxyUrl = videoLocalCacheProxy.getProxyUrl(resolvedUrl, mergedHeaders, source)
                 proxyUrl to emptyMap<String, String>()
             }.getOrElse {
                 Log.w("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
-                url to mergedHeaders
+                resolvedUrl to mergedHeaders
             }
         } else {
-            Log.d("VideoPlayerActivity", "Bypass local proxy for URL: $url")
-            url to mergedHeaders
+            Log.d("VideoPlayerActivity", "Bypass local proxy for URL: $resolvedUrl")
+            resolvedUrl to mergedHeaders
         }
         Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
         
@@ -1830,10 +1842,20 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         url: String,
         headers: Map<String, String>,
         source: ParsersContentSource?,
+        forceHls: Boolean,
         unwrapPngSegments: Boolean,
     ): String? {
         if (source !is CloudstreamSource) return null
-        if (!unwrapPngSegments && !url.contains("/config-", ignoreCase = true)) return null
+        val path = url.substringBefore('?').substringBefore('#')
+        val hasStandardHlsSuffix = path.endsWith(".m3u8", ignoreCase = true)
+        val requiresNonstandardHlsProxy = forceHls && !hasStandardHlsSuffix
+        if (
+            !unwrapPngSegments &&
+            !requiresNonstandardHlsProxy &&
+            !url.contains("/config-", ignoreCase = true)
+        ) {
+            return null
+        }
         val identitySeed = buildString {
             append(url)
             append("|unwrapPngSegments=").append(unwrapPngSegments)
@@ -1845,7 +1867,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             id = "cloudstream-config:${identitySeed.hashCode()}",
         ) { request ->
             val proxyBaseUrl = buildDynamicProxyBaseUrl(request)
-            val targetUrl = request.queryParameters["target"].takeUnless { it.isNullOrBlank() } ?: url
+            val targetUrl = request.queryParameters["target64"]
+                ?.takeUnless(String::isBlank)
+                ?.let(::decodeCloudstreamProxyTarget)
+                ?: request.queryParameters["target"].takeUnless { it.isNullOrBlank() }
+                ?: url
             val upstreamResponse = executeCloudstreamProxyRequest(targetUrl, headers)
             if (!upstreamResponse.isSuccessful) {
                 upstreamResponse.close()
@@ -1865,7 +1891,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     body = "Cloudstream upstream body is null".toByteArray(Charsets.UTF_8),
                 )
             }
-            if (isCloudstreamPlaylistResponse(targetUrl, contentType)) {
+            if (
+                (requiresNonstandardHlsProxy && targetUrl == url) ||
+                isCloudstreamPlaylistResponse(targetUrl, contentType)
+            ) {
                 val playlist = body.string()
                 val playlistUrl = upstreamResponse.request.url.toString()
                 upstreamResponse.close()
@@ -1885,15 +1914,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     body = rewritten.toByteArray(Charsets.UTF_8),
                 )
             }
-            if (unwrapPngSegments && contentType.startsWith("image/png", ignoreCase = true)) {
+            if (forceHls && contentType.startsWith("image/", ignoreCase = true)) {
                 val unwrapped = unwrapPngPrefixedStream(body.byteStream())
-                if (unwrapped.wasUnwrapped) {
-                    Log.d("VideoPlayerActivity", "Stripped PNG wrapper from Cloudstream HLS segment target=$targetUrl")
+                if (unwrapped.wasUnwrapped || unwrapped.isTransportStream) {
+                    Log.d(
+                        "VideoPlayerActivity",
+                        "Normalized image-labelled Cloudstream HLS segment target=$targetUrl " +
+                            "contentType=$contentType unwrapped=${unwrapped.wasUnwrapped}",
+                    )
                     return@getDynamicProxyUrl VideoLocalCacheProxy.DynamicResponse(
                         statusCode = upstreamResponse.code,
                         contentType = "video/mp2t",
                         headers = buildCloudstreamProxyHeaders(upstreamResponse)
-                            .filterKeys { it.equals("Cache-Control", ignoreCase = true) },
+                            .filterKeys { key ->
+                                key.equals("Cache-Control", ignoreCase = true) ||
+                                    (!unwrapped.wasUnwrapped && key.equals("Content-Length", ignoreCase = true))
+                            },
                         bodyStream = unwrapped.stream,
                     )
                 }
@@ -1913,7 +1949,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun buildDynamicProxyBaseUrl(request: VideoLocalCacheProxy.DynamicRequest): String {
         val host = request.headers["host"].orEmpty().ifBlank { "127.0.0.1" }
-        val key = request.pathSegments.lastOrNull().orEmpty()
+        val dynamicIndex = request.pathSegments.indexOf("dynamic")
+        val key = request.pathSegments.getOrNull(dynamicIndex + 1).orEmpty()
         return "http://$host/dynamic/$key"
     }
 
@@ -2020,17 +2057,36 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             absoluteUrl
         }
-        val rewritten = Uri.parse(proxyBaseUrl).buildUpon()
-            .appendQueryParameter("target", normalizedTargetUrl)
+        val proxyUrlBuilder = Uri.parse(proxyBaseUrl).buildUpon()
+        if (isImageLabelledHlsSegment(normalizedTargetUrl)) {
+            // FFmpeg also considers the URL suffix when selecting the demuxer for an HLS segment.
+            // Keep the upstream URL in the query while exposing the actual MPEG-TS container locally.
+            proxyUrlBuilder.appendPath("segment.ts")
+        }
+        return proxyUrlBuilder
+            .appendQueryParameter("target64", encodeCloudstreamProxyTarget(normalizedTargetUrl))
             .build()
             .toString()
-        if (rewritten != rawUrl) {
-            Log.d(
-                "VideoPlayerActivity",
-                "Rewrote Cloudstream playlist URL from=$rawUrl to=$rewritten",
-            )
+    }
+
+    private fun encodeCloudstreamProxyTarget(url: String): String {
+        return Base64.encodeToString(
+            url.toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+    }
+
+    private fun decodeCloudstreamProxyTarget(value: String): String? {
+        return runCatching {
+            Base64.decode(value, Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)
+        }.getOrNull()
+    }
+
+    private fun isImageLabelledHlsSegment(url: String): Boolean {
+        return when (Uri.parse(url).lastPathSegment?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase()) {
+            "jpg", "jpeg", "png", "webp", "avif" -> true
+            else -> false
         }
-        return rewritten
     }
 
     private fun buildCloudstreamProxyHeaders(response: Response): Map<String, String> {
@@ -2102,6 +2158,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         cloudstreamFallbackJob = null
         rejectedCloudstreamVideoUrls.clear()
         pngWrappedCloudstreamVideoUrls.clear()
+        resolvedCloudstreamHlsUrls.clear()
         selectionDialogState = null
         actionDialogState = null
         currentVideoSource = source
@@ -2992,6 +3049,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 return true
             }
             val playlist = HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream())
+            var resolvedPlaybackUrl: String? = null
             val mediaPlaylist = when (playlist) {
                 is HlsMediaPlaylist -> playlist
                 is HlsMultivariantPlaylist -> {
@@ -3000,9 +3058,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         ?.url
                         ?.toString()
                         ?: return true
-                    loadCloudstreamMediaPlaylist(client, variantUrl, video.headers) ?: return true
+                    loadCloudstreamMediaPlaylist(client, variantUrl, video.headers)?.also {
+                        resolvedPlaybackUrl = variantUrl
+                    } ?: return true
                 }
                 else -> return true
+            }
+            resolvedPlaybackUrl?.let { resolvedUrl ->
+                resolvedCloudstreamHlsUrls[video.videoUrl] = resolvedUrl
+                Log.d(
+                    "VideoPlayer",
+                    "Resolved Cloudstream HLS master to variant master=${video.videoUrl} variant=$resolvedUrl",
+                )
             }
             val segmentUrl = mediaPlaylist.segments.firstOrNull()?.url ?: return true
             val resolvedSegmentUrl = URI(mediaPlaylist.baseUri).resolve(segmentUrl).toString()
@@ -3013,10 +3080,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     val isDeclaredHls = video.internalData == HLS_VIDEO_MARKER
                     if (
                         isDeclaredHls &&
-                        segmentResponse.header("Content-Type")?.startsWith("image/png", ignoreCase = true) == true
+                        segmentResponse.header("Content-Type")?.startsWith("image/", ignoreCase = true) == true
                     ) {
                         pngWrappedCloudstreamVideoUrls += video.videoUrl
-                        Log.d("VideoPlayer", "Detected PNG-wrapped Cloudstream HLS segments url=${video.videoUrl}")
+                        Log.d("VideoPlayer", "Detected image-labelled Cloudstream HLS segments url=${video.videoUrl}")
                     }
                     return !isRejectedCloudstreamSegmentProbe(
                         segmentResponse.header("Content-Type"),

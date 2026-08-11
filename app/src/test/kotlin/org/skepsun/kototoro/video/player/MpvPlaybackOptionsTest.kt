@@ -37,4 +37,28 @@ class MpvPlaybackOptionsTest {
 			)
 		}
 	}
+
+	@Test
+	fun `standard HLS relies on normal mime detection`() {
+		assertEquals(
+			null,
+			MpvPlaybackOptions.hlsLoadFileOptions("https://cdn.example/video/master.m3u8?token=abc", true),
+		)
+	}
+
+	@Test
+	fun `nonstandard HLS keeps the compatibility demuxer options`() {
+		assertEquals(
+			"demuxer-lavf-format=hls,demuxer-lavf-o=extension_picky=0",
+			MpvPlaybackOptions.hlsLoadFileOptions("https://cdn.example/video/index.json", true),
+		)
+	}
+
+	@Test
+	fun `regular video has no HLS load options`() {
+		assertEquals(
+			null,
+			MpvPlaybackOptions.hlsLoadFileOptions("https://cdn.example/video/file.mp4", false),
+		)
+	}
 }

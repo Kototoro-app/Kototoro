@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.content.res.Resources
 import android.util.Log
-import android.webkit.WebSettings
 import com.lagradost.api.setContext
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.CloudStreamApp
@@ -121,9 +120,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 	}
 
 	private fun configureCloudstreamNetwork() {
-		val cloudstreamUserAgent = runCatching { WebSettings.getDefaultUserAgent(context) }
-			.getOrNull()
-			?: com.lagradost.cloudstream3.USER_AGENT
+		val cloudstreamUserAgent = com.lagradost.cloudstream3.USER_AGENT
 		CloudstreamRequestContext.userAgent = cloudstreamUserAgent
 		app.baseClient = contentHttpClient.newBuilder()
 			.apply {
