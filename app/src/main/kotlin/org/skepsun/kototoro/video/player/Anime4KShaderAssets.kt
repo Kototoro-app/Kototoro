@@ -4,10 +4,10 @@ import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
 
-object MpvShaderManager {
+object Anime4KShaderAssets {
 
 	private const val ASSET_DIR = "shaders"
-	private const val TARGET_DIR = "mpv_shaders"
+	private const val TARGET_DIR = "anime4k_shaders"
 
 	// Mode A: strong restore + upscale
 	val modeAPreset = listOf(

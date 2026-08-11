@@ -134,7 +134,7 @@ class LNReaderContentRepository(
 										success = true
 									} catch (e: Exception) {
 										retries++
-										Log.w(TAG, "parsePage($page) attempt $retries failed: ${e.message}")
+										Log.d(TAG, "parsePage($page) attempt $retries failed: ${e.message}")
 										if (retries >= 3) {
 											Log.e(TAG, "parsePage($page) failed 3 times, giving up on remaining pages.")
 											break
@@ -186,7 +186,7 @@ class LNReaderContentRepository(
 			} ?: run {
 				val cachedChapters = manga.chapters
 				if (!cachedChapters.isNullOrEmpty()) {
-					Log.w(TAG, "getDetails fallback to cached chapters for ${source.name} after parse failure")
+					Log.d(TAG, "getDetails fallback to cached chapters for ${source.name} after parse failure")
 					manga.copy(
 						url = candidatePaths.first(),
 						publicUrl = manga.publicUrl.ifBlank { candidatePaths.first() },

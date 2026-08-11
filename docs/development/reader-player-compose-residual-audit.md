@@ -159,7 +159,7 @@ seek 反馈及空间切换 FAB 共享 Activity 的同一 Compose 状态树。
 对应的 XML `TextView`、`View`、`ImageButton`、`LinearProgressIndicator` 和反向更新传统
 `DefaultTimeBar` 的代码均已删除。
 
-MPV 初始化通过一次性就绪信号与 Compose `AndroidView` 创建时序协调，媒体加载会等待 Surface
+Media3 初始化通过一次性就绪信号与 Compose `AndroidView` 创建时序协调，媒体加载会等待 Surface
 初始化完成，避免 `lateinit` 未初始化和首次 Composition 时序竞争。
 
 ### 现役 XML 控制层
@@ -174,11 +174,11 @@ MPV 初始化通过一次性就绪信号与 Compose `AndroidView` 创建时序�
 - `app/src/main/kotlin/org/skepsun/kototoro/video/ui/compose/VideoPlayerInfoDialog.kt`
 
 旧 `dialog_video_player_info.xml` 已删除。Activity 级字幕、音轨、清晰度、画面比例、播放速度、
-默认速度和跳转间隔选择已统一为 Compose 单选对话框；MPV 初始化失败提示也已改为 Compose
+默认速度和跳转间隔选择已统一为 Compose 单选对话框；Media3 初始化失败提示也已改为 Compose
 `AlertDialog`。`VideoPlayerActivity` 自身不再使用 `MaterialAlertDialogBuilder`。
 
-`MpvConfigManager` 已收敛为纯文件读写组件，不再创建 `TextInputEditText`、`ScrollView` 或
-`MaterialAlertDialogBuilder`。mpv.conf 的指南、多行等宽编辑、保存、重置和反馈由 Compose
+`已移除的播放器配置组件` 已收敛为纯文件读写组件，不再创建 `TextInputEditText`、`ScrollView` 或
+`MaterialAlertDialogBuilder`。旧播放器配置 的指南、多行等宽编辑、保存、重置和反馈由 Compose
 播放设置页直接管理。
 
 ### 现役 Fragment Sheet
@@ -209,7 +209,7 @@ Compose 对话框承载：
 
 ### 平台互操作保留项
 
-MPV `SurfaceView`、弹幕 `DanmakuView` 及类似播放器渲染组件不应为了“无 View”而强行
+Media3 `PlayerView`、弹幕 `DanmakuView` 及类似播放器渲染组件不应为了“无 View”而强行
 重写。合理的 Compose 终态是：
 
 - Compose 负责播放器根布局、控制层、状态、动画、弹窗和面板。
@@ -220,7 +220,7 @@ MPV `SurfaceView`、弹幕 `DanmakuView` 及类似播放器渲染组件不应为
 
 最终形态的渲染互操作边界已集中到
 `app/src/main/kotlin/org/skepsun/kototoro/video/ui/compose/VideoPlayerRenderLayer.kt`：它只通过
-`AndroidView` 承载 `CustomMpvView` 与 `DanmakuView`，不包含工具栏、控制器、弹窗或其他传统
+`AndroidView` 承载 `PlayerView` 与 `EnhancedVideoSurfaceView` 与 `DanmakuView`，不包含工具栏、控制器、弹窗或其他传统
 View UI。Activity 已接入该根；Surface 手势、`PixelCopy` 截图和第三方渲染 View 属于明确的平台
 互操作边界，不是 `ComposeView` 过渡态。
 
@@ -259,7 +259,7 @@ View UI。Activity 已接入该根；Surface 手势、`PixelCopy` 截图和第�
 - 漫画章节/书签/页面入口在详情页与阅读器中均可用。
 - 小说分页、连续跨章、TTS、书签及当前位置恢复不回归。
 - 视频播放、旋转、锁定、进度拖动、字幕、弹幕、DLNA 和超分辨率不回归。
-- MPV/弹幕 View 的创建、销毁和配置变更生命周期正确。
+- Media3/画质增强/弹幕 View 的创建、销毁和配置变更生命周期正确。
 
 清理后可再次执行静态检查：
 

@@ -446,10 +446,9 @@ class VideoLocalCacheProxy @Inject constructor(
                 ?: return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream error")
 
             if (!upstreamResponse.isSuccessful && upstreamResponse.code !in listOf(200, 206)) {
-                val errorBody = runCatching { upstreamResponse.body.string().take(300) }.getOrDefault("")
                 Log.w(
                     TAG,
-                    "upstream failed key=$key code=${upstreamResponse.code} url=${source.url} body=$errorBody",
+                    "upstream failed key=$key code=${upstreamResponse.code}",
                 )
                 upstreamResponse.close()
                 return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Upstream failed: ${upstreamResponse.code}")

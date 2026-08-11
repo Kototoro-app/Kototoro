@@ -10,19 +10,6 @@ import org.junit.jupiter.api.Test
 class CloudstreamPlaybackSelectionTest {
 
     @Test
-    fun `probe rejects image and html responses but accepts playlists`() {
-        assertTrue(isRejectedCloudstreamProbe("image/png", byteArrayOf()))
-        assertTrue(isRejectedCloudstreamProbe(null, byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte())))
-        assertTrue(isRejectedCloudstreamProbe("text/html", "<!doctype html>".toByteArray()))
-        assertFalse(
-            isRejectedCloudstreamProbe(
-                "application/vnd.apple.mpegurl",
-                "#EXTM3U\n#EXT-X-VERSION:3".toByteArray(),
-            ),
-        )
-    }
-
-    @Test
     fun `zero and short playback durations require another mirror`() {
         assertTrue(isSuspiciousCloudstreamPlaybackDuration(0L))
         assertTrue(isSuspiciousCloudstreamPlaybackDuration(90_000L))

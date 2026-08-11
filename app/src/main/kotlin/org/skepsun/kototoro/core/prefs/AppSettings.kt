@@ -30,8 +30,6 @@ import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.list.domain.ListSortOrder
-import org.skepsun.kototoro.core.prefs.VideoDecoderMode
-import org.skepsun.kototoro.core.prefs.VideoRendererMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
@@ -191,7 +189,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	init {
 		clearDeprecatedAllSourcesEnabledFlag()
-		normalizeVideoEnhancementCompatibility()
 	}
 
 	var hasSeenPluginWelcome: Boolean
@@ -749,33 +746,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getEnumValue(KEY_READER_BACKGROUND, ReaderBackground.AUTO)
 		set(value) = prefs.edit { putEnumValue(KEY_READER_BACKGROUND, value) }
 
-	var videoDecoderMode: VideoDecoderMode
-		get() = prefs.getEnumValue(KEY_VIDEO_DECODER_MODE, VideoDecoderMode.HARDWARE)
-		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_DECODER_MODE, value) }
-
-	var videoRendererMode: VideoRendererMode
-		get() = prefs.getEnumValue(KEY_VIDEO_RENDERER_MODE, VideoRendererMode.AUTO)
-		set(value) = prefs.edit {
-			putEnumValue(KEY_VIDEO_RENDERER_MODE, value)
-			putEnumValue(
-				KEY_VIDEO_SUPER_RES_MODE,
-				VideoEnhancementCompatibility.superResolutionForRenderer(value, videoSuperResolutionMode),
-			)
-		}
-
 	var videoBackground: ReaderBackground
 		get() = prefs.getEnumValue(KEY_VIDEO_BACKGROUND, ReaderBackground.DEFAULT)
 		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_BACKGROUND, value) }
 
 	var videoSuperResolutionMode: VideoSuperResolutionMode
 		get() = prefs.getEnumValue(KEY_VIDEO_SUPER_RES_MODE, VideoSuperResolutionMode.BALANCED)
-		set(value) = prefs.edit {
-			putEnumValue(KEY_VIDEO_SUPER_RES_MODE, value)
-			putEnumValue(
-				KEY_VIDEO_RENDERER_MODE,
-				VideoEnhancementCompatibility.rendererForSuperResolution(value, videoRendererMode),
-			)
-		}
+		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_SUPER_RES_MODE, value) }
 
 	var videoSuperResolutionShader: VideoSuperResolutionShader
 		get() = prefs.getEnumValue(KEY_VIDEO_SUPER_RES_SHADER, VideoSuperResolutionShader.MODE_A)
@@ -796,6 +773,35 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var videoSuperResolutionCustomShaders: String
 		get() = prefs.getString(KEY_VIDEO_SUPER_RES_CUSTOM_SHADERS, "") ?: ""
 		set(value) = prefs.edit { putString(KEY_VIDEO_SUPER_RES_CUSTOM_SHADERS, value) }
+
+	var videoEnhancementAlgorithm: VideoEnhancementAlgorithm
+		get() = prefs.getEnumValue(KEY_VIDEO_ENHANCEMENT_ALGORITHM, VideoEnhancementAlgorithm.ANIME4K)
+		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_ENHANCEMENT_ALGORITHM, value) }
+
+	var videoAnime4KPreset: Anime4KPreset
+		get() = prefs.getEnumValue(KEY_VIDEO_ANIME4K_PRESET, migrateAnime4KPreset())
+		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_ANIME4K_PRESET, value) }
+
+	var videoFsrSharpness: Float
+		get() = prefs.getFloat(KEY_VIDEO_FSR_SHARPNESS, 0.9f).coerceIn(0f, 1f)
+		set(value) = prefs.edit { putFloat(KEY_VIDEO_FSR_SHARPNESS, value.coerceIn(0f, 1f)) }
+
+	var videoEnhancementRememberAcrossVideos: Boolean
+		get() = prefs.getBoolean(KEY_VIDEO_ENHANCEMENT_REMEMBER, migrateEnhancementRemember())
+		set(value) = prefs.edit { putBoolean(KEY_VIDEO_ENHANCEMENT_REMEMBER, value) }
+
+	var videoEnhancementRememberedEnabled: Boolean
+		get() = prefs.getBoolean(KEY_VIDEO_ENHANCEMENT_REMEMBERED_ENABLED, migrateEnhancementRemember())
+		set(value) = prefs.edit { putBoolean(KEY_VIDEO_ENHANCEMENT_REMEMBERED_ENABLED, value) }
+
+	private fun migrateAnime4KPreset(): Anime4KPreset = when (videoSuperResolutionMode) {
+		VideoSuperResolutionMode.PERFORMANCE, VideoSuperResolutionMode.BALANCED -> Anime4KPreset.FAST
+		VideoSuperResolutionMode.QUALITY, VideoSuperResolutionMode.ADVANCED -> Anime4KPreset.QUALITY
+		VideoSuperResolutionMode.OFF -> Anime4KPreset.FAST
+	}
+
+	private fun migrateEnhancementRemember(): Boolean =
+		prefs.contains(KEY_VIDEO_SUPER_RES_MODE) && videoSuperResolutionMode != VideoSuperResolutionMode.OFF
 
 	var videoDanmakuEnabled: Boolean
 		get() = prefs.getBoolean(KEY_VIDEO_DANMAKU_ENABLED, false)
@@ -2087,7 +2093,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	}
 
 	private fun migrateLegacyUiPreferences() {
-		normalizeVideoEnhancementCompatibility()
 		val sanitizedSearchSuggestionTypes = searchSuggestionTypes
 		val sanitizedBadges = mangaListBadges
 		val sanitizedSelectedGroupTab = BrowseGroupTab.fromId(getSelectedGroupTab() ?: BrowseGroupTab.All.id).id
@@ -2128,16 +2133,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 				KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
 				isBackupWebDavAutoUploadBlockedByLegacyRestore,
 			)
-		}
-	}
-
-	private fun normalizeVideoEnhancementCompatibility() {
-		val compatibleMode = VideoEnhancementCompatibility.superResolutionForRenderer(
-			videoRendererMode,
-			videoSuperResolutionMode,
-		)
-		if (compatibleMode != videoSuperResolutionMode) {
-			prefs.edit { putEnumValue(KEY_VIDEO_SUPER_RES_MODE, compatibleMode) }
 		}
 	}
 
@@ -2515,6 +2510,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_VIDEO_SUPER_RES_BALANCED_SHADER = "video_super_resolution_balanced_shader"
 		const val KEY_VIDEO_SUPER_RES_PERFORMANCE_SHADER = "video_super_resolution_performance_shader"
 		const val KEY_VIDEO_SUPER_RES_CUSTOM_SHADERS = "video_super_resolution_custom_shaders"
+		const val KEY_VIDEO_ENHANCEMENT_ALGORITHM = "video_enhancement_algorithm"
+		const val KEY_VIDEO_ANIME4K_PRESET = "video_anime4k_preset"
+		const val KEY_VIDEO_FSR_SHARPNESS = "video_fsr_sharpness"
+		const val KEY_VIDEO_ENHANCEMENT_REMEMBER = "video_enhancement_remember"
+		const val KEY_VIDEO_ENHANCEMENT_REMEMBERED_ENABLED = "video_enhancement_remembered_enabled"
 		const val KEY_VIDEO_DANMAKU_ENABLED = "video_danmaku_enabled"
 		const val KEY_VIDEO_DANMAKU_SIZE = "video_danmaku_size"
 		const val KEY_VIDEO_DANMAKU_SPEED = "video_danmaku_speed"

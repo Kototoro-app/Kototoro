@@ -179,7 +179,7 @@ class LocalMangaRepository @Inject constructor(
 		// Legacy EPUB chapters with file://path#chapter/N format are no longer supported
 		// Users need to re-download to use the new architecture
 		if (chapter.url.contains("#chapter/") && chapter.url.startsWith("file://")) {
-			android.util.Log.w("LocalMangaRepository", "Legacy EPUB chapter format detected: ${chapter.url}")
+			android.util.Log.d("LocalMangaRepository", "Legacy EPUB chapter format detected: ${chapter.url}")
 			android.util.Log.w("LocalMangaRepository", "Please re-download this manga to use the new EPUB architecture")
 			// Return empty list to indicate unsupported format
 			return emptyList()

@@ -137,14 +137,14 @@ object DlnaController {
             val response = client.newCall(request).execute()
             val success = response.isSuccessful
             if (!success) {
-                Log.w(TAG, "SOAP $action failed: ${response.code} ${response.body.string().take(500)}")
+                Log.w(TAG, "SOAP $action failed: ${response.code}")
             } else {
                 Log.d(TAG, "SOAP $action succeeded on $controlUrl")
             }
             response.close()
             success
         } catch (e: Exception) {
-            Log.e(TAG, "SOAP $action error on $controlUrl", e)
+            Log.e(TAG, "SOAP $action error: ${e.javaClass.simpleName}")
             false
         }
     }

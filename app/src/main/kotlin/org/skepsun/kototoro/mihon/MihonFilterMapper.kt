@@ -3,6 +3,7 @@ package org.skepsun.kototoro.mihon
 import android.util.Log
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentListFilterOptions
 import org.skepsun.kototoro.parsers.model.ContentTag
@@ -82,10 +83,12 @@ object MihonFilterMapper {
             ContentTagGroup(title, allTags)
         }
 
-        Log.d(TAG, "[mapOptions] DONE: groups=${mergedGroups.size} totalTags=${mergedGroups.flatMap { it.tags }.size}")
-        mergedGroups.forEachIndexed { i, g ->
-            val preview = g.tags.take(5).joinToString(" | ") { "'${it.title}' (${it.key.take(40)})" }
-            Log.d(TAG, "[mapOptions] group[$i] '${g.title}': ${g.tags.size} tags -> $preview")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "[mapOptions] DONE: groups=${mergedGroups.size} totalTags=${mergedGroups.flatMap { it.tags }.size}")
+            mergedGroups.forEachIndexed { i, g ->
+                val preview = g.tags.take(5).joinToString(" | ") { "'${it.title}' (${it.key.take(40)})" }
+                Log.d(TAG, "[mapOptions] group[$i] '${g.title}': ${g.tags.size} tags -> $preview")
+            }
         }
 
         return ContentListFilterOptions(

@@ -43,10 +43,10 @@ abstract class CachingContentRepository(
 		val cacheUrl = chapter.cacheUrl()
 		cache.getPages(source, cacheUrl)?.let {
 			if (it.isNotEmpty()) {
-				Log.w("CachingRepo", "getPages cache-hit chapterId=${chapter.id} url=${chapter.url} pages=${it.size}")
+				Log.d("CachingRepo", "getPages cache-hit chapterId=${chapter.id} url=${chapter.url} pages=${it.size}")
 				return it
 			}
-			Log.w("CachingRepo", "getPages empty cache ignored chapterId=${chapter.id} url=${chapter.url}")
+			Log.d("CachingRepo", "getPages empty cache ignored chapterId=${chapter.id} url=${chapter.url}")
 		}
 		val pages = asyncSafe {
 			Log.d("CachingRepo", "getPages getPagesImpl chapterId=${chapter.id} url=${chapter.url}")

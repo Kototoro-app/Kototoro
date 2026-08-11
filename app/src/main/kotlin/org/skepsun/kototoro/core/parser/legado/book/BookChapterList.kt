@@ -173,7 +173,7 @@ object BookChapterList {
             }
             
             if (name.isBlank() || url.isBlank()) {
-                android.util.Log.w(TAG, "Skipping chapter due to blank name or url: name=\"$name\", url=\"$url\"")
+                android.util.Log.d(TAG, "Skipping chapter due to blank name or url: name=\"$name\", url=\"$url\"")
                 return@mapIndexedNotNull null
             }
             

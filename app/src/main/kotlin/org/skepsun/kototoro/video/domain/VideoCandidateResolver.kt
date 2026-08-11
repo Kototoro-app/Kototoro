@@ -11,6 +11,7 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.video.data.isTorrentLocator
+import org.skepsun.kototoro.video.player.PlaybackMediaKind
 
 data class VideoCandidate(
     val url: String,
@@ -20,6 +21,7 @@ data class VideoCandidate(
     val subtitleTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
     val audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
     val isTorrent: Boolean = false,
+    val mediaKind: PlaybackMediaKind = PlaybackMediaKind.AUTO,
 )
 
 suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): List<VideoCandidate> {
@@ -39,6 +41,7 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
                     subtitleTracks = video.subtitleTracks,
                     audioTracks = video.audioTracks,
                     isTorrent = video.videoUrl.isTorrentLocator(),
+                    mediaKind = inferPlaybackMediaKind(video.videoUrl),
                 )
             }
     }
@@ -63,6 +66,13 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
                             isTorrent = event.type == ExtractorLinkType.MAGNET ||
                                 event.type == ExtractorLinkType.TORRENT ||
                                 page.url.isTorrentLocator(),
+                            mediaKind = when (event.type) {
+                                ExtractorLinkType.M3U8 -> PlaybackMediaKind.HLS
+                                ExtractorLinkType.DASH -> PlaybackMediaKind.DASH
+                                ExtractorLinkType.MAGNET, ExtractorLinkType.TORRENT -> PlaybackMediaKind.TORRENT
+                                ExtractorLinkType.VIDEO -> PlaybackMediaKind.PROGRESSIVE
+                                else -> inferPlaybackMediaKind(page.url)
+                            },
                         ),
                     )
                 }
@@ -97,7 +107,19 @@ private suspend fun List<ContentPage>.toFallbackVideoCandidates(repo: ContentRep
                 eu.kanade.tachiyomi.animesource.model.Track(it.url, it.lang)
             },
             isTorrent = streamUrl.isTorrentLocator(),
+            mediaKind = inferPlaybackMediaKind(streamUrl),
         )
+    }
+}
+
+private fun inferPlaybackMediaKind(url: String): PlaybackMediaKind {
+    val path = url.substringBefore('?').substringBefore('#').lowercase()
+    return when {
+        url.isTorrentLocator() -> PlaybackMediaKind.TORRENT
+        path.endsWith(".m3u8") -> PlaybackMediaKind.HLS
+        path.endsWith(".mpd") -> PlaybackMediaKind.DASH
+        path.endsWith(".mp4") || path.endsWith(".webm") || path.endsWith(".mkv") -> PlaybackMediaKind.PROGRESSIVE
+        else -> PlaybackMediaKind.AUTO
     }
 }
 

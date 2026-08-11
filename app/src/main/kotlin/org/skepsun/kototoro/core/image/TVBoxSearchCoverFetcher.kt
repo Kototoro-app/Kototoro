@@ -35,7 +35,7 @@ class TVBoxSearchCoverFetcher(
             tag = "TVBoxSearchCoverFetcher",
             prefix = "repository_unavailable",
         ) ?: run {
-            Log.w(TAG, "fetch abort: repository unavailable for source=${manga.source.name} title=${manga.title}")
+            Log.d(TAG, "fetch abort: repository unavailable for source=${manga.source.name} title=${manga.title}")
             return null
         }
         val details = repo.getDetails(manga)
@@ -45,7 +45,7 @@ class TVBoxSearchCoverFetcher(
         )
         val coverUrl = details.coverUrl?.takeIf { it.isNotBlank() } ?: details.largeCoverUrl?.takeIf { it.isNotBlank() }
             ?: run {
-                Log.w(TAG, "fetch abort: no cover from details for source=${manga.source.name} title=${manga.title}")
+                Log.d(TAG, "fetch abort: no cover from details for source=${manga.source.name} title=${manga.title}")
                 return null
             }
         val imageClient = repo.getImageClient() ?: fallbackImageClient
@@ -70,7 +70,7 @@ class TVBoxSearchCoverFetcher(
         override fun create(data: TVBoxSearchCoverModel, options: Options, imageLoader: ImageLoader): Fetcher? {
             val manga = options.extras[mangaKey] ?: data.manga
             if (!manga.url.startsWith("tvbox://item/")) {
-                Log.w(TAG, "create abort: manga url is not tvbox item, title=${manga.title} mangaUrl=${manga.url}")
+                Log.d(TAG, "create abort: manga url is not tvbox item, title=${manga.title} mangaUrl=${manga.url}")
                 return null
             }
             Log.d(

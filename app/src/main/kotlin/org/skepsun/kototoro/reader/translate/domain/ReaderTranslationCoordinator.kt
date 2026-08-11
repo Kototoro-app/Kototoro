@@ -113,10 +113,10 @@ internal class ReaderTranslationCoordinator(
 							android.util.Log.d("ReaderTranslationCoordinator", "translateBlocksCached: ONNX accepted")
 						} else {
 							log { "translate onnx rejected src=${oneLine(text, 140)} out=${oneLine(sanitized, 140)}" }
-							android.util.Log.w("ReaderTranslationCoordinator", "translateBlocksCached: ONNX rejected by isAcceptableTranslation")
+							android.util.Log.d("ReaderTranslationCoordinator", "translateBlocksCached: ONNX rejected by isAcceptableTranslation")
 						}
 					} else {
-						android.util.Log.w("ReaderTranslationCoordinator", "translateBlocksCached: ONNX returned blank")
+						android.util.Log.d("ReaderTranslationCoordinator", "translateBlocksCached: ONNX returned blank")
 					}
 				}
 			}
@@ -475,7 +475,7 @@ internal class ReaderTranslationCoordinator(
 				}.onFailure {
 					if (it is kotlinx.coroutines.CancellationException) throw it
 					log { "translate local item failed src=${oneLine(text, 140)} err=${it.message.orEmpty()}" }
-					android.util.Log.e("ReaderTranslationCoordinator", "translateLocalBatch item $index failed: ${it.message}")
+					android.util.Log.d("ReaderTranslationCoordinator", "translateLocalBatch item $index failed: ${it.javaClass.simpleName}")
 				}.getOrDefault("").trim()
 				results[text] = out
 				if (index == 0) {

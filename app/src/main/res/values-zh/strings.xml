@@ -204,6 +204,17 @@
     <string name="video_decoder_software">软件解码</string>
     <string name="video_background">播放背景</string>
     <string name="video_super_resolution">超分辨率</string>
+    <string name="video_enhancement_enabled">为当前视频开启</string>
+    <string name="video_enhancement_algorithm">算法</string>
+    <string name="video_enhancement_algorithm_anime4k">Anime4K（动漫）</string>
+    <string name="video_enhancement_algorithm_fsr">AMD FSR 1.0（通用）</string>
+    <string name="video_enhancement_anime4k_preset">Anime4K 档位</string>
+    <string name="video_enhancement_anime4k_fast">效率</string>
+    <string name="video_enhancement_anime4k_quality">质量</string>
+    <string name="video_enhancement_fsr_sharpness">FSR 锐度：%1$d%%</string>
+    <string name="video_enhancement_fsr_sharpness_search">FSR 锐度</string>
+    <string name="video_enhancement_remember">跨视频记忆开启状态</string>
+    <string name="video_enhancement_power_warning">画质增强会增加耗电与发热，低性能设备可能卡顿。</string>
     <string name="video_super_resolution_mode">模式</string>
     <string name="video_super_resolution_off">关闭</string>
     <string name="video_super_resolution_quality">质量</string>

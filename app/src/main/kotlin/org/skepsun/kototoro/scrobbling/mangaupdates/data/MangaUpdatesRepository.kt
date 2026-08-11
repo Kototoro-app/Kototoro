@@ -843,7 +843,10 @@ class MangaUpdatesRepository(
 			.url("$BASE_API_URL/lists/series")
 
 		val response = okHttp.newCall(request.build()).await()
-		if (response.isSuccessful) {
+		val responseCode = response.code
+		val isSuccessful = response.isSuccessful
+		response.close()
+		if (isSuccessful) {
 			Log.d(TAG, "createRate: success, targetId=$scrobblerContentId")
 			val entity = ScrobblingEntity(
 				scrobbler = ScrobblerService.MANGAUPDATES.id,
@@ -857,9 +860,8 @@ class MangaUpdatesRepository(
 			)
 			db.upsertScrobblingForManga(entity, workResolver, mangaId = mangaId)
 		} else {
-			val responseBodyStr = response.body?.string() ?: "Empty body"
-			Log.e(TAG, "createRate: FAILED code=${response.code}, body=${responseBodyStr.take(200)}")
-			throw IOException("Failed to create rate: ${response.code}, body: $responseBodyStr")
+			Log.e(TAG, "createRate: FAILED code=$responseCode")
+			throw IOException("Failed to create rate: $responseCode")
 		}
 	}
 
@@ -1073,8 +1075,8 @@ class MangaUpdatesRepository(
 
 			val callResponse = okHttp.newCall(request.build()).await()
 			if (!callResponse.isSuccessful) {
-				val bodySnippet = runCatching { callResponse.body?.string()?.take(200) }.getOrNull() ?: ""
-				Log.w(TAG, "fetchListSeries: HTTP ${callResponse.code} body=$bodySnippet")
+				Log.w(TAG, "fetchListSeries: HTTP ${callResponse.code}")
+				callResponse.close()
 				break
 			}
 

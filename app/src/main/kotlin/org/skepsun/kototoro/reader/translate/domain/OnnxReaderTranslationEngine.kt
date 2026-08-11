@@ -665,7 +665,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
 		if (parsed.isNotEmpty()) {
 			return parsed
 		}
-		Log.w(LOG_TAG, "Qwen batch decode produced no usable translations raw=${oneLine(attempt.rawOutput, 220)}")
+		Log.w(LOG_TAG, "Qwen batch decode produced no usable translations")
 		return emptyMap()
 	}
 

@@ -630,7 +630,7 @@ class LegadoRepository(
                     return it
                 }
                 // 章节为空且存在目录规则：视为“脏缓存”，触发重新拉取（常见于网络错误/规则调整后）。
-                android.util.Log.w(TAG, "Memory cache BYPASS (getDetails) for book: ${manga.title} (cached chapters empty)")
+                android.util.Log.d(TAG, "Memory cache BYPASS (getDetails) for book: ${manga.title} (cached chapters empty)")
             }
         }
 
@@ -789,7 +789,7 @@ class LegadoRepository(
             val normalizedNextChapter = nextChapterUrl?.substringBefore(",")
             android.util.Log.d("LegadoRepository", "[BoundaryCheck] url=$normalizedUrl, nextChapterUrl=$normalizedNextChapter")
             if (normalizedNextChapter != null && normalizedUrl == normalizedNextChapter) {
-                android.util.Log.w("LegadoRepository", "Reached next chapter URL: $url, stopping page load.")
+                android.util.Log.d("LegadoRepository", "Reached next chapter URL: $url, stopping page load.")
                 break
             }
 
@@ -919,7 +919,7 @@ class LegadoRepository(
             val normalizedNextChapter = nextChapterUrl?.substringBefore(",")
             android.util.Log.d("LegadoRepository", "[BoundaryCheck] url=$normalizedCurrentUrl, nextChapterUrl=$normalizedNextChapter")
             if (normalizedNextChapter != null && normalizedCurrentUrl == normalizedNextChapter) {
-                android.util.Log.w("LegadoRepository", "Reached next chapter URL: $url, stopping page load.")
+                android.util.Log.d("LegadoRepository", "Reached next chapter URL: $url, stopping page load.")
                 break
             }
 
@@ -1153,7 +1153,7 @@ class LegadoRepository(
             val normalizedCurrentUrl = url.substringBefore(",")
             val normalizedNextChapter = nextChapterUrl?.substringBefore(",")
             if (normalizedNextChapter != null && normalizedCurrentUrl == normalizedNextChapter) {
-                android.util.Log.w(TAG, "Reached next chapter URL while building novel chapter content: $url")
+                android.util.Log.d(TAG, "Reached next chapter URL while building novel chapter content: $url")
                 break
             }
 
@@ -1258,7 +1258,7 @@ class LegadoRepository(
             val normalizedCurrentUrl = url.substringBefore(",")
             val normalizedNextChapter = nextChapterUrl?.substringBefore(",")
             if (normalizedNextChapter != null && normalizedCurrentUrl == normalizedNextChapter) {
-                android.util.Log.w(TAG, "Reached next chapter URL while building standalone novel chapter content: $url")
+                android.util.Log.d(TAG, "Reached next chapter URL while building standalone novel chapter content: $url")
                 break
             }
 
@@ -2071,7 +2071,7 @@ class LegadoRepository(
             }
             headers
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse headers JSON: $jsonStr", e)
+            Log.e(TAG, "Failed to parse headers JSON: ${e.javaClass.simpleName}")
             emptyMap()
         }
     }

@@ -7,9 +7,6 @@ import android.graphics.Bitmap
 import android.content.ContentValues
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -18,7 +15,9 @@ import android.os.Looper
 import android.app.PictureInPictureParams
 import android.provider.MediaStore
 import android.util.Rational
+import android.util.Base64
 import android.view.PixelCopy
+import android.view.Surface
 import android.view.WindowManager
 import android.util.Log
 import org.skepsun.kototoro.R
@@ -49,6 +48,7 @@ import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
 import androidx.core.net.toUri
+import androidx.media3.ui.PlayerView
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.reader.ui.ReaderState
 import org.skepsun.kototoro.parsers.model.Content
@@ -73,7 +73,6 @@ import android.provider.Settings
 import android.content.Context
 import java.io.File
 import java.net.URI
-import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import okhttp3.Headers
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -84,19 +83,23 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.core.prefs.Anime4KPreset
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.VideoDecoderMode
-import org.skepsun.kototoro.core.prefs.VideoRendererMode
-import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
-import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
-import org.skepsun.kototoro.video.player.CustomMpvView
-import org.skepsun.kototoro.video.player.MpvPlaybackOptions
-import org.skepsun.kototoro.video.player.MpvPlayer
-import org.skepsun.kototoro.video.player.MpvShaderManager
+import org.skepsun.kototoro.core.prefs.VideoEnhancementAlgorithm
+import org.skepsun.kototoro.video.player.Media3VideoPlayerEngine
+import org.skepsun.kototoro.video.player.EnhancedVideoSurfaceView
+import org.skepsun.kototoro.video.player.VideoEnhancementConfig
+import org.skepsun.kototoro.video.player.PlaybackMediaKind
+import org.skepsun.kototoro.video.player.PlaybackRequest
+import org.skepsun.kototoro.video.player.PlaybackRequestNormalizer
+import org.skepsun.kototoro.video.player.VideoPlayerEngine
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
+import org.skepsun.kototoro.video.data.VideoCache
 import org.skepsun.kototoro.video.data.ExternalPlayerHelper
 import org.skepsun.kototoro.video.data.TorrentStreamService
 import org.skepsun.kototoro.video.data.isTorrentLocator
+import org.skepsun.kototoro.video.data.unwrapPngPrefixedStream
 import org.skepsun.kototoro.video.performance.DevicePerformanceClassifier
 import org.skepsun.kototoro.video.performance.DevicePerformanceInfo
 import org.skepsun.kototoro.video.performance.EffectiveVideoPlaybackConfig
@@ -106,7 +109,6 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
-import org.skepsun.kototoro.video.domain.isRejectedCloudstreamProbe
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
@@ -169,7 +171,6 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
 import org.skepsun.kototoro.video.ui.compose.PlayerMenuPlacement
 import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoSelectionDialogState
-import org.skepsun.kototoro.video.ui.compose.VideoShaderOption
 import org.skepsun.kototoro.video.ui.compose.VideoSuperResolutionDialog
 import org.skepsun.kototoro.video.ui.compose.VideoSuperResolutionDialogState
 import org.skepsun.kototoro.video.ui.compose.DlnaDeviceDialog
@@ -180,9 +181,9 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
-        private const val CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES = 256L * 1024L
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
+        private const val HLS_VIDEO_MARKER = "kototoro:hls"
     }
 
     private data class PlayerSettingsAction(
@@ -214,8 +215,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var playbackHealthCheckGeneration = 0L
     private var suspiciousAdRetryCount = 0
 
-    private var mpvPlayer: MpvPlayer? = null
-    internal fun getMpvPlayer(): MpvPlayer? = mpvPlayer
+    private var videoPlayer: VideoPlayerEngine? = null
     private var isUiVisible: Boolean = false
     private var playerUiState: PlayerUiState = PlayerUiState.Hidden
     private var autoNextTriggered: Boolean = false
@@ -240,18 +240,28 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var torrentResolutionJob: Job? = null
     private var torrentConsent: Boolean? = null
     private var cloudstreamPlaybackInstance: Long = 0L
-    private val rejectedCloudstreamVideoUrls = mutableSetOf<String>()
+    private var playbackRequestGeneration: Long = 0L
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
+    private var currentMediaForceHls: Boolean = false
     private var currentMediaStartMs: Long = 0L
     private var skipHistorySeekForCurrentMedia: Boolean = false
     private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
     private var pendingExternalAudio: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
-    private lateinit var mpvView: CustomMpvView
-    private val mpvReady = CompletableDeferred<Boolean>()
-    private var playerGestureInstaller: ((CustomMpvView) -> Unit)? = null
+    private lateinit var playerView: PlayerView
+    private lateinit var enhancementView: EnhancedVideoSurfaceView
+    private var enhancementVideoSurface: Surface? = null
+    private var enhancementSessionEnabled = false
+    private var enhancementSurfaceReady = false
+    private var enhancementOutputAttached = false
+    private var enhancementFallbackGeneration = 0L
+    private var enhancementDisplayedFirstFrame = false
+    private var currentEnhancementConfig: VideoEnhancementConfig? = null
+    private val playerReady = CompletableDeferred<Boolean>()
+    private var playerGestureInstaller: ((View) -> Unit)? = null
     private var playerGesturesInstalled = false
+    private var enhancementGesturesInstalled = false
     private var composeControlState by mutableStateOf(VideoPlayerControlState())
     private var videoInfoDialogText by mutableStateOf<String?>(null)
     private var selectionDialogState by mutableStateOf<VideoSelectionDialogState?>(null)
@@ -283,6 +293,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     @Inject
     @ContentHttpClient
     lateinit var contentHttpClient: OkHttpClient
+
+    @Inject
+    lateinit var videoCache: VideoCache
 
     @Inject
     lateinit var videoDownloadIndex: org.skepsun.kototoro.video.data.VideoDownloadIndex
@@ -318,7 +331,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var userManualSubtitleSelection: ManualSubtitleSelection? = null
     // In-memory selected subtitle-track index (0 = off) for the subtitle panel, refreshed immediately on selection
     private var subtitlePanelSelectedIndex: Int = 0
-    private val mpvListener = object : MpvPlayer.Listener {
+    private val playerListener = object : VideoPlayerEngine.Listener {
         override fun onDurationChanged(durationMs: Long) {
             runOnUiThread { syncComposeControlState() }
             if (!hasRestoredProgress && durationMs > 0) {
@@ -343,7 +356,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
 
         override fun onPlaybackEnded() {
-            val dur = mpvPlayer?.durationMs ?: 0L
+            val dur = videoPlayer?.durationMs ?: 0L
             val isCloudstreamShortPlayback = currentVideoSource is CloudstreamSource &&
                 isSuspiciousCloudstreamPlaybackDuration(dur)
             if (
@@ -393,7 +406,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 autoNextTriggered = false
                 applySuperResolutionFromSettings()
                 danmakuController.start()
-                loadPendingExternalTracks()
+                playerRoot.postDelayed(::autoSelectTracksByLanguage, 250L)
                 syncComposeControlState()
                 scheduleCloudstreamPlaybackHealthCheck()
             }
@@ -402,41 +415,27 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         override fun onPlaybackFailed(message: String?) {
             runOnUiThread {
                 setKeepScreenOn(false)
-                handlePlaybackFallback("mpv_end_file_before_loaded", message)
+                handlePlaybackFallback("media3_playback_error", message)
             }
         }
 
         override fun onSubtitleTextChanged(text: String?) {
-            // This callback may or may not fire depending on mpv-android-lib version
-            Log.d("VideoPlayerActivity", "onSubtitleTextChanged callback: '$text'")
             updateSubtitleOverlay(text)
         }
 
         override fun onPositionChanged(positionMs: Long) {
-            // Poll sub-text every ~10th position update (~every 1s if updates come at ~100ms intervals)
-            subtitlePollCounter++
-            if (subtitlePollCounter % 10 == 0) {
-                val text = mpvPlayer?.getPropertyString("sub-text")
-                if (text != lastSubtitleTextFromPoll) {
-                    lastSubtitleTextFromPoll = text
-                    Log.d("VideoPlayerActivity", "sub-text poll: '$text'")
-                    updateSubtitleOverlay(text)
-                }
-            }
             // Auto-skip outro: when position reaches outro start, seek to end
             if (outroStartMs > 0 && !hasTriggeredOutro && positionMs >= outroStartMs) {
                 hasTriggeredOutro = true
                 runOnUiThread {
                     showPlayerMessage(R.string.video_skipping_outro)
-                    val dur = mpvPlayer?.durationMs ?: return@runOnUiThread
+                    val dur = videoPlayer?.durationMs ?: return@runOnUiThread
                     
                     if (appSettings.videoAutoNextEnabled) {
                         maybeAutoPlayNext(ignoreRatio = true)
                     }
                     if (!autoNextTriggered && dur > 0) {
-                        // Seeking to exactly `dur` often fails or hits the wrong keyframe in mpv
-                        // We do an EXACT seek to 500ms before duration, so it naturally hits EOF
-                        mpvPlayer?.seekExact(dur - 500)
+                        videoPlayer?.seekExact(dur - 500)
                     }
                 }
             }
@@ -484,7 +483,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var longSeekAccumulatedMs: Long = 0L
     private val longSeekRunnable = object : Runnable {
         override fun run() {
-            val p = mpvPlayer ?: return
+            val p = videoPlayer ?: return
             val dur = p.durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE
             val newPos = (p.positionMs + longSeekDirection * longSeekStepMs).coerceIn(0, dur)
             p.seekTo(newPos)
@@ -616,7 +615,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             KototoroTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     VideoPlayerRenderLayer(
-                        onMpvViewCreated = ::onMpvViewCreated,
+                        onPlayerViewCreated = ::onPlayerViewCreated,
+                        onEnhancementViewCreated = ::onEnhancementViewCreated,
                         onDanmakuViewCreated = danmakuController::attach,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -719,9 +719,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         VideoSuperResolutionDialog(
                             state = buildSuperResolutionDialogState(),
                             onDismissRequest = { superResolutionDialogVisible = false },
-                            onModeSelected = ::selectSuperResolutionMode,
-                            onShaderSelected = ::selectSuperResolutionShader,
-                            onCustomShaderToggled = ::toggleCustomSuperResolutionShader,
+                            onEnabledChange = ::setVideoEnhancementEnabled,
+                            onAlgorithmSelected = ::selectVideoEnhancementAlgorithm,
+                            onAnime4KPresetSelected = ::selectAnime4KPreset,
+                            onFsrSharpnessChanged = ::setFsrSharpness,
+                            onRememberAcrossVideosChanged = ::setRememberVideoEnhancement,
                         )
                     }
                     dlnaDialogState?.let { state ->
@@ -770,29 +772,64 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         onAction: (() -> Unit)? = null,
     ) = showPlayerMessage(getString(messageRes), duration, actionLabel, onAction)
 
-    private fun onMpvViewCreated(view: CustomMpvView) {
-        if (::mpvView.isInitialized) return
-        mpvView = view
+    private fun onPlayerViewCreated(view: PlayerView) {
+        if (::playerView.isInitialized) return
+        playerView = view
         view.background = null
-        val initialized = initializeMpvRuntime()
-        mpvReady.complete(initialized)
+        val initialized = initializePlayerRuntime()
+        playerReady.complete(initialized)
         if (initialized) installPlayerGesturesIfReady()
     }
 
+    private fun onEnhancementViewCreated(view: EnhancedVideoSurfaceView) {
+        if (::enhancementView.isInitialized) return
+        enhancementView = view
+        view.setListeners(
+            onSurfaceReady = { surface ->
+                enhancementVideoSurface = surface
+                enhancementSurfaceReady = surface != null
+                if (enhancementSessionEnabled) {
+                    if (surface != null) {
+                        Log.i("VideoPlayerActivity", "Enhancement decoder surface became ready; applying output route")
+                        applySuperResolutionFromSettings()
+                    } else {
+                        Log.i("VideoPlayerActivity", "Enhancement decoder surface released")
+                        enhancementOutputAttached = false
+                        videoPlayer?.clearVideoSurface()
+                    }
+                }
+            },
+            onFirstFrame = {
+                enhancementDisplayedFirstFrame = true
+                enhancementFallbackGeneration++
+            },
+            onError = { error ->
+                Log.e("VideoPlayerActivity", "Enhancement GL pipeline failed", error)
+                fallbackToDirectOutput()
+            },
+        )
+        installPlayerGesturesIfReady()
+    }
+
     private fun installPlayerGesturesIfReady() {
-        if (playerGesturesInstalled || !::mpvView.isInitialized) return
         val installer = playerGestureInstaller ?: return
-        playerGesturesInstalled = true
-        installer(mpvView)
+        if (::playerView.isInitialized && !playerGesturesInstalled) {
+            playerGesturesInstalled = true
+            installer(playerView)
+        }
+        if (::enhancementView.isInitialized && !enhancementGesturesInstalled) {
+            enhancementGesturesInstalled = true
+            installer(enhancementView)
+        }
     }
 
     private fun onComposePlayerAction(action: VideoPlayerAction) {
         when (action) {
             VideoPlayerAction.NavigateBack -> finishAfterTransition()
-            VideoPlayerAction.TogglePlayback -> mpvPlayer?.let { player ->
+            VideoPlayerAction.TogglePlayback -> videoPlayer?.let { player ->
                 if (player.isPlaying) player.pause() else player.play()
             }
-            is VideoPlayerAction.SeekTo -> mpvPlayer?.seekTo(action.positionMs)
+            is VideoPlayerAction.SeekTo -> videoPlayer?.seekTo(action.positionMs)
             VideoPlayerAction.PreviousChapter -> navigateChapter(-1)
             VideoPlayerAction.NextChapter -> navigateChapter(1)
             is VideoPlayerAction.OpenSubtitles -> {
@@ -840,7 +877,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val currentChapter = playerChapterList().find { it.id == currentId }
             ?: chapters.getOrNull(currentIndex)
         val (title, subtitle) = extractChapterInfo()
-        val player = mpvPlayer
+        val player = videoPlayer
         composeControlState = VideoPlayerControlState(
             title = title,
             subtitle = subtitle,
@@ -858,16 +895,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun initializeMpvRuntime(): Boolean {
+    private fun initializePlayerRuntime(): Boolean {
         return runCatching {
-            mpvView.initialize(filesDir.path, cacheDir.path)
-            mpvPlayer = MpvPlayer(mpvView.mpv).also { player ->
-                player.initialize()
-                player.addListener(mpvListener)
+            val mediaHttpClient = contentHttpClient.newBuilder()
+                .cache(null)
+                .build()
+            videoPlayer = Media3VideoPlayerEngine(this, mediaHttpClient, videoCache.cache).also { player ->
+                player.addListener(playerListener)
+                player.attachPlayerView(playerView)
             }
             applySubtitleOverlayStyle()
         }.onFailure { error ->
-            Log.e("VideoPlayerActivity", "Failed to initialize mpv runtime", error)
+            Log.e("VideoPlayerActivity", "Failed to initialize Media3 runtime", error)
             nativeInitErrorVisible = true
         }.isSuccess
     }
@@ -880,8 +919,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         applySubtitleOverlayStyle()
         applyPlaybackBackground()
         danmakuController.setPlaybackPositionProvider(
-            positionProvider = { mpvPlayer?.positionMs ?: 0L },
-            playingProvider = { mpvPlayer?.isPlaying == true },
+            positionProvider = { videoPlayer?.positionMs ?: 0L },
+            playingProvider = { videoPlayer?.isPlaying == true },
         )
         applyDanmakuSettings()
 
@@ -901,7 +940,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
         )
         lifecycleScope.launch {
-            if (!mpvReady.await()) return@launch
+            if (!playerReady.await()) return@launch
             mangaContent = resolveLaunchContent()
 
             // 使用新的统一方法设置标题和副标题
@@ -986,7 +1025,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     if (isScreenLocked) return true // no-op when locked
                     val w = pv.width.takeIf { it > 0 } ?: -1
                     val x = e.x
-                    val p = mpvPlayer
+                    val p = videoPlayer
                     val allowDoubleTapSeek = appSettings.videoDoubleTapSeekEnabled
                     if (w > 0 && p != null) {
                         val left = w * 0.33f
@@ -1014,7 +1053,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         updatePlaybackMenu()
                         return true
                     }
-                    mpvPlayer?.let { p ->
+                    videoPlayer?.let { p ->
                         val wasPlaying = p.isPlaying
                         if (wasPlaying) p.pause() else p.play()
                         showPlayPauseOverlay(getString(if (wasPlaying) R.string.video_pause else R.string.video_play))
@@ -1031,7 +1070,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
                 override fun onLongPress(e: MotionEvent) {
                     if (isScreenLocked) return // no-op when locked
-                    val p = mpvPlayer ?: return
+                    val p = videoPlayer ?: return
                     isLongPressSpeeding = true
                     p.setRate(2.0)
                     showPlayPauseOverlay("2.0x", 2000)
@@ -1057,7 +1096,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             isHorizontalScrubbing = true
                             isUserScrubbing = true
                             // Capture actual start position and touch X when horizontal drag is confirmed
-                            initialScrubPositionStart = mpvPlayer?.positionMs ?: 0L
+                            initialScrubPositionStart = videoPlayer?.positionMs ?: 0L
                             initialTouchX = e2.x
                             lastScrubPosition = initialScrubPositionStart
                             // Auto-show controller when scrubbing starts
@@ -1080,7 +1119,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     }
 
                     if (isHorizontalScrubbing) {
-                        val duration = mpvPlayer?.durationMs ?: return true
+                        val duration = videoPlayer?.durationMs ?: return true
                         if (duration <= 0) return true
                         
                         // Proportional Seek: One screen width equals the entire video duration
@@ -1117,13 +1156,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         // Restore from long press speed
                         if (isLongPressSpeeding) {
                             val originalSpeed = appSettings.videoPlaybackSpeed.toDouble()
-                            mpvPlayer?.setRate(originalSpeed)
+                            videoPlayer?.setRate(originalSpeed)
                             isLongPressSpeeding = false
                         }
                         
                         // Action final horizontal scrub seek
                         if (isHorizontalScrubbing) {
-                            mpvPlayer?.seekTo(lastScrubPosition)
+                            videoPlayer?.seekTo(lastScrubPosition)
                             isHorizontalScrubbing = false
                             isUserScrubbing = false
                             hideSeekFeedback()
@@ -1347,17 +1386,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             availableVideos = emptyList()
             currentVideoIndex = 0
             updateQualityButtonVisibility()
-            var mpvUrl: String = localUrl
+            var playbackUrl: String = localUrl
             if (localUrl.startsWith("file://")) {
                 runCatching {
                     val decodedPath = Uri.parse(localUrl).path
                     if (decodedPath != null && File(decodedPath).exists()) {
-                        mpvUrl = decodedPath
+                        playbackUrl = decodedPath
                     }
                 }
             }
             
-            startMpvPlayback(mpvUrl, manga?.source ?: source, headers = null, startMs = startMs)
+            startPlayback(playbackUrl, manga?.source ?: source, headers = null, startMs = startMs)
             return
         }
 
@@ -1387,7 +1426,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
                 return
             }
-            startMpvPlayback(normalizedUrl, source, mergedHeaders, startMs = startMs)
+            startPlayback(normalizedUrl, source, mergedHeaders, startMs = startMs)
             return
         }
 
@@ -1395,7 +1434,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lifecycleScope.launch {
                 try {
                     val repo = mangaRepositoryFactory.create(manga.source)
-                    android.util.Log.w("VideoPlayer", "repo=${repo!!::class.simpleName} chapters=${manga.chapters?.size} source=${manga.source.name}")
+                    android.util.Log.d("VideoPlayer", "repo=${repo!!::class.simpleName} chapters=${manga.chapters?.size} source=${manga.source.name}")
                     val chapters = manga.chapters ?: emptyList()
                     val currentChapter = if (currentState != null) {
                         chapters.find { it.id == currentState.chapterId }
@@ -1414,11 +1453,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     val videos = repo.getVideoListForChapter(currentChapter)
                                         .filter { it.videoUrl.isNotBlank() }
                                     if (videos.isNotEmpty()) {
-                                        Log.d(
-                                            "VideoPlayerActivity",
-                                            "Resolved ${videos.size} Aniyomi video(s): " +
-                                                videos.joinToString { it.videoTitle.ifBlank { "<untitled>" } },
-                                        )
+                                        if (BuildConfig.DEBUG) {
+                                            Log.d(
+                                                "VideoPlayerActivity",
+                                                "Resolved ${videos.size} Aniyomi video(s): " +
+                                                    videos.joinToString { it.videoTitle.ifBlank { "<untitled>" } },
+                                            )
+                                        }
                                         availableVideos = videos
                                         updateQualityButtonVisibility()
                                         currentVideoSource = manga.source
@@ -1428,7 +1469,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
                                         pendingExternalSubtitles = selected.subtitleTracks
                                         pendingExternalAudio = selected.audioTracks
-                                        startMpvPlayback(
+                                        startPlayback(
                                             selected.videoUrl,
                                             manga.source,
                                             mergedHeaders,
@@ -1439,16 +1480,29 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         null
                                     }
                                 }
-                                is CloudstreamContentRepository -> loadAndPlayCloudstreamChapter(
-                                    repo = repo,
-                                    chapter = currentChapter,
-                                    source = manga.source,
-                                    startMs = startMs,
-                                    onFirstVideo = {
-                                        readerState = ReaderState(currentChapter.id, 0, 0)
-                                        updateChapterNavButtons()
-                                    },
-                                )
+                                is CloudstreamContentRepository -> {
+                                    val started = loadAndPlayCloudstreamChapter(
+                                        repo = repo,
+                                        chapter = currentChapter,
+                                        source = manga.source,
+                                        startMs = startMs,
+                                        onFirstVideo = {
+                                            readerState = ReaderState(currentChapter.id, 0, 0)
+                                            updateChapterNavButtons()
+                                        },
+                                    )
+                                    if (!started) {
+                                        Log.w(
+                                            "VideoPlayerActivity",
+                                            "Cloudstream returned no playable links chapter=${currentChapter.id} " +
+                                                "source=${manga.source.name}",
+                                        )
+                                        showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
+                                    }
+                                    // Cloudstream already performed its complete link resolution. Mark the
+                                    // request as handled so the generic fallback does not invoke loadLinks twice.
+                                    true
+                                }
                                 else -> null
                             } ?: run {
                                 val pages = repo.getPages(currentChapter)
@@ -1466,7 +1520,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         "VideoPlayerActivity",
                                         "Selected fallback video for chapter=${currentChapter.id} url=${selected.videoUrl} title=${selected.videoTitle} source=${manga.source.name} subtitles=${selected.subtitleTracks.size}",
                                     )
-                                    startMpvPlayback(
+                                    startPlayback(
                                         selected.videoUrl,
                                         manga.source,
                                         mergedHeaders,
@@ -1489,7 +1543,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                         updateQualityButtonVisibility()
                                         currentVideoSource = manga.source
                                         if (streamUrl.isTorrentLocator()) {
-                                            startMpvPlayback(
+                                            startPlayback(
                                                 url = streamUrl,
                                                 source = manga.source,
                                                 headers = streamHeaders,
@@ -1590,7 +1644,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 availableVideos = emptyList()
                 currentVideoIndex = 0
                 updateQualityButtonVisibility()
-                startMpvPlayback(
+                startPlayback(
                     url = sniffed.url,
                     source = source,
                     headers = mergeHeaders(headers, sniffed.headers),
@@ -1598,7 +1652,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 return@launch
             }
 
-            Log.w("VideoPlayer", "No playable media sniffed from web page, fallback to browser: $url")
+            Log.d("VideoPlayer", "No playable media sniffed from web page, fallback to browser: $url")
             AppRouter(this@VideoPlayerActivity).openBrowser(
                 url = url,
                 source = source,
@@ -1647,12 +1701,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         return file.toUri().toString()
     }
 
-    private fun startMpvPlayback(
+    private fun startPlayback(
         url: String,
         source: ParsersContentSource?,
         headers: Map<String, String>? = null,
         startMs: Long? = null,
         isTorrent: Boolean = url.isTorrentLocator(),
+        forceHls: Boolean = false,
     ) {
         externalTrackLoadingJob?.cancel()
         playbackHealthCheckGeneration++
@@ -1668,33 +1723,44 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         currentMediaUrl = url
         currentVideoSource = source
         currentMediaHeaders = headers
+        currentMediaForceHls = forceHls
         maybeLoadDanmaku()
-        val mergedHeaders = headers.orEmpty()
-        videoLocalCacheProxy.resetSessionStats("startMpvPlayback")
+        val declaredKind = when {
+            isTorrent -> PlaybackMediaKind.TORRENT
+            forceHls -> PlaybackMediaKind.HLS
+            else -> PlaybackMediaKind.AUTO
+        }
+        val normalized = PlaybackRequestNormalizer.normalize(
+            url = url,
+            declaredKind = declaredKind,
+            originalHeaders = headers.orEmpty(),
+            isCloudstream = source is CloudstreamSource,
+        )
+        val mergedHeaders = normalized.headers
+        videoLocalCacheProxy.resetSessionStats("startPlayback")
         val initialStartMs = startMs ?: resolveSavedPlaybackProgress(url)
         currentMediaStartMs = initialStartMs ?: 0L
         skipHistorySeekForCurrentMedia = initialStartMs != null
         effectivePlaybackConfig = playbackConfigOverride ?: VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
         logEffectivePlaybackConfig()
-        mpvPlayer?.setVideoOutput(resolveVideoRenderer(effectivePlaybackConfig.rendererMode))
-        applyStableHardwareDecoder()
-        
-        // Apply optimized streaming options for network stability
-        mpvPlayer?.setStreamingOptions(appSettings.videoCacheSizeMb)
-        
         applyPlaybackOptions()
         applyAspectRatio()
         val defaultSpeed = appSettings.videoDefaultSpeed
         appSettings.videoPlaybackSpeed = defaultSpeed
-        mpvPlayer?.setRate(defaultSpeed.toDouble())
+        videoPlayer?.setRate(defaultSpeed.toDouble())
 
-        Log.d("VideoPlayerActivity", "Loading media. URL: $url, Headers: ${mergedHeaders.keys}")
-        val isHttpSource = url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)
+        Log.d(
+            "VideoPlayerActivity",
+            "Loading media. URL: $url, Headers: ${mergedHeaders.keys}",
+        )
+        val isHttpSource = url.startsWith("http://", ignoreCase = true) ||
+            url.startsWith("https://", ignoreCase = true)
         val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
             url = url,
             headers = mergedHeaders,
             source = source,
+            forceHls = forceHls,
         )
         val (playUrl, playHeaders) = if (dynamicCloudstreamPlaylistUrl != null) {
             Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $url")
@@ -1704,7 +1770,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, mergedHeaders, source)
                 proxyUrl to emptyMap<String, String>()
             }.getOrElse {
-                Log.w("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
+                Log.d("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
                 url to mergedHeaders
             }
         } else {
@@ -1713,27 +1779,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
         
-        val doLoad = {
-            mpvPlayer?.load(playUrl, playHeaders, initialStartMs)
-            mpvPlayer?.play()
-        }
-        
-        val holder = mpvView.holder
-        val surface = holder.surface
-        if (surface != null && surface.isValid) {
-            doLoad()
-        } else {
-            Log.d("VideoPlayerActivity", "Surface not ready, waiting for surfaceCreated to load MPV")
-            holder.addCallback(object : android.view.SurfaceHolder.Callback {
-                override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                    holder.removeCallback(this)
-                    Log.d("VideoPlayerActivity", "Surface ready, loading MPV now")
-                    mpvView.post { doLoad() }
-                }
-                override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {}
-                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
-            })
-        }
+        val requestId = "${++playbackRequestGeneration}:${playUrl.hashCode()}"
+        val mediaKind = normalized.mediaKind.takeUnless { dynamicCloudstreamPlaylistUrl != null }
+            ?: PlaybackMediaKind.HLS
+        videoPlayer?.load(
+            PlaybackRequest(
+                requestId = requestId,
+                uri = Uri.parse(playUrl),
+                mediaKind = mediaKind,
+                headers = playHeaders,
+                subtitles = selectExternalSubtitlesForCurrentMedia(pendingExternalSubtitles),
+                externalAudio = pendingExternalAudio,
+                startPositionMs = initialStartMs ?: 0L,
+            ),
+        )
+        pendingExternalSubtitles = emptyList()
+        pendingExternalAudio = emptyList()
         updateTitleAndSubtitle()
         updatePlaybackMenu()
         if (!skipHistorySeekForCurrentMedia) {
@@ -1756,7 +1817,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     torrentStreamService.resolve(locator, headers.orEmpty())
                 }.onSuccess { streamUrl ->
                     Log.i("VideoPlayerActivity", "Resolved torrent locator to local stream")
-                    startMpvPlayback(
+                    startPlayback(
                         url = streamUrl,
                         source = source,
                         headers = headers,
@@ -1811,7 +1872,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (isM3u8 && !ENABLE_M3U8_PROXY_CACHE) {
             Log.d(
                 "VideoPlayerActivity",
-                "Bypass local proxy for HLS; mpv playback cache=${appSettings.videoCacheSizeMb}MB: $url",
+                "Bypass local proxy for HLS; Media3 cache=${appSettings.videoCacheSizeMb}MB: $url",
             )
             return false
         }
@@ -1822,9 +1883,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         url: String,
         headers: Map<String, String>,
         source: ParsersContentSource?,
+        forceHls: Boolean,
     ): String? {
         if (source !is CloudstreamSource) return null
-        if (!url.contains("/config-", ignoreCase = true)) return null
+        val path = url.substringBefore('?').substringBefore('#')
+        val hasStandardHlsSuffix = path.endsWith(".m3u8", ignoreCase = true)
+        val requiresNonstandardHlsProxy = forceHls && !hasStandardHlsSuffix
+        if (
+            !requiresNonstandardHlsProxy &&
+            !url.contains("/config-", ignoreCase = true)
+        ) {
+            return null
+        }
         val identitySeed = buildString {
             append(url)
             headers.toSortedMap(String.CASE_INSENSITIVE_ORDER).forEach { (key, value) ->
@@ -1835,7 +1905,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             id = "cloudstream-config:${identitySeed.hashCode()}",
         ) { request ->
             val proxyBaseUrl = buildDynamicProxyBaseUrl(request)
-            val targetUrl = request.queryParameters["target"].takeUnless { it.isNullOrBlank() } ?: url
+            val targetUrl = request.queryParameters["target64"]
+                ?.takeUnless(String::isBlank)
+                ?.let(::decodeCloudstreamProxyTarget)
+                ?: request.queryParameters["target"].takeUnless { it.isNullOrBlank() }
+                ?: url
             val upstreamResponse = executeCloudstreamProxyRequest(targetUrl, headers)
             if (!upstreamResponse.isSuccessful) {
                 upstreamResponse.close()
@@ -1855,7 +1929,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     body = "Cloudstream upstream body is null".toByteArray(Charsets.UTF_8),
                 )
             }
-            if (isCloudstreamPlaylistResponse(targetUrl, contentType)) {
+            if (
+                (requiresNonstandardHlsProxy && targetUrl == url) ||
+                isCloudstreamPlaylistResponse(targetUrl, contentType)
+            ) {
                 val playlist = body.string()
                 val playlistUrl = upstreamResponse.request.url.toString()
                 upstreamResponse.close()
@@ -1864,16 +1941,38 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     baseUrl = playlistUrl,
                     proxyBaseUrl = proxyBaseUrl,
                 )
-                Log.d(
-                    "VideoPlayerActivity",
-                    "Cloudstream playlist preview:\n${rewritten.lineSequence().take(8).joinToString("\n")}",
-                )
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "VideoPlayerActivity",
+                        "Cloudstream playlist preview:\n${rewritten.lineSequence().take(8).joinToString("\n")}",
+                    )
+                }
                 return@getDynamicProxyUrl VideoLocalCacheProxy.DynamicResponse(
                     statusCode = 200,
                     contentType = "application/vnd.apple.mpegurl; charset=utf-8",
                     headers = mapOf("Cache-Control" to "no-cache"),
                     body = rewritten.toByteArray(Charsets.UTF_8),
                 )
+            }
+            if (forceHls && contentType.startsWith("image/", ignoreCase = true)) {
+                val unwrapped = unwrapPngPrefixedStream(body.byteStream())
+                if (unwrapped.wasUnwrapped || unwrapped.isTransportStream) {
+                    Log.d(
+                        "VideoPlayerActivity",
+                        "Normalized image-labelled Cloudstream HLS segment target=$targetUrl " +
+                            "contentType=$contentType unwrapped=${unwrapped.wasUnwrapped}",
+                    )
+                    return@getDynamicProxyUrl VideoLocalCacheProxy.DynamicResponse(
+                        statusCode = upstreamResponse.code,
+                        contentType = "video/mp2t",
+                        headers = buildCloudstreamProxyHeaders(upstreamResponse)
+                            .filterKeys { key ->
+                                key.equals("Cache-Control", ignoreCase = true) ||
+                                    (!unwrapped.wasUnwrapped && key.equals("Content-Length", ignoreCase = true))
+                            },
+                        bodyStream = unwrapped.stream,
+                    )
+                }
             }
             Log.d(
                 "VideoPlayerActivity",
@@ -1890,7 +1989,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun buildDynamicProxyBaseUrl(request: VideoLocalCacheProxy.DynamicRequest): String {
         val host = request.headers["host"].orEmpty().ifBlank { "127.0.0.1" }
-        val key = request.pathSegments.lastOrNull().orEmpty()
+        val dynamicIndex = request.pathSegments.indexOf("dynamic")
+        val key = request.pathSegments.getOrNull(dynamicIndex + 1).orEmpty()
         return "http://$host/dynamic/$key"
     }
 
@@ -1906,10 +2006,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             .get()
             .build()
         return runCatching {
-            val field = videoLocalCacheProxy.javaClass.getDeclaredField("okHttpClient")
-            field.isAccessible = true
-            val okHttpClient = field.get(videoLocalCacheProxy) as okhttp3.OkHttpClient
-            okHttpClient.newCall(request).execute()
+            contentHttpClient.newCall(request).execute()
         }.getOrElse { error ->
             throw IllegalStateException("Failed to proxy Cloudstream request: $url", error)
         }
@@ -1997,17 +2094,36 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             absoluteUrl
         }
-        val rewritten = Uri.parse(proxyBaseUrl).buildUpon()
-            .appendQueryParameter("target", normalizedTargetUrl)
+        val proxyUrlBuilder = Uri.parse(proxyBaseUrl).buildUpon()
+        if (isImageLabelledHlsSegment(normalizedTargetUrl)) {
+            // FFmpeg also considers the URL suffix when selecting the demuxer for an HLS segment.
+            // Keep the upstream URL in the query while exposing the actual MPEG-TS container locally.
+            proxyUrlBuilder.appendPath("segment.ts")
+        }
+        return proxyUrlBuilder
+            .appendQueryParameter("target64", encodeCloudstreamProxyTarget(normalizedTargetUrl))
             .build()
             .toString()
-        if (rewritten != rawUrl) {
-            Log.d(
-                "VideoPlayerActivity",
-                "Rewrote Cloudstream playlist URL from=$rawUrl to=$rewritten",
-            )
+    }
+
+    private fun encodeCloudstreamProxyTarget(url: String): String {
+        return Base64.encodeToString(
+            url.toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+    }
+
+    private fun decodeCloudstreamProxyTarget(value: String): String? {
+        return runCatching {
+            Base64.decode(value, Base64.URL_SAFE or Base64.NO_WRAP).toString(Charsets.UTF_8)
+        }.getOrNull()
+    }
+
+    private fun isImageLabelledHlsSegment(url: String): Boolean {
+        return when (Uri.parse(url).lastPathSegment?.substringAfterLast('.', missingDelimiterValue = "")?.lowercase()) {
+            "jpg", "jpeg", "png", "webp", "avif" -> true
+            else -> false
         }
-        return rewritten
     }
 
     private fun buildCloudstreamProxyHeaders(response: Response): Map<String, String> {
@@ -2016,17 +2132,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             response.header("Accept-Ranges")?.let { put("Accept-Ranges", it) }
             response.header("Content-Range")?.let { put("Content-Range", it) }
             response.header("Cache-Control")?.let { put("Cache-Control", it) }
-        }
-    }
-
-    private fun resolveVideoRenderer(rendererMode: VideoRendererMode): String {
-        return when (rendererMode) {
-            VideoRendererMode.AUTO -> {
-                if (Build.VERSION.SDK_INT >= 34) "gpu-next" else "gpu"
-            }
-            VideoRendererMode.GPU -> "gpu"
-            VideoRendererMode.GPU_NEXT -> "gpu-next"
-            VideoRendererMode.MEDIACODEC_EMBED -> "mediacodec_embed"
         }
     }
 
@@ -2077,7 +2182,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         cloudstreamFallbackJob?.cancel()
         cloudstreamFallbackJob = null
-        rejectedCloudstreamVideoUrls.clear()
         selectionDialogState = null
         actionDialogState = null
         currentVideoSource = source
@@ -2093,7 +2197,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         fun refreshVideos(): List<Video> {
             val sortedVideos = videosByUrl.values
                 .toList()
-                .filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
                 .sortedCloudstreamVideos()
                 .sortedBy { video -> video.internalData == TORRENT_VIDEO_MARKER }
             availableVideos = sortedVideos
@@ -2106,17 +2209,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return sortedVideos
         }
 
-        suspend fun startPlayerFromAvailableLink(): Boolean {
+        fun startPlayerFromAvailableLink(): Boolean {
             if (startedVideoUrl != null) return true
-            var selected = refreshVideos().firstOrNull() ?: return false
-            while (!probeCloudstreamVideo(selected)) {
-                rejectedCloudstreamVideoUrls += selected.videoUrl
-                Log.w(
-                    "VideoPlayer",
-                    "Skipping Cloudstream link rejected by media probe url=${selected.videoUrl}",
-                )
-                selected = refreshVideos().firstOrNull() ?: return false
-            }
+            val selected = refreshVideos().firstOrNull() ?: return false
             startedVideoUrl = selected.videoUrl
             currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == selected.videoUrl }
                 .takeIf { it >= 0 }
@@ -2125,20 +2220,29 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             pendingExternalAudio = selected.audioTracks
             Log.d(
                 "VideoPlayerActivity",
-                "Starting Cloudstream playback from incremental link url=${selected.videoUrl} " +
+                "Starting Cloudstream playback after link collection url=${selected.videoUrl} " +
                     "available=${availableVideos.size}",
             )
             onFirstVideo()
-            startMpvPlayback(
+            startPlayback(
                 selected.videoUrl,
                 source,
                 headersToMap(selected.headers),
                 startMs,
                 isTorrent = selected.internalData == TORRENT_VIDEO_MARKER || selected.videoUrl.isTorrentLocator(),
+                forceHls = selected.internalData == HLS_VIDEO_MARKER,
             )
             return true
         }
 
+        // Some Cloudstream extensions host an AppCompat DialogFragment directly from loadLinks
+        // (for example, a Turnstile challenge). Register this activity explicitly because the
+        // plugin callback can outlive normal activity lifecycle callback ordering.
+        com.lagradost.cloudstream3.CommonActivity.setActivityInstance(this)
+        Log.d(
+            "VideoPlayerActivity",
+            "Cloudstream activity bridge registered chapter=${chapter.id} activity=${javaClass.simpleName}",
+        )
         repo.getPlaybackEvents(chapter, clearCache).collect { event ->
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
@@ -2147,24 +2251,24 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     val updatedVideo = video.copy(
                         videoTitle = video.videoTitle,
                         subtitleTracks = subtitlesByUrl.values.toList(),
-                        internalData = if (
-                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET ||
-                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT
-                        ) {
-                            TORRENT_VIDEO_MARKER
-                        } else {
-                            video.internalData
+                        internalData = when (event.type) {
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET,
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT -> TORRENT_VIDEO_MARKER
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 -> HLS_VIDEO_MARKER
+                            else -> video.internalData
                         },
                     )
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
                     refreshVideos()
+                    // Match Cloudstream's generator behavior: publish and consume links as callbacks
+                    // arrive instead of waiting for every extractor to finish.
                     startPlayerFromAvailableLink()
                 }
                 is CloudstreamPlaybackEvent.Subtitle -> {
                     if (!event.track.url.startsWith("http://") && !event.track.url.startsWith("https://")) {
-                        Log.w(
+                        Log.d(
                             "VideoPlayerActivity",
-                            "Ignoring Cloudstream subtitle with unsupported URL: ${event.track.url}",
+                            "Ignoring Cloudstream subtitle with unsupported URL",
                         )
                         return@collect
                     }
@@ -2304,10 +2408,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun trySkipIntro() {
         if (introEndMs > 0 && !hasSkippedIntro) {
-            val pos = mpvPlayer?.positionMs ?: return
+            val pos = videoPlayer?.positionMs ?: return
             if (pos < introEndMs) {
                 hasSkippedIntro = true
-                mpvPlayer?.seekTo(introEndMs)
+                videoPlayer?.seekTo(introEndMs)
                 showPlayerMessage(R.string.video_skipping_intro)
             }
         }
@@ -2349,7 +2453,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     onClick = ::enterPictureInPicture,
                 ),
                 VideoActionDialogItem(
-                    title = getString(R.string.video_super_resolution),
+                    title = getString(R.string.ai_video_enhancement_settings),
                     iconRes = R.drawable.ic_auto_fix,
                     onClick = ::showVideoSuperResolutionSheet,
                 ),
@@ -2518,7 +2622,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             appSettings.clearIntroEndMs(currentMangaId)
             showPlayerMessage(R.string.video_skip_intro_cleared)
         } else {
-            val pos = mpvPlayer?.positionMs ?: return
+            val pos = videoPlayer?.positionMs ?: return
             introEndMs = pos
             appSettings.setIntroEndMs(currentMangaId, pos)
             showPlayerMessage(getString(R.string.video_skip_intro_set, formatTimeMs(pos)))
@@ -2533,7 +2637,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             appSettings.clearOutroStartMs(currentMangaId)
             showPlayerMessage(R.string.video_skip_outro_cleared)
         } else {
-            val pos = mpvPlayer?.positionMs ?: return
+            val pos = videoPlayer?.positionMs ?: return
             outroStartMs = pos
             appSettings.setOutroStartMs(currentMangaId, pos)
             showPlayerMessage(getString(R.string.video_skip_outro_set, formatTimeMs(pos)))
@@ -2606,50 +2710,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         syncComposeControlState()
     }
 
-    /**
-     * Load any external subtitle and audio tracks from the Aniyomi Video model.
-     * Called after file is loaded so MPV can accept sub-add/audio-add commands.
-     */
     private fun loadPendingExternalTracks() {
-        val player = mpvPlayer ?: return
-        val subs = selectExternalSubtitlesForCurrentMedia(pendingExternalSubtitles)
-        val audios = pendingExternalAudio.toList()
-        pendingExternalSubtitles = emptyList()
-        pendingExternalAudio = emptyList()
-
-        if (subs.isEmpty() && audios.isEmpty()) {
-            autoSelectTracksByLanguage()
-            return
-        }
-
-        externalTrackLoadingJob?.cancel()
-        externalTrackLoadingJob = lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            if (subs.isNotEmpty()) {
-                android.util.Log.d("VideoPlayerActivity", "Loading ${subs.size} external subtitle tracks")
-                for (track in subs) {
-                    currentCoroutineContext().ensureActive()
-                    player.addSubtitleTrack(track.url, track.lang, track.lang)
-                }
-            }
-            if (audios.isNotEmpty()) {
-                android.util.Log.d("VideoPlayerActivity", "Loading ${audios.size} external audio tracks")
-                val needsExternalAudioSelection = player.getAudioTracks().none { it.isSelected }
-                for ((index, track) in audios.withIndex()) {
-                    currentCoroutineContext().ensureActive()
-                    player.addAudioTrack(
-                        url = track.url,
-                        title = track.lang,
-                        lang = track.lang,
-                        select = needsExternalAudioSelection && index == 0,
-                    )
-                }
-            }
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                if (!isDestroyed && !isFinishing) {
-                    autoSelectTracksByLanguage()
-                }
-            }
-        }
+        autoSelectTracksByLanguage()
     }
 
     private fun selectExternalSubtitlesForCurrentMedia(
@@ -2693,19 +2755,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }.getOrDefault(url)
     }
 
-    /**
-     * Poll MPV's sub-text property and update the subtitle overlay.
-     * Called every 1s from the controller progress runnable while controls are visible.
-     * This is a reliable fallback since property observation may not work
-     * for string properties in some mpv-android-lib versions.
-     */
     private fun pollSubtitleText() {
-        val player = mpvPlayer ?: return
-        val text = player.getPropertyString("sub-text")
-        if (text != lastSubtitleText) {
-            lastSubtitleText = text
-            updateSubtitleOverlay(text)
-        }
+        // Media3 pushes CueGroup updates through VideoPlayerEngine.Listener.
     }
 
     /**
@@ -2725,18 +2776,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             alignX = settings.videoSubtitleAlignX,
             bottomPositionDp = settings.videoSubtitlePosition,
         )
-
-        mpvPlayer?.applySubtitleStyle(
-            fontSizeSp = settings.videoSubtitleFontSize,
-            isBold = settings.videoSubtitleBold,
-            isItalic = settings.videoSubtitleItalic,
-            textColor = settings.videoSubtitleTextColor,
-            borderColor = settings.videoSubtitleBorderColor,
-            borderSize = settings.videoSubtitleBorderSize,
-            backgroundColor = settings.videoSubtitleBgColor,
-            alignX = settings.videoSubtitleAlignX,
-            position = settings.videoSubtitlePosition,
-        )
     }
 
     private fun updateSubtitleOverlay(text: String?) {
@@ -2751,7 +2790,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
      * Called after file is loaded and tracks are available.
      */
     private fun autoSelectTracksByLanguage() {
-        val player = mpvPlayer ?: return
+        val player = videoPlayer ?: return
         val manualSelection = userManualSubtitleSelection
         Log.d("VideoPlayerActivity", "autoSelectTracksByLanguage: manualSelection=$manualSelection")
 
@@ -2797,9 +2836,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
     }
 
-    private fun autoSelectSubtitleBySystemLanguage(subTracks: List<MpvPlayer.TrackInfo>) {
+    private fun autoSelectSubtitleBySystemLanguage(subTracks: List<VideoPlayerEngine.TrackInfo>) {
         val systemLang = java.util.Locale.getDefault().language
-        val player = mpvPlayer ?: return
+        val player = videoPlayer ?: return
         val match = subTracks.find { it.language?.startsWith(systemLang, ignoreCase = true) == true }
         if (match != null && !match.isSelected) {
             player.setSubtitleTrack(match.id)
@@ -2814,58 +2853,108 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     fun applySuperResolutionFromSettings() {
         effectivePlaybackConfig = playbackConfigOverride ?: VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
-        val vo = mpvPlayer?.getPropertyString("vo")
-        val voParams = mpvPlayer?.getPropertyString("video-out-params/vo")
-        val hwdec = mpvPlayer?.getPropertyString("hwdec-current")
-        val voCombined = listOfNotNull(vo, voParams).joinToString("|")
-        val isMediacodecEmbed = voCombined.contains("mediacodec_embed", ignoreCase = true)
-        android.util.Log.d("MpvPlayer", "SuperResolution check: vo=$vo voParams=$voParams hwdec=$hwdec")
-        if (isMediacodecEmbed || !effectivePlaybackConfig.allowShaderPipeline) {
-            android.util.Log.d("MpvPlayer", "SuperResolution disabled: vo=$voCombined hwdec=$hwdec")
-            mpvPlayer?.applyShaderList(null)
-            applyStableHardwareDecoder()
+        val remembered = appSettings.videoEnhancementRememberAcrossVideos &&
+            appSettings.videoEnhancementRememberedEnabled
+        val shouldEnable = enhancementSessionEnabled || remembered
+        if (!shouldEnable || !effectivePlaybackConfig.allowShaderPipeline || isInPictureInPictureMode) {
+            Log.i(
+                "VideoPlayerActivity",
+                "Enhancement route bypassed shouldEnable=$shouldEnable " +
+                    "allowShader=${effectivePlaybackConfig.allowShaderPipeline} pip=$isInPictureInPictureMode",
+            )
+            fallbackToDirectOutput()
             return
         }
-        if (effectivePlaybackConfig.superResolutionMode == VideoSuperResolutionMode.OFF) {
-            android.util.Log.d("MpvPlayer", "SuperResolution disabled: mode=OFF")
-            mpvPlayer?.applyShaderList(null)
-            applyStableHardwareDecoder()
+        if (!::enhancementView.isInitialized || !enhancementSurfaceReady) {
+			if (::enhancementView.isInitialized) {
+				enhancementView.visibility = View.VISIBLE
+				enhancementView.alpha = 0f
+			}
+            Log.w(
+                "VideoPlayerActivity",
+                "Enhancement requested but surface unavailable viewReady=${::enhancementView.isInitialized} " +
+                    "surfaceReady=$enhancementSurfaceReady",
+            )
             return
         }
-        if (effectivePlaybackConfig.decoderMode == VideoDecoderMode.SOFTWARE) {
-            mpvPlayer?.setHardwareDecodingMode("no")
+        val wasEnabled = enhancementSessionEnabled
+        enhancementSessionEnabled = true
+        val config = VideoEnhancementConfig(
+            algorithm = appSettings.videoEnhancementAlgorithm,
+            anime4KPreset = appSettings.videoAnime4KPreset,
+            fsrSharpness = appSettings.videoFsrSharpness,
+            sourceWidth = videoPlayer?.getPropertyString("video-params/w")?.toIntOrNull() ?: 1,
+            sourceHeight = videoPlayer?.getPropertyString("video-params/h")?.toIntOrNull() ?: 1,
+        )
+        val previousConfig = currentEnhancementConfig
+        val pipelineChanged = !wasEnabled || previousConfig == null ||
+            previousConfig.algorithm != config.algorithm ||
+            previousConfig.anime4KPreset != config.anime4KPreset ||
+            previousConfig.sourceWidth != config.sourceWidth ||
+            previousConfig.sourceHeight != config.sourceHeight
+        currentEnhancementConfig = config
+        enhancementView.configure(config)
+        enhancementView.visibility = View.VISIBLE
+		enhancementView.alpha = 1f
+        if (!enhancementOutputAttached) {
+            playerView.player = null
+            playerView.visibility = View.GONE
+            videoPlayer?.setVideoSurface(enhancementVideoSurface)
+            enhancementOutputAttached = true
+            Log.i(
+                "VideoPlayerActivity",
+                "Enhancement output attached algorithm=${appSettings.videoEnhancementAlgorithm} " +
+                    "preset=${appSettings.videoAnime4KPreset} sharpness=${appSettings.videoFsrSharpness}",
+            )
         } else {
-            mpvPlayer?.setHardwareDecodingMode("mediacodec-copy")
-        }
-        val dir = MpvShaderManager.ensureShadersCopied(this)
-        val shaderList = when (effectivePlaybackConfig.superResolutionMode) {
-            VideoSuperResolutionMode.OFF -> emptyList()
-            VideoSuperResolutionMode.QUALITY -> mapSubModeToPreset(
-                resolveSubMode(VideoSuperResolutionMode.QUALITY, appSettings.videoSuperResolutionQualityShader)
+            Log.i(
+                "VideoPlayerActivity",
+                "Enhancement config updated algorithm=${appSettings.videoEnhancementAlgorithm} " +
+                    "preset=${appSettings.videoAnime4KPreset} sharpness=${appSettings.videoFsrSharpness}",
             )
-            VideoSuperResolutionMode.BALANCED -> mapSubModeToPreset(
-                resolveSubMode(VideoSuperResolutionMode.BALANCED, appSettings.videoSuperResolutionBalancedShader)
-            )
-            VideoSuperResolutionMode.PERFORMANCE -> mapSubModeToPreset(
-                resolveSubMode(VideoSuperResolutionMode.PERFORMANCE, appSettings.videoSuperResolutionPerformanceShader)
-            )
-            VideoSuperResolutionMode.ADVANCED -> {
-                mapSubModeToPreset(appSettings.videoSuperResolutionShader)
-            }
         }
-        val shaderPaths = if (shaderList.isEmpty()) null else {
-            MpvShaderManager.buildShaderPathList(dir, shaderList)
-        }
-        mpvPlayer?.applyShaderList(shaderPaths)
+        if (pipelineChanged) scheduleEnhancementFirstFrameFallback()
     }
 
-    private fun applyStableHardwareDecoder() {
-        mpvPlayer?.setHardwareDecodingMode(
-            MpvPlaybackOptions.hardwareDecoder(
-                rendererMode = effectivePlaybackConfig.rendererMode,
-                decoderMode = effectivePlaybackConfig.decoderMode,
-            ),
-        )
+    private fun scheduleEnhancementFirstFrameFallback() {
+        enhancementDisplayedFirstFrame = false
+        val generation = ++enhancementFallbackGeneration
+        var playbackIntentStartedAtMs: Long? = null
+        fun checkFirstFrame() {
+            if (generation != enhancementFallbackGeneration || !enhancementSessionEnabled ||
+                enhancementDisplayedFirstFrame
+            ) return
+            val player = videoPlayer?.player ?: return
+            val hasPlaybackIntent = player.playWhenReady && player.mediaItemCount > 0
+            if (!hasPlaybackIntent) {
+                playbackIntentStartedAtMs = null
+            } else {
+                val now = android.os.SystemClock.elapsedRealtime()
+                val startedAt = playbackIntentStartedAtMs ?: now.also { playbackIntentStartedAtMs = it }
+                if (now - startedAt >= 3_000L) {
+                    Log.w("VideoPlayerActivity", "No enhanced GL first frame after 3s of playback intent; falling back")
+                    fallbackToDirectOutput()
+                    return
+                }
+            }
+            playerRoot.postDelayed(::checkFirstFrame, 120L)
+        }
+        playerRoot.post(::checkFirstFrame)
+    }
+
+    private fun fallbackToDirectOutput() {
+        enhancementSessionEnabled = false
+        enhancementOutputAttached = false
+        enhancementDisplayedFirstFrame = false
+        enhancementFallbackGeneration++
+        if (::enhancementView.isInitialized) {
+			enhancementView.visibility = View.VISIBLE
+			enhancementView.alpha = 0f
+		}
+        if (::playerView.isInitialized) {
+            playerView.visibility = View.VISIBLE
+            videoPlayer?.attachPlayerView(playerView)
+        }
     }
 
     private fun logEffectivePlaybackConfig() {
@@ -2873,7 +2962,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             "VideoPlayerActivity",
             "Playback policy: tier=${devicePerformanceInfo.tier} score=${devicePerformanceInfo.score} " +
                 "ramMb=${devicePerformanceInfo.totalRamMb} cpu=${devicePerformanceInfo.cpuCores} " +
-                "renderer=${effectivePlaybackConfig.rendererMode} decoder=${effectivePlaybackConfig.decoderMode} " +
                 "superRes=${effectivePlaybackConfig.superResolutionMode} shaders=${effectivePlaybackConfig.allowShaderPipeline}"
         )
     }
@@ -2887,7 +2975,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ?: currentVideoIndex
         currentVideoIndex = activeVideoIndex
         val firstCandidate = availableVideos.getOrNull(activeVideoIndex + 1) ?: run {
-            Log.w(
+            Log.d(
                 "VideoPlayer",
                 "Cloudstream playback failed without another mirror trigger=$trigger " +
                     "index=$activeVideoIndex available=${availableVideos.size} detail=$detail",
@@ -2896,40 +2984,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return false
         }
         cloudstreamFallbackJob = lifecycleScope.launch {
-            var candidate = firstCandidate
-            while (true) {
-                val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == candidate.videoUrl }
-                if (candidateIndex < 0) return@launch
-                if (probeCloudstreamVideo(candidate)) {
-                    Log.w(
-                        "VideoPlayer",
-                        "Cloudstream playback failed, trying next mirror trigger=$trigger " +
-                            "from=$activeVideoIndex to=$candidateIndex " +
-                            "available=${availableVideos.size} detail=$detail",
-                    )
-                    switchVideoQuality(candidate, currentMediaStartMs)
-                    return@launch
-                }
-                rejectedCloudstreamVideoUrls += candidate.videoUrl
-                Log.w(
-                    "VideoPlayer",
-                    "Skipping Cloudstream fallback rejected by media probe index=$candidateIndex " +
-                        "url=${candidate.videoUrl}",
-                )
-                availableVideos = availableVideos.filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
-                currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == currentMediaUrl }
-                    .takeIf { it >= 0 }
-                    ?: 0
-                candidate = availableVideos.getOrNull(currentVideoIndex + 1) ?: run {
-                    Log.w(
-                        "VideoPlayer",
-                        "Cloudstream playback failed without another mirror after probing " +
-                            "trigger=$trigger available=${availableVideos.size} detail=$detail",
-                    )
-                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
-                    return@launch
-                }
-            }
+            val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == firstCandidate.videoUrl }
+            if (candidateIndex < 0) return@launch
+            Log.d(
+                "VideoPlayer",
+                "Cloudstream playback failed, trying next mirror trigger=$trigger " +
+                    "from=$activeVideoIndex to=$candidateIndex " +
+                    "available=${availableVideos.size} detail=$detail",
+            )
+            switchVideoQuality(firstCandidate, currentMediaStartMs)
         }.also { job ->
             job.invokeOnCompletion {
                 if (cloudstreamFallbackJob === job) cloudstreamFallbackJob = null
@@ -2938,96 +3001,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         return true
     }
 
-    private suspend fun probeCloudstreamVideo(video: Video): Boolean {
-        val url = video.videoUrl
-        if (video.internalData == TORRENT_VIDEO_MARKER || url.isTorrentLocator()) return true
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return true
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                probeCloudstreamVideoBlocking(video)
-            }.onFailure { error ->
-                Log.d("VideoPlayer", "Cloudstream media probe inconclusive url=$url", error)
-            }.getOrDefault(true)
-        }
-    }
-
-    @androidx.media3.common.util.UnstableApi
-    private fun probeCloudstreamVideoBlocking(video: Video): Boolean {
-        val client = contentHttpClient.newBuilder()
-            .callTimeout(6, TimeUnit.SECONDS)
-            .build()
-        val request = cloudstreamProbeRequest(video.videoUrl, video.headers, head = false)
-        return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return false
-            val contentType = response.header("Content-Type")
-            val responseUrl = response.request.url.toString()
-            val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
-            if (isRejectedCloudstreamProbe(contentType, body.copyOf(minOf(body.size, 64)))) return false
-            if (!contentType.orEmpty().contains("mpegurl", ignoreCase = true) &&
-                !body.toString(Charsets.UTF_8).trimStart().startsWith("#EXTM3U")
-            ) {
-                return true
-            }
-            val playlist = HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream())
-            val mediaPlaylist = when (playlist) {
-                is HlsMediaPlaylist -> playlist
-                is HlsMultivariantPlaylist -> {
-                    val variantUrl = playlist.variants
-                        .maxByOrNull { it.format.bitrate }
-                        ?.url
-                        ?.toString()
-                        ?: return true
-                    loadCloudstreamMediaPlaylist(client, variantUrl, video.headers) ?: return true
-                }
-                else -> return true
-            }
-            val segmentUrl = mediaPlaylist.segments.firstOrNull()?.url ?: return true
-            val resolvedSegmentUrl = URI(mediaPlaylist.baseUri).resolve(segmentUrl).toString()
-            client.newCall(cloudstreamProbeRequest(resolvedSegmentUrl, video.headers, head = true))
-                .execute()
-                .use { segmentResponse ->
-                    if (!segmentResponse.isSuccessful) return true
-                    return !isRejectedCloudstreamProbe(
-                        segmentResponse.header("Content-Type"),
-                        byteArrayOf(),
-                    )
-                }
-        }
-    }
-
-    @androidx.media3.common.util.UnstableApi
-    private fun loadCloudstreamMediaPlaylist(
-        client: OkHttpClient,
-        url: String,
-        headers: Headers?,
-    ): HlsMediaPlaylist? {
-        return client.newCall(cloudstreamProbeRequest(url, headers, head = false))
-            .execute()
-            .use { response ->
-                if (!response.isSuccessful) return null
-                val responseUrl = response.request.url.toString()
-                val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
-                HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream()) as? HlsMediaPlaylist
-            }
-    }
-
-    private fun cloudstreamProbeRequest(url: String, headers: Headers?, head: Boolean): Request {
-        return Request.Builder()
-            .url(url)
-            .apply { headers?.let { videoHeaders -> headers(videoHeaders) } }
-            .apply { if (head) head() else header("Range", "bytes=0-262143") }
-            .build()
-    }
-
     private fun scheduleCloudstreamPlaybackHealthCheck() {
         if (currentVideoSource !is CloudstreamSource) return
         val generation = playbackHealthCheckGeneration
-        val initialPositionMs = mpvPlayer?.positionMs ?: return
+        val initialPositionMs = videoPlayer?.positionMs ?: return
         playerRoot.postDelayed({
             if (generation != playbackHealthCheckGeneration || currentVideoSource !is CloudstreamSource) {
                 return@postDelayed
             }
-            val player = mpvPlayer ?: return@postDelayed
+            val player = videoPlayer ?: return@postDelayed
             if (
                 isStalledCloudstreamPlayback(
                     durationMs = player.durationMs,
@@ -3096,46 +3078,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         )
     }
 
-    private fun resolveSubMode(
-        mode: VideoSuperResolutionMode,
-        shader: VideoSuperResolutionShader,
-    ): VideoSuperResolutionShader {
-        return when (mode) {
-            VideoSuperResolutionMode.OFF -> shader
-            VideoSuperResolutionMode.QUALITY -> shader
-            VideoSuperResolutionMode.BALANCED -> when (shader) {
-                VideoSuperResolutionShader.MODE_AA -> VideoSuperResolutionShader.MODE_A
-                VideoSuperResolutionShader.MODE_BB -> VideoSuperResolutionShader.MODE_B
-                VideoSuperResolutionShader.MODE_CA -> VideoSuperResolutionShader.MODE_C
-                else -> shader
-            }
-            VideoSuperResolutionMode.PERFORMANCE -> when (shader) {
-                VideoSuperResolutionShader.MODE_A,
-                VideoSuperResolutionShader.MODE_AA -> VideoSuperResolutionShader.MODE_B
-                VideoSuperResolutionShader.MODE_B,
-                VideoSuperResolutionShader.MODE_BB -> VideoSuperResolutionShader.MODE_C
-                VideoSuperResolutionShader.MODE_C,
-                VideoSuperResolutionShader.MODE_CA -> VideoSuperResolutionShader.MODE_C
-                else -> shader
-            }
-            VideoSuperResolutionMode.ADVANCED -> shader
-        }
-    }
-
-    private fun mapSubModeToPreset(shader: VideoSuperResolutionShader): List<String> {
-        return when (shader) {
-            VideoSuperResolutionShader.MODE_A -> MpvShaderManager.modeAPreset
-            VideoSuperResolutionShader.MODE_B -> MpvShaderManager.modeBPreset
-            VideoSuperResolutionShader.MODE_C -> MpvShaderManager.modeCPreset
-            VideoSuperResolutionShader.MODE_AA -> MpvShaderManager.modeAPlusPreset
-            VideoSuperResolutionShader.MODE_BB -> MpvShaderManager.modeBPlusPreset
-            VideoSuperResolutionShader.MODE_CA -> MpvShaderManager.modeCAPlusPreset
-            VideoSuperResolutionShader.CUSTOM -> appSettings.videoSuperResolutionCustomShaders.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        }
-    }
-
     private fun buildSubtitleSettingsDialogState(): VideoSubtitleSettingsDialogState {
-        val player = mpvPlayer
+        val player = videoPlayer
         val tracks = player?.getSubtitleTracks().orEmpty()
         val trackOptions = arrayOf(getString(org.skepsun.kototoro.R.string.video_subtitle_off)) +
             tracks.map { it.displayName() }.toTypedArray()
@@ -3156,7 +3100,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun showSubtitleSettingsDialog() {
-        subtitlePanelSelectedIndex = mpvPlayer?.getSubtitleTracks()
+        subtitlePanelSelectedIndex = videoPlayer?.getSubtitleTracks()
             ?.indexOfFirst { it.isSelected }
             ?.takeIf { it >= 0 }
             ?.let { it + 1 }
@@ -3166,7 +3110,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun selectSubtitleTrack(which: Int) {
         subtitlePanelSelectedIndex = which
-        val player = mpvPlayer ?: return
+        val player = videoPlayer ?: return
         val tracks = player.getSubtitleTracks()
         if (which == 0) {
             player.setSubtitleTrack(null)
@@ -3182,7 +3126,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun showAudioTrackDialog() {
-        val player = mpvPlayer ?: return
+        val player = videoPlayer ?: return
         val tracks = player.getAudioTracks()
         if (tracks.isEmpty()) {
             showPlayerMessage(org.skepsun.kototoro.R.string.video_no_audio_tracks)
@@ -3285,11 +3229,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun switchVideoQuality(
         selection: Video,
-        resumeMs: Long = mpvPlayer?.positionMs ?: 0L,
+        resumeMs: Long = videoPlayer?.positionMs ?: 0L,
     ) {
         val resolved = availableVideos.resolveCloudstreamVideo(selection)
         if (resolved == null) {
-            Log.w("VideoPlayer", "Ignoring stale video selection url=${selection.videoUrl}")
+            Log.d("VideoPlayer", "Ignoring stale video selection url=${selection.videoUrl}")
             return
         }
         val video = resolved.value
@@ -3303,12 +3247,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
         }
-        startMpvPlayback(
+        startPlayback(
             url = video.videoUrl,
             source = currentVideoSource,
             headers = mergedHeaders,
             startMs = resumeMs,
             isTorrent = video.internalData == TORRENT_VIDEO_MARKER || video.videoUrl.isTorrentLocator(),
+            forceHls = video.internalData == HLS_VIDEO_MARKER,
         )
     }
 
@@ -3317,100 +3262,57 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun buildSuperResolutionDialogState(): VideoSuperResolutionDialogState {
-        val mode = appSettings.videoSuperResolutionMode
-        val shader = when (mode) {
-            VideoSuperResolutionMode.OFF -> appSettings.videoSuperResolutionShader
-            VideoSuperResolutionMode.QUALITY -> appSettings.videoSuperResolutionQualityShader
-            VideoSuperResolutionMode.BALANCED -> appSettings.videoSuperResolutionBalancedShader
-            VideoSuperResolutionMode.PERFORMANCE -> appSettings.videoSuperResolutionPerformanceShader
-            VideoSuperResolutionMode.ADVANCED -> appSettings.videoSuperResolutionShader
-        }
-        val selectedCustomShaders = appSettings.videoSuperResolutionCustomShaders
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toSet()
-        val shaderDir = MpvShaderManager.ensureShadersCopied(this)
-        val customShaders = shaderDir.listFiles { _, name -> name.endsWith(".glsl", ignoreCase = true) }
-            .orEmpty()
-            .map { file ->
-                val descriptionName = "video_super_resolution_shader_desc_${file.nameWithoutExtension.lowercase()}"
-                val descriptionRes = resources.getIdentifier(descriptionName, "string", packageName)
-                VideoShaderOption(
-                    fileName = file.name,
-                    description = descriptionRes.takeIf { it != 0 }?.let(::getString),
-                    selected = file.name in selectedCustomShaders,
-                )
-            }
-            .sortedBy(VideoShaderOption::fileName)
         return VideoSuperResolutionDialogState(
-            selectedMode = mode,
-            selectedShader = shader,
-            shaderLabels = VideoSuperResolutionShader.entries.associateWith(::superResolutionShaderLabel),
-            customShaders = customShaders,
+            enabled = enhancementSessionEnabled,
+            algorithm = appSettings.videoEnhancementAlgorithm,
+            anime4KPreset = appSettings.videoAnime4KPreset,
+            fsrSharpnessPercent = (appSettings.videoFsrSharpness * 100f).roundToInt(),
+            rememberAcrossVideos = appSettings.videoEnhancementRememberAcrossVideos,
             anchorBounds = submenuAnchorBounds,
         )
     }
 
-    private fun selectSuperResolutionMode(mode: VideoSuperResolutionMode) {
-        val disablesGpuNext = mode != VideoSuperResolutionMode.OFF &&
-            appSettings.videoRendererMode == VideoRendererMode.GPU_NEXT
-        appSettings.videoSuperResolutionMode = mode
-        if (mode == VideoSuperResolutionMode.ADVANCED) {
-            appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
+    private fun setVideoEnhancementEnabled(enabled: Boolean) {
+        Log.i(
+            "VideoPlayerActivity",
+            "Video enhancement toggled enabled=$enabled surfaceReady=$enhancementSurfaceReady " +
+                "viewReady=${::enhancementView.isInitialized}",
+        )
+        enhancementSessionEnabled = enabled
+        if (appSettings.videoEnhancementRememberAcrossVideos) {
+            appSettings.videoEnhancementRememberedEnabled = enabled
         }
-        if (disablesGpuNext) {
-            showPlayerMessage(R.string.video_super_resolution_disabled_gpu_next)
-            reloadPlayback()
-        } else {
-            applySuperResolutionFromSettings()
-        }
+        if (enabled) applySuperResolutionFromSettings() else fallbackToDirectOutput()
         superResolutionDialogVersion++
     }
 
-    private fun selectSuperResolutionShader(shader: VideoSuperResolutionShader) {
-        when (appSettings.videoSuperResolutionMode) {
-            VideoSuperResolutionMode.OFF -> appSettings.videoSuperResolutionShader = shader
-            VideoSuperResolutionMode.QUALITY -> appSettings.videoSuperResolutionQualityShader = shader
-            VideoSuperResolutionMode.BALANCED -> appSettings.videoSuperResolutionBalancedShader = shader
-            VideoSuperResolutionMode.PERFORMANCE -> appSettings.videoSuperResolutionPerformanceShader = shader
-            VideoSuperResolutionMode.ADVANCED -> appSettings.videoSuperResolutionShader = shader
-        }
+    private fun selectVideoEnhancementAlgorithm(algorithm: VideoEnhancementAlgorithm) {
+        if (appSettings.videoEnhancementAlgorithm == algorithm) return
+        appSettings.videoEnhancementAlgorithm = algorithm
         applySuperResolutionFromSettings()
         superResolutionDialogVersion++
     }
 
-    private fun toggleCustomSuperResolutionShader(fileName: String, selected: Boolean) {
-        val disablesGpuNext = appSettings.videoRendererMode == VideoRendererMode.GPU_NEXT
-        val shaders = appSettings.videoSuperResolutionCustomShaders
-            .split(',')
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toMutableSet()
-        if (selected) shaders += fileName else shaders -= fileName
-        appSettings.videoSuperResolutionCustomShaders = shaders.joinToString(",")
-        appSettings.videoSuperResolutionMode = VideoSuperResolutionMode.ADVANCED
-        appSettings.videoSuperResolutionShader = VideoSuperResolutionShader.CUSTOM
-        if (disablesGpuNext) {
-            showPlayerMessage(R.string.video_super_resolution_disabled_gpu_next)
-            reloadPlayback()
-        } else {
-            applySuperResolutionFromSettings()
-        }
+    private fun selectAnime4KPreset(preset: Anime4KPreset) {
+        if (appSettings.videoAnime4KPreset == preset) return
+        appSettings.videoAnime4KPreset = preset
+        applySuperResolutionFromSettings()
         superResolutionDialogVersion++
     }
 
-    private fun superResolutionShaderLabel(shader: VideoSuperResolutionShader): String = getString(
-        when (shader) {
-            VideoSuperResolutionShader.MODE_A -> R.string.video_super_resolution_mode_a
-            VideoSuperResolutionShader.MODE_B -> R.string.video_super_resolution_mode_b
-            VideoSuperResolutionShader.MODE_C -> R.string.video_super_resolution_mode_c
-            VideoSuperResolutionShader.MODE_AA -> R.string.video_super_resolution_mode_aa
-            VideoSuperResolutionShader.MODE_BB -> R.string.video_super_resolution_mode_bb
-            VideoSuperResolutionShader.MODE_CA -> R.string.video_super_resolution_mode_ca
-            VideoSuperResolutionShader.CUSTOM -> R.string.video_super_resolution_mode_custom
-        },
-    )
+    private fun setFsrSharpness(percent: Int) {
+        val sharpness = percent.coerceIn(0, 100) / 100f
+        if (appSettings.videoFsrSharpness == sharpness) return
+        appSettings.videoFsrSharpness = sharpness
+        applySuperResolutionFromSettings()
+        superResolutionDialogVersion++
+    }
+
+    private fun setRememberVideoEnhancement(remember: Boolean) {
+        appSettings.videoEnhancementRememberAcrossVideos = remember
+        appSettings.videoEnhancementRememberedEnabled = remember && enhancementSessionEnabled
+        superResolutionDialogVersion++
+    }
 
     private fun updatePlaybackSpeedButton() {
         syncComposeControlState()
@@ -3429,6 +3331,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         torrentStreamService.resume(currentMediaUrl)
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::enhancementView.isInitialized) enhancementView.resumeVideoSurface()
+    }
+
+    override fun onPause() {
+        if (::enhancementView.isInitialized) enhancementView.pauseVideoSurface()
+        super.onPause()
+    }
+
     override fun onStop() {
         playerRoot.removeCallbacks(hideUiRunnable)
         playerRoot.removeCallbacks(progressUpdateRunnable)
@@ -3441,7 +3353,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         saveHistoryProgressAsync()
         finishReadingSession()
         videoLocalCacheProxy.logSessionStats("onStop")
-        mpvPlayer?.pause()
+        videoPlayer?.pause()
         torrentStreamService.pause(currentMediaUrl)
         setKeepScreenOn(false)
         danmakuController.pause()
@@ -3466,10 +3378,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         savePlaybackProgress()
         saveHistoryProgressAsync()
         finishReadingSession()
-        mpvPlayer?.release()
-        mpvPlayer = null
+        videoPlayer?.release()
+        videoPlayer = null
         torrentStreamService.release(currentMediaUrl)
-        runCatching { mpvView.destroy() }
+        playerView.player = null
+        if (::enhancementView.isInitialized) enhancementView.releaseVideoSurface()
+        enhancementVideoSurface = null
         danmakuController.release()
         super.onDestroy()
     }
@@ -3503,25 +3417,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     fun applyPlaybackSpeed(speed: Float) {
-        mpvPlayer?.setRate(speed.toDouble())
+        videoPlayer?.setRate(speed.toDouble())
     }
 
     fun applyPlaybackOptions() {
-        val volume = if (appSettings.videoVolumeBoostEnabled) 130.0 else 100.0
-        mpvPlayer?.setVolume(volume)
-        val mpvCacheDir = getExternalFilesDir("mpv_cache") ?: File(filesDir, "mpv_cache")
-        mpvPlayer?.applyCacheSettings(appSettings.videoCacheSizeMb, mpvCacheDir)
+        videoPlayer?.setVolume(100.0)
+        videoPlayer?.setVolumeBoost(appSettings.videoVolumeBoostEnabled)
     }
 
     fun applyAspectRatio() {
-        mpvPlayer?.setAspectRatio(appSettings.videoAspectRatio)
+        videoPlayer?.setAspectRatio(appSettings.videoAspectRatio)
     }
 
     fun reloadPlayback() {
         val manga = currentMangaContent()
         val chapter = manga?.chapters?.find { it.id == currentReaderStateOrIntent()?.chapterId }
         if (manga?.source is CloudstreamSource && chapter != null) {
-            val resumeMs = mpvPlayer?.positionMs ?: 0L
+            val resumeMs = videoPlayer?.positionMs ?: 0L
             lifecycleScope.launch {
                 val repo = mangaRepositoryFactory.create(manga.source) as? CloudstreamContentRepository
                 val started = repo?.let {
@@ -3542,8 +3454,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             return
         }
-        val resumeMs = mpvPlayer?.positionMs ?: 0L
-        startMpvPlayback(url, currentVideoSource, currentMediaHeaders, resumeMs)
+        val resumeMs = videoPlayer?.positionMs ?: 0L
+        startPlayback(
+            url = url,
+            source = currentVideoSource,
+            headers = currentMediaHeaders,
+            startMs = resumeMs,
+            forceHls = currentMediaForceHls,
+        )
     }
 
     private fun openVideoDetails() {
@@ -3563,36 +3481,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
 
         val (title, chapter) = extractChapterInfo()
-        val decoderSetting = when (appSettings.videoDecoderMode) {
-            VideoDecoderMode.HARDWARE -> getString(org.skepsun.kototoro.R.string.video_info_hw_decoding)
-            VideoDecoderMode.SOFTWARE -> getString(org.skepsun.kototoro.R.string.video_info_sw_decoding)
-        }
-        val rendererSetting = when (appSettings.videoRendererMode) {
-            VideoRendererMode.AUTO -> getString(org.skepsun.kototoro.R.string.video_info_auto)
-            VideoRendererMode.GPU -> "GPU"
-            VideoRendererMode.GPU_NEXT -> "GPU Next"
-            VideoRendererMode.MEDIACODEC_EMBED -> "MediaCodec Embed"
-        }
-        val hwdecCurrent = mpvPlayer?.getPropertyString("hwdec-current").orDash()
-        val voCurrent = mpvPlayer?.getPropertyString("vo").orDash()
-        val videoCodec = mpvPlayer?.getPropertyString("video-codec").orDash()
-        val audioCodec = mpvPlayer?.getPropertyString("audio-codec-name").orDash()
-        val videoWidth = mpvPlayer?.getPropertyString("video-params/w").orDash()
-        val videoHeight = mpvPlayer?.getPropertyString("video-params/h").orDash()
+        val decoderSetting = "MediaCodec (fallback enabled)"
+        val rendererSetting = if (enhancementSessionEnabled) "Media3 + GLES" else "Media3 PlayerView"
+        val hwdecCurrent = videoPlayer?.getPropertyString("hwdec-current").orDash()
+        val voCurrent = videoPlayer?.getPropertyString("vo").orDash()
+        val videoCodec = videoPlayer?.getPropertyString("video-codec").orDash()
+        val audioCodec = videoPlayer?.getPropertyString("audio-codec-name").orDash()
+        val videoWidth = videoPlayer?.getPropertyString("video-params/w").orDash()
+        val videoHeight = videoPlayer?.getPropertyString("video-params/h").orDash()
         val fps = (
-            mpvPlayer?.getPropertyString("estimated-vf-fps")
-                ?: mpvPlayer?.getPropertyString("video-params/fps")
-                ?: mpvPlayer?.getPropertyString("container-fps")
+            videoPlayer?.getPropertyString("estimated-vf-fps")
+                ?: videoPlayer?.getPropertyString("video-params/fps")
+                ?: videoPlayer?.getPropertyString("container-fps")
             ).orDash()
         val sourceName = currentVideoSource?.name.orDash()
         val proxyStats = videoLocalCacheProxy.getSessionStatsSnapshot()
         val diagnostics = playbackDiagnostics.snapshot()
-        val effectiveRendererSetting = when (effectivePlaybackConfig.rendererMode) {
-            VideoRendererMode.AUTO -> getString(org.skepsun.kototoro.R.string.video_info_auto)
-            VideoRendererMode.GPU -> "GPU"
-            VideoRendererMode.GPU_NEXT -> "GPU Next"
-            VideoRendererMode.MEDIACODEC_EMBED -> "MediaCodec Embed"
-        }
+        val effectiveRendererSetting = rendererSetting
         val lastFailureCategory = diagnostics.lastFailureCategory?.name.orDash()
         val lastFallbackReason = diagnostics.lastFallbackReason?.name.orDash()
 
@@ -3649,8 +3554,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         setUiIsVisible(false)
         val paramsBuilder = PictureInPictureParams.Builder()
-        val pipWidth = mpvPlayer?.getPropertyString("video-params/w")?.toIntOrNull()
-        val pipHeight = mpvPlayer?.getPropertyString("video-params/h")?.toIntOrNull()
+        val pipWidth = videoPlayer?.getPropertyString("video-params/w")?.toIntOrNull()
+        val pipHeight = videoPlayer?.getPropertyString("video-params/h")?.toIntOrNull()
         if (pipWidth != null && pipHeight != null && pipWidth > 0 && pipHeight > 0) {
             paramsBuilder.setAspectRatio(Rational(pipWidth, pipHeight))
         }
@@ -3672,7 +3577,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     fun takeScreenshot() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val surfaceView = mpvView
+        val surfaceView = playerView.videoSurfaceView as? android.view.SurfaceView
+        if (surfaceView == null) {
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
+            return
+        }
         if (surfaceView.width <= 0 || surfaceView.height <= 0) {
             showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             return
@@ -3756,7 +3665,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             danmakuController.loadDanmaku(
                 items = items,
                 autoShow = autoShow,
-                isPlaying = mpvPlayer?.isPlaying == true,
+                isPlaying = videoPlayer?.isPlaying == true,
             )
             danmakuController.setVisible(autoShow)
         }
@@ -3834,7 +3743,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             showPlayerMessage(org.skepsun.kototoro.R.string.video_danmaku_enabled)
             return
         }
-        val timeMs = mpvPlayer?.positionMs ?: return
+        val timeMs = videoPlayer?.positionMs ?: return
         danmakuController.addLiveDanmaku(message, timeMs)
     }
 
@@ -3843,8 +3752,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         propagateFailure: Boolean = false,
     ) {
         val currentUrl = currentMediaUrl
-        val player = mpvPlayer
-        val dur = mpvPlayer?.durationMs
+        val player = videoPlayer
+        val dur = videoPlayer?.durationMs
         if (currentUrl == null || player == null || dur == null) {
             if (propagateFailure) error("Playback state is not ready")
             return
@@ -3875,7 +3784,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             android.util.Log.d("VideoPlayer", "Skip restore: near end pos=$pos dur=$dur")
             return
         }
-        mpvPlayer?.seekTo(pos)
+        videoPlayer?.seekTo(pos)
     }
 
     private fun resolveSavedPlaybackProgress(url: String): Long? {
@@ -3900,14 +3809,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         
         // Verify chapter ID matches current playing chapter
         if (currentChapterId != null && currentChapterId != history.chapterId) {
-            android.util.Log.w("VideoPlayer", "Chapter mismatch: history has ${history.chapterId}, but playing ${currentChapterId}. Not restoring position.")
+            android.util.Log.d("VideoPlayer", "Chapter mismatch: history has ${history.chapterId}, but playing ${currentChapterId}. Not restoring position.")
             // Don't restore position when chapter doesn't match
             return
         }
         
         val overall = history.percent
         if (overall !in 0f..1f) {
-            android.util.Log.w("VideoPlayer", "Invalid history percent: $overall")
+            android.util.Log.d("VideoPlayer", "Invalid history percent: $overall")
             return
         }
         if (overall >= 0.98f) {
@@ -3923,7 +3832,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         
         val chapter = chapters.find { it.id == history.chapterId } ?: run {
-            android.util.Log.w("VideoPlayer", "Chapter not found for id=${history.chapterId}, using overall percent")
+            android.util.Log.d("VideoPlayer", "Chapter not found for id=${history.chapterId}, using overall percent")
             pendingInitialSeekPercent = overall
             return
         }
@@ -3933,7 +3842,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val branchChapters = chapters.filter { it.branch == chapter.branch }
         val count = branchChapters.size
         if (count <= 0) {
-            android.util.Log.w("VideoPlayer", "No chapters in branch '${chapter.branch}'")
+            android.util.Log.d("VideoPlayer", "No chapters in branch '${chapter.branch}'")
             pendingInitialSeekPercent = overall
             return
         }
@@ -3951,14 +3860,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             pendingInitialSeekPercent = null
             return
         }
-        val pos = mpvPlayer?.positionMs ?: 0L
+        val pos = videoPlayer?.positionMs ?: 0L
         if (pos > 0L) {
             pendingInitialSeekPercent = null
             return
         }
-        val dur = mpvPlayer?.durationMs ?: 0L
+        val dur = videoPlayer?.durationMs ?: 0L
         if (dur > 0) {
-            mpvPlayer?.seekTo((p * dur).toLong())
+            videoPlayer?.seekTo((p * dur).toLong())
             pendingInitialSeekPercent = null
         }
     }
@@ -3967,7 +3876,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         completed: Boolean = false,
         requireHistory: Boolean = false,
     ): Job? {
-        val exo = mpvPlayer ?: return null
+        val exo = videoPlayer ?: return null
         val mangaSeed = currentMangaContent() ?: return null
         val dur = exo.durationMs
         val pos = exo.positionMs
@@ -3985,22 +3894,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         android.util.Log.d("VideoPlayer", "ReaderState before save: chapterId=${state?.chapterId}, page=${state?.page}")
         
         if (state == null) {
-            android.util.Log.w("VideoPlayer", "ReaderState is null, cannot save accurate chapter progress")
+            android.util.Log.d("VideoPlayer", "ReaderState is null, cannot save accurate chapter progress")
         }
 
         fun computeSeriesPercent(m: org.skepsun.kototoro.parsers.model.Content, s: ReaderState, ep: Float): Float {
             val chapters = m.chapters ?: run {
-                android.util.Log.w("VideoPlayer", "No chapters available for series percent calculation")
+                android.util.Log.d("VideoPlayer", "No chapters available for series percent calculation")
                 return ep
             }
             val curr = chapters.find { it.id == s.chapterId } ?: run {
-                android.util.Log.w("VideoPlayer", "Current chapter (id=${s.chapterId}) not found in chapters list")
+                android.util.Log.d("VideoPlayer", "Current chapter (id=${s.chapterId}) not found in chapters list")
                 return ep
             }
             val branchChapters = chapters.filter { it.branch == curr.branch }
             val count = branchChapters.size
             if (count <= 0) {
-                android.util.Log.w("VideoPlayer", "No chapters in branch '${curr.branch}'")
+                android.util.Log.d("VideoPlayer", "No chapters in branch '${curr.branch}'")
                 return ep
             }
             val idx = branchChapters.indexOfFirst { it.id == curr.id }.coerceAtLeast(0)
@@ -4018,7 +3927,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             // 防御性拦截：如果 mangaSeed ?URL 是本地文件协议，绝对不能交给在线解析器，否则必定抛错
 	            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
 	                if (mangaSeed.url.startsWith("file://")) {
-	                    android.util.Log.w("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
+	                    android.util.Log.d("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
 	                    val dbContent = contentDataRepository.findPreferredLocalContentById(mangaSeed.id, withChapters = true)
 	                        ?: contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
 	                    dbContent ?: mangaSeed
@@ -4032,7 +3941,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             
             // 若仍无章节信息（网络/源不可用），避免保存触发断言失败
             if (manga.chapters.isNullOrEmpty()) {
-                android.util.Log.w("VideoPlayer", "Cannot save history: manga has no chapters")
+                android.util.Log.d("VideoPlayer", "Cannot save history: manga has no chapters")
                 if (requireHistory) error("Cannot save history without chapters")
                 return@launch
             }
@@ -4078,7 +3987,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         historyUpdateUseCase.invokeAsync(manga, timedState, overall)
                     }
                 } else {
-                    android.util.Log.w("VideoPlayer", "Cannot create fallback ReaderState")
+                    android.util.Log.d("VideoPlayer", "Cannot create fallback ReaderState")
                     if (requireHistory) error("Cannot create history state")
                 }
             }
@@ -4091,7 +4000,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ?: error("Playback history is not ready")
         historyJob.awaitCompletion()
         finishReadingSession(allowShort = true, continueFromEnd = false)?.awaitCompletion()
-        mpvPlayer?.pause()
+        videoPlayer?.pause()
         danmakuController.pause()
     }
 
@@ -4101,8 +4010,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun currentVideoRecordState(): ReaderState? {
         val state = readerState ?: return null
-        val pos = mpvPlayer?.positionMs ?: 0L
-        val dur = mpvPlayer?.durationMs ?: 0L
+        val pos = videoPlayer?.positionMs ?: 0L
+        val dur = videoPlayer?.durationMs ?: 0L
         val episodePercent = if (dur > 0L) {
             (pos.toFloat() / dur).coerceIn(0f, 1f)
         } else {
@@ -4265,7 +4174,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         
                         resetChapterState()
                         
-                        startMpvPlayback(selected.videoUrl, manga.source, mergedHeaders)
+                        startPlayback(selected.videoUrl, manga.source, mergedHeaders)
                         updateTitleAndSubtitle()
                         resolved = true
                     }
@@ -4297,7 +4206,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         resetChapterState()
 
                         val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                        startMpvPlayback(selected.videoUrl, manga.source, mergedHeaders)
+                        startPlayback(selected.videoUrl, manga.source, mergedHeaders)
                         updateTitleAndSubtitle()
                         resolved = true
                     }
@@ -4358,8 +4267,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
 	private fun maybeAutoPlayNext(ignoreRatio: Boolean = false) {
 		if (!appSettings.videoAutoNextEnabled || autoNextTriggered) return
-		val duration = mpvPlayer?.durationMs ?: 0L
-		val position = mpvPlayer?.positionMs ?: 0L
+		val duration = videoPlayer?.durationMs ?: 0L
+		val position = videoPlayer?.positionMs ?: 0L
 		if (duration <= 0L) {
 			android.util.Log.d("VideoPlayer", "AutoNext skipped: duration=0")
 			return
@@ -4441,7 +4350,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun castToDlnaDevice(device: DlnaDevice) {
         val url = currentMediaUrl ?: return
         val headers = currentMediaHeaders.orEmpty()
-        val positionMs = mpvPlayer?.positionMs ?: 0L
+        val positionMs = videoPlayer?.positionMs ?: 0L
         dlnaDialogState = DlnaDeviceDialogState.Casting(device)
         lifecycleScope.launch {
             val lanUrl = videoLocalCacheProxy.getLanProxyUrl(url, headers)
@@ -4457,7 +4366,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     DlnaController.seek(contentHttpClient, device, positionMs)
                 }
                 showPlayerMessage(getString(R.string.casting_to, device.name))
-                mpvPlayer?.pause()
+                videoPlayer?.pause()
             } else {
                 showPlayerMessage(R.string.cast_failed)
             }

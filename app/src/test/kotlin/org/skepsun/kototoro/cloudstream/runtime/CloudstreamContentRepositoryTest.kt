@@ -36,6 +36,14 @@ class CloudstreamContentRepositoryTest {
 	}
 
 	@Test
+	fun `missing plugin urls reject stringified null values`() {
+		assertTrue("".isMissingCloudstreamUrl())
+		assertTrue(" null ".isMissingCloudstreamUrl())
+		assertTrue("UNDEFINED".isMissingCloudstreamUrl())
+		assertFalse("https://video.test/live.m3u8".isMissingCloudstreamUrl())
+	}
+
+	@Test
 	fun `metadata round trip preserves rich details and ignores future fields`() {
 		val encoded = CloudstreamMetadataCodec.encodeContent(
 			CloudstreamContentMetadata(

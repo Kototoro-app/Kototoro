@@ -39,7 +39,7 @@ class LegadoCookieAPI(
         return try {
             cookieJar.getCookieHeader(url)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get cookie for $url", e)
+            Log.e(TAG, "Failed to get cookie: ${e.javaClass.simpleName}")
             ""
         }
     }
@@ -56,7 +56,7 @@ class LegadoCookieAPI(
      */
     fun setCookie(url: String, cookie: String?) {
         if (cookie.isNullOrBlank()) {
-            Log.w(TAG, "Attempted to set empty cookie for $url")
+            Log.w(TAG, "Attempted to set an empty cookie")
             return
         }
         
@@ -68,10 +68,10 @@ class LegadoCookieAPI(
                 cookieJar.setCookies(url, cookieList)
                 Log.d(TAG, "Set ${cookieList.size} cookies for $url")
             } else {
-                Log.w(TAG, "No valid cookies parsed from: $cookie")
+                Log.w(TAG, "No valid cookies were parsed")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to set cookie for $url: $cookie", e)
+            Log.e(TAG, "Failed to set cookie: ${e.javaClass.simpleName}")
         }
     }
     
@@ -86,7 +86,7 @@ class LegadoCookieAPI(
      */
     fun replaceCookie(url: String, cookie: String) {
         if (cookie.isBlank()) {
-            Log.w(TAG, "Attempted to replace with empty cookie for $url")
+            Log.w(TAG, "Attempted to replace cookies with an empty value")
             return
         }
         
@@ -108,7 +108,7 @@ class LegadoCookieAPI(
                 Log.d(TAG, "Replaced cookies for $url (merged ${oldMap.size} cookies)")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to replace cookie for $url", e)
+            Log.e(TAG, "Failed to replace cookie: ${e.javaClass.simpleName}")
         }
     }
     
@@ -122,7 +122,7 @@ class LegadoCookieAPI(
             cookieJar.removeCookies(url)
             Log.d(TAG, "Removed all cookies for $url")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to remove cookies for $url", e)
+            Log.e(TAG, "Failed to remove cookies: ${e.javaClass.simpleName}")
         }
     }
     
@@ -163,7 +163,7 @@ class LegadoCookieAPI(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse cookie string: $cookie", e)
+            Log.e(TAG, "Failed to parse cookie string: ${e.javaClass.simpleName}")
         }
         
         return cookieMap
@@ -188,7 +188,7 @@ class LegadoCookieAPI(
                 "$key=$value"
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to convert map to cookie string", e)
+            Log.e(TAG, "Failed to convert map to cookie string: ${e.javaClass.simpleName}")
             ""
         }
     }
@@ -206,7 +206,7 @@ class LegadoCookieAPI(
             val cookieMap = cookieToMap(cookie)
             cookieMap[key] ?: ""
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get cookie key $key for $url", e)
+            Log.e(TAG, "Failed to get cookie by key: ${e.javaClass.simpleName}")
             ""
         }
     }
@@ -257,7 +257,7 @@ class LegadoCookieAPI(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse cookie string: $cookieString", e)
+            Log.e(TAG, "Failed to parse cookie string: ${e.javaClass.simpleName}")
         }
         
         return cookies
