@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.core.ui.util
 
 import android.app.Activity
+import com.lagradost.cloudstream3.CommonActivity
 import org.skepsun.kototoro.core.ui.DefaultActivityLifecycleCallbacks
 import java.lang.ref.WeakReference
 import javax.inject.Inject
@@ -19,17 +20,20 @@ class ForegroundActivityHolder @Inject constructor() : DefaultActivityLifecycleC
 
     override fun onActivityResumed(activity: Activity) {
         activityRef = WeakReference(activity)
+        CommonActivity.setActivityInstance(activity)
     }
 
     override fun onActivityPaused(activity: Activity) {
         if (activityRef?.get() == activity) {
             activityRef = null
+            CommonActivity.setActivityInstance(null)
         }
     }
 
     override fun onActivityDestroyed(activity: Activity) {
         if (activityRef?.get() == activity) {
             activityRef = null
+            CommonActivity.setActivityInstance(null)
         }
     }
 }
