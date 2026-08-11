@@ -34,6 +34,7 @@ import androidx.core.content.edit
 
 internal val READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS = linkedSetOf(
     "mangaocr_2025_onnx",
+    "baberu_ocr_int4",
     "manga_48px_ctc_onnx",
     "ppocrv6_medium_rec_onnx",
     "latin_ppocrv5_mobile_rec_onnx",

@@ -26,7 +26,7 @@ data class OnnxModelFile(
 )
 
 object OnnxOfficialModelCatalog {
-	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx, https://www.modelscope.cn/models/hgmzhn/manga-translator-ui, https://huggingface.co/Skepsun/manga-translator-ui-onnx, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
+	const val source = "https://github.com/niedev/OnnxModelsEnhancer/releases, https://github.com/niedev/RTranslator/releases, https://www.modelscope.cn/models/PaddlePaddle/PP-OCRv6_medium_rec_onnx, https://www.modelscope.cn/models/hgmzhn/manga-translator-ui, https://huggingface.co/Skepsun/manga-translator-ui-onnx, https://huggingface.co/justinchuby/Hy-MT2-1.8B-ONNX, https://huggingface.co/ilaylow/PP_OCRv5_mobile_onnx, https://huggingface.co/l0wgear/manga-ocr-2025-onnx, https://huggingface.co/genshiai-daichi/baberu-ocr, https://huggingface.co/collections/PaddlePaddle/pp-ocrv6"
 
 	val models = listOf(
 		OnnxOfficialModel(
@@ -423,6 +423,35 @@ object OnnxOfficialModelCatalog {
 			),
 			description = "MangaOCR encoder-decoder recognizer optimized for Japanese manga text.",
 		),
+		OnnxOfficialModel(
+			id = "baberu_ocr_int4",
+			title = "Baberu OCR (INT4)",
+			version = "d9cc1315-int4",
+			category = OnnxModelCategory.OCR_RECOGNIZER,
+			files = listOf(
+				OnnxModelFile(
+					fileName = "onnx/vision_int4.onnx",
+					downloadUrl = BABERU_BASE_URL + "onnx/vision_int4.onnx",
+					sha256 = "9526bcf99eb8de805df7ea2f66b385cfcbcb5dff0e99a5dcfb02bdb2d4182bde",
+				),
+				OnnxModelFile(
+					fileName = "onnx/decoder_prefill_int8.onnx",
+					downloadUrl = BABERU_BASE_URL + "onnx/decoder_prefill_int8.onnx",
+					sha256 = "4f8d28d4e5e8b6c7f3a4510663aa0a9199a7eec06bcb1dc0afb3ca571494e97f",
+				),
+				OnnxModelFile(
+					fileName = "onnx/decoder_step_int8.onnx",
+					downloadUrl = BABERU_BASE_URL + "onnx/decoder_step_int8.onnx",
+					sha256 = "2eaf792ca70b67e55140ef0bcfbfc3c3b1e07d72ca277dcc46aae27c81f27ac8",
+				),
+				OnnxModelFile(
+					fileName = "tokenizer/vocab.json",
+					downloadUrl = BABERU_BASE_URL + "tokenizer/vocab.json",
+					sha256 = "681de4eb83154a397af49e2ddae4705041b12a22e16fe00860b829e889e5f47c",
+				),
+			),
+			description = "Baberu character-level OCR for Japanese, Chinese and English manga text (INT4 vision encoder).",
+		),
 
 		OnnxOfficialModel(
 			id = "realesrgan_ncnn_x4plus_anime",
@@ -455,4 +484,8 @@ object OnnxOfficialModelCatalog {
 	fun findById(id: String?): OnnxOfficialModel? {
 		return models.firstOrNull { it.id == id }
 	}
+
+	private const val BABERU_BASE_URL =
+		"https://huggingface.co/genshiai-daichi/baberu-ocr/resolve/" +
+			"d9cc13153e9a1cd8fdfa3b7b1cc329da2020aeae/"
 }

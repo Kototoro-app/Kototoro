@@ -84,6 +84,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	private val defaultDbNetTextDetector: DefaultDbNetTextDetector,
 	private val bubbleReaderTextDetector: BubbleReaderTextDetector,
 	private val mangaOcrReaderTextRecognizer: MangaOcrReaderTextRecognizer,
+	private val baberuOcrReaderTextRecognizer: BaberuOcrReaderTextRecognizer,
 	private val onnxBubbleDetectorEngine: OnnxBubbleDetectorEngine,
 	private val onnxTranslationEngine: OnnxReaderTranslationEngine,
 	private val debugLogStore: ReaderTranslationDebugLogStore,
@@ -172,6 +173,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		get() = defaultDbNetTextDetector
 	private val mangaTextRecognizer: ReaderTextRecognizer
 		get() = mangaOcrReaderTextRecognizer
+	private val baberuTextRecognizer: ReaderTextRecognizer
+		get() = baberuOcrReaderTextRecognizer
 	private val translationCoordinator by lazy(LazyThreadSafetyMode.NONE) {
 		ReaderTranslationCoordinator(
 			settings = settings,
@@ -650,6 +653,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 		val recBackend = when (recModelId) {
 			"MLKIT" -> OcrRecognizerBackend.MLKIT
 			MANGA_OCR_RECOGNIZER_MODEL_ID -> OcrRecognizerBackend.MANGA_OCR
+			BaberuOcrReaderTextRecognizer.MODEL_ID -> OcrRecognizerBackend.BABERU
 			else -> OcrRecognizerBackend.PADDLE
 		}
 		if (configuredRecModelId == "AUTO") {
@@ -742,6 +746,12 @@ class ReaderPageTranslationProcessor @Inject constructor(
 	): List<OcrTextBlock> {
 		mangaOcrReaderTextRecognizer.setDiagnosticsEmitter(::log)
 		return when {
+			route.recognizer == OcrRecognizerBackend.BABERU -> recognizeWithBaberu(
+				detector = route.detector,
+				sourceUri = sourceUri,
+				sourceLang = sourceLang,
+				pageId = pageId,
+			)
 			route.detector == OcrDetectorBackend.MLKIT &&
 				route.recognizer == OcrRecognizerBackend.MLKIT -> recognizeTextByEngine(
 				engine = ReaderOcrEngine.MLKIT,
@@ -866,6 +876,29 @@ class ReaderPageTranslationProcessor @Inject constructor(
 				}
 				else -> emptyList()
 		}
+	}
+
+	private suspend fun recognizeWithBaberu(
+		detector: OcrDetectorBackend,
+		sourceUri: Uri,
+		sourceLang: String,
+		pageId: Long,
+	): List<OcrTextBlock> {
+		val regions = when (detector) {
+			OcrDetectorBackend.MLKIT -> detectedBlocksToRegions(
+				recognizeTextByEngine(ReaderOcrEngine.MLKIT, sourceUri, sourceLang, pageId),
+			)
+			OcrDetectorBackend.PADDLE -> paddleTextDetector.detect(sourceUri)
+			OcrDetectorBackend.CTD -> ctdTextDetector.detect(sourceUri)
+			OcrDetectorBackend.DBNET -> dbNetTextDetector.detect(sourceUri)
+			OcrDetectorBackend.BUBBLE -> bubbleReaderTextDetector.detect(sourceUri)
+		}
+		val detectorKey = detector.name.lowercase()
+		log { "metric.ocr.$detectorKey.detected_regions=${regions.size}" }
+		if (regions.isEmpty()) return emptyList()
+		val recognized = baberuTextRecognizer.recognize(sourceUri, regions)
+		log { "metric.ocr.${detectorKey}_baberu.recognized_blocks=${recognized.size}" }
+		return recognized
 	}
 
 	private fun logMangaOcrDiagnostics() {
@@ -3673,6 +3706,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 			MLKIT,
 			PADDLE,
 			MANGA_OCR,
+			BABERU,
 		}
 
 		private data class OcrQualityStats(

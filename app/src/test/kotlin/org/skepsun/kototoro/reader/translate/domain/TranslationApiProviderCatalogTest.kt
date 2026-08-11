@@ -87,4 +87,22 @@ class TranslationApiProviderCatalogTest {
 		)
 		assertTrue(model.files.all { it.downloadUrl.startsWith("https://huggingface.co/Skepsun/") })
 	}
+
+	@Test
+	fun `catalog exposes pinned Baberu INT4 recognizer files`() {
+		val model = requireNotNull(OnnxOfficialModelCatalog.findById(BaberuOcrReaderTextRecognizer.MODEL_ID))
+
+		assertEquals("OCR_RECOGNIZER", model.category.name)
+		assertEquals(
+			listOf(
+				"onnx/vision_int4.onnx",
+				"onnx/decoder_prefill_int8.onnx",
+				"onnx/decoder_step_int8.onnx",
+				"tokenizer/vocab.json",
+			),
+			model.files.map { it.fileName },
+		)
+		assertTrue(model.files.all { it.downloadUrl.contains("/d9cc13153e9a1cd8fdfa3b7b1cc329da2020aeae/") })
+		assertTrue(model.files.all { it.sha256?.length == 64 })
+	}
 }
