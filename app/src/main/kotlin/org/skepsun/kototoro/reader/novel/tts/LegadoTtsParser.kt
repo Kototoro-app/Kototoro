@@ -72,7 +72,7 @@ object LegadoTtsParser {
                 speed = 1.0f
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse Legado JSON string: \n$jsonStr", e)
+            Log.e(TAG, "Failed to parse Legado TTS configuration: ${e.javaClass.simpleName}")
             null
         }
     }

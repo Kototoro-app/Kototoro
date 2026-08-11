@@ -1623,7 +1623,7 @@ class NovelReaderActivity :
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                android.util.Log.w("NovelReaderActivity", "Failed to preload chapter: ${nextChapter.title}", e)
+                android.util.Log.d("NovelReaderActivity", "Failed to preload chapter: ${nextChapter.title}", e)
             }
         }
     }
@@ -1960,7 +1960,7 @@ class NovelReaderActivity :
                             android.util.Log.d("NovelReaderActivity", "Content ID not matched in ${dir.name} (looking for ${manga.id})")
                         }
                     } catch (e: Exception) {
-                        android.util.Log.w("NovelReaderActivity", "Failed to read index.json in ${dir.name}", e)
+                        android.util.Log.d("NovelReaderActivity", "Failed to read index.json in ${dir.name}", e)
                     }
                 } else {
                     android.util.Log.d("NovelReaderActivity", "No index.json in ${dir.name}")
@@ -2074,7 +2074,7 @@ class NovelReaderActivity :
                             android.util.Log.d("NovelReaderActivity", "Expanded EPUB chapter into ${epubContent.chapters.size} internal chapters")
                         } else {
                             // 读取失败，保留原始章节
-                            android.util.Log.w("NovelReaderActivity", "Failed to expand EPUB chapter, keeping original")
+                            android.util.Log.d("NovelReaderActivity", "Failed to expand EPUB chapter, keeping original")
                             expandedChapters.add(chapter)
                         }
                     }
@@ -2276,7 +2276,7 @@ class NovelReaderActivity :
             currentPageIndex = 0
             loadChapter(currentChapterIndex)
         } else {
-            android.util.Log.w("NovelReaderActivity", "Chapter selection ignored: index=$index, same as current or out of bounds")
+            android.util.Log.d("NovelReaderActivity", "Chapter selection ignored: index=$index, same as current or out of bounds")
         }
     }
 
@@ -2430,7 +2430,7 @@ class NovelReaderActivity :
                 
                 // 如果仍然没有章节信息，不保存历史
                 if (mangaWithChapters.chapters.isNullOrEmpty()) {
-                    android.util.Log.w("NovelReaderActivity", "Cannot save history: no chapters available")
+                    android.util.Log.d("NovelReaderActivity", "Cannot save history: no chapters available")
                     return@launch
                 }
                 

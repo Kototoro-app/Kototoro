@@ -148,7 +148,7 @@ class BrowserLauncher(
         try {
             val httpUrl = url.toHttpUrlOrNull()
             if (httpUrl == null) {
-                Log.w(TAG, "Invalid URL for cookie sync: $url")
+                Log.w(TAG, "Invalid URL for cookie sync")
                 return
             }
             
@@ -202,7 +202,7 @@ class BrowserLauncher(
                     .path("/")
                     .build()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse cookie: $trimmed", e)
+                Log.w(TAG, "Failed to parse cookie: ${e.javaClass.simpleName}")
                 null
             }
         }

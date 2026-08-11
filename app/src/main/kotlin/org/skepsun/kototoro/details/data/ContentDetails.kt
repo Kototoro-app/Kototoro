@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.details.data
 
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.withOverride
@@ -142,10 +143,12 @@ data class ContentDetails(
         if (remainingLocalChapters.isNotEmpty()) {
             result.addAll(remainingLocalChapters)
         }
-        android.util.Log.d(
-            "ContentDetails",
-            "mergeChapters: resultCount=${result.size}, resultBranches=${result.groupBy { it.branch }.mapValues { it.value.size }}, first=${result.take(3).map { "${it.id}|${it.branch}|${it.title}" }}",
-        )
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d(
+                "ContentDetails",
+                "mergeChapters: resultCount=${result.size}, resultBranches=${result.groupBy { it.branch }.mapValues { it.value.size }}, first=${result.take(3).map { "${it.id}|${it.branch}|${it.title}" }}",
+            )
+        }
         return result
     }
 

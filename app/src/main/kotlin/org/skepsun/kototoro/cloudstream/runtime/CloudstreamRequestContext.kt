@@ -5,6 +5,7 @@ import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.network.CloudFlareHandlingPolicy
 import org.skepsun.kototoro.core.network.CommonHeaders
@@ -65,7 +66,7 @@ internal object CloudstreamRequestContext {
 			originalRequest
 		}
 		val response = chain.proceed(request)
-		if (source != null && policy?.allowBlockedResponse == true) {
+		if (BuildConfig.DEBUG && source != null && policy?.allowBlockedResponse == true) {
 			Log.d(
 				TAG,
 				"loadLinks request source=${source.displayName} code=${response.code} url=${request.url} " +

@@ -22,7 +22,7 @@ class AcraScreenLogger @Inject constructor() : FragmentLifecycleCallbacks(), Def
 
 	override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
 		super.onFragmentAttached(fm, f, context)
-		ACRA.errorReporter.putCustomData(f.key(), f.arguments.contentToString())
+		ACRA.errorReporter.putCustomData(f.key(), SCREEN_STATE_ATTACHED)
 	}
 
 	override fun onFragmentDetached(fm: FragmentManager, f: Fragment) {
@@ -33,7 +33,7 @@ class AcraScreenLogger @Inject constructor() : FragmentLifecycleCallbacks(), Def
 
 	override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
 		super.onActivityCreated(activity, savedInstanceState)
-		ACRA.errorReporter.putCustomData(activity.key(), activity.intent.extras.contentToString())
+		ACRA.errorReporter.putCustomData(activity.key(), SCREEN_STATE_CREATED)
 		(activity as? FragmentActivity)?.supportFragmentManager?.registerFragmentLifecycleCallbacks(this, true)
 	}
 
@@ -48,9 +48,8 @@ class AcraScreenLogger @Inject constructor() : FragmentLifecycleCallbacks(), Def
 		"$time: ${javaClass.simpleName}"
 	}
 
-	@Suppress("DEPRECATION")
-	private fun Bundle?.contentToString() = this?.keySet()?.joinToString { k ->
-		val v = get(k)
-		"$k=$v"
-	} ?: toString()
+	private companion object {
+		const val SCREEN_STATE_ATTACHED = "attached"
+		const val SCREEN_STATE_CREATED = "created"
+	}
 }

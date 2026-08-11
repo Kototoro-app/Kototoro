@@ -107,7 +107,7 @@ class CommonHeadersInterceptor @Inject constructor(
 				SniBypassHostMap.register(safeHost, workingUrl.host)
 				workingUrl = workingUrl.newBuilder().host(safeHost).build()
 				headersBuilder[ "Host" ] = request.url.host
-				Log.w("CommonHeadersInterceptor", "SNI workaround: ${request.url.host} -> $safeHost")
+				Log.d("CommonHeadersInterceptor", "SNI workaround: ${request.url.host} -> $safeHost")
 			}
 		}
 
@@ -116,7 +116,7 @@ class CommonHeadersInterceptor @Inject constructor(
 
 		// Log response for debugging blocked images
 		if (!response.isSuccessful) {
-			android.util.Log.w("CommonHeadersInterceptor", "Request failed: ${response.code} for ${request.url}")
+			android.util.Log.d("CommonHeadersInterceptor", "Request failed: ${response.code}")
 		}
 
 		return response

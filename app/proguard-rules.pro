@@ -9,6 +9,22 @@
 	public static void checkNotNullParameter(...);
 }
 
+# Keep warning and error diagnostics in optimized builds, but remove verbose,
+# debug, and info logs together with their message construction.
+-maximumremovedandroidloglevel 4
+
+# Legacy debug output still exists in a few integration paths. Treat console
+# writes and no-argument stack traces as debug-only so R8 can remove them from
+# release/nightly builds. Crash reports written through PrintWriter are not
+# affected by these rules.
+-assumenosideeffects class java.io.PrintStream {
+	public void print(...);
+	public void println(...);
+}
+-assumenosideeffects class java.lang.Throwable {
+	public void printStackTrace();
+}
+
 -dontwarn okhttp3.internal.platform.**
 -dontwarn org.conscrypt.**
 -dontwarn org.bouncycastle.**

@@ -26,6 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
@@ -89,7 +90,7 @@ class CloudstreamContentRepository(
 			if (source.api.hasMainPage) {
 				return loadMainPage(offset, filter)
 			}
-			Log.w(
+			Log.d(
 				TAG,
 				"getList returning empty because query is blank for source=${source.displayName} " +
 					"hasMainPage=${source.api.hasMainPage}",
@@ -156,7 +157,7 @@ class CloudstreamContentRepository(
 			return links
 		}
 		if (chapter.url.isDirectPlayableUrl()) {
-			Log.w(
+			Log.d(
 				TAG,
 				"loadLinks empty, falling back to direct url source=${source.displayName} " +
 					"chapterId=${chapter.id} url=${chapter.url}",
@@ -337,11 +338,13 @@ class CloudstreamContentRepository(
 			"loadLinks start source=${source.displayName} chapterId=${chapter.id} chapterTitle=${chapter.title} " +
 				"locator=${chapter.url} branch=${chapter.branch}",
 		)
-		Log.d(
-			TAG,
-			"loadLinks extractors source=${source.displayName} total=${synchronized(extractorApis) { extractorApis.size }} " +
-				"sample=${cloudstreamExtractorSummary()}",
-		)
+		if (BuildConfig.DEBUG) {
+			Log.d(
+				TAG,
+				"loadLinks extractors source=${source.displayName} total=${synchronized(extractorApis) { extractorApis.size }} " +
+					"sample=${cloudstreamExtractorSummary()}",
+			)
+		}
 		val directLinkType = CloudstreamMetadataCodec.decodeEpisode(chapter.sourceData)
 			?.linkType
 			?.let { runCatching { ExtractorLinkType.valueOf(it) }.getOrNull() }
@@ -418,7 +421,7 @@ class CloudstreamContentRepository(
 				},
 				linkCallback = { link ->
 					if (link.url.isMissingCloudstreamUrl()) {
-						Log.w(
+						Log.d(
 							TAG,
 							"loadLinks rejected invalid url source=${source.displayName} chapterId=${chapter.id} " +
 								"name=${link.name} url=${link.url}",
@@ -475,12 +478,14 @@ class CloudstreamContentRepository(
 		}
 		if (completed) playbackCache.finish(cacheKey)
 		val pages = links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
-		val linkTypes = links.values.groupingBy { it.type }.eachCount()
-		Log.d(
-			TAG,
-			"loadLinks done source=${source.displayName} chapterId=${chapter.id} success=$success links=${pages.size} " +
-				"subtitles=${subtitles.size} rawLinks=${links.size} types=$linkTypes selected=${pages.firstOrNull()?.url}",
-		)
+		if (BuildConfig.DEBUG) {
+			val linkTypes = links.values.groupingBy { it.type }.eachCount()
+			Log.d(
+				TAG,
+				"loadLinks done source=${source.displayName} chapterId=${chapter.id} success=$success links=${pages.size} " +
+					"subtitles=${subtitles.size} rawLinks=${links.size} types=$linkTypes selected=${pages.firstOrNull()?.url}",
+			)
+		}
 		return pages
 	}
 
@@ -585,15 +590,17 @@ class CloudstreamContentRepository(
 			)
 		}.also { items ->
 			if (items.isEmpty() && aggregated.isEmpty()) {
-				Log.w(
+				Log.d(
 					TAG,
 					"main page produced 0 items source=${source.displayName} page=$page " +
 						"slotPage=$requestPage requestCount=${requests.size} selectedSectionIndex=$selectedSectionIndex " +
 						"aggregatedRaw=${aggregated.size}",
 				)
-				requests.forEachIndexed { index, page ->
-					val request = MainPageRequest(page.name, page.data, page.horizontalImages)
-					logMainPageBrowserContext(request, index, requestPage)
+				if (BuildConfig.DEBUG) {
+					requests.forEachIndexed { index, page ->
+						val request = MainPageRequest(page.name, page.data, page.horizontalImages)
+						logMainPageBrowserContext(request, index, requestPage)
+					}
 				}
 			}
 		}
@@ -705,6 +712,7 @@ class CloudstreamContentRepository(
 		requestPage: Int,
 		rows: List<com.lagradost.cloudstream3.HomePageList>,
 	) {
+		if (!BuildConfig.DEBUG) return
 		val summary = rows.mapIndexed { index, row ->
 			"#$index name=${row.name} list=${row.list.size}"
 		}
@@ -721,7 +729,8 @@ class CloudstreamContentRepository(
 		requestPage: Int,
 		hasNext: Boolean,
 	) {
-		Log.w(
+		if (!BuildConfig.DEBUG) return
+		Log.d(
 			TAG,
 			"main page empty response source=${source.displayName} api=${source.api.name} mainUrl=${source.api.mainUrl} " +
 				"usesWebView=${source.api.usesWebView} requestName=${request.name} requestData=${request.data} " +

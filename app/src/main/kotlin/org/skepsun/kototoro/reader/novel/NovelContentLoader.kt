@@ -245,7 +245,7 @@ class NovelContentLoader @Inject constructor(
                     android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: CACHE HIT for $cacheKey, length=${content.length}")
                     return content
                 } else {
-                    android.util.Log.w("NovelContentLoader", ">>> loadChapterContentInternal: Cached content looks like error/placeholder, skipping cache")
+                    android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Cached content looks like error/placeholder, skipping cache")
                 }
             }
         }
@@ -292,7 +292,7 @@ class NovelContentLoader @Inject constructor(
             val uri = java.net.URI(chapter.url)
             val file = java.io.File(uri)
             if (!file.exists()) {
-                android.util.Log.w("NovelContentLoader", "Local chapter file not found: ${chapter.url}")
+                android.util.Log.d("NovelContentLoader", "Local chapter file not found: ${chapter.url}")
                 "本地章节文件不存在：${chapter.url}"
             } else {
                 val html = readTextFromFile(file)
@@ -496,7 +496,7 @@ class NovelContentLoader @Inject constructor(
 							android.util.Log.d("NovelContentLoader", "image fallback: $src -> $entryPath")
                         }
 						if (entryPath == null) {
-							android.util.Log.w("NovelContentLoader", "image unresolved, keep remote: $src")
+								android.util.Log.d("NovelContentLoader", "image unresolved, keeping remote source")
 						}
                         if (entryPath != null) {
 							val absolute = "$URI_SCHEME_ZIP://$zipPath#$entryPath"

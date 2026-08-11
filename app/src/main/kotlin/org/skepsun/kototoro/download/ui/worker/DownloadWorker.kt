@@ -52,6 +52,7 @@ import okio.sink
 import okio.source
 import okio.use
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.image.BitmapDecoderCompat
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.ids
@@ -758,7 +759,7 @@ class DownloadWorker @AssistedInject constructor(
 				repo.getPages(chapter.value, nextChapterUrl)
 			} ?: continue
 			if (pages.isEmpty()) {
-				Log.w("DownloadWorker", "processStandardChapters empty pages: idx=$chapterIndex title=${chapter.value.title}")
+				Log.d("DownloadWorker", "processStandardChapters empty pages: idx=$chapterIndex title=${chapter.value.title}")
 			}
 
 			println("DownloadWorker: Chapter ${chapter.index}: ${chapter.value.title}")
@@ -1046,7 +1047,7 @@ class DownloadWorker @AssistedInject constructor(
 			val content = runFailsafe { repo.getChapterContent(chapter.value, nextChapterUrl) }
 				?: runFailsafe { decodeDataPage(repo.getPages(chapter.value, nextChapterUrl).firstOrNull()) }
 				?: run {
-					android.util.Log.w("DownloadWorker", "downloadNovelChapters: skip chapter ${chapter.value.title} (no content)")
+					android.util.Log.d("DownloadWorker", "downloadNovelChapters: skipping chapter without content")
 					continue
 				}
 
@@ -1139,7 +1140,7 @@ class DownloadWorker @AssistedInject constructor(
 						isStuck = etaEstimator.isStuck(),
 					))
 				}.onFailure {
-					android.util.Log.w("DownloadWorker", "downloadNovelChapters: image download failed ${it.message}")
+					android.util.Log.d("DownloadWorker", "downloadNovelChapters: image download failed")
 				}
 			}
 
@@ -1681,7 +1682,7 @@ class DownloadWorker @AssistedInject constructor(
 						try {
 							downloadTrackFile(repo.source, track, target.headers, trackFile)
 						} catch (e: Exception) {
-							android.util.Log.w("DownloadWorker", "Failed to download subtitle track: ${track.lang} url=${track.url}", e)
+								android.util.Log.d("DownloadWorker", "Failed to download subtitle track: ${e.javaClass.simpleName}")
 							trackFile.delete()
 						}
 					}
@@ -1695,7 +1696,7 @@ class DownloadWorker @AssistedInject constructor(
 						try {
 							downloadTrackFile(repo.source, track, target.headers, trackFile)
 						} catch (e: Exception) {
-							android.util.Log.w("DownloadWorker", "Failed to download audio track: ${track.lang} url=${track.url}", e)
+								android.util.Log.d("DownloadWorker", "Failed to download audio track: ${e.javaClass.simpleName}")
 							trackFile.delete()
 						}
 					}
@@ -1837,7 +1838,7 @@ class DownloadWorker @AssistedInject constructor(
 					return
 				}
 			}
-			android.util.Log.w("DownloadWorker", "Local track file not found or empty: $url")
+			android.util.Log.d("DownloadWorker", "Local track file not found or empty: $url")
 		}
 		// Normal HTTP URL — download via network
 		downloadDirectVideo(source, url, headers, outputFile) { _, _ -> }
@@ -1856,12 +1857,14 @@ class DownloadWorker @AssistedInject constructor(
 		val lines = mediaText.lineSequence().map { it.trim() }.toList()
 		val mediaSequence = parseHlsMediaSequence(lines)
 		val segments = parseHlsSegments(mediaUrl, lines, mediaSequence)
-		android.util.Log.d(
-			"DownloadWorker",
-			"HLS parsed: mediaUrl=$mediaUrl segments=${segments.size} keys=${
-				segments.mapNotNull { it.key?.method }.distinct().joinToString()
-			}",
-		)
+		if (BuildConfig.DEBUG) {
+			android.util.Log.d(
+				"DownloadWorker",
+				"HLS parsed: mediaUrl=$mediaUrl segments=${segments.size} keys=${
+					segments.mapNotNull { it.key?.method }.distinct().joinToString()
+				}",
+			)
+		}
 		segments.firstOrNull()?.let {
 			android.util.Log.d("DownloadWorker", "HLS first segment: url=${it.url} seq=${it.sequence}")
 		}

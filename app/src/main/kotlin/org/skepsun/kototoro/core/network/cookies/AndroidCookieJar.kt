@@ -101,7 +101,7 @@ class AndroidCookieJar : MutableCookieJar {
 			}
 		}
 		if (!latch.await(2, TimeUnit.SECONDS)) {
-			android.util.Log.w("MihonNetwork", "AndroidCookieJar setCookie timeout: url=$url, valueName=${value.substringBefore("=")}")
+			android.util.Log.w("MihonNetwork", "AndroidCookieJar setCookie timed out")
 		}
 	}
 

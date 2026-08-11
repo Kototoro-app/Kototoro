@@ -119,7 +119,7 @@ object BookList {
                     return listOf(detail)
                 }
             }
-            Log.w(TAG, "bookList parse returned empty list for url=$baseUrl isSearch=$isSearch")
+            Log.d(TAG, "bookList parse returned empty list for url=$baseUrl isSearch=$isSearch")
             return emptyList()
         }
 

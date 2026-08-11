@@ -7,9 +7,6 @@ import android.graphics.Bitmap
 import android.content.ContentValues
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -74,7 +71,6 @@ import android.provider.Settings
 import android.content.Context
 import java.io.File
 import java.net.URI
-import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import okhttp3.Headers
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -85,6 +81,7 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.VideoDecoderMode
 import org.skepsun.kototoro.core.prefs.VideoRendererMode
@@ -108,8 +105,6 @@ import org.skepsun.kototoro.video.performance.PlaybackFallbackReason
 import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
-import org.skepsun.kototoro.video.domain.isRejectedCloudstreamProbe
-import org.skepsun.kototoro.video.domain.isRejectedCloudstreamSegmentProbe
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
@@ -183,7 +178,6 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
-        private const val CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES = 256L * 1024L
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
         private const val HLS_VIDEO_MARKER = "kototoro:hls"
@@ -244,9 +238,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var torrentResolutionJob: Job? = null
     private var torrentConsent: Boolean? = null
     private var cloudstreamPlaybackInstance: Long = 0L
-    private val rejectedCloudstreamVideoUrls = mutableSetOf<String>()
-    private val pngWrappedCloudstreamVideoUrls = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val resolvedCloudstreamHlsUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
@@ -868,6 +859,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun initializeMpvRuntime(): Boolean {
         return runCatching {
             mpvView.initialize(filesDir.path, cacheDir.path)
+            // BaseMPVView leaves libmpv in idle=once, which shuts the core down after a failed
+            // first file. Keep it alive so Cloudstream can replace that file with the next mirror.
+            mpvView.mpv.setOptionString("idle", "yes")
             mpvPlayer = MpvPlayer(mpvView.mpv).also { player ->
                 player.initialize()
                 player.addListener(mpvListener)
@@ -1402,7 +1396,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             lifecycleScope.launch {
                 try {
                     val repo = mangaRepositoryFactory.create(manga.source)
-                    android.util.Log.w("VideoPlayer", "repo=${repo!!::class.simpleName} chapters=${manga.chapters?.size} source=${manga.source.name}")
+                    android.util.Log.d("VideoPlayer", "repo=${repo!!::class.simpleName} chapters=${manga.chapters?.size} source=${manga.source.name}")
                     val chapters = manga.chapters ?: emptyList()
                     val currentChapter = if (currentState != null) {
                         chapters.find { it.id == currentState.chapterId }
@@ -1421,11 +1415,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     val videos = repo.getVideoListForChapter(currentChapter)
                                         .filter { it.videoUrl.isNotBlank() }
                                     if (videos.isNotEmpty()) {
-                                        Log.d(
-                                            "VideoPlayerActivity",
-                                            "Resolved ${videos.size} Aniyomi video(s): " +
-                                                videos.joinToString { it.videoTitle.ifBlank { "<untitled>" } },
-                                        )
+                                        if (BuildConfig.DEBUG) {
+                                            Log.d(
+                                                "VideoPlayerActivity",
+                                                "Resolved ${videos.size} Aniyomi video(s): " +
+                                                    videos.joinToString { it.videoTitle.ifBlank { "<untitled>" } },
+                                            )
+                                        }
                                         availableVideos = videos
                                         updateQualityButtonVisibility()
                                         currentVideoSource = manga.source
@@ -1605,7 +1601,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 return@launch
             }
 
-            Log.w("VideoPlayer", "No playable media sniffed from web page, fallback to browser: $url")
+            Log.d("VideoPlayer", "No playable media sniffed from web page, fallback to browser: $url")
             AppRouter(this@VideoPlayerActivity).openBrowser(
                 url = url,
                 source = source,
@@ -1697,39 +1693,33 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         appSettings.videoPlaybackSpeed = defaultSpeed
         mpvPlayer?.setRate(defaultSpeed.toDouble())
 
-        val resolvedUrl = if (source is CloudstreamSource && forceHls) {
-            resolvedCloudstreamHlsUrls[url] ?: url
-        } else {
-            url
-        }
         Log.d(
             "VideoPlayerActivity",
-            "Loading media. URL: $url, resolvedUrl=$resolvedUrl, Headers: ${mergedHeaders.keys}",
+            "Loading media. URL: $url, Headers: ${mergedHeaders.keys}",
         )
-        val isHttpSource = resolvedUrl.startsWith("http://", ignoreCase = true) ||
-            resolvedUrl.startsWith("https://", ignoreCase = true)
-        val useProxy = shouldUseLocalProxy(resolvedUrl, isHttpSource, source)
+        val isHttpSource = url.startsWith("http://", ignoreCase = true) ||
+            url.startsWith("https://", ignoreCase = true)
+        val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
-            url = resolvedUrl,
+            url = url,
             headers = mergedHeaders,
             source = source,
             forceHls = forceHls,
-            unwrapPngSegments = forceHls && url in pngWrappedCloudstreamVideoUrls,
         )
         val (playUrl, playHeaders) = if (dynamicCloudstreamPlaylistUrl != null) {
-            Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $resolvedUrl")
+            Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $url")
             dynamicCloudstreamPlaylistUrl to emptyMap<String, String>()
         } else if (useProxy) {
             runCatching {
-                val proxyUrl = videoLocalCacheProxy.getProxyUrl(resolvedUrl, mergedHeaders, source)
+                val proxyUrl = videoLocalCacheProxy.getProxyUrl(url, mergedHeaders, source)
                 proxyUrl to emptyMap<String, String>()
             }.getOrElse {
-                Log.w("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
-                resolvedUrl to mergedHeaders
+                Log.d("VideoPlayerActivity", "Proxy cache unavailable, fallback to origin URL", it)
+                url to mergedHeaders
             }
         } else {
-            Log.d("VideoPlayerActivity", "Bypass local proxy for URL: $resolvedUrl")
-            resolvedUrl to mergedHeaders
+            Log.d("VideoPlayerActivity", "Bypass local proxy for URL: $url")
+            url to mergedHeaders
         }
         Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
         
@@ -1843,14 +1833,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         headers: Map<String, String>,
         source: ParsersContentSource?,
         forceHls: Boolean,
-        unwrapPngSegments: Boolean,
     ): String? {
         if (source !is CloudstreamSource) return null
         val path = url.substringBefore('?').substringBefore('#')
         val hasStandardHlsSuffix = path.endsWith(".m3u8", ignoreCase = true)
         val requiresNonstandardHlsProxy = forceHls && !hasStandardHlsSuffix
         if (
-            !unwrapPngSegments &&
             !requiresNonstandardHlsProxy &&
             !url.contains("/config-", ignoreCase = true)
         ) {
@@ -1858,7 +1846,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         val identitySeed = buildString {
             append(url)
-            append("|unwrapPngSegments=").append(unwrapPngSegments)
             headers.toSortedMap(String.CASE_INSENSITIVE_ORDER).forEach { (key, value) ->
                 append('|').append(key).append('=').append(value)
             }
@@ -1903,10 +1890,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     baseUrl = playlistUrl,
                     proxyBaseUrl = proxyBaseUrl,
                 )
-                Log.d(
-                    "VideoPlayerActivity",
-                    "Cloudstream playlist preview:\n${rewritten.lineSequence().take(8).joinToString("\n")}",
-                )
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "VideoPlayerActivity",
+                        "Cloudstream playlist preview:\n${rewritten.lineSequence().take(8).joinToString("\n")}",
+                    )
+                }
                 return@getDynamicProxyUrl VideoLocalCacheProxy.DynamicResponse(
                     statusCode = 200,
                     contentType = "application/vnd.apple.mpegurl; charset=utf-8",
@@ -2156,9 +2145,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         cloudstreamFallbackJob?.cancel()
         cloudstreamFallbackJob = null
-        rejectedCloudstreamVideoUrls.clear()
-        pngWrappedCloudstreamVideoUrls.clear()
-        resolvedCloudstreamHlsUrls.clear()
         selectionDialogState = null
         actionDialogState = null
         currentVideoSource = source
@@ -2174,7 +2160,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         fun refreshVideos(): List<Video> {
             val sortedVideos = videosByUrl.values
                 .toList()
-                .filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
                 .sortedCloudstreamVideos()
                 .sortedBy { video -> video.internalData == TORRENT_VIDEO_MARKER }
             availableVideos = sortedVideos
@@ -2187,17 +2172,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return sortedVideos
         }
 
-        suspend fun startPlayerFromAvailableLink(): Boolean {
+        fun startPlayerFromAvailableLink(): Boolean {
             if (startedVideoUrl != null) return true
-            var selected = refreshVideos().firstOrNull() ?: return false
-            while (!probeCloudstreamVideo(selected)) {
-                rejectedCloudstreamVideoUrls += selected.videoUrl
-                Log.w(
-                    "VideoPlayer",
-                    "Skipping Cloudstream link rejected by media probe url=${selected.videoUrl}",
-                )
-                selected = refreshVideos().firstOrNull() ?: return false
-            }
+            val selected = refreshVideos().firstOrNull() ?: return false
             startedVideoUrl = selected.videoUrl
             currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == selected.videoUrl }
                 .takeIf { it >= 0 }
@@ -2206,7 +2183,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             pendingExternalAudio = selected.audioTracks
             Log.d(
                 "VideoPlayerActivity",
-                "Starting Cloudstream playback from incremental link url=${selected.videoUrl} " +
+                "Starting Cloudstream playback after link collection url=${selected.videoUrl} " +
                     "available=${availableVideos.size}",
             )
             onFirstVideo()
@@ -2238,13 +2215,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     )
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
                     refreshVideos()
-                    startPlayerFromAvailableLink()
                 }
                 is CloudstreamPlaybackEvent.Subtitle -> {
                     if (!event.track.url.startsWith("http://") && !event.track.url.startsWith("https://")) {
-                        Log.w(
+                        Log.d(
                             "VideoPlayerActivity",
-                            "Ignoring Cloudstream subtitle with unsupported URL: ${event.track.url}",
+                            "Ignoring Cloudstream subtitle with unsupported URL",
                         )
                         return@collect
                     }
@@ -2967,7 +2943,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ?: currentVideoIndex
         currentVideoIndex = activeVideoIndex
         val firstCandidate = availableVideos.getOrNull(activeVideoIndex + 1) ?: run {
-            Log.w(
+            Log.d(
                 "VideoPlayer",
                 "Cloudstream playback failed without another mirror trigger=$trigger " +
                     "index=$activeVideoIndex available=${availableVideos.size} detail=$detail",
@@ -2976,146 +2952,21 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return false
         }
         cloudstreamFallbackJob = lifecycleScope.launch {
-            var candidate = firstCandidate
-            while (true) {
-                val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == candidate.videoUrl }
-                if (candidateIndex < 0) return@launch
-                if (probeCloudstreamVideo(candidate)) {
-                    Log.w(
-                        "VideoPlayer",
-                        "Cloudstream playback failed, trying next mirror trigger=$trigger " +
-                            "from=$activeVideoIndex to=$candidateIndex " +
-                            "available=${availableVideos.size} detail=$detail",
-                    )
-                    switchVideoQuality(candidate, currentMediaStartMs)
-                    return@launch
-                }
-                rejectedCloudstreamVideoUrls += candidate.videoUrl
-                Log.w(
-                    "VideoPlayer",
-                    "Skipping Cloudstream fallback rejected by media probe index=$candidateIndex " +
-                        "url=${candidate.videoUrl}",
-                )
-                availableVideos = availableVideos.filterNot { it.videoUrl in rejectedCloudstreamVideoUrls }
-                currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == currentMediaUrl }
-                    .takeIf { it >= 0 }
-                    ?: 0
-                candidate = availableVideos.getOrNull(currentVideoIndex + 1) ?: run {
-                    Log.w(
-                        "VideoPlayer",
-                        "Cloudstream playback failed without another mirror after probing " +
-                            "trigger=$trigger available=${availableVideos.size} detail=$detail",
-                    )
-                    showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
-                    return@launch
-                }
-            }
+            val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == firstCandidate.videoUrl }
+            if (candidateIndex < 0) return@launch
+            Log.d(
+                "VideoPlayer",
+                "Cloudstream playback failed, trying next mirror trigger=$trigger " +
+                    "from=$activeVideoIndex to=$candidateIndex " +
+                    "available=${availableVideos.size} detail=$detail",
+            )
+            switchVideoQuality(firstCandidate, currentMediaStartMs)
         }.also { job ->
             job.invokeOnCompletion {
                 if (cloudstreamFallbackJob === job) cloudstreamFallbackJob = null
             }
         }
         return true
-    }
-
-    private suspend fun probeCloudstreamVideo(video: Video): Boolean {
-        val url = video.videoUrl
-        if (video.internalData == TORRENT_VIDEO_MARKER || url.isTorrentLocator()) return true
-        if (!url.startsWith("http://") && !url.startsWith("https://")) return true
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                probeCloudstreamVideoBlocking(video)
-            }.onFailure { error ->
-                Log.d("VideoPlayer", "Cloudstream media probe inconclusive url=$url", error)
-            }.getOrDefault(true)
-        }
-    }
-
-    @androidx.media3.common.util.UnstableApi
-    private fun probeCloudstreamVideoBlocking(video: Video): Boolean {
-        val client = contentHttpClient.newBuilder()
-            .callTimeout(6, TimeUnit.SECONDS)
-            .build()
-        val request = cloudstreamProbeRequest(video.videoUrl, video.headers, head = false)
-        return client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return false
-            val contentType = response.header("Content-Type")
-            val responseUrl = response.request.url.toString()
-            val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
-            if (isRejectedCloudstreamProbe(contentType, body.copyOf(minOf(body.size, 64)))) return false
-            if (!contentType.orEmpty().contains("mpegurl", ignoreCase = true) &&
-                !body.toString(Charsets.UTF_8).trimStart().startsWith("#EXTM3U")
-            ) {
-                return true
-            }
-            val playlist = HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream())
-            var resolvedPlaybackUrl: String? = null
-            val mediaPlaylist = when (playlist) {
-                is HlsMediaPlaylist -> playlist
-                is HlsMultivariantPlaylist -> {
-                    val variantUrl = playlist.variants
-                        .maxByOrNull { it.format.bitrate }
-                        ?.url
-                        ?.toString()
-                        ?: return true
-                    loadCloudstreamMediaPlaylist(client, variantUrl, video.headers)?.also {
-                        resolvedPlaybackUrl = variantUrl
-                    } ?: return true
-                }
-                else -> return true
-            }
-            resolvedPlaybackUrl?.let { resolvedUrl ->
-                resolvedCloudstreamHlsUrls[video.videoUrl] = resolvedUrl
-                Log.d(
-                    "VideoPlayer",
-                    "Resolved Cloudstream HLS master to variant master=${video.videoUrl} variant=$resolvedUrl",
-                )
-            }
-            val segmentUrl = mediaPlaylist.segments.firstOrNull()?.url ?: return true
-            val resolvedSegmentUrl = URI(mediaPlaylist.baseUri).resolve(segmentUrl).toString()
-            client.newCall(cloudstreamProbeRequest(resolvedSegmentUrl, video.headers, head = true))
-                .execute()
-                .use { segmentResponse ->
-                    if (!segmentResponse.isSuccessful) return true
-                    val isDeclaredHls = video.internalData == HLS_VIDEO_MARKER
-                    if (
-                        isDeclaredHls &&
-                        segmentResponse.header("Content-Type")?.startsWith("image/", ignoreCase = true) == true
-                    ) {
-                        pngWrappedCloudstreamVideoUrls += video.videoUrl
-                        Log.d("VideoPlayer", "Detected image-labelled Cloudstream HLS segments url=${video.videoUrl}")
-                    }
-                    return !isRejectedCloudstreamSegmentProbe(
-                        segmentResponse.header("Content-Type"),
-                        byteArrayOf(),
-                        isDeclaredHls = isDeclaredHls,
-                    )
-                }
-        }
-    }
-
-    @androidx.media3.common.util.UnstableApi
-    private fun loadCloudstreamMediaPlaylist(
-        client: OkHttpClient,
-        url: String,
-        headers: Headers?,
-    ): HlsMediaPlaylist? {
-        return client.newCall(cloudstreamProbeRequest(url, headers, head = false))
-            .execute()
-            .use { response ->
-                if (!response.isSuccessful) return null
-                val responseUrl = response.request.url.toString()
-                val body = response.peekBody(CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES).bytes()
-                HlsPlaylistParser().parse(Uri.parse(responseUrl), body.inputStream()) as? HlsMediaPlaylist
-            }
-    }
-
-    private fun cloudstreamProbeRequest(url: String, headers: Headers?, head: Boolean): Request {
-        return Request.Builder()
-            .url(url)
-            .apply { headers?.let { videoHeaders -> headers(videoHeaders) } }
-            .apply { if (head) head() else header("Range", "bytes=0-262143") }
-            .build()
     }
 
     private fun scheduleCloudstreamPlaybackHealthCheck() {
@@ -3388,7 +3239,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     ) {
         val resolved = availableVideos.resolveCloudstreamVideo(selection)
         if (resolved == null) {
-            Log.w("VideoPlayer", "Ignoring stale video selection url=${selection.videoUrl}")
+            Log.d("VideoPlayer", "Ignoring stale video selection url=${selection.videoUrl}")
             return
         }
         val video = resolved.value
@@ -4006,14 +3857,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         
         // Verify chapter ID matches current playing chapter
         if (currentChapterId != null && currentChapterId != history.chapterId) {
-            android.util.Log.w("VideoPlayer", "Chapter mismatch: history has ${history.chapterId}, but playing ${currentChapterId}. Not restoring position.")
+            android.util.Log.d("VideoPlayer", "Chapter mismatch: history has ${history.chapterId}, but playing ${currentChapterId}. Not restoring position.")
             // Don't restore position when chapter doesn't match
             return
         }
         
         val overall = history.percent
         if (overall !in 0f..1f) {
-            android.util.Log.w("VideoPlayer", "Invalid history percent: $overall")
+            android.util.Log.d("VideoPlayer", "Invalid history percent: $overall")
             return
         }
         if (overall >= 0.98f) {
@@ -4029,7 +3880,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }
         
         val chapter = chapters.find { it.id == history.chapterId } ?: run {
-            android.util.Log.w("VideoPlayer", "Chapter not found for id=${history.chapterId}, using overall percent")
+            android.util.Log.d("VideoPlayer", "Chapter not found for id=${history.chapterId}, using overall percent")
             pendingInitialSeekPercent = overall
             return
         }
@@ -4039,7 +3890,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val branchChapters = chapters.filter { it.branch == chapter.branch }
         val count = branchChapters.size
         if (count <= 0) {
-            android.util.Log.w("VideoPlayer", "No chapters in branch '${chapter.branch}'")
+            android.util.Log.d("VideoPlayer", "No chapters in branch '${chapter.branch}'")
             pendingInitialSeekPercent = overall
             return
         }
@@ -4091,22 +3942,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         android.util.Log.d("VideoPlayer", "ReaderState before save: chapterId=${state?.chapterId}, page=${state?.page}")
         
         if (state == null) {
-            android.util.Log.w("VideoPlayer", "ReaderState is null, cannot save accurate chapter progress")
+            android.util.Log.d("VideoPlayer", "ReaderState is null, cannot save accurate chapter progress")
         }
 
         fun computeSeriesPercent(m: org.skepsun.kototoro.parsers.model.Content, s: ReaderState, ep: Float): Float {
             val chapters = m.chapters ?: run {
-                android.util.Log.w("VideoPlayer", "No chapters available for series percent calculation")
+                android.util.Log.d("VideoPlayer", "No chapters available for series percent calculation")
                 return ep
             }
             val curr = chapters.find { it.id == s.chapterId } ?: run {
-                android.util.Log.w("VideoPlayer", "Current chapter (id=${s.chapterId}) not found in chapters list")
+                android.util.Log.d("VideoPlayer", "Current chapter (id=${s.chapterId}) not found in chapters list")
                 return ep
             }
             val branchChapters = chapters.filter { it.branch == curr.branch }
             val count = branchChapters.size
             if (count <= 0) {
-                android.util.Log.w("VideoPlayer", "No chapters in branch '${curr.branch}'")
+                android.util.Log.d("VideoPlayer", "No chapters in branch '${curr.branch}'")
                 return ep
             }
             val idx = branchChapters.indexOfFirst { it.id == curr.id }.coerceAtLeast(0)
@@ -4124,7 +3975,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             // 防御性拦截：如果 mangaSeed ?URL 是本地文件协议，绝对不能交给在线解析器，否则必定抛错
 	            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
 	                if (mangaSeed.url.startsWith("file://")) {
-	                    android.util.Log.w("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
+	                    android.util.Log.d("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
 	                    val dbContent = contentDataRepository.findPreferredLocalContentById(mangaSeed.id, withChapters = true)
 	                        ?: contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
 	                    dbContent ?: mangaSeed
@@ -4138,7 +3989,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             
             // 若仍无章节信息（网络/源不可用），避免保存触发断言失败
             if (manga.chapters.isNullOrEmpty()) {
-                android.util.Log.w("VideoPlayer", "Cannot save history: manga has no chapters")
+                android.util.Log.d("VideoPlayer", "Cannot save history: manga has no chapters")
                 if (requireHistory) error("Cannot save history without chapters")
                 return@launch
             }
@@ -4184,7 +4035,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         historyUpdateUseCase.invokeAsync(manga, timedState, overall)
                     }
                 } else {
-                    android.util.Log.w("VideoPlayer", "Cannot create fallback ReaderState")
+                    android.util.Log.d("VideoPlayer", "Cannot create fallback ReaderState")
                     if (requireHistory) error("Cannot create history state")
                 }
             }

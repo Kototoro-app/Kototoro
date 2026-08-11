@@ -132,9 +132,7 @@ object JsonSourceLogger {
 	 * @param error The error that occurred
 	 */
 	fun logNetworkError(url: String, error: Throwable) {
-		Log.e(TAG, "Network error accessing '$url'", error)
-		Log.e(TAG, "  Error type: ${error.javaClass.simpleName}")
-		Log.e(TAG, "  Message: ${error.message}")
+		Log.e(TAG, "Network request failed: ${error.javaClass.simpleName}")
 	}
 	
 	/**
@@ -144,8 +142,7 @@ object JsonSourceLogger {
 	 * @param reason The reason for the failure
 	 */
 	fun logRuleSyntaxError(rule: String, reason: String) {
-		Log.e(TAG, "Invalid rule syntax: $reason")
-		Log.e(TAG, "  Rule: '$rule'")
+		Log.e(TAG, "Invalid rule syntax")
 	}
 	
 	/**
@@ -167,12 +164,8 @@ object JsonSourceLogger {
 	}
 
 	fun logTvBoxImportFailure(category: String, action: String, locator: String, detail: String, error: Throwable? = null) {
-		val message = "TVBox import failure: category=$category action=$action locator=$locator detail=$detail"
-		if (error == null) {
-			Log.w(TAG, message)
-		} else {
-			Log.w(TAG, message, error)
-		}
+		val errorType = error?.javaClass?.simpleName ?: "none"
+		Log.w(TAG, "TVBox import failure: category=$category action=$action errorType=$errorType")
 	}
 	
 	/**

@@ -8,7 +8,11 @@
 #include "gpu.h"
 
 #define TAG "RealEsrganJni"
+#ifndef NDEBUG
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
+#else
+#define LOGD(...) ((void) 0)
+#endif
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
 static RealESRGAN* realesrgan = nullptr;

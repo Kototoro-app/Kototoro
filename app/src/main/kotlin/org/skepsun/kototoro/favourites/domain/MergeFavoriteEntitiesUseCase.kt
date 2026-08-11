@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.domain
 
 import android.util.Log
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
 import org.skepsun.kototoro.core.db.entity.toContent
@@ -918,10 +919,12 @@ class MergeFavoriteEntitiesUseCase @Inject constructor(
                         val mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id }
                         val mergeState = resolveMergeState(mangaIds, localEntityIdsByMangaId)
                         val matchScore = matches.minOfOrNull { it.score } ?: 1f
-                        Log.d(
-                            TAG,
-                            "alias match: entityId=${entity.id} primary='${entity.primaryName}' aliases=${entity.aliases.joinToString("|")} matchedKey='$entityKey' score=$matchScore members=${items.map { "${it.title}(${it.source.name})" }.joinToString(", ")}",
-                        )
+                        if (BuildConfig.DEBUG) {
+                            Log.d(
+                                TAG,
+                                "alias match: entityId=${entity.id} primary='${entity.primaryName}' aliases=${entity.aliases.joinToString("|")} matchedKey='$entityKey' score=$matchScore members=${items.map { "${it.title}(${it.source.name})" }.joinToString(", ")}",
+                            )
+                        }
                         MergeCandidateGroup(
                             id = "${contentType.name}:alias:${entity.id}:${mangaIds.joinToString("-")}",
                             title = entity.primaryName,

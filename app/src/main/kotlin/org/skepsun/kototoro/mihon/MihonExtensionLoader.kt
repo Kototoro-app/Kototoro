@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionMetadataSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -153,11 +154,11 @@ class MihonExtensionLoader @Inject constructor(
         val isExtension = hasFeature || (hasPackageName && hasMetaData)
         
         // Enhanced logging for debugging - LOG ALL POTENTIAL MATCHES
-        if (hasPackageName || isExtension) {
+        if (BuildConfig.DEBUG && (hasPackageName || isExtension)) {
             android.util.Log.d(TAG, "isPackageAnExtension($pkgName): isExt=$isExtension (feature=$hasFeature, name=$hasPackageName, meta=$hasMetaData)")
             if (!hasFeature) {
                 val features = pkgInfo.reqFeatures?.joinToString { it.name } ?: "none"
-                android.util.Log.w(TAG, "$pkgName missing required feature $EXTENSION_FEATURE. Current features: $features")
+                android.util.Log.d(TAG, "$pkgName missing required feature $EXTENSION_FEATURE. Current features: $features")
             }
         }
         

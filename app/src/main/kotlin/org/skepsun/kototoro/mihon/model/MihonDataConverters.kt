@@ -173,7 +173,7 @@ fun Content.toMihonManga(): SManga {
     if (httpIndex > 0) {
         // Extract everything from the second "http" onwards
         cleanUrl = cleanUrl.substring(httpIndex)
-        android.util.Log.w("MihonDataConverters", "Detected duplicate baseUrl, extracting: '$url' -> '$cleanUrl'")
+        android.util.Log.d("MihonDataConverters", "Detected duplicate baseUrl, extracting: '$url' -> '$cleanUrl'")
     }
     
     // Fix malformed protocols (https// -> https://)
@@ -193,7 +193,7 @@ fun Content.toMihonManga(): SManga {
     
     // If URL still doesn't look absolute, log warning
     if (!cleanUrl.matches(Regex("^https?://.*")) && !cleanUrl.startsWith("/")) {
-        android.util.Log.w("MihonDataConverters", "URL may be invalid after cleanup: '$cleanUrl' (original: '$url')")
+        android.util.Log.d("MihonDataConverters", "URL may be invalid after cleanup: '$cleanUrl' (original: '$url')")
     }
     
     // NOTE: Do NOT add a leading slash to non-absolute URLs.

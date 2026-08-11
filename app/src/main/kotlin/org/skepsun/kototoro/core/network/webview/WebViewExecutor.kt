@@ -490,8 +490,7 @@ class WebViewExecutor @Inject constructor(
                         }
                     }
                     if (resolved == null) {
-                        Log.w(TAG, "Captcha auto-resolve timed out for ${exception.url}, dumping page HTML:")
-                        dumpPageHtml(webView)
+                        Log.w(TAG, "Captcha auto-resolve timed out")
                     }
                     resolved == true
                 } catch (e: CancellationException) {
@@ -1009,7 +1008,7 @@ class WebViewExecutor @Inject constructor(
                         else -> if (System.currentTimeMillis() >= challengeDeadline) {
                             Log.w(
                                 TAG,
-                                "Captcha auto-resolve deadline reached for ${exception.url}, " +
+                                "Captcha auto-resolve deadline reached, " +
                                     "state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
                             )
                             resumeOnce(false)
@@ -1064,20 +1063,6 @@ class WebViewExecutor @Inject constructor(
             .firstOrNull()
             ?: return false
         return repository.getConfig()[key]
-    }
-
-    @MainThread
-    private suspend fun dumpPageHtml(webView: WebView) {
-        runCatchingCancellable {
-            val html = withTimeoutOrNull(2_000L) {
-                suspendCancellableCoroutine<String?> { cont ->
-                    webView.evaluateJavascript("document.documentElement.outerHTML") { result ->
-                        cont.resume(result)
-                    }
-                }
-            }
-            Log.w(TAG, html.orEmpty())
-        }.onFailure { it.printStackTraceDebug() }
     }
 
 	suspend fun loginAndCheck(
@@ -1194,7 +1179,6 @@ class WebViewExecutor @Inject constructor(
 												"loginAndCheck pageFinished: requested=$loginUrl, current=${currentUrl.take(180)}, " +
 													"title=${title.take(120)}, ok=$ok, rawCookies=[${webViewCookieDebugString(loginUrl)}]",
 											)
-											logLoginPageState(webView, loginUrl, "pageFinished")
 											if (ok && cont.isActive) {
 												Log.i(
 													TAG,
@@ -1228,7 +1212,6 @@ class WebViewExecutor @Inject constructor(
 							}
 						}
 					} catch (error: kotlinx.coroutines.TimeoutCancellationException) {
-						logLoginPageState(webView, loginUrl, "timeout")
 						throw error
 					}
 					Log.i(
@@ -1285,28 +1268,8 @@ class WebViewExecutor @Inject constructor(
 				}
 			}
 		}.onFailure { error ->
-			Log.w(TAG, "loginAndCheck failed: url=$loginUrl, error=${error::class.java.simpleName}: ${error.message}")
+			Log.w(TAG, "loginAndCheck failed: ${error::class.java.simpleName}")
 		}.getOrDefault(false)
-	}
-
-	private suspend fun logLoginPageState(webView: WebView, loginUrl: String, reason: String) {
-		runCatchingCancellable {
-			val state = withTimeoutOrNull(2_000L) {
-				suspendCancellableCoroutine<String> { cont ->
-					webView.evaluateJavascript(LOGIN_PAGE_STATE_SCRIPT) { result ->
-						if (cont.isActive) {
-							cont.resume(decodeJavascriptString(result))
-						}
-					}
-				}
-			}.orEmpty()
-			Log.w(
-				TAG,
-				"loginAndCheck pageState: reason=$reason, requested=$loginUrl, state=${state.take(1200)}",
-			)
-		}.onFailure { error ->
-			Log.w(TAG, "loginAndCheck pageState failed: reason=$reason, error=${error.message}")
-		}
 	}
 
 	private fun shouldLogCloudflareDiagnostic(value: String): Boolean {
@@ -1492,22 +1455,6 @@ class WebViewExecutor @Inject constructor(
 			"cf_chl",
 			"__cf",
 		)
-		private val LOGIN_PAGE_STATE_SCRIPT = """
-			JSON.stringify({
-			  readyState: document.readyState || '',
-			  href: location.href || '',
-			  title: document.title || '',
-			  visibilityState: document.visibilityState || '',
-			  userAgent: navigator.userAgent || '',
-			  webdriver: navigator.webdriver === undefined ? 'undefined' : String(navigator.webdriver),
-			  language: navigator.language || '',
-			  platform: navigator.platform || '',
-			  cookieEnabled: String(navigator.cookieEnabled),
-			  challengeErrorTitle: document.querySelector('#challenge-error-title')?.textContent?.trim() || '',
-			  challengeErrorText: document.querySelector('#challenge-error-text')?.textContent?.trim() || '',
-			  bodyText: document.body?.innerText?.trim()?.slice(0, 500) || ''
-			})
-		""".trimIndent()
     }
 
 	data class SniffedMediaResult(

@@ -480,7 +480,7 @@ class LNReaderPluginBridge(
 		val obj = try {
 			json.parseToJsonElement(jsonStr).jsonObject
 		} catch (e: Exception) {
-			Log.e(TAG, "Failed to parse novel details JSON: ${e.message}\nRaw JSON: ${jsonStr.take(1000)}")
+			Log.e(TAG, "Failed to parse novel details JSON: ${e.javaClass.simpleName}")
 			return LNReaderNovelDetails(name = "Error", path = "")
 		}
 		

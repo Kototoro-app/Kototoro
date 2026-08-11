@@ -10,6 +10,7 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
@@ -169,10 +170,11 @@ class MihonMangaRepository(
         val details = update.manga
         val rawChapters = update.chapters
 
-        val totalChapters = rawChapters.size
-        android.util.Log.d("MihonMangaRepository", "rawChapters count: $totalChapters, source: ${source.name}")
-        rawChapters.take(15).forEachIndexed { idx, ch ->
-            android.util.Log.d("MihonMangaRepository", "  raw[$idx]: ${ch.name}")
+        if (BuildConfig.DEBUG) {
+            android.util.Log.d("MihonMangaRepository", "rawChapters count: ${rawChapters.size}, source: ${source.name}")
+            rawChapters.take(15).forEachIndexed { idx, ch ->
+                android.util.Log.d("MihonMangaRepository", "  raw[$idx]: ${ch.name}")
+            }
         }
         // 采用最直观的策略：直接反转原始列表（假设原始是“最新在前”），并依次分配虚拟编号。
         // 这能确保 Page 1 对应 1.0，Page 15 对应 15.0，解决排序识别反向的问题。

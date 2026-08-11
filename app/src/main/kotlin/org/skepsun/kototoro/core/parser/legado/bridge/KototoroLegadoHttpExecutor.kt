@@ -8,6 +8,7 @@ import org.json.JSONObject
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.core.parser.legado.ConcurrentRateLimiter
@@ -152,11 +153,13 @@ class KototoroLegadoHttpExecutor(
                         }
                         val effectiveBody = body
                         logUnimplementedRequestOptions(plan)
-                        val bodyPreview = effectiveBody.replace("\r", "").replace("\n", "\\n").take(180)
-                        Log.d(
-                            TAG,
-                            "Final request for ${plan.url}: method=POST contentType=$inferredContentType bodyPreview=$bodyPreview headers=$sanitizedHeaders",
-                        )
+                        if (BuildConfig.DEBUG) {
+                            val bodyPreview = effectiveBody.replace("\r", "").replace("\n", "\\n").take(180)
+                            Log.d(
+                                TAG,
+                                "Final request for ${plan.url}: method=POST contentType=$inferredContentType bodyPreview=$bodyPreview headers=$sanitizedHeaders",
+                            )
+                        }
                         httpClient.post(
                             plan.url,
                             effectiveBody.toRequestBody(inferredContentType.toMediaTypeOrNull()),
@@ -343,6 +346,7 @@ class KototoroLegadoHttpExecutor(
     }
 
     private fun logUnimplementedRequestOptions(plan: LegadoRequestPlan) {
+        if (!BuildConfig.DEBUG) return
         if (
             plan.proxy != null ||
             plan.dnsIp != null ||

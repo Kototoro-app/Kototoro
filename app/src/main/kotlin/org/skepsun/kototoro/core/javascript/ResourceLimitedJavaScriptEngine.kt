@@ -56,7 +56,7 @@ class ResourceLimitedJavaScriptEngine(
         // 检查是否超过限制
         if (usedMemoryMB > this.maxMemoryMB) {
             val message = "JavaScript execution exceeded memory limit: ${usedMemoryMB}MB > ${this.maxMemoryMB}MB"
-            Log.e(TAG, "$message for $operation: ${code.take(100)}...")
+            Log.e(TAG, "$message for $operation")
             
             // 尝试触发垃圾回收
             System.gc()
