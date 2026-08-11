@@ -14,7 +14,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.async
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.browser.BrowserActivity
-import org.skepsun.kototoro.browser.cloudflare.CloudFlareActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.EmptyContentException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
@@ -26,6 +25,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.ui.dialog.buildAlertDialog
 import org.skepsun.kototoro.core.util.ext.isHttpUrl
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.findInteractiveActionRequiredException
 import org.skepsun.kototoro.core.util.ext.restartApplication
 import org.skepsun.kototoro.details.ui.pager.EmptyContentReason
@@ -64,9 +64,6 @@ class ExceptionResolver private constructor(
     private val sourceAuthContract = host.registerForActivityResult(SourceAuthActivity.Contract()) {
         handleActivityResult(SourceAuthActivity.TAG, it)
     }
-    private val cloudflareContract = host.registerForActivityResult(CloudFlareActivity.Contract()) {
-        handleActivityResult(CloudFlareActivity.TAG, it)
-    }
 
     fun showErrorDetails(e: Throwable, url: String? = null) {
         host.router.showErrorDialog(e, url)
@@ -74,10 +71,12 @@ class ExceptionResolver private constructor(
 
     suspend fun resolve(e: Throwable, tryAutoResolve: Boolean = true): Boolean = host.lifecycleScope.async {
         val interactiveAction = e.findInteractiveActionRequiredException()
+        val cloudflare = e.findCloudFlareException()
         if (interactiveAction != null) {
             resolveBrowserAction(interactiveAction)
+        } else if (cloudflare is CloudFlareProtectedException) {
+            resolveCF(cloudflare, tryAutoResolve)
         } else when (e) {
-            is CloudFlareProtectedException -> resolveCF(e, tryAutoResolve)
             is AuthRequiredException -> resolveAuthException(e.source)
             is SSLException,
             is CertPathValidatorException -> {
@@ -136,13 +135,11 @@ class ExceptionResolver private constructor(
     private suspend fun resolveCF(e: CloudFlareProtectedException, tryAutoResolve: Boolean): Boolean {
         val autoResolveEnabled = tryAutoResolve &&
             (host.context?.let { !SourceSettings(it, e.source).isCaptchaAutoResolveDisabled } ?: true)
-        if (autoResolveEnabled && captchaAutoResolveCoordinator.resolve(e.source, e)) {
-            return true
-        }
-        return suspendCoroutine { cont ->
-            continuations[CloudFlareActivity.TAG] = cont
-            cloudflareContract.launch(e)
-        }
+        return captchaAutoResolveCoordinator.resolve(
+            source = e.source,
+            exception = e,
+            tryAutomatic = autoResolveEnabled,
+        )
     }
 
     private suspend fun resolveAuthException(source: ContentSource): Boolean {
@@ -274,27 +271,31 @@ class ExceptionResolver private constructor(
     companion object {
 
         @StringRes
-        fun getResolveStringId(e: Throwable) = when (e) {
-            is CloudFlareProtectedException -> R.string.captcha_solve
-            is ScrobblerAuthRequiredException,
-            is AuthRequiredException -> R.string.sign_in
-
-            is NotFoundException -> if (e.url.isHttpUrl()) R.string.open_in_browser else 0
-            is UnsupportedSourceException -> if (e.manga != null) R.string.alternatives else 0
-            is SSLException,
-            is CertPathValidatorException -> R.string.fix
-
-            is ProxyConfigException -> R.string.settings
-
-            is InteractiveActionRequiredException -> R.string._continue
-
-            is EmptyContentException -> when (e.reason) {
-                EmptyContentReason.RESTRICTED -> if (e.manga.publicUrl.isHttpUrl()) R.string.open_in_browser else 0
-                EmptyContentReason.NO_CHAPTERS -> R.string.alternatives
-                else -> 0
+        fun getResolveStringId(e: Throwable): Int {
+            if (e.findCloudFlareException() is CloudFlareProtectedException) {
+                return R.string.captcha_solve
             }
+            return when (e) {
+                is ScrobblerAuthRequiredException,
+                is AuthRequiredException -> R.string.sign_in
 
-            else -> if (e.findInteractiveActionRequiredException() != null) R.string._continue else 0
+                is NotFoundException -> if (e.url.isHttpUrl()) R.string.open_in_browser else 0
+                is UnsupportedSourceException -> if (e.manga != null) R.string.alternatives else 0
+                is SSLException,
+                is CertPathValidatorException -> R.string.fix
+
+                is ProxyConfigException -> R.string.settings
+
+                is InteractiveActionRequiredException -> R.string._continue
+
+                is EmptyContentException -> when (e.reason) {
+                    EmptyContentReason.RESTRICTED -> if (e.manga.publicUrl.isHttpUrl()) R.string.open_in_browser else 0
+                    EmptyContentReason.NO_CHAPTERS -> R.string.alternatives
+                    else -> 0
+                }
+
+                else -> if (e.findInteractiveActionRequiredException() != null) R.string._continue else 0
+            }
         }
 
         fun canResolve(e: Throwable) = getResolveStringId(e) != 0

@@ -35,17 +35,24 @@ class CloudFlareInterceptor : Interceptor {
 				}
 			}
 
-			CloudFlareHelper.PROTECTION_CAPTCHA -> response.closeThrowing(
-				CloudFlareProtectedException(
-					url = if (source?.name?.startsWith(CLOUDSTREAM_SOURCE_PREFIX) == true) {
-						request.url.toString()
-					} else {
-						CloudFlareHelper.getChallengeUrl(request.url.toString())
-					},
+			CloudFlareHelper.PROTECTION_CAPTCHA -> {
+				val error = CloudFlareProtectedException(
+					url = CloudFlareHelper.getBrowserChallengeUrl(request.url.toString()),
 					source = source,
 					headers = request.headers,
-				),
-			)
+				)
+				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
+				if (policy?.allowCaptchaResponse == true) {
+					policy.onCaptchaDetected?.invoke(error)
+					Log.w(
+						TAG,
+						"CloudFlare captcha response allowed by request policy: url=${request.url} source=${source?.name}",
+					)
+					response
+				} else {
+					response.closeThrowing(error)
+				}
+			}
 
 			else -> response
 		}
@@ -62,6 +69,5 @@ class CloudFlareInterceptor : Interceptor {
 
 	private companion object {
 		const val TAG = "CloudFlareInterceptor"
-		const val CLOUDSTREAM_SOURCE_PREFIX = "CLOUDSTREAM_"
 	}
 }

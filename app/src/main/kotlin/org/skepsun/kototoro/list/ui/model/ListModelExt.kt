@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.util.ext.getDisplayIcon
+import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.parsers.util.ifZero
 
 fun Throwable.toErrorState(canRetry: Boolean = true, @StringRes secondaryAction: Int = 0) = ErrorState(
@@ -11,7 +12,9 @@ fun Throwable.toErrorState(canRetry: Boolean = true, @StringRes secondaryAction:
 	icon = getDisplayIcon(),
 	canRetry = canRetry,
 	buttonText = ExceptionResolver.getResolveStringId(this).ifZero { R.string.try_again },
-	secondaryButtonText = secondaryAction,
+	secondaryButtonText = secondaryAction.takeIf { it != 0 }
+		?: getCauseUrl()?.let { R.string.open_in_browser }
+		?: 0,
 )
 
 fun Throwable.toErrorFooter() = ErrorFooter(

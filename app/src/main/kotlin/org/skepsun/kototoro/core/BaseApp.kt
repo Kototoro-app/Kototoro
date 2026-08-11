@@ -221,6 +221,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
 		fun mihonExtensionManager(): MihonExtensionManager
 		fun aniyomiExtensionManager(): AniyomiExtensionManager
 		fun ireaderExtensionManager(): IReaderExtensionManager
+		fun captchaAutoResolveCoordinator(): org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 		fun cloudstreamRuntimeManager(): org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
 		fun jsonSourceManager(): org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 		fun externalExtensionRepoRepository(): org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository

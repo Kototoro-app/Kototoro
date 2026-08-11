@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 
 internal class CloudstreamApiGateway(
 	private val source: CloudstreamSource,
@@ -46,11 +47,17 @@ internal class CloudstreamApiGateway(
 		isCasting: Boolean,
 		subtitleCallback: (SubtitleFile) -> Unit,
 		linkCallback: (ExtractorLink) -> Unit,
-	): Boolean = executeOrNull(source.api.loadLinksTimeoutMs) {
-		CloudstreamRequestContext.withLoadLinksCompatibility {
-			source.api.loadLinks(data, isCasting, subtitleCallback, linkCallback)
-		}
-	} ?: false
+	): CloudstreamLoadLinksResult {
+		val execution = executeOrNull(source.api.loadLinksTimeoutMs) {
+			CloudstreamRequestContext.withLoadLinksCompatibility {
+				source.api.loadLinks(data, isCasting, subtitleCallback, linkCallback)
+			}
+		} ?: return CloudstreamLoadLinksResult(success = false, challenge = null)
+		return CloudstreamLoadLinksResult(
+			success = execution.value,
+			challenge = execution.challenge,
+		)
+	}
 
 	private suspend fun <T> executeOrNull(timeoutMillis: Long?, block: suspend () -> T): T? {
 		return CloudstreamRequestContext.withSource(source) {
@@ -92,3 +99,8 @@ internal class CloudstreamApiGateway(
 		const val MAX_TIMEOUT_MILLIS = DEFAULT_TIMEOUT_MILLIS * 4
 	}
 }
+
+internal data class CloudstreamLoadLinksResult(
+	val success: Boolean,
+	val challenge: CloudFlareProtectedException?,
+)

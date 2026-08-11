@@ -403,8 +403,9 @@ class CloudstreamContentRepository(
 			Log.d(TAG, "loadLinks using saturated cache source=${source.displayName} chapterId=${chapter.id}")
 			return links.values.filter { it.type in PLAYABLE_LINK_TYPES }.map { it.toPage() }
 		}
+		var detectedChallenge: CloudFlareProtectedException? = null
 		suspend fun loadLinksOnce(): Boolean {
-			return gateway.loadLinks(
+			val result = gateway.loadLinks(
 				data = chapter.url,
 				isCasting = false,
 				subtitleCallback = { subtitle ->
@@ -442,12 +443,15 @@ class CloudstreamContentRepository(
 					)
 				},
 			)
+			detectedChallenge = result.challenge ?: detectedChallenge
+			return result.success
 		}
 		var success = false
 		val firstError = runCatchingCancellable {
 			success = loadLinksOnce()
 		}.exceptionOrNull()
 		var completed = firstError == null
+		var captchaFallbackAttempted = false
 		if (firstError != null) {
 			Log.e(
 				TAG,
@@ -461,6 +465,7 @@ class CloudstreamContentRepository(
 					"loadLinks cloudflare detected source=${source.displayName} chapterId=${chapter.id} " +
 						"url=${chapter.url} cfUrl=${cfError.url} cookies=${cookieSummary(chapter.url)}",
 				)
+				captchaFallbackAttempted = true
 				if (resolveCloudflare(cfError, chapter.url, "loadLinks")) {
 					val retryResult = runCatchingCancellable {
 						loadLinksOnce()
@@ -468,6 +473,29 @@ class CloudstreamContentRepository(
 						Log.e(
 							TAG,
 							"loadLinks retry failed source=${source.displayName} chapterId=${chapter.id} url=${chapter.url}",
+							retryError,
+						)
+					}
+					completed = retryResult.isSuccess
+					success = retryResult.getOrDefault(false)
+				}
+			}
+		}
+		if (!captchaFallbackAttempted && links.values.none { it.type in PLAYABLE_LINK_TYPES }) {
+			detectedChallenge?.let { challenge ->
+				Log.w(
+					TAG,
+					"loadLinks plugin fallback exhausted after cloudflare response " +
+						"source=${source.displayName} chapterId=${chapter.id} cfUrl=${challenge.url}",
+				)
+				if (resolveCloudflare(challenge, chapter.url, "loadLinks fallback")) {
+					val retryResult = runCatchingCancellable {
+						loadLinksOnce()
+					}.onFailure { retryError ->
+						Log.e(
+							TAG,
+							"loadLinks fallback retry failed source=${source.displayName} " +
+								"chapterId=${chapter.id} url=${chapter.url}",
 							retryError,
 						)
 					}

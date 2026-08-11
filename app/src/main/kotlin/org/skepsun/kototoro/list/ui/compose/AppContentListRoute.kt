@@ -42,6 +42,8 @@ import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.findInteractiveActionRequiredException
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
+import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
@@ -482,12 +484,12 @@ fun <VM : ContentListViewModel> AppContentListRoute(
 
     fun resolveCloudflareAndRetry() {
         val actionableError = items.filterIsInstance<ErrorState>().firstOrNull { item ->
-            item.exception is CloudFlareProtectedException ||
+            item.exception.findCloudFlareException() is CloudFlareProtectedException ||
                 item.exception.findInteractiveActionRequiredException() != null
         }
         if (actionableError != null && exceptionResolver != null) {
             coroutineScope.launch {
-                if (exceptionResolver.resolve(actionableError.exception)) {
+                if (exceptionResolver.resolve(actionableError.exception, tryAutoResolve = false)) {
                     viewModel.onRetry()
                 }
             }
@@ -598,6 +600,11 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             }
         },
         onRetry = ::resolveCloudflareAndRetry,
+        onSecondaryAction = { error ->
+            error.getCauseUrl()?.let { url ->
+                appRouter.openBrowser(url, null, null)
+            }
+        },
         showInlineSelectionTopBar = false,
         listHeader = listHeader,
         showQuickFilterInline = showQuickFilterInline,

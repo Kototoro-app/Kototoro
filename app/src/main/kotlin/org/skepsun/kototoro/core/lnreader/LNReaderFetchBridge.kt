@@ -110,12 +110,7 @@ class LNReaderFetchBridge(
 			
 			responseJson.toString()
 		} catch (e: Exception) {
-			val causeList = generateSequence(e as Throwable) { it.cause }.toList()
-			val interactiveEx = causeList.find { 
-				it.javaClass.name.contains("CloudFlare") || 
-				it.javaClass.name.contains("InteractiveAction") 
-			} as? Exception
-
+			val interactiveEx = e.findInteractiveException()
 			if (interactiveEx != null) {
 				Log.e(TAG, "[$pluginId] Native Protection engaged: ${interactiveEx.message}")
 				pendingFatalException = interactiveEx
@@ -184,7 +179,12 @@ class LNReaderFetchBridge(
 
 			responseJson.toString()
 		} catch (e: Exception) {
-			if (e is IOException) {
+			val interactiveEx = e.findInteractiveException()
+			if (interactiveEx != null) {
+				Log.e(TAG, "[$pluginId] Native binary protection engaged: ${interactiveEx.message}")
+				pendingFatalException = interactiveEx
+				errorResponse(url, 403, "Protected", interactiveEx.message ?: "Protected")
+			} else if (e is IOException) {
 				Log.e(TAG, "[$pluginId] Binary network error: ${e.message}")
 				errorResponse(url, 0, "Network Error", e.message ?: "Network error")
 			} else {
@@ -192,6 +192,14 @@ class LNReaderFetchBridge(
 				errorResponse(url, 0, "Fatal Error", "Fatal error: ${e.message}")
 			}
 		}
+	}
+
+	private fun Exception.findInteractiveException(): Exception? {
+		return generateSequence(this as Throwable) { it.cause }
+			.firstOrNull {
+				it.javaClass.name.contains("CloudFlare") ||
+					it.javaClass.name.contains("InteractiveAction")
+			} as? Exception
 	}
 	
 	/**

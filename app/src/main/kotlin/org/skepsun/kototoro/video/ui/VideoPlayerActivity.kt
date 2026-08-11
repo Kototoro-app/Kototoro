@@ -28,6 +28,8 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -236,6 +238,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var availableVideos: List<Video> = emptyList()
     private var cloudstreamLinkJob: Job? = null
     private var cloudstreamFallbackJob: Job? = null
+    private var isPlaybackKeepingScreenOn = false
+    private var screenOnCloudstreamPlaybackInstance: Long? = null
     private var externalTrackLoadingJob: Job? = null
     private var torrentResolutionJob: Job? = null
     private var torrentConsent: Boolean? = null
@@ -348,7 +352,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             runOnUiThread {
-                setKeepScreenOn(isPlaying)
+                setPlaybackKeepScreenOn(isPlaying)
                 updatePlaybackMenu()
                 syncComposeControlState()
                 danmakuController.onPlaybackStateChanged(isPlaying)
@@ -395,7 +399,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             torrentStreamService.pause(currentMediaUrl)
             suspiciousAdRetryCount = 0
             runOnUiThread {
-                setKeepScreenOn(false)
+                setPlaybackKeepScreenOn(false)
                 maybeAutoPlayNext()
             }
         }
@@ -414,7 +418,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onPlaybackFailed(message: String?) {
             runOnUiThread {
-                setKeepScreenOn(false)
+                setPlaybackKeepScreenOn(false)
                 handlePlaybackFallback("media3_playback_error", message)
             }
         }
@@ -1606,7 +1610,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (!ExceptionResolver.canResolve(error)) {
             return false
         }
-        val resolved = exceptionResolver.resolve(error, tryAutoResolve = false)
+        val resolved = exceptionResolver.resolve(error, tryAutoResolve = true)
         if (resolved) {
             prepareAndPlay(retryUrl, source, headers, startMs)
         }
@@ -2243,7 +2247,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             "VideoPlayerActivity",
             "Cloudstream activity bridge registered chapter=${chapter.id} activity=${javaClass.simpleName}",
         )
-        repo.getPlaybackEvents(chapter, clearCache).collect { event ->
+        val playbackEvents = repo.getPlaybackEvents(chapter, clearCache)
+            .onStart { setCloudstreamLinkResolutionActive(playbackInstance, true) }
+            .onCompletion { setCloudstreamLinkResolutionActive(playbackInstance, false) }
+        playbackEvents.collect { event ->
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
                 is CloudstreamPlaybackEvent.Link -> {
@@ -3318,7 +3325,27 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         syncComposeControlState()
     }
 
-    private fun setKeepScreenOn(enabled: Boolean) {
+    private fun setPlaybackKeepScreenOn(enabled: Boolean) {
+        isPlaybackKeepingScreenOn = enabled
+        updateKeepScreenOn()
+    }
+
+    private fun setCloudstreamLinkResolutionActive(playbackInstance: Long, active: Boolean) {
+        if (active) {
+            screenOnCloudstreamPlaybackInstance = playbackInstance
+        } else if (screenOnCloudstreamPlaybackInstance == playbackInstance) {
+            screenOnCloudstreamPlaybackInstance = null
+        }
+        updateKeepScreenOn()
+    }
+
+    private fun clearCloudstreamLinkResolution() {
+        screenOnCloudstreamPlaybackInstance = null
+        updateKeepScreenOn()
+    }
+
+    private fun updateKeepScreenOn() {
+        val enabled = isPlaybackKeepingScreenOn || screenOnCloudstreamPlaybackInstance != null
         if (enabled) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
@@ -3355,11 +3382,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         videoLocalCacheProxy.logSessionStats("onStop")
         videoPlayer?.pause()
         torrentStreamService.pause(currentMediaUrl)
-        setKeepScreenOn(false)
+        setPlaybackKeepScreenOn(false)
         danmakuController.pause()
     }
 
     override fun onDestroy() {
+        clearCloudstreamLinkResolution()
+        setPlaybackKeepScreenOn(false)
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null

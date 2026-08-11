@@ -109,6 +109,7 @@ class AppBackupAgent : BackupAgent() {
 							applicationContext = applicationContext,
 							httpClient = okhttp3.OkHttpClient(),
 							settings = appSettings,
+							captchaAutoResolveCoordinator = entryPoint.captchaAutoResolveCoordinator(),
 						),
 					),
 					cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(
@@ -208,6 +209,7 @@ class AppBackupAgent : BackupAgent() {
 								applicationContext = applicationContext,
 								httpClient = okhttp3.OkHttpClient(),
 								settings = appSettings,
+								captchaAutoResolveCoordinator = entryPoint.captchaAutoResolveCoordinator(),
 							),
 						),
 						cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(

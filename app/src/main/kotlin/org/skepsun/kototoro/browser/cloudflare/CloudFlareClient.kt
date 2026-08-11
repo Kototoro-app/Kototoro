@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import android.webkit.WebView
 import org.skepsun.kototoro.browser.BrowserClient
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
+import org.skepsun.kototoro.core.network.webview.CF_STATE_JS
+import org.skepsun.kototoro.core.network.webview.CloudFlarePageState
+import org.skepsun.kototoro.core.network.webview.parseCloudFlarePageState
 import org.skepsun.kototoro.core.network.webview.adblock.AdBlock
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 
@@ -18,6 +21,7 @@ open class CloudFlareClient(
 
 	private val oldClearance = getClearance()
 	private var counter = 0
+	private var pageStatePassed = false
 
 	override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
 		super.onPageStarted(view, url, favicon)
@@ -27,24 +31,27 @@ open class CloudFlareClient(
 	override fun onPageCommitVisible(view: WebView, url: String) {
 		super.onPageCommitVisible(view, url)
 		checkClearance(countFailure = false)
+		checkPageState(view, url)
 		callback.onPageLoaded()
 	}
 
 	override fun onPageFinished(webView: WebView, url: String) {
 		super.onPageFinished(webView, url)
 		checkClearance(countFailure = false)
+		checkPageState(webView, url)
 		callback.onPageLoaded()
 	}
 
 	fun reset() {
 		counter = 0
+		pageStatePassed = false
 	}
 
 	fun checkClearance(): Boolean = checkClearance(countFailure = false)
 
 	private fun checkClearance(countFailure: Boolean): Boolean {
 		val clearance = getClearance()
-		if (clearance != null && clearance != oldClearance) {
+		if (clearance != null && clearance != oldClearance && pageStatePassed) {
 			callback.onCheckPassed()
 			return true
 		} else if (countFailure) {
@@ -55,6 +62,21 @@ open class CloudFlareClient(
 			}
 		}
 		return false
+	}
+
+	private fun checkPageState(webView: WebView, url: String) {
+		webView.evaluateJavascript(CF_STATE_JS) { raw ->
+			val state = parseCloudFlarePageState(raw)
+			android.util.Log.d("CloudFlareClient", "Page state=$state url=$url")
+			if (state == CloudFlarePageState.OK) {
+				// Page state alone is insufficient: challenge pages can briefly expose
+				// an ordinary document before Cloudflare issues cf_clearance.
+				pageStatePassed = true
+				checkClearance(countFailure = false)
+			} else {
+				pageStatePassed = false
+			}
+		}
 	}
 
     override fun onReceivedSslError(

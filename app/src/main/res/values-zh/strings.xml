@@ -1427,7 +1427,7 @@
     <string name="only_using_wifi">仅连接 Wi-Fi 时</string>
     <string name="open_daily_schedule">打开每日放送</string>
     <string name="open_external_player">用外部播放器打开</string>
-    <string name="open_in_browser">浏览器</string>
+    <string name="open_in_browser">在浏览器中打开</string>
     <string name="open_local_source_in_browser">在浏览器中打开本地来源页面</string>
     <string name="open_metadata_in_browser">在浏览器中打开元数据页面</string>
     <string name="open_playback_page_in_browser">在浏览器中打开播放页面</string>

@@ -7,9 +7,11 @@ import okhttp3.Interceptor
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CloudFlareHandlingPolicy
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.parsers.model.ContentSource
+import java.util.concurrent.atomic.AtomicReference
 
 internal object CloudstreamRequestContext {
 
@@ -24,11 +26,23 @@ internal object CloudstreamRequestContext {
 		}
 	}
 
-	suspend fun <T> withLoadLinksCompatibility(block: suspend () -> T): T {
-		return withContext(currentPolicy.asContextElement(CloudFlareHandlingPolicy(allowBlockedResponse = true))) {
+	suspend fun <T> withLoadLinksCompatibility(block: suspend () -> T): LoadLinksExecution<T> {
+		val challenge = AtomicReference<CloudFlareProtectedException?>()
+		val policy = CloudFlareHandlingPolicy(
+			allowBlockedResponse = true,
+			allowCaptchaResponse = true,
+			onCaptchaDetected = { detected -> challenge.compareAndSet(null, detected) },
+		)
+		val value = withContext(currentPolicy.asContextElement(policy)) {
 			block()
 		}
+		return LoadLinksExecution(value, challenge.get())
 	}
+
+	data class LoadLinksExecution<T>(
+		val value: T,
+		val challenge: CloudFlareProtectedException?,
+	)
 
 	fun interceptor(): Interceptor = Interceptor { chain ->
 		val source = currentSource.get()

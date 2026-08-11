@@ -7,7 +7,6 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.network.SniBypassSSLSocketFactory
-import org.skepsun.kototoro.core.network.CloudFlareInterceptor
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -66,9 +65,6 @@ object JsonSourceNetworkModule {
             readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             
-            // Remove global CloudFlareInterceptor to enable custom handling in Legado
-            interceptors().removeAll { it is CloudFlareInterceptor }
-            
             // Add JSON source specific interceptors
             addInterceptor(userAgentInterceptor)
             addInterceptor(rateLimitInterceptor)
@@ -77,9 +73,8 @@ object JsonSourceNetworkModule {
             // This mirrors legado-with-MD3 default (no explicit cache configured).
             cache(null)
             
-            // NOTE: CloudFlareInterceptor is NOT added here
-            // Legado sources handle CloudFlare internally in LegadoRepository
-            // This "sandbox" approach allows Legado to use its own CF handling logic
+            // Keep the CloudFlareInterceptor inherited from ContentHttpClient so Legado and TVBox
+            // report challenges through the same host-level solver as every other source type.
             
             // Add logging in debug builds
             if (BuildConfig.DEBUG) {

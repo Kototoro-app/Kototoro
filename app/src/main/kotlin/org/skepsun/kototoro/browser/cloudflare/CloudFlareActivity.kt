@@ -25,6 +25,7 @@ import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinato
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaHandler
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
+import org.skepsun.kototoro.core.network.webview.CF_CLEARANCE_COOKIE
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.parsers.config.ConfigKey
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -95,6 +96,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			startClearancePolling()
 			if (savedInstanceState == null) {
 				onTitleChanged(getString(R.string.loading_), url)
+				url.toHttpUrlOrNull()?.let { clearRejectedClearance(it) }
 				browserWebView.loadUrl(url)
 			}
 		}
@@ -129,9 +131,9 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		setResult(pendingResult)
 		if (isAutoResolve && !resultNotified) {
 			resultNotified = true
-			intent?.getStringExtra(AppRouter.KEY_SOURCE)?.let { sourceName ->
+			intent?.getStringExtra(EXTRA_RESOLVE_KEY)?.let { resolveKey ->
 				captchaAutoResolveCoordinator.notifyResolveResult(
-					org.skepsun.kototoro.core.model.ContentSource(sourceName),
+					resolveKey,
 					pendingResult == RESULT_OK,
 				)
 			}
@@ -219,6 +221,12 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		}
 	}
 
+	private suspend fun clearRejectedClearance(url: HttpUrl) = runInterruptible(Dispatchers.Default) {
+		cookieJar.removeCookies(url) { cookie ->
+			cookie.name == CF_CLEARANCE_COOKIE
+		}
+	}
+
 	private suspend fun shouldUseInterception(repository: ParserContentRepository?): Boolean {
 		if (repository == null) {
 			return false
@@ -245,6 +253,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		const val TAG = "CloudFlareActivity"
 		const val EXTRA_HIDDEN = "hidden"
 		const val EXTRA_AUTO_RESOLVE = "auto_resolve"
+		const val EXTRA_RESOLVE_KEY = "resolve_key"
 		private const val HIDDEN_TIMEOUT_MS = 45_000L
 		private const val CLEARANCE_POLL_INTERVAL_MS = 250L
 	}

@@ -19,6 +19,7 @@ import org.skepsun.kototoro.core.parser.legado.runtime.LegadoHttpResponse
 import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRequestPlan
 import org.skepsun.kototoro.core.util.EncodingDetect
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 
 /**
  * Kototoro 对 LegadoRequestPlan 的默认执行器实现。
@@ -193,6 +194,26 @@ class KototoroLegadoHttpExecutor(
                     val code = response.code
                     val finalUrl = response.request.url.toString()
                     val responseHeaders = response.headers.toMultimap().mapValues { (_, values) -> values.joinToString(", ") }
+                    when (CloudFlareHelper.checkResponseForProtection(response)) {
+                        CloudFlareHelper.PROTECTION_CAPTCHA -> {
+                            response.close()
+                            Log.w(TAG, "CF challenge detected, throwing exception for UI verification")
+                            throw org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException(
+                                url = CloudFlareHelper.getChallengeUrl(finalUrl),
+                                source = source,
+                                headers = toHeaders(headersWithUa),
+                            )
+                        }
+
+                        CloudFlareHelper.PROTECTION_BLOCKED -> {
+                            response.close()
+                            Log.e(TAG, "CloudFlare blocked this request")
+                            throw org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException(
+                                url = finalUrl,
+                                source = source,
+                            )
+                        }
+                    }
                     if (plan.type != null) {
                         val bytes = response.body?.bytes() ?: ByteArray(0)
                         response.close()
@@ -207,20 +228,10 @@ class KototoroLegadoHttpExecutor(
 
                     val content = getResponseBodyWithCharset(response)
                     Log.d(TAG, "Response for ${plan.url}: code=${response.code} contentType=${response.header("Content-Type")}")
-                    val responseClone = response.newBuilder().build()
                     response.close()
 
                     if (content == null) {
                         throw IllegalStateException("Empty response body for ${plan.url}")
-                    }
-
-                    val cfStatus = LegadoCloudFlareResolver.checkResponseForProtection(responseClone, content)
-                    if (cfStatus == LegadoCloudFlareResolver.PROTECTION_CAPTCHA) {
-                        Log.w(TAG, "CF challenge detected, throwing exception for UI verification")
-                        throw LegadoCloudFlareResolver.createException(plan.url, source, toHeaders(headersWithUa))
-                    } else if (cfStatus == LegadoCloudFlareResolver.PROTECTION_BLOCKED) {
-                        Log.e(TAG, "CloudFlare BLOCKED this request!")
-                        throw IllegalStateException("CloudFlare blocked request: ${plan.url}")
                     }
 
                     LegadoHttpResponse(
@@ -232,7 +243,7 @@ class KototoroLegadoHttpExecutor(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                if (e is org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException) throw e
+                if (e is org.skepsun.kototoro.core.exceptions.CloudFlareException) throw e
 
                 if (e is org.skepsun.kototoro.parsers.exception.TooManyRequestExceptions) {
                     val waitTime = e.getRetryDelay().coerceAtLeast(1000L)

@@ -14,25 +14,29 @@ import javax.inject.Singleton
 class ForegroundActivityHolder @Inject constructor() : DefaultActivityLifecycleCallbacks {
 
     private var activityRef: WeakReference<Activity>? = null
+    private var cloudstreamActivityRef: WeakReference<Activity>? = null
 
     val current: Activity?
         get() = activityRef?.get()
 
     override fun onActivityResumed(activity: Activity) {
         activityRef = WeakReference(activity)
+        cloudstreamActivityRef = WeakReference(activity)
         CommonActivity.setActivityInstance(activity)
     }
 
     override fun onActivityPaused(activity: Activity) {
         if (activityRef?.get() == activity) {
             activityRef = null
-            CommonActivity.setActivityInstance(null)
         }
     }
 
     override fun onActivityDestroyed(activity: Activity) {
         if (activityRef?.get() == activity) {
             activityRef = null
+        }
+        if (cloudstreamActivityRef?.get() == activity) {
+            cloudstreamActivityRef = null
             CommonActivity.setActivityInstance(null)
         }
     }

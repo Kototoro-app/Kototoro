@@ -8,6 +8,7 @@ import ireader.core.source.model.MangaInfo
 import ireader.core.source.model.PageUrl
 import ireader.core.source.model.Text
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.parser.CachingContentRepository
@@ -88,6 +89,7 @@ class IReaderMangaRepository(
             android.util.Log.d("IReaderRepo", "getList: page=$page query=$query results=${result.mangas.size} hasNext=${result.hasNextPage}")
             result.mangas.map { manga -> manga.toContent() }
         } catch (e: Exception) {
+            e.rethrowIfIReaderActionRequired()
             android.util.Log.e("IReaderRepo", "getList failed", e)
             emptyList()
         }
@@ -103,6 +105,7 @@ class IReaderMangaRepository(
                 chapters = chapters.mapIndexed { index, ch -> ch.toContentChapter(index, originalUrl = manga.url) },
             )
         } catch (e: Exception) {
+            e.rethrowIfIReaderActionRequired()
             android.util.Log.e("IReaderRepo", "getDetails failed", e)
             manga
         }
@@ -146,6 +149,7 @@ class IReaderMangaRepository(
                 }
             }
         } catch (e: Exception) {
+            e.rethrowIfIReaderActionRequired()
             android.util.Log.e("IReaderRepo", "getPages failed", e)
             emptyList()
         }
@@ -170,12 +174,16 @@ class IReaderMangaRepository(
     private suspend fun fetchChapters(mangaInfo: MangaInfo): List<ChapterInfo> {
         val reportedPageCount = runCatching { ireaderSource.getChapterPageCount(mangaInfo) }
             .getOrElse {
+                it.rethrowIfIReaderActionRequired()
                 android.util.Log.w("IReaderRepo", "fetchChapters: getChapterPageCount failed", it)
                 1
             }
             .coerceAtLeast(1)
         val supportsPagination = runCatching { ireaderSource.supportsPaginatedChapters() }
-            .getOrDefault(false)
+            .getOrElse {
+                it.rethrowIfIReaderActionRequired()
+                false
+            }
         if (!supportsPagination && reportedPageCount <= 1) {
             return ireaderSource.getChapterList(mangaInfo, emptyList())
         }
@@ -199,9 +207,20 @@ class IReaderMangaRepository(
             }
             chaptersByKey.values.toList()
         }.getOrElse { error ->
+            error.rethrowIfIReaderActionRequired()
             android.util.Log.w("IReaderRepo", "fetchChapters: paginated load failed, falling back to first page API", error)
             ireaderSource.getChapterList(mangaInfo, emptyList())
         }
+    }
+
+    private fun Throwable.rethrowIfIReaderActionRequired() {
+        val actionRequired = generateSequence(this) { it.cause }
+            .firstOrNull { error ->
+                error is CancellationException ||
+                    error is org.skepsun.kototoro.core.exceptions.CloudFlareException ||
+                    error is org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
+            }
+        if (actionRequired != null) throw actionRequired
     }
 
     // --- Model Mapping ---

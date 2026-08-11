@@ -103,6 +103,26 @@ public object CloudFlareHelper {
             .toString()
     }
 
+    /**
+     * Returns the URL a browser should open to solve a detected challenge.
+     * Keep document and API paths because Cloudflare rules can be path-specific;
+     * asset requests fall back to the site root where a user can actually verify.
+     */
+    @JvmStatic
+    public fun getBrowserChallengeUrl(url: String): String {
+        val httpUrl = try {
+            url.toHttpUrl()
+        } catch (_: Exception) {
+            return url
+        }
+        val host = httpUrl.host.lowercase()
+        val extension = httpUrl.encodedPath.substringAfterLast('.', "").lowercase()
+        val isAsset = extension in setOf("jpg", "jpeg", "png", "webp", "gif", "svg", "ico", "css", "js") ||
+            host.startsWith("imagenes.") || host.startsWith("images.") || host.startsWith("cdn.") ||
+            host.startsWith("img.") || host.startsWith("static.")
+        return if (isAsset) getChallengeUrl(url) else httpUrl.toString()
+    }
+
     @JvmStatic
     public fun getRootDomain(host: String): String {
         val parts = host.split('.')

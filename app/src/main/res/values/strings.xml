@@ -162,7 +162,7 @@
     <string name="domain">Domain</string>
     <string name="app_update_available">A new version of the app is available</string>
     <string name="app_update_mirror_summary">Used for this update download and saved as the global GitHub mirror.</string>
-    <string name="open_in_browser">Browser</string>
+    <string name="open_in_browser">Open in browser</string>
     <string name="open_metadata_in_browser">Open metadata page in browser</string>
     <string name="open_local_source_in_browser">Open local source page in browser</string>
     <string name="open_reading_page_in_browser">Open reading page in browser</string>

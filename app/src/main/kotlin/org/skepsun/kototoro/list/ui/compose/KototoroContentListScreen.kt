@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import dagger.hilt.android.EntryPointAccessors
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -71,6 +72,8 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
+import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -178,6 +181,7 @@ fun KototoroContentListScreen(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit = {},
     onEmptyActionClick: () -> Unit = {},
     onRetry: () -> Unit = {},
+    onSecondaryAction: ((Throwable) -> Unit)? = null,
     showInlineSelectionTopBar: Boolean = true,
     showQuickFilterInline: Boolean = true,
     enableItemAnimations: Boolean = true,
@@ -192,6 +196,14 @@ fun KototoroContentListScreen(
         hasMoreItems && items.any { it is ContentListModel }
     }
     val context = LocalContext.current
+    val defaultSecondaryAction: (Throwable) -> Unit = remember(context) {
+        { error ->
+            error.getCauseUrl()?.let { url ->
+                (context as? FragmentActivity)?.let { AppRouter(it).openBrowser(url, null, null) }
+            }
+        }
+    }
+    val secondaryAction = onSecondaryAction ?: defaultSecondaryAction
     val settings = androidx.compose.runtime.remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs = settings.observeAsState(
         AppSettings.KEY_SHOW_SOURCE_ON_CARDS,
@@ -353,6 +365,7 @@ fun KototoroContentListScreen(
                                             showQuickFilterInline = showQuickFilterInline,
                                             onEmptyActionClick = onEmptyActionClick,
                                             onRetry = onRetry,
+                                            onSecondaryAction = secondaryAction,
                                         )
                                     }
 
@@ -419,6 +432,7 @@ fun KototoroContentListScreen(
                                                 showQuickFilterInline = showQuickFilterInline,
                                                 onEmptyActionClick = onEmptyActionClick,
                                                 onRetry = onRetry,
+                                                onSecondaryAction = secondaryAction,
                                             )
                                         }
                                     }
@@ -485,6 +499,7 @@ fun KototoroContentListScreen(
                                                 showQuickFilterInline = showQuickFilterInline,
                                                 onEmptyActionClick = onEmptyActionClick,
                                                 onRetry = onRetry,
+                                                onSecondaryAction = secondaryAction,
                                             )
                                         }
                                     }
@@ -574,6 +589,7 @@ private fun SupplementaryListItem(
     showQuickFilterInline: Boolean,
     onEmptyActionClick: () -> Unit,
     onRetry: () -> Unit,
+    onSecondaryAction: (Throwable) -> Unit,
 ) {
     when (item) {
         is ListHeader -> ListHeaderItem(item)
@@ -586,7 +602,7 @@ private fun SupplementaryListItem(
         }
         is InfoModel -> InfoCard(item)
         is EmptyState -> EmptyStateCard(item, onEmptyActionClick)
-        is ErrorState -> ErrorStateCard(item, onRetry)
+        is ErrorState -> ErrorStateCard(item, onRetry, onSecondaryAction)
         LoadingState -> LoadingStateItem(listMode = listMode, gridScale = gridScale)
     }
 }
@@ -954,6 +970,7 @@ private fun EmptyStateCard(
 private fun ErrorStateCard(
     item: ErrorState,
     onRetry: () -> Unit,
+    onSecondaryAction: (Throwable) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -979,6 +996,11 @@ private fun ErrorStateCard(
         if (item.canRetry) {
             Button(onClick = onRetry) {
                 Text(stringResource(item.buttonText.takeIf { it != 0 } ?: R.string.retry))
+            }
+        }
+        if (item.secondaryButtonText != 0) {
+            TextButton(onClick = { onSecondaryAction(item.exception) }) {
+                Text(stringResource(item.secondaryButtonText))
             }
         }
     }

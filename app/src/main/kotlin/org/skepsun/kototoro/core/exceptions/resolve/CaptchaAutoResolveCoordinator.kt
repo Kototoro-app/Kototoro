@@ -7,10 +7,6 @@ import android.os.Looper
 import android.widget.Toast
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.skepsun.kototoro.R
@@ -18,9 +14,12 @@ import org.skepsun.kototoro.browser.cloudflare.CloudFlareActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.network.webview.CaptchaAutoResolveResult
 import org.skepsun.kototoro.core.ui.util.ForegroundActivityHolder
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentSource
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,106 +28,130 @@ import javax.inject.Singleton
 class CaptchaAutoResolveCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val foregroundActivityHolder: ForegroundActivityHolder,
+    private val webViewExecutor: WebViewExecutor,
 ) {
 
-    private val mutex = Mutex()
-    private val inFlight = ConcurrentHashMap<ContentSource, CompletableDeferred<Boolean>>()
-    private val pendingActivityResult = ConcurrentHashMap<ContentSource, CompletableDeferred<Boolean>>()
-    private val recentSuccessAt = ConcurrentHashMap<ContentSource, Long>()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val hostMutexes = ConcurrentHashMap<String, Mutex>()
+    private val manualMutex = Mutex()
+    private val pendingActivityResult = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+    private val resolverState = CloudFlareResolverState()
 
-    fun notifyResolveResult(source: ContentSource, success: Boolean) {
-        pendingActivityResult.remove(source)?.complete(success)
+    fun notifyResolveResult(resolveKey: String, success: Boolean) {
+        pendingActivityResult.remove(resolveKey)?.complete(success)
     }
 
-    suspend fun resolve(source: ContentSource, exception: CloudFlareProtectedException): Boolean {
-        return resolveInternal(source, exception, allowInteractiveFallback = true, showToast = true)
+    suspend fun resolve(
+        source: ContentSource,
+        exception: CloudFlareProtectedException,
+        tryAutomatic: Boolean = true,
+    ): Boolean {
+        return resolveInternal(
+            source = source,
+            exception = exception,
+            tryAutomatic = tryAutomatic,
+            allowInteractiveFallback = true,
+            showToast = tryAutomatic,
+        )
     }
 
     suspend fun resolveInBackground(source: ContentSource, exception: CloudFlareProtectedException): Boolean {
-        return resolveInternal(source, exception, allowInteractiveFallback = false, showToast = false)
+        return resolveInternal(
+            source = source,
+            exception = exception,
+            tryAutomatic = true,
+            allowInteractiveFallback = false,
+            showToast = false,
+        )
     }
 
     private suspend fun resolveInternal(
         source: ContentSource,
         exception: CloudFlareProtectedException,
+        tryAutomatic: Boolean,
         allowInteractiveFallback: Boolean,
         showToast: Boolean,
     ): Boolean {
-        inFlight[source]?.let { return it.await() }
-        val lastSuccessAt = recentSuccessAt[source]
-        if (lastSuccessAt != null && System.currentTimeMillis() - lastSuccessAt < RECENT_SUCCESS_COOLDOWN_MS) {
-            return false
+        val host = exception.url.resolveHostKey()
+        return hostMutexes.getOrPut(host) { Mutex() }.withLock {
+            runOrchestration(
+                source = source,
+                exception = exception,
+                host = host,
+                tryAutomatic = tryAutomatic,
+                allowInteractiveFallback = allowInteractiveFallback,
+                showToast = showToast,
+            )
         }
-        val deferred = mutex.withLock {
-            inFlight[source]?.let { return@withLock it }
-            val recheckSuccessAt = recentSuccessAt[source]
-            if (recheckSuccessAt != null && System.currentTimeMillis() - recheckSuccessAt < RECENT_SUCCESS_COOLDOWN_MS) {
-                return@withLock CompletableDeferred(false)
-            }
-            CompletableDeferred<Boolean>().also { fresh ->
-                inFlight[source] = fresh
-                if (showToast) {
-                    showSolvingToast()
-                }
-                scope.launch {
-                    runOrchestration(source, exception, allowInteractiveFallback, fresh)
-                }
-            }
-        }
-        return deferred.await()
     }
 
     private suspend fun runOrchestration(
         source: ContentSource,
         exception: CloudFlareProtectedException,
+        host: String,
+        tryAutomatic: Boolean,
         allowInteractiveFallback: Boolean,
-        deferred: CompletableDeferred<Boolean>,
-    ) {
-        try {
-            val hiddenPassed = launchAndAwait(source, exception, hidden = true)
-            val finalResult = if (hiddenPassed) {
-                true
-            } else if (allowInteractiveFallback) {
-                launchAndAwait(source, exception, hidden = false)
+        showToast: Boolean,
+    ): Boolean {
+        return try {
+            val plan = resolverState.plan(host, tryAutomatic, allowInteractiveFallback)
+            if (plan == CloudFlareResolvePlan.FAIL_FAST) {
+                android.util.Log.w(TAG, "Resolver is cooling down for host=$host source=${source.name}")
+                return false
+            }
+            if (showToast && plan.runAutomatic) {
+                showSolvingToast()
+            }
+            val automaticResult = if (plan.runAutomatic) {
+                webViewExecutor.resolveCaptchaAutomatically(
+                    exception = exception,
+                    timeout = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS,
+                )
             } else {
-                false
+                null
             }
-            if (finalResult) {
-                recentSuccessAt[source] = System.currentTimeMillis()
-            }
-            deferred.complete(finalResult)
+            android.util.Log.d(TAG, "host=$host plan=$plan automaticResult=$automaticResult")
+            if (automaticResult == CaptchaAutoResolveResult.SOLVED) {
+                resolverState.recordSuccess(host, CloudFlareResolveStage.AUTOMATIC)
+                true
+            } else if (plan.runManual) {
+                manualMutex.withLock {
+                    launchAndAwait(source, exception, host)
+                }.also { resolved ->
+                    if (resolved) {
+                        resolverState.recordSuccess(host, CloudFlareResolveStage.MANUAL)
+                    }
+                }
+            } else false
         } catch (e: Throwable) {
             e.printStackTraceDebug()
-            deferred.complete(false)
-        } finally {
-            inFlight.remove(source)
-            pendingActivityResult.remove(source)
+            false
         }
     }
 
     private suspend fun launchAndAwait(
         source: ContentSource,
         exception: CloudFlareProtectedException,
-        hidden: Boolean,
+        resolveKey: String,
     ): Boolean {
         if (source == UnknownContentSource) {
             return false
         }
         val launcher = foregroundActivityHolder.current
-        if (hidden && launcher == null) {
-            return false
-        }
         val resultDeferred = CompletableDeferred<Boolean>()
-        pendingActivityResult[source] = resultDeferred
-        val intent = AppRouter.cloudFlareResolveIntent(context, exception, hidden = hidden).apply {
+        pendingActivityResult[resolveKey] = resultDeferred
+        val intent = AppRouter.cloudFlareResolveIntent(context, exception, hidden = false).apply {
             putExtra(CloudFlareActivity.EXTRA_AUTO_RESOLVE, true)
+            putExtra(CloudFlareActivity.EXTRA_RESOLVE_KEY, resolveKey)
         }
         launcher?.startActivity(intent) ?: run {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         }
-        return resultDeferred.await()
+        return try {
+            resultDeferred.await()
+        } finally {
+            pendingActivityResult.remove(resolveKey, resultDeferred)
+        }
     }
 
     private fun showSolvingToast() {
@@ -138,6 +161,76 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     }
 
     private companion object {
-        const val RECENT_SUCCESS_COOLDOWN_MS = 30_000L
+        const val TAG = "CaptchaAutoResolver"
     }
 }
+
+internal enum class CloudFlareResolveStage {
+    AUTOMATIC,
+    MANUAL,
+}
+
+internal enum class CloudFlareResolvePlan(
+    val runAutomatic: Boolean,
+    val runManual: Boolean,
+) {
+    AUTO_THEN_MANUAL(runAutomatic = true, runManual = true),
+    AUTO_ONLY(runAutomatic = true, runManual = false),
+    MANUAL_ONLY(runAutomatic = false, runManual = true),
+    FAIL_FAST(runAutomatic = false, runManual = false),
+}
+
+internal class CloudFlareResolverState(
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+) {
+    private data class Success(
+        val stage: CloudFlareResolveStage,
+        val timestamp: Long,
+    )
+
+    private val lastSuccess = ConcurrentHashMap<String, Success>()
+    private val cooldownUntil = ConcurrentHashMap<String, Long>()
+
+    fun plan(host: String, tryAutomatic: Boolean, allowManual: Boolean): CloudFlareResolvePlan {
+        val now = nowMillis()
+        cooldownUntil[host]?.let { until ->
+            if (until > now) return CloudFlareResolvePlan.FAIL_FAST
+            cooldownUntil.remove(host, until)
+        }
+        val recent = lastSuccess[host]?.takeIf { now - it.timestamp < SUCCESS_RETRY_WINDOW_MS }
+        if (recent == null) {
+            lastSuccess.remove(host)
+            return when {
+                tryAutomatic && allowManual -> CloudFlareResolvePlan.AUTO_THEN_MANUAL
+                tryAutomatic -> CloudFlareResolvePlan.AUTO_ONLY
+                allowManual -> CloudFlareResolvePlan.MANUAL_ONLY
+                else -> CloudFlareResolvePlan.FAIL_FAST
+            }
+        }
+        return when (recent.stage) {
+            CloudFlareResolveStage.AUTOMATIC -> {
+                if (allowManual) CloudFlareResolvePlan.MANUAL_ONLY else CloudFlareResolvePlan.FAIL_FAST
+            }
+            CloudFlareResolveStage.MANUAL -> {
+                lastSuccess.remove(host, recent)
+                cooldownUntil[host] = now + RESOLVER_COOLDOWN_MS
+                CloudFlareResolvePlan.FAIL_FAST
+            }
+        }
+    }
+
+    fun recordSuccess(host: String, stage: CloudFlareResolveStage) {
+        cooldownUntil.remove(host)
+        lastSuccess[host] = Success(stage, nowMillis())
+    }
+
+    private companion object {
+        const val SUCCESS_RETRY_WINDOW_MS = RESOLVER_COOLDOWN_MS
+    }
+}
+
+private const val RESOLVER_COOLDOWN_MS = 2 * 60 * 1000L
+
+private fun String.resolveHostKey(): String = runCatching {
+    URI(this).host?.lowercase()
+}.getOrNull().orEmpty().ifBlank { this }

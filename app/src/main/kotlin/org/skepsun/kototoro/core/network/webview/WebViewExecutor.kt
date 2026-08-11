@@ -29,6 +29,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.proxy.ProxyProvider
@@ -62,6 +63,15 @@ import okhttp3.Cookie
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 
+enum class CaptchaAutoResolveResult {
+    SOLVED,
+    INTERACTIVE_REQUIRED,
+    HARD_BLOCKED,
+    TIMED_OUT,
+    COOLDOWN,
+    FAILED,
+}
+
 @Singleton
 class WebViewExecutor @Inject constructor(
 	@ApplicationContext private val context: Context,
@@ -94,6 +104,7 @@ class WebViewExecutor @Inject constructor(
 
 	private var webViewCached: WeakReference<WebView>? = null
 	private val mutex = Mutex()
+    private val captchaMutexes = ConcurrentHashMap<String, Mutex>()
     private val recentFailureUntil = ConcurrentHashMap<String, Long>()
 
 	val defaultUserAgent: String? by lazy {
@@ -438,7 +449,13 @@ class WebViewExecutor @Inject constructor(
 		}
 	}
 
-	suspend fun tryResolveCaptcha(exception: CloudFlareException, timeout: Long): Boolean {
+    suspend fun tryResolveCaptcha(exception: CloudFlareException, timeout: Long): Boolean =
+        resolveCaptchaAutomatically(exception, timeout) == CaptchaAutoResolveResult.SOLVED
+
+	suspend fun resolveCaptchaAutomatically(
+        exception: CloudFlareException,
+        timeout: Long,
+    ): CaptchaAutoResolveResult {
         val cooldownHost = runCatching { URI(exception.url).host?.lowercase() }.getOrNull()
         if (cooldownHost != null) {
             val now = System.currentTimeMillis()
@@ -446,16 +463,24 @@ class WebViewExecutor @Inject constructor(
             if (skipUntil != null) {
                 if (skipUntil > now) {
                     Log.d(TAG, "Skipping captcha auto-resolve for $cooldownHost (cooled down for ${skipUntil - now}ms)")
-                    return false
+                    return CaptchaAutoResolveResult.COOLDOWN
                 }
                 recentFailureUntil.remove(cooldownHost)
             }
         }
-        val resolved = mutex.withLock {
+        val captchaMutex = captchaMutexes.getOrPut(cooldownHost ?: exception.url) { Mutex() }
+        val result = captchaMutex.withLock {
             if (cooldownHost != null) {
                 val skipUntil = recentFailureUntil[cooldownHost]
                 if (skipUntil != null && skipUntil > System.currentTimeMillis()) {
-                    return@withLock false
+                    return@withLock CaptchaAutoResolveResult.COOLDOWN
+                }
+            }
+            exception.url.toHttpUrlOrNull()?.let { challengeUrl ->
+                withContext(Dispatchers.IO) {
+                    cookieJar.removeCookies(challengeUrl) { cookie ->
+                        cookie.name == CF_CLEARANCE_COOKIE
+                    }
                 }
             }
             runCatchingCancellable { proxyProvider.applyWebViewConfig() }.onFailure { it.printStackTraceDebug() }
@@ -465,18 +490,22 @@ class WebViewExecutor @Inject constructor(
                 val host: ViewGroup?
                 val isThrowaway: Boolean
                 if (activity != null) {
-                    webView = WebView(context).apply { configureForParser(null) }
+                    webView = WebView(activity).apply { configureForParser(null) }
                     host = attachToHost(webView, activity)
                     isThrowaway = true
                 } else {
-                    webView = obtainWebView()
+                    webView = WebView(context).apply { configureForParser(null) }
                     host = null
-                    isThrowaway = false
+                    isThrowaway = true
                 }
                 try {
-                    exception.source.getUserAgent()?.let {
+                    val protectedHeaders = (exception as? CloudFlareProtectedException)?.headers
+                    val userAgent = protectedHeaders?.get(CommonHeaders.USER_AGENT)
+                        ?: exception.source.getUserAgent()
+                    userAgent?.let {
                         webView.settings.userAgentString = it
                     }
+                    val requestHeaders = protectedHeaders?.toCloudFlareWebViewHeaders().orEmpty()
                     val useInterception = shouldUseCloudFlareInterception(exception.source)
                     val resolved = withTimeoutOrNull(timeout) {
                         suspendCancellableCoroutine { cont ->
@@ -486,19 +515,23 @@ class WebViewExecutor @Inject constructor(
                                 continuation = cont,
                                 useInterception = useInterception,
                             )
-                            webView.loadUrl(exception.url)
+                            if (requestHeaders.isEmpty()) {
+                                webView.loadUrl(exception.url)
+                            } else {
+                                webView.loadUrl(exception.url, requestHeaders)
+                            }
                         }
                     }
                     if (resolved == null) {
                         Log.w(TAG, "Captcha auto-resolve timed out")
                     }
-                    resolved == true
+                    resolved ?: CaptchaAutoResolveResult.TIMED_OUT
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     exception.addSuppressed(e)
                     e.printStackTraceDebug()
-                    false
+                    CaptchaAutoResolveResult.FAILED
                 } finally {
                     if (isThrowaway) {
                         runCatching { webView.stopLoading() }
@@ -512,13 +545,13 @@ class WebViewExecutor @Inject constructor(
             }
         }
         if (cooldownHost != null) {
-            if (resolved) {
+            if (result == CaptchaAutoResolveResult.SOLVED) {
                 recentFailureUntil.remove(cooldownHost)
             } else {
                 recentFailureUntil[cooldownHost] = System.currentTimeMillis() + FAILURE_COOLDOWN_MS
             }
         }
-        return resolved
+        return result
 	}
 
 	/**
@@ -977,12 +1010,12 @@ class WebViewExecutor @Inject constructor(
     private fun createCloudFlareClient(
         webView: WebView,
         exception: CloudFlareException,
-        continuation: kotlin.coroutines.Continuation<Boolean>,
+        continuation: kotlin.coroutines.Continuation<CaptchaAutoResolveResult>,
         useInterception: Boolean,
     ): CloudFlareClient {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
-        val resumeOnce: (Boolean) -> Unit = { result ->
+        val resumeOnce: (CaptchaAutoResolveResult) -> Unit = { result ->
             if (!finished) {
                 finished = true
                 handler.removeCallbacksAndMessages(null)
@@ -996,22 +1029,39 @@ class WebViewExecutor @Inject constructor(
                 if (finished) return
                 val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
                 if (clearance != null && clearance != initialClearance) {
-                    resumeOnce(true)
+                    resumeOnce(CaptchaAutoResolveResult.SOLVED)
                     return
                 }
                 webView.evaluateJavascript(CF_STATE_JS) { raw ->
                     if (finished) return@evaluateJavascript
-                    val state = raw?.removeSurrounding("\"")
+                    val state = parseCloudFlarePageState(raw)
                     when (state) {
-                        "ok" -> resumeOnce(true)
-                        "error" -> resumeOnce(false)
+                        CloudFlarePageState.INTERACTIVE -> {
+                            Log.i(TAG, "Interactive Cloudflare challenge detected; switching to visible resolver")
+                            resumeOnce(CaptchaAutoResolveResult.INTERACTIVE_REQUIRED)
+                        }
+                        // A normal document can report OK without having solved the
+                        // challenge. The old clearance was removed before loading,
+                        // so only a newly issued clearance is a valid auto result.
+                        CloudFlarePageState.OK -> {
+                            if (clearance != null && clearance != initialClearance) {
+                                resumeOnce(CaptchaAutoResolveResult.SOLVED)
+                            } else if (System.currentTimeMillis() >= challengeDeadline) {
+                                Log.w(TAG, "Captcha page is OK but no new clearance was issued")
+                                resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
+                            } else {
+                                handler.removeCallbacks(this)
+                                handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
+                            }
+                        }
+                        CloudFlarePageState.ERROR -> resumeOnce(CaptchaAutoResolveResult.HARD_BLOCKED)
                         else -> if (System.currentTimeMillis() >= challengeDeadline) {
                             Log.w(
                                 TAG,
                                 "Captcha auto-resolve deadline reached, " +
                                     "state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
                             )
-                            resumeOnce(false)
+                            resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
                         } else {
                             handler.removeCallbacks(this)
                             handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
@@ -1440,6 +1490,7 @@ class WebViewExecutor @Inject constructor(
 	}
 
     companion object {
+		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 15_000L
 	        private const val TAG = "WebViewExecutor"
 	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
 		        private const val MAX_CHALLENGE_MS = 30_000L

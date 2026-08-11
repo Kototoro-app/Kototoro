@@ -57,6 +57,22 @@ class CloudFlareHelperTest {
         )
     }
 
+    @Test
+    fun `browser challenge keeps API path`() {
+        assertEquals(
+            "https://kissmanga.in/wp-admin/admin-ajax.php",
+            CloudFlareHelper.getBrowserChallengeUrl("https://kissmanga.in/wp-admin/admin-ajax.php"),
+        )
+    }
+
+    @Test
+    fun `browser challenge uses root for assets`() {
+        assertEquals(
+            "https://kissmanga.in/",
+            CloudFlareHelper.getBrowserChallengeUrl("https://kissmanga.in/assets/site/favicon.png"),
+        )
+    }
+
     private fun response(code: Int, body: String): Response {
         return Response.Builder()
             .request(Request.Builder().url("https://example.org/").build())

@@ -19,6 +19,7 @@ import org.skepsun.kototoro.mihon.util.ChildFirstPathClassLoader
 import javax.inject.Inject
 import javax.inject.Singleton
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 import org.skepsun.kototoro.core.prefs.AppSettings
 import okhttp3.OkHttpClient
 
@@ -27,6 +28,7 @@ class IReaderExtensionLoader @Inject constructor(
     @ApplicationContext private val applicationContext: Context,
     @ContentHttpClient private val httpClient: OkHttpClient,
     private val settings: AppSettings,
+    private val captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator,
 ) {
     companion object {
         private const val TAG = "IReaderExtensionLoader"
@@ -164,8 +166,22 @@ class IReaderExtensionLoader @Inject constructor(
             }
                 
             if (dependenciesConstructor != null) {
-                val deps = IReaderDependenciesProvider.get(context, httpClient)
-                dependenciesConstructor.newInstance(deps) as Source
+                val session = IReaderDependenciesProvider.createSession(
+                    context = context,
+                    kototoroClient = httpClient,
+                    captchaCoordinator = captchaAutoResolveCoordinator,
+                )
+                (dependenciesConstructor.newInstance(session.dependencies) as Source).also { loadedSource ->
+                    session.bindSource(
+                        IReaderMangaSource(
+                            pkgName = pkgName,
+                            catalogueSource = loadedSource,
+                            isNsfw = isNsfw,
+                            language = loadedSource.lang,
+                            displayName = loadedSource.name,
+                        ),
+                    )
+                }
             } else {
                 // Try parameterless constructor
                 clazz.getDeclaredConstructor().newInstance() as Source

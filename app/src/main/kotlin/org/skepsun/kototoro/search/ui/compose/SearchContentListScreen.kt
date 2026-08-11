@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.search.ui.compose
 
 import android.app.Activity
+import android.util.Log
 import android.widget.Toast
 import androidx.core.text.HtmlCompat
 import androidx.activity.compose.BackHandler
@@ -126,6 +127,8 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -155,6 +158,8 @@ import org.skepsun.kototoro.core.ui.model.titleRes
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
+import org.skepsun.kototoro.core.util.ext.getCauseUrl
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.parser.favicon.directFaviconUriOrNull
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
@@ -607,13 +612,25 @@ fun AppSearchContentListRoute(
             .filterIsInstance<ErrorState>()
             .firstOrNull { ExceptionResolver.canResolve(it.exception) }
             ?.exception
+        Log.i("SearchCfResolver", "retry clicked error=${error?.javaClass?.name} resolver=${exceptionResolver != null}")
         if (error != null && exceptionResolver != null) {
             coroutineScope.launch {
-                if (exceptionResolver.resolve(error)) {
+                Log.i("SearchCfResolver", "starting manual resolver")
+                val cloudflare = error.findCloudFlareException()
+                val resolverError = if (cloudflare is CloudFlareProtectedException && cloudflare.source == UnknownContentSource) {
+                    CloudFlareProtectedException(cloudflare.url, viewModel.source, cloudflare.headers)
+                } else {
+                    error
+                }
+                if (exceptionResolver.resolve(resolverError, tryAutoResolve = false)) {
+                    Log.i("SearchCfResolver", "manual resolver succeeded, retrying")
                     viewModel.onRetry()
+                } else {
+                    Log.w("SearchCfResolver", "manual resolver failed or was unavailable")
                 }
             }
         } else {
+            Log.w("SearchCfResolver", "no resolvable error or resolver, retrying directly")
             viewModel.onRetry()
         }
     }
@@ -788,6 +805,9 @@ fun AppSearchContentListRoute(
                                 selectedItemsIds = selectedItemsIds,
                                 showInlineSelectionTopBar = false,
                                 onRetry = ::resolveErrorAndRetry,
+                                onSecondaryAction = { error ->
+                                    error.getCauseUrl()?.let { url -> appRouter.openBrowser(url, null, null) }
+                                },
                                 gridState = if (listMode == ListMode.GRID || listMode == ListMode.COMPACT_GRID) {
                                     wideGridState
                                 } else {
@@ -958,6 +978,9 @@ fun AppSearchContentListRoute(
                             selectedItemsIds = selectedItemsIds,
                             showInlineSelectionTopBar = false,
                             onRetry = ::resolveErrorAndRetry,
+                            onSecondaryAction = { error ->
+                                error.getCauseUrl()?.let { url -> appRouter.openBrowser(url, null, null) }
+                            },
                         )
                     }
                     Box(

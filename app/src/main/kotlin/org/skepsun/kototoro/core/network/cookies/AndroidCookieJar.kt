@@ -69,12 +69,12 @@ class AndroidCookieJar : MutableCookieJar {
 						"domain=${c.domain}, path=${c.path}, hostOnly=${c.hostOnly}",
 				)
 			}
-			// Rebuild the cookie with a past expiry, preserving all original attributes
-			// (domain, path, secure, httpOnly). This is the only reliable way to delete
-			// Secure+HttpOnly cookies via Android's CookieManager — empty-value + Max-Age=0
-			// fails because the Chromium engine requires an exact attribute match.
-			val expired = c.newBuilder().expiresAt(1L).build()
-			setCookieBlocking(urlString, expired.toString())
+			// CookieManager only exposes name=value when reading cookies, so Cookie.parse()
+			// cannot recover whether the stored cookie was host-only or Domain scoped.
+			// Expire every possible domain identity instead of trusting reconstructed attrs.
+			buildCookieDeletionHeaders(c.name, url.host, setOf(c.path, "/")).forEach { tombstone ->
+				setCookieBlocking(urlString, tombstone)
+			}
 		}
 		cookieManager.flush()
 		if (cookies.any { it.name == "cf_clearance" && (predicate == null || predicate.test(it)) }) {
@@ -125,4 +125,24 @@ class AndroidCookieJar : MutableCookieJar {
 			.joinToString(",")
 			.ifBlank { "<none>" }
 	}
+}
+
+internal fun buildCookieDeletionHeaders(
+	name: String,
+	host: String,
+	paths: Set<String>,
+): List<String> {
+	val normalizedPaths = paths.mapTo(LinkedHashSet()) { path ->
+		path.takeIf { it.startsWith('/') } ?: "/"
+	}
+	val domains = linkedSetOf(host, ".$host")
+	return buildList {
+		for (path in normalizedPaths) {
+			val base = "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=$path"
+			add("$base; Secure")
+			for (domain in domains) {
+				add("$base; Domain=$domain; Secure")
+			}
+		}
+	}.distinct()
 }
