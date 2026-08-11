@@ -1,5 +1,11 @@
 # Kototoro 视频播放器低端设备适配与运行时回退方案
 
+> [!IMPORTANT]
+> 本文关于“长期保留 mpv、不引入 Media3 播放内核”的决策已被
+> [`media3-video-player-migration-plan-2026-08.md`](./media3-video-player-migration-plan-2026-08.md) 取代。
+> 本文继续作为设备性能分级、会话级回退和播放诊断的历史设计依据；后续实现应将这些策略映射到
+> Media3 直接输出与 Anime4K 绕过，而不是继续扩展 mpv 专用兼容层。
+
 ## 文档版本
 - 创建日期：2026-03-31
 - 最后更新：2026-03-31

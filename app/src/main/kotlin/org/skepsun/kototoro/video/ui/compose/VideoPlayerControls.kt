@@ -83,7 +83,7 @@ data class VideoPlayerControlState(
     val qualityLabel: String? = null,
 )
 
-/** Events emitted by Compose. The Activity or a ViewModel owns the MPV side effects. */
+/** Events emitted by Compose. The Activity or a ViewModel owns the Media3 side effects. */
 sealed interface VideoPlayerAction {
     data object NavigateBack : VideoPlayerAction
     data object TogglePlayback : VideoPlayerAction
@@ -103,7 +103,7 @@ sealed interface VideoPlayerAction {
 }
 
 /**
- * Compose-only player chrome. Video frames remain outside this component: libmpv renders them
+ * Compose-only player chrome. Video frames remain outside this component: Media3 renders them
  * through its native Surface while this UI sends declarative [VideoPlayerAction] events.
  */
 @Composable

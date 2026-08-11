@@ -128,7 +128,6 @@ class SettingsSearchHelper @Inject constructor(
 			"video_decoder_mode" to R.string.video_decoder_mode,
 			"video_renderer_mode" to R.string.video_renderer_mode,
 			"video_background" to R.string.video_background,
-			"video_mpv_conf_trigger" to R.string.video_mpv_conf,
 			"playback_ai_video_settings_entry" to R.string.ai_settings,
 			"video_controls_alpha" to R.string.video_controls_alpha,
 			"video_gradient_alpha" to R.string.video_gradient_alpha
@@ -180,11 +179,10 @@ class SettingsSearchHelper @Inject constructor(
 			)
 		}
 		val aiVideoKeys = listOf(
-			"video_super_resolution_mode" to R.string.video_super_resolution_mode,
-			"video_super_resolution_quality_shader" to R.string.video_super_resolution_submode_quality,
-			"video_super_resolution_balanced_shader" to R.string.video_super_resolution_submode_balanced,
-			"video_super_resolution_performance_shader" to R.string.video_super_resolution_submode_performance,
-			"video_super_resolution_advanced_settings_button" to R.string.video_super_resolution_advanced_settings
+			"video_enhancement_algorithm" to R.string.video_enhancement_algorithm,
+			"video_anime4k_preset" to R.string.video_enhancement_anime4k_preset,
+			"video_fsr_sharpness" to R.string.video_enhancement_fsr_sharpness_search,
+			"video_enhancement_remember" to R.string.video_enhancement_remember,
 		)
 		aiVideoKeys.forEach { (key, titleRes) ->
 			result.add(

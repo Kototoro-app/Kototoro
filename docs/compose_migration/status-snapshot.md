@@ -39,7 +39,7 @@
 | 主入口 | `MainActivity`、`SearchActivity` | 核心阻塞项 |
 | 详情 | `DetailsActivity`、`AlternativesActivity` | Phase 1 |
 | 阅读器 | `ReaderActivity`、`NovelReaderActivity` | 暂缓（核心渲染仍用 ViewBinding） |
-| 视频 | `VideoPlayerActivity` | Compose 根；MPV/弹幕为 AndroidView 边界 |
+| 视频 | `VideoPlayerActivity` | Compose 根；Media3/Anime4K/弹幕为 AndroidView 边界 |
 | 收藏 | `FavouriteCategoriesActivity`、`FavouritesCategoryEditActivity` | L2 |
 | 图片 | `ImageActivity` | L2 |
 | 设置子页 | `UnifiedSourcesActivity`、`SourcesCatalogActivity`、`SourcePresetListActivity`、`SourcePresetEditActivity`、`OverrideConfigActivity`、`ProtectSetupActivity`、`ReaderTapGridConfigActivity`、`ContentDirectoriesActivity`、`JsonSourceEditActivity`、`ScrobblerConfigActivity` | 逐个评估 |

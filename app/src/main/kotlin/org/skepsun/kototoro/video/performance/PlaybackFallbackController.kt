@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.video.performance
 
-import org.skepsun.kototoro.core.prefs.VideoRendererMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 
 enum class PlaybackFallbackReason {
@@ -69,11 +68,6 @@ object PlaybackFallbackController {
 					allowShaderPipeline = false,
 				),
 				reason = PlaybackFallbackReason.SUPER_RES_DISABLED,
-			)
-
-			current.rendererMode == VideoRendererMode.GPU_NEXT -> PlaybackFallbackDecision(
-				config = current.copy(rendererMode = VideoRendererMode.GPU),
-				reason = PlaybackFallbackReason.RENDERER_DOWNGRADED,
 			)
 
 			else -> null

@@ -210,10 +210,6 @@
 -keep class kotlin.SynchronizedLazyImpl { *; }
 -keep class kotlin.UnsafeLazyImpl { *; }
 
-# MPV (is.xyz.mpv)
--keep class is.xyz.mpv.** { *; }
--keep interface is.xyz.mpv.** { *; }
--keepclassmembers class is.xyz.mpv.** { *; }
 
 # Kotlin reflection (some extensions may use it)
 -keep class kotlin.reflect.** { *; }

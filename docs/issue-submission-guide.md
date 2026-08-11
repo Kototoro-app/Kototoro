@@ -1,8 +1,8 @@
 # Issue Submission Guide / Kototoro 问题提报指南
 
-Welcome to submit bug reports or feature requests for Kototoro! Given the extreme complexity of our underlying reader, video decode engine (MPV), dynamic source plugins, and networking stacks, please follow these guidelines to help us **identify and fix your issue as quickly as possible**.
+Welcome to submit bug reports or feature requests for Kototoro! Given the complexity of the reader, Media3 video engine, dynamic source plugins, and networking stacks, please follow these guidelines to help us **identify and fix your issue as quickly as possible**.
 
-欢迎向 Kototoro 提交 Bug 报告或功能请求！由于本应用涉及到极其复杂的底层阅读器、视频解码引擎（MPV）、动态图源插件以及网络请求库，为了让我们能**最快速度排查并解决您的报错**，请在提交 Issue 时遵循以下规范：
+欢迎向 Kototoro 提交 Bug 报告或功能请求！由于本应用涉及底层阅读器、Media3 视频引擎、动态图源插件以及网络请求库，为了让我们能**最快速度排查并解决您的报错**，请在提交 Issue 时遵循以下规范：
 
 ## 📝 Pre-submission Checklist / 提交 Issue 前的必做检查项
 
@@ -37,8 +37,8 @@ If the UI is corrupted or frozen, append a short screen record. It is significan
 
 ## 🛠️ [IMPORTANT] How to get Logcat on Release Versions? / 重点：如何获取 Release 版本的 Logcat？
 
-By default, officially installed Release versions of the app do not have Android's Developer Debuggable flag enabled. If a silent Native crash (like an MPV out of memory error or bad rendering block) occurs, the in-app built-in crash reporter won't show any popups. Therefore, **you MUST grab system-level Logcat.**
-很多情况下，您安装的正式发布版（Release 版本）并未开启 Android 的开发者 Debug 开关。当 App 由于内存溢出或底层播放器（libmpv）发生原生代码层崩溃时，App 内的崩溃收集器不会有任何弹窗。此时，**您必须抓取系统级的 Logcat 日志**。
+By default, officially installed Release versions of the app do not have Android's Developer Debuggable flag enabled. If a silent codec or OpenGL rendering failure occurs, the in-app crash reporter may not show a popup. Therefore, **you MUST grab system-level Logcat.**
+很多情况下，您安装的正式发布版（Release 版本）并未开启 Android 的开发者 Debug 开关。当 App 发生 MediaCodec 或 OpenGL 渲染故障时，内置崩溃收集器可能不会弹窗。此时，**您必须抓取系统级的 Logcat 日志**。
 
 ### Method 1: Using a PC (Recommended & Most Reliable) / 方法一：使用电脑辅助 (推荐，最可靠)
 
@@ -59,17 +59,17 @@ By default, officially installed Release versions of the app do not have Android
 4. **Reproduce the Crash / 重现崩溃**: While the terminal is waiting, pick up your phone and reproduce the bug to generate the logs. / 在命令行处于等待状态时，拿起手机重复一次引发崩溃或 Bug 的操作。
 5. **Finish capturing / 结束抓取**: Press `Ctrl + C` on your keyboard, then drag and drop the `kototoro_crash.log` text file directly into your GitHub Issue! / 操作完后，按下键盘 Ctrl + C，将生成的 log 文件拖拽上传到 GitHub Issue 中即可！
 
-> **⚠️ CRITICAL (For Video Player / MPV Issues) / 核心提醒 (针对视频底层问题)**:
-> If your issue involves MPV native playback (black screens, hardware decode failures, shader panics), filtering by PID may miss native C++ output. In these specific cases, use:
-> 如果您遇到的是 MPV 视频播放相关的问题，由于底层的日志由 C++ 原生引擎独立打印，上述 PID 过滤有时候会漏掉。请优先改用：
-> `adb logcat -s mpv > kototoro_crash.log`
+> **⚠️ CRITICAL (For Video Player Issues) / 核心提醒（针对视频底层问题）**:
+> For black screens, decoder failures, HLS errors, or enhancement-pipeline failures, include Media3, MediaCodec, and Kototoro player logs:
+> 对黑屏、解码失败、HLS 错误或画质增强管线故障，请同时保留 Media3、MediaCodec 和 Kototoro 播放日志：
+> `adb logcat | grep -E "Media3Player|MediaCodec|VideoPlayerActivity" > kototoro_video.log`
 
 ### Method 2: Without a PC (Using Shizuku/Bugjaeger on device) / 方法二：使用全平台无需电脑的方法
 
 If you don't have access to a computer, you can use local apps that support adb environments:
 如果您手边没有电脑，可以使用支持原生 adb 环境的本机工具：
 1. Download a Logcat viewer app such as [Bugjaeger](https://play.google.com/store/apps/details?id=eu.sisik.hackend) (via Wireless Debugging) or any Shizuku-enabled Logcat reader. / 下载并在手机上配置好 Bugjaeger (需开启“无线调试”) 或是配置了 Shizuku 环境的任意 Logcat 日志查看器。
-2. Set the Logcat filter keyword to `kototoro` (for app core errors) or `mpv` (for video engine errors). / 在日志管理界面设定过滤关键词为 `kototoro` 或 `mpv`。
+2. Set the Logcat filter keyword to `kototoro`, `Media3Player`, or `MediaCodec`. / 在日志管理界面设定过滤关键词为 `kototoro`、`Media3Player` 或 `MediaCodec`。
 3. Keep the tool running in the background and reproduce the bug. / 在工具保持后台抓取时，复现 Bug。
 4. **Save the caught hundreds of lines of text as a `.txt` file and upload it.** Do NOT just screenshot 3 lines of logging, as context is lost. / 将截取的数百行文本**保存为 .txt 文件并上传**（请勿直接截图几行日志，日志不全会导致无从下手）。
 

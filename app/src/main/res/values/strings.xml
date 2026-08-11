@@ -448,6 +448,17 @@
     <string name="video_quality">Quality</string>
     <string name="video_quality_line">Line %1$d</string>
     <string name="video_super_resolution">Super resolution</string>
+    <string name="video_enhancement_enabled">Enable for this video</string>
+    <string name="video_enhancement_algorithm">Algorithm</string>
+    <string name="video_enhancement_algorithm_anime4k">Anime4K (animation)</string>
+    <string name="video_enhancement_algorithm_fsr">AMD FSR 1.0 (general)</string>
+    <string name="video_enhancement_anime4k_preset">Anime4K preset</string>
+    <string name="video_enhancement_anime4k_fast">Efficiency</string>
+    <string name="video_enhancement_anime4k_quality">Quality</string>
+    <string name="video_enhancement_fsr_sharpness">FSR sharpness: %1$d%%</string>
+    <string name="video_enhancement_fsr_sharpness_search">FSR sharpness</string>
+    <string name="video_enhancement_remember">Remember across videos</string>
+    <string name="video_enhancement_power_warning">Enhancement increases power use and heat, and may stutter on slower devices.</string>
     <string name="video_super_resolution_mode">Mode</string>
     <string name="video_super_resolution_off">Off</string>
     <string name="video_super_resolution_quality">Quality</string>

@@ -19,7 +19,7 @@ import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.reader.translate.data.RealCuganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.RealEsrganNcnnEngine
 import org.skepsun.kototoro.reader.translate.data.Anime4kImageEngine
-import org.skepsun.kototoro.video.player.MpvShaderManager
+import org.skepsun.kototoro.video.player.Anime4KShaderAssets
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -175,15 +175,15 @@ class ReaderSuperResolutionManager @Inject constructor(
 
         if (modelId.startsWith("ANIME4K_")) {
             val preset = when (modelId) {
-                "ANIME4K_A" -> MpvShaderManager.modeAPreset
-                "ANIME4K_B" -> MpvShaderManager.modeBPreset
-                "ANIME4K_C" -> MpvShaderManager.modeCPreset
-                "ANIME4K_AA" -> MpvShaderManager.modeAPlusPreset
-                "ANIME4K_BB" -> MpvShaderManager.modeBPlusPreset
-                "ANIME4K_CA" -> MpvShaderManager.modeCAPlusPreset
-                else -> MpvShaderManager.modeAPreset
+                "ANIME4K_A" -> Anime4KShaderAssets.modeAPreset
+                "ANIME4K_B" -> Anime4KShaderAssets.modeBPreset
+                "ANIME4K_C" -> Anime4KShaderAssets.modeCPreset
+                "ANIME4K_AA" -> Anime4KShaderAssets.modeAPlusPreset
+                "ANIME4K_BB" -> Anime4KShaderAssets.modeBPlusPreset
+                "ANIME4K_CA" -> Anime4KShaderAssets.modeCAPlusPreset
+                else -> Anime4KShaderAssets.modeAPreset
             }
-            val shadersDir = MpvShaderManager.ensureShadersCopied(context)
+            val shadersDir = Anime4KShaderAssets.ensureShadersCopied(context)
             anime4kEngine = Anime4kImageEngine(context)
             anime4kEngine?.initialize(shadersDir, preset)
         } else {
