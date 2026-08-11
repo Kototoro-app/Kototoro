@@ -189,6 +189,14 @@ object UnifiedRecommendedRepositories {
 			),
 			UnifiedRecommendedRepository(
 				kind = UnifiedSourceKind.CLOUDSTREAM,
+				name = "Cs-GizliKeyif +18 | @kraptor123",
+				url = "https://raw.githubusercontent.com/Kraptor123/Cs-GizliKeyif/refs/heads/master/repo.json",
+				locationType = UnifiedRepositoryLocationType.REMOTE_URL,
+				capabilities = cloudstreamRepoCapabilities,
+				note = "Maintained 18+ repository",
+			),
+			UnifiedRecommendedRepository(
+				kind = UnifiedSourceKind.CLOUDSTREAM,
 				name = "doGior's Had Enough",
 				url = "https://raw.githubusercontent.com/doGior/doGiorsHadEnough/refs/heads/builds/repo.json",
 				locationType = UnifiedRepositoryLocationType.REMOTE_URL,

@@ -28,6 +28,14 @@ internal fun isRejectedCloudstreamProbe(contentType: String?, prefix: ByteArray)
     return textPrefix.startsWith("<!doctype html") || textPrefix.startsWith("<html")
 }
 
+internal fun isRejectedCloudstreamSegmentProbe(
+    contentType: String?,
+    prefix: ByteArray,
+    isDeclaredHls: Boolean,
+): Boolean {
+    return !isDeclaredHls && isRejectedCloudstreamProbe(contentType, prefix)
+}
+
 internal fun isSuspiciousCloudstreamPlaybackDuration(durationMs: Long): Boolean {
     return durationMs in 0L..MAX_SUSPICIOUS_PLAYBACK_DURATION_MS
 }

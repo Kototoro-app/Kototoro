@@ -25,6 +25,15 @@ import org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
 
 class UnifiedSourceCatalogRepositoryTest : FunSpec({
 
+    test("recommended repositories include Cs-GizliKeyif") {
+        val repository = UnifiedRecommendedRepositories.all.single {
+            it.url == "https://raw.githubusercontent.com/Kraptor123/Cs-GizliKeyif/refs/heads/master/repo.json"
+        }
+
+        repository.kind shouldBe UnifiedSourceKind.CLOUDSTREAM
+        repository.name shouldBe "Cs-GizliKeyif +18 | @kraptor123"
+    }
+
     test("lnreader package ids stay unique when plugin metadata ids repeat") {
         val packages = testRepository().invokeToJsonPackageItems(
             listOf(

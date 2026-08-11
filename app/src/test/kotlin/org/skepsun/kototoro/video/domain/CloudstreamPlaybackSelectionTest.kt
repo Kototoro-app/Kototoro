@@ -23,6 +23,24 @@ class CloudstreamPlaybackSelectionTest {
     }
 
     @Test
+    fun `declared hls accepts image disguised media segments`() {
+        assertFalse(
+            isRejectedCloudstreamSegmentProbe(
+                contentType = "image/jpeg",
+                prefix = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()),
+                isDeclaredHls = true,
+            ),
+        )
+        assertTrue(
+            isRejectedCloudstreamSegmentProbe(
+                contentType = "image/jpeg",
+                prefix = byteArrayOf(),
+                isDeclaredHls = false,
+            ),
+        )
+    }
+
+    @Test
     fun `zero and short playback durations require another mirror`() {
         assertTrue(isSuspiciousCloudstreamPlaybackDuration(0L))
         assertTrue(isSuspiciousCloudstreamPlaybackDuration(90_000L))

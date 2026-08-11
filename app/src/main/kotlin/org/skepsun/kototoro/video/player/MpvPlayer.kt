@@ -75,7 +75,12 @@ class MpvPlayer(
 		listeners.remove(listener)
 	}
 
-	fun load(url: String, headers: Map<String, String>, startMs: Long? = null) {
+	fun load(
+		url: String,
+		headers: Map<String, String>,
+		startMs: Long? = null,
+		forceHls: Boolean = false,
+	) {
 		isReplacingFile = true
 		positionMs = 0L
 		durationMs = 0L
@@ -104,8 +109,10 @@ class MpvPlayer(
 		val userAgent = headers.entries.find { it.key.equals("User-Agent", ignoreCase = true) }?.value
 		val referer = headers.entries.find { it.key.equals("Referer", ignoreCase = true) }?.value
 		
-		mpv.setOptionString("user-agent", userAgent.orEmpty())
-		mpv.setOptionString("referrer", referer.orEmpty())
+		// These values change for every stream, so update runtime properties instead of
+		// initialization-only options. mpv then reuses them for HLS child playlists and segments.
+		mpv.setPropertyString("user-agent", userAgent.orEmpty())
+		mpv.setPropertyString("referrer", referer.orEmpty())
 
 		val otherHeaders = headers.filter { 
 			!it.key.equals("User-Agent", ignoreCase = true) && !it.key.equals("Referer", ignoreCase = true) 
@@ -118,10 +125,20 @@ class MpvPlayer(
 		} else {
 			""
 		}
-		mpv.setOptionString("http-header-fields", headerValue)
+		mpv.setPropertyString("http-header-fields", headerValue)
 		
-		Log.d("MpvPlayer", "load: $url with headers count=${headers.size}")
-		mpv.command("loadfile", url, "replace")
+		Log.d("MpvPlayer", "load: $url with headers count=${headers.size}, forceHls=$forceHls")
+		if (forceHls) {
+			mpv.command(
+				"loadfile",
+				url,
+				"replace",
+				"-1",
+				"demuxer-lavf-format=hls,demuxer-lavf-o=extension_picky=0",
+			)
+		} else {
+			mpv.command("loadfile", url, "replace")
+		}
 	}
 
 	fun setStreamingOptions(cacheSizeMb: Int? = null) {

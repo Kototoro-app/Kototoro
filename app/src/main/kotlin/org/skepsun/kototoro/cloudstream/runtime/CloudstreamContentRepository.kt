@@ -367,7 +367,7 @@ class CloudstreamContentRepository(
 			snapshot.subtitles.forEach { put(it.url, it) }
 		}
 		val links = LinkedHashMap<String, ExtractorLink>().apply {
-			snapshot.links.forEach { put(it.url, it) }
+			snapshot.links.filterNot { it.url.isMissingCloudstreamUrl() }.forEach { put(it.url, it) }
 		}
 		fun SubtitleFile.toTrack() = ContentExternalTrack(
 			url = url,
@@ -417,7 +417,15 @@ class CloudstreamContentRepository(
 					)
 				},
 				linkCallback = { link ->
-					if (link.url.isBlank() || !playbackCache.addLink(cacheKey, link.url, link)) {
+					if (link.url.isMissingCloudstreamUrl()) {
+						Log.w(
+							TAG,
+							"loadLinks rejected invalid url source=${source.displayName} chapterId=${chapter.id} " +
+								"name=${link.name} url=${link.url}",
+						)
+						return@loadLinks
+					}
+					if (!playbackCache.addLink(cacheKey, link.url, link)) {
 						return@loadLinks
 					}
 					links[link.url] = link
@@ -914,6 +922,13 @@ internal fun resolveCloudstreamEpisodeTitle(name: String?, episodeNumber: Int): 
 
 internal fun isCloudstreamStructuredLocator(value: String): Boolean {
 	return value.trimStart().let { it.startsWith('[') || it.startsWith('{') }
+}
+
+internal fun String.isMissingCloudstreamUrl(): Boolean {
+	val normalized = trim()
+	return normalized.isEmpty() ||
+		normalized.equals("null", ignoreCase = true) ||
+		normalized.equals("undefined", ignoreCase = true)
 }
 
 internal fun cloudstreamStableId(value: String): Long = value.longHashCode() and Long.MAX_VALUE

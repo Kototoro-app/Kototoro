@@ -97,6 +97,7 @@ import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
 import org.skepsun.kototoro.video.data.ExternalPlayerHelper
 import org.skepsun.kototoro.video.data.TorrentStreamService
 import org.skepsun.kototoro.video.data.isTorrentLocator
+import org.skepsun.kototoro.video.data.unwrapPngPrefixedStream
 import org.skepsun.kototoro.video.performance.DevicePerformanceClassifier
 import org.skepsun.kototoro.video.performance.DevicePerformanceInfo
 import org.skepsun.kototoro.video.performance.EffectiveVideoPlaybackConfig
@@ -107,6 +108,7 @@ import org.skepsun.kototoro.video.performance.PlaybackSessionDiagnostics
 import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
 import org.skepsun.kototoro.video.domain.isRejectedCloudstreamProbe
+import org.skepsun.kototoro.video.domain.isRejectedCloudstreamSegmentProbe
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
@@ -183,6 +185,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         private const val CLOUDSTREAM_PROBE_PLAYLIST_LIMIT_BYTES = 256L * 1024L
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
+        private const val HLS_VIDEO_MARKER = "kototoro:hls"
     }
 
     private data class PlayerSettingsAction(
@@ -241,9 +244,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var torrentConsent: Boolean? = null
     private var cloudstreamPlaybackInstance: Long = 0L
     private val rejectedCloudstreamVideoUrls = mutableSetOf<String>()
+    private val pngWrappedCloudstreamVideoUrls = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private var currentVideoIndex: Int = 0
     private var currentVideoSource: ParsersContentSource? = null
     private var currentMediaHeaders: Map<String, String>? = null
+    private var currentMediaForceHls: Boolean = false
     private var currentMediaStartMs: Long = 0L
     private var skipHistorySeekForCurrentMedia: Boolean = false
     private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
@@ -1653,6 +1658,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         headers: Map<String, String>? = null,
         startMs: Long? = null,
         isTorrent: Boolean = url.isTorrentLocator(),
+        forceHls: Boolean = false,
     ) {
         externalTrackLoadingJob?.cancel()
         playbackHealthCheckGeneration++
@@ -1668,6 +1674,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         currentMediaUrl = url
         currentVideoSource = source
         currentMediaHeaders = headers
+        currentMediaForceHls = forceHls
         maybeLoadDanmaku()
         val mergedHeaders = headers.orEmpty()
         videoLocalCacheProxy.resetSessionStats("startMpvPlayback")
@@ -1695,6 +1702,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             url = url,
             headers = mergedHeaders,
             source = source,
+            unwrapPngSegments = forceHls && url in pngWrappedCloudstreamVideoUrls,
         )
         val (playUrl, playHeaders) = if (dynamicCloudstreamPlaylistUrl != null) {
             Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $url")
@@ -1714,7 +1722,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
         
         val doLoad = {
-            mpvPlayer?.load(playUrl, playHeaders, initialStartMs)
+            mpvPlayer?.load(playUrl, playHeaders, initialStartMs, forceHls)
             mpvPlayer?.play()
         }
         
@@ -1822,11 +1830,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         url: String,
         headers: Map<String, String>,
         source: ParsersContentSource?,
+        unwrapPngSegments: Boolean,
     ): String? {
         if (source !is CloudstreamSource) return null
-        if (!url.contains("/config-", ignoreCase = true)) return null
+        if (!unwrapPngSegments && !url.contains("/config-", ignoreCase = true)) return null
         val identitySeed = buildString {
             append(url)
+            append("|unwrapPngSegments=").append(unwrapPngSegments)
             headers.toSortedMap(String.CASE_INSENSITIVE_ORDER).forEach { (key, value) ->
                 append('|').append(key).append('=').append(value)
             }
@@ -1874,6 +1884,19 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     headers = mapOf("Cache-Control" to "no-cache"),
                     body = rewritten.toByteArray(Charsets.UTF_8),
                 )
+            }
+            if (unwrapPngSegments && contentType.startsWith("image/png", ignoreCase = true)) {
+                val unwrapped = unwrapPngPrefixedStream(body.byteStream())
+                if (unwrapped.wasUnwrapped) {
+                    Log.d("VideoPlayerActivity", "Stripped PNG wrapper from Cloudstream HLS segment target=$targetUrl")
+                    return@getDynamicProxyUrl VideoLocalCacheProxy.DynamicResponse(
+                        statusCode = upstreamResponse.code,
+                        contentType = "video/mp2t",
+                        headers = buildCloudstreamProxyHeaders(upstreamResponse)
+                            .filterKeys { it.equals("Cache-Control", ignoreCase = true) },
+                        bodyStream = unwrapped.stream,
+                    )
+                }
             }
             Log.d(
                 "VideoPlayerActivity",
@@ -2078,6 +2101,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         cloudstreamFallbackJob?.cancel()
         cloudstreamFallbackJob = null
         rejectedCloudstreamVideoUrls.clear()
+        pngWrappedCloudstreamVideoUrls.clear()
         selectionDialogState = null
         actionDialogState = null
         currentVideoSource = source
@@ -2135,6 +2159,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 headersToMap(selected.headers),
                 startMs,
                 isTorrent = selected.internalData == TORRENT_VIDEO_MARKER || selected.videoUrl.isTorrentLocator(),
+                forceHls = selected.internalData == HLS_VIDEO_MARKER,
             )
             return true
         }
@@ -2147,13 +2172,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     val updatedVideo = video.copy(
                         videoTitle = video.videoTitle,
                         subtitleTracks = subtitlesByUrl.values.toList(),
-                        internalData = if (
-                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET ||
-                            event.type == com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT
-                        ) {
-                            TORRENT_VIDEO_MARKER
-                        } else {
-                            video.internalData
+                        internalData = when (event.type) {
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET,
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT -> TORRENT_VIDEO_MARKER
+                            com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8 -> HLS_VIDEO_MARKER
+                            else -> video.internalData
                         },
                     )
                     if (videosByUrl.putIfAbsent(video.videoUrl, updatedVideo) != null) return@collect
@@ -2987,9 +3010,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 .execute()
                 .use { segmentResponse ->
                     if (!segmentResponse.isSuccessful) return true
-                    return !isRejectedCloudstreamProbe(
+                    val isDeclaredHls = video.internalData == HLS_VIDEO_MARKER
+                    if (
+                        isDeclaredHls &&
+                        segmentResponse.header("Content-Type")?.startsWith("image/png", ignoreCase = true) == true
+                    ) {
+                        pngWrappedCloudstreamVideoUrls += video.videoUrl
+                        Log.d("VideoPlayer", "Detected PNG-wrapped Cloudstream HLS segments url=${video.videoUrl}")
+                    }
+                    return !isRejectedCloudstreamSegmentProbe(
                         segmentResponse.header("Content-Type"),
                         byteArrayOf(),
+                        isDeclaredHls = isDeclaredHls,
                     )
                 }
         }
@@ -3309,6 +3341,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             headers = mergedHeaders,
             startMs = resumeMs,
             isTorrent = video.internalData == TORRENT_VIDEO_MARKER || video.videoUrl.isTorrentLocator(),
+            forceHls = video.internalData == HLS_VIDEO_MARKER,
         )
     }
 
@@ -3543,7 +3576,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         val resumeMs = mpvPlayer?.positionMs ?: 0L
-        startMpvPlayback(url, currentVideoSource, currentMediaHeaders, resumeMs)
+        startMpvPlayback(
+            url = url,
+            source = currentVideoSource,
+            headers = currentMediaHeaders,
+            startMs = resumeMs,
+            forceHls = currentMediaForceHls,
+        )
     }
 
     private fun openVideoDetails() {
