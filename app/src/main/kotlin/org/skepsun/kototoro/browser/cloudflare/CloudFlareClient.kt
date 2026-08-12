@@ -71,7 +71,7 @@ open class CloudFlareClient(
 			if (state == CloudFlarePageState.OK) {
 				// Page state alone is insufficient: challenge pages can briefly expose
 				// an ordinary document before Cloudflare issues cf_clearance.
-				pageStatePassed = true
+				pageStatePassed = getClearance() != null && getClearance() != oldClearance
 				checkClearance(countFailure = false)
 			} else {
 				pageStatePassed = false

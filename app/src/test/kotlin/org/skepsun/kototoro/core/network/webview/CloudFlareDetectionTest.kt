@@ -6,6 +6,34 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class CloudFlareDetectionTest {
+	@Test
+	fun `document readiness requires stable completed non challenge page`() {
+		val tracker = BrowserDocumentReadinessTracker(quietWindowMs = 1_500L)
+
+		assertFalse(tracker.observe(CloudFlarePageState.WAIT, "complete", "https://example.com", 4, 0L))
+		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 500L))
+		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 1_500L))
+		assertTrue(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 3_000L))
+	}
+
+	@Test
+	fun `document readiness resets when resources or challenge navigation changes`() {
+		val tracker = BrowserDocumentReadinessTracker(quietWindowMs = 1_000L)
+
+		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 2, 0L))
+		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 1_000L))
+		assertFalse(
+			tracker.observe(
+				CloudFlarePageState.OK,
+				"complete",
+				"https://example.com?__cf_chl_rt_tk=token",
+				3,
+				2_000L,
+			),
+		)
+		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 2_500L))
+		assertTrue(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 3_500L))
+	}
 
     @Test
     fun `normal Cloudflare background script is not a challenge selector`() {

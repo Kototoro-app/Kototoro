@@ -134,6 +134,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
         resolveKey: String,
     ): Boolean {
         if (source == UnknownContentSource) {
+            android.util.Log.w(TAG, "Manual Cloudflare resolver skipped: source is unknown url=${exception.url}")
             return false
         }
         val launcher = foregroundActivityHolder.current
@@ -143,6 +144,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
             putExtra(CloudFlareActivity.EXTRA_AUTO_RESOLVE, true)
             putExtra(CloudFlareActivity.EXTRA_RESOLVE_KEY, resolveKey)
         }
+        android.util.Log.i(TAG, "Launching manual Cloudflare resolver: source=${source.name} url=${exception.url}")
         launcher?.startActivity(intent) ?: run {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)

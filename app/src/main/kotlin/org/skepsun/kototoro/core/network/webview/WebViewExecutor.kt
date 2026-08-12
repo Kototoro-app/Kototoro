@@ -14,8 +14,20 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.CookieManager
+import android.webkit.SslErrorHandler
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
+import android.net.http.SslError
+import androidx.webkit.JavaScriptReplyProxy
+import androidx.webkit.JavaScriptExecutionWorld
+import androidx.webkit.JavaScriptExecutionException
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.ScriptHandler
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import androidx.webkit.WebViewOutcomeReceiver
+import androidx.webkit.WebViewRenderProcessClient
 import androidx.annotation.MainThread
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -28,8 +40,12 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import org.skepsun.kototoro.core.exceptions.CloudFlareException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.proxy.ProxyProvider
@@ -52,13 +68,18 @@ import java.lang.ref.WeakReference
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Headers
 import okhttp3.Cookie
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
@@ -78,9 +99,43 @@ class WebViewExecutor @Inject constructor(
 	private val proxyProvider: ProxyProvider,
 	private val cookieJar: MutableCookieJar,
     private val adBlock: AdBlock,
-    private val foregroundActivityHolder: ForegroundActivityHolder,
+	private val foregroundActivityHolder: ForegroundActivityHolder,
+	private val browserSessionManager: BrowserSessionManager,
 	private val mangaRepositoryFactoryProvider: Provider<ContentRepository.Factory>,
 ) {
+	private enum class BrowserSessionState { READY, BUSY, POISONED, DESTROYED }
+
+	private data class BrowserSessionRecord(
+		val sessionId: String = UUID.randomUUID().toString(),
+		val origin: String,
+		val webView: WebView,
+		val provider: String?,
+		val executionMutex: Mutex = Mutex(),
+		var rendererEpoch: Long = 0L,
+		var navigationEpoch: Long = 0L,
+		var pendingOperations: Int = 0,
+		var attachedToUi: Boolean = false,
+		var unresponsiveAt: Long? = null,
+		var state: BrowserSessionState = BrowserSessionState.READY,
+		var activeExecution: BrowserExecution? = null,
+		var lastUsedAt: Long = System.currentTimeMillis(),
+		var transportInstallation: BrowserTransportInstallation? = null,
+	) {
+		val canEvict: Boolean
+			get() = pendingOperations == 0 && activeExecution == null && !attachedToUi &&
+				state == BrowserSessionState.READY
+
+		fun transitionExecutionTo(next: BrowserExecutionState) {
+			val execution = checkNotNull(activeExecution) { "BrowserSession has no active execution" }
+			execution.transitionTo(next)
+			Log.d(
+				"WebViewExecutor",
+				"BrowserExecution transition: session=$sessionId execution=${execution.executionId} " +
+					"origin=$origin state=$next",
+			)
+		}
+	}
+
     data class WebViewSniffResult(
         val url: String,
         val body: String,
@@ -104,8 +159,67 @@ class WebViewExecutor @Inject constructor(
 
 	private var webViewCached: WeakReference<WebView>? = null
 	private val mutex = Mutex()
+	private val browserSessionCache = LinkedHashMap<String, BrowserSessionRecord>(BROWSER_SESSION_CACHE_SIZE, 0.75f, true)
     private val captchaMutexes = ConcurrentHashMap<String, Mutex>()
-    private val recentFailureUntil = ConcurrentHashMap<String, Long>()
+	private val recentFailureUntil = ConcurrentHashMap<String, Long>()
+	private val _interactiveChallenges = MutableSharedFlow<BrowserInteractiveChallenge>(
+		extraBufferCapacity = 8,
+	)
+	private val interactiveChallengeStates = ConcurrentHashMap<String, BrowserInteractiveChallenge>()
+	private val interactiveChallengeCancellations = ConcurrentHashMap<String, () -> Unit>()
+
+	internal val interactiveChallenges: SharedFlow<BrowserInteractiveChallenge> = _interactiveChallenges.asSharedFlow()
+
+	/** A host calls this after attaching the session WebView for the challenge. */
+	internal fun acknowledgeInteractiveChallenge(challengeId: String, sessionId: String) {
+		updateInteractiveChallenge(challengeId, sessionId, BrowserInteractiveChallengeState.ATTACHED)
+	}
+
+	/** Cancels only the matching active challenge; stale UI events cannot affect a newer operation. */
+	internal fun cancelInteractiveChallenge(challengeId: String, sessionId: String): Boolean {
+		val current = interactiveChallengeStates[challengeId] ?: return false
+		if (current.sessionId != sessionId || current.isTerminal) return false
+		updateInteractiveChallenge(challengeId, sessionId, BrowserInteractiveChallengeState.CANCELLED)
+		interactiveChallengeCancellations.remove(challengeId)?.invoke()
+		return true
+	}
+
+	private fun updateInteractiveChallenge(
+		challengeId: String,
+		sessionId: String,
+		state: BrowserInteractiveChallengeState,
+	) {
+		val current = interactiveChallengeStates[challengeId] ?: return
+		if (current.sessionId != sessionId || current.isTerminal) return
+		if (current.state == state) return
+		val updated = current.transitionTo(state)
+		interactiveChallengeStates[challengeId] = updated
+		_interactiveChallenges.tryEmit(updated)
+	}
+
+	/**
+	 * Attaches an existing BrowserSession WebView by stable session id.
+	 * The caller must release the returned host with [detachBrowserSession].
+	 */
+	@MainThread
+	internal fun attachBrowserSession(sessionId: String, activity: android.app.Activity): ViewGroup? {
+		val session = browserSessionCache.values.firstOrNull { it.sessionId == sessionId } ?: return null
+		val content = browserSessionManager.attach(session.sessionId, activity) ?: return null
+		session.attachedToUi = true
+		return content
+	}
+
+	@MainThread
+	internal fun detachBrowserSession(sessionId: String, host: ViewGroup): Boolean {
+		val session = browserSessionCache.values.firstOrNull { it.sessionId == sessionId } ?: return false
+		if (!browserSessionManager.detach(session.sessionId, host)) return false
+		session.attachedToUi = false
+		session.lastUsedAt = System.currentTimeMillis()
+		return true
+	}
+
+	internal fun isBrowserSessionAttached(sessionId: String): Boolean =
+		browserSessionCache.values.firstOrNull { it.sessionId == sessionId }?.attachedToUi == true
 
 	val defaultUserAgent: String? by lazy {
 		try {
@@ -121,44 +235,159 @@ class WebViewExecutor @Inject constructor(
 	 */
 	suspend fun fetchWithBrowserContext(
 		url: String,
+		method: String = "GET",
+		body: String? = null,
 		userAgent: String? = null,
 		headers: Map<String, String> = emptyMap(),
+		allowedOrigins: Set<String> = emptySet(),
 		settleDelayMs: Long = 1200,
 		timeoutMs: Long = 30000,
-	): BrowserFetchResult? = mutex.withLock {
-		withContext(Dispatchers.Main.immediate) {
-			val target = url.toHttpUrlOrNull() ?: return@withContext null
-			val webView = obtainWebView()
+	): BrowserFetchResult? {
+		val target = url.toHttpUrlOrNull() ?: return null
+		val normalizedMethod = method.uppercase().takeIf { it == "GET" || it == "POST" } ?: return null
+		val originPolicy = BrowserOriginPolicy.create(url, allowedOrigins) ?: return null
+		val sessionKey = originPolicy.primaryOrigin
+		return withContext(Dispatchers.Main.immediate) {
+				val session = obtainBrowserSession(sessionKey)
+				session.executionMutex.withLock {
+				val webView = session.webView
+				val rendererEpoch = session.rendererEpoch
+				val execution = BrowserExecution(requestUrl = url, method = normalizedMethod)
+				check(session.activeExecution == null) { "BrowserSession already has an active execution" }
+				session.activeExecution = execution
+				session.pendingOperations++
+				session.state = BrowserSessionState.BUSY
+				Log.d(
+					TAG,
+					"BrowserExecution started: session=${session.sessionId} execution=${execution.executionId} " +
+						"origin=${session.origin} method=$normalizedMethod url=$url",
+				)
+				val messageBridge = session.transportInstallation?.messageBridge?.bridge
 			try {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext start: $url")
 				webView.configureForParser(userAgent, blockImages = true)
-				withTimeoutOrNull(timeoutMs) {
-					// Ensure browser context is established on the same origin first.
-					suspendCancellableCoroutine<Unit> { cont ->
+				val transportResult = withTimeoutOrNull(timeoutMs) {
+					check(session.rendererEpoch == rendererEpoch && session.state != BrowserSessionState.POISONED) {
+						"BrowserSession renderer changed before request"
+					}
+					val currentUrl = webView.url
+					val needsOriginNavigation = currentUrl.isNullOrBlank() || currentUrl == "about:blank" ||
+						!originPolicy.allowsDocument(currentUrl)
+					if (needsOriginNavigation) suspendCancellableCoroutine<Unit> { cont ->
+						val completed = AtomicBoolean(false)
+						val apiObservationSequence = AtomicInteger(0)
+						fun fail(cause: Throwable) {
+							if (completed.compareAndSet(false, true) && cont.isActive) {
+								cont.resumeWithException(cause)
+							}
+						}
 						webView.webViewClient = object : WebViewClient() {
+							override fun shouldInterceptRequest(
+								view: WebView?,
+								request: WebResourceRequest?,
+							): WebResourceResponse? {
+								request?.takeIf { shouldObserveBrowserApiRequest(originPolicy, it.url.toString()) }
+									?.let { observed ->
+										logObservedBrowserApiRequest(
+											sequence = apiObservationSequence.incrementAndGet(),
+											request = observed,
+										)
+									}
+								return null
+							}
+
 							override fun onPageFinished(view: WebView?, loadedUrl: String?) {
 								android.util.Log.d(
 									"WebViewExecutor",
 									"fetchWithBrowserContext base page finished: $loadedUrl",
 								)
-								if (cont.isActive) {
+								if (completed.compareAndSet(false, true) && cont.isActive) {
 									cont.resume(Unit)
 								}
 							}
+
+							override fun onReceivedError(
+								view: WebView?,
+								request: WebResourceRequest?,
+								error: WebResourceError?,
+							) {
+								if (request?.isForMainFrame == true) {
+									fail(
+										BrowserPageLoadException(
+											"Main-frame WebView load failed: code=${error?.errorCode}, " +
+												"description=${error?.description}",
+										),
+									)
+								}
+							}
+
+							override fun onReceivedSslError(
+								view: WebView?,
+								handler: SslErrorHandler?,
+								error: SslError?,
+							) {
+								handler?.cancel()
+								fail(BrowserPageLoadException("Main-frame WebView SSL error: ${error?.primaryError}"))
+							}
+
+							override fun onReceivedHttpError(
+								view: WebView?,
+								request: WebResourceRequest?,
+								errorResponse: WebResourceResponse?,
+							) {
+								val requestUrl = request?.url?.toString().orEmpty()
+								if (shouldObserveBrowserApiRequest(originPolicy, requestUrl)) {
+									Log.d(
+										TAG,
+										"Observed browser API response: method=${request?.method} " +
+											"status=${errorResponse?.statusCode} url=${requestUrl.take(240)}",
+									)
+								}
+							}
+
+							 override fun onRenderProcessGone(
+								view: WebView?,
+								detail: android.webkit.RenderProcessGoneDetail?,
+							): Boolean {
+								messageBridge?.failAll(BrowserPageLoadException("WebView renderer exited; didCrash=${detail?.didCrash()}"))
+								discardWebView(view)
+								fail(BrowserPageLoadException("WebView renderer exited; didCrash=${detail?.didCrash()}"))
+								return true
+							}
 						}
+						cont.invokeOnCancellation { webView.stopLoading() }
 						val baseUrl = target.newBuilder()
 							.encodedPath("/")
 							.query(null)
 							.fragment(null)
 							.build()
 							.toString()
+						advanceNavigationEpoch(webView)
 						webView.loadUrl(baseUrl)
+					} else {
+						Log.d(TAG, "Reusing BrowserSession document: currentUrl=$currentUrl target=$url")
 					}
-					kotlinx.coroutines.delay(settleDelayMs)
+						if (needsOriginNavigation) {
+							awaitBrowserDocumentReady(
+								webView = webView,
+								maxWaitMs = BROWSER_DOCUMENT_READY_TIMEOUT_MS,
+								quietWindowMs = settleDelayMs.coerceAtLeast(BROWSER_DOCUMENT_QUIET_WINDOW_MS),
+							)
+						} else {
+							kotlinx.coroutines.delay(settleDelayMs)
+						}
 
 					val resolvedOriginHost = webView.url?.toHttpUrlOrNull()?.host ?: target.host
+					val resolvedPageUrl = webView.url ?: target.newBuilder().encodedPath("/").build().toString()
+					if (!originPolicy.allowsDocument(resolvedPageUrl)) {
+						throw BrowserPageLoadException("Browser page redirected outside origin policy: $resolvedPageUrl")
+					}
 					val targetUrlToFetch = if (resolvedOriginHost != target.host) {
-						target.newBuilder().host(resolvedOriginHost).build().toString()
+						val redirectedTarget = target.newBuilder().host(resolvedOriginHost).build().toString()
+						if (!originPolicy.allowsFetch(redirectedTarget)) {
+							throw BrowserPageLoadException("Browser request redirected outside origin policy: $redirectedTarget")
+						}
+						redirectedTarget
 					} else {
 						url
 					}
@@ -167,95 +396,198 @@ class WebViewExecutor @Inject constructor(
 						"fetchWithBrowserContext origin ready: currentUrl=${webView.url} targetUrl=$targetUrlToFetch",
 					)
 
-					val allowedHeaders = headers.filterKeys { key ->
-						!key.equals("Referer", ignoreCase = true) && !key.equals("Origin", ignoreCase = true)
-					}
-					val jsHeaders = JSONObject(allowedHeaders).toString()
-					val js = """
-						window.__kototoroFetchResult = null;
-						(async () => {
-						  try {
-						  	// Wait for document to be ready if it's not already
-						    if (document.readyState === 'loading') {
-						        await new Promise(resolve => {
-						            document.addEventListener('DOMContentLoaded', resolve);
-						            setTimeout(resolve, 3000);
-						        });
-						    }
-						    const response = await fetch(${JSONObject.quote(targetUrlToFetch)}, {
-						      method: 'GET',
-						      credentials: 'include',
-						      headers: $jsHeaders,
-						    });
-						    const text = await response.text();
-						    const responseHeaders = {};
-						    response.headers.forEach((value, key) => { responseHeaders[key] = value; });
-						    window.__kototoroFetchResult = JSON.stringify({
-						      ok: true,
-						      status: response.status,
-						      statusText: response.statusText || '',
-						      url: response.url || ${JSONObject.quote(url)},
-						      headers: responseHeaders,
-						      body: text || '',
-						    });
-						  } catch (e) {
-						    window.__kototoroFetchResult = JSON.stringify({
-						      ok: false,
-						      error: String(e),
-						      errorName: e?.name ? String(e.name) : '',
-						      errorMessage: e?.message ? String(e.message) : '',
-						      errorStack: e?.stack ? String(e.stack) : '',
-						    });
-						  }
-						})();
-					""".trimIndent()
-
-					webView.evaluateJavascript(js, null)
-					var raw = ""
-					while (isActive) {
-						val pollResult = suspendCancellableCoroutine<String> { cont ->
-							webView.evaluateJavascript("window.__kototoroFetchResult") { result ->
-								if (cont.isActive) {
-									cont.resume(decodeJavascriptString(result))
-								}
-							}
-						}
-						if (pollResult.isNotBlank() && pollResult != "null") {
-							raw = pollResult
-							webView.evaluateJavascript("window.__kototoroFetchResult = null;", null)
-							break
-						}
-						kotlinx.coroutines.delay(100)
+					val allowedHeaders = browserFetchHeaders(headers)
+					logBrowserRpcRequest(
+						method = normalizedMethod,
+						headers = allowedHeaders,
+						body = body,
+						executionWorld = BrowserFetchExecutionWorld.PREFER_ISOLATED,
+					)
+					val raw = fetchViaWebMessage(
+						webView = webView,
+						bridge = messageBridge,
+						originPolicy = originPolicy,
+						url = targetUrlToFetch,
+						fallbackUrl = url,
+						method = normalizedMethod,
+						body = body,
+						headers = allowedHeaders,
+						executionWorld = BrowserFetchExecutionWorld.PREFER_ISOLATED,
+					) ?: fetchViaJavascriptPolling(
+						webView,
+						targetUrlToFetch,
+						url,
+						normalizedMethod,
+						body,
+						allowedHeaders,
+					)
+					check(session.rendererEpoch == rendererEpoch && session.state != BrowserSessionState.POISONED) {
+						"BrowserSession renderer changed during request"
 					}
 					if (raw.isBlank()) {
 						android.util.Log.w(
 							"WebViewExecutor",
 							"fetchWithBrowserContext empty JS result"
 						)
-						return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
+						return@withTimeoutOrNull tryNavigationFetchFallback(
+							webView, targetUrlToFetch, headers, normalizedMethod,
+						)
 					}
 					val json = runCatching { JSONObject(raw) }.onFailure {
 						android.util.Log.w(
 							"WebViewExecutor",
 							"fetchWithBrowserContext JSON parse failed: ${it.message}; rawPreview=${raw.take(200)}",
 						)
-					}.getOrNull() ?: return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
-					val fetchStatus = json.optInt("status")
-					val fetchBody = json.optString("body")
-					val isCloudflareBlock = (fetchStatus == 403 || fetchStatus == 503) && 
-						(fetchBody.contains("cf-browser-verification") || 
-						 fetchBody.contains("Just a moment") || 
-						 fetchBody.contains("__cf_chl_opt") ||
-						 fetchBody.contains("Adscore"))
-
-					if (!json.optBoolean("ok") || isCloudflareBlock) {
-						android.util.Log.w(
-							"WebViewExecutor",
-							"fetchWithBrowserContext failed or hit WAF (ok=${json.optBoolean("ok")}, status=$fetchStatus, isCF=$isCloudflareBlock). Falling back to navigation.",
+						}.getOrNull() ?: return@withTimeoutOrNull tryNavigationFetchFallback(
+							webView, targetUrlToFetch, headers, normalizedMethod,
 						)
-						return@withTimeoutOrNull tryNavigationFetchFallback(webView, targetUrlToFetch, headers)
+					if (json.optString("body").length > MAX_BROWSER_TEXT_BYTES) {
+						throw BrowserPageLoadException("Browser response exceeds text transport limit")
 					}
-					val responseHeadersObj = json.optJSONObject("headers")
+					var activeJson = json
+					var fetchStatus = activeJson.optInt("status")
+					var fetchBody = activeJson.optString("body")
+					var fetchHeaders = activeJson.optJSONObject("headers")
+					val isManagedChallenge = fetchHeaders?.optString("cf-mitigated")
+						.equals("challenge", ignoreCase = true)
+					var isCloudflareBlock = (fetchStatus == 403 || fetchStatus == 503) &&
+						(fetchBody.contains("cf-browser-verification") ||
+							fetchBody.contains("Just a moment") ||
+							fetchBody.contains("__cf_chl_opt") ||
+							fetchBody.contains("challenge-platform") ||
+							fetchBody.contains("turnstile") ||
+							fetchBody.contains("Adscore") ||
+							isManagedChallenge)
+					logBrowserRpcResponse(BrowserFetchExecutionWorld.PREFER_ISOLATED, activeJson, isCloudflareBlock)
+
+					if (isCloudflareBlock) {
+						logBrowserRpcRequest(
+							method = normalizedMethod,
+							headers = allowedHeaders,
+							body = body,
+							executionWorld = BrowserFetchExecutionWorld.PAGE,
+						)
+						val pageWorldRaw = fetchViaWebMessage(
+							webView = webView,
+							bridge = messageBridge,
+							originPolicy = originPolicy,
+							url = targetUrlToFetch,
+							fallbackUrl = url,
+							method = normalizedMethod,
+							body = body,
+							headers = allowedHeaders,
+							executionWorld = BrowserFetchExecutionWorld.PAGE,
+						)
+						val pageWorldJson = pageWorldRaw?.let { runCatching { JSONObject(it) }.getOrNull() }
+						if (pageWorldJson != null) {
+							val pageStatus = pageWorldJson.optInt("status")
+							val pageBody = pageWorldJson.optString("body")
+							val pageHeaders = pageWorldJson.optJSONObject("headers")
+							val pageIsCloudflareBlock = isCloudflareChallenge(pageStatus, pageBody, pageHeaders)
+							logBrowserRpcResponse(BrowserFetchExecutionWorld.PAGE, pageWorldJson, pageIsCloudflareBlock)
+							activeJson = pageWorldJson
+							fetchStatus = pageStatus
+							fetchBody = pageBody
+							fetchHeaders = pageHeaders
+							isCloudflareBlock = pageIsCloudflareBlock
+						}
+					}
+
+						if (!activeJson.optBoolean("ok") || isCloudflareBlock) {
+							android.util.Log.w(
+								"WebViewExecutor",
+								"fetchWithBrowserContext failed or hit WAF " +
+									"(ok=${activeJson.optBoolean("ok")}, status=$fetchStatus, isCF=$isCloudflareBlock, " +
+									"error=${activeJson.optString("error").take(240)}). Falling back to navigation.",
+							)
+						if (isCloudflareBlock) {
+							val challengeHeaders = Headers.Builder().apply {
+								headers.forEach { (name, value) ->
+									if (name.isNotBlank() && value.isNotBlank()) add(name, value)
+								}
+							}.build()
+							val challengeContext = BrowserChallengeContext.create(
+								requestUrl = targetUrlToFetch,
+								method = normalizedMethod,
+								responseHtml = fetchBody,
+							) ?: throw BrowserPageLoadException("Invalid browser challenge context")
+							execution.challengeDetected(challengeContext)
+							Log.d(
+								TAG,
+								"BrowserExecution transition: session=${session.sessionId} " +
+									"execution=${execution.executionId} origin=${session.origin} " +
+									"state=${BrowserExecutionState.CHALLENGE_DETECTED}",
+							)
+							val challenge = CloudFlareProtectedException(
+								url = targetUrlToFetch,
+								source = UnknownContentSource,
+								headers = challengeHeaders,
+								method = normalizedMethod,
+								body = body,
+							)
+							session.transitionExecutionTo(BrowserExecutionState.RESOLVING_AUTOMATIC)
+							val resolutionEvidence = resolveChallengeInSession(
+								webView = webView,
+								exception = challenge,
+								context = challengeContext,
+								challengeDocumentHtml = fetchBody,
+							)
+							if (resolutionEvidence != null) {
+								session.transitionExecutionTo(BrowserExecutionState.VALIDATING)
+								session.transitionExecutionTo(BrowserExecutionState.RETRYING_REQUEST)
+								logBrowserRpcRequest(
+									method = normalizedMethod,
+									headers = allowedHeaders,
+									body = body,
+									executionWorld = BrowserFetchExecutionWorld.PAGE,
+								)
+								val retryRaw = fetchViaWebMessage(
+									webView, messageBridge, originPolicy, targetUrlToFetch, url, normalizedMethod, body,
+									allowedHeaders, BrowserFetchExecutionWorld.PAGE,
+								) ?: fetchViaJavascriptPolling(
+									webView, targetUrlToFetch, url, normalizedMethod, body, allowedHeaders,
+								)
+								val retryJson = runCatching { JSONObject(retryRaw) }.getOrNull()
+								if (retryJson != null) {
+									logBrowserRpcResponse(
+										BrowserFetchExecutionWorld.PAGE,
+										retryJson,
+										isCloudflareChallenge(
+											retryJson.optInt("status"),
+											retryJson.optString("body"),
+											retryJson.optJSONObject("headers"),
+										),
+									)
+								}
+								if (retryJson?.optBoolean("ok") == true) {
+									session.transitionExecutionTo(BrowserExecutionState.COMPLETED)
+									return@withTimeoutOrNull BrowserFetchResult(
+										status = retryJson.optInt("status"),
+										statusText = retryJson.optString("statusText"),
+										url = retryJson.optString("url", url),
+										headers = retryJson.optJSONObject("headers")?.let { obj ->
+											buildMap { obj.keys().forEach { key -> put(key, obj.optString(key)) } }
+										} ?: emptyMap(),
+										body = retryJson.optString("body"),
+									)
+								}
+								session.transitionExecutionTo(BrowserExecutionState.FAILED)
+							} else {
+								session.transitionExecutionTo(BrowserExecutionState.FAILED)
+							}
+						}
+						val failedHeaders = fetchHeaders?.let { obj ->
+							buildMap { obj.keys().forEach { key -> put(key, obj.optString(key)) } }
+						} ?: emptyMap()
+						return@withTimeoutOrNull BrowserFetchResult(
+							status = fetchStatus,
+							statusText = activeJson.optString("statusText"),
+							url = activeJson.optString("url", url),
+							headers = failedHeaders,
+							body = fetchBody,
+						)
+					}
+					val responseHeadersObj = activeJson.optJSONObject("headers")
 					val responseHeaders = linkedMapOf<String, String>()
 					if (responseHeadersObj != null) {
 						val keys = responseHeadersObj.keys()
@@ -265,17 +597,618 @@ class WebViewExecutor @Inject constructor(
 						}
 					}
 					BrowserFetchResult(
-						status = json.optInt("status"),
-						statusText = json.optString("statusText"),
-						url = json.optString("url"),
+						status = activeJson.optInt("status"),
+						statusText = activeJson.optString("statusText"),
+						url = activeJson.optString("url"),
 						headers = responseHeaders,
-						body = json.optString("body"),
+						body = activeJson.optString("body"),
 					)
-				} ?: snapshotCurrentPage(webView, webView.url ?: url, "timeout")
+				}
+					if (transportResult == null) {
+						snapshotCurrentPage(webView, webView.url ?: url, "timeout")
+					}
+					val result = transportResult?.takeIf { it.status in 100..599 }
+				if (!execution.isTerminal) {
+					session.transitionExecutionTo(
+						if (result != null && result.status != 0) {
+							BrowserExecutionState.COMPLETED
+						} else {
+							BrowserExecutionState.FAILED
+						},
+					)
+				}
+				result
+			} catch (error: CancellationException) {
+				if (!execution.isTerminal) session.transitionExecutionTo(BrowserExecutionState.CANCELLED)
+				throw error
+			} catch (error: BrowserPageLoadException) {
+				if (!execution.isTerminal) session.transitionExecutionTo(BrowserExecutionState.FAILED)
+				Log.w(TAG, "Browser transport page initialization failed: $url", error)
+				null
+			} catch (error: Exception) {
+				if (!execution.isTerminal) session.transitionExecutionTo(BrowserExecutionState.FAILED)
+				Log.w(TAG, "Browser transport execution failed: $url", error)
+				null
 			} finally {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext end: $url")
-				webView.reset()
+					if (execution.state == BrowserExecutionState.FAILED) {
+						Log.w(TAG, "Discarding BrowserSession after failed execution: session=${session.sessionId} url=$url")
+						discardWebView(webView)
+					} else {
+						runCatching { prepareBrowserSessionForReuse(webView) }.onFailure { discardWebView(webView) }
+					}
+				session.pendingOperations = (session.pendingOperations - 1).coerceAtLeast(0)
+				if (session.state == BrowserSessionState.BUSY) {
+					session.state = BrowserSessionState.READY
+				}
+				if (session.activeExecution === execution) session.activeExecution = null
+				session.lastUsedAt = System.currentTimeMillis()
+				trimBrowserSessionCache()
 			}
+		}
+	}
+	}
+
+	@MainThread
+	private fun prepareBrowserSessionForReuse(webView: WebView) {
+		webView.stopLoading()
+		webView.webChromeClient = WebChromeClient()
+		webView.webViewClient = WebViewClient()
+		(webView.parent as? ViewGroup)?.removeView(webView)
+		webView.alpha = 0.01f
+		// Keep the current same-origin document, CookieManager state, storage and
+		// renderer alive. Navigating to an empty document here would defeat the
+		// per-origin BrowserSession contract.
+	}
+
+	private suspend fun resolveChallengeInSession(
+		webView: WebView,
+		exception: CloudFlareProtectedException,
+		context: BrowserChallengeContext,
+		challengeDocumentHtml: String,
+	): BrowserResolutionEvidence? {
+		val activity = foregroundActivityHolder.current ?: return null
+		val session = browserSessionCache.values.firstOrNull { it.webView === webView } ?: return null
+		val host = attachBrowserSession(session.sessionId, activity) ?: return null
+		session.transitionExecutionTo(BrowserExecutionState.WAITING_FOR_USER)
+		val interactiveChallenge = BrowserInteractiveChallenge(
+			sessionId = session.sessionId,
+			origin = context.origin,
+			requestUrl = context.requestUrl,
+			method = context.method,
+			displayUrl = context.navigationUrl ?: context.requestUrl,
+		)
+		interactiveChallengeStates[interactiveChallenge.challengeId] = interactiveChallenge
+		var terminalState = BrowserInteractiveChallengeState.FAILED
+		val evidence = try {
+			// Keep the clearance issued by the homepage. Kagane uses one browser
+			// session for the homepage and API; deleting it here recreates the loop.
+			val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+			withTimeoutOrNull(DEFAULT_CAPTCHA_TIMEOUT_MS * 2) {
+				suspendCancellableCoroutine<BrowserResolutionEvidence?> { cont ->
+					interactiveChallengeCancellations[interactiveChallenge.challengeId] = {
+						if (cont.isActive) cont.resume(null) {}
+					}
+					if (!_interactiveChallenges.tryEmit(interactiveChallenge)) {
+						interactiveChallengeCancellations.remove(interactiveChallenge.challengeId)
+						cont.resume(null) {}
+						return@suspendCancellableCoroutine
+					}
+					Log.i(
+						TAG,
+						"Interactive challenge attached to BrowserSession: session=${interactiveChallenge.sessionId} " +
+							"challenge=${interactiveChallenge.challengeId} origin=${context.origin} " +
+							"url=${context.requestUrl} method=${context.method} " +
+							"snippetLength=${context.responseHtmlSnippet.length}",
+					)
+					val resolutionTracker = BrowserChallengeResolutionTracker()
+					fun inspectState() {
+						webView.evaluateJavascript(CF_STATE_JS) { raw ->
+							val state = parseCloudFlarePageState(raw)
+							val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+							val evidence = resolutionTracker.observe(
+								pageState = state,
+								hasClearance = clearance != null,
+								clearanceChanged = clearance != null && clearance != initialClearance,
+								currentUrl = webView.url,
+								requiresInteractiveResolution = context.method == "POST",
+							)
+							Log.d(
+								TAG,
+								"Session challenge state=$state url=${webView.url} " +
+									"hasClearance=${clearance != null} evidence=$evidence",
+							)
+							if (evidence != null && cont.isActive) {
+								cont.resume(evidence) {}
+							}
+						}
+					}
+					val client = CloudFlareClient(cookieJar, object : org.skepsun.kototoro.browser.cloudflare.CloudFlareCallback {
+						override fun onLoadingStateChanged(isLoading: Boolean) = Unit
+						override fun onHistoryChanged() = Unit
+						override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) = Unit
+						override fun onPageFinished(webView: WebView, url: String) = Unit
+						override fun onPageLoaded() = inspectState()
+						override fun onLoopDetected() {
+							if (cont.isActive) cont.resume(null) {}
+						}
+
+						override fun onCheckPassed() {
+							// This callback is resolution evidence, not transport success.
+							// Re-check the actual page and cookie before retrying the original request.
+							inspectState()
+						}
+					}, adBlock, exception.url)
+					webView.webViewClient = client
+					webView.alpha = 1f
+					webView.visibility = View.VISIBLE
+					// A POST challenge must be opened as a real HTTPS document. Injecting the
+					// response with loadDataWithBaseURL() can leave Chromium reporting an
+					// about:blank document to Turnstile, which breaks its postMessage origin
+					// handshake. This navigation is a GET only; the original POST is retried
+					// below after resolution and is never downgraded to navigation.
+					advanceNavigationEpoch(webView)
+					val navigationUrl = context.navigationUrl ?: context.requestUrl
+					webView.loadUrl(navigationUrl)
+					Log.i(
+						TAG,
+						"Interactive challenge navigated to real HTTPS origin: url=$navigationUrl " +
+							"method=${context.method} htmlSnippetLength=${challengeDocumentHtml.length}",
+					)
+					cont.invokeOnCancellation { webView.stopLoading() }
+				}
+			}.also { result ->
+				terminalState = if (result != null) BrowserInteractiveChallengeState.RESOLVED
+				else BrowserInteractiveChallengeState.FAILED
+			}
+		} catch (error: CancellationException) {
+			terminalState = BrowserInteractiveChallengeState.CANCELLED
+			throw error
+		} catch (error: Exception) {
+			terminalState = BrowserInteractiveChallengeState.FAILED
+			throw error
+		} finally {
+			interactiveChallengeCancellations.remove(interactiveChallenge.challengeId)
+			val currentState = interactiveChallengeStates[interactiveChallenge.challengeId]?.state
+			if (currentState != BrowserInteractiveChallengeState.CANCELLED) {
+				updateInteractiveChallenge(interactiveChallenge.challengeId, interactiveChallenge.sessionId, terminalState)
+			}
+			interactiveChallengeStates.remove(interactiveChallenge.challengeId)
+			withContext(Dispatchers.Main.immediate) {
+				detachBrowserSession(session.sessionId, host)
+				webView.alpha = 0.01f
+			}
+		}
+		return evidence
+	}
+
+	@MainThread
+	private fun installBrowserFetchExecutor(
+		webView: WebView,
+		originPolicy: BrowserOriginPolicy,
+	): ScriptHandler? {
+		if (WebViewFeature.isFeatureSupported(WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD)) {
+			Log.d(TAG, "WebView provider supports isolated JavaScript worlds; using capability-aware fallback")
+		}
+		if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return null
+		val script = """
+			(() => {
+			  const key = '__kototoroFetchExecutor';
+			  if (Object.prototype.hasOwnProperty.call(window, key)) return;
+			  const nativeFetch = window.fetch.bind(window);
+			  const executor = Object.freeze({ fetch: (input, init) => nativeFetch(input, init) });
+			  Object.defineProperty(window, key, {
+			    value: executor, writable: false, configurable: false, enumerable: false
+			  });
+			})();
+		""".trimIndent()
+		return WebViewCompat.addDocumentStartJavaScript(webView, script, originPolicy.documentOrigins)
+	}
+
+	/** Uses the AndroidX origin-scoped bridge; returns null when the WebView lacks the feature. */
+	@MainThread
+	private fun installBrowserMessageBridge(
+		webView: WebView,
+		session: BrowserSessionRecord,
+		sessionOriginPolicy: BrowserOriginPolicy,
+	): BrowserMessageBridgeInstallation? {
+		if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return null
+		val bridge = BrowserMessageBridge(
+			sessionOriginPolicy = sessionOriginPolicy,
+			currentRendererEpoch = { session.rendererEpoch },
+			currentNavigationEpoch = { session.navigationEpoch },
+		)
+		val isolatedListener = WebViewCompat.WebMessageListener { _, message, sourceOrigin, isMainFrame, replyProxy ->
+			bridge.onIsolatedPostMessage(message, sourceOrigin, isMainFrame, replyProxy)
+		}
+		val isolatedWorld = if (WebViewFeature.isFeatureSupported(WebViewFeature.JS_INJECTION_IN_FRAME_AND_WORLD)) {
+			val world = WebViewCompat.getExecutionWorld(webView, "KototoroTransport")
+			WebViewCompat.addWebMessageListener(
+				webView,
+				ISOLATED_TRANSPORT_BRIDGE_NAME,
+				sessionOriginPolicy.documentOrigins,
+				world,
+				isolatedListener,
+			)
+			val scriptHandler = WebViewCompat.addJavaScriptOnEvent(
+				webView,
+				"window.$ISOLATED_TRANSPORT_BRIDGE_NAME?.postMessage(JSON.stringify({type:'isolated-ready'}));",
+				WebViewCompat.INJECTION_EVENT_DOCUMENT_START,
+				sessionOriginPolicy.documentOrigins,
+				world,
+			)
+			IsolatedWorldInstallation(world, scriptHandler)
+		} else null
+		WebViewCompat.addWebMessageListener(
+			webView,
+			TRANSPORT_BRIDGE_NAME,
+			sessionOriginPolicy.documentOrigins,
+			bridge,
+		)
+		return BrowserMessageBridgeInstallation(bridge, isolatedWorld)
+	}
+
+	private data class IsolatedWorldInstallation(
+		val world: JavaScriptExecutionWorld,
+		val scriptHandler: ScriptHandler,
+	)
+
+	private data class BrowserMessageBridgeInstallation(
+		val bridge: BrowserMessageBridge,
+		val isolatedWorld: IsolatedWorldInstallation?,
+	) {
+		@MainThread
+		fun remove(webView: WebView) {
+			bridge.clearIsolatedExecutor()
+			WebViewCompat.removeWebMessageListener(webView, TRANSPORT_BRIDGE_NAME)
+			isolatedWorld?.let { installation ->
+				WebViewCompat.removeWebMessageListener(
+					webView,
+					installation.world,
+					ISOLATED_TRANSPORT_BRIDGE_NAME,
+				)
+				installation.scriptHandler.remove()
+			}
+		}
+	}
+
+	private data class BrowserTransportInstallation(
+		val fetchScriptHandler: ScriptHandler?,
+		val messageBridge: BrowserMessageBridgeInstallation?,
+	) {
+		@MainThread
+		fun remove(webView: WebView) {
+			messageBridge?.remove(webView)
+			fetchScriptHandler?.remove()
+		}
+	}
+
+	private suspend fun fetchViaWebMessage(
+		webView: WebView,
+		bridge: BrowserMessageBridge?,
+		originPolicy: BrowserOriginPolicy,
+		url: String,
+		fallbackUrl: String,
+		method: String,
+		body: String?,
+		headers: Map<String, String>,
+		executionWorld: BrowserFetchExecutionWorld,
+	): String? {
+		bridge ?: return null
+		url.toHttpUrlOrNull() ?: return null
+		val result = CompletableDeferred<String>()
+		val requestId = UUID.randomUUID().toString()
+		val generation = UUID.randomUUID().toString()
+		bridge.register(requestId, generation, originPolicy, result)
+		try {
+			val jsHeaders = JSONObject(headers).toString()
+			val jsBody = body?.let(JSONObject::quote) ?: "undefined"
+			fun fetchScript(bridgeName: String) = """
+				(async () => {
+				  const id = ${JSONObject.quote(requestId)};
+				  const generation = ${JSONObject.quote(generation)};
+				  const controllers = window.__kototoroFetchControllers || (window.__kototoroFetchControllers = {});
+				  const controller = new AbortController();
+				  controllers[id] = controller;
+				  const post = value => window[${JSONObject.quote(bridgeName)}]?.postMessage(JSON.stringify(value));
+				  const executeFetch = window.__kototoroFetchExecutor?.fetch || window.fetch.bind(window);
+				  try {
+				    const response = await executeFetch(${JSONObject.quote(url)}, {
+				      method: ${JSONObject.quote(method)}, credentials: 'include', headers: $jsHeaders,
+				      body: $jsBody, signal: controller.signal
+				    });
+				    if (Number(response.headers.get('content-length') || 0) > $MAX_BROWSER_TEXT_BYTES) {
+				      throw new Error('Browser response exceeds text transport limit');
+				    }
+				    const responseHeaders = {};
+				    response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+				    const body = await response.text();
+				    if (body.length > $MAX_BROWSER_TEXT_BYTES) throw new Error('Browser response exceeds text transport limit');
+				    post({
+				      id, generation, ok: response.ok, status: response.status,
+				      statusText: response.statusText || '', url: response.url || ${JSONObject.quote(fallbackUrl)},
+				      headers: responseHeaders, body
+				    });
+				  } catch (e) {
+				    post({ id, generation, ok: false, status: 0, error: String(e) });
+				  } finally {
+				    delete controllers[id];
+				  }
+				})();
+			""".trimIndent()
+			if (executionWorld == BrowserFetchExecutionWorld.PAGE ||
+				!bridge.executeInIsolatedWorld(fetchScript(ISOLATED_TRANSPORT_BRIDGE_NAME))
+			) {
+				Log.d(TAG, "Browser RPC executing in page world: request=$requestId url=$url")
+				webView.evaluateJavascript(fetchScript(TRANSPORT_BRIDGE_NAME), null)
+			} else {
+				Log.d(TAG, "Browser RPC executing in isolated world: request=$requestId url=$url")
+			}
+			return withTimeoutOrNull(WEB_MESSAGE_RESPONSE_TIMEOUT_MS) {
+				result.await()
+			} ?: run {
+				Log.w(TAG, "WebMessage fetch response timed out; falling back to JS polling: $url")
+				null
+			}
+		} finally {
+			val abortScript =
+				"window.__kototoroFetchControllers?.[${JSONObject.quote(requestId)}]?.abort(); " +
+					"delete window.__kototoroFetchControllers?.[${JSONObject.quote(requestId)}];"
+			if (executionWorld == BrowserFetchExecutionWorld.PAGE || !bridge.executeInIsolatedWorld(abortScript)) {
+				webView.evaluateJavascript(abortScript, null)
+			}
+			bridge.unregister(requestId, result)
+		}
+	}
+
+	private fun logBrowserRpcRequest(
+		method: String,
+		headers: Map<String, String>,
+		body: String?,
+		executionWorld: BrowserFetchExecutionWorld,
+	) {
+		val contentType = headers.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
+		Log.d(
+			TAG,
+			"Browser RPC request: world=$executionWorld method=$method " +
+				"headerNames=${headers.keys.sortedBy(String::lowercase)} " +
+				"contentType=${contentType ?: "<none>"} bodyLength=${body?.length ?: 0}",
+		)
+	}
+
+	private fun shouldObserveBrowserApiRequest(originPolicy: BrowserOriginPolicy, url: String): Boolean {
+		val parsed = url.toHttpUrlOrNull() ?: return false
+		return parsed.encodedPath.startsWith("/api/") && originPolicy.allowsFetch(url)
+	}
+
+	private fun logObservedBrowserApiRequest(sequence: Int, request: WebResourceRequest) {
+		val headers = request.requestHeaders.orEmpty()
+		val contentType = headers.entries
+			.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+			?.value
+		Log.d(
+			TAG,
+			"Observed browser API request: sequence=$sequence method=${request.method} " +
+				"isMainFrame=${request.isForMainFrame} headerNames=${headers.keys.sortedBy(String::lowercase)} " +
+				"contentType=${contentType ?: "<none>"} url=${request.url.toString().take(240)}",
+		)
+	}
+
+	private fun logBrowserRpcResponse(
+		executionWorld: BrowserFetchExecutionWorld,
+		response: JSONObject,
+		isCloudflare: Boolean,
+	) {
+		val responseHeaders = response.optJSONObject("headers")
+		Log.d(
+			TAG,
+			"Browser RPC response: world=$executionWorld status=${response.optInt("status")} " +
+				"cfMitigated=${responseHeaders?.optString("cf-mitigated").orEmpty().ifBlank { "<none>" }} " +
+				"isCF=$isCloudflare url=${response.optString("url").take(240)}",
+		)
+	}
+
+	private fun isCloudflareChallenge(status: Int, body: String, headers: JSONObject?): Boolean {
+		val isManagedChallenge = headers?.optString("cf-mitigated").equals("challenge", ignoreCase = true)
+		return (status == 403 || status == 503) &&
+			(body.contains("cf-browser-verification") ||
+				body.contains("Just a moment") ||
+				body.contains("__cf_chl_opt") ||
+				body.contains("challenge-platform") ||
+				body.contains("turnstile") ||
+				body.contains("Adscore") ||
+				isManagedChallenge)
+	}
+
+	private enum class BrowserFetchExecutionWorld {
+		PREFER_ISOLATED,
+		PAGE,
+	}
+
+	private suspend fun fetchViaJavascriptPolling(
+		webView: WebView,
+		url: String,
+		fallbackUrl: String,
+		method: String,
+		body: String?,
+		headers: Map<String, String>,
+	): String {
+		val requestId = UUID.randomUUID().toString()
+		val jsHeaders = JSONObject(headers).toString()
+		val jsBody = body?.let(JSONObject::quote) ?: "undefined"
+		val script = """
+			window.__kototoroPollingResults = window.__kototoroPollingResults || {};
+			window.__kototoroPollingControllers = window.__kototoroPollingControllers || {};
+			(async () => {
+			  const id = ${JSONObject.quote(requestId)};
+			  const controller = new AbortController();
+			  window.__kototoroPollingControllers[id] = controller;
+			  try {
+			    const executeFetch = window.__kototoroFetchExecutor?.fetch || window.fetch.bind(window);
+			    const response = await executeFetch(${JSONObject.quote(url)}, {
+			      method: ${JSONObject.quote(method)}, credentials: 'include', headers: $jsHeaders, body: $jsBody,
+			      signal: controller.signal
+			    });
+			    const responseHeaders = {};
+			    response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+			    window.__kototoroPollingResults[id] = JSON.stringify({ ok: response.ok, status: response.status,
+			      statusText: response.statusText || '', url: response.url || ${JSONObject.quote(fallbackUrl)},
+			      headers: responseHeaders, body: await response.text() });
+			  } catch (e) {
+			    window.__kototoroPollingResults[id] = JSON.stringify({ ok: false, status: 0, error: String(e) });
+			  } finally {
+			    delete window.__kototoroPollingControllers[id];
+			  }
+			})();
+		""".trimIndent()
+		webView.evaluateJavascript(script, null)
+		try {
+			while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+				val value = suspendCancellableCoroutine<String> { cont ->
+					webView.evaluateJavascript(
+						"window.__kototoroPollingResults?.[${JSONObject.quote(requestId)}] ?? null",
+					) { raw ->
+						if (cont.isActive) cont.resume(decodeJavascriptString(raw))
+					}
+				}
+				if (value.isNotBlank() && value != "null") {
+					return value
+				}
+				kotlinx.coroutines.delay(100)
+			}
+			return ""
+		} finally {
+			webView.evaluateJavascript(
+				"window.__kototoroPollingControllers?.[${JSONObject.quote(requestId)}]?.abort(); " +
+					"delete window.__kototoroPollingControllers?.[${JSONObject.quote(requestId)}]; " +
+					"delete window.__kototoroPollingResults?.[${JSONObject.quote(requestId)}];",
+				null,
+			)
+		}
+	}
+
+	private class BrowserMessageBridge(
+		private val sessionOriginPolicy: BrowserOriginPolicy,
+		private val currentRendererEpoch: () -> Long,
+		private val currentNavigationEpoch: () -> Long,
+	) : WebViewCompat.WebMessageListener {
+		private data class PendingRequest(
+			val generation: String,
+			val rendererEpoch: Long,
+			val navigationEpoch: Long,
+			val originPolicy: BrowserOriginPolicy,
+			val result: CompletableDeferred<String>,
+		)
+
+		private val pending = ConcurrentHashMap<String, PendingRequest>()
+		@Volatile private var isolatedExecutor: IsolatedExecutor? = null
+
+		private data class IsolatedExecutor(
+			val replyProxy: JavaScriptReplyProxy,
+			val rendererEpoch: Long,
+			val navigationEpoch: Long,
+		)
+
+		fun executeInIsolatedWorld(script: String): Boolean {
+			val executor = isolatedExecutor ?: return false
+			if (executor.rendererEpoch != currentRendererEpoch() ||
+				executor.navigationEpoch != currentNavigationEpoch()
+			) {
+				isolatedExecutor = null
+				return false
+			}
+			executor.replyProxy.executeJavaScript(
+				script,
+				object : WebViewOutcomeReceiver<String, JavaScriptExecutionException> {
+					override fun onResult(result: String) = Unit
+
+					override fun onError(error: JavaScriptExecutionException) {
+						Log.w(TAG, "Isolated-world JavaScript execution failed", error)
+					}
+				},
+			)
+			return true
+		}
+
+		fun clearIsolatedExecutor() {
+			isolatedExecutor = null
+		}
+
+		fun register(
+			requestId: String,
+			generation: String,
+			originPolicy: BrowserOriginPolicy,
+			result: CompletableDeferred<String>,
+		) {
+			pending[requestId] = PendingRequest(
+				generation = generation,
+				rendererEpoch = currentRendererEpoch(),
+				navigationEpoch = currentNavigationEpoch(),
+				originPolicy = originPolicy,
+				result = result,
+			)
+		}
+
+		fun unregister(requestId: String, result: CompletableDeferred<String>) {
+			if (pending[requestId]?.result === result) pending.remove(requestId)
+		}
+
+		fun failAll(cause: Throwable) {
+			pending.values.forEach { request ->
+				if (request.result.isActive) request.result.completeExceptionally(cause)
+			}
+			pending.clear()
+		}
+
+			override fun onPostMessage(
+				view: WebView,
+			message: WebMessageCompat,
+			sourceOrigin: Uri,
+			isMainFrame: Boolean,
+				replyProxy: JavaScriptReplyProxy,
+			) {
+				handleMessage(message, sourceOrigin, isMainFrame, replyProxy, acceptIsolatedReady = false)
+			}
+
+		fun onIsolatedPostMessage(
+			message: WebMessageCompat,
+				sourceOrigin: Uri,
+				isMainFrame: Boolean,
+				replyProxy: JavaScriptReplyProxy,
+			) {
+				handleMessage(message, sourceOrigin, isMainFrame, replyProxy, acceptIsolatedReady = true)
+			}
+
+			private fun handleMessage(
+				message: WebMessageCompat,
+				sourceOrigin: Uri,
+				isMainFrame: Boolean,
+				replyProxy: JavaScriptReplyProxy,
+				acceptIsolatedReady: Boolean,
+			) {
+			if (!isMainFrame || !sessionOriginPolicy.allowsDocument(sourceOrigin.toString())) return
+				val payload = message.data ?: return
+				val json = runCatching { JSONObject(payload) }.getOrNull() ?: return
+				if (json.optString("type") == "isolated-ready") {
+					if (!acceptIsolatedReady) return
+					isolatedExecutor = IsolatedExecutor(
+						replyProxy = replyProxy,
+						rendererEpoch = currentRendererEpoch(),
+						navigationEpoch = currentNavigationEpoch(),
+					)
+					Log.d(
+						TAG,
+						"Browser isolated RPC ready: origin=$sourceOrigin navigationEpoch=${currentNavigationEpoch()}",
+					)
+					return
+				}
+			val requestId = json.optString("id")
+			val request = pending[requestId] ?: return
+			if (json.optString("generation") != request.generation) return
+			if (request.rendererEpoch != currentRendererEpoch()) return
+			if (request.navigationEpoch != currentNavigationEpoch()) return
+			if (json.optBoolean("ok") && !request.originPolicy.allowsRedirect(json.optString("url"))) return
+			if (request.result.isActive) request.result.complete(payload)
 		}
 	}
 
@@ -338,11 +1271,74 @@ class WebViewExecutor @Inject constructor(
 		)
 	}
 
+	@MainThread
+	private suspend fun awaitBrowserDocumentReady(
+		webView: WebView,
+		maxWaitMs: Long,
+		quietWindowMs: Long,
+	) {
+		val tracker = BrowserDocumentReadinessTracker(quietWindowMs)
+		val startedAt = System.currentTimeMillis()
+		var lastState = CloudFlarePageState.WAIT
+		var lastReadyState = ""
+		var lastUrl = webView.url.orEmpty()
+		var lastResourceCount = 0
+		val ready = withTimeoutOrNull(maxWaitMs) {
+			while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+				val raw = suspendCancellableCoroutine<String> { cont ->
+					webView.evaluateJavascript(
+						"""(function() {
+							return JSON.stringify({
+								cfState: $CF_STATE_JS,
+								readyState: document.readyState || '',
+								href: location.href || '',
+								resourceCount: performance.getEntriesByType('resource').length
+							});
+						})()""",
+					) { result ->
+						if (cont.isActive) cont.resume(decodeJavascriptString(result))
+					}
+				}
+				val state = runCatching { JSONObject(raw) }.getOrNull()
+				lastState = parseCloudFlarePageState(state?.optString("cfState")?.let(JSONObject::quote))
+				lastReadyState = state?.optString("readyState").orEmpty()
+				lastUrl = state?.optString("href").orEmpty().ifBlank { webView.url.orEmpty() }
+				lastResourceCount = state?.optInt("resourceCount") ?: 0
+				if (tracker.observe(
+						pageState = lastState,
+						readyState = lastReadyState,
+						url = lastUrl,
+						resourceCount = lastResourceCount,
+						nowMs = System.currentTimeMillis(),
+					)
+				) {
+					return@withTimeoutOrNull true
+				}
+				kotlinx.coroutines.delay(BROWSER_DOCUMENT_READY_POLL_MS)
+			}
+			false
+		} == true
+		Log.i(
+			TAG,
+			"Browser document readiness: ready=$ready durationMs=${System.currentTimeMillis() - startedAt} " +
+				"state=$lastState readyState=$lastReadyState resources=$lastResourceCount url=$lastUrl",
+		)
+		if (!ready) {
+			throw BrowserPageLoadException(
+				"Browser origin did not become stable: state=$lastState readyState=$lastReadyState " +
+					"resources=$lastResourceCount url=$lastUrl",
+			)
+		}
+	}
+
 	private suspend fun tryNavigationFetchFallback(
 		webView: WebView,
 		url: String,
 		headers: Map<String, String>,
+		method: String,
+		allowAutomaticChallengeResolve: Boolean = true,
 	): BrowserFetchResult? {
+		if (method != "GET") return null
 		android.util.Log.i("WebViewExecutor", "fetchWithBrowserContext fallback to navigation: $url")
 		var statusCode: Int? = null
 		var statusText: String? = null
@@ -415,6 +1411,35 @@ class WebViewExecutor @Inject constructor(
 		}
 		val code = if (isCloudflare) 403 else (statusCode ?: 200)
 		val message = statusText.orEmpty()
+		if (isCloudflare && allowAutomaticChallengeResolve) {
+			val challengeHeaders = Headers.Builder().apply {
+				headers.forEach { (name, value) ->
+					if (name.isNotBlank() && value.isNotBlank()) add(name, value)
+				}
+			}.build()
+			val resolved = runCatching {
+				resolveCaptchaAutomatically(
+					CloudFlareProtectedException(
+						url = url,
+						source = UnknownContentSource,
+						headers = challengeHeaders,
+					),
+					DEFAULT_CAPTCHA_TIMEOUT_MS,
+				) == CaptchaAutoResolveResult.SOLVED
+			}.onFailure { error ->
+				Log.w(TAG, "Automatic API challenge resolve failed: $url", error)
+			}.getOrDefault(false)
+			if (resolved) {
+				Log.i(TAG, "Automatic API challenge resolved; retrying in the same browser session: $url")
+				return tryNavigationFetchFallback(
+					webView = webView,
+					url = url,
+					headers = headers,
+					method = method,
+					allowAutomaticChallengeResolve = false,
+				)
+			}
+		}
 		android.util.Log.i(
 			"WebViewExecutor",
 			"navigation fallback success: status=$code contentType=${contentType.ifBlank { "<empty>" }} bodyLength=${body.length} isCloudflare=$isCloudflare",
@@ -933,9 +1958,9 @@ class WebViewExecutor @Inject constructor(
 										tryResume(null)
 									}
 								}
+								}
 							}
-						}
-						if (!headers.isNullOrEmpty()) {
+							if (!headers.isNullOrEmpty()) {
 							webView.loadUrl(url, headers)
 						} else {
 							webView.loadUrl(url)
@@ -966,6 +1991,92 @@ class WebViewExecutor @Inject constructor(
 		}
 	}
 
+	@MainThread
+	private suspend fun obtainBrowserSession(host: String): BrowserSessionRecord {
+		browserSessionCache[host]?.let { return it }
+		if (browserSessionCache.size >= BROWSER_SESSION_CACHE_SIZE) {
+			val eldest = browserSessionCache.entries.firstOrNull { it.value.canEvict }
+			if (eldest != null) {
+				browserSessionCache.remove(eldest.key)
+				discardWebView(eldest.value.webView)
+			}
+		}
+		val webView = WebView(context).also { webView ->
+			webView.configureForParser(null)
+			proxyProvider.applyWebViewConfig()
+			webView.onResume()
+			webView.resumeTimers()
+		}
+		return BrowserSessionRecord(
+			origin = host,
+			webView = webView,
+			provider = WebViewCompat.getCurrentWebViewPackage(context)?.let { "${it.packageName}/${it.versionName}" },
+			).also { session ->
+				val sessionOriginPolicy = checkNotNull(BrowserOriginPolicy.create(session.origin))
+				session.transportInstallation = BrowserTransportInstallation(
+					fetchScriptHandler = installBrowserFetchExecutor(webView, sessionOriginPolicy),
+					messageBridge = installBrowserMessageBridge(webView, session, sessionOriginPolicy),
+				)
+				WebViewCompat.setWebViewRenderProcessClient(webView, object : WebViewRenderProcessClient() {
+				override fun onRenderProcessUnresponsive(view: WebView, renderer: androidx.webkit.WebViewRenderProcess?) {
+					session.unresponsiveAt = System.currentTimeMillis()
+					Log.w(TAG, "BrowserSession renderer unresponsive: id=${session.sessionId} origin=$host pending=${session.pendingOperations}")
+				}
+
+				override fun onRenderProcessResponsive(view: WebView, renderer: androidx.webkit.WebViewRenderProcess?) {
+					val started = session.unresponsiveAt
+					session.unresponsiveAt = null
+					Log.i(TAG, "BrowserSession renderer responsive: id=${session.sessionId} origin=$host durationMs=${started?.let { System.currentTimeMillis() - it } ?: 0}")
+				}
+			})
+					browserSessionCache[host] = session
+					browserSessionManager.register(session.sessionId, webView)
+			Log.i(TAG, "BrowserSession created: id=${session.sessionId} origin=$host provider=${session.provider}")
+		}
+	}
+
+	@MainThread
+	private fun trimBrowserSessionCache() {
+		while (browserSessionCache.size > BROWSER_SESSION_CACHE_SIZE) {
+			val eldest = browserSessionCache.entries.firstOrNull { it.value.canEvict } ?: return
+			browserSessionCache.remove(eldest.key)
+			discardWebView(eldest.value.webView)
+		}
+	}
+
+	@MainThread
+	private fun discardWebView(webView: WebView?) {
+		if (webView == null) return
+		val session = browserSessionCache.values.firstOrNull { it.webView === webView }
+		session?.apply {
+			activeExecution?.takeUnless { it.isTerminal }?.transitionTo(BrowserExecutionState.FAILED)
+			rendererEpoch++
+			navigationEpoch++
+			state = BrowserSessionState.POISONED
+			Log.w(TAG, "BrowserSession poisoned: id=$sessionId origin=$origin rendererEpoch=$rendererEpoch")
+		}
+		browserSessionCache.entries.removeIf { it.value.webView === webView }
+		session?.let { browserSessionManager.unregister(it.sessionId, webView) }
+		if (webViewCached?.get() === webView) {
+			webViewCached = null
+		}
+			runCatching {
+				session?.transportInstallation?.remove(webView)
+				session?.transportInstallation = null
+				(webView.parent as? ViewGroup)?.removeView(webView)
+			webView.stopLoading()
+			webView.destroy()
+		}.onFailure { error ->
+			Log.w(TAG, "Failed to discard broken WebView", error)
+		}
+		session?.state = BrowserSessionState.DESTROYED
+	}
+
+	@MainThread
+	private fun advanceNavigationEpoch(webView: WebView) {
+		browserSessionCache.values.firstOrNull { it.webView === webView }?.navigationEpoch++
+	}
+
     @MainThread
     private fun attachToHost(
 		webView: WebView,
@@ -992,6 +2103,25 @@ class WebViewExecutor @Inject constructor(
         }
         return content
     }
+
+	@MainThread
+	private fun attachInteractiveToHost(
+		webView: WebView,
+		activity: android.app.Activity,
+	): ViewGroup? {
+		val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return null
+		return runCatching {
+			(webView.parent as? ViewGroup)?.removeView(webView)
+			webView.alpha = 1f
+			webView.visibility = View.VISIBLE
+			webView.translationY = 0f
+			content.addView(webView, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+			content
+		}.getOrElse {
+			Log.w(TAG, "Unable to attach BrowserSession for interactive challenge", it)
+			null
+		}
+	}
 
     @MainThread
     private fun detachFromHost(webView: WebView, host: ViewGroup) {
@@ -1081,7 +2211,8 @@ class WebViewExecutor @Inject constructor(
                 handler.postDelayed(check, 100L)
             }
 
-            override fun onCheckPassed() {
+						override fun onCheckPassed() {
+							Log.i(TAG, "Interactive challenge clearance observed in BrowserSession: url=${exception.url}")
                 if (finished) return
                 handler.removeCallbacks(check)
                 handler.postDelayed(check, 100L)
@@ -1187,7 +2318,7 @@ class WebViewExecutor @Inject constructor(
 										return null
 									}
 
-									override fun onReceivedError(
+					override fun onReceivedError(
 										view: WebView?,
 										request: WebResourceRequest?,
 										error: WebResourceError?,
@@ -1489,8 +2620,16 @@ class WebViewExecutor @Inject constructor(
 		clearHistory()
 	}
 
-    companion object {
+	companion object {
 		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 15_000L
+		private const val TRANSPORT_BRIDGE_NAME = "KototoroTransport"
+		private const val ISOLATED_TRANSPORT_BRIDGE_NAME = "KototoroIsolatedTransport"
+		private const val MAX_BROWSER_TEXT_BYTES = 8 * 1024 * 1024
+			private const val WEB_MESSAGE_RESPONSE_TIMEOUT_MS = 8_000L
+			private const val BROWSER_DOCUMENT_READY_TIMEOUT_MS = 12_000L
+			private const val BROWSER_DOCUMENT_QUIET_WINDOW_MS = 1_500L
+			private const val BROWSER_DOCUMENT_READY_POLL_MS = 250L
+		private const val BROWSER_SESSION_CACHE_SIZE = 3
 	        private const val TAG = "WebViewExecutor"
 	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
 		        private const val MAX_CHALLENGE_MS = 30_000L
@@ -1520,6 +2659,8 @@ class WebViewExecutor @Inject constructor(
 		val headers: Map<String, String>,
 		val body: String,
 	)
+
+	private class BrowserPageLoadException(message: String) : IllegalStateException(message)
 
 	private fun decodeJavascriptString(value: String?): String {
 		if (value.isNullOrBlank() || value == "null") {

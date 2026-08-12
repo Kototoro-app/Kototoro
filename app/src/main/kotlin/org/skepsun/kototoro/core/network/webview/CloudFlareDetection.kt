@@ -13,6 +13,33 @@ internal enum class CloudFlarePageState {
 	WAIT,
 }
 
+internal class BrowserDocumentReadinessTracker(
+	private val quietWindowMs: Long,
+) {
+	private var stableSince: Long? = null
+	private var lastResourceCount: Int? = null
+
+	fun observe(
+		pageState: CloudFlarePageState,
+		readyState: String,
+		url: String,
+		resourceCount: Int,
+		nowMs: Long,
+	): Boolean {
+		val resourceChanged = lastResourceCount != null && lastResourceCount != resourceCount
+		lastResourceCount = resourceCount
+		val isStableCandidate = pageState == CloudFlarePageState.OK &&
+			readyState == "complete" &&
+			!url.contains("__cf_chl_", ignoreCase = true)
+		if (!isStableCandidate || resourceChanged) {
+			stableSince = null
+			return false
+		}
+		val since = stableSince ?: nowMs.also { stableSince = it }
+		return nowMs - since >= quietWindowMs
+	}
+}
+
 internal const val CF_CLEARANCE_COOKIE = "cf_clearance"
 
 internal const val CF_CHALLENGE_SELECTOR =

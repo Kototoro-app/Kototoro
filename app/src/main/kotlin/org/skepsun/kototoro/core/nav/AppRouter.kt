@@ -1446,6 +1446,9 @@ class AppRouter private constructor(
             Intent(context, CloudFlareActivity::class.java).apply {
                 data = Uri.parse(exception.url)
                 putExtra(KEY_SOURCE, exception.source.name)
+                putExtra(CloudFlareActivity.EXTRA_METHOD, exception.method)
+                exception.body?.let { putExtra(CloudFlareActivity.EXTRA_BODY, it) }
+				exception.contentType?.let { putExtra(CloudFlareActivity.EXTRA_CONTENT_TYPE, it) }
                 putExtra(CloudFlareActivity.EXTRA_HIDDEN, hidden)
                 exception.headers[CommonHeaders.USER_AGENT]?.let {
                     putExtra(KEY_USER_AGENT, it)

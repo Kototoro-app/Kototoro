@@ -76,6 +76,8 @@ abstract class BaseComposeActivity :
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         configureSafeAreaWindow()
+
+		observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
     }
 
     override fun onNewIntent(intent: Intent) {

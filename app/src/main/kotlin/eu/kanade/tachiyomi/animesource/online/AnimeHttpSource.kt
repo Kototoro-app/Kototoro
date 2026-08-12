@@ -310,14 +310,17 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
     }
 
     private fun tagRequest(request: Request): Request {
-        if (request.tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java) != null) {
+		if (request.tag(org.skepsun.kototoro.mihon.compat.SourceRequestContext::class.java) != null) {
             return request
         }
+		val source = request.tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java)
+			?: aniyomiContentSource()
         return request.newBuilder()
-            .tag(
-                org.skepsun.kototoro.parsers.model.ContentSource::class.java,
-                aniyomiContentSource(),
-            )
+			.tag(org.skepsun.kototoro.parsers.model.ContentSource::class.java, source)
+			.tag(
+				org.skepsun.kototoro.mihon.compat.SourceRequestContext::class.java,
+				org.skepsun.kototoro.mihon.compat.SourceRequestContext.from(source, baseUrl),
+			)
             .build()
     }
 }

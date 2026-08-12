@@ -805,8 +805,10 @@ fun AppSearchContentListRoute(
                                 selectedItemsIds = selectedItemsIds,
                                 showInlineSelectionTopBar = false,
                                 onRetry = ::resolveErrorAndRetry,
-                                onSecondaryAction = { error ->
-                                    error.getCauseUrl()?.let { url -> appRouter.openBrowser(url, null, null) }
+								onSecondaryAction = { error ->
+									error.getCauseUrl()
+									?: error.findCloudFlareException()?.url
+									?.let { url -> appRouter.openBrowser(url, null, null) }
                                 },
                                 gridState = if (listMode == ListMode.GRID || listMode == ListMode.COMPACT_GRID) {
                                     wideGridState
@@ -978,8 +980,10 @@ fun AppSearchContentListRoute(
                             selectedItemsIds = selectedItemsIds,
                             showInlineSelectionTopBar = false,
                             onRetry = ::resolveErrorAndRetry,
-                            onSecondaryAction = { error ->
-                                error.getCauseUrl()?.let { url -> appRouter.openBrowser(url, null, null) }
+							onSecondaryAction = { error ->
+								error.getCauseUrl()
+									?: error.findCloudFlareException()?.url
+									?.let { url -> appRouter.openBrowser(url, null, null) }
                             },
                         )
                     }

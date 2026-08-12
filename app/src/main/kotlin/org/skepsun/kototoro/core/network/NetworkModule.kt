@@ -21,6 +21,7 @@ import org.skepsun.kototoro.core.network.cookies.PreferencesCookieJar
 import org.skepsun.kototoro.core.network.imageproxy.ImageProxyInterceptor
 import org.skepsun.kototoro.core.network.imageproxy.RealImageProxyInterceptor
 import org.skepsun.kototoro.core.network.proxy.ProxyProvider
+import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.assertNotInMainThread
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -68,6 +69,7 @@ interface NetworkModule {
 			cookieJar: CookieJar,
 			settings: AppSettings,
 			proxyProvider: ProxyProvider,
+			webViewExecutor: dagger.Lazy<WebViewExecutor>,
 		): OkHttpClient = OkHttpClient.Builder().apply {
 			assertNotInMainThread()
 			val chromeTlsSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
@@ -102,7 +104,7 @@ interface NetworkModule {
 			// Send requests normally first; GZipInterceptor only retries compatible GET/HEAD
 			// requests after a 400/415 response.
 			addInterceptor(GZipInterceptor())
-			addInterceptor(CloudFlareInterceptor())
+			addInterceptor(CloudFlareInterceptor(webViewExecutor))
 			addInterceptor(RateLimitInterceptor())
 			addNetworkInterceptor(BrotliInterceptor)
 			if (BuildConfig.DEBUG) {

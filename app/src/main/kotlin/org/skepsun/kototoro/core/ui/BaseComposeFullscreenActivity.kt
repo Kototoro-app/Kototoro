@@ -43,6 +43,7 @@ abstract class BaseComposeFullscreenActivity :
 		putDataToExtras(intent)
 		exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
 		super.onCreate(savedInstanceState)
+		observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
 		configureKototoroEdgeToEdge()
 		with(window) {
 			systemUiController = SystemUiController(this)

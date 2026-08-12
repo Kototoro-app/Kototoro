@@ -6,6 +6,7 @@ import dagger.hilt.components.SingletonComponent
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.theme.OnlineFontLoader
+import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -16,4 +17,6 @@ interface BaseActivityEntryPoint {
 	val exceptionResolverFactory: ExceptionResolver.Factory
 
 	val onlineFontLoader: OnlineFontLoader
+
+	val webViewExecutor: WebViewExecutor
 }

@@ -87,6 +87,10 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			} catch (e: Exception) {
 				showSnackbar(e.getDisplayMessage(resources))
 			}
+			val targetHttpUrl = url.toHttpUrlOrNull()
+			if (targetHttpUrl != null) {
+				clearRejectedClearance(targetHttpUrl)
+			}
 			cfClient = if (shouldUseInterception(repository)) {
 				CloudFlareInterceptClient(cookieJar, this@CloudFlareActivity, adBlock, url)
 			} else {
@@ -96,7 +100,11 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			startClearancePolling()
 			if (savedInstanceState == null) {
 				onTitleChanged(getString(R.string.loading_), url)
-				url.toHttpUrlOrNull()?.let { clearRejectedClearance(it) }
+				val method = intent?.getStringExtra(EXTRA_METHOD)?.uppercase() ?: "GET"
+				android.util.Log.i(TAG, "Loading challenge navigation: requestMethod=$method url=$url")
+				// A POST API challenge cannot be reproduced with WebView.postUrl(), which
+				// always uses form encoding. Navigate to the challenged endpoint with GET
+				// for user interaction; the transport retries the original POST afterwards.
 				browserWebView.loadUrl(url)
 			}
 		}
@@ -107,7 +115,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 			return false
 		}
 		menuInflater.inflate(R.menu.opt_captcha, menu)
-		return super.onCreateOptionsMenu(menu)
+		return true
 	}
 
 	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
@@ -119,6 +127,18 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 
 		R.id.action_retry -> {
 			restartCheck()
+			true
+		}
+
+		R.id.action_open_browser -> {
+			val url = intent?.dataString
+			if (!url.isNullOrBlank()) {
+				runCatching {
+					val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
+						?.let { name -> org.skepsun.kototoro.core.model.ContentSource(name) }
+					startActivity(AppRouter.browserIntent(this, url, source, getString(R.string.open_in_browser)))
+				}.onFailure { showSnackbar(it.getDisplayMessage(resources)) }
+			}
 			true
 		}
 
@@ -150,7 +170,7 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 	}
 
 	override fun onLoopDetected() {
-		if (isHidden || isAutoResolve) {
+		if (isHidden) {
 			restartCheck()
 		} else {
 			cfClient.reset()
@@ -254,6 +274,9 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		const val EXTRA_HIDDEN = "hidden"
 		const val EXTRA_AUTO_RESOLVE = "auto_resolve"
 		const val EXTRA_RESOLVE_KEY = "resolve_key"
+		const val EXTRA_METHOD = "method"
+		const val EXTRA_BODY = "body"
+		const val EXTRA_CONTENT_TYPE = "content_type"
 		private const val HIDDEN_TIMEOUT_MS = 45_000L
 		private const val CLEARANCE_POLL_INTERVAL_MS = 250L
 	}

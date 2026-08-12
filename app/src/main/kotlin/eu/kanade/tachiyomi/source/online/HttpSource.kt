@@ -402,14 +402,16 @@ abstract class HttpSource : CatalogueSource {
     protected abstract fun imageUrlParse(response: Response): String
 
     private fun tagRequest(request: Request): Request {
-        if (request.tag(ContentSource::class.java) != null) {
+		if (request.tag(org.skepsun.kototoro.mihon.compat.SourceRequestContext::class.java) != null) {
             return request
         }
+		val source = request.tag(ContentSource::class.java) ?: mihonContentSource()
         return request.newBuilder()
-            .tag(
-                ContentSource::class.java,
-                mihonContentSource(),
-            )
+			.tag(ContentSource::class.java, source)
+			.tag(
+				org.skepsun.kototoro.mihon.compat.SourceRequestContext::class.java,
+				org.skepsun.kototoro.mihon.compat.SourceRequestContext.from(source, baseUrl),
+			)
             .build()
     }
 

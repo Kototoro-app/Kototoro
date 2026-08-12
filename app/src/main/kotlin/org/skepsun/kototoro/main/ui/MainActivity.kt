@@ -126,6 +126,7 @@ class MainActivity : BaseComposeActivity() {
     @Inject
     lateinit var workResolver: WorkResolver
 
+
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
     private val spaceResumeViewModel by viewModels<SpaceResumeViewModel>()
@@ -534,6 +535,7 @@ class MainActivity : BaseComposeActivity() {
 
         consumeResumeSpaceIntent(intent)
         observeFoldableState()
+
     }
 
     override fun onNewIntent(intent: Intent) {
