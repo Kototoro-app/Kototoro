@@ -450,6 +450,24 @@
     public protected *;
 }
 
+# Tsuki (UMA / Usagi plugin runtime ABI)
+# UMA plugins (e.g. InvalidDavid/UMA uma.jar) are separate JARs loaded via
+# JarExtensionLoader/DexClassLoader and compiled against Tsuki. The host
+# provides the Tsuki runtime classes (tsuki.core.AbstractMangaParser, etc.).
+# Tsuki's own shrink rules use "-keep,allowoptimization", which lets R8
+# finalize methods in release/nightly builds; a plugin subclass overriding such
+# a method then fails at load time with:
+#   LinkageError: Method ... overrides final method in class Ltsuki/core/AbstractMangaParser;
+# The stricter rules below (no allowoptimization) win when merged with the
+# library rule, so R8 must not optimize this ABI.
+-keep class tsuki.** { *; }
+-keep interface tsuki.** { *; }
+-keep @interface tsuki.** { *; }
+-keepclassmembers class tsuki.** {
+    public <init>(...);
+    public protected *;
+}
+
 # AndroidX Collection - JAR plugins may reference SparseArrayCompat and other collection classes.
 # R8 may strip these if the host app no longer directly uses them, but runtime-loaded JARs still need them.
 -keep class androidx.collection.** { *; }
