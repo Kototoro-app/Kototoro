@@ -41,6 +41,16 @@ class PlaybackRequestNormalizerTest {
 	}
 
 	@Test
+	fun `aniyomi m3u8 proxy endpoint is recognized as hls`() {
+		val result = PlaybackRequestNormalizer.normalize(
+			url = "http://localhost:41565/m3u8?url=https%3A%2F%2Fcdn.example%2Fvideo.m3u8",
+		)
+
+		assertEquals(PlaybackMediaKind.HLS, result.mediaKind)
+		assertEquals(PlaybackRoute.DIRECT, result.route)
+	}
+
+	@Test
 	fun `dash and torrent are recognized`() {
 		assertEquals(
 			PlaybackMediaKind.DASH,

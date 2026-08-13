@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.OkHttpClient
@@ -95,6 +96,7 @@ import org.skepsun.kototoro.video.player.VideoEnhancementConfig
 import org.skepsun.kototoro.video.player.PlaybackMediaKind
 import org.skepsun.kototoro.video.player.PlaybackRequest
 import org.skepsun.kototoro.video.player.PlaybackRequestNormalizer
+import org.skepsun.kototoro.video.player.HlsManifestProbe
 import org.skepsun.kototoro.video.player.VideoPlayerEngine
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
 import org.skepsun.kototoro.video.data.VideoCache
@@ -113,6 +115,7 @@ import org.skepsun.kototoro.video.performance.VideoPlaybackPolicy
 import org.skepsun.kototoro.video.domain.resolveCloudstreamVideo
 import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
+import org.skepsun.kototoro.video.domain.shouldProbeCloudstreamAsHls
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
@@ -183,6 +186,7 @@ import org.skepsun.kototoro.video.ui.compose.VideoPlayerRenderLayer
 class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCallback {
     companion object {
         private const val CLOUDSTREAM_PLAYBACK_HEALTH_CHECK_DELAY_MS = 5_000L
+        private const val CLOUDSTREAM_HLS_PROBE_TIMEOUT_MS = 10_000L
         private const val ENABLE_M3U8_PROXY_CACHE = false
         private const val TORRENT_VIDEO_MARKER = "kototoro:torrent"
         private const val HLS_VIDEO_MARKER = "kototoro:hls"
@@ -2981,36 +2985,113 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun handlePlaybackFallback(trigger: String, detail: String?): Boolean {
         if (currentVideoSource !is CloudstreamSource) return false
         if (cloudstreamFallbackJob?.isActive == true) return true
-        val activeVideoIndex = availableVideos
-            .indexOfFirst { it.videoUrl == currentMediaUrl }
-            .takeIf { it >= 0 }
-            ?: currentVideoIndex
-        currentVideoIndex = activeVideoIndex
-        val firstCandidate = availableVideos.getOrNull(activeVideoIndex + 1) ?: run {
-            Log.d(
-                "VideoPlayer",
-                "Cloudstream playback failed without another mirror trigger=$trigger " +
-                    "index=$activeVideoIndex available=${availableVideos.size} detail=$detail",
+        if (
+            shouldProbeCloudstreamAsHls(
+                trigger = trigger,
+                detail = detail,
+                alreadyHls = currentMediaForceHls,
             )
+        ) {
+            val url = currentMediaUrl ?: return false
+            val source = currentVideoSource
+            val headers = currentMediaHeaders
+            val startMs = currentMediaStartMs
+            val safeHeaders = PlaybackRequestNormalizer.normalize(
+                url = url,
+                originalHeaders = headers.orEmpty(),
+                isCloudstream = true,
+            ).headers
+            cloudstreamFallbackJob = lifecycleScope.launch {
+                val isHls = runCatching {
+                    withTimeoutOrNull(CLOUDSTREAM_HLS_PROBE_TIMEOUT_MS) {
+                        HlsManifestProbe(contentHttpClient).isHls(url, safeHeaders)
+                    } == true
+                }.getOrElse { error ->
+                    Log.d("VideoPlayer", "Cloudstream HLS probe failed url=$url", error)
+                    false
+                }
+                if (currentMediaUrl != url || currentVideoSource !== source) return@launch
+                if (isHls) {
+                    Log.d(
+                        "VideoPlayer",
+                        "Cloudstream HLS manifest confirmed, retrying with explicit HLS MIME url=$url",
+                    )
+                    startPlayback(
+                        url = url,
+                        source = source,
+                        headers = headers,
+                        startMs = startMs,
+                        forceHls = true,
+                    )
+                } else {
+                    tryNextCloudstreamMirror(trigger, detail)
+                }
+            }.also { job ->
+                job.invokeOnCompletion {
+                    if (cloudstreamFallbackJob === job) cloudstreamFallbackJob = null
+                }
+            }
+            return true
+        }
+        return launchNextCloudstreamMirror(trigger, detail)
+    }
+
+    private fun launchNextCloudstreamMirror(trigger: String, detail: String?): Boolean {
+        if (!hasNextCloudstreamMirror()) {
+            logMissingCloudstreamMirror(trigger, detail)
             showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
             return false
         }
         cloudstreamFallbackJob = lifecycleScope.launch {
-            val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == firstCandidate.videoUrl }
-            if (candidateIndex < 0) return@launch
-            Log.d(
-                "VideoPlayer",
-                "Cloudstream playback failed, trying next mirror trigger=$trigger " +
-                    "from=$activeVideoIndex to=$candidateIndex " +
-                    "available=${availableVideos.size} detail=$detail",
-            )
-            switchVideoQuality(firstCandidate, currentMediaStartMs)
+            tryNextCloudstreamMirror(trigger, detail)
         }.also { job ->
             job.invokeOnCompletion {
                 if (cloudstreamFallbackJob === job) cloudstreamFallbackJob = null
             }
         }
         return true
+    }
+
+    private fun hasNextCloudstreamMirror(): Boolean {
+        val activeVideoIndex = availableVideos
+            .indexOfFirst { it.videoUrl == currentMediaUrl }
+            .takeIf { it >= 0 }
+            ?: currentVideoIndex
+        return availableVideos.getOrNull(activeVideoIndex + 1) != null
+    }
+
+    private fun tryNextCloudstreamMirror(trigger: String, detail: String?) {
+        val activeVideoIndex = availableVideos
+            .indexOfFirst { it.videoUrl == currentMediaUrl }
+            .takeIf { it >= 0 }
+            ?: currentVideoIndex
+        currentVideoIndex = activeVideoIndex
+        val firstCandidate = availableVideos.getOrNull(activeVideoIndex + 1) ?: run {
+            logMissingCloudstreamMirror(trigger, detail, activeVideoIndex)
+            showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
+            return
+        }
+        val candidateIndex = availableVideos.indexOfFirst { it.videoUrl == firstCandidate.videoUrl }
+        if (candidateIndex < 0) return
+        Log.d(
+            "VideoPlayer",
+            "Cloudstream playback failed, trying next mirror trigger=$trigger " +
+                "from=$activeVideoIndex to=$candidateIndex " +
+                "available=${availableVideos.size} detail=$detail",
+        )
+        switchVideoQuality(firstCandidate, currentMediaStartMs)
+    }
+
+    private fun logMissingCloudstreamMirror(
+        trigger: String,
+        detail: String?,
+        activeVideoIndex: Int = currentVideoIndex,
+    ) {
+        Log.d(
+            "VideoPlayer",
+            "Cloudstream playback failed without another mirror trigger=$trigger " +
+                "index=$activeVideoIndex available=${availableVideos.size} detail=$detail",
+        )
     }
 
     private fun scheduleCloudstreamPlaybackHealthCheck() {

@@ -26,6 +26,16 @@ class CloudstreamPlaybackSelectionTest {
     }
 
     @Test
+    fun `unsupported cloudstream container retries once as hls`() {
+        val detail = "UNKNOWN: ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED: Source error"
+
+        assertTrue(shouldProbeCloudstreamAsHls("media3_playback_error", detail, alreadyHls = false))
+        assertFalse(shouldProbeCloudstreamAsHls("media3_playback_error", detail, alreadyHls = true))
+        assertFalse(shouldProbeCloudstreamAsHls("stalled_after_file_loaded", detail, alreadyHls = false))
+        assertFalse(shouldProbeCloudstreamAsHls("media3_playback_error", "network error", alreadyHls = false))
+    }
+
+    @Test
     fun `links use cloudstream quality priority and deduplicate urls`() {
         val videos = listOf(
             Video(videoUrl = "360", resolution = 360),

@@ -29,7 +29,7 @@ object PlaybackRequestNormalizer {
 		val kind = when {
 			declaredKind != PlaybackMediaKind.AUTO -> declaredKind
 			url.startsWith("magnet:", true) || path.endsWith(".torrent") -> PlaybackMediaKind.TORRENT
-			path.endsWith(".m3u8") -> PlaybackMediaKind.HLS
+			path.endsWith(".m3u8") || path.endsWith("/m3u8") -> PlaybackMediaKind.HLS
 			path.endsWith(".mpd") -> PlaybackMediaKind.DASH
 			path.endsWith(".mp4") || path.endsWith(".mkv") || path.endsWith(".webm") ->
 				PlaybackMediaKind.PROGRESSIVE
