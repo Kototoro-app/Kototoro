@@ -53,6 +53,7 @@ fun AboutSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.about)) {
                     SettingsActionPreference(
                         title = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                        iconRes = R.drawable.ic_app_update,
                         summary = stringResource(R.string.check_for_updates),
                         enabled = isUpdateSupported && !isLoading,
                         onClick = onCheckUpdate,
@@ -61,6 +62,7 @@ fun AboutSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.allow_unstable_updates),
+                            iconRes = R.drawable.ic_new,
                             summary = stringResource(R.string.allow_unstable_updates_summary),
                             checked = if (isStableVersion) {
                                 settings.prefs.getBoolean(AppSettings.KEY_UPDATES_UNSTABLE, false)
@@ -76,12 +78,14 @@ fun AboutSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.changelog),
+                        iconRes = R.drawable.ic_history_selector,
                         summary = stringResource(R.string.changelog_summary),
                         onClick = onChangelogClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.crash_logs),
+                        iconRes = R.drawable.ic_error_small,
                         summary = stringResource(R.string.crash_logs_summary),
                         onClick = onCrashLogsClick,
                     )
@@ -91,24 +95,28 @@ fun AboutSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.more)) {
                     SettingsActionPreference(
                         title = stringResource(R.string.user_manual),
+                        iconRes = R.drawable.ic_read,
                         summary = stringResource(R.string.url_user_manual),
                         onClick = { onLinkClick(AppSettings.KEY_LINK_MANUAL) },
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.source_code),
+                        iconRes = R.drawable.ic_code,
                         summary = stringResource(R.string.url_github),
                         onClick = { onLinkClick(AppSettings.KEY_LINK_GITHUB) },
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.about_donate),
+                        iconRes = R.drawable.ic_heart_outline,
                         summary = stringResource(R.string.url_donate),
                         onClick = { onLinkClick(AppSettings.KEY_LINK_DONATE) },
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.about_discord),
+                        iconRes = R.drawable.ic_discord,
                         summary = stringResource(R.string.url_discord),
                         onClick = { onLinkClick(AppSettings.KEY_LINK_DISCORD) },
                     )

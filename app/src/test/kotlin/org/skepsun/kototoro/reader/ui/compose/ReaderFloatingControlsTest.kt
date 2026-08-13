@@ -79,4 +79,11 @@ class ReaderFloatingControlsTest {
 
 		assertEquals(setOf(ReaderControl.TRANSLATE), controls)
 	}
+
+	@Test
+	fun `novel floating controls only keep implemented actions`() {
+		val controls = ReaderControl.limitNovelFloatingControls(ReaderControl.entries.toSet())
+
+		assertEquals(setOf(ReaderControl.BOOKMARK, ReaderControl.TRANSLATE), controls)
+	}
 }

@@ -53,11 +53,13 @@ fun TtsSettingsScreen(
             SettingsPreferenceSection(title = stringResource(R.string.reader_translation_section_general)) {
                 SettingsSwitchPreference(
                     title = stringResource(R.string.tts_enable),
+                    iconRes = R.drawable.ic_voice_input,
                     checked = state.enabled,
                     onCheckedChange = onEnabledChange,
                 )
                 SettingsChoicePreference(
                     title = stringResource(R.string.tts_engine_type),
+                    iconRes = R.drawable.ic_audiotrack,
                     value = state.engineType,
                     options = listOf(
                         SettingsChoiceOption("SYSTEM", stringResource(R.string.tts_engine_system)),
@@ -68,6 +70,7 @@ fun TtsSettingsScreen(
                 )
                 SettingsActionPreference(
                     title = stringResource(R.string.tts_test),
+                    iconRes = R.drawable.ic_plug,
                     summary = stringResource(
                         if (state.isTestRunning) R.string.tts_test_running_summary
                         else R.string.tts_test_summary,
@@ -82,6 +85,7 @@ fun TtsSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.tts_system_configuration)) {
                     SettingsChoicePreference(
                         title = stringResource(R.string.tts_system_voice),
+                        iconRes = R.drawable.ic_voice_input,
                         value = state.systemVoice,
                         options = state.systemVoiceOptions,
                         summary = state.systemVoiceSummary,
@@ -93,6 +97,7 @@ fun TtsSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.tts_legado_configuration)) {
                     SettingsChoicePreference(
                         title = stringResource(R.string.tts_legado_voice),
+                        iconRes = R.drawable.ic_voice_input,
                         value = state.legadoVoice,
                         options = state.legadoVoiceOptions,
                         summary = state.legadoVoiceSummary,
@@ -101,6 +106,7 @@ fun TtsSettingsScreen(
                     )
                     SettingsActionPreference(
                         title = stringResource(R.string.tts_legado_import_clipboard),
+                        iconRes = R.drawable.ic_import,
                         summary = stringResource(R.string.tts_legado_import_clipboard_summary),
                         enabled = state.enabled,
                         showChevron = false,
@@ -108,6 +114,7 @@ fun TtsSettingsScreen(
                     )
                     SettingsActionPreference(
                         title = stringResource(R.string.tts_legado_import_url),
+                        iconRes = R.drawable.ic_web,
                         summary = stringResource(R.string.tts_legado_import_url_summary),
                         enabled = state.enabled,
                         showChevron = false,
@@ -115,6 +122,7 @@ fun TtsSettingsScreen(
                     )
                     SettingsActionPreference(
                         title = stringResource(R.string.tts_legado_manage_sources),
+                        iconRes = R.drawable.ic_services,
                         summary = stringResource(
                             if (state.legadoConfigCount > 0) R.string.tts_legado_manage_sources_summary_count
                             else R.string.tts_legado_manage_sources_summary_empty,

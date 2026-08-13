@@ -48,6 +48,7 @@ fun ProxySettingsScreen(
     ) {
         SettingsChoicePreference(
             title = stringResource(R.string.type),
+            iconRes = R.drawable.ic_dns,
             value = proxyType.name,
             options = typeOptions,
             onValueChange = { value ->
@@ -56,6 +57,7 @@ fun ProxySettingsScreen(
         )
         SettingsTextInputPreference(
             title = stringResource(R.string.address),
+            iconRes = R.drawable.ic_web,
             value = proxyAddress,
             enabled = isProxyEnabled,
             onValueChange = { value ->
@@ -64,6 +66,7 @@ fun ProxySettingsScreen(
         )
         SettingsTextInputPreference(
             title = stringResource(R.string.port),
+            iconRes = R.drawable.ic_plug,
             value = proxyPort,
             enabled = isProxyEnabled,
             onValueChange = { value ->
@@ -73,6 +76,7 @@ fun ProxySettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.authorization_optional)) {
             SettingsTextInputPreference(
                 title = stringResource(R.string.username),
+                iconRes = R.drawable.ic_user,
                 value = proxyLogin,
                 enabled = isProxyEnabled,
                 onValueChange = { value ->
@@ -81,6 +85,7 @@ fun ProxySettingsScreen(
             )
             SettingsTextInputPreference(
                 title = stringResource(R.string.password),
+                iconRes = R.drawable.ic_key,
                 value = proxyPassword,
                 enabled = isProxyEnabled,
                 isPassword = true,
@@ -91,6 +96,7 @@ fun ProxySettingsScreen(
         }
         SettingsActionPreference(
             title = stringResource(R.string.test_connection),
+            iconRes = R.drawable.ic_plug,
             summary = testSummary ?: if (!isProxyConfigured) {
                 stringResource(R.string.invalid_proxy_configuration)
             } else {

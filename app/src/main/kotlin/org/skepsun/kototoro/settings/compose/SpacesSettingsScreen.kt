@@ -108,6 +108,7 @@ fun SpacesSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.spaces), modifier = Modifier.fillMaxWidth()) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.spaces_enabled),
+                        iconRes = R.drawable.ic_list_group,
                         summary = stringResource(R.string.spaces_enabled_summary),
                         checked = state.spacesEnabled,
                         onCheckedChange = onSpacesEnabledChange,
@@ -115,6 +116,7 @@ fun SpacesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.space_switcher_position),
+                        iconRes = R.drawable.ic_pin,
                         value = state.switcherPosition,
                         options = listOf(
                             SettingsChoiceOption(

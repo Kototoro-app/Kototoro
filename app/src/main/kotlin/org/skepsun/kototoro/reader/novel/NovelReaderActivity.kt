@@ -54,6 +54,7 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -81,6 +82,7 @@ import org.skepsun.kototoro.reader.novel.compose.NovelReadingPosition
 import org.skepsun.kototoro.reader.novel.compose.ComposeNovelReaderRoute
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderBottomChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderChromeCallbacks
+import org.skepsun.kototoro.reader.novel.compose.NovelReaderFloatingControls
 import org.skepsun.kototoro.reader.novel.compose.NovelReaderTopChrome
 import org.skepsun.kototoro.reader.novel.compose.NovelTtsVoiceDialog
 import org.skepsun.kototoro.reader.novel.compose.NovelTtsVoiceDialogState
@@ -479,6 +481,9 @@ class NovelReaderActivity :
         setContent {
             KototoroTheme {
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
+                val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
+                    novelReaderControls
+                }
                 val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS && !isEInkModeEnabled) {
                     rememberLayerBackdrop { drawContent() }
                 } else {
@@ -581,6 +586,16 @@ class NovelReaderActivity :
                                 animationsEnabled = !isEInkModeEnabled,
                             )
                         }
+                        NovelReaderFloatingControls(
+                            state = state,
+                            controls = floatingControls,
+                            callbacks = callbacks,
+                            animationsEnabled = !isEInkModeEnabled,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .navigationBarsPadding()
+                                .padding(end = 16.dp, bottom = 62.dp),
+                        )
                         if (!state.settingsSheetVisible && !state.chaptersSheetVisible) {
                             spaceSwitcherDelegate.Fab(
                                 modifier = Modifier.fillMaxSize(),
@@ -2298,8 +2313,7 @@ class NovelReaderActivity :
             org.skepsun.kototoro.reader.ui.tapgrid.TapAction.TOGGLE_UI -> toggleUiVisibility()
             org.skepsun.kototoro.reader.ui.tapgrid.TapAction.SHOW_MENU -> openMenu()
             null -> {
-                // 没有配置动作，默认切换 UI
-                toggleUiVisibility()
+                // 空动作必须保持为空；不再以切换工具栏作为隐式兜底。
             }
         }
     }

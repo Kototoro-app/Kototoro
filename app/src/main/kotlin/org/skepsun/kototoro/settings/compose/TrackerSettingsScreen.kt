@@ -76,12 +76,14 @@ fun TrackerSettingsScreen(
                 SettingsPreferenceSection(title = trackingTitle) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.check_new_chapters_title),
+                        iconRes = R.drawable.ic_updated,
                         checked = state.isTrackerEnabled,
                         onCheckedChange = onTrackerEnabledChange,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.only_using_wifi),
+                        iconRes = R.drawable.ic_wifi,
                         checked = state.isTrackerWifiOnly,
                         summary = stringResource(R.string.tracker_wifi_only_summary),
                         enabled = state.isTrackerEnabled,
@@ -90,6 +92,7 @@ fun TrackerSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.frequency_of_check),
+                        iconRes = R.drawable.ic_schedule,
                         value = state.trackerFrequencyFactor,
                         options = frequencyOptions,
                         enabled = state.isTrackerEnabled,
@@ -98,6 +101,7 @@ fun TrackerSettingsScreen(
                     SettingsSectionDivider()
                     SettingsMultiChoicePreference(
                         title = stringResource(R.string.track_sources),
+                        iconRes = R.drawable.ic_manga_source,
                         values = state.trackSources,
                         options = trackSourcesOptions,
                         emptySelectionText = emptyTrackSourcesText,
@@ -107,6 +111,7 @@ fun TrackerSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.favourites_categories),
+                        iconRes = R.drawable.ic_select_group,
                         summary = state.categoriesSummary,
                         enabled = state.isCategoriesEnabled,
                         onClick = onTrackCategoriesClick,
@@ -114,6 +119,7 @@ fun TrackerSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.notifications_settings),
+                        iconRes = R.drawable.ic_notification,
                         summary = state.notificationsSummary,
                         enabled = state.isTrackerEnabled,
                         onClick = onNotificationsSettingsClick,
@@ -121,6 +127,7 @@ fun TrackerSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.download_new_chapters),
+                        iconRes = R.drawable.ic_download,
                         value = state.trackerDownloadStrategy,
                         options = downloadStrategyOptions,
                         enabled = state.isTrackerEnabled,
@@ -132,6 +139,7 @@ fun TrackerSettingsScreen(
                 SettingsPreferenceSection(title = debugTitle) {
                     SettingsActionPreference(
                         title = stringResource(R.string.tracker_debug_info),
+                        iconRes = R.drawable.ic_code,
                         summary = stringResource(R.string.tracker_debug_info_summary),
                         enabled = state.isTrackerEnabled,
                         onClick = onTrackerDebugClick,
@@ -140,6 +148,7 @@ fun TrackerSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.disable_battery_optimization),
+                            iconRes = R.drawable.ic_battery_outline,
                             summary = stringResource(R.string.disable_battery_optimization_summary),
                             enabled = state.isTrackerEnabled,
                             onClick = onIgnoreDozeClick,

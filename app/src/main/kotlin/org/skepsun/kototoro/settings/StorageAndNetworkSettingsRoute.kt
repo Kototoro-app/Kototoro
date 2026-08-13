@@ -172,6 +172,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.image_caches))
             SettingsSliderPreference(
                 title = context.getString(R.string.thumbnails_cache_limit),
+                iconRes = R.drawable.ic_images,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = thumbsCacheMb,
                 valueRange = 32..2048,
@@ -185,6 +186,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.favicons_cache_limit),
+                iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = faviconCacheMb,
                 valueRange = 4..128,
@@ -198,6 +200,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.pages_cache_limit),
+                iconRes = R.drawable.ic_book_page,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = pagesCacheMb,
                 valueRange = 64..4096,
@@ -211,6 +214,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.novel_cache_limit),
+                iconRes = R.drawable.ic_read,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = novelCacheMb,
                 valueRange = 32..2048,
@@ -224,6 +228,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.tts_audio_cache_limit),
+                iconRes = R.drawable.ic_voice_input,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = ttsCacheMb,
                 valueRange = 32..2048,
@@ -237,6 +242,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsChoicePreference(
                 title = context.getString(R.string.reader_super_resolution_cache_limit),
+                iconRes = R.drawable.ic_zoom_in,
                 value = srCacheLimit,
                 options = srCacheLabels.mapIndexed { index, label ->
                     SettingsChoiceOption(srCacheValues[index], label)
@@ -249,6 +255,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.video_caches))
             SettingsSliderPreference(
                 title = context.getString(R.string.video_playback_cache_limit),
+                iconRes = R.drawable.ic_content_video,
                 value = videoCacheMb,
                 valueRange = 256..4096,
                 step = 128,
@@ -258,6 +265,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.video_proxy_cache_limit),
+                iconRes = R.drawable.ic_dns,
                 value = videoProxyCacheMb,
                 valueRange = 128..4096,
                 step = 128,
@@ -267,6 +275,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.torrent_cache_limit),
+                iconRes = R.drawable.ic_network_cellular,
                 value = torrentCacheMb,
                 valueRange = 512..16384,
                 step = 512,
@@ -276,6 +285,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.danmaku_cache_limit),
+                iconRes = R.drawable.ic_danmaku,
                 value = videoDanmakuCacheMb,
                 valueRange = 16..1024,
                 step = 16,
@@ -286,6 +296,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.network))
             SettingsSliderPreference(
                 title = context.getString(R.string.network_cache_limit),
+                iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = httpCacheMb,
                 valueRange = 32..2048,
@@ -300,6 +311,7 @@ fun StorageAndNetworkSettingsRoute(
         prefetchContent = {
             SettingsChoicePreference(
                 title = context.getString(R.string.prefetch_content),
+                iconRes = R.drawable.ic_download,
                 value = prefetchPolicy,
                 options = networkOptions,
                 onValueChange = { settings.contentPrefetchPolicy = it },
@@ -308,6 +320,7 @@ fun StorageAndNetworkSettingsRoute(
         preloadPages = {
             SettingsChoicePreference(
                 title = context.getString(R.string.preload_pages),
+                iconRes = R.drawable.ic_book_page,
                 value = pagesPreloadPolicy,
                 options = networkOptions,
                 onValueChange = { settings.pagesPreloadPolicy = it },
@@ -316,6 +329,7 @@ fun StorageAndNetworkSettingsRoute(
         proxy = {
             SettingsActionPreference(
                 title = context.getString(R.string.proxy),
+                iconRes = R.drawable.ic_web,
                 summary = buildProxySummary(settings, context),
                 onClick = onOpenProxySettings,
             )
@@ -323,6 +337,7 @@ fun StorageAndNetworkSettingsRoute(
         dns = {
             SettingsChoicePreference(
                 title = context.getString(R.string.dns_over_https),
+                iconRes = R.drawable.ic_dns,
                 value = dnsOverHttps,
                 options = dohOptions,
                 onValueChange = { settings.dnsOverHttps = it },
@@ -333,6 +348,7 @@ fun StorageAndNetworkSettingsRoute(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = context.getString(R.string.pref_doh_custom_url),
+                    iconRes = R.drawable.ic_web,
                     value = dohCustomUrl,
                     onValueChange = { settings.dohCustomUrl = it },
                 )
@@ -343,6 +359,7 @@ fun StorageAndNetworkSettingsRoute(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = context.getString(R.string.pref_doh_custom_ips),
+                    iconRes = R.drawable.ic_dns,
                     value = dohCustomIps,
                     onValueChange = { settings.dohCustomIps = it },
                 )
@@ -351,6 +368,7 @@ fun StorageAndNetworkSettingsRoute(
         imageProxy = {
             SettingsChoicePreference(
                 title = context.getString(R.string.images_proxy_title),
+                iconRes = R.drawable.ic_images,
                 value = imagesProxy,
                 options = imageProxyOptions,
                 onValueChange = { settings.imagesProxy = it },
@@ -359,6 +377,7 @@ fun StorageAndNetworkSettingsRoute(
         githubMirror = {
             SettingsChoicePreference(
                 title = context.getString(R.string.pref_github_mirror),
+                iconRes = R.drawable.ic_code,
                 value = gitHubMirror,
                 options = gitHubMirrorOptions,
                 summary = context.getString(R.string.pref_github_mirror_summary),
@@ -368,6 +387,7 @@ fun StorageAndNetworkSettingsRoute(
         huggingFaceMirror = {
             SettingsChoicePreference(
                 title = context.getString(R.string.pref_huggingface_mirror),
+                iconRes = R.drawable.ic_face,
                 value = huggingFaceMirror,
                 options = huggingFaceMirrorOptions,
                 summary = context.getString(R.string.pref_huggingface_mirror_summary),
@@ -377,6 +397,7 @@ fun StorageAndNetworkSettingsRoute(
         bangumiMirror = {
             SettingsChoicePreference(
                 title = context.getString(R.string.pref_bangumi_mirror),
+                iconRes = R.drawable.ic_content_video,
                 value = bangumiMirror,
                 options = bangumiMirrorOptions,
                 summary = context.getString(R.string.pref_bangumi_mirror_summary),
@@ -388,6 +409,7 @@ fun StorageAndNetworkSettingsRoute(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = context.getString(R.string.pref_bangumi_mirror_custom_base),
+                    iconRes = R.drawable.ic_web,
                     value = bangumiMirrorCustomBase,
                     summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
                     placeholder = "https://bangumi.lol",
@@ -398,6 +420,7 @@ fun StorageAndNetworkSettingsRoute(
         sslBypass = {
             SettingsSwitchPreference(
                 title = context.getString(R.string.ignore_ssl_errors),
+                iconRes = R.drawable.ic_lock_open,
                 checked = sslBypass,
                 summary = context.getString(R.string.ignore_ssl_errors_summary),
                 onCheckedChange = {
@@ -411,6 +434,7 @@ fun StorageAndNetworkSettingsRoute(
         offlineCheck = {
             SettingsSwitchPreference(
                 title = context.getString(R.string.disable_connectivity_check),
+                iconRes = R.drawable.ic_offline,
                 checked = offlineDisabled,
                 summary = context.getString(R.string.disable_connectivity_check_summary),
                 onCheckedChange = { settings.isOfflineCheckDisabled = it },
@@ -419,6 +443,7 @@ fun StorageAndNetworkSettingsRoute(
         adBlock = {
             SettingsSwitchPreference(
                 title = context.getString(R.string.adblock),
+                iconRes = R.drawable.ic_disable,
                 checked = adBlock,
                 summary = context.getString(R.string.adblock_summary),
                 onCheckedChange = { settings.isAdBlockEnabled = it },
@@ -428,6 +453,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.local_storage))
             SettingsActionPreference(
                 title = context.getString(R.string.clear_local_manga_storage),
+                iconRes = R.drawable.ic_storage,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_MANGA),
                 enabled = AppSettings.KEY_LOCAL_MANGA_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -436,6 +462,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_local_novel_storage),
+                iconRes = R.drawable.ic_storage,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_NOVELS),
                 enabled = AppSettings.KEY_LOCAL_NOVELS_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -444,6 +471,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_local_video_storage),
+                iconRes = R.drawable.ic_storage,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_VIDEOS),
                 enabled = AppSettings.KEY_LOCAL_VIDEOS_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -453,6 +481,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.cache))
             SettingsActionPreference(
                 title = context.getString(R.string.clear_thumbs_cache),
+                iconRes = R.drawable.ic_images,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.THUMBS_CACHE),
                 enabled = AppSettings.KEY_THUMBS_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -463,6 +492,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_favicons_cache),
+                iconRes = R.drawable.ic_web,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.FAVICONS_CACHE),
                 enabled = AppSettings.KEY_FAVICONS_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -473,6 +503,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_pages_cache),
+                iconRes = R.drawable.ic_book_page,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.PAGES_CACHE),
                 enabled = AppSettings.KEY_PAGES_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -483,6 +514,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_novel_cache),
+                iconRes = R.drawable.ic_read,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.NOVELS_CACHE),
                 enabled = AppSettings.KEY_NOVEL_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -493,6 +525,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_video_cache),
+                iconRes = R.drawable.ic_content_video,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.VIDEO_CACHE),
                 enabled = AppSettings.KEY_VIDEO_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -503,6 +536,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_video_proxy_cache),
+                iconRes = R.drawable.ic_dns,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.VIDEO_PROXY_CACHE),
                 enabled = AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -513,6 +547,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_torrent_cache),
+                iconRes = R.drawable.ic_network_cellular,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.TORRENT_CACHE),
                 enabled = AppSettings.KEY_TORRENT_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -521,6 +556,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_danmaku_cache),
+                iconRes = R.drawable.ic_danmaku,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.DANMAKU_CACHE),
                 enabled = AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -531,6 +567,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_tts_audio_cache),
+                iconRes = R.drawable.ic_voice_input,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.TTS_CACHE),
                 enabled = AppSettings.KEY_TTS_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -541,6 +578,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.reader_super_resolution_clear_cache),
+                iconRes = R.drawable.ic_zoom_in,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.SUPER_RESOLUTION_CACHE),
                 enabled = AppSettings.KEY_SR_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -551,6 +589,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_network_cache),
+                iconRes = R.drawable.ic_web,
                 summary = storageSummary(context, storageUsage, StorageUsageCategory.HTTP_CACHE),
                 enabled = AppSettings.KEY_HTTP_CACHE_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -560,6 +599,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.privacy))
             SettingsActionPreference(
                 title = context.getString(R.string.clear_search_history),
+                iconRes = R.drawable.ic_search,
                 summary = countSummary(context, searchHistoryCount),
                 enabled = AppSettings.KEY_SEARCH_HISTORY_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -568,6 +608,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_updates_feed),
+                iconRes = R.drawable.ic_feed,
                 summary = countSummary(context, feedItemsCount),
                 enabled = AppSettings.KEY_UPDATES_FEED_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -576,6 +617,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_database),
+                iconRes = R.drawable.ic_database,
                 summary = context.getString(R.string.clear_database_summary),
                 enabled = AppSettings.KEY_CLEAR_MANGA_DATA !in loadingKeys,
                 showChevron = false,
@@ -584,6 +626,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = context.getString(R.string.clear_cookies),
+                iconRes = R.drawable.ic_cookie,
                 summary = context.getString(R.string.clear_cookies_summary),
                 showChevron = false,
                 onClick = onConfirmClearCookies,
@@ -592,6 +635,7 @@ fun StorageAndNetworkSettingsRoute(
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = context.getString(R.string.clear_browser_data),
+                    iconRes = R.drawable.ic_web,
                     summary = context.getString(R.string.clear_browser_data_summary),
                     enabled = AppSettings.KEY_WEBVIEW_CLEAR !in loadingKeys,
                     showChevron = false,
@@ -602,6 +646,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsGroupLabel(text = context.getString(R.string.chapters))
             SettingsActionPreference(
                 title = context.getString(R.string.delete_read_chapters),
+                iconRes = R.drawable.ic_delete,
                 summary = context.getString(R.string.delete_read_chapters_summary),
                 enabled = AppSettings.KEY_CHAPTERS_CLEAR !in loadingKeys,
                 showChevron = false,
@@ -610,6 +655,7 @@ fun StorageAndNetworkSettingsRoute(
             SettingsSectionDivider()
             SettingsSwitchPreference(
                 title = context.getString(R.string.delete_read_chapters_auto),
+                iconRes = R.drawable.ic_timer,
                 summary = context.getString(R.string.runs_on_app_start),
                 checked = settings.prefs.getBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, false),
                 onCheckedChange = { checked ->
@@ -656,6 +702,7 @@ fun CacheLimitsSettingsRoute(
         SettingsPreferenceSection(title = context.getString(R.string.image_caches)) {
             SettingsSliderPreference(
                 title = context.getString(R.string.thumbnails_cache_limit),
+                iconRes = R.drawable.ic_images,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = thumbsCacheMb,
                 valueRange = 32..2048,
@@ -669,6 +716,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.favicons_cache_limit),
+                iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = faviconCacheMb,
                 valueRange = 4..128,
@@ -682,6 +730,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.pages_cache_limit),
+                iconRes = R.drawable.ic_book_page,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = pagesCacheMb,
                 valueRange = 64..4096,
@@ -695,6 +744,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.novel_cache_limit),
+                iconRes = R.drawable.ic_read,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = novelCacheMb,
                 valueRange = 32..2048,
@@ -708,6 +758,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.tts_audio_cache_limit),
+                iconRes = R.drawable.ic_voice_input,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = ttsCacheMb,
                 valueRange = 32..2048,
@@ -721,6 +772,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsChoicePreference(
                 title = context.getString(R.string.reader_super_resolution_cache_limit),
+                iconRes = R.drawable.ic_zoom_in,
                 value = srCacheLimit,
                 options = srCacheLabels.mapIndexed { index, label ->
                     SettingsChoiceOption(srCacheValues[index], label)
@@ -733,6 +785,7 @@ fun CacheLimitsSettingsRoute(
         SettingsPreferenceSection(title = context.getString(R.string.video_caches)) {
             SettingsSliderPreference(
                 title = context.getString(R.string.video_playback_cache_limit),
+                iconRes = R.drawable.ic_content_video,
                 value = videoCacheMb,
                 valueRange = 256..4096,
                 step = 128,
@@ -742,6 +795,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.video_proxy_cache_limit),
+                iconRes = R.drawable.ic_dns,
                 value = videoProxyCacheMb,
                 valueRange = 128..4096,
                 step = 128,
@@ -751,6 +805,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.torrent_cache_limit),
+                iconRes = R.drawable.ic_network_cellular,
                 value = torrentCacheMb,
                 valueRange = 512..16384,
                 step = 512,
@@ -760,6 +815,7 @@ fun CacheLimitsSettingsRoute(
             SettingsSectionDivider()
             SettingsSliderPreference(
                 title = context.getString(R.string.danmaku_cache_limit),
+                iconRes = R.drawable.ic_danmaku,
                 value = videoDanmakuCacheMb,
                 valueRange = 16..1024,
                 step = 16,
@@ -770,6 +826,7 @@ fun CacheLimitsSettingsRoute(
         SettingsPreferenceSection(title = context.getString(R.string.network)) {
             SettingsSliderPreference(
                 title = context.getString(R.string.network_cache_limit),
+                iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = httpCacheMb,
                 valueRange = 32..2048,

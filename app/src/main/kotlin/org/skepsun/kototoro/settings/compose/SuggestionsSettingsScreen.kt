@@ -80,6 +80,7 @@ fun SuggestionsSettingsScreen(
             ) {
                 SettingsSwitchPreference(
                     title = stringResource(R.string.suggestions_enable),
+                    iconRes = R.drawable.ic_suggestion,
                     checked = isEnabled,
                     onCheckedChange = { checked ->
                         settings.isSuggestionsEnabled = checked
@@ -88,6 +89,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.only_using_wifi),
+                    iconRes = R.drawable.ic_wifi,
                     summary = stringResource(R.string.suggestions_wifi_only_summary),
                     checked = isWifiOnly,
                     enabled = isEnabled,
@@ -98,6 +100,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.include_disabled_sources),
+                    iconRes = R.drawable.ic_manga_source,
                     summary = stringResource(R.string.suggestions_disabled_sources_summary),
                     checked = includeDisabledSources,
                     enabled = isEnabled,
@@ -108,6 +111,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.notifications_enable),
+                    iconRes = R.drawable.ic_notification,
                     summary = stringResource(R.string.suggestions_notifications_summary),
                     checked = notificationsEnabled,
                     enabled = isEnabled,
@@ -118,6 +122,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.suggestions_excluded_genres),
+                    iconRes = R.drawable.ic_tag,
                     summary = excludeTags.ifEmpty { stringResource(R.string.suggestions_excluded_genres_summary) },
                     value = excludeTags,
                     enabled = isEnabled,
@@ -126,6 +131,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.suggestions_preferred_genres),
+                    iconRes = R.drawable.ic_star_small,
                     summary = preferredTags.ifEmpty { stringResource(R.string.suggestions_preferred_genres_summary) },
                     value = preferredTags,
                     enabled = isEnabled,
@@ -134,6 +140,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SuggestionSourcesPreference(
                     title = stringResource(R.string.suggestions_preferred_sources),
+                    iconRes = R.drawable.ic_star_small,
                     emptySummary = stringResource(R.string.suggestions_preferred_sources_summary),
                     options = sourceOptions,
                     selectedIds = preferredSources,
@@ -143,6 +150,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SuggestionSourcesPreference(
                     title = stringResource(R.string.suggestions_excluded_sources),
+                    iconRes = R.drawable.ic_disable,
                     emptySummary = stringResource(R.string.suggestions_excluded_sources_summary),
                     options = sourceOptions,
                     selectedIds = excludedSources,
@@ -152,6 +160,7 @@ fun SuggestionsSettingsScreen(
                 SettingsSectionDivider()
                 SettingsInfoPreference(
                     title = stringResource(R.string.suggestions_info),
+                    iconRes = R.drawable.ic_info_outline,
                     summary = "",
                 )
             }
@@ -163,6 +172,7 @@ fun SuggestionsSettingsScreen(
 private fun SuggestionSourcesPreference(
     title: String,
     emptySummary: String,
+    @androidx.annotation.DrawableRes iconRes: Int? = null,
     options: List<SuggestionSourceOption>,
     selectedIds: Set<String>,
     enabled: Boolean,
@@ -182,6 +192,7 @@ private fun SuggestionSourcesPreference(
     SettingsActionPreference(
         title = title,
         summary = summary,
+        iconRes = iconRes,
         enabled = enabled,
         onClick = { showDialog = true },
     )

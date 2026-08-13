@@ -82,11 +82,13 @@ fun SyncSettingsScreen(
                     if (state.isGoogleDriveSignedIn) {
                         SettingsInfoPreference(
                             title = stringResource(R.string.sync_account),
+                            iconRes = R.drawable.ic_user,
                             summary = state.googleDriveAccountSummary ?: stringResource(R.string.google_drive_sync),
                         )
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.sync_google_drive_enable),
+                            iconRes = R.drawable.ic_sync,
                             checked = state.isGoogleDriveEnabled,
                             summary = stringResource(R.string.sync_google_drive_enable_summary),
                             onCheckedChange = { enabled ->
@@ -100,6 +102,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_now),
+                            iconRes = R.drawable.ic_cloud_upload,
                             summary = when {
                                 state.isGoogleDriveSyncing -> stringResource(R.string.sync_syncing)
                                 state.googleDriveErrorSummary != null -> state.googleDriveErrorSummary
@@ -115,6 +118,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsChoicePreference(
                             title = stringResource(R.string.sync_frequency),
+                            iconRes = R.drawable.ic_schedule,
                             value = state.googleDriveIntervalMinutes,
                             options = listOf(
                                 SettingsChoiceOption(0, stringResource(R.string.sync_freq_off)),
@@ -129,6 +133,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.sync_wifi_only),
+                            iconRes = R.drawable.ic_wifi,
                             checked = state.isGoogleDriveWifiOnly,
                             enabled = state.isGoogleDriveEnabled,
                             onCheckedChange = onGoogleDriveWifiOnlyChange,
@@ -136,6 +141,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.sync_on_start),
+                            iconRes = R.drawable.ic_bolt,
                             checked = state.isGoogleDriveSyncOnStart,
                             summary = stringResource(R.string.sync_on_start_summary),
                             enabled = state.isGoogleDriveEnabled,
@@ -144,6 +150,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_delete_remote_data),
+                            iconRes = R.drawable.ic_delete_all,
                             summary = stringResource(R.string.sync_delete_remote_data_summary),
                             enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
                             onClick = { isDeleteRemoteDialogVisible = true },
@@ -151,6 +158,7 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_import_legacy_remote_data),
+                            iconRes = R.drawable.ic_import,
                             summary = stringResource(R.string.sync_import_legacy_remote_data_summary),
                             enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
                             onClick = { isImportLegacyDialogVisible = true },
@@ -158,11 +166,13 @@ fun SyncSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_sign_out),
+                            iconRes = R.drawable.ic_lock_open,
                             onClick = onGoogleDriveSignOutClick,
                         )
                     } else {
                         SettingsActionPreference(
                             title = stringResource(R.string.sync_sign_in),
+                            iconRes = R.drawable.ic_user,
                             summary = stringResource(R.string.sync_sign_in_summary),
                             onClick = onGoogleDriveSignInClick,
                         )

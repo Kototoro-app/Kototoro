@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
+import org.skepsun.kototoro.R
 
 sealed interface SourceSettingsRowUiState {
     val id: String
@@ -38,6 +40,7 @@ data class SourceSettingsActionRowUiState(
     override val id: String,
     val title: String,
     val summary: String? = null,
+    @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
     val showChevron: Boolean = true,
     val onClick: () -> Unit,
@@ -48,6 +51,7 @@ data class SourceSettingsSwitchRowUiState(
     val title: String,
     val checked: Boolean,
     val summary: String? = null,
+    @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
     val onCheckedChange: (Boolean) -> Unit,
 ) : SourceSettingsRowUiState
@@ -58,6 +62,7 @@ data class SourceSettingsChoiceRowUiState(
     val value: String,
     val options: List<SettingsChoiceOption<String>>,
     val summary: String? = null,
+    @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
     val onValueChange: (String) -> Unit,
 ) : SourceSettingsRowUiState
@@ -69,6 +74,7 @@ data class SourceSettingsMultiChoiceRowUiState(
     val options: List<SettingsChoiceOption<String>>,
     val emptySelectionText: String,
     val summary: String? = null,
+    @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
     val onValueChange: (Set<String>) -> Unit,
 ) : SourceSettingsRowUiState
@@ -81,6 +87,7 @@ data class SourceSettingsTextRowUiState(
     val placeholder: String? = null,
     val suggestions: List<SettingsChoiceOption<String>> = emptyList(),
     val isPassword: Boolean = false,
+    @DrawableRes val iconRes: Int? = null,
     val enabled: Boolean = true,
     val onValueChange: (String) -> Unit,
 ) : SourceSettingsRowUiState
@@ -89,6 +96,7 @@ data class SourceSettingsInfoRowUiState(
     override val id: String,
     val title: String,
     val summary: String,
+    @DrawableRes val iconRes: Int? = null,
 ) : SourceSettingsRowUiState
 
 @Composable
@@ -131,6 +139,7 @@ fun SourceSettingsScreen(
                                         SettingsActionPreference(
                                             title = row.title,
                                             summary = row.summary,
+                                            iconRes = row.iconRes ?: R.drawable.ic_settings,
                                             enabled = row.enabled,
                                             showChevron = row.showChevron,
                                             onClick = row.onClick,
@@ -142,6 +151,7 @@ fun SourceSettingsScreen(
                                             title = row.title,
                                             checked = row.checked,
                                             summary = row.summary,
+                                            iconRes = row.iconRes ?: R.drawable.ic_toggle,
                                             enabled = row.enabled,
                                             onCheckedChange = row.onCheckedChange,
                                         )
@@ -153,6 +163,7 @@ fun SourceSettingsScreen(
                                             value = row.value,
                                             options = row.options,
                                             summary = row.summary,
+                                            iconRes = row.iconRes ?: R.drawable.ic_select,
                                             enabled = row.enabled,
                                             onValueChange = row.onValueChange,
                                         )
@@ -165,6 +176,7 @@ fun SourceSettingsScreen(
                                             options = row.options,
                                             emptySelectionText = row.emptySelectionText,
                                             summary = row.summary,
+                                            iconRes = row.iconRes ?: R.drawable.ic_select_all,
                                             enabled = row.enabled,
                                             onValueChange = row.onValueChange,
                                         )
@@ -178,6 +190,7 @@ fun SourceSettingsScreen(
                                             placeholder = row.placeholder,
                                             suggestions = row.suggestions,
                                             isPassword = row.isPassword,
+                                            iconRes = row.iconRes ?: R.drawable.ic_edit,
                                             enabled = row.enabled,
                                             onValueChange = row.onValueChange,
                                         )
@@ -187,6 +200,7 @@ fun SourceSettingsScreen(
                                         SettingsInfoPreference(
                                             title = row.title,
                                             summary = row.summary,
+                                            iconRes = row.iconRes ?: R.drawable.ic_info_outline,
                                         )
                                     }
                                 }

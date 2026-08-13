@@ -33,7 +33,13 @@ class TapGridSettings @Inject constructor(@ApplicationContext context: Context) 
 
 	fun setTapAction(area: TapGridArea, isLongTap: Boolean, action: TapAction?) {
 		val key = getPrefKey(area, isLongTap)
-		prefs.edit { putEnumValue(key, action) }
+		prefs.edit {
+			if (action == null) {
+				remove(key)
+			} else {
+				putEnumValue(key, action)
+			}
+		}
 	}
 
 	fun reset() {

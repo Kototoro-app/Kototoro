@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -96,6 +97,69 @@ internal data class NovelReaderChromeCallbacks(
 	val onTtsVoice: () -> Unit = {},
 	val onTtsClose: () -> Unit = {},
 )
+
+@Composable
+internal fun NovelReaderFloatingControls(
+	state: NovelComposeReaderUiState,
+	controls: Set<ReaderControl>,
+	callbacks: NovelReaderChromeCallbacks,
+	animationsEnabled: Boolean = true,
+	modifier: Modifier = Modifier,
+) {
+	val supportedControls = ReaderControl.NOVEL_FLOATING
+		.filter(controls::contains)
+		.take(ReaderControl.MAX_FLOATING_CONTROLS)
+	AnimatedVisibility(
+		visible = state.controlsVisible &&
+			!state.settingsSheetVisible &&
+			!state.chaptersSheetVisible &&
+			!state.toolsSheetVisible &&
+			supportedControls.isNotEmpty(),
+		enter = slideInVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
+		exit = slideOutVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
+		modifier = modifier,
+	) {
+		Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			supportedControls.forEach { control ->
+				NovelFloatingControlButton(control, state, callbacks)
+			}
+		}
+	}
+}
+
+@Composable
+private fun NovelFloatingControlButton(
+	control: ReaderControl,
+	state: NovelComposeReaderUiState,
+	callbacks: NovelReaderChromeCallbacks,
+) {
+	val icon = when (control) {
+		ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.drawable.ic_bookmark_added else R.drawable.ic_bookmark
+		ReaderControl.TRANSLATE -> R.drawable.ic_translate
+		else -> return
+	}
+	val label = when (control) {
+		ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.string.bookmark_remove else R.string.bookmark_add
+		ReaderControl.TRANSLATE -> R.string.novel_translate
+	}
+	val onClick = when (control) {
+		ReaderControl.BOOKMARK -> callbacks.onBookmark
+		ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
+	}
+	NovelTopControlSurface(shape = CircleShape, modifier = Modifier.size(44.dp)) {
+		IconButton(onClick = onClick) {
+			Icon(
+				painter = painterResource(icon),
+				contentDescription = stringResource(label),
+				tint = if (control == ReaderControl.TRANSLATE && state.settings?.isTranslationEnabled == true) {
+					MaterialTheme.colorScheme.primary
+				} else {
+					MaterialTheme.colorScheme.onSurface
+				},
+			)
+		}
+	}
+}
 
 @Composable
 internal fun NovelReaderTopChrome(

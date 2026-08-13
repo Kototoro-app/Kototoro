@@ -48,6 +48,7 @@ fun AIImageEnhancementSettingsScreen(
             ) {
                 SettingsSwitchPreference(
                     title = stringResource(R.string.reader_super_resolution),
+                    iconRes = R.drawable.ic_zoom_in,
                     summary = stringResource(R.string.reader_super_resolution_summary),
                     checked = isEnabled,
                     onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED, it) } },
@@ -57,6 +58,7 @@ fun AIImageEnhancementSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.reader_super_resolution_engine),
+                        iconRes = R.drawable.ic_services,
                         options = stringArrayResource(R.array.reader_super_resolution_engines).mapIndexed { index, label ->
                             SettingsChoiceOption(engineNames[index], label)
                         },
@@ -68,6 +70,7 @@ fun AIImageEnhancementSettingsScreen(
                         SettingsSectionDivider()
                         SettingsChoicePreference(
                             title = stringResource(R.string.reader_super_resolution_anime4k_mode),
+                            iconRes = R.drawable.ic_auto_fix,
                             options = stringArrayResource(R.array.video_super_resolution_shaders).mapIndexed { index, label ->
                                 SettingsChoiceOption(anime4kNames[index], label)
                             },
@@ -82,6 +85,7 @@ fun AIImageEnhancementSettingsScreen(
                         SettingsSectionDivider()
                         SettingsChoicePreference(
                             title = stringResource(R.string.reader_super_resolution_model),
+                            iconRes = R.drawable.ic_dice,
                             options = ncnnModels,
                             value = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL) {
                                 prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL, "SE") ?: "SE"

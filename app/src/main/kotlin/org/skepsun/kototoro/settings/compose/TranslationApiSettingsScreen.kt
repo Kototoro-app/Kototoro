@@ -49,6 +49,7 @@ fun TranslationApiSettingsScreen(
             ) {
                 SettingsChoicePreference(
                     title = stringResource(R.string.reader_translation_api_provider_preset),
+                    iconRes = R.drawable.ic_key,
                     options = listOf(
 						SettingsChoiceOption("CUSTOM", stringResource(R.string.reader_translation_api_provider_custom)),
 					) + TranslationApiProviderCatalog.providers.map { preset ->
@@ -61,12 +62,14 @@ fun TranslationApiSettingsScreen(
 					SettingsSectionDivider()
 					SettingsActionPreference(
 						title = stringResource(R.string.reader_translation_api_get_key),
+						iconRes = R.drawable.ic_key,
 						summary = stringResource(R.string.reader_translation_api_get_key_summary),
 						onClick = { uriHandler.openUri(provider.apiKeyUrl) },
 					)
 					SettingsSectionDivider()
 					SettingsActionPreference(
 						title = stringResource(R.string.reader_translation_api_open_docs),
+						iconRes = R.drawable.ic_open_external,
 						summary = stringResource(R.string.reader_translation_api_open_docs_summary),
 						onClick = { uriHandler.openUri(provider.documentationUrl) },
 					)
@@ -74,6 +77,7 @@ fun TranslationApiSettingsScreen(
 					SettingsSectionDivider()
 					SettingsTextInputPreference(
 						title = stringResource(R.string.reader_translation_api_endpoint),
+						iconRes = R.drawable.ic_web,
 						summary = stringResource(R.string.reader_translation_api_endpoint_summary),
 						value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT) {
 							prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT, "") ?: ""
@@ -84,6 +88,7 @@ fun TranslationApiSettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_key),
+                    iconRes = R.drawable.ic_key,
                     summary = stringResource(R.string.reader_translation_api_key_summary),
                     value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_KEY) {
                         prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_KEY, "") ?: ""
@@ -94,6 +99,7 @@ fun TranslationApiSettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_model),
+                    iconRes = R.drawable.ic_auto_fix,
                     summary = stringResource(R.string.reader_translation_api_model_summary),
                     value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_MODEL) {
                         prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, "gpt-4o-mini") ?: "gpt-4o-mini"
@@ -104,6 +110,7 @@ fun TranslationApiSettingsScreen(
 					SettingsSectionDivider()
 					SettingsTextInputPreference(
 						title = stringResource(R.string.reader_translation_api_custom_headers),
+						iconRes = R.drawable.ic_code,
 						summary = stringResource(R.string.reader_translation_api_custom_headers_summary),
 						value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS) {
 							prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, "") ?: ""
@@ -114,6 +121,7 @@ fun TranslationApiSettingsScreen(
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.reader_translation_api_models_fetch),
+                    iconRes = R.drawable.ic_cloud_download,
                     summary = stringResource(R.string.reader_translation_api_models_fetch_summary),
                     onClick = onFetchModelsClick,
                 )

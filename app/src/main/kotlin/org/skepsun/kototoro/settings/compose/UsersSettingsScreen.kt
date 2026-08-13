@@ -90,6 +90,7 @@ fun UsersSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.discover)) {
                     SettingsChoicePreference(
                         title = stringResource(R.string.preferred_tracking_site),
+                        iconRes = R.drawable.ic_star_small,
                         value = state.preferredTrackingSite,
                         options = state.preferredTrackingSiteOptions,
                         summary = stringResource(R.string.preferred_tracking_site_summary),

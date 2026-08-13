@@ -191,6 +191,7 @@
     <string name="delete_manga">删除漫画</string>
     <string name="text_delete_local_manga">确定从设备中永久删除\"%s\"?</string>
     <string name="reader_settings">阅读</string>
+    <string name="reader_settings_common_tab">通用</string>
     <string name="switch_pages">翻页方式</string>
     <string name="_continue">继续</string>
     <string name="error">错误</string>

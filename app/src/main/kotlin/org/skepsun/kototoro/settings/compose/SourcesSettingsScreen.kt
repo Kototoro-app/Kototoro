@@ -101,6 +101,7 @@ fun SourcesSettingsScreen(
                 SettingsPreferenceSection(title = overviewTitle) {
                     SettingsChoicePreference(
                         title = stringResource(R.string.sort_order),
+                        iconRes = R.drawable.ic_sort,
                         value = state.sourcesSortOrder,
                         options = sortOrderOptions,
                         onValueChange = onSourcesSortOrderChange,
@@ -109,12 +110,14 @@ fun SourcesSettingsScreen(
                     SettingsActionPreference(
                         title = stringResource(R.string.show_in_grid_view),
                         summary = stringResource(R.string.browse_display_options_summary),
+                        iconRes = R.drawable.ic_grid,
                         showChevron = false,
                         onClick = {},
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.group_sources_by_language),
+                        iconRes = R.drawable.ic_language,
                         checked = state.isSourcesGroupedByLanguage,
                         summary = stringResource(R.string.group_sources_by_language_summary),
                         onCheckedChange = onSourcesGroupedByLanguageChange,
@@ -122,6 +125,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.setup_wizard),
+                        iconRes = R.drawable.ic_welcome,
                         summary = stringResource(R.string.setup_wizard_summary),
                         onClick = onSetupWizardClick,
                     )
@@ -131,6 +135,7 @@ fun SourcesSettingsScreen(
                 SettingsPreferenceSection(title = remoteSourcesTitle) {
                     SettingsReorderPreference(
                         title = stringResource(R.string.jar_priority_order_title),
+                        iconRes = R.drawable.ic_tap_reorder,
                         value = state.jarPriorityOrder,
                         summary = stringResource(R.string.jar_priority_order_summary),
                         emptyValueText = stringResource(R.string.not_specified),
@@ -139,6 +144,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.show_broken_sources),
+                        iconRes = R.drawable.ic_error_small,
                         checked = state.isShowBrokenSources,
                         summary = stringResource(R.string.show_broken_sources_summary),
                         onCheckedChange = onShowBrokenSourcesChange,
@@ -149,6 +155,7 @@ fun SourcesSettingsScreen(
                 SettingsPreferenceSection(title = adultFilteringTitle) {
                     SettingsMultiChoicePreference(
                         title = stringResource(R.string.disable_nsfw),
+                        iconRes = R.drawable.ic_nsfw,
                         values = state.adultContentFilterTargets,
                         options = adultContentFilterOptions,
                         emptySelectionText = stringResource(R.string.none),
@@ -157,6 +164,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.incognito_for_nsfw),
+                        iconRes = R.drawable.ic_incognito,
                         value = state.incognitoModeForNsfw,
                         options = incognitoOptions,
                         onValueChange = onIncognitoModeForNsfwChange,
@@ -164,6 +172,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.blacklisted_tags),
+                        iconRes = R.drawable.ic_tag,
                         summary = if (state.blacklistedTagCount == 0) {
                             stringResource(R.string.blacklisted_tags_summary)
                         } else {
@@ -177,6 +186,7 @@ fun SourcesSettingsScreen(
                 SettingsPreferenceSection(title = moreTitle) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.tags_warnings),
+                        iconRes = R.drawable.ic_alert_outline,
                         checked = state.isTagsWarningsEnabled,
                         summary = stringResource(R.string.tags_warnings_summary),
                         onCheckedChange = onTagsWarningsEnabledChange,
@@ -184,6 +194,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.mirror_switching),
+                        iconRes = R.drawable.ic_swap_vert,
                         checked = state.isMirrorSwitchingEnabled,
                         summary = stringResource(R.string.mirror_switching_summary),
                         onCheckedChange = onMirrorSwitchingChange,
@@ -191,6 +202,7 @@ fun SourcesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.handle_links),
+                        iconRes = R.drawable.ic_open_external,
                         checked = state.isHandleLinksEnabled,
                         summary = stringResource(R.string.handle_links_summary),
                         onCheckedChange = onHandleLinksEnabledChange,

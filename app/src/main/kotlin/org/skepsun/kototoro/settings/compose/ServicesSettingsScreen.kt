@@ -68,12 +68,14 @@ fun ServicesSettingsScreen(
                 SettingsPreferenceSection(title = servicesTitle) {
                     SettingsActionPreference(
                         title = stringResource(R.string.suggestions),
+                        iconRes = R.drawable.ic_suggestion,
                         summary = state.suggestionsSummary,
                         onClick = onSuggestionsClick,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.browse_tracking_recommendations),
+                        iconRes = R.drawable.ic_suggestion,
                         checked = state.isBrowseTrackingRecommendationsEnabled,
                         summary = stringResource(R.string.browse_tracking_recommendations_summary),
                         onCheckedChange = onBrowseTrackingRecommendationsChange,
@@ -82,6 +84,7 @@ fun ServicesSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSwitchPreference(
                             title = stringResource(R.string.browse_more_tracking_recommendations),
+                            iconRes = R.drawable.ic_updated,
                             checked = state.isBrowseMoreTrackingRecommendationsEnabled,
                             summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
                             onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
@@ -90,6 +93,7 @@ fun ServicesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.related_manga),
+                        iconRes = R.drawable.ic_heart_outline,
                         checked = state.isRelatedContentEnabled,
                         summary = stringResource(R.string.related_manga_summary),
                         onCheckedChange = onRelatedContentChange,
@@ -97,6 +101,7 @@ fun ServicesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSplitSwitchPreference(
                         title = stringResource(R.string.reading_stats),
+                        iconRes = R.drawable.ic_bar_chart,
                         checked = state.isStatsEnabled,
                         summary = if (state.isStatsEnabled) {
                             stringResource(R.string.enabled)
@@ -109,6 +114,7 @@ fun ServicesSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.reading_time_estimation),
+                        iconRes = R.drawable.ic_timer,
                         checked = state.isReadingTimeEstimationEnabled,
                         summary = stringResource(R.string.reading_time_estimation_summary),
                         onCheckedChange = onReadingTimeChange,

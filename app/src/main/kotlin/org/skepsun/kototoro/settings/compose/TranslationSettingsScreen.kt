@@ -58,6 +58,7 @@ fun TranslationSettingsScreen(
 			) {
 				SettingsChoicePreference(
 					title = stringResource(R.string.reader_translation_mode),
+					iconRes = R.drawable.ic_translate,
 					options = stringArrayResource(R.array.reader_translation_modes).mapIndexed { index, label ->
 						SettingsChoiceOption(modeNames[index], label)
 					},
@@ -69,6 +70,7 @@ fun TranslationSettingsScreen(
 
 				SettingsChoicePreference(
 					title = stringResource(R.string.reader_translation_ocr_mode),
+					iconRes = R.drawable.ic_script,
 					options = listOf(
 						SettingsChoiceOption(ReaderOcrMode.BASIC, stringResource(R.string.reader_translation_ocr_mode_basic)),
 						SettingsChoiceOption(ReaderOcrMode.ADVANCED, stringResource(R.string.reader_translation_ocr_mode_advanced)),
@@ -81,6 +83,7 @@ fun TranslationSettingsScreen(
 
 				SettingsChoicePreference(
 					title = stringResource(R.string.reader_translation_render_style),
+					iconRes = R.drawable.ic_palette,
 					options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
 						SettingsChoiceOption(renderStyleNames[index], label)
 					},
@@ -94,6 +97,7 @@ fun TranslationSettingsScreen(
 
 				SettingsChoicePreference(
                     title = stringResource(R.string.reader_translation_source_lang),
+                    iconRes = R.drawable.ic_language,
                     options = stringArrayResource(R.array.reader_translation_source_languages).mapIndexed { index, label ->
                         SettingsChoiceOption(sourceLangNames[index], label)
                     },
@@ -103,6 +107,7 @@ fun TranslationSettingsScreen(
 
                 SettingsChoicePreference(
                     title = stringResource(R.string.reader_translation_target_lang),
+                    iconRes = R.drawable.ic_language,
                     options = stringArrayResource(R.array.reader_translation_target_languages).mapIndexed { index, label ->
                         SettingsChoiceOption(targetLangNames[index], label)
                     },
@@ -113,6 +118,7 @@ fun TranslationSettingsScreen(
                 if (BuildConfig.DEBUG) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.reader_translation_debug_logs),
+                        iconRes = R.drawable.ic_code,
                         summary = stringResource(R.string.reader_translation_debug_logs_summary),
                         checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS) {
                             settings.isReaderTranslationDebugLogsEnabled

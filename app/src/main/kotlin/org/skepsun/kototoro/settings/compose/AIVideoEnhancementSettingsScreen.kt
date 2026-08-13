@@ -42,6 +42,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
 			) {
 				SettingsChoicePreference(
 					title = stringResource(R.string.video_enhancement_algorithm),
+					iconRes = R.drawable.ic_auto_fix,
 					value = algorithm.name,
 					options = listOf(
 						SettingsChoiceOption(
@@ -58,6 +59,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
 				if (algorithm == VideoEnhancementAlgorithm.ANIME4K) {
 					SettingsChoicePreference(
 						title = stringResource(R.string.video_enhancement_anime4k_preset),
+						iconRes = R.drawable.ic_timelapse,
 						value = preset.name,
 						options = listOf(
 							SettingsChoiceOption(
@@ -74,6 +76,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
 				} else {
 					SettingsSliderPreference(
 						title = stringResource(R.string.video_enhancement_fsr_sharpness_search),
+						iconRes = R.drawable.ic_zoom_in,
 						summary = "${(sharpness * 100).toInt()}%",
 						value = (sharpness * 100).toInt(),
 						valueRange = 0..100,
@@ -84,6 +87,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
 				}
 				SettingsSwitchPreference(
 					title = stringResource(R.string.video_enhancement_remember),
+					iconRes = R.drawable.ic_save_ok,
 					summary = stringResource(R.string.video_enhancement_power_warning),
 					checked = remember,
 					onCheckedChange = { enabled ->

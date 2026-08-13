@@ -41,12 +41,14 @@ fun AISettingsScreen(
                 SettingsActionPreference(
                     title = stringResource(R.string.reader_translation_manage_ocr_models),
                     summary = stringResource(R.string.reader_translation_manage_ocr_models_summary),
+                    iconRes = R.drawable.ic_script,
                     onClick = onOpenOcrModels
                 )
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.ai_api_settings),
                     summary = stringResource(R.string.ai_api_settings_summary),
+                    iconRes = R.drawable.ic_key,
                     onClick = onOpenApiSettings
                 )
             }
@@ -58,6 +60,7 @@ fun AISettingsScreen(
                 SettingsActionPreference(
                     title = stringResource(R.string.translation_settings),
                     summary = stringResource(R.string.reader_translation_settings_entry_summary),
+                    iconRes = R.drawable.ic_translate,
                     onClick = onOpenTranslationSettings
                 )
             }
@@ -69,6 +72,7 @@ fun AISettingsScreen(
                 SettingsActionPreference(
                     title = stringResource(R.string.ai_image_enhancement_settings),
                     summary = stringResource(R.string.ai_image_enhancement_summary),
+                    iconRes = R.drawable.ic_zoom_in,
                     onClick = onOpenImageEnhancementSettings
                 )
             }
@@ -80,6 +84,7 @@ fun AISettingsScreen(
                 SettingsActionPreference(
                     title = stringResource(R.string.tts_settings_title),
                     summary = stringResource(R.string.tts_settings_summary),
+                    iconRes = R.drawable.ic_voice_input,
                     onClick = onOpenTtsSettings
                 )
             }
@@ -91,6 +96,7 @@ fun AISettingsScreen(
                 SettingsActionPreference(
                     title = stringResource(R.string.ai_video_enhancement_settings),
                     summary = stringResource(R.string.ai_video_enhancement_summary),
+                    iconRes = R.drawable.ic_content_video,
                     onClick = onOpenVideoEnhancementSettings
                 )
             }

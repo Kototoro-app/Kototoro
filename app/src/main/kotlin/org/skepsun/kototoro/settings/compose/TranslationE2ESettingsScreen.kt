@@ -63,11 +63,13 @@ fun TranslationE2ESettingsScreen(
             ) {
                 SettingsInfoPreference(
                     title = stringResource(R.string.reader_translation_e2e_api_intro_title),
+                    iconRes = R.drawable.ic_info_outline,
                     summary = stringResource(R.string.reader_translation_e2e_api_intro_summary),
                 )
                 SettingsSectionDivider()
                 SettingsChoicePreference(
                     title = stringResource(R.string.reader_translation_api_provider_preset),
+                    iconRes = R.drawable.ic_key,
                     summary = stringResource(R.string.reader_translation_api_provider_preset_summary),
                     value = providerPreset,
                     options = presetOptions,
@@ -78,6 +80,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_endpoint),
+                    iconRes = R.drawable.ic_web,
                     summary = endpoint.ifEmpty { stringResource(R.string.reader_translation_api_endpoint_summary) },
                     value = endpoint,
                     onValueChange = { value ->
@@ -87,6 +90,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_key),
+                    iconRes = R.drawable.ic_key,
                     summary = apiKey.ifEmpty { stringResource(R.string.reader_translation_api_key_summary) },
                     value = apiKey,
                     onValueChange = { value ->
@@ -96,6 +100,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_model),
+                    iconRes = R.drawable.ic_auto_fix,
                     summary = model.ifEmpty { stringResource(R.string.reader_translation_api_model_summary) },
                     value = model,
                     onValueChange = { value ->
@@ -105,6 +110,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_api_custom_headers),
+                    iconRes = R.drawable.ic_code,
                     summary = customHeaders.ifEmpty { stringResource(R.string.reader_translation_api_custom_headers_summary) },
                     value = customHeaders,
                     onValueChange = { value ->
@@ -114,6 +120,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsTextInputPreference(
                     title = stringResource(R.string.reader_translation_e2e_api_concurrency),
+                    iconRes = R.drawable.ic_timer_run,
                     summary = stringResource(R.string.reader_translation_e2e_api_concurrency_summary),
                     value = concurrency,
                     onValueChange = { value ->
@@ -125,6 +132,7 @@ fun TranslationE2ESettingsScreen(
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.reader_translation_api_models_fetch),
+                    iconRes = R.drawable.ic_cloud_download,
                     summary = stringResource(R.string.reader_translation_api_models_fetch_summary),
                     onClick = onFetchModels,
                 )

@@ -89,6 +89,7 @@ fun StorageAndNetworkSettingsScreen(
                 SettingsPreferenceSection(title = cacheLimitsTitle) {
                     SettingsActionPreference(
                         title = cacheLimitsTitle,
+                        iconRes = R.drawable.ic_storage,
                         summary = LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
                         onClick = onCacheLimitsClick,
                     )
@@ -98,6 +99,7 @@ fun StorageAndNetworkSettingsScreen(
                 SettingsPreferenceSection(title = dataRemovalTitle) {
                     SettingsActionPreference(
                         title = dataRemovalTitle,
+                        iconRes = R.drawable.ic_delete_all,
                         onClick = onDataRemovalClick,
                     )
                 }

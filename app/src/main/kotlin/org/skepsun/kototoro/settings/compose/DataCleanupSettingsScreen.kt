@@ -81,6 +81,7 @@ fun DataCleanupSettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.local_storage)) {
             SettingsActionPreference(
                 title = stringResource(R.string.clear_local_manga_storage),
+                iconRes = R.drawable.ic_storage,
                 enabled = isLocalMangaEnabled,
                 showChevron = false,
                 onClick = onClearLocalManga,
@@ -88,6 +89,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_local_novel_storage),
+                iconRes = R.drawable.ic_storage,
                 enabled = isLocalNovelsEnabled,
                 showChevron = false,
                 onClick = onClearLocalNovels,
@@ -95,6 +97,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_local_video_storage),
+                iconRes = R.drawable.ic_storage,
                 enabled = isLocalVideosEnabled,
                 showChevron = false,
                 onClick = onClearLocalVideos,
@@ -103,6 +106,7 @@ fun DataCleanupSettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.cache)) {
             SettingsActionPreference(
                 title = stringResource(R.string.clear_thumbs_cache),
+                iconRes = R.drawable.ic_images,
                 summary = thumbsCacheSummary,
                 enabled = isThumbsCacheEnabled,
                 showChevron = false,
@@ -111,6 +115,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_favicons_cache),
+                iconRes = R.drawable.ic_web,
                 summary = faviconsCacheSummary,
                 enabled = isFaviconsCacheEnabled,
                 showChevron = false,
@@ -119,6 +124,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_pages_cache),
+                iconRes = R.drawable.ic_book_page,
                 summary = pagesCacheSummary,
                 enabled = isPagesCacheEnabled,
                 showChevron = false,
@@ -127,6 +133,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_novel_cache),
+                iconRes = R.drawable.ic_read,
                 summary = novelCacheSummary,
                 enabled = isNovelCacheEnabled,
                 showChevron = false,
@@ -135,6 +142,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_video_cache),
+                iconRes = R.drawable.ic_content_video,
                 summary = videoCacheSummary,
                 enabled = isVideoCacheEnabled,
                 showChevron = false,
@@ -143,6 +151,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_video_proxy_cache),
+                iconRes = R.drawable.ic_dns,
                 summary = videoProxyCacheSummary,
                 enabled = isVideoProxyCacheEnabled,
                 showChevron = false,
@@ -151,6 +160,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_torrent_cache),
+                iconRes = R.drawable.ic_network_cellular,
                 summary = torrentCacheSummary,
                 enabled = isTorrentCacheEnabled,
                 showChevron = false,
@@ -159,6 +169,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_danmaku_cache),
+                iconRes = R.drawable.ic_danmaku,
                 summary = danmakuCacheSummary,
                 enabled = isDanmakuCacheEnabled,
                 showChevron = false,
@@ -167,6 +178,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_tts_audio_cache),
+                iconRes = R.drawable.ic_voice_input,
                 summary = ttsCacheSummary,
                 enabled = isTtsCacheEnabled,
                 showChevron = false,
@@ -175,6 +187,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.reader_super_resolution_clear_cache),
+                iconRes = R.drawable.ic_zoom_in,
                 summary = superResolutionCacheSummary,
                 enabled = isSuperResolutionCacheEnabled,
                 showChevron = false,
@@ -183,6 +196,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_network_cache),
+                iconRes = R.drawable.ic_web,
                 summary = networkCacheSummary,
                 enabled = isNetworkCacheEnabled,
                 showChevron = false,
@@ -192,6 +206,7 @@ fun DataCleanupSettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.privacy)) {
             SettingsActionPreference(
                 title = stringResource(R.string.clear_search_history),
+                iconRes = R.drawable.ic_search,
                 summary = searchHistorySummary,
                 enabled = isSearchHistoryEnabled,
                 showChevron = false,
@@ -200,6 +215,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_updates_feed),
+                iconRes = R.drawable.ic_feed,
                 summary = updatesFeedSummary,
                 enabled = isUpdatesFeedEnabled,
                 showChevron = false,
@@ -208,6 +224,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_database),
+                iconRes = R.drawable.ic_database,
                 summary = stringResource(R.string.clear_database_summary),
                 enabled = isMangaDataEnabled,
                 showChevron = false,
@@ -216,6 +233,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsActionPreference(
                 title = stringResource(R.string.clear_cookies),
+                iconRes = R.drawable.ic_cookie,
                 summary = stringResource(R.string.clear_cookies_summary),
                 showChevron = false,
                 onClick = onClearCookies,
@@ -224,6 +242,7 @@ fun DataCleanupSettingsScreen(
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.clear_browser_data),
+                    iconRes = R.drawable.ic_web,
                     summary = stringResource(R.string.clear_browser_data_summary),
                     enabled = isWebviewClearEnabled,
                     showChevron = false,
@@ -234,6 +253,7 @@ fun DataCleanupSettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.chapters)) {
             SettingsActionPreference(
                 title = stringResource(R.string.delete_read_chapters),
+                iconRes = R.drawable.ic_delete,
                 summary = stringResource(R.string.delete_read_chapters_summary),
                 enabled = isChaptersClearEnabled,
                 showChevron = false,
@@ -242,6 +262,7 @@ fun DataCleanupSettingsScreen(
             SettingsSectionDivider()
             SettingsSwitchPreference(
                 title = stringResource(R.string.delete_read_chapters_auto),
+                iconRes = R.drawable.ic_timer,
                 summary = stringResource(R.string.runs_on_app_start),
                 checked = settings.prefs.getBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, false),
                 onCheckedChange = { checked ->
@@ -252,6 +273,7 @@ fun DataCleanupSettingsScreen(
         SettingsPreferenceSection(title = stringResource(R.string.entity_reset_title)) {
             SettingsActionPreference(
                 title = stringResource(R.string.entity_reset),
+                iconRes = R.drawable.ic_delete_all,
                 summary = stringResource(R.string.entity_reset_description),
                 onClick = onOpenEntityOrganize,
             )

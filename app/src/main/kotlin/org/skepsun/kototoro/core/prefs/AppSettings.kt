@@ -668,6 +668,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			?.let(ReaderControl::limitFloatingControls)
 			?: ReaderControl.FLOATING_DEFAULT
 
+	val novelReaderControls: Set<ReaderControl>
+		get() = prefs.getStringSet(KEY_NOVEL_READER_CONTROLS, null)
+			?.mapNotNullTo(EnumSet.noneOf(ReaderControl::class.java)) { value ->
+				ReaderControl.entries.find { it.name == value }
+			}
+			?.let(ReaderControl::limitNovelFloatingControls)
+			?: ReaderControl.NOVEL_FLOATING.filterTo(EnumSet.noneOf(ReaderControl::class.java)) {
+				it in readerControls
+			}
+
 	var isOfflineCheckDisabled: Boolean
 		get() = prefs.getBoolean(KEY_OFFLINE_DISABLED, false)
 		set(value) = prefs.edit { putBoolean(KEY_OFFLINE_DISABLED, value) }
@@ -2363,6 +2373,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_EINK_REFRESH_EVERY = "eink_refresh_every"
 		const val KEY_EINK_REFRESH_COLOR = "eink_refresh_color"
 		const val KEY_READER_CONTROLS = "reader_controls"
+		const val KEY_NOVEL_READER_CONTROLS = "novel_reader_controls"
 		const val KEY_READER_MODE = "reader_mode"
 		const val KEY_READER_MODE_DETECT = "reader_mode_detect"
 		const val KEY_READER_CROP = "reader_crop"

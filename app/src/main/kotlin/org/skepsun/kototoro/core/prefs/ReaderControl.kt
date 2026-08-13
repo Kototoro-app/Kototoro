@@ -25,6 +25,11 @@ enum class ReaderControl {
 			TRANSLATE,
 		)
 
+		val NOVEL_FLOATING: Set<ReaderControl> = EnumSet.of(
+			BOOKMARK,
+			TRANSLATE,
+		)
+
 		const val MAX_FLOATING_CONTROLS = 4
 
 		fun limitFloatingControls(controls: Set<ReaderControl>): Set<ReaderControl> {
@@ -33,6 +38,11 @@ enum class ReaderControl {
 				.filter(controls::contains)
 				.take(MAX_FLOATING_CONTROLS)
 				.toCollection(EnumSet.noneOf(ReaderControl::class.java))
+		}
+
+		fun limitNovelFloatingControls(controls: Set<ReaderControl>): Set<ReaderControl> {
+			return NOVEL_FLOATING
+				.filterTo(EnumSet.noneOf(ReaderControl::class.java), controls::contains)
 		}
 	}
 }

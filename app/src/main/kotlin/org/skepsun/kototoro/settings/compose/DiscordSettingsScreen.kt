@@ -49,6 +49,7 @@ fun DiscordSettingsScreen(
             ) {
                 SettingsSwitchPreference(
                     title = stringResource(R.string.discord_rpc),
+                    iconRes = R.drawable.ic_discord,
                     checked = isEnabled,
                     onCheckedChange = { checked ->
                         settings.prefs.edit {
@@ -59,6 +60,7 @@ fun DiscordSettingsScreen(
                 SettingsSectionDivider()
                 SettingsActionPreference(
                     title = stringResource(R.string.sign_in),
+                    iconRes = R.drawable.ic_user,
                     summary = tokenSummary ?: stringResource(R.string.discord_token_summary),
                     enabled = isEnabled,
                     onClick = onTokenClick,
@@ -67,6 +69,7 @@ fun DiscordSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.logout),
+                        iconRes = R.drawable.ic_lock_open,
                         summary = stringResource(R.string.discord_logout_summary),
                         enabled = isEnabled,
                         onClick = onLogoutClick,
@@ -75,6 +78,7 @@ fun DiscordSettingsScreen(
                 SettingsSectionDivider()
                 SettingsSwitchPreference(
                     title = stringResource(R.string.disable_nsfw),
+                    iconRes = R.drawable.ic_nsfw,
                     summary = stringResource(R.string.rpc_skip_nsfw_summary),
                     checked = skipNsfw,
                     enabled = isEnabled,

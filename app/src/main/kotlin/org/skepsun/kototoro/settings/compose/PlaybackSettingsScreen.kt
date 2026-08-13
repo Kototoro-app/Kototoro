@@ -68,6 +68,7 @@ fun PlaybackSettingsScreen(
             ) {
                 SettingsChoicePreference(
                     title = stringResource(R.string.video_background),
+                    iconRes = R.drawable.ic_images,
                     options = backgroundOptions,
                     value = background.name,
                     onValueChange = { settings.videoBackground = org.skepsun.kototoro.core.prefs.ReaderBackground.valueOf(it) },
@@ -75,6 +76,7 @@ fun PlaybackSettingsScreen(
 
                 SettingsChoicePreference(
                     title = stringResource(R.string.video_decoder_mode),
+                    iconRes = R.drawable.ic_services,
                     options = decoderOptions,
                     value = decoderMode.name,
                     onValueChange = { settings.videoDecoderMode = VideoDecoderMode.valueOf(it) },
@@ -82,12 +84,14 @@ fun PlaybackSettingsScreen(
 
                 SettingsActionPreference(
                     title = stringResource(R.string.ai_settings),
+                    iconRes = R.drawable.ic_auto_fix,
                     summary = stringResource(R.string.ai_settings_entry_summary),
                     onClick = onAiSettingsClick,
                 )
 
                 SettingsSliderPreference(
                     title = stringResource(R.string.video_controls_alpha),
+                    iconRes = R.drawable.ic_eye,
                     summary = "${(controlsAlpha * 100).toInt()}%",
                     value = (controlsAlpha * 100f).toInt(),
                     valueRange = 30..100,
@@ -98,6 +102,7 @@ fun PlaybackSettingsScreen(
 
                 SettingsSliderPreference(
                     title = stringResource(R.string.video_gradient_alpha),
+                    iconRes = R.drawable.ic_bar_chart,
                     summary = "${(gradientAlpha * 100).toInt()}%",
                     value = (gradientAlpha * 100f).toInt(),
                     valueRange = 0..100,

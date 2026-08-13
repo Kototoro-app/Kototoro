@@ -9,6 +9,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -196,6 +197,7 @@ private fun NovelPageText(
  * Compose chapter renderer for the non-paginated document path. It preserves source text while
  * displaying partial translations and block images supplied by the reader state owner.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ComposeNovelChapter(
 	content: String,
@@ -219,6 +221,9 @@ fun ComposeNovelChapter(
 	val paragraphSpacing = with(LocalDensity.current) {
 		(settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
 	}
+	val statusBarInset = WindowInsets.statusBarsIgnoringVisibility
+		.asPaddingValues()
+		.calculateTopPadding()
 	val gestureModifier = Modifier.novelReaderGestures(onTap, onLongPress)
 	LazyColumn(
 		state = listState ?: rememberLazyListState(),
@@ -227,8 +232,10 @@ fun ComposeNovelChapter(
 			.background(Color(palette.backgroundColor))
 			.then(gestureModifier),
 		contentPadding = PaddingValues(
-			horizontal = settings.marginHorizontal.dp,
-			vertical = settings.marginVertical.dp,
+			start = settings.marginHorizontal.dp,
+			top = statusBarInset + settings.marginVertical.dp,
+			end = settings.marginHorizontal.dp,
+			bottom = settings.marginVertical.dp,
 		),
 		verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
 	) {
@@ -312,6 +319,7 @@ private data class NovelComposeWindowBlock(
 	val chapterBlockCount: Int,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ComposeNovelChapterWindow(
 	chapters: List<NovelComposeChapterContent>,
@@ -348,6 +356,9 @@ private fun ComposeNovelChapterWindow(
 	val paragraphSpacing = with(LocalDensity.current) {
 		(settings.fontSizeSp * settings.lineSpacing * settings.paragraphSpacingLines).sp.toDp()
 	}
+	val statusBarInset = WindowInsets.statusBarsIgnoringVisibility
+		.asPaddingValues()
+		.calculateTopPadding()
 	val gestureModifier = Modifier.novelReaderGestures(onTap, onLongPress)
 	LazyColumn(
 		state = listState,
@@ -356,8 +367,10 @@ private fun ComposeNovelChapterWindow(
 			.background(Color(palette.backgroundColor))
 			.then(gestureModifier),
 		contentPadding = PaddingValues(
-			horizontal = settings.marginHorizontal.dp,
-			vertical = settings.marginVertical.dp,
+			start = settings.marginHorizontal.dp,
+			top = statusBarInset + settings.marginVertical.dp,
+			end = settings.marginHorizontal.dp,
+			bottom = settings.marginVertical.dp,
 		),
 		verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
 	) {
@@ -751,7 +764,7 @@ internal fun splitNovelPageLineRanges(
 	}
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 private fun ComposeNovelPagedChapter(
 	state: NovelComposeReaderUiState,
@@ -819,7 +832,11 @@ private fun ComposeNovelPagedChapter(
 			.background(Color(palette.backgroundColor))
 			.then(gestureModifier),
 	) {
-		val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+		// 用户上边距从状态栏安全区下缘开始计算。即使全屏时状态栏隐藏也保留该安全区，
+		// 避免挖孔遮挡，并确保唤出工具栏时正文高度与分页锚点完全不变。
+		val statusBarInset = WindowInsets.statusBarsIgnoringVisibility
+			.asPaddingValues()
+			.calculateTopPadding()
 		val contentWidthPx = with(density) {
 			(maxWidth - settings.marginHorizontal.dp * 2).coerceAtLeast(1.dp).roundToPx()
 		}

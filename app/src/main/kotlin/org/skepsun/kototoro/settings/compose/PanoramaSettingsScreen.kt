@@ -75,6 +75,7 @@ fun PanoramaSettingsScreen(
                 SettingsPreferenceSection(title = "") {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.pref_panorama_cover),
+                        iconRes = R.drawable.ic_images,
                         checked = state.enabled,
                         summary = stringResource(R.string.pref_panorama_cover_summary),
                         onCheckedChange = onEnabledChange,
@@ -100,6 +101,7 @@ fun PanoramaSettingsScreen(
                 SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_behavior)) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.pref_details_panorama_scroll_linked),
+                        iconRes = R.drawable.ic_sync,
                         checked = state.scrollLinked,
                         summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
                         enabled = state.enabled && state.layoutMode == PanoramaLayoutMode.HALF_SCREEN,
@@ -108,6 +110,7 @@ fun PanoramaSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.pref_panorama_animation),
+                        iconRes = R.drawable.ic_animation,
                         checked = state.animationEnabled,
                         summary = stringResource(
                             if (state.animationSettingsEnabled) {
@@ -135,6 +138,7 @@ fun PanoramaSettingsScreen(
                     SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_advanced)) {
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_blur),
+                            iconRes = R.drawable.ic_eye_off,
                             value = state.blurPercent,
                             valueRange = 0..100,
                             step = 5,
@@ -145,6 +149,7 @@ fun PanoramaSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_top_opacity),
+                            iconRes = R.drawable.ic_eye,
                             value = state.topOpacityPercent,
                             valueRange = 0..100,
                             step = 5,
@@ -156,6 +161,7 @@ fun PanoramaSettingsScreen(
                         SettingsSectionDivider()
                         SettingsSliderPreference(
                             title = stringResource(R.string.pref_panorama_transition_intensity),
+                            iconRes = R.drawable.ic_timelapse,
                             value = state.transitionRangePercent,
                             valueRange = 0..100,
                             step = 5,
@@ -167,6 +173,7 @@ fun PanoramaSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.panorama_settings_restore_default),
+                            iconRes = R.drawable.ic_revert,
                             enabled = state.enabled,
                             showChevron = false,
                             onClick = onReset,

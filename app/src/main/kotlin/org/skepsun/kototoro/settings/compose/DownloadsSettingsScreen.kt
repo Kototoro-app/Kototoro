@@ -89,30 +89,35 @@ fun DownloadsSettingsScreen(
                 SettingsPreferenceSection(title = downloadsTitle) {
                     SettingsActionPreference(
                         title = stringResource(R.string.local_manga_directories),
+                        iconRes = R.drawable.ic_folder_file,
                         summary = state.mangaDirectoriesSummary,
                         onClick = onMangaDirectoriesClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.manga_save_location),
+                        iconRes = R.drawable.ic_storage,
                         summary = state.mangaStorageSummary,
                         onClick = onMangaStorageClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.novel_save_location),
+                        iconRes = R.drawable.ic_storage,
                         summary = state.novelStorageSummary,
                         onClick = onNovelStorageClick,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.video_save_location),
+                        iconRes = R.drawable.ic_storage,
                         summary = state.videoStorageSummary,
                         onClick = onVideoStorageClick,
                     )
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.preferred_download_format),
+                        iconRes = R.drawable.ic_file_zip,
                         value = state.preferredDownloadFormat,
                         options = downloadFormatOptions,
                         onValueChange = onPreferredDownloadFormatChange,
@@ -120,6 +125,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.download_align_reader),
+                        iconRes = R.drawable.ic_reader_ltr,
                         checked = state.isDownloadAlignedWithReader,
                         summary = stringResource(R.string.download_align_reader_summary),
                         onCheckedChange = onDownloadAlignReaderChange,
@@ -127,6 +133,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.download_auto_retry),
+                        iconRes = R.drawable.ic_retry,
                         checked = state.isDownloadAutoRetryOnNetworkError,
                         summary = stringResource(R.string.download_auto_retry_summary),
                         onCheckedChange = onDownloadAutoRetryChange,
@@ -134,6 +141,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSliderPreference(
                         title = stringResource(R.string.download_threads),
+                        iconRes = R.drawable.ic_network_cellular,
                         value = state.downloadThreads,
                         valueRange = 1..10,
                         step = 1,
@@ -145,6 +153,7 @@ fun DownloadsSettingsScreen(
                     val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
                     SettingsSliderPreference(
                         title = stringResource(R.string.download_max_active_series),
+                        iconRes = R.drawable.ic_list_group,
                         value = state.downloadMaxActiveSeries,
                         valueRange = 1..AppSettings.UNLIMITED_SERIES,
                         step = 1,
@@ -161,6 +170,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSliderPreference(
                         title = stringResource(R.string.download_request_delay),
+                        iconRes = R.drawable.ic_schedule,
                         value = state.downloadRequestDelayMs,
                         valueRange = 0..5000,
                         step = 100,
@@ -171,6 +181,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSliderPreference(
                         title = stringResource(R.string.download_retry_count),
+                        iconRes = R.drawable.ic_retry,
                         value = state.downloadRetryCount,
                         valueRange = 1..10,
                         step = 1,
@@ -181,6 +192,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsSliderPreference(
                         title = stringResource(R.string.download_retry_delay),
+                        iconRes = R.drawable.ic_schedule,
                         value = state.downloadRetryDelayMs,
                         valueRange = 500..10_000,
                         step = 500,
@@ -191,6 +203,7 @@ fun DownloadsSettingsScreen(
                     SettingsSectionDivider()
                     SettingsChoicePreference(
                         title = stringResource(R.string.download_over_cellular),
+                        iconRes = R.drawable.ic_wifi,
                         value = state.allowDownloadOnMeteredNetwork,
                         options = meteredNetworkOptions,
                         onValueChange = onAllowMeteredNetworkChange,
@@ -205,6 +218,7 @@ fun DownloadsSettingsScreen(
                         SettingsSectionDivider()
                         SettingsActionPreference(
                             title = stringResource(R.string.disable_battery_optimization),
+                            iconRes = R.drawable.ic_battery_outline,
                             summary = stringResource(R.string.disable_battery_optimization_summary_downloads),
                             onClick = onIgnoreDozeClick,
                         )
@@ -215,12 +229,14 @@ fun DownloadsSettingsScreen(
                 SettingsPreferenceSection(title = pagesSavingTitle) {
                     SettingsActionPreference(
                         title = stringResource(R.string.default_page_save_dir),
+                        iconRes = R.drawable.ic_folder_file,
                         summary = state.pagesDirectorySummary,
                         onClick = onPagesDirectoryClick,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.ask_for_dest_dir_every_time),
+                        iconRes = R.drawable.ic_data_privacy,
                         checked = state.isPagesSavingAskEnabled,
                         onCheckedChange = onPagesSavingAskChange,
                     )

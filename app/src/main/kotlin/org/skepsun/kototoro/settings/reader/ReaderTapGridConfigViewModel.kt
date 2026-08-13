@@ -26,21 +26,16 @@ class ReaderTapGridConfigViewModel @Inject constructor(
 		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
 
 	fun reset() {
-		launchJob(Dispatchers.Default) {
-			tapGridSettings.reset()
-		}
+		tapGridSettings.reset()
 	}
 
 	fun disableAll() {
-		launchJob(Dispatchers.Default) {
-			tapGridSettings.disableAll()
-		}
+		tapGridSettings.disableAll()
 	}
 
 	fun setTapAction(area: TapGridArea, isLongTap: Boolean, action: TapAction?) {
-		launchJob(Dispatchers.Default) {
-			tapGridSettings.setTapAction(area, isLongTap, action)
-		}
+		// 设置项很小，直接提交可确保离开页面前动作（尤其是“无”）已持久化。
+		tapGridSettings.setTapAction(area, isLongTap, action)
 	}
 
 	private fun getData(): Map<TapGridArea, TapActions> {

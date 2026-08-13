@@ -49,6 +49,7 @@ fun OcrModelsSettingsScreen(
 			SettingsPreferenceSection(title = stringResource(R.string.reader_translation_ocr_advanced_settings)) {
 				SettingsChoicePreference(
 					title = stringResource(R.string.reader_translation_ocr_det_model_selection),
+					iconRes = R.drawable.ic_eye_check,
 					options = detectorOptions,
 					value = selectedDetector,
 					onValueChange = onDetectorChange,
@@ -56,6 +57,7 @@ fun OcrModelsSettingsScreen(
 				SettingsSectionDivider()
 				SettingsChoicePreference(
 					title = stringResource(R.string.reader_translation_ocr_recognizer_model_selection),
+					iconRes = R.drawable.ic_script,
 					options = recognizerOptions,
 					value = selectedRecognizer,
 					onValueChange = onRecognizerChange,
@@ -67,6 +69,7 @@ fun OcrModelsSettingsScreen(
                         SettingsActionPreference(
                             title = item.title,
                             summary = item.summary,
+                            iconRes = R.drawable.ic_script,
                             enabled = item.enabled,
                             showChevron = false,
                             onClick = { onModelClick(item.id) },

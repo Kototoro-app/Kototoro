@@ -59,12 +59,14 @@ fun NotificationSettingsScreen(
                 SettingsPreferenceSection(title = notificationsTitle) {
                     SettingsSwitchPreference(
                         title = stringResource(R.string.notifications_enable),
+                        iconRes = R.drawable.ic_notification,
                         checked = state.isTrackerNotificationsEnabled,
                         onCheckedChange = onTrackerNotificationsEnabledChange,
                     )
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.notification_sound),
+                        iconRes = R.drawable.ic_audiotrack,
                         summary = state.ringtoneSummary,
                         enabled = state.isTrackerNotificationsEnabled,
                         onClick = onNotificationSoundClick,
@@ -72,12 +74,14 @@ fun NotificationSettingsScreen(
                     SettingsSectionDivider()
                     SettingsActionPreference(
                         title = stringResource(R.string.vibration),
+                        iconRes = R.drawable.ic_vibration,
                         enabled = state.isTrackerNotificationsEnabled,
                         onClick = onNotificationVibrateClick,
                     )
                     SettingsSectionDivider()
                     SettingsSwitchPreference(
                         title = stringResource(R.string.light_indicator),
+                        iconRes = R.drawable.ic_lightbulb,
                         checked = state.isNotificationLightEnabled,
                         enabled = state.isTrackerNotificationsEnabled,
                         onCheckedChange = onNotificationLightChange,
