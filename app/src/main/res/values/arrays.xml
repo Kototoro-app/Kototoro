@@ -110,8 +110,9 @@
 		<item>@string/color_black</item>
 	</string-array>
 	<string-array name="video_decoder_modes" translatable="false">
-		<item>@string/video_decoder_hardware</item>
-		<item>@string/video_decoder_software</item>
+		<item>@string/video_decoder_hardware_only</item>
+		<item>@string/video_decoder_hardware_preferred</item>
+		<item>@string/video_decoder_software_preferred</item>
 	</string-array>
 	<string-array name="video_renderer_modes" translatable="false">
 		<item>@string/video_renderer_auto</item>

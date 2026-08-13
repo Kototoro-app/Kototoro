@@ -64,7 +64,8 @@ webkit = "1.16.0"
 workRuntime = "2.10.5"
 workinspector = "1.2"
 window = "1.3.0"
-media3 = "1.10.0"
+media3 = "1.9.3"
+nextlibMedia3 = "1.9.3-0.12.0"
 kotest = "5.9.1"
 xsoup = "0.3.7"
 jsonpath = "2.8.0"
@@ -200,6 +201,7 @@ androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "medi
 androidx-media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
 androidx-media3-exoplayer-dash = { module = "androidx.media3:media3-exoplayer-dash", version.ref = "media3" }
 androidx-media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+nextlib-media3ext = { module = "io.github.anilbeesetti:nextlib-media3ext", version.ref = "nextlibMedia3" }
 bytedance-danmaku-render-engine = { module = "com.github.bytedance:danmaku-render-engine", version.ref = "danmakuRenderEngine" }
 kotest-property = { module = "io.kotest:kotest-property", version.ref = "kotest" }
 kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.VideoDecoderMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 
 @Composable
@@ -37,6 +38,7 @@ fun PlaybackSettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val background by settings.observeAsState(AppSettings.KEY_VIDEO_BACKGROUND) { videoBackground }
+    val decoderMode by settings.observeAsState(AppSettings.KEY_VIDEO_DECODER_MODE) { videoDecoderMode }
     val controlsAlpha by settings.observeAsState(AppSettings.KEY_VIDEO_CONTROLS_ALPHA) { videoControlsAlpha }
     val gradientAlpha by settings.observeAsState(AppSettings.KEY_VIDEO_GRADIENT_ALPHA) { videoGradientAlpha }
 
@@ -44,6 +46,9 @@ fun PlaybackSettingsScreen(
 
     val backgroundOptions = stringArrayResource(R.array.video_backgrounds).mapIndexed { index, label ->
         SettingsChoiceOption(readerBackgroundNames[index], label)
+    }
+    val decoderOptions = stringArrayResource(R.array.video_decoder_modes).mapIndexed { index, label ->
+        SettingsChoiceOption(VideoDecoderMode.entries[index].name, label)
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -66,6 +71,13 @@ fun PlaybackSettingsScreen(
                     options = backgroundOptions,
                     value = background.name,
                     onValueChange = { settings.videoBackground = org.skepsun.kototoro.core.prefs.ReaderBackground.valueOf(it) },
+                )
+
+                SettingsChoicePreference(
+                    title = stringResource(R.string.video_decoder_mode),
+                    options = decoderOptions,
+                    value = decoderMode.name,
+                    onValueChange = { settings.videoDecoderMode = VideoDecoderMode.valueOf(it) },
                 )
 
                 SettingsActionPreference(

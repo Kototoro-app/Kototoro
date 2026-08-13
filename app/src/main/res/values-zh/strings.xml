@@ -202,6 +202,9 @@
     <string name="video_decoder_mode">视频解码方式</string>
     <string name="video_decoder_hardware">硬件解码</string>
     <string name="video_decoder_software">软件解码</string>
+    <string name="video_decoder_hardware_only">仅硬件解码</string>
+    <string name="video_decoder_hardware_preferred">硬解优先（推荐）</string>
+    <string name="video_decoder_software_preferred">软解优先</string>
     <string name="video_background">播放背景</string>
     <string name="video_super_resolution">超分辨率</string>
     <string name="video_enhancement_enabled">为当前视频开启</string>

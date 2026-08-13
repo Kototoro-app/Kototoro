@@ -904,7 +904,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             val mediaHttpClient = contentHttpClient.newBuilder()
                 .cache(null)
                 .build()
-            videoPlayer = Media3VideoPlayerEngine(this, mediaHttpClient, videoCache.cache).also { player ->
+            videoPlayer = Media3VideoPlayerEngine(
+                context = this,
+                httpClient = mediaHttpClient,
+                cache = videoCache.cache,
+                decoderMode = appSettings.videoDecoderMode,
+            ).also { player ->
                 player.addListener(playerListener)
                 player.attachPlayerView(playerView)
             }

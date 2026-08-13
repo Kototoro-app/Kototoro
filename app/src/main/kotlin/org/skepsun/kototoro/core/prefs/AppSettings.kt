@@ -750,6 +750,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getEnumValue(KEY_VIDEO_BACKGROUND, ReaderBackground.DEFAULT)
 		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_BACKGROUND, value) }
 
+	var videoDecoderMode: VideoDecoderMode
+		get() = prefs.getEnumValue(KEY_VIDEO_DECODER_MODE, VideoDecoderMode.HARDWARE_PREFERRED)
+		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_DECODER_MODE, value) }
+
 	var videoSuperResolutionMode: VideoSuperResolutionMode
 		get() = prefs.getEnumValue(KEY_VIDEO_SUPER_RES_MODE, VideoSuperResolutionMode.BALANCED)
 		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_SUPER_RES_MODE, value) }

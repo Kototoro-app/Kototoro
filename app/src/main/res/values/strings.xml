@@ -1198,6 +1198,9 @@
     <string name="video_decoder_mode">Video decoder</string>
     <string name="video_decoder_hardware">Hardware decoding</string>
     <string name="video_decoder_software">Software decoding</string>
+    <string name="video_decoder_hardware_only">Hardware only</string>
+    <string name="video_decoder_hardware_preferred">Prefer hardware (recommended)</string>
+    <string name="video_decoder_software_preferred">Prefer software</string>
     <string name="video_renderer_mode">Video renderer</string>
     <string name="video_renderer_auto">Auto (GPU)</string>
     <string name="video_renderer_gpu">GPU</string>

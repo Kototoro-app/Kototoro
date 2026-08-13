@@ -5,6 +5,7 @@ import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
@@ -23,12 +24,17 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.RenderersFactory
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import org.skepsun.kototoro.core.prefs.VideoDecoderMode
 import java.util.concurrent.CopyOnWriteArraySet
 import okhttp3.OkHttpClient
 
@@ -37,7 +43,8 @@ class Media3VideoPlayerEngine(
 	context: Context,
 	private val httpClient: OkHttpClient,
 	private val cache: Cache,
-) : VideoPlayerEngine, Player.Listener {
+	decoderMode: VideoDecoderMode,
+) : VideoPlayerEngine, Player.Listener, AnalyticsListener {
 
 	private data class TrackTarget(
 		val type: Int,
@@ -45,13 +52,21 @@ class Media3VideoPlayerEngine(
 		val trackIndex: Int,
 	)
 
+	private data class PendingSeekDiagnostic(
+		val targetPositionMs: Long,
+		val originPositionMs: Long,
+		val requestedAtMs: Long,
+	)
+
 	private val listeners = CopyOnWriteArraySet<VideoPlayerEngine.Listener>()
 	private val handler = Handler(Looper.getMainLooper())
 	private val trackSelector = DefaultTrackSelector(context)
-	private val renderersFactory = DefaultRenderersFactory(context)
-		.setEnableDecoderFallback(true)
+	private val renderersFactory = createRenderersFactory(context, decoderMode)
 	private val exoPlayer = ExoPlayer.Builder(context, renderersFactory)
 		.setTrackSelector(trackSelector)
+		.setSeekParameters(Media3PlaybackConfig.seekParameters())
+		.setLoadControl(Media3PlaybackConfig.loadControl())
+		.setLivePlaybackSpeedControl(Media3PlaybackConfig.livePlaybackSpeedControl())
 		.build()
 	private val trackTargets = LinkedHashMap<Int, TrackTarget>()
 	private var currentRequest: PlaybackRequest? = null
@@ -63,6 +78,19 @@ class Media3VideoPlayerEngine(
 	private var loudnessEnhancer: LoudnessEnhancer? = null
 	private var volumeBoostEnabled = false
 	private var playerView: PlayerView? = null
+	private var videoDecoderName: String? = null
+	private var droppedVideoFrameCount = 0
+	private var pendingSeekDiagnostic: PendingSeekDiagnostic? = null
+
+	private fun createRenderersFactory(context: Context, mode: VideoDecoderMode): RenderersFactory = when (mode) {
+		VideoDecoderMode.HARDWARE_ONLY -> DefaultRenderersFactory(context)
+		VideoDecoderMode.HARDWARE_PREFERRED -> CloudStreamCompatibleRenderersFactory(context)
+			.setEnableDecoderFallback(true)
+			.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+		VideoDecoderMode.SOFTWARE_PREFERRED -> CloudStreamCompatibleRenderersFactory(context)
+			.setEnableDecoderFallback(true)
+			.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+	}
 
 	private val positionTicker = object : Runnable {
 		override fun run() {
@@ -76,6 +104,7 @@ class Media3VideoPlayerEngine(
 
 	init {
 		exoPlayer.addListener(this)
+		exoPlayer.addAnalyticsListener(this)
 		handler.post(positionTicker)
 	}
 
@@ -136,6 +165,9 @@ class Media3VideoPlayerEngine(
 		currentStatus = VideoPlaybackStatus.PREPARING
 		fileLoadedForRequest = null
 		lastDuration = C.TIME_UNSET
+		videoDecoderName = null
+		droppedVideoFrameCount = 0
+		pendingSeekDiagnostic = null
 		val mediaSource = createMediaSource(request)
 		exoPlayer.setMediaSource(mediaSource, request.startPositionMs.coerceAtLeast(0L))
 		exoPlayer.prepare()
@@ -155,7 +187,10 @@ class Media3VideoPlayerEngine(
 			.setCache(cache)
 			.setUpstreamDataSourceFactory(upstream)
 			.setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-		val sourceFactory = DefaultMediaSourceFactory(cachedFactory)
+		val extractorsFactory = DefaultExtractorsFactory()
+			.setFragmentedMp4ExtractorFlags(FragmentedMp4Extractor.FLAG_MERGE_FRAGMENTED_SIDX)
+		val sourceFactory = DefaultMediaSourceFactory(cachedFactory, extractorsFactory)
+			.setLiveTargetOffsetMs(Media3PlaybackConfig.PREFERRED_LIVE_OFFSET_MS)
 		val item = MediaItem.Builder()
 			.setMediaId(request.requestId)
 			.setUri(request.uri)
@@ -188,8 +223,17 @@ class Media3VideoPlayerEngine(
 	override fun pause() = exoPlayer.pause()
 
 	override fun seekTo(positionMs: Long) {
-		exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
-		listeners.forEach { it.onSeek(positionMs) }
+		val targetPositionMs = positionMs.coerceAtLeast(0L)
+		val diagnostic = PendingSeekDiagnostic(
+			targetPositionMs = targetPositionMs,
+			originPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L),
+			requestedAtMs = SystemClock.elapsedRealtime(),
+		)
+		pendingSeekDiagnostic = diagnostic
+		Log.i(TAG, "seek requested ${diagnostic.describe()} ${playbackDiagnosticState()}")
+		exoPlayer.seekTo(targetPositionMs)
+		handler.postDelayed({ logMissingVideoFrameAfterSeek(diagnostic) }, SEEK_FRAME_DIAGNOSTIC_TIMEOUT_MS)
+		listeners.forEach { it.onSeek(targetPositionMs) }
 	}
 
 	override fun setRate(speed: Double) {
@@ -279,7 +323,7 @@ class Media3VideoPlayerEngine(
 		val video = exoPlayer.videoFormat
 		val audio = exoPlayer.audioFormat
 		return when (name) {
-			"hwdec-current" -> "MediaCodec"
+			"hwdec-current", "video-decoder" -> videoDecoderName ?: "MediaCodec"
 			"vo", "video-out-params/vo" -> "Media3"
 			"video-codec" -> video?.codecs ?: video?.sampleMimeType
 			"audio-codec-name" -> audio?.codecs ?: audio?.sampleMimeType
@@ -345,7 +389,54 @@ class Media3VideoPlayerEngine(
 
 	override fun onRenderedFirstFrame() {
 		if (!isCurrentRequestEvent()) return
+		pendingSeekDiagnostic?.let { diagnostic ->
+			val elapsedMs = SystemClock.elapsedRealtime() - diagnostic.requestedAtMs
+			Log.i(
+				TAG,
+				"first video frame after seek elapsedMs=$elapsedMs " +
+					"${diagnostic.describe()} ${playbackDiagnosticState()}",
+			)
+			pendingSeekDiagnostic = null
+		}
 		listeners.forEach { it.onRenderedFirstFrame() }
+	}
+
+	override fun onVideoInputFormatChanged(
+		eventTime: AnalyticsListener.EventTime,
+		format: Format,
+		decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?,
+	) {
+		if (!isCurrentRequestEvent()) return
+		Log.i(
+			TAG,
+			"video format mime=${format.sampleMimeType} codecs=${format.codecs} " +
+				"size=${format.width}x${format.height} fps=${format.frameRate} " +
+				"decoderReuse=${decoderReuseEvaluation?.result}",
+		)
+	}
+
+	override fun onVideoDecoderInitialized(
+		eventTime: AnalyticsListener.EventTime,
+		decoderName: String,
+		initializedTimestampMs: Long,
+		initializationDurationMs: Long,
+	) {
+		videoDecoderName = decoderName
+		Log.i(TAG, "video decoder initialized name=$decoderName durationMs=$initializationDurationMs")
+	}
+
+	override fun onDroppedVideoFrames(
+		eventTime: AnalyticsListener.EventTime,
+		droppedFrames: Int,
+		elapsedMs: Long,
+	) {
+		if (!isCurrentRequestEvent() || droppedFrames <= 0) return
+		droppedVideoFrameCount += droppedFrames
+		Log.w(
+			TAG,
+			"video frames dropped count=$droppedFrames total=$droppedVideoFrameCount windowMs=$elapsedMs " +
+				playbackDiagnosticState(),
+		)
 	}
 
 	override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -354,11 +445,13 @@ class Media3VideoPlayerEngine(
 
 	override fun release() {
 		handler.removeCallbacks(positionTicker)
+		pendingSeekDiagnostic = null
 		loudnessEnhancer?.release()
 		loudnessEnhancer = null
 		playerView?.player = null
 		playerView = null
 		exoPlayer.removeListener(this)
+		exoPlayer.removeAnalyticsListener(this)
 		exoPlayer.release()
 		listeners.clear()
 	}
@@ -366,6 +459,32 @@ class Media3VideoPlayerEngine(
 	private fun isCurrentRequestEvent(): Boolean {
 		val expected = currentRequest?.requestId ?: return false
 		return exoPlayer.currentMediaItem?.mediaId == expected
+	}
+
+	private fun logMissingVideoFrameAfterSeek(diagnostic: PendingSeekDiagnostic) {
+		if (pendingSeekDiagnostic !== diagnostic || !isCurrentRequestEvent()) return
+		val elapsedMs = SystemClock.elapsedRealtime() - diagnostic.requestedAtMs
+		Log.w(
+			TAG,
+			"no video frame after seek elapsedMs=$elapsedMs ${diagnostic.describe()} ${playbackDiagnosticState()}",
+		)
+	}
+
+	private fun PendingSeekDiagnostic.describe(): String =
+		"originMs=$originPositionMs targetMs=$targetPositionMs"
+
+	private fun playbackDiagnosticState(): String =
+		"request=${currentRequest?.requestId} state=${playbackStateLabel(exoPlayer.playbackState)} " +
+			"isPlaying=${exoPlayer.isPlaying} playWhenReady=${exoPlayer.playWhenReady} " +
+			"positionMs=${exoPlayer.currentPosition} bufferedMs=${exoPlayer.bufferedPosition} " +
+			"decoder=${videoDecoderName ?: "unknown"} droppedFrames=$droppedVideoFrameCount"
+
+	private fun playbackStateLabel(state: Int): String = when (state) {
+		Player.STATE_IDLE -> "IDLE"
+		Player.STATE_BUFFERING -> "BUFFERING"
+		Player.STATE_READY -> "READY"
+		Player.STATE_ENDED -> "ENDED"
+		else -> state.toString()
 	}
 
 	private fun PlaybackMediaKind.mimeType(): String? = when (this) {
@@ -390,5 +509,6 @@ class Media3VideoPlayerEngine(
 	private companion object {
 		const val TAG = "Media3Player"
 		const val POSITION_TICK_MS = 250L
+		const val SEEK_FRAME_DIAGNOSTIC_TIMEOUT_MS = 2_500L
 	}
 }
