@@ -65,67 +65,75 @@ fun ServicesSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "services") {
-                SettingsPreferenceSection(title = servicesTitle) {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.suggestions),
-                        iconRes = R.drawable.ic_suggestion,
-                        summary = state.suggestionsSummary,
-                        onClick = onSuggestionsClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.browse_tracking_recommendations),
-                        iconRes = R.drawable.ic_suggestion,
-                        checked = state.isBrowseTrackingRecommendationsEnabled,
-                        summary = stringResource(R.string.browse_tracking_recommendations_summary),
-                        onCheckedChange = onBrowseTrackingRecommendationsChange,
-                    )
-                    if (state.isBrowseTrackingRecommendationsEnabled) {
-                        SettingsSectionDivider()
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.browse_more_tracking_recommendations),
-                            iconRes = R.drawable.ic_updated,
-                            checked = state.isBrowseMoreTrackingRecommendationsEnabled,
-                            summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
-                            onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
+                SettingsPreferenceGroup(title = servicesTitle) {
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.suggestions),
+                            iconRes = R.drawable.ic_suggestion,
+                            summary = state.suggestionsSummary,
+                            onClick = onSuggestionsClick,
                         )
                     }
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.related_manga),
-                        iconRes = R.drawable.ic_heart_outline,
-                        checked = state.isRelatedContentEnabled,
-                        summary = stringResource(R.string.related_manga_summary),
-                        onCheckedChange = onRelatedContentChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSplitSwitchPreference(
-                        title = stringResource(R.string.reading_stats),
-                        iconRes = R.drawable.ic_bar_chart,
-                        checked = state.isStatsEnabled,
-                        summary = if (state.isStatsEnabled) {
-                            stringResource(R.string.enabled)
-                        } else {
-                            stringResource(R.string.disabled)
-                        },
-                        onClick = onStatsClick,
-                        onCheckedChange = onStatsEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.reading_time_estimation),
-                        iconRes = R.drawable.ic_timer,
-                        checked = state.isReadingTimeEstimationEnabled,
-                        summary = stringResource(R.string.reading_time_estimation_summary),
-                        onCheckedChange = onReadingTimeChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.discord_rpc),
-                        summary = stringResource(R.string.discord_rpc_summary),
-                        iconRes = R.drawable.ic_discord,
-                        onClick = onDiscordSettingsClick,
-                    )
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.browse_tracking_recommendations),
+                            iconRes = R.drawable.ic_suggestion,
+                            checked = state.isBrowseTrackingRecommendationsEnabled,
+                            summary = stringResource(R.string.browse_tracking_recommendations_summary),
+                            onCheckedChange = onBrowseTrackingRecommendationsChange,
+                        )
+                    }
+                    if (state.isBrowseTrackingRecommendationsEnabled) {
+                        item {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.browse_more_tracking_recommendations),
+                                iconRes = R.drawable.ic_updated,
+                                checked = state.isBrowseMoreTrackingRecommendationsEnabled,
+                                summary = stringResource(R.string.browse_more_tracking_recommendations_summary),
+                                onCheckedChange = onBrowseMoreTrackingRecommendationsChange,
+                            )
+                        }
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.related_manga),
+                            iconRes = R.drawable.ic_heart_outline,
+                            checked = state.isRelatedContentEnabled,
+                            summary = stringResource(R.string.related_manga_summary),
+                            onCheckedChange = onRelatedContentChange,
+                        )
+                    }
+                    item {
+                        SettingsSplitSwitchPreference(
+                            title = stringResource(R.string.reading_stats),
+                            iconRes = R.drawable.ic_bar_chart,
+                            checked = state.isStatsEnabled,
+                            summary = if (state.isStatsEnabled) {
+                                stringResource(R.string.enabled)
+                            } else {
+                                stringResource(R.string.disabled)
+                            },
+                            onClick = onStatsClick,
+                            onCheckedChange = onStatsEnabledChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.reading_time_estimation),
+                            iconRes = R.drawable.ic_timer,
+                            checked = state.isReadingTimeEstimationEnabled,
+                            summary = stringResource(R.string.reading_time_estimation_summary),
+                            onCheckedChange = onReadingTimeChange,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.discord_rpc),
+                            summary = stringResource(R.string.discord_rpc_summary),
+                            iconRes = R.drawable.ic_discord,
+                            onClick = onDiscordSettingsClick,
+                        )
+                    }
                 }
             }
         }

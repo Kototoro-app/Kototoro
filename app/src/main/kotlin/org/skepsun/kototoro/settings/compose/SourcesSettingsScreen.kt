@@ -85,8 +85,9 @@ fun SourcesSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -98,79 +99,73 @@ fun SourcesSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "overview") {
-                SettingsPreferenceSection(title = overviewTitle) {
-                    SettingsChoicePreference(
+                SettingsPreferenceGroup(title = overviewTitle) {
+                    item { SettingsChoicePreference(
                         title = stringResource(R.string.sort_order),
                         iconRes = R.drawable.ic_sort,
                         value = state.sourcesSortOrder,
                         options = sortOrderOptions,
                         onValueChange = onSourcesSortOrderChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.show_in_grid_view),
                         summary = stringResource(R.string.browse_display_options_summary),
                         iconRes = R.drawable.ic_grid,
                         showChevron = false,
                         onClick = {},
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.group_sources_by_language),
                         iconRes = R.drawable.ic_language,
                         checked = state.isSourcesGroupedByLanguage,
                         summary = stringResource(R.string.group_sources_by_language_summary),
                         onCheckedChange = onSourcesGroupedByLanguageChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.setup_wizard),
                         iconRes = R.drawable.ic_welcome,
                         summary = stringResource(R.string.setup_wizard_summary),
                         onClick = onSetupWizardClick,
-                    )
+                    ) }
                 }
             }
             item(key = "remote_sources") {
-                SettingsPreferenceSection(title = remoteSourcesTitle) {
-                    SettingsReorderPreference(
+                SettingsPreferenceGroup(title = remoteSourcesTitle) {
+                    item { SettingsReorderPreference(
                         title = stringResource(R.string.jar_priority_order_title),
                         iconRes = R.drawable.ic_tap_reorder,
                         value = state.jarPriorityOrder,
                         summary = stringResource(R.string.jar_priority_order_summary),
                         emptyValueText = stringResource(R.string.not_specified),
                         onValueChange = onJarPriorityOrderChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.show_broken_sources),
                         iconRes = R.drawable.ic_error_small,
                         checked = state.isShowBrokenSources,
                         summary = stringResource(R.string.show_broken_sources_summary),
                         onCheckedChange = onShowBrokenSourcesChange,
-                    )
+                    ) }
                 }
             }
             item(key = "adult_filtering") {
-                SettingsPreferenceSection(title = adultFilteringTitle) {
-                    SettingsMultiChoicePreference(
+                SettingsPreferenceGroup(title = adultFilteringTitle) {
+                    item { SettingsMultiChoicePreference(
                         title = stringResource(R.string.disable_nsfw),
                         iconRes = R.drawable.ic_nsfw,
                         values = state.adultContentFilterTargets,
                         options = adultContentFilterOptions,
                         emptySelectionText = stringResource(R.string.none),
                         onValueChange = onAdultContentFilterTargetsChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
+                    ) }
+                    item { SettingsChoicePreference(
                         title = stringResource(R.string.incognito_for_nsfw),
                         iconRes = R.drawable.ic_incognito,
                         value = state.incognitoModeForNsfw,
                         options = incognitoOptions,
                         onValueChange = onIncognitoModeForNsfwChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.blacklisted_tags),
                         iconRes = R.drawable.ic_tag,
                         summary = if (state.blacklistedTagCount == 0) {
@@ -179,34 +174,32 @@ fun SourcesSettingsScreen(
                             stringResource(R.string.selected_count, state.blacklistedTagCount)
                         },
                         onClick = onGlobalTagBlacklistClick,
-                    )
+                    ) }
                 }
             }
             item(key = "more") {
-                SettingsPreferenceSection(title = moreTitle) {
-                    SettingsSwitchPreference(
+                SettingsPreferenceGroup(title = moreTitle) {
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.tags_warnings),
                         iconRes = R.drawable.ic_alert_outline,
                         checked = state.isTagsWarningsEnabled,
                         summary = stringResource(R.string.tags_warnings_summary),
                         onCheckedChange = onTagsWarningsEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.mirror_switching),
                         iconRes = R.drawable.ic_swap_vert,
                         checked = state.isMirrorSwitchingEnabled,
                         summary = stringResource(R.string.mirror_switching_summary),
                         onCheckedChange = onMirrorSwitchingChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.handle_links),
                         iconRes = R.drawable.ic_open_external,
                         checked = state.isHandleLinksEnabled,
                         summary = stringResource(R.string.handle_links_summary),
                         onCheckedChange = onHandleLinksEnabledChange,
-                    )
+                    ) }
                 }
             }
         }

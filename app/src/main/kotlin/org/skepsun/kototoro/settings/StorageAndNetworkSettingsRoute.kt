@@ -31,45 +31,28 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.NetworkPolicy
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
-import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
-import org.skepsun.kototoro.local.data.CacheDir
 import org.skepsun.kototoro.settings.compose.SettingsActionPreference
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SettingsChoicePreference
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
-import org.skepsun.kototoro.settings.compose.SettingsGroupLabel
-import org.skepsun.kototoro.settings.compose.SettingsPreferenceSection
-import org.skepsun.kototoro.settings.compose.SettingsSectionDivider
+import org.skepsun.kototoro.settings.compose.SettingsPreferenceGroup
 import org.skepsun.kototoro.settings.compose.SettingsSliderPreference
 import org.skepsun.kototoro.settings.compose.SettingsSwitchPreference
 import org.skepsun.kototoro.settings.compose.SettingsTextInputPreference
 import org.skepsun.kototoro.settings.compose.StorageAndNetworkSettingsScreen
-import org.skepsun.kototoro.settings.userdata.storage.DataCleanupSettingsViewModel
 import org.skepsun.kototoro.settings.userdata.storage.StorageUsage
-import org.skepsun.kototoro.settings.userdata.storage.StorageUsageCategory
 
 @Composable
 fun StorageAndNetworkSettingsRoute(
     settings: AppSettings,
     viewModel: StorageAndNetworkSettingsViewModel,
-    dataCleanupViewModel: DataCleanupSettingsViewModel,
     onOpenCacheLimits: () -> Unit,
     onOpenDataRemoval: () -> Unit,
     onOpenProxySettings: () -> Unit,
-    onConfirmClearSearchHistory: () -> Unit,
-    onConfirmClearCookies: () -> Unit,
-    onConfirmCleanupChapters: () -> Unit,
-    onConfirmClearLocalManga: () -> Unit,
-    onConfirmClearLocalNovels: () -> Unit,
-    onConfirmClearLocalVideos: () -> Unit,
 ) {
     val context = LocalContext.current
     val storageUsage = viewModel.storageUsage.collectAsStateWithLifecycle().value
-    val loadingKeys = dataCleanupViewModel.loadingKeys.collectAsStateWithLifecycle().value
-    val searchHistoryCount = dataCleanupViewModel.searchHistoryCount.collectAsStateWithLifecycle().value
-    val feedItemsCount = dataCleanupViewModel.feedItemsCount.collectAsStateWithLifecycle().value
 
     val prefetchPolicy = settings.observeAsState(AppSettings.KEY_PREFETCH_CONTENT) { contentPrefetchPolicy }.value
     val pagesPreloadPolicy = settings.observeAsState(AppSettings.KEY_PAGES_PRELOAD) { pagesPreloadPolicy }.value
@@ -87,26 +70,10 @@ fun StorageAndNetworkSettingsRoute(
     val offlineDisabled = settings.observeAsState(AppSettings.KEY_OFFLINE_DISABLED) { isOfflineCheckDisabled }.value
     val adBlock = settings.observeAsState(AppSettings.KEY_ADBLOCK) { isAdBlockEnabled }.value
 
-    val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
-    val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value
-    val torrentCacheMb = settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value
-    val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) { videoDanmakuCacheSizeMb }.value
-    val thumbsCacheMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value
-    val faviconCacheMb = settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value
-    val pagesCacheMb = settings.observeAsState(AppSettings.KEY_PAGES_CACHE_MB) { pagesCacheSizeMb }.value
-    val novelCacheMb = settings.observeAsState(AppSettings.KEY_NOVEL_CACHE_MB) { novelCacheSizeMb }.value
-    val httpCacheMb = settings.observeAsState(AppSettings.KEY_HTTP_CACHE_MB_LIMIT) { httpCacheSizeMb }.value
-    val ttsCacheMb = settings.observeAsState(AppSettings.KEY_TTS_CACHE_MB) { ttsCacheSizeMb }.value
-    val srCacheLimit = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT) {
-        settings.prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512") ?: "512"
-    }.value
-
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val dohLabels = context.resources.getStringArray(R.array.doh_providers)
     val imageProxyLabels = context.resources.getStringArray(R.array.image_proxies)
-    val srCacheLabels = context.resources.getStringArray(R.array.reader_super_resolution_cache_limits)
-    val srCacheValues = context.resources.getStringArray(R.array.values_reader_super_resolution_cache_limits)
 
     val showRestartRequired: () -> Unit = {
         coroutineScope.launch {
@@ -168,500 +135,171 @@ fun StorageAndNetworkSettingsRoute(
         snackbarHostState = snackbarHostState,
         onCacheLimitsClick = onOpenCacheLimits,
         onDataRemovalClick = onOpenDataRemoval,
-        cacheLimits = {
-            SettingsGroupLabel(text = context.getString(R.string.image_caches))
-            SettingsSliderPreference(
-                title = context.getString(R.string.thumbnails_cache_limit),
-                iconRes = R.drawable.ic_images,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = thumbsCacheMb,
-                valueRange = 32..2048,
-                step = 32,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.thumbsCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.favicons_cache_limit),
-                iconRes = R.drawable.ic_web,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = faviconCacheMb,
-                valueRange = 4..128,
-                step = 4,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.faviconCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.pages_cache_limit),
-                iconRes = R.drawable.ic_book_page,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = pagesCacheMb,
-                valueRange = 64..4096,
-                step = 64,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.pagesCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.novel_cache_limit),
-                iconRes = R.drawable.ic_read,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = novelCacheMb,
-                valueRange = 32..2048,
-                step = 32,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.novelCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.tts_audio_cache_limit),
-                iconRes = R.drawable.ic_voice_input,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = ttsCacheMb,
-                valueRange = 32..2048,
-                step = 32,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.ttsCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsChoicePreference(
-                title = context.getString(R.string.reader_super_resolution_cache_limit),
-                iconRes = R.drawable.ic_zoom_in,
-                value = srCacheLimit,
-                options = srCacheLabels.mapIndexed { index, label ->
-                    SettingsChoiceOption(srCacheValues[index], label)
-                },
-                onValueChange = {
-                    settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, it).apply()
-                },
-            )
-            SettingsSectionDivider()
-            SettingsGroupLabel(text = context.getString(R.string.video_caches))
-            SettingsSliderPreference(
-                title = context.getString(R.string.video_playback_cache_limit),
-                iconRes = R.drawable.ic_content_video,
-                value = videoCacheMb,
-                valueRange = 256..4096,
-                step = 128,
-                valueText = { "$it MB" },
-                onValueChange = { settings.videoCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.video_proxy_cache_limit),
-                iconRes = R.drawable.ic_dns,
-                value = videoProxyCacheMb,
-                valueRange = 128..4096,
-                step = 128,
-                valueText = { "$it MB" },
-                onValueChange = { settings.videoProxyCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.torrent_cache_limit),
-                iconRes = R.drawable.ic_network_cellular,
-                value = torrentCacheMb,
-                valueRange = 512..16384,
-                step = 512,
-                valueText = { "$it MB" },
-                onValueChange = { settings.torrentCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
-                title = context.getString(R.string.danmaku_cache_limit),
-                iconRes = R.drawable.ic_danmaku,
-                value = videoDanmakuCacheMb,
-                valueRange = 16..1024,
-                step = 16,
-                valueText = { "$it MB" },
-                onValueChange = { settings.videoDanmakuCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsGroupLabel(text = context.getString(R.string.network))
-            SettingsSliderPreference(
-                title = context.getString(R.string.network_cache_limit),
-                iconRes = R.drawable.ic_web,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
-                value = httpCacheMb,
-                valueRange = 32..2048,
-                step = 32,
-                valueText = { "$it MB" },
-                onValueChange = {
-                    settings.httpCacheSizeMb = it
-                    showRestartRequired()
-                },
-            )
-        },
         prefetchContent = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.prefetch_content),
-                iconRes = R.drawable.ic_download,
-                value = prefetchPolicy,
-                options = networkOptions,
-                onValueChange = { settings.contentPrefetchPolicy = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.prefetch_content),
+                    iconRes = R.drawable.ic_download,
+                    value = prefetchPolicy,
+                    options = networkOptions,
+                    onValueChange = { settings.contentPrefetchPolicy = it },
+                )
+            }
         },
         preloadPages = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.preload_pages),
-                iconRes = R.drawable.ic_book_page,
-                value = pagesPreloadPolicy,
-                options = networkOptions,
-                onValueChange = { settings.pagesPreloadPolicy = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.preload_pages),
+                    iconRes = R.drawable.ic_book_page,
+                    value = pagesPreloadPolicy,
+                    options = networkOptions,
+                    onValueChange = { settings.pagesPreloadPolicy = it },
+                )
+            }
         },
         proxy = {
-            SettingsActionPreference(
-                title = context.getString(R.string.proxy),
-                iconRes = R.drawable.ic_web,
-                summary = buildProxySummary(settings, context),
-                onClick = onOpenProxySettings,
-            )
+            item {
+                SettingsActionPreference(
+                    title = context.getString(R.string.proxy),
+                    iconRes = R.drawable.ic_web,
+                    summary = buildProxySummary(settings, context),
+                    onClick = onOpenProxySettings,
+                )
+            }
         },
         dns = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.dns_over_https),
-                iconRes = R.drawable.ic_dns,
-                value = dnsOverHttps,
-                options = dohOptions,
-                onValueChange = { settings.dnsOverHttps = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.dns_over_https),
+                    iconRes = R.drawable.ic_dns,
+                    value = dnsOverHttps,
+                    options = dohOptions,
+                    onValueChange = { settings.dnsOverHttps = it },
+                )
+            }
         },
         customDohUrl = {
             if (dnsOverHttps == DoHProvider.CUSTOM) {
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = context.getString(R.string.pref_doh_custom_url),
-                    iconRes = R.drawable.ic_web,
-                    value = dohCustomUrl,
-                    onValueChange = { settings.dohCustomUrl = it },
-                )
+                item {
+                    SettingsTextInputPreference(
+                        title = context.getString(R.string.pref_doh_custom_url),
+                        iconRes = R.drawable.ic_web,
+                        value = dohCustomUrl,
+                        onValueChange = { settings.dohCustomUrl = it },
+                    )
+                }
             }
         },
         customDohIps = {
             if (dnsOverHttps == DoHProvider.CUSTOM) {
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = context.getString(R.string.pref_doh_custom_ips),
-                    iconRes = R.drawable.ic_dns,
-                    value = dohCustomIps,
-                    onValueChange = { settings.dohCustomIps = it },
-                )
+                item {
+                    SettingsTextInputPreference(
+                        title = context.getString(R.string.pref_doh_custom_ips),
+                        iconRes = R.drawable.ic_dns,
+                        value = dohCustomIps,
+                        onValueChange = { settings.dohCustomIps = it },
+                    )
+                }
             }
         },
         imageProxy = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.images_proxy_title),
-                iconRes = R.drawable.ic_images,
-                value = imagesProxy,
-                options = imageProxyOptions,
-                onValueChange = { settings.imagesProxy = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.images_proxy_title),
+                    iconRes = R.drawable.ic_images,
+                    value = imagesProxy,
+                    options = imageProxyOptions,
+                    onValueChange = { settings.imagesProxy = it },
+                )
+            }
         },
         githubMirror = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.pref_github_mirror),
-                iconRes = R.drawable.ic_code,
-                value = gitHubMirror,
-                options = gitHubMirrorOptions,
-                summary = context.getString(R.string.pref_github_mirror_summary),
-                onValueChange = { settings.gitHubMirror = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.pref_github_mirror),
+                    iconRes = R.drawable.ic_code,
+                    value = gitHubMirror,
+                    options = gitHubMirrorOptions,
+                    summary = context.getString(R.string.pref_github_mirror_summary),
+                    onValueChange = { settings.gitHubMirror = it },
+                )
+            }
         },
         huggingFaceMirror = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.pref_huggingface_mirror),
-                iconRes = R.drawable.ic_face,
-                value = huggingFaceMirror,
-                options = huggingFaceMirrorOptions,
-                summary = context.getString(R.string.pref_huggingface_mirror_summary),
-                onValueChange = { settings.huggingFaceMirror = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.pref_huggingface_mirror),
+                    iconRes = R.drawable.ic_face,
+                    value = huggingFaceMirror,
+                    options = huggingFaceMirrorOptions,
+                    summary = context.getString(R.string.pref_huggingface_mirror_summary),
+                    onValueChange = { settings.huggingFaceMirror = it },
+                )
+            }
         },
         bangumiMirror = {
-            SettingsChoicePreference(
-                title = context.getString(R.string.pref_bangumi_mirror),
-                iconRes = R.drawable.ic_content_video,
-                value = bangumiMirror,
-                options = bangumiMirrorOptions,
-                summary = context.getString(R.string.pref_bangumi_mirror_summary),
-                onValueChange = { settings.bangumiMirror = it },
-            )
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.pref_bangumi_mirror),
+                    iconRes = R.drawable.ic_content_video,
+                    value = bangumiMirror,
+                    options = bangumiMirrorOptions,
+                    summary = context.getString(R.string.pref_bangumi_mirror_summary),
+                    onValueChange = { settings.bangumiMirror = it },
+                )
+            }
         },
         bangumiMirrorCustomBase = {
             if (bangumiMirror == AppSettings.BangumiMirror.CUSTOM) {
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = context.getString(R.string.pref_bangumi_mirror_custom_base),
-                    iconRes = R.drawable.ic_web,
-                    value = bangumiMirrorCustomBase,
-                    summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
-                    placeholder = "https://bangumi.lol",
-                    onValueChange = { settings.bangumiMirrorCustomBase = it },
-                )
+                item {
+                    SettingsTextInputPreference(
+                        title = context.getString(R.string.pref_bangumi_mirror_custom_base),
+                        iconRes = R.drawable.ic_web,
+                        value = bangumiMirrorCustomBase,
+                        summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
+                        placeholder = "https://bangumi.lol",
+                        onValueChange = { settings.bangumiMirrorCustomBase = it },
+                    )
+                }
             }
         },
         sslBypass = {
-            SettingsSwitchPreference(
-                title = context.getString(R.string.ignore_ssl_errors),
-                iconRes = R.drawable.ic_lock_open,
-                checked = sslBypass,
-                summary = context.getString(R.string.ignore_ssl_errors_summary),
-                onCheckedChange = {
-                    settings.isSSLBypassEnabled = it
-                    if (it) {
-                        showRestartRequired()
-                    }
-                },
-            )
-        },
-        offlineCheck = {
-            SettingsSwitchPreference(
-                title = context.getString(R.string.disable_connectivity_check),
-                iconRes = R.drawable.ic_offline,
-                checked = offlineDisabled,
-                summary = context.getString(R.string.disable_connectivity_check_summary),
-                onCheckedChange = { settings.isOfflineCheckDisabled = it },
-            )
-        },
-        adBlock = {
-            SettingsSwitchPreference(
-                title = context.getString(R.string.adblock),
-                iconRes = R.drawable.ic_disable,
-                checked = adBlock,
-                summary = context.getString(R.string.adblock_summary),
-                onCheckedChange = { settings.isAdBlockEnabled = it },
-            )
-        },
-        dataRemoval = {
-            SettingsGroupLabel(text = context.getString(R.string.local_storage))
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_local_manga_storage),
-                iconRes = R.drawable.ic_storage,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_MANGA),
-                enabled = AppSettings.KEY_LOCAL_MANGA_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = onConfirmClearLocalManga,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_local_novel_storage),
-                iconRes = R.drawable.ic_storage,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_NOVELS),
-                enabled = AppSettings.KEY_LOCAL_NOVELS_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = onConfirmClearLocalNovels,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_local_video_storage),
-                iconRes = R.drawable.ic_storage,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.LOCAL_VIDEOS),
-                enabled = AppSettings.KEY_LOCAL_VIDEOS_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = onConfirmClearLocalVideos,
-            )
-            SettingsSectionDivider()
-            SettingsGroupLabel(text = context.getString(R.string.cache))
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_thumbs_cache),
-                iconRes = R.drawable.ic_images,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.THUMBS_CACHE),
-                enabled = AppSettings.KEY_THUMBS_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_THUMBS_CACHE_CLEAR, CacheDir.THUMBS)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_favicons_cache),
-                iconRes = R.drawable.ic_web,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.FAVICONS_CACHE),
-                enabled = AppSettings.KEY_FAVICONS_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_FAVICONS_CACHE_CLEAR, CacheDir.FAVICONS)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_pages_cache),
-                iconRes = R.drawable.ic_book_page,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.PAGES_CACHE),
-                enabled = AppSettings.KEY_PAGES_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_PAGES_CACHE_CLEAR, CacheDir.PAGES)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_novel_cache),
-                iconRes = R.drawable.ic_read,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.NOVELS_CACHE),
-                enabled = AppSettings.KEY_NOVEL_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_NOVEL_CACHE_CLEAR, CacheDir.NOVELS)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_video_cache),
-                iconRes = R.drawable.ic_content_video,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.VIDEO_CACHE),
-                enabled = AppSettings.KEY_VIDEO_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_VIDEO_CACHE_CLEAR, CacheDir.VIDEO)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_video_proxy_cache),
-                iconRes = R.drawable.ic_dns,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.VIDEO_PROXY_CACHE),
-                enabled = AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_VIDEO_PROXY_CACHE_CLEAR, CacheDir.VIDEO_PROXY)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_torrent_cache),
-                iconRes = R.drawable.ic_network_cellular,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.TORRENT_CACHE),
-                enabled = AppSettings.KEY_TORRENT_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = dataCleanupViewModel::clearTorrentCache,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_danmaku_cache),
-                iconRes = R.drawable.ic_danmaku,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.DANMAKU_CACHE),
-                enabled = AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_VIDEO_DANMAKU_CACHE_CLEAR, CacheDir.DANMAKU)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_tts_audio_cache),
-                iconRes = R.drawable.ic_voice_input,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.TTS_CACHE),
-                enabled = AppSettings.KEY_TTS_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_TTS_CACHE_CLEAR, CacheDir.TtsAudio)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.reader_super_resolution_clear_cache),
-                iconRes = R.drawable.ic_zoom_in,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.SUPER_RESOLUTION_CACHE),
-                enabled = AppSettings.KEY_SR_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = {
-                    dataCleanupViewModel.clearCache(AppSettings.KEY_SR_CACHE_CLEAR, CacheDir.SUPER_RESOLUTION)
-                },
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_network_cache),
-                iconRes = R.drawable.ic_web,
-                summary = storageSummary(context, storageUsage, StorageUsageCategory.HTTP_CACHE),
-                enabled = AppSettings.KEY_HTTP_CACHE_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = dataCleanupViewModel::clearHttpCache,
-            )
-            SettingsSectionDivider()
-            SettingsGroupLabel(text = context.getString(R.string.privacy))
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_search_history),
-                iconRes = R.drawable.ic_search,
-                summary = countSummary(context, searchHistoryCount),
-                enabled = AppSettings.KEY_SEARCH_HISTORY_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = onConfirmClearSearchHistory,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_updates_feed),
-                iconRes = R.drawable.ic_feed,
-                summary = countSummary(context, feedItemsCount),
-                enabled = AppSettings.KEY_UPDATES_FEED_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = dataCleanupViewModel::clearUpdatesFeed,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_database),
-                iconRes = R.drawable.ic_database,
-                summary = context.getString(R.string.clear_database_summary),
-                enabled = AppSettings.KEY_CLEAR_MANGA_DATA !in loadingKeys,
-                showChevron = false,
-                onClick = dataCleanupViewModel::clearContentData,
-            )
-            SettingsSectionDivider()
-            SettingsActionPreference(
-                title = context.getString(R.string.clear_cookies),
-                iconRes = R.drawable.ic_cookie,
-                summary = context.getString(R.string.clear_cookies_summary),
-                showChevron = false,
-                onClick = onConfirmClearCookies,
-            )
-            if (dataCleanupViewModel.isBrowserDataCleanupEnabled) {
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = context.getString(R.string.clear_browser_data),
-                    iconRes = R.drawable.ic_web,
-                    summary = context.getString(R.string.clear_browser_data_summary),
-                    enabled = AppSettings.KEY_WEBVIEW_CLEAR !in loadingKeys,
-                    showChevron = false,
-                    onClick = dataCleanupViewModel::clearBrowserData,
+            item {
+                SettingsSwitchPreference(
+                    title = context.getString(R.string.ignore_ssl_errors),
+                    iconRes = R.drawable.ic_lock_open,
+                    checked = sslBypass,
+                    summary = context.getString(R.string.ignore_ssl_errors_summary),
+                    onCheckedChange = {
+                        settings.isSSLBypassEnabled = it
+                        if (it) {
+                            showRestartRequired()
+                        }
+                    },
                 )
             }
-            SettingsSectionDivider()
-            SettingsGroupLabel(text = context.getString(R.string.chapters))
-            SettingsActionPreference(
-                title = context.getString(R.string.delete_read_chapters),
-                iconRes = R.drawable.ic_delete,
-                summary = context.getString(R.string.delete_read_chapters_summary),
-                enabled = AppSettings.KEY_CHAPTERS_CLEAR !in loadingKeys,
-                showChevron = false,
-                onClick = onConfirmCleanupChapters,
-            )
-            SettingsSectionDivider()
-            SettingsSwitchPreference(
-                title = context.getString(R.string.delete_read_chapters_auto),
-                iconRes = R.drawable.ic_timer,
-                summary = context.getString(R.string.runs_on_app_start),
-                checked = settings.prefs.getBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, false),
-                onCheckedChange = { checked ->
-                    settings.prefs.edit().putBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, checked).apply()
-                },
-            )
+        },
+        offlineCheck = {
+            item {
+                SettingsSwitchPreference(
+                    title = context.getString(R.string.disable_connectivity_check),
+                    iconRes = R.drawable.ic_offline,
+                    checked = offlineDisabled,
+                    summary = context.getString(R.string.disable_connectivity_check_summary),
+                    onCheckedChange = { settings.isOfflineCheckDisabled = it },
+                )
+            }
+        },
+        adBlock = {
+            item {
+                SettingsSwitchPreference(
+                    title = context.getString(R.string.adblock),
+                    iconRes = R.drawable.ic_disable,
+                    checked = adBlock,
+                    summary = context.getString(R.string.adblock_summary),
+                    onCheckedChange = { settings.isAdBlockEnabled = it },
+                )
+            }
         },
     )
 }
@@ -699,8 +337,8 @@ fun CacheLimitsSettingsRoute(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
     ) {
-        SettingsPreferenceSection(title = context.getString(R.string.image_caches)) {
-            SettingsSliderPreference(
+        SettingsPreferenceGroup(title = context.getString(R.string.image_caches)) {
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.thumbnails_cache_limit),
                 iconRes = R.drawable.ic_images,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -712,9 +350,8 @@ fun CacheLimitsSettingsRoute(
                     settings.thumbsCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.favicons_cache_limit),
                 iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -726,9 +363,8 @@ fun CacheLimitsSettingsRoute(
                     settings.faviconCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.pages_cache_limit),
                 iconRes = R.drawable.ic_book_page,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -740,9 +376,8 @@ fun CacheLimitsSettingsRoute(
                     settings.pagesCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.novel_cache_limit),
                 iconRes = R.drawable.ic_read,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -754,9 +389,8 @@ fun CacheLimitsSettingsRoute(
                     settings.novelCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.tts_audio_cache_limit),
                 iconRes = R.drawable.ic_voice_input,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -768,9 +402,8 @@ fun CacheLimitsSettingsRoute(
                     settings.ttsCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
-            SettingsSectionDivider()
-            SettingsChoicePreference(
+            ) }
+            item { SettingsChoicePreference(
                 title = context.getString(R.string.reader_super_resolution_cache_limit),
                 iconRes = R.drawable.ic_zoom_in,
                 value = srCacheLimit,
@@ -780,10 +413,10 @@ fun CacheLimitsSettingsRoute(
                 onValueChange = {
                     settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, it).apply()
                 },
-            )
+            ) }
         }
-        SettingsPreferenceSection(title = context.getString(R.string.video_caches)) {
-            SettingsSliderPreference(
+        SettingsPreferenceGroup(title = context.getString(R.string.video_caches)) {
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.video_playback_cache_limit),
                 iconRes = R.drawable.ic_content_video,
                 value = videoCacheMb,
@@ -791,9 +424,8 @@ fun CacheLimitsSettingsRoute(
                 step = 128,
                 valueText = { "$it MB" },
                 onValueChange = { settings.videoCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.video_proxy_cache_limit),
                 iconRes = R.drawable.ic_dns,
                 value = videoProxyCacheMb,
@@ -801,9 +433,8 @@ fun CacheLimitsSettingsRoute(
                 step = 128,
                 valueText = { "$it MB" },
                 onValueChange = { settings.videoProxyCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.torrent_cache_limit),
                 iconRes = R.drawable.ic_network_cellular,
                 value = torrentCacheMb,
@@ -811,9 +442,8 @@ fun CacheLimitsSettingsRoute(
                 step = 512,
                 valueText = { "$it MB" },
                 onValueChange = { settings.torrentCacheSizeMb = it },
-            )
-            SettingsSectionDivider()
-            SettingsSliderPreference(
+            ) }
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.danmaku_cache_limit),
                 iconRes = R.drawable.ic_danmaku,
                 value = videoDanmakuCacheMb,
@@ -821,10 +451,10 @@ fun CacheLimitsSettingsRoute(
                 step = 16,
                 valueText = { "$it MB" },
                 onValueChange = { settings.videoDanmakuCacheSizeMb = it },
-            )
+            ) }
         }
-        SettingsPreferenceSection(title = context.getString(R.string.network)) {
-            SettingsSliderPreference(
+        SettingsPreferenceGroup(title = context.getString(R.string.network)) {
+            item { SettingsSliderPreference(
                 title = context.getString(R.string.network_cache_limit),
                 iconRes = R.drawable.ic_web,
                 summary = context.getString(R.string.cache_limit_applies_on_restart),
@@ -836,26 +466,9 @@ fun CacheLimitsSettingsRoute(
                     settings.httpCacheSizeMb = it
                     showRestartRequired()
                 },
-            )
+            ) }
         }
     }
-}
-
-private fun storageSummary(
-    context: android.content.Context,
-    storageUsage: StorageUsage?,
-    category: StorageUsageCategory,
-): String {
-    val bytes = storageUsage?.find(category)?.bytes ?: return context.getString(R.string.computing_)
-    return FileSize.BYTES.format(context, bytes)
-}
-
-private fun countSummary(
-    context: android.content.Context,
-    count: Int,
-): String = when {
-    count < 0 -> context.getString(R.string.loading_)
-    else -> context.resources.getQuantityStringSafe(R.plurals.items, count, count)
 }
 
 private fun buildProxySummary(

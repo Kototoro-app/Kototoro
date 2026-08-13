@@ -78,104 +78,117 @@ fun SyncSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "google_drive") {
-                SettingsPreferenceSection(title = stringResource(R.string.google_drive_sync)) {
+                SettingsPreferenceGroup(title = stringResource(R.string.google_drive_sync)) {
                     if (state.isGoogleDriveSignedIn) {
-                        SettingsInfoPreference(
-                            title = stringResource(R.string.sync_account),
-                            iconRes = R.drawable.ic_user,
-                            summary = state.googleDriveAccountSummary ?: stringResource(R.string.google_drive_sync),
-                        )
-                        SettingsSectionDivider()
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.sync_google_drive_enable),
-                            iconRes = R.drawable.ic_sync,
-                            checked = state.isGoogleDriveEnabled,
-                            summary = stringResource(R.string.sync_google_drive_enable_summary),
-                            onCheckedChange = { enabled ->
-                                if (enabled && state.isWebDavEnabled) {
-                                    isEnableGoogleDriveConfirmVisible = true
-                                } else {
-                                    onGoogleDriveEnabledChange(enabled)
-                                }
-                            },
-                        )
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.sync_now),
-                            iconRes = R.drawable.ic_cloud_upload,
-                            summary = when {
-                                state.isGoogleDriveSyncing -> stringResource(R.string.sync_syncing)
-                                state.googleDriveErrorSummary != null -> state.googleDriveErrorSummary
-                                state.googleDriveLastSyncSummary != null -> stringResource(
-                                    R.string.sync_last,
-                                    state.googleDriveLastSyncSummary,
-                                )
-                                else -> stringResource(R.string.sync_never)
-                            },
-                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
-                            onClick = onGoogleDriveSyncNowClick,
-                        )
-                        SettingsSectionDivider()
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.sync_frequency),
-                            iconRes = R.drawable.ic_schedule,
-                            value = state.googleDriveIntervalMinutes,
-                            options = listOf(
-                                SettingsChoiceOption(0, stringResource(R.string.sync_freq_off)),
-                                SettingsChoiceOption(360, stringResource(R.string.sync_freq_6h)),
-                                SettingsChoiceOption(720, stringResource(R.string.sync_freq_12h)),
-                                SettingsChoiceOption(1440, stringResource(R.string.sync_freq_daily)),
-                                SettingsChoiceOption(10080, stringResource(R.string.sync_freq_weekly)),
-                            ),
-                            enabled = state.isGoogleDriveEnabled,
-                            onValueChange = onGoogleDriveIntervalChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.sync_wifi_only),
-                            iconRes = R.drawable.ic_wifi,
-                            checked = state.isGoogleDriveWifiOnly,
-                            enabled = state.isGoogleDriveEnabled,
-                            onCheckedChange = onGoogleDriveWifiOnlyChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.sync_on_start),
-                            iconRes = R.drawable.ic_bolt,
-                            checked = state.isGoogleDriveSyncOnStart,
-                            summary = stringResource(R.string.sync_on_start_summary),
-                            enabled = state.isGoogleDriveEnabled,
-                            onCheckedChange = onGoogleDriveSyncOnStartChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.sync_delete_remote_data),
-                            iconRes = R.drawable.ic_delete_all,
-                            summary = stringResource(R.string.sync_delete_remote_data_summary),
-                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
-                            onClick = { isDeleteRemoteDialogVisible = true },
-                        )
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.sync_import_legacy_remote_data),
-                            iconRes = R.drawable.ic_import,
-                            summary = stringResource(R.string.sync_import_legacy_remote_data_summary),
-                            enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
-                            onClick = { isImportLegacyDialogVisible = true },
-                        )
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.sync_sign_out),
-                            iconRes = R.drawable.ic_lock_open,
-                            onClick = onGoogleDriveSignOutClick,
-                        )
+                        item {
+                            SettingsInfoPreference(
+                                title = stringResource(R.string.sync_account),
+                                iconRes = R.drawable.ic_user,
+                                summary = state.googleDriveAccountSummary
+                                    ?: stringResource(R.string.google_drive_sync),
+                            )
+                        }
+                        item {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.sync_google_drive_enable),
+                                iconRes = R.drawable.ic_sync,
+                                checked = state.isGoogleDriveEnabled,
+                                summary = stringResource(R.string.sync_google_drive_enable_summary),
+                                onCheckedChange = { enabled ->
+                                    if (enabled && state.isWebDavEnabled) {
+                                        isEnableGoogleDriveConfirmVisible = true
+                                    } else {
+                                        onGoogleDriveEnabledChange(enabled)
+                                    }
+                                },
+                            )
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.sync_now),
+                                iconRes = R.drawable.ic_cloud_upload,
+                                summary = when {
+                                    state.isGoogleDriveSyncing -> stringResource(R.string.sync_syncing)
+                                    state.googleDriveErrorSummary != null -> state.googleDriveErrorSummary
+                                    state.googleDriveLastSyncSummary != null -> stringResource(
+                                        R.string.sync_last,
+                                        state.googleDriveLastSyncSummary,
+                                    )
+                                    else -> stringResource(R.string.sync_never)
+                                },
+                                enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
+                                onClick = onGoogleDriveSyncNowClick,
+                            )
+                        }
+                        item {
+                            SettingsChoicePreference(
+                                title = stringResource(R.string.sync_frequency),
+                                iconRes = R.drawable.ic_schedule,
+                                value = state.googleDriveIntervalMinutes,
+                                options = listOf(
+                                    SettingsChoiceOption(0, stringResource(R.string.sync_freq_off)),
+                                    SettingsChoiceOption(360, stringResource(R.string.sync_freq_6h)),
+                                    SettingsChoiceOption(720, stringResource(R.string.sync_freq_12h)),
+                                    SettingsChoiceOption(1440, stringResource(R.string.sync_freq_daily)),
+                                    SettingsChoiceOption(10080, stringResource(R.string.sync_freq_weekly)),
+                                ),
+                                enabled = state.isGoogleDriveEnabled,
+                                onValueChange = onGoogleDriveIntervalChange,
+                            )
+                        }
+                        item {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.sync_wifi_only),
+                                iconRes = R.drawable.ic_wifi,
+                                checked = state.isGoogleDriveWifiOnly,
+                                enabled = state.isGoogleDriveEnabled,
+                                onCheckedChange = onGoogleDriveWifiOnlyChange,
+                            )
+                        }
+                        item {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.sync_on_start),
+                                iconRes = R.drawable.ic_bolt,
+                                checked = state.isGoogleDriveSyncOnStart,
+                                summary = stringResource(R.string.sync_on_start_summary),
+                                enabled = state.isGoogleDriveEnabled,
+                                onCheckedChange = onGoogleDriveSyncOnStartChange,
+                            )
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.sync_delete_remote_data),
+                                iconRes = R.drawable.ic_delete_all,
+                                summary = stringResource(R.string.sync_delete_remote_data_summary),
+                                enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
+                                onClick = { isDeleteRemoteDialogVisible = true },
+                            )
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.sync_import_legacy_remote_data),
+                                iconRes = R.drawable.ic_import,
+                                summary = stringResource(R.string.sync_import_legacy_remote_data_summary),
+                                enabled = state.isGoogleDriveEnabled && !state.isGoogleDriveSyncing,
+                                onClick = { isImportLegacyDialogVisible = true },
+                            )
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.sync_sign_out),
+                                iconRes = R.drawable.ic_lock_open,
+                                onClick = onGoogleDriveSignOutClick,
+                            )
+                        }
                     } else {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.sync_sign_in),
-                            iconRes = R.drawable.ic_user,
-                            summary = stringResource(R.string.sync_sign_in_summary),
-                            onClick = onGoogleDriveSignInClick,
-                        )
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.sync_sign_in),
+                                iconRes = R.drawable.ic_user,
+                                summary = stringResource(R.string.sync_sign_in_summary),
+                                onClick = onGoogleDriveSignInClick,
+                            )
+                        }
                     }
                 }
             }

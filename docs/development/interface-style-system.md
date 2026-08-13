@@ -92,6 +92,7 @@ Material 路径是 Android 原生、清晰、直接且高性能的默认体验�
 - 禁止噪点、折射、vibrancy、lens 和实时采样背景。
 - 阴影只使用 Material 组件默认 elevation；普通列表卡片优先用 tonal surface 而非阴影。
 - 分割关系优先使用间距和 `surfaceContainer*`，其次才是低强调 `outlineVariant`。
+- 组合设置组不对每个条目重复描边；相邻完整边框会形成双线，条目边界由 Surface 色阶、间距和形状表达。
 
 这项限制应最终由共享组件策略保证，而不是依靠每个页面自觉判断。
 
@@ -424,12 +425,17 @@ Miuix Scaffold 为 overlay、popup 和 dialog 提供统一宿主。这与 Kototo
 - 页面使用 `surface` 背景；
 - 顶栏滚动后使用克制的半透明 `surfaceContainer`，不模糊；
 - 分组标题置于共同容器外；
-- 分组容器使用 `surfaceContainerLow`；
+- 分组使用位置感知的组合 Surface：每项保持独立命中与反馈，首尾外圆角共同表达组轮廓；
+- 组内条目使用稳定的 `surfaceContainerLow`，默认以 `2dp` 间隙分隔；
 - 行之间默认不画全宽 Divider，仅在语义分区必要时使用；
 - 单行视觉高度目标 `52–56dp`，双行目标 `64–72dp`；
 - 尾部开关或箭头对齐主标题视觉中心；
 - 页面水平 padding `16dp`，组间距 `16–20dp`；
 - 大屏限制内容最大宽度，避免设置项横跨整个窗口。
+
+组合 Surface 不属于“每行独立悬浮卡片”：组内项目不使用阴影，内接缝保持小圆角和固定紧凑间隙，
+业务页面也不能感知或指定首项、中间项、末项。位置、形状、Surface 与状态反馈统一由共享
+`SettingsGroup` 实现。
 
 Miuix 的参考价值最终应沉淀为 Kototoro 自有 token 和设置组件，而不是运行时依赖。
 

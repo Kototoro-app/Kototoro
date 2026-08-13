@@ -1055,10 +1055,9 @@ class SettingsActivity :
 			SettingsDestination.StorageAndNetworkSettings -> RenderComposeSection(
 				title = getString(R.string.storage_and_network),
 			) {
-				StorageAndNetworkSettingsRoute(
-					settings = kototoroAppSettings,
-					viewModel = storageAndNetworkSettingsViewModel,
-					dataCleanupViewModel = dataCleanupSettingsViewModel,
+					StorageAndNetworkSettingsRoute(
+						settings = kototoroAppSettings,
+						viewModel = storageAndNetworkSettingsViewModel,
 					onOpenCacheLimits = {
 						openDestination(SettingsDestination.CacheLimitsSettings, null, false)
 					},
@@ -1068,12 +1067,6 @@ class SettingsActivity :
 					onOpenProxySettings = {
 						openDestination(SettingsDestination.ProxySettings, null, false)
 					},
-					onConfirmClearSearchHistory = ::confirmClearSearchHistory,
-					onConfirmClearCookies = ::confirmClearCookies,
-					onConfirmCleanupChapters = ::confirmCleanupChapters,
-					onConfirmClearLocalManga = ::confirmClearLocalManga,
-					onConfirmClearLocalNovels = ::confirmClearLocalNovels,
-					onConfirmClearLocalVideos = ::confirmClearLocalVideos,
 				)
 			}
 			SettingsDestination.CacheLimitsSettings -> RenderComposeSection(title = getString(R.string.cache_limits)) {

@@ -72,112 +72,127 @@ fun PanoramaSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item(key = "master") {
-                SettingsPreferenceSection(title = "") {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_panorama_cover),
-                        iconRes = R.drawable.ic_images,
-                        checked = state.enabled,
-                        summary = stringResource(R.string.pref_panorama_cover_summary),
-                        onCheckedChange = onEnabledChange,
-                    )
+                SettingsPreferenceGroup(title = "") {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.pref_panorama_cover),
+                            iconRes = R.drawable.ic_images,
+                            checked = state.enabled,
+                            summary = stringResource(R.string.pref_panorama_cover_summary),
+                            onCheckedChange = onEnabledChange,
+                        )
+                    }
                 }
             }
             item(key = "appearance") {
-                SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_effect)) {
-                    PanoramaLayoutModePreference(
-                        selected = state.layoutMode,
-                        enabled = state.enabled,
-                        onSelected = onLayoutModeChange,
-                    )
-                    SettingsSectionDivider()
-                    PanoramaPresetPreference(
-                        selected = state.preset,
-                        enabled = state.enabled,
-                        onSelected = onPresetChange,
-                    )
+                SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_effect)) {
+                    item {
+                        PanoramaLayoutModePreference(
+                            selected = state.layoutMode,
+                            enabled = state.enabled,
+                            onSelected = onLayoutModeChange,
+                        )
+                    }
+                    item {
+                        PanoramaPresetPreference(
+                            selected = state.preset,
+                            enabled = state.enabled,
+                            onSelected = onPresetChange,
+                        )
+                    }
                 }
             }
             item(key = "behavior") {
-                SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_behavior)) {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_details_panorama_scroll_linked),
-                        iconRes = R.drawable.ic_sync,
-                        checked = state.scrollLinked,
-                        summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
-                        enabled = state.enabled && state.layoutMode == PanoramaLayoutMode.HALF_SCREEN,
-                        onCheckedChange = onScrollLinkedChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.pref_panorama_animation),
-                        iconRes = R.drawable.ic_animation,
-                        checked = state.animationEnabled,
-                        summary = stringResource(
-                            if (state.animationSettingsEnabled) {
-                                R.string.pref_panorama_animation_summary
-                            } else {
-                                R.string.panorama_animation_reduced_effects_summary
-                            },
-                        ),
-                        enabled = state.enabled && state.animationSettingsEnabled,
-                        onCheckedChange = onAnimationEnabledChange,
-                    )
+                SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_behavior)) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.pref_details_panorama_scroll_linked),
+                            iconRes = R.drawable.ic_sync,
+                            checked = state.scrollLinked,
+                            summary = stringResource(R.string.pref_details_panorama_scroll_linked_summary),
+                            enabled = state.enabled && state.layoutMode == PanoramaLayoutMode.HALF_SCREEN,
+                            onCheckedChange = onScrollLinkedChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.pref_panorama_animation),
+                            iconRes = R.drawable.ic_animation,
+                            checked = state.animationEnabled,
+                            summary = stringResource(
+                                if (state.animationSettingsEnabled) {
+                                    R.string.pref_panorama_animation_summary
+                                } else {
+                                    R.string.panorama_animation_reduced_effects_summary
+                                },
+                            ),
+                            enabled = state.enabled && state.animationSettingsEnabled,
+                            onCheckedChange = onAnimationEnabledChange,
+                        )
+                    }
                 }
             }
             item(key = "advanced_toggle") {
-                SettingsPreferenceSection(title = "") {
-                    PanoramaAdvancedToggle(
-                        expanded = advancedExpanded,
-                        enabled = state.enabled,
-                        onClick = { advancedExpanded = !advancedExpanded },
-                    )
+                SettingsPreferenceGroup(title = "") {
+                    item {
+                        PanoramaAdvancedToggle(
+                            expanded = advancedExpanded,
+                            enabled = state.enabled,
+                            onClick = { advancedExpanded = !advancedExpanded },
+                        )
+                    }
                 }
             }
             if (advancedExpanded) {
                 item(key = "advanced") {
-                    SettingsPreferenceSection(title = stringResource(R.string.panorama_settings_advanced)) {
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.pref_panorama_blur),
-                            iconRes = R.drawable.ic_eye_off,
-                            value = state.blurPercent,
-                            valueRange = 0..100,
-                            step = 5,
-                            enabled = state.enabled,
-                            valueText = { "$it%" },
-                            onValueChange = onBlurChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.pref_panorama_top_opacity),
-                            iconRes = R.drawable.ic_eye,
-                            value = state.topOpacityPercent,
-                            valueRange = 0..100,
-                            step = 5,
-                            summary = stringResource(R.string.pref_panorama_top_opacity_summary),
-                            enabled = state.enabled,
-                            valueText = { "$it%" },
-                            onValueChange = onTopOpacityChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsSliderPreference(
-                            title = stringResource(R.string.pref_panorama_transition_intensity),
-                            iconRes = R.drawable.ic_timelapse,
-                            value = state.transitionRangePercent,
-                            valueRange = 0..100,
-                            step = 5,
-                            summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
-                            enabled = state.enabled,
-                            valueText = { "$it%" },
-                            onValueChange = onTransitionRangeChange,
-                        )
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.panorama_settings_restore_default),
-                            iconRes = R.drawable.ic_revert,
-                            enabled = state.enabled,
-                            showChevron = false,
-                            onClick = onReset,
-                        )
+                    SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_advanced)) {
+                        item {
+                            SettingsSliderPreference(
+                                title = stringResource(R.string.pref_panorama_blur),
+                                iconRes = R.drawable.ic_eye_off,
+                                value = state.blurPercent,
+                                valueRange = 0..100,
+                                step = 5,
+                                enabled = state.enabled,
+                                valueText = { "$it%" },
+                                onValueChange = onBlurChange,
+                            )
+                        }
+                        item {
+                            SettingsSliderPreference(
+                                title = stringResource(R.string.pref_panorama_top_opacity),
+                                iconRes = R.drawable.ic_eye,
+                                value = state.topOpacityPercent,
+                                valueRange = 0..100,
+                                step = 5,
+                                summary = stringResource(R.string.pref_panorama_top_opacity_summary),
+                                enabled = state.enabled,
+                                valueText = { "$it%" },
+                                onValueChange = onTopOpacityChange,
+                            )
+                        }
+                        item {
+                            SettingsSliderPreference(
+                                title = stringResource(R.string.pref_panorama_transition_intensity),
+                                iconRes = R.drawable.ic_timelapse,
+                                value = state.transitionRangePercent,
+                                valueRange = 0..100,
+                                step = 5,
+                                summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
+                                enabled = state.enabled,
+                                valueText = { "$it%" },
+                                onValueChange = onTransitionRangeChange,
+                            )
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.panorama_settings_restore_default),
+                                iconRes = R.drawable.ic_revert,
+                                enabled = state.enabled,
+                                showChevron = false,
+                                onClick = onReset,
+                            )
+                        }
                     }
                 }
             }

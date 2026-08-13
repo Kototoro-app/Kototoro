@@ -130,10 +130,11 @@ fun ReaderSettingsScreen(
                 ) {
                     when (page) {
                         READER_SETTINGS_MANGA_PAGE -> {
-            SettingsPreferenceSection(
+							SettingsPreferenceGroup(
                 title = stringResource(R.string.manga),
                 modifier = Modifier.fillMaxWidth(),
             ) {
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.default_mode),
                 iconRes = R.drawable.ic_book_page,
@@ -143,7 +144,9 @@ fun ReaderSettingsScreen(
                 value = settings.observeAsState(AppSettings.KEY_READER_MODE) { prefs.getString(AppSettings.KEY_READER_MODE, "") ?: "" }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_MODE, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.detect_reader_mode),
                 summary = stringResource(R.string.detect_reader_mode_summary),
@@ -151,7 +154,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_MODE_DETECT) { prefs.getBoolean(AppSettings.KEY_READER_MODE_DETECT, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_MODE_DETECT, it) } }
             )
+            }
 
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.scale_mode),
                 iconRes = R.drawable.ic_zoom_in,
@@ -161,7 +166,9 @@ fun ReaderSettingsScreen(
                 value = settings.observeAsState(AppSettings.KEY_ZOOM_MODE) { prefs.getString(AppSettings.KEY_ZOOM_MODE, "") ?: "" }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_ZOOM_MODE, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_zoom_buttons),
                 summary = stringResource(R.string.reader_zoom_buttons_summary),
@@ -169,7 +176,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_ZOOM_BUTTONS) { prefs.getBoolean(AppSettings.KEY_READER_ZOOM_BUTTONS, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_ZOOM_BUTTONS, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.webtoon_zoom),
                 summary = stringResource(R.string.webtoon_zoom_summary),
@@ -177,7 +186,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_WEBTOON_ZOOM) { prefs.getBoolean(AppSettings.KEY_WEBTOON_ZOOM, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_ZOOM, it) } }
             )
+            }
 
+            item {
             SettingsSliderPreference(
                 title = stringResource(R.string.default_webtoon_zoom_out),
                 iconRes = R.drawable.ic_zoom_out,
@@ -195,7 +206,9 @@ fun ReaderSettingsScreen(
                 valueText = { it.toString() },
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_WEBTOON_ZOOM_OUT, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.webtoon_gaps),
                 summary = stringResource(R.string.webtoon_gaps_summary),
@@ -203,7 +216,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_WEBTOON_GAPS) { prefs.getBoolean(AppSettings.KEY_WEBTOON_GAPS, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_GAPS, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_control_labels),
                 summary = stringResource(R.string.reader_control_labels_summary),
@@ -215,7 +230,9 @@ fun ReaderSettingsScreen(
                     settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LABELS, it) }
                 },
             )
+            }
 
+            item {
             SettingsMultiChoicePreference(
                 title = stringResource(R.string.reader_floating_controls),
                 iconRes = R.drawable.ic_reorder_handle,
@@ -231,14 +248,18 @@ fun ReaderSettingsScreen(
                     prefs.edit { putStringSet(AppSettings.KEY_READER_CONTROLS, limitedControls.map { it.name }.toSet()) }
                 },
             )
+            }
 
+            item {
             SettingsActionPreference(
                 title = stringResource(R.string.ai_settings),
                 summary = stringResource(R.string.ai_settings_entry_summary),
                 iconRes = R.drawable.ic_auto_fix,
                 onClick = onReaderAiSettingsEntryClick
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_control_ltr),
                 summary = stringResource(R.string.reader_control_ltr_summary),
@@ -246,7 +267,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_CONTROL_LTR) { prefs.getBoolean(AppSettings.KEY_READER_CONTROL_LTR, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LTR, it) } }
             )
+            }
 
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.pages_animation),
                 iconRes = R.drawable.ic_animation,
@@ -256,7 +279,9 @@ fun ReaderSettingsScreen(
                 value = settings.observeAsState(AppSettings.KEY_READER_ANIMATION) { prefs.getString(AppSettings.KEY_READER_ANIMATION, "") ?: "" }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_ANIMATION, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.enable_pull_gesture_title),
                 summary = stringResource(R.string.enable_pull_gesture_summary),
@@ -264,7 +289,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_WEBTOON_PULL_GESTURE) { prefs.getBoolean(AppSettings.KEY_WEBTOON_PULL_GESTURE, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_PULL_GESTURE, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.enhanced_colors),
                 summary = stringResource(R.string.enhanced_colors_summary),
@@ -272,7 +299,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_32BIT_COLOR) { prefs.getBoolean(AppSettings.KEY_32BIT_COLOR, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_32BIT_COLOR, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_optimize),
                 summary = stringResource(R.string.reader_optimize_summary),
@@ -280,7 +309,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_OPTIMIZE) { prefs.getBoolean(AppSettings.KEY_READER_OPTIMIZE, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_OPTIMIZE, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_reduce_page_preloading),
                 summary = stringResource(R.string.reader_reduce_page_preloading_summary),
@@ -292,7 +323,9 @@ fun ReaderSettingsScreen(
                     settings.prefs.edit { putBoolean(AppSettings.KEY_READER_REDUCE_PRELOAD, it) }
                 }
             )
+            }
 
+            item {
             SettingsMultiChoicePreference(
                 title = stringResource(R.string.crop_pages),
                 iconRes = R.drawable.ic_aspect_ratio,
@@ -303,7 +336,9 @@ fun ReaderSettingsScreen(
                 emptySelectionText = stringResource(R.string.none),
                 onValueChange = { settings.prefs.edit { putStringSet(AppSettings.KEY_READER_CROP, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.fullscreen_mode),
                 summary = stringResource(R.string.reader_fullscreen_summary),
@@ -311,7 +346,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_FULLSCREEN) { prefs.getBoolean(AppSettings.KEY_READER_FULLSCREEN, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_FULLSCREEN, it) } }
             )
+            }
 
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.screen_orientation),
                 iconRes = R.drawable.ic_screen_rotation,
@@ -321,7 +358,9 @@ fun ReaderSettingsScreen(
                 value = settings.observeAsState(AppSettings.KEY_READER_ORIENTATION) { prefs.getString(AppSettings.KEY_READER_ORIENTATION, "") ?: "" }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_ORIENTATION, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.keep_screen_on),
                 summary = stringResource(R.string.keep_screen_on_summary),
@@ -329,7 +368,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_SCREEN_ON) { prefs.getBoolean(AppSettings.KEY_READER_SCREEN_ON, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SCREEN_ON, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_multitask),
                 summary = stringResource(R.string.reader_multitask_summary),
@@ -337,7 +378,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_MULTITASK) { prefs.getBoolean(AppSettings.KEY_READER_MULTITASK, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_MULTITASK, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_info_bar),
                 summary = stringResource(R.string.reader_info_bar_summary),
@@ -345,14 +388,18 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_BAR) { prefs.getBoolean(AppSettings.KEY_READER_BAR, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_info_bar_transparent),
                 iconRes = R.drawable.ic_drawer_menu,
                 checked = settings.observeAsState(AppSettings.KEY_READER_BAR_TRANSPARENT) { prefs.getBoolean(AppSettings.KEY_READER_BAR_TRANSPARENT, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR_TRANSPARENT, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.reader_chapter_toast),
                 summary = stringResource(R.string.reader_chapter_toast_summary),
@@ -360,7 +407,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_TOAST) { prefs.getBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, it) } }
             )
+            }
 
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.reader_background),
                 iconRes = R.drawable.ic_images,
@@ -372,7 +421,9 @@ fun ReaderSettingsScreen(
                 }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_BACKGROUND, it) } }
             )
+            }
 
+            item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.show_pages_numbers),
                 summary = stringResource(R.string.show_pages_numbers_summary),
@@ -380,7 +431,9 @@ fun ReaderSettingsScreen(
                 checked = settings.observeAsState(AppSettings.KEY_PAGES_NUMBERS) { prefs.getBoolean(AppSettings.KEY_PAGES_NUMBERS, false) }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_PAGES_NUMBERS, it) } }
             )
+            }
 
+            item {
             SettingsChoicePreference(
                 title = stringResource(R.string.preload_pages),
                 iconRes = R.drawable.ic_download,
@@ -390,7 +443,9 @@ fun ReaderSettingsScreen(
                 value = settings.observeAsState(AppSettings.KEY_PAGES_PRELOAD) { prefs.getString(AppSettings.KEY_PAGES_PRELOAD, "") ?: "" }.value,
                 onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_PAGES_PRELOAD, it) } }
             )
+            }
 
+            item {
             SettingsSliderPreference(
                 title = stringResource(R.string.download_threads),
                 summary = stringResource(R.string.download_threads_summary),
@@ -401,7 +456,9 @@ fun ReaderSettingsScreen(
                 valueText = { it.toString() },
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_THREADS, it) } }
             )
+            }
 
+            item {
             SettingsSliderPreference(
                 title = stringResource(R.string.prefetch_limit),
                 summary = stringResource(R.string.prefetch_limit_summary),
@@ -413,14 +470,16 @@ fun ReaderSettingsScreen(
                 onValueChange = { settings.prefs.edit { putInt(AppSettings.KEY_READER_PREFETCH_LIMIT, it) } }
             )
             }
+            }
 						}
 
 						READER_SETTINGS_NOVEL_PAGE -> {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.novel),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsChoicePreference(
+                item {
+                    SettingsChoicePreference(
                     title = stringResource(R.string.novel_reading_mode),
                     iconRes = R.drawable.ic_reader_vertical,
                     value = novelSettings.readingMode.name,
@@ -431,9 +490,11 @@ fun ReaderSettingsScreen(
                     onValueChange = { value ->
                         updateNovelSettings { copy(readingMode = ReadingMode.valueOf(value)) }
                     },
-                )
+                    )
+                }
 
-                SettingsMultiChoicePreference(
+                item {
+                    SettingsMultiChoicePreference(
                     title = stringResource(R.string.reader_floating_controls),
                     iconRes = R.drawable.ic_reorder_handle,
                     values = settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
@@ -455,9 +516,11 @@ fun ReaderSettingsScreen(
                             )
                         }
                     },
-                )
+                    )
+                }
 
-                SettingsChoicePreference(
+                item {
+                    SettingsChoicePreference(
                     title = stringResource(R.string.novel_page_turn_animation),
                     iconRes = R.drawable.ic_animation,
                     value = novelSettings.pageTurnAnimation.name,
@@ -475,9 +538,11 @@ fun ReaderSettingsScreen(
                     onValueChange = { value ->
                         updateNovelSettings { copy(pageTurnAnimation = NovelPageTurnAnimation.valueOf(value)) }
                     },
-                )
+                    )
+                }
 
-                SettingsChoicePreference(
+                item {
+                    SettingsChoicePreference(
                     title = stringResource(R.string.novel_theme_preset),
                     iconRes = R.drawable.ic_palette,
                     value = novelSettings.themePreset.name,
@@ -502,9 +567,11 @@ fun ReaderSettingsScreen(
                     onValueChange = { value ->
                         updateNovelSettings { copy(themePreset = NovelReaderThemePreset.valueOf(value)) }
                     },
-                )
+                    )
+                }
 
-                SettingsSliderPreference(
+                item {
+                    SettingsSliderPreference(
                     title = stringResource(R.string.novel_font_size),
                     iconRes = R.drawable.ic_format_size,
                     value = (novelSettings.fontSizeSp * 2).toInt(),
@@ -513,9 +580,11 @@ fun ReaderSettingsScreen(
                     step = 1,
                     valueText = { "%.1fsp".format(it / 2f) },
                     onValueChange = { value -> updateNovelSettings { copy(fontSizeSp = value / 2f) } },
-                )
+                    )
+                }
 
-                SettingsSliderPreference(
+                item {
+                    SettingsSliderPreference(
                     title = stringResource(R.string.novel_line_spacing),
                     iconRes = R.drawable.ic_line_spacing,
                     value = (novelSettings.lineSpacing * 10).toInt(),
@@ -524,9 +593,11 @@ fun ReaderSettingsScreen(
                     step = 1,
                     valueText = { "%.1f".format(it / 10f) },
                     onValueChange = { value -> updateNovelSettings { copy(lineSpacing = value / 10f) } },
-                )
+                    )
+                }
 
-                SettingsSliderPreference(
+                item {
+                    SettingsSliderPreference(
                     title = stringResource(R.string.novel_paragraph_spacing),
                     iconRes = R.drawable.ic_line_spacing,
                     value = novelSettings.paragraphSpacingLines,
@@ -534,9 +605,11 @@ fun ReaderSettingsScreen(
                     step = 1,
                     valueText = { resources.getString(R.string.novel_paragraph_spacing_value, it) },
                     onValueChange = { value -> updateNovelSettings { copy(paragraphSpacing = value.toFloat()) } },
-                )
+                    )
+                }
 
-                SettingsSliderPreference(
+                item {
+                    SettingsSliderPreference(
                     title = stringResource(R.string.novel_margin_horizontal),
                     iconRes = R.drawable.ic_straighten,
                     value = novelSettings.marginHorizontal,
@@ -544,9 +617,11 @@ fun ReaderSettingsScreen(
                     step = NovelReaderSettings.MARGIN_STEP,
                     valueText = { "${it}dp" },
                     onValueChange = { value -> updateNovelSettings { copy(marginHorizontal = value) } },
-                )
+                    )
+                }
 
-                SettingsSliderPreference(
+                item {
+                    SettingsSliderPreference(
                     title = stringResource(R.string.novel_margin_vertical),
                     iconRes = R.drawable.ic_straighten,
                     value = novelSettings.marginVertical,
@@ -554,30 +629,38 @@ fun ReaderSettingsScreen(
                     step = NovelReaderSettings.MARGIN_STEP,
                     valueText = { "${it}dp" },
                     onValueChange = { value -> updateNovelSettings { copy(marginVertical = value) } },
-                )
+                    )
+                }
 
-                SettingsSwitchPreference(
+                item {
+                    SettingsSwitchPreference(
                     title = stringResource(R.string.novel_dual_page_mode),
                     iconRes = R.drawable.ic_view_column,
                     checked = novelSettings.enableDualPage,
                     onCheckedChange = { enabled -> updateNovelSettings { copy(enableDualPage = enabled) } },
-                )
+                    )
+                }
 
-                SettingsSwitchPreference(
+                item {
+                    SettingsSwitchPreference(
                     title = stringResource(R.string.novel_fullscreen_mode),
                     iconRes = R.drawable.ic_fullscreen,
                     checked = novelSettings.enableFullscreen,
                     onCheckedChange = { enabled -> updateNovelSettings { copy(enableFullscreen = enabled) } },
-                )
+                    )
+                }
 
-                SettingsSwitchPreference(
+                item {
+                    SettingsSwitchPreference(
                     title = stringResource(R.string.novel_show_reading_status),
                     iconRes = R.drawable.ic_progress_marker,
                     checked = novelSettings.showReadingStatus,
                     onCheckedChange = { enabled -> updateNovelSettings { copy(showReadingStatus = enabled) } },
-                )
+                    )
+                }
 
-                SettingsSwitchPreference(
+                item {
+                    SettingsSwitchPreference(
                     title = stringResource(R.string.novel_transparent_status_bar),
                     iconRes = R.drawable.ic_drawer_menu,
                     checked = novelSettings.isReadingStatusTransparent,
@@ -585,16 +668,20 @@ fun ReaderSettingsScreen(
                     onCheckedChange = { enabled ->
                         updateNovelSettings { copy(isReadingStatusTransparent = enabled) }
                     },
-                )
+                    )
+                }
 
-                SettingsSwitchPreference(
+                item {
+                    SettingsSwitchPreference(
                     title = stringResource(R.string.novel_first_line_indent),
                     iconRes = R.drawable.ic_read,
                     checked = novelSettings.enableParagraphIndent,
                     onCheckedChange = { enabled -> updateNovelSettings { copy(enableParagraphIndent = enabled) } },
-                )
+                    )
+                }
 
-                SettingsChoicePreference(
+                item {
+                    SettingsChoicePreference(
                     title = stringResource(R.string.novel_translation_display_mode),
                     iconRes = R.drawable.ic_translate,
                     value = novelSettings.translationDisplayMode.name,
@@ -613,106 +700,143 @@ fun ReaderSettingsScreen(
                             copy(translationDisplayMode = NovelTranslationDisplayMode.valueOf(value))
                         }
                     },
-                )
+                    )
+                }
             }
 						}
 
-						else -> {
-            SettingsPreferenceSection(
-                title = stringResource(R.string.reader_settings_common_tab),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-SettingsActionPreference(
-                title = stringResource(R.string.reader_actions),
-                summary = stringResource(R.string.reader_actions_summary),
-                iconRes = R.drawable.ic_tap,
-                onClick = onReaderTapActionsClick
-            )
+							else -> {
+                                SettingsPreferenceGroup(
+                                    title = stringResource(R.string.reader_settings_common_tab),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    item {
+                                        SettingsActionPreference(
+                                            title = stringResource(R.string.reader_actions),
+                                            summary = stringResource(R.string.reader_actions_summary),
+                                            iconRes = R.drawable.ic_tap,
+                                            onClick = onReaderTapActionsClick,
+                                        )
+                                    }
+                                    item {
+                                        SettingsSwitchPreference(
+                                            title = stringResource(R.string.switch_pages_volume_buttons),
+                                            summary = stringResource(R.string.switch_pages_volume_buttons_summary),
+                                            iconRes = R.drawable.ic_volume_up,
+                                            checked = settings.observeAsState(AppSettings.KEY_READER_VOLUME_BUTTONS) {
+                                                prefs.getBoolean(AppSettings.KEY_READER_VOLUME_BUTTONS, false)
+                                            }.value,
+                                            onCheckedChange = {
+                                                prefs.edit { putBoolean(AppSettings.KEY_READER_VOLUME_BUTTONS, it) }
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        SettingsSwitchPreference(
+                                            title = stringResource(R.string.reader_navigation_inverted),
+                                            summary = stringResource(R.string.reader_navigation_inverted_summary),
+                                            iconRes = R.drawable.ic_swap_vert,
+                                            checked = settings.observeAsState(
+                                                AppSettings.KEY_READER_NAVIGATION_INVERTED,
+                                            ) {
+                                                prefs.getBoolean(AppSettings.KEY_READER_NAVIGATION_INVERTED, false)
+                                            }.value,
+                                            onCheckedChange = {
+                                                prefs.edit { putBoolean(AppSettings.KEY_READER_NAVIGATION_INVERTED, it) }
+                                            },
+                                        )
+                                    }
+                                }
 
-SettingsSwitchPreference(
-                title = stringResource(R.string.switch_pages_volume_buttons),
-                summary = stringResource(R.string.switch_pages_volume_buttons_summary),
-                iconRes = R.drawable.ic_volume_up,
-                    checked = settings.observeAsState(AppSettings.KEY_READER_VOLUME_BUTTONS) {
-                        prefs.getBoolean(AppSettings.KEY_READER_VOLUME_BUTTONS, false)
-                    }.value,
-                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_VOLUME_BUTTONS, it) } },
-                )
-
-SettingsSwitchPreference(
-                title = stringResource(R.string.reader_navigation_inverted),
-                summary = stringResource(R.string.reader_navigation_inverted_summary),
-                iconRes = R.drawable.ic_swap_vert,
-                    checked = settings.observeAsState(AppSettings.KEY_READER_NAVIGATION_INVERTED) {
-                        prefs.getBoolean(AppSettings.KEY_READER_NAVIGATION_INVERTED, false)
-                    }.value,
-                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_READER_NAVIGATION_INVERTED, it) } },
-                )
-            }
-
-            SettingsPreferenceSection(
-                title = stringResource(R.string.e_ink),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 20.dp),
-            ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.eink_mode),
-                    summary = stringResource(R.string.eink_mode_summary),
-                    iconRes = R.drawable.ic_auto_fix,
-                    checked = eInkModeEnabled,
-                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_EINK_MODE, it) } },
-                )
-
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.eink_refresh),
-                    summary = stringResource(R.string.eink_refresh_summary),
-                    iconRes = R.drawable.ic_screen_rotation_lock,
-                    checked = eInkRefreshEnabled,
-                    enabled = eInkModeEnabled,
-                    onCheckedChange = { prefs.edit { putBoolean(AppSettings.KEY_EINK_REFRESH, it) } },
-                )
-
-                SettingsSliderPreference(
-                    title = stringResource(R.string.eink_refresh_duration),
-                    iconRes = R.drawable.ic_timer,
-                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_DURATION) {
-                        eInkRefreshDurationMillis
-                    }.value,
-                    valueRange = AppSettings.EINK_REFRESH_DURATION_MIN..AppSettings.EINK_REFRESH_DURATION_MAX,
-                    step = 50,
-                    enabled = eInkModeEnabled && eInkRefreshEnabled,
-                    valueText = { resources.getString(R.string.milliseconds_value, it) },
-                    onValueChange = { prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_DURATION, it) } },
-                )
-
-                SettingsSliderPreference(
-                    title = stringResource(R.string.eink_refresh_every),
-                    iconRes = R.drawable.ic_timeline,
-                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_EVERY) {
-                        eInkRefreshEveryPages
-                    }.value,
-                    valueRange = AppSettings.EINK_REFRESH_EVERY_MIN..AppSettings.EINK_REFRESH_EVERY_MAX,
-                    step = 1,
-                    enabled = eInkModeEnabled && eInkRefreshEnabled,
-                    valueText = { resources.getQuantityString(R.plurals.pages_value, it, it) },
-                    onValueChange = { prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_EVERY, it) } },
-                )
-
-                SettingsChoicePreference(
-                    title = stringResource(R.string.eink_refresh_color),
-                    iconRes = R.drawable.ic_palette,
-                    options = listOf(
-                        SettingsChoiceOption(EInkRefreshColor.WHITE.name, stringResource(R.string.color_white)),
-                        SettingsChoiceOption(EInkRefreshColor.BLACK.name, stringResource(R.string.color_black)),
-                    ),
-                    value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_COLOR) {
-                        eInkRefreshColor.name
-                    }.value,
-                    enabled = eInkModeEnabled && eInkRefreshEnabled,
-                    onValueChange = { prefs.edit { putString(AppSettings.KEY_EINK_REFRESH_COLOR, it) } },
-                )
-            }
+                                SettingsPreferenceGroup(
+                                    title = stringResource(R.string.e_ink),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 20.dp),
+                                ) {
+                                    item {
+                                        SettingsSwitchPreference(
+                                            title = stringResource(R.string.eink_mode),
+                                            summary = stringResource(R.string.eink_mode_summary),
+                                            iconRes = R.drawable.ic_auto_fix,
+                                            checked = eInkModeEnabled,
+                                            onCheckedChange = {
+                                                prefs.edit { putBoolean(AppSettings.KEY_EINK_MODE, it) }
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        SettingsSwitchPreference(
+                                            title = stringResource(R.string.eink_refresh),
+                                            summary = stringResource(R.string.eink_refresh_summary),
+                                            iconRes = R.drawable.ic_screen_rotation_lock,
+                                            checked = eInkRefreshEnabled,
+                                            enabled = eInkModeEnabled,
+                                            onCheckedChange = {
+                                                prefs.edit { putBoolean(AppSettings.KEY_EINK_REFRESH, it) }
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        SettingsSliderPreference(
+                                            title = stringResource(R.string.eink_refresh_duration),
+                                            iconRes = R.drawable.ic_timer,
+                                            value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_DURATION) {
+                                                eInkRefreshDurationMillis
+                                            }.value,
+                                            valueRange = AppSettings.EINK_REFRESH_DURATION_MIN..
+                                                AppSettings.EINK_REFRESH_DURATION_MAX,
+                                            step = 50,
+                                            enabled = eInkModeEnabled && eInkRefreshEnabled,
+                                            valueText = { resources.getString(R.string.milliseconds_value, it) },
+                                            onValueChange = {
+                                                prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_DURATION, it) }
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        SettingsSliderPreference(
+                                            title = stringResource(R.string.eink_refresh_every),
+                                            iconRes = R.drawable.ic_timeline,
+                                            value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_EVERY) {
+                                                eInkRefreshEveryPages
+                                            }.value,
+                                            valueRange = AppSettings.EINK_REFRESH_EVERY_MIN..
+                                                AppSettings.EINK_REFRESH_EVERY_MAX,
+                                            step = 1,
+                                            enabled = eInkModeEnabled && eInkRefreshEnabled,
+                                            valueText = {
+                                                resources.getQuantityString(R.plurals.pages_value, it, it)
+                                            },
+                                            onValueChange = {
+                                                prefs.edit { putInt(AppSettings.KEY_EINK_REFRESH_EVERY, it) }
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        SettingsChoicePreference(
+                                            title = stringResource(R.string.eink_refresh_color),
+                                            iconRes = R.drawable.ic_palette,
+                                            options = listOf(
+                                                SettingsChoiceOption(
+                                                    EInkRefreshColor.WHITE.name,
+                                                    stringResource(R.string.color_white),
+                                                ),
+                                                SettingsChoiceOption(
+                                                    EInkRefreshColor.BLACK.name,
+                                                    stringResource(R.string.color_black),
+                                                ),
+                                            ),
+                                            value = settings.observeAsState(AppSettings.KEY_EINK_REFRESH_COLOR) {
+                                                eInkRefreshColor.name
+                                            }.value,
+                                            enabled = eInkModeEnabled && eInkRefreshEnabled,
+                                            onValueChange = {
+                                                prefs.edit { putString(AppSettings.KEY_EINK_REFRESH_COLOR, it) }
+                                            },
+                                        )
+                                    }
+                                }
 						}
 					}
 				}

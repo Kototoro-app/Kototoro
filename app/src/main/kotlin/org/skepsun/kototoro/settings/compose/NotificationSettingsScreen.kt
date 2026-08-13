@@ -43,8 +43,9 @@ fun NotificationSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -56,43 +57,49 @@ fun NotificationSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "notifications") {
-                SettingsPreferenceSection(title = notificationsTitle) {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.notifications_enable),
-                        iconRes = R.drawable.ic_notification,
-                        checked = state.isTrackerNotificationsEnabled,
-                        onCheckedChange = onTrackerNotificationsEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.notification_sound),
-                        iconRes = R.drawable.ic_audiotrack,
-                        summary = state.ringtoneSummary,
-                        enabled = state.isTrackerNotificationsEnabled,
-                        onClick = onNotificationSoundClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.vibration),
-                        iconRes = R.drawable.ic_vibration,
-                        enabled = state.isTrackerNotificationsEnabled,
-                        onClick = onNotificationVibrateClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.light_indicator),
-                        iconRes = R.drawable.ic_lightbulb,
-                        checked = state.isNotificationLightEnabled,
-                        enabled = state.isTrackerNotificationsEnabled,
-                        onCheckedChange = onNotificationLightChange,
-                    )
-                    if (state.isNotificationsInfoVisible) {
-                        SettingsSectionDivider()
-                        SettingsInfoPreference(
-                            title = stringResource(R.string.notifications),
-                            summary = stringResource(R.string.show_notification_new_chapters_off),
-                            iconRes = R.drawable.ic_info_outline,
+                SettingsPreferenceGroup(title = notificationsTitle) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.notifications_enable),
+                            iconRes = R.drawable.ic_notification,
+                            checked = state.isTrackerNotificationsEnabled,
+                            onCheckedChange = onTrackerNotificationsEnabledChange,
                         )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.notification_sound),
+                            iconRes = R.drawable.ic_audiotrack,
+                            summary = state.ringtoneSummary,
+                            enabled = state.isTrackerNotificationsEnabled,
+                            onClick = onNotificationSoundClick,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.vibration),
+                            iconRes = R.drawable.ic_vibration,
+                            enabled = state.isTrackerNotificationsEnabled,
+                            onClick = onNotificationVibrateClick,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.light_indicator),
+                            iconRes = R.drawable.ic_lightbulb,
+                            checked = state.isNotificationLightEnabled,
+                            enabled = state.isTrackerNotificationsEnabled,
+                            onCheckedChange = onNotificationLightChange,
+                        )
+                    }
+                    if (state.isNotificationsInfoVisible) {
+                        item {
+                            SettingsInfoPreference(
+                                title = stringResource(R.string.notifications),
+                                summary = stringResource(R.string.show_notification_new_chapters_off),
+                                iconRes = R.drawable.ic_info_outline,
+                            )
+                        }
                     }
                 }
             }

@@ -105,67 +105,75 @@ fun SpacesSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                SettingsPreferenceSection(title = stringResource(R.string.spaces), modifier = Modifier.fillMaxWidth()) {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.spaces_enabled),
-                        iconRes = R.drawable.ic_list_group,
-                        summary = stringResource(R.string.spaces_enabled_summary),
-                        checked = state.spacesEnabled,
-                        onCheckedChange = onSpacesEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.space_switcher_position),
-                        iconRes = R.drawable.ic_pin,
-                        value = state.switcherPosition,
-                        options = listOf(
-                            SettingsChoiceOption(
-                                SpaceSwitcherPosition.TOP_RIGHT,
-                                stringResource(R.string.space_switcher_position_top_right),
+                SettingsPreferenceGroup(
+                    title = stringResource(R.string.spaces),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.spaces_enabled),
+                            iconRes = R.drawable.ic_list_group,
+                            summary = stringResource(R.string.spaces_enabled_summary),
+                            checked = state.spacesEnabled,
+                            onCheckedChange = onSpacesEnabledChange,
+                        )
+                    }
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.space_switcher_position),
+                            iconRes = R.drawable.ic_pin,
+                            value = state.switcherPosition,
+                            options = listOf(
+                                SettingsChoiceOption(
+                                    SpaceSwitcherPosition.TOP_RIGHT,
+                                    stringResource(R.string.space_switcher_position_top_right),
+                                ),
+                                SettingsChoiceOption(
+                                    SpaceSwitcherPosition.CENTER_RIGHT,
+                                    stringResource(R.string.space_switcher_position_center_right),
+                                ),
+                                SettingsChoiceOption(
+                                    SpaceSwitcherPosition.TOP_LEFT,
+                                    stringResource(R.string.space_switcher_position_top_left),
+                                ),
+                                SettingsChoiceOption(
+                                    SpaceSwitcherPosition.CENTER_LEFT,
+                                    stringResource(R.string.space_switcher_position_center_left),
+                                ),
                             ),
-                            SettingsChoiceOption(
-                                SpaceSwitcherPosition.CENTER_RIGHT,
-                                stringResource(R.string.space_switcher_position_center_right),
-                            ),
-                            SettingsChoiceOption(
-                                SpaceSwitcherPosition.TOP_LEFT,
-                                stringResource(R.string.space_switcher_position_top_left),
-                            ),
-                            SettingsChoiceOption(
-                                SpaceSwitcherPosition.CENTER_LEFT,
-                                stringResource(R.string.space_switcher_position_center_left),
-                            ),
-                        ),
-                        enabled = state.spacesEnabled,
-                        onValueChange = onSwitcherPositionChange,
-                    )
+                            enabled = state.spacesEnabled,
+                            onValueChange = onSwitcherPositionChange,
+                        )
+                    }
                 }
             }
             if (state.spacesEnabled) {
                 item {
-                    SettingsPreferenceSection(
+                    SettingsPreferenceGroup(
                         title = stringResource(R.string.custom_spaces),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        definitions.spaces.forEachIndexed { index, space ->
-                            if (index > 0) SettingsSectionDivider()
-                            SpaceDefinitionRow(
-                                space = space,
-                                onEnabledChange = { onSave(space.copy(enabled = it)) },
-                                onEdit = { editing = space },
-                                onDelete = { deleting = space },
-                                onMove = { onMove(space, it) },
+                        definitions.spaces.forEach { space ->
+                            item {
+                                SpaceDefinitionRow(
+                                    space = space,
+                                    onEnabledChange = { onSave(space.copy(enabled = it)) },
+                                    onEdit = { editing = space },
+                                    onDelete = { deleting = space },
+                                    onMove = { onMove(space, it) },
+                                )
+                            }
+                        }
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.add_custom_space),
+                                summary = stringResource(R.string.custom_space_limit, 16),
+                                iconRes = R.drawable.ic_add,
+                                enabled = definitions.canCreate,
+                                showChevron = false,
+                                onClick = { creating = true },
                             )
                         }
-                        if (definitions.spaces.isNotEmpty()) SettingsSectionDivider()
-                        SettingsActionPreference(
-                            title = stringResource(R.string.add_custom_space),
-                            summary = stringResource(R.string.custom_space_limit, 16),
-                            iconRes = R.drawable.ic_add,
-                            enabled = definitions.canCreate,
-                            showChevron = false,
-                            onClick = { creating = true },
-                        )
                     }
                 }
             }
@@ -217,13 +225,15 @@ private fun SpaceDefinitionRow(
     onMove: (Int) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = space.title ?: stringResource(space.kind.defaultTitleRes()),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
             )
             Text(
                 text = if (space.isBuiltIn) {
@@ -236,7 +246,7 @@ private fun SpaceDefinitionRow(
                         space.sourceKinds.size,
                     )
                 },
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

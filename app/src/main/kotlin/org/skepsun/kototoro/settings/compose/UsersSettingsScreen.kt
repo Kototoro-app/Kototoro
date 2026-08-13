@@ -74,8 +74,9 @@ fun UsersSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -87,26 +88,27 @@ fun UsersSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "browse_defaults") {
-                SettingsPreferenceSection(title = stringResource(R.string.discover)) {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.preferred_tracking_site),
-                        iconRes = R.drawable.ic_star_small,
-                        value = state.preferredTrackingSite,
-                        options = state.preferredTrackingSiteOptions,
-                        summary = stringResource(R.string.preferred_tracking_site_summary),
-                        onValueChange = onPreferredTrackingSiteChange,
-                    )
+                SettingsPreferenceGroup(title = stringResource(R.string.discover)) {
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.preferred_tracking_site),
+                            iconRes = R.drawable.ic_star_small,
+                            value = state.preferredTrackingSite,
+                            options = state.preferredTrackingSiteOptions,
+                            summary = stringResource(R.string.preferred_tracking_site_summary),
+                            onValueChange = onPreferredTrackingSiteChange,
+                        )
+                    }
                 }
             }
             item(key = "tracking_accounts") {
-                SettingsPreferenceSection(title = trackingAccountsTitle) {
-                    state.accounts.forEachIndexed { index, item ->
-                        UserTrackingAccountRow(
-                            item = item,
-                            onClick = { onTrackingServiceClick(item.service) },
-                        )
-                        if (index != state.accounts.lastIndex) {
-                            SettingsSectionDivider()
+                SettingsPreferenceGroup(title = trackingAccountsTitle) {
+                    state.accounts.forEach { account ->
+                        item {
+                            UserTrackingAccountRow(
+                                item = account,
+                                onClick = { onTrackingServiceClick(account.service) },
+                            )
                         }
                     }
                 }
@@ -165,14 +167,14 @@ private fun UserTrackingAccountRow(
         ) {
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = item.summary,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -180,7 +182,7 @@ private fun UserTrackingAccountRow(
             item.statsSummary?.let { stats ->
                 Text(
                     text = stats,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 4,
                     overflow = TextOverflow.Ellipsis,

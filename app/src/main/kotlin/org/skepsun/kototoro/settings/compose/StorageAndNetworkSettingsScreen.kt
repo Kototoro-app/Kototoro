@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -32,6 +33,11 @@ private data class StorageUsageUiItem(
     val progress: Float,
 )
 
+internal fun visibleStorageUsageItems(storageUsage: StorageUsage?): List<StorageUsage.Item> =
+    storageUsage?.items
+        ?.filter { it.bytes > 0L || it.category == StorageUsageCategory.AVAILABLE }
+        .orEmpty()
+
 @Composable
 fun StorageAndNetworkSettingsScreen(
     storageTitle: String,
@@ -41,22 +47,20 @@ fun StorageAndNetworkSettingsScreen(
     storageUsage: StorageUsage?,
     onCacheLimitsClick: () -> Unit,
     onDataRemovalClick: () -> Unit,
-    cacheLimits: @Composable () -> Unit = {},
-    prefetchContent: @Composable () -> Unit,
-    preloadPages: @Composable () -> Unit,
-    proxy: @Composable () -> Unit,
-    dns: @Composable () -> Unit,
-    customDohUrl: @Composable () -> Unit,
-    customDohIps: @Composable () -> Unit,
-    imageProxy: @Composable () -> Unit,
-    githubMirror: @Composable () -> Unit,
-    huggingFaceMirror: @Composable () -> Unit,
-    bangumiMirror: @Composable () -> Unit,
-    bangumiMirrorCustomBase: @Composable () -> Unit,
-    sslBypass: @Composable () -> Unit,
-    offlineCheck: @Composable () -> Unit,
-    adBlock: @Composable () -> Unit,
-    dataRemoval: @Composable () -> Unit = {},
+    prefetchContent: @Composable SettingsItemGroupScope.() -> Unit,
+    preloadPages: @Composable SettingsItemGroupScope.() -> Unit,
+    proxy: @Composable SettingsItemGroupScope.() -> Unit,
+    dns: @Composable SettingsItemGroupScope.() -> Unit,
+    customDohUrl: @Composable SettingsItemGroupScope.() -> Unit,
+    customDohIps: @Composable SettingsItemGroupScope.() -> Unit,
+    imageProxy: @Composable SettingsItemGroupScope.() -> Unit,
+    githubMirror: @Composable SettingsItemGroupScope.() -> Unit,
+    huggingFaceMirror: @Composable SettingsItemGroupScope.() -> Unit,
+    bangumiMirror: @Composable SettingsItemGroupScope.() -> Unit,
+    bangumiMirrorCustomBase: @Composable SettingsItemGroupScope.() -> Unit,
+    sslBypass: @Composable SettingsItemGroupScope.() -> Unit,
+    offlineCheck: @Composable SettingsItemGroupScope.() -> Unit,
+    adBlock: @Composable SettingsItemGroupScope.() -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
     Scaffold(
@@ -81,54 +85,59 @@ fun StorageAndNetworkSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "storage_usage") {
-                SettingsPreferenceSection(title = storageTitle) {
-                    StorageUsageBlock(storageUsage = storageUsage)
+                val storageUsageItems = rememberStorageUsageItems(storageUsage)
+                SettingsPreferenceGroup(title = storageTitle) {
+                    if (storageUsageItems.isEmpty()) {
+                        item {
+                            StorageUsageLoadingRow()
+                        }
+                    } else {
+                        storageUsageItems.forEach { usageItem ->
+                            item {
+                                StorageUsageRow(item = usageItem)
+                            }
+                        }
+                    }
                 }
             }
             item(key = "cache_limits") {
-                SettingsPreferenceSection(title = cacheLimitsTitle) {
-                    SettingsActionPreference(
-                        title = cacheLimitsTitle,
-                        iconRes = R.drawable.ic_storage,
-                        summary = LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
-                        onClick = onCacheLimitsClick,
-                    )
+                SettingsPreferenceGroup(title = cacheLimitsTitle) {
+                    item {
+                        SettingsActionPreference(
+                            title = cacheLimitsTitle,
+                            iconRes = R.drawable.ic_storage,
+                            summary = LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
+                            onClick = onCacheLimitsClick,
+                        )
+                    }
                 }
             }
             item(key = "data_removal") {
-                SettingsPreferenceSection(title = dataRemovalTitle) {
-                    SettingsActionPreference(
-                        title = dataRemovalTitle,
-                        iconRes = R.drawable.ic_delete_all,
-                        onClick = onDataRemovalClick,
-                    )
+                SettingsPreferenceGroup(title = dataRemovalTitle) {
+                    item {
+                        SettingsActionPreference(
+                            title = dataRemovalTitle,
+                            iconRes = R.drawable.ic_delete_all,
+                            onClick = onDataRemovalClick,
+                        )
+                    }
                 }
             }
             item(key = "network") {
-                SettingsPreferenceSection(title = networkTitle) {
+                SettingsPreferenceGroup(title = networkTitle) {
                     prefetchContent()
-                    SettingsSectionDivider()
                     preloadPages()
-                    SettingsSectionDivider()
                     proxy()
-                    SettingsSectionDivider()
                     dns()
                     customDohUrl()
                     customDohIps()
-                    SettingsSectionDivider()
                     imageProxy()
-                    SettingsSectionDivider()
                     githubMirror()
-                    SettingsSectionDivider()
                     huggingFaceMirror()
-                    SettingsSectionDivider()
                     bangumiMirror()
                     bangumiMirrorCustomBase()
-                    SettingsSectionDivider()
                     sslBypass()
-                    SettingsSectionDivider()
                     offlineCheck()
-                    SettingsSectionDivider()
                     adBlock()
                 }
             }
@@ -137,33 +146,42 @@ fun StorageAndNetworkSettingsScreen(
 }
 
 @Composable
-private fun StorageUsageBlock(
+private fun rememberStorageUsageItems(
     storageUsage: StorageUsage?,
-) {
+): List<StorageUsageUiItem> {
     val context = LocalContext.current
-    val items = remember(storageUsage, context) {
-        storageUsage?.items
-            ?.filter { it.bytes > 0L || it.category == StorageUsageCategory.AVAILABLE }
-            ?.map {
+    return remember(storageUsage, context) {
+        visibleStorageUsageItems(storageUsage)
+            .map {
                 StorageUsageUiItem(
                     label = storageCategoryLabel(context, it.category),
                     bytes = it.bytes,
                     progress = it.percent,
                 )
             }
-            .orEmpty()
     }
+}
 
-    if (items.isEmpty()) {
-        Text(
-            text = context.getString(R.string.computing_),
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-        )
-        return
-    }
+@Composable
+private fun StorageUsageLoadingRow() {
+    Text(
+        text = LocalContext.current.getString(R.string.computing_),
+        style = MaterialTheme.typography.bodyMedium,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+    )
+}
 
-    items.forEachIndexed { index, item ->
+@Composable
+private fun StorageUsageRow(
+    item: StorageUsageUiItem,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = context.getString(
                 R.string.memory_usage_pattern,
@@ -171,17 +189,11 @@ private fun StorageUsageBlock(
                 item.label,
             ),
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
         )
         LinearProgressIndicator(
             progress = { item.progress.coerceIn(0f, 1f) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+            modifier = Modifier.fillMaxWidth(),
         )
-        if (index != items.lastIndex) {
-            SettingsSectionDivider()
-        }
     }
 }
 

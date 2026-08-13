@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -45,65 +46,82 @@ fun ProxySettingsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SettingsChoicePreference(
-            title = stringResource(R.string.type),
-            iconRes = R.drawable.ic_dns,
-            value = proxyType.name,
-            options = typeOptions,
-            onValueChange = { value ->
-                settings.prefs.edit().putString(AppSettings.KEY_PROXY_TYPE, value).apply()
-            },
-        )
-        SettingsTextInputPreference(
-            title = stringResource(R.string.address),
-            iconRes = R.drawable.ic_web,
-            value = proxyAddress,
-            enabled = isProxyEnabled,
-            onValueChange = { value ->
-                settings.prefs.edit().putString(AppSettings.KEY_PROXY_ADDRESS, value).apply()
-            },
-        )
-        SettingsTextInputPreference(
-            title = stringResource(R.string.port),
-            iconRes = R.drawable.ic_plug,
-            value = proxyPort,
-            enabled = isProxyEnabled,
-            onValueChange = { value ->
-                settings.prefs.edit().putString(AppSettings.KEY_PROXY_PORT, value).apply()
-            },
-        )
-        SettingsPreferenceSection(title = stringResource(R.string.authorization_optional)) {
-            SettingsTextInputPreference(
-                title = stringResource(R.string.username),
-                iconRes = R.drawable.ic_user,
-                value = proxyLogin,
-                enabled = isProxyEnabled,
-                onValueChange = { value ->
-                    settings.prefs.edit().putString(AppSettings.KEY_PROXY_LOGIN, value).apply()
-                },
-            )
-            SettingsTextInputPreference(
-                title = stringResource(R.string.password),
-                iconRes = R.drawable.ic_key,
-                value = proxyPassword,
-                enabled = isProxyEnabled,
-                isPassword = true,
-                onValueChange = { value ->
-                    settings.prefs.edit().putString(AppSettings.KEY_PROXY_PASSWORD, value).apply()
-                },
-            )
+        SettingsPreferenceGroup(title = "") {
+            item {
+                SettingsChoicePreference(
+                    title = stringResource(R.string.type),
+                    iconRes = R.drawable.ic_dns,
+                    value = proxyType.name,
+                    options = typeOptions,
+                    onValueChange = { value ->
+                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_TYPE, value).apply()
+                    },
+                )
+            }
+            item {
+                SettingsTextInputPreference(
+                    title = stringResource(R.string.address),
+                    iconRes = R.drawable.ic_web,
+                    value = proxyAddress,
+                    enabled = isProxyEnabled,
+                    onValueChange = { value ->
+                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_ADDRESS, value).apply()
+                    },
+                )
+            }
+            item {
+                SettingsTextInputPreference(
+                    title = stringResource(R.string.port),
+                    iconRes = R.drawable.ic_plug,
+                    value = proxyPort,
+                    enabled = isProxyEnabled,
+                    onValueChange = { value ->
+                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_PORT, value).apply()
+                    },
+                )
+            }
         }
-        SettingsActionPreference(
-            title = stringResource(R.string.test_connection),
-            iconRes = R.drawable.ic_plug,
-            summary = testSummary ?: if (!isProxyConfigured) {
-                stringResource(R.string.invalid_proxy_configuration)
-            } else {
-                null
-            },
-            enabled = isProxyEnabled && isProxyConfigured && !isTestRunning,
-            onClick = onTestConnection,
-        )
+        SettingsPreferenceGroup(title = stringResource(R.string.authorization_optional)) {
+            item {
+                SettingsTextInputPreference(
+                    title = stringResource(R.string.username),
+                    iconRes = R.drawable.ic_user,
+                    value = proxyLogin,
+                    enabled = isProxyEnabled,
+                    onValueChange = { value ->
+                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_LOGIN, value).apply()
+                    },
+                )
+            }
+            item {
+                SettingsTextInputPreference(
+                    title = stringResource(R.string.password),
+                    iconRes = R.drawable.ic_key,
+                    value = proxyPassword,
+                    enabled = isProxyEnabled,
+                    isPassword = true,
+                    onValueChange = { value ->
+                        settings.prefs.edit().putString(AppSettings.KEY_PROXY_PASSWORD, value).apply()
+                    },
+                )
+            }
+        }
+        SettingsPreferenceGroup(title = "") {
+            item {
+                SettingsActionPreference(
+                    title = stringResource(R.string.test_connection),
+                    iconRes = R.drawable.ic_plug,
+                    summary = testSummary ?: if (!isProxyConfigured) {
+                        stringResource(R.string.invalid_proxy_configuration)
+                    } else {
+                        null
+                    },
+                    enabled = isProxyEnabled && isProxyConfigured && !isTestRunning,
+                    onClick = onTestConnection,
+                )
+            }
+        }
     }
 }

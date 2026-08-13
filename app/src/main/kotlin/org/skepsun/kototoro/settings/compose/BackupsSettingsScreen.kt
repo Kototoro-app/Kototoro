@@ -125,31 +125,32 @@ fun BackupsSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "backup_restore") {
-                SettingsPreferenceSection(title = backupRestoreTitle) {
-                    SettingsActionPreference(
+                SettingsPreferenceGroup(title = backupRestoreTitle) {
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.backups_output_directory),
                         summary = state.backupOutputSummary,
-                        iconRes = if (state.isBackupOutputInvalid) R.drawable.ic_alert_outline else R.drawable.ic_folder_file,
+                        iconRes = if (state.isBackupOutputInvalid) {
+                            R.drawable.ic_alert_outline
+                        } else {
+                            R.drawable.ic_folder_file
+                        },
                         onClick = onBackupOutputClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
+                    ) }
+                    item { SettingsChoicePreference(
                         title = stringResource(R.string.backup_frequency),
                         iconRes = R.drawable.ic_schedule,
                         value = state.backupFrequency,
                         options = backupFrequencyOptions,
                         onValueChange = onBackupFrequencyChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.delete_old_backups),
                         iconRes = R.drawable.ic_delete,
                         checked = state.isPeriodicalTrimEnabled,
                         summary = stringResource(R.string.delete_old_backups_summary),
                         onCheckedChange = onPeriodicalTrimChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSliderPreference(
+                    ) }
+                    item { SettingsSliderPreference(
                         title = stringResource(R.string.max_backups_count),
                         iconRes = R.drawable.ic_timeline,
                         value = state.periodicalBackupCount,
@@ -158,69 +159,61 @@ fun BackupsSettingsScreen(
                         enabled = state.isPeriodicalTrimEnabled,
                         valueText = { it.toString() },
                         onValueChange = onPeriodicalBackupCountChange,
-                    )
+                    ) }
                     state.lastBackupSummary?.let {
-                        SettingsSectionDivider()
-                        SettingsInfoPreference(
+                        item { SettingsInfoPreference(
                             title = stringResource(R.string.create_backup),
                             summary = it,
                             iconRes = R.drawable.ic_info_outline,
-                        )
+                        ) }
                     }
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.create_backup),
                         summary = stringResource(R.string.backup_information),
                         iconRes = R.drawable.ic_backup_restore,
                         onClick = onCreateBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.restore_kototoro_backup),
                         summary = stringResource(R.string.restore_kototoro_backup_summary),
                         iconRes = R.drawable.ic_revert,
                         onClick = onRestoreBackupClick,
-                    )
+                    ) }
                 }
             }
             item(key = "external_backup_import") {
-                SettingsPreferenceSection(title = stringResource(R.string.external_backup_section_title)) {
-                    SettingsActionPreference(
+                SettingsPreferenceGroup(title = stringResource(R.string.external_backup_section_title)) {
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.import_kotatsu_or_legacy_backup),
                         summary = stringResource(R.string.import_kotatsu_or_legacy_backup_summary),
                         iconRes = R.drawable.ic_import,
                         onClick = onImportKotatsuOrLegacyBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.export_kotatsu_backup),
                         summary = stringResource(R.string.export_kotatsu_backup_summary),
                         iconRes = R.drawable.ic_share,
                         onClick = onExportKotatsuBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.export_mihon_backup),
                         summary = stringResource(R.string.export_mihon_backup_summary),
                         iconRes = R.drawable.ic_share,
                         onClick = onExportMihonBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.export_aniyomi_backup),
                         summary = stringResource(R.string.export_aniyomi_backup_summary),
                         iconRes = R.drawable.ic_share,
                         onClick = onExportAniyomiBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.export_usagi_backup),
                         summary = stringResource(R.string.export_usagi_backup_summary),
                         iconRes = R.drawable.ic_share,
                         onClick = onExportUsagiBackupClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.import_backup_from_other_apps),
                         iconRes = R.drawable.ic_import,
                         summary = stringResource(
@@ -230,12 +223,12 @@ fun BackupsSettingsScreen(
                             stringResource(R.string.import_backup_supported_apps_summary),
                         ),
                         onClick = onImportExternalBackupClick,
-                    )
+                    ) }
                 }
             }
             item(key = "webdav_backup") {
-                SettingsPreferenceSection(title = stringResource(R.string.webdav_integration)) {
-                    SettingsSwitchPreference(
+                SettingsPreferenceGroup(title = stringResource(R.string.webdav_integration)) {
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.sync_webdav_enable),
                         iconRes = R.drawable.ic_cloud_upload,
                         checked = state.isWebDavEnabled,
@@ -247,85 +240,76 @@ fun BackupsSettingsScreen(
                                 onWebDavEnabledChange(enabled)
                             }
                         },
-                    )
-                    SettingsSectionDivider()
-                    SettingsTextInputPreference(
+                    ) }
+                    item { SettingsTextInputPreference(
                         title = stringResource(R.string.webdav_server_url),
                         iconRes = R.drawable.ic_web,
                         value = state.webDavServerUrl,
                         enabled = state.isWebDavEnabled,
                         placeholder = "https://example.com/dav",
                         onValueChange = onWebDavServerUrlChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsTextInputPreference(
+                    ) }
+                    item { SettingsTextInputPreference(
                         title = stringResource(R.string.webdav_username),
                         iconRes = R.drawable.ic_user,
                         value = state.webDavUsername,
                         enabled = state.isWebDavEnabled,
                         placeholder = stringResource(R.string.username),
                         onValueChange = onWebDavUsernameChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsTextInputPreference(
+                    ) }
+                    item { SettingsTextInputPreference(
                         title = stringResource(R.string.webdav_password),
                         iconRes = R.drawable.ic_key,
                         value = state.webDavPassword,
                         enabled = state.isWebDavEnabled,
                         isPassword = true,
                         onValueChange = onWebDavPasswordChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsTextInputPreference(
+                    ) }
+                    item { SettingsTextInputPreference(
                         title = stringResource(R.string.webdav_remote_path),
                         iconRes = R.drawable.ic_folder_file,
                         value = state.webDavRemotePath,
                         enabled = state.isWebDavEnabled,
                         placeholder = "/backup",
                         onValueChange = onWebDavRemotePathChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.test_connection),
                         iconRes = R.drawable.ic_plug,
                         summary = stringResource(R.string.webdav_integration),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading,
                         onClick = onWebDavTestClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.webdav_upload_now),
                         iconRes = R.drawable.ic_cloud_upload,
                         summary = state.webDavUploadBusySummary ?: stringResource(R.string.create_backup),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
                         onClick = onWebDavUploadNowClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.webdav_restore_now),
                         iconRes = R.drawable.ic_cloud_download,
                         summary = state.webDavRestoreBusySummary ?: stringResource(R.string.restore_backup),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
                         onClick = { isRestoreLatestModeDialogVisible = true },
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.webdav_remote_backups_refresh),
                         iconRes = R.drawable.ic_sync,
-                        summary = state.webDavRemoteBackupBusySummary ?: stringResource(R.string.webdav_remote_backups_refresh_summary),
+                        summary = state.webDavRemoteBackupBusySummary
+                            ?: stringResource(R.string.webdav_remote_backups_refresh_summary),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
                         onClick = onWebDavRefreshRemoteBackupsClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.webdav_remote_backups_inspect),
                         iconRes = R.drawable.ic_list_detailed,
                         summary = stringResource(R.string.webdav_remote_backups_inspect_summary),
                         enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
                         onClick = onWebDavInspectRemoteBackupsClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
+                    ) }
+                    item { SettingsActionPreference(
                         title = stringResource(R.string.webdav_remote_backups_clear),
                         iconRes = R.drawable.ic_delete_all,
                         summary = stringResource(R.string.webdav_remote_backups_clear_summary),
@@ -335,59 +319,53 @@ fun BackupsSettingsScreen(
                             state.webDavRemoteBackups.isNotEmpty(),
                         showChevron = false,
                         onClick = { isClearRemoteBackupsConfirmVisible = true },
-                    )
+                    ) }
                     state.webDavRemoteBackups.forEach { backup ->
-                        SettingsSectionDivider()
-                        SettingsActionPreference(
+                        item { SettingsActionPreference(
                             title = backup.title,
                             iconRes = R.drawable.ic_file_zip,
                             summary = backup.summary,
                             enabled = state.isWebDavEnabled && !state.isWebDavCheckLoading && !state.isWebDavBusy,
                             onClick = { selectedRemoteBackup = backup },
-                        )
+                        ) }
                     }
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.webdav_auto_restore),
                         iconRes = R.drawable.ic_sync,
                         checked = state.isWebDavAutoRestoreEnabled,
                         summary = stringResource(R.string.webdav_auto_restore_summary),
                         enabled = state.isWebDavEnabled,
                         onCheckedChange = onWebDavAutoRestoreChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
+                    ) }
+                    item { SettingsSwitchPreference(
                         title = stringResource(R.string.webdav_keep_local_copy),
                         iconRes = R.drawable.ic_save,
                         checked = state.isWebDavKeepLocalCopyEnabled,
                         summary = stringResource(R.string.webdav_keep_local_copy_summary),
                         enabled = state.isWebDavEnabled,
                         onCheckedChange = onWebDavKeepLocalCopyChange,
-                    )
+                    ) }
                     state.webDavLastActionSummary?.let {
-                        SettingsSectionDivider()
-                        SettingsInfoPreference(
+                        item { SettingsInfoPreference(
                             title = stringResource(R.string.recent_webdav_action),
                             iconRes = R.drawable.ic_info_outline,
                             summary = it,
-                        )
+                        ) }
                     }
                     if (state.isWebDavPolicyNoteVisible) {
-                        SettingsSectionDivider()
-                        SettingsInfoPreference(
+                        item { SettingsInfoPreference(
                             title = stringResource(R.string.read_more),
                             summary = stringResource(R.string.backup_periodic_explain_keep_local_copy_off),
                             iconRes = R.drawable.ic_info_outline,
-                        )
+                        ) }
                     }
                     if (state.isWebDavBusy) {
-                        SettingsSectionDivider()
                         val busyText = state.webDavUploadBusySummary ?: state.webDavRestoreBusySummary ?: ""
-                        SettingsInfoPreference(
+                        item { SettingsInfoPreference(
                             title = stringResource(R.string.processing_),
                             summary = state.webDavRemoteBackupBusySummary ?: busyText,
                             iconRes = R.drawable.ic_info_outline,
-                        )
+                        ) }
                     }
                 }
             }

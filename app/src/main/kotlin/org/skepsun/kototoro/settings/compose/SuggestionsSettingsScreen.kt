@@ -74,95 +74,103 @@ fun SuggestionsSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.suggestions),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.suggestions_enable),
-                    iconRes = R.drawable.ic_suggestion,
-                    checked = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.isSuggestionsEnabled = checked
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.only_using_wifi),
-                    iconRes = R.drawable.ic_wifi,
-                    summary = stringResource(R.string.suggestions_wifi_only_summary),
-                    checked = isWifiOnly,
-                    enabled = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_WIFI_ONLY, checked).apply()
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.include_disabled_sources),
-                    iconRes = R.drawable.ic_manga_source,
-                    summary = stringResource(R.string.suggestions_disabled_sources_summary),
-                    checked = includeDisabledSources,
-                    enabled = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_DISABLED_SOURCES, checked).apply()
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.notifications_enable),
-                    iconRes = R.drawable.ic_notification,
-                    summary = stringResource(R.string.suggestions_notifications_summary),
-                    checked = notificationsEnabled,
-                    enabled = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_NOTIFICATIONS, checked).apply()
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.suggestions_excluded_genres),
-                    iconRes = R.drawable.ic_tag,
-                    summary = excludeTags.ifEmpty { stringResource(R.string.suggestions_excluded_genres_summary) },
-                    value = excludeTags,
-                    enabled = isEnabled,
-                    onValueChange = onExcludeTagsChanged,
-                )
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.suggestions_preferred_genres),
-                    iconRes = R.drawable.ic_star_small,
-                    summary = preferredTags.ifEmpty { stringResource(R.string.suggestions_preferred_genres_summary) },
-                    value = preferredTags,
-                    enabled = isEnabled,
-                    onValueChange = onPreferredTagsChanged,
-                )
-                SettingsSectionDivider()
-                SuggestionSourcesPreference(
-                    title = stringResource(R.string.suggestions_preferred_sources),
-                    iconRes = R.drawable.ic_star_small,
-                    emptySummary = stringResource(R.string.suggestions_preferred_sources_summary),
-                    options = sourceOptions,
-                    selectedIds = preferredSources,
-                    enabled = isEnabled,
-                    onSelectedIdsChanged = onPreferredSourcesChanged,
-                )
-                SettingsSectionDivider()
-                SuggestionSourcesPreference(
-                    title = stringResource(R.string.suggestions_excluded_sources),
-                    iconRes = R.drawable.ic_disable,
-                    emptySummary = stringResource(R.string.suggestions_excluded_sources_summary),
-                    options = sourceOptions,
-                    selectedIds = excludedSources,
-                    enabled = isEnabled,
-                    onSelectedIdsChanged = onExcludedSourcesChanged,
-                )
-                SettingsSectionDivider()
-                SettingsInfoPreference(
-                    title = stringResource(R.string.suggestions_info),
-                    iconRes = R.drawable.ic_info_outline,
-                    summary = "",
-                )
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.suggestions_enable),
+                        iconRes = R.drawable.ic_suggestion,
+                        checked = isEnabled,
+                        onCheckedChange = { settings.isSuggestionsEnabled = it },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.only_using_wifi),
+                        iconRes = R.drawable.ic_wifi,
+                        summary = stringResource(R.string.suggestions_wifi_only_summary),
+                        checked = isWifiOnly,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_WIFI_ONLY, checked).apply()
+                        },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.include_disabled_sources),
+                        iconRes = R.drawable.ic_manga_source,
+                        summary = stringResource(R.string.suggestions_disabled_sources_summary),
+                        checked = includeDisabledSources,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_DISABLED_SOURCES, checked).apply()
+                        },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.notifications_enable),
+                        iconRes = R.drawable.ic_notification,
+                        summary = stringResource(R.string.suggestions_notifications_summary),
+                        checked = notificationsEnabled,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.prefs.edit().putBoolean(AppSettings.KEY_SUGGESTIONS_NOTIFICATIONS, checked).apply()
+                        },
+                    )
+                }
+                item {
+                    SettingsTextInputPreference(
+                        title = stringResource(R.string.suggestions_excluded_genres),
+                        iconRes = R.drawable.ic_tag,
+                        summary = excludeTags.ifEmpty { stringResource(R.string.suggestions_excluded_genres_summary) },
+                        value = excludeTags,
+                        enabled = isEnabled,
+                        onValueChange = onExcludeTagsChanged,
+                    )
+                }
+                item {
+                    SettingsTextInputPreference(
+                        title = stringResource(R.string.suggestions_preferred_genres),
+                        iconRes = R.drawable.ic_star_small,
+                        summary = preferredTags.ifEmpty { stringResource(R.string.suggestions_preferred_genres_summary) },
+                        value = preferredTags,
+                        enabled = isEnabled,
+                        onValueChange = onPreferredTagsChanged,
+                    )
+                }
+                item {
+                    SuggestionSourcesPreference(
+                        title = stringResource(R.string.suggestions_preferred_sources),
+                        iconRes = R.drawable.ic_star_small,
+                        emptySummary = stringResource(R.string.suggestions_preferred_sources_summary),
+                        options = sourceOptions,
+                        selectedIds = preferredSources,
+                        enabled = isEnabled,
+                        onSelectedIdsChanged = onPreferredSourcesChanged,
+                    )
+                }
+                item {
+                    SuggestionSourcesPreference(
+                        title = stringResource(R.string.suggestions_excluded_sources),
+                        iconRes = R.drawable.ic_disable,
+                        emptySummary = stringResource(R.string.suggestions_excluded_sources_summary),
+                        options = sourceOptions,
+                        selectedIds = excludedSources,
+                        enabled = isEnabled,
+                        onSelectedIdsChanged = onExcludedSourcesChanged,
+                    )
+                }
+                item {
+                    SettingsInfoPreference(
+                        title = stringResource(R.string.suggestions_info),
+                        iconRes = R.drawable.ic_info_outline,
+                        summary = "",
+                    )
+                }
             }
         }
     }

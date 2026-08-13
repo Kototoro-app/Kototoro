@@ -60,8 +60,9 @@ fun TrackerSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -73,94 +74,106 @@ fun TrackerSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "tracking") {
-                SettingsPreferenceSection(title = trackingTitle) {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.check_new_chapters_title),
-                        iconRes = R.drawable.ic_updated,
-                        checked = state.isTrackerEnabled,
-                        onCheckedChange = onTrackerEnabledChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.only_using_wifi),
-                        iconRes = R.drawable.ic_wifi,
-                        checked = state.isTrackerWifiOnly,
-                        summary = stringResource(R.string.tracker_wifi_only_summary),
-                        enabled = state.isTrackerEnabled,
-                        onCheckedChange = onTrackerWifiOnlyChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.frequency_of_check),
-                        iconRes = R.drawable.ic_schedule,
-                        value = state.trackerFrequencyFactor,
-                        options = frequencyOptions,
-                        enabled = state.isTrackerEnabled,
-                        onValueChange = onTrackerFrequencyChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsMultiChoicePreference(
-                        title = stringResource(R.string.track_sources),
-                        iconRes = R.drawable.ic_manga_source,
-                        values = state.trackSources,
-                        options = trackSourcesOptions,
-                        emptySelectionText = emptyTrackSourcesText,
-                        enabled = state.isTrackerEnabled,
-                        onValueChange = onTrackSourcesChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.favourites_categories),
-                        iconRes = R.drawable.ic_select_group,
-                        summary = state.categoriesSummary,
-                        enabled = state.isCategoriesEnabled,
-                        onClick = onTrackCategoriesClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.notifications_settings),
-                        iconRes = R.drawable.ic_notification,
-                        summary = state.notificationsSummary,
-                        enabled = state.isTrackerEnabled,
-                        onClick = onNotificationsSettingsClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.download_new_chapters),
-                        iconRes = R.drawable.ic_download,
-                        value = state.trackerDownloadStrategy,
-                        options = downloadStrategyOptions,
-                        enabled = state.isTrackerEnabled,
-                        onValueChange = onTrackerDownloadStrategyChange,
-                    )
+                SettingsPreferenceGroup(title = trackingTitle) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.check_new_chapters_title),
+                            iconRes = R.drawable.ic_updated,
+                            checked = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerEnabledChange,
+                        )
+                    }
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.only_using_wifi),
+                            iconRes = R.drawable.ic_wifi,
+                            checked = state.isTrackerWifiOnly,
+                            summary = stringResource(R.string.tracker_wifi_only_summary),
+                            enabled = state.isTrackerEnabled,
+                            onCheckedChange = onTrackerWifiOnlyChange,
+                        )
+                    }
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.frequency_of_check),
+                            iconRes = R.drawable.ic_schedule,
+                            value = state.trackerFrequencyFactor,
+                            options = frequencyOptions,
+                            enabled = state.isTrackerEnabled,
+                            onValueChange = onTrackerFrequencyChange,
+                        )
+                    }
+                    item {
+                        SettingsMultiChoicePreference(
+                            title = stringResource(R.string.track_sources),
+                            iconRes = R.drawable.ic_manga_source,
+                            values = state.trackSources,
+                            options = trackSourcesOptions,
+                            emptySelectionText = emptyTrackSourcesText,
+                            enabled = state.isTrackerEnabled,
+                            onValueChange = onTrackSourcesChange,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.favourites_categories),
+                            iconRes = R.drawable.ic_select_group,
+                            summary = state.categoriesSummary,
+                            enabled = state.isCategoriesEnabled,
+                            onClick = onTrackCategoriesClick,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.notifications_settings),
+                            iconRes = R.drawable.ic_notification,
+                            summary = state.notificationsSummary,
+                            enabled = state.isTrackerEnabled,
+                            onClick = onNotificationsSettingsClick,
+                        )
+                    }
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.download_new_chapters),
+                            iconRes = R.drawable.ic_download,
+                            value = state.trackerDownloadStrategy,
+                            options = downloadStrategyOptions,
+                            enabled = state.isTrackerEnabled,
+                            onValueChange = onTrackerDownloadStrategyChange,
+                        )
+                    }
                 }
             }
             item(key = "debug") {
-                SettingsPreferenceSection(title = debugTitle) {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.tracker_debug_info),
-                        iconRes = R.drawable.ic_code,
-                        summary = stringResource(R.string.tracker_debug_info_summary),
-                        enabled = state.isTrackerEnabled,
-                        onClick = onTrackerDebugClick,
-                    )
-                    if (state.isDozeIgnoreVisible) {
-                        SettingsSectionDivider()
+                SettingsPreferenceGroup(title = debugTitle) {
+                    item {
                         SettingsActionPreference(
-                            title = stringResource(R.string.disable_battery_optimization),
-                            iconRes = R.drawable.ic_battery_outline,
-                            summary = stringResource(R.string.disable_battery_optimization_summary),
+                            title = stringResource(R.string.tracker_debug_info),
+                            iconRes = R.drawable.ic_code,
+                            summary = stringResource(R.string.tracker_debug_info_summary),
                             enabled = state.isTrackerEnabled,
-                            onClick = onIgnoreDozeClick,
+                            onClick = onTrackerDebugClick,
                         )
                     }
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.read_more),
-                        summary = stringResource(R.string.tracker_warning),
-                        iconRes = R.drawable.ic_info_outline,
-                        onClick = onTrackerWarningClick,
-                    )
+                    if (state.isDozeIgnoreVisible) {
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.disable_battery_optimization),
+                                iconRes = R.drawable.ic_battery_outline,
+                                summary = stringResource(R.string.disable_battery_optimization_summary),
+                                enabled = state.isTrackerEnabled,
+                                onClick = onIgnoreDozeClick,
+                            )
+                        }
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.read_more),
+                            summary = stringResource(R.string.tracker_warning),
+                            iconRes = R.drawable.ic_info_outline,
+                            onClick = onTrackerWarningClick,
+                        )
+                    }
                 }
             }
         }

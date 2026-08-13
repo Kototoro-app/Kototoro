@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
@@ -43,10 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.settings.search.SettingsItem
 
@@ -127,36 +125,20 @@ fun SettingsRootScreen(
 private fun SettingsSectionCard(
     section: SettingsRootSection,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Text(
             text = section.title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(
-                horizontal = AppLayoutTokens.screenHorizontalPadding,
-                vertical = 4.dp,
+                horizontal = 16.dp,
+                vertical = 6.dp,
             ),
         )
-        if (expressive || isIosStyle) {
-            SettingsGroupSurface {
-                section.items.forEachIndexed { index, item ->
-                    SettingsRootRow(item = item)
-                    if (index != section.items.lastIndex) {
-                        SettingsRootDivider(startPadding = 62.dp)
-                    }
-                }
-            }
-        } else {
-            section.items.forEachIndexed { index, item ->
-                SettingsRootRow(item = item)
-                if (index != section.items.lastIndex) {
-                    SettingsRootDivider(startPadding = 62.dp)
-                }
-            }
+        SettingsItemGroup(itemCount = section.items.size) { index ->
+            SettingsRootRow(item = section.items[index])
         }
     }
 }
@@ -172,36 +154,17 @@ private fun SettingsSearchResultsCard(
         if (results.isEmpty()) {
             Text(
                 text = stringResource(R.string.nothing_found),
-                modifier = Modifier.padding(vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            if (
-                LocalMaterialExpressiveComponentsEnabled.current ||
-                LocalInterfaceStyle.current == InterfaceStyle.IOS
-            ) {
-                SettingsGroupSurface {
-                    results.forEachIndexed { index, item ->
-                        SettingsSearchResultRow(
-                            item = item,
-                            onClick = { onItemClick(item) },
-                        )
-                        if (index != results.lastIndex) {
-                            SettingsRootDivider(startPadding = 14.dp)
-                        }
-                    }
-                }
-            } else {
-                results.forEachIndexed { index, item ->
-                    SettingsSearchResultRow(
-                        item = item,
-                        onClick = { onItemClick(item) },
-                    )
-                    if (index != results.lastIndex) {
-                        SettingsRootDivider(startPadding = 14.dp)
-                    }
-                }
+            SettingsItemGroup(itemCount = results.size) { index ->
+                val item = results[index]
+                SettingsSearchResultRow(
+                    item = item,
+                    onClick = { onItemClick(item) },
+                )
             }
         }
     }
@@ -212,27 +175,13 @@ private fun SettingsSearchResultRow(
     item: SettingsItem,
     onClick: () -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val tokens = LocalInterfaceStyleTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .then(
-                if (expressive || isIosStyle) {
-                    Modifier
-                        .heightIn(min = if (isIosStyle) 62.dp else 0.dp)
-                        .padding(
-                            horizontal = AppLayoutTokens.screenHorizontalPadding,
-                            vertical = 10.dp,
-                        )
-                } else {
-                    Modifier.padding(
-                        horizontal = AppLayoutTokens.screenHorizontalPadding,
-                        vertical = 12.dp,
-                    )
-                },
-            ),
+            .heightIn(min = tokens.settingsItemMinHeight)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
@@ -241,14 +190,14 @@ private fun SettingsSearchResultRow(
         ) {
             Text(
                 text = item.title.toString(),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = item.breadcrumbs.joinToString(" / "),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -259,6 +208,7 @@ private fun SettingsSearchResultRow(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -267,45 +217,26 @@ private fun SettingsSearchResultRow(
 private fun SettingsRootRow(
     item: SettingsRootItem,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
+    val tokens = LocalInterfaceStyleTokens.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = item.onClick)
-            .then(
-                if (expressive || isIosStyle) {
-                    Modifier
-                        .heightIn(min = if (isIosStyle) 62.dp else 0.dp)
-                        .padding(
-                            horizontal = AppLayoutTokens.screenHorizontalPadding,
-                            vertical = 10.dp,
-                        )
-                } else {
-                    Modifier.padding(
-                        horizontal = AppLayoutTokens.screenHorizontalPadding,
-                        vertical = 12.dp,
-                    )
-                },
-            ),
+            .heightIn(min = tokens.settingsItemMinHeight)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(if (isIosStyle) 30.dp else 40.dp)
-                .then(
-                    if (expressive || isIosStyle) {
-                        Modifier.background(
-                            color = if (isIosStyle) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                            } else {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.64f)
-                            },
-                            shape = RoundedCornerShape(if (isIosStyle) 8.dp else 14.dp),
-                        )
+                .size(tokens.settingsItemIconContainerSize)
+                .background(
+                    color = if (isIosStyle) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.11f)
                     } else {
-                        Modifier
+                        MaterialTheme.colorScheme.secondaryContainer
                     },
+                    shape = RoundedCornerShape(if (isIosStyle) 9.dp else 12.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -314,44 +245,38 @@ private fun SettingsRootRow(
                 contentDescription = null,
                 tint = if (isIosStyle) {
                     MaterialTheme.colorScheme.primary
-                } else if (expressive) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
-                    MaterialTheme.colorScheme.onSurface
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 },
                 modifier = Modifier.size(if (isIosStyle) 18.dp else 22.dp),
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(1.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 text = item.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = item.summary,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
     }
-}
-
-@Composable
-private fun SettingsRootDivider(
-    startPadding: Dp,
-) {
-    SettingsGroupDivider(startPadding = startPadding)
 }

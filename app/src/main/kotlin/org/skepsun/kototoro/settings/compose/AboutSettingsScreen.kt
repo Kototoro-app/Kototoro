@@ -38,8 +38,9 @@ fun AboutSettingsScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-        LazyColumn(state = listState,
+        val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -50,76 +51,86 @@ fun AboutSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "about_overview") {
-                SettingsPreferenceSection(title = stringResource(R.string.about)) {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
-                        iconRes = R.drawable.ic_app_update,
-                        summary = stringResource(R.string.check_for_updates),
-                        enabled = isUpdateSupported && !isLoading,
-                        onClick = onCheckUpdate,
-                    )
-                    if (isUpdateSupported) {
-                        SettingsSectionDivider()
-                        SettingsSwitchPreference(
-                            title = stringResource(R.string.allow_unstable_updates),
-                            iconRes = R.drawable.ic_new,
-                            summary = stringResource(R.string.allow_unstable_updates_summary),
-                            checked = if (isStableVersion) {
-                                settings.prefs.getBoolean(AppSettings.KEY_UPDATES_UNSTABLE, false)
-                            } else {
-                                true
-                            },
-                            enabled = isStableVersion,
-                            onCheckedChange = { checked ->
-                                settings.prefs.edit().putBoolean(AppSettings.KEY_UPDATES_UNSTABLE, checked).apply()
-                            },
+                SettingsPreferenceGroup(title = stringResource(R.string.about)) {
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                            iconRes = R.drawable.ic_app_update,
+                            summary = stringResource(R.string.check_for_updates),
+                            enabled = isUpdateSupported && !isLoading,
+                            onClick = onCheckUpdate,
                         )
                     }
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.changelog),
-                        iconRes = R.drawable.ic_history_selector,
-                        summary = stringResource(R.string.changelog_summary),
-                        onClick = onChangelogClick,
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.crash_logs),
-                        iconRes = R.drawable.ic_error_small,
-                        summary = stringResource(R.string.crash_logs_summary),
-                        onClick = onCrashLogsClick,
-                    )
+                    if (isUpdateSupported) {
+                        item {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.allow_unstable_updates),
+                                iconRes = R.drawable.ic_new,
+                                summary = stringResource(R.string.allow_unstable_updates_summary),
+                                checked = if (isStableVersion) {
+                                    settings.prefs.getBoolean(AppSettings.KEY_UPDATES_UNSTABLE, false)
+                                } else {
+                                    true
+                                },
+                                enabled = isStableVersion,
+                                onCheckedChange = { checked ->
+                                    settings.prefs.edit().putBoolean(AppSettings.KEY_UPDATES_UNSTABLE, checked).apply()
+                                },
+                            )
+                        }
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.changelog),
+                            iconRes = R.drawable.ic_history_selector,
+                            summary = stringResource(R.string.changelog_summary),
+                            onClick = onChangelogClick,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.crash_logs),
+                            iconRes = R.drawable.ic_error_small,
+                            summary = stringResource(R.string.crash_logs_summary),
+                            onClick = onCrashLogsClick,
+                        )
+                    }
                 }
             }
             item(key = "about_links") {
-                SettingsPreferenceSection(title = stringResource(R.string.more)) {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.user_manual),
-                        iconRes = R.drawable.ic_read,
-                        summary = stringResource(R.string.url_user_manual),
-                        onClick = { onLinkClick(AppSettings.KEY_LINK_MANUAL) },
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.source_code),
-                        iconRes = R.drawable.ic_code,
-                        summary = stringResource(R.string.url_github),
-                        onClick = { onLinkClick(AppSettings.KEY_LINK_GITHUB) },
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.about_donate),
-                        iconRes = R.drawable.ic_heart_outline,
-                        summary = stringResource(R.string.url_donate),
-                        onClick = { onLinkClick(AppSettings.KEY_LINK_DONATE) },
-                    )
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.about_discord),
-                        iconRes = R.drawable.ic_discord,
-                        summary = stringResource(R.string.url_discord),
-                        onClick = { onLinkClick(AppSettings.KEY_LINK_DISCORD) },
-                    )
+                SettingsPreferenceGroup(title = stringResource(R.string.more)) {
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.user_manual),
+                            iconRes = R.drawable.ic_read,
+                            summary = stringResource(R.string.url_user_manual),
+                            onClick = { onLinkClick(AppSettings.KEY_LINK_MANUAL) },
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.source_code),
+                            iconRes = R.drawable.ic_code,
+                            summary = stringResource(R.string.url_github),
+                            onClick = { onLinkClick(AppSettings.KEY_LINK_GITHUB) },
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.about_donate),
+                            iconRes = R.drawable.ic_heart_outline,
+                            summary = stringResource(R.string.url_donate),
+                            onClick = { onLinkClick(AppSettings.KEY_LINK_DONATE) },
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.about_discord),
+                            iconRes = R.drawable.ic_discord,
+                            summary = stringResource(R.string.url_discord),
+                            onClick = { onLinkClick(AppSettings.KEY_LINK_DISCORD) },
+                        )
+                    }
                 }
             }
         }

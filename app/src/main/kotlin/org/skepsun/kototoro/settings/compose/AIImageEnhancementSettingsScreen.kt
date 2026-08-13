@@ -42,56 +42,72 @@ fun AIImageEnhancementSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_image_enhancement_settings),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.reader_super_resolution),
-                    iconRes = R.drawable.ic_zoom_in,
-                    summary = stringResource(R.string.reader_super_resolution_summary),
-                    checked = isEnabled,
-                    onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED, it) } },
-                )
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.reader_super_resolution),
+                        iconRes = R.drawable.ic_zoom_in,
+                        summary = stringResource(R.string.reader_super_resolution_summary),
+                        checked = isEnabled,
+                        onCheckedChange = {
+                            settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED, it) }
+                        },
+                    )
+                }
 
                 if (isEnabled) {
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.reader_super_resolution_engine),
-                        iconRes = R.drawable.ic_services,
-                        options = stringArrayResource(R.array.reader_super_resolution_engines).mapIndexed { index, label ->
-                            SettingsChoiceOption(engineNames[index], label)
-                        },
-                        value = engine,
-                        onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_ENGINE, it) } },
-                    )
-
-                    if (engine == "ANIME4K" || engine == "VULKAN") {
-                        SettingsSectionDivider()
+                    item {
                         SettingsChoicePreference(
-                            title = stringResource(R.string.reader_super_resolution_anime4k_mode),
-                            iconRes = R.drawable.ic_auto_fix,
-                            options = stringArrayResource(R.array.video_super_resolution_shaders).mapIndexed { index, label ->
-                                SettingsChoiceOption(anime4kNames[index], label)
+                            title = stringResource(R.string.reader_super_resolution_engine),
+                            iconRes = R.drawable.ic_services,
+                            options = stringArrayResource(R.array.reader_super_resolution_engines)
+                                .mapIndexed { index, label -> SettingsChoiceOption(engineNames[index], label) },
+                            value = engine,
+                            onValueChange = {
+                                settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_ENGINE, it) }
                             },
-                            value = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE) {
-                                prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE, "ANIME4K_A") ?: "ANIME4K_A"
-                            }.value,
-                            onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE, it) } },
                         )
                     }
 
+                    if (engine == "ANIME4K" || engine == "VULKAN") {
+                        item {
+                            SettingsChoicePreference(
+                                title = stringResource(R.string.reader_super_resolution_anime4k_mode),
+                                iconRes = R.drawable.ic_auto_fix,
+                                options = stringArrayResource(R.array.video_super_resolution_shaders)
+                                    .mapIndexed { index, label -> SettingsChoiceOption(anime4kNames[index], label) },
+                                value = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE) {
+                                    prefs.getString(
+                                        AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE,
+                                        "ANIME4K_A",
+                                    ) ?: "ANIME4K_A"
+                                }.value,
+                                onValueChange = {
+                                    settings.prefs.edit {
+                                        putString(AppSettings.KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE, it)
+                                    }
+                                },
+                            )
+                        }
+                    }
+
                     if (engine == "NCNN") {
-                        SettingsSectionDivider()
-                        SettingsChoicePreference(
-                            title = stringResource(R.string.reader_super_resolution_model),
-                            iconRes = R.drawable.ic_dice,
-                            options = ncnnModels,
-                            value = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL) {
-                                prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL, "SE") ?: "SE"
-                            }.value,
-                            onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL, it) } },
-                        )
+                        item {
+                            SettingsChoicePreference(
+                                title = stringResource(R.string.reader_super_resolution_model),
+                                iconRes = R.drawable.ic_dice,
+                                options = ncnnModels,
+                                value = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL) {
+                                    prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL, "SE") ?: "SE"
+                                }.value,
+                                onValueChange = {
+                                    settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_MODEL, it) }
+                                },
+                            )
+                        }
                     }
                 }
             }

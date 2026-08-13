@@ -113,7 +113,8 @@ fun SourceSettingsScreen(
         val systemBarsBottom = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
         val navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
         val bottomInset = max(systemBarsBottom, navigationBarsBottom)
-        LazyColumn(state = listState,
+        LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
@@ -125,88 +126,87 @@ fun SourceSettingsScreen(
         ) {
             sections.forEach { section ->
                 item(key = section.id) {
-                    SettingsPreferenceSection(title = section.title) {
-                        section.rows.forEachIndexed { index, row ->
-                            key(row.id) {
-                                when (row) {
-                                    is SourceSettingsGroupLabelRowUiState -> {
-                                        SettingsGroupLabel(
-                                            text = row.text,
-                                        )
-                                    }
+                    SettingsPreferenceGroup(title = section.title) {
+                        section.rows.forEach { row ->
+                            item {
+                                key(row.id) {
+                                    when (row) {
+                                        is SourceSettingsGroupLabelRowUiState -> {
+                                            SettingsGroupLabel(
+                                                text = row.text,
+                                            )
+                                        }
 
-                                    is SourceSettingsActionRowUiState -> {
-                                        SettingsActionPreference(
-                                            title = row.title,
-                                            summary = row.summary,
-                                            iconRes = row.iconRes ?: R.drawable.ic_settings,
-                                            enabled = row.enabled,
-                                            showChevron = row.showChevron,
-                                            onClick = row.onClick,
-                                        )
-                                    }
+                                        is SourceSettingsActionRowUiState -> {
+                                            SettingsActionPreference(
+                                                title = row.title,
+                                                summary = row.summary,
+                                                iconRes = row.iconRes ?: R.drawable.ic_settings,
+                                                enabled = row.enabled,
+                                                showChevron = row.showChevron,
+                                                onClick = row.onClick,
+                                            )
+                                        }
 
-                                    is SourceSettingsSwitchRowUiState -> {
-                                        SettingsSwitchPreference(
-                                            title = row.title,
-                                            checked = row.checked,
-                                            summary = row.summary,
-                                            iconRes = row.iconRes ?: R.drawable.ic_toggle,
-                                            enabled = row.enabled,
-                                            onCheckedChange = row.onCheckedChange,
-                                        )
-                                    }
+                                        is SourceSettingsSwitchRowUiState -> {
+                                            SettingsSwitchPreference(
+                                                title = row.title,
+                                                checked = row.checked,
+                                                summary = row.summary,
+                                                iconRes = row.iconRes ?: R.drawable.ic_toggle,
+                                                enabled = row.enabled,
+                                                onCheckedChange = row.onCheckedChange,
+                                            )
+                                        }
 
-                                    is SourceSettingsChoiceRowUiState -> {
-                                        SettingsChoicePreference(
-                                            title = row.title,
-                                            value = row.value,
-                                            options = row.options,
-                                            summary = row.summary,
-                                            iconRes = row.iconRes ?: R.drawable.ic_select,
-                                            enabled = row.enabled,
-                                            onValueChange = row.onValueChange,
-                                        )
-                                    }
+                                        is SourceSettingsChoiceRowUiState -> {
+                                            SettingsChoicePreference(
+                                                title = row.title,
+                                                value = row.value,
+                                                options = row.options,
+                                                summary = row.summary,
+                                                iconRes = row.iconRes ?: R.drawable.ic_select,
+                                                enabled = row.enabled,
+                                                onValueChange = row.onValueChange,
+                                            )
+                                        }
 
-                                    is SourceSettingsMultiChoiceRowUiState -> {
-                                        SettingsMultiChoicePreference(
-                                            title = row.title,
-                                            values = row.values,
-                                            options = row.options,
-                                            emptySelectionText = row.emptySelectionText,
-                                            summary = row.summary,
-                                            iconRes = row.iconRes ?: R.drawable.ic_select_all,
-                                            enabled = row.enabled,
-                                            onValueChange = row.onValueChange,
-                                        )
-                                    }
+                                        is SourceSettingsMultiChoiceRowUiState -> {
+                                            SettingsMultiChoicePreference(
+                                                title = row.title,
+                                                values = row.values,
+                                                options = row.options,
+                                                emptySelectionText = row.emptySelectionText,
+                                                summary = row.summary,
+                                                iconRes = row.iconRes ?: R.drawable.ic_select_all,
+                                                enabled = row.enabled,
+                                                onValueChange = row.onValueChange,
+                                            )
+                                        }
 
-                                    is SourceSettingsTextRowUiState -> {
-                                        SettingsDialogTextPreference(
-                                            title = row.title,
-                                            value = row.value,
-                                            summary = row.summary,
-                                            placeholder = row.placeholder,
-                                            suggestions = row.suggestions,
-                                            isPassword = row.isPassword,
-                                            iconRes = row.iconRes ?: R.drawable.ic_edit,
-                                            enabled = row.enabled,
-                                            onValueChange = row.onValueChange,
-                                        )
-                                    }
+                                        is SourceSettingsTextRowUiState -> {
+                                            SettingsDialogTextPreference(
+                                                title = row.title,
+                                                value = row.value,
+                                                summary = row.summary,
+                                                placeholder = row.placeholder,
+                                                suggestions = row.suggestions,
+                                                isPassword = row.isPassword,
+                                                iconRes = row.iconRes ?: R.drawable.ic_edit,
+                                                enabled = row.enabled,
+                                                onValueChange = row.onValueChange,
+                                            )
+                                        }
 
-                                    is SourceSettingsInfoRowUiState -> {
-                                        SettingsInfoPreference(
-                                            title = row.title,
-                                            summary = row.summary,
-                                            iconRes = row.iconRes ?: R.drawable.ic_info_outline,
-                                        )
+                                        is SourceSettingsInfoRowUiState -> {
+                                            SettingsInfoPreference(
+                                                title = row.title,
+                                                summary = row.summary,
+                                                iconRes = row.iconRes ?: R.drawable.ic_info_outline,
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                            if (index < section.rows.lastIndex) {
-                                SettingsSectionDivider()
                             }
                         }
                     }

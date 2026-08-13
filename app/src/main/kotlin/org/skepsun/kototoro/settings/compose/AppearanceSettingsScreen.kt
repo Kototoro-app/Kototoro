@@ -240,378 +240,453 @@ fun AppearanceSettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-        item(key = "appearance") {
-            SettingsPreferenceSection(
-                title = stringResource(R.string.appearance),
+        item(key = "appearance_theme_and_color") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_theme_and_color),
             ) {
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_theme_and_color))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.interface_style),
-                    iconRes = R.drawable.ic_appearance,
-                    value = state.interfaceStyle,
-                    options = options.interfaceStyles,
-                    onValueChange = onInterfaceStyleChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.color_theme),
-                    iconRes = R.drawable.ic_auto_fix,
-                    value = state.colorScheme,
-                    options = options.colorSchemes,
-                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                        stringResource(R.string.appearance_color_scheme_ios_note)
-                    } else {
-                        null
-                    },
-                    onValueChange = onColorSchemeChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.appearance_mode),
-                    iconRes = R.drawable.ic_timelapse,
-                    value = state.theme,
-                    options = options.themes,
-                    onValueChange = onThemeChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.background_style),
-                    iconRes = R.drawable.ic_images,
-                    value = state.backgroundStyle,
-                    options = options.backgroundStyles,
-                    summary = stringResource(R.string.background_style_summary),
-                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                        stringResource(R.string.appearance_background_ios_note)
-                    } else {
-                        null
-                    },
-                    onValueChange = onBackgroundStyleChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.black_dark_theme),
-                    iconRes = R.drawable.ic_eye_off,
-                    checked = state.isAmoledTheme,
-                    summary = stringResource(R.string.black_dark_theme_summary),
-                    onCheckedChange = onAmoledThemeChange,
-                )
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_text_and_language))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.pref_app_font_preset),
-                    iconRes = R.drawable.ic_read,
-                    value = if (usesExpressiveTypography) {
-                        state.expressiveAppFontPreset
-                    } else {
-                        state.appFontPreset
-                    },
-                    options = options.fontPresets,
-                    summary = stringResource(R.string.pref_app_font_preset_summary),
-                    styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                        stringResource(
-                            R.string.appearance_ios_font_note,
-                            options.fontPresets.firstOrNull { it.value == state.expressiveAppFontPreset }?.label.orEmpty(),
-                        )
-                    } else {
-                        null
-                    },
-                    onValueChange = if (usesExpressiveTypography) {
-                        onExpressiveAppFontPresetChange
-                    } else {
-                        onAppFontPresetChange
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.language),
-                    iconRes = R.drawable.ic_language,
-                    value = state.appLocale,
-                    options = options.appLocales,
-                    onValueChange = onAppLocaleChange,
-                )
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_interface_components))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.tablet_ui_mode),
-                    iconRes = R.drawable.ic_aspect_ratio,
-                    value = state.tabletUiMode,
-                    options = options.tabletUiModes,
-                    onValueChange = onTabletUiModeChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.pref_loading_circle_style),
-                    iconRes = R.drawable.ic_timer_run,
-                    value = state.loadingCircleStyle,
-                    options = options.loadingCircleStyles,
-                    summary = stringResource(R.string.pref_loading_circle_style_summary),
-                    onValueChange = onLoadingCircleStyleChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.pref_popup_radius),
-                    iconRes = R.drawable.ic_aspect_ratio,
-                    value = state.popupRadius,
-                    options = options.popupRadii,
-                    styleHint = stringResource(
-                        if (state.popupRadius == -1) {
-                            R.string.appearance_style_default_value
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.interface_style),
+                        iconRes = R.drawable.ic_appearance,
+                        value = state.interfaceStyle,
+                        options = options.interfaceStyles,
+                        onValueChange = onInterfaceStyleChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.color_theme),
+                        iconRes = R.drawable.ic_auto_fix,
+                        value = state.colorScheme,
+                        options = options.colorSchemes,
+                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                            stringResource(R.string.appearance_color_scheme_ios_note)
                         } else {
-                            R.string.appearance_style_custom_override
+                            null
                         },
-                        stringResource(state.interfaceStyle.titleResId),
-                        "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
-                    ),
-                    onValueChange = onPopupRadiusChange,
-                )
-            }
-        }
-
-        item(key = "manga_list") {
-            SettingsPreferenceSection(
-                title = stringResource(R.string.manga_list),
-            ) {
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_list_layout))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.list_mode),
-                    iconRes = R.drawable.ic_list,
-                    value = state.listMode,
-                    options = options.listModes,
-                    onValueChange = onListModeChange,
-                )
-                SettingsSectionDivider()
-                SettingsSliderPreference(
-                    title = stringResource(R.string.grid_size),
-                    iconRes = R.drawable.ic_grid,
-                    value = state.gridSize,
-                    valueRange = 50..150,
-                    step = 5,
-                    valueText = { "$it%" },
-                    onValueChange = onGridSizeChange,
-                )
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_list_interaction))
-                SettingsSliderPreference(
-                    title = stringResource(R.string.pref_rail_animation_intensity),
-                    iconRes = R.drawable.ic_move_horizontal,
-                    value = state.railAnimationIntensityPercent,
-                    valueRange = 0..300,
-                    step = 10,
-                    summary = stringResource(R.string.pref_rail_animation_intensity_summary),
-                    valueText = { "$it%" },
-                    enabled = state.isRailAnimationSettingsEnabled,
-                    onValueChange = onRailAnimationIntensityChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.show_quick_filters),
-                    iconRes = R.drawable.ic_filter_menu,
-                    checked = state.isQuickFilterEnabled,
-                    summary = stringResource(R.string.show_quick_filters_summary),
-                    onCheckedChange = onQuickFilterChange,
-                )
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_list_information))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.show_reading_indicators),
-                    iconRes = R.drawable.ic_progress_marker,
-                    value = state.progressIndicatorMode,
-                    options = options.progressIndicatorModes,
-                    onValueChange = onProgressIndicatorModeChange,
-                )
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.badges_in_lists),
-                    summary = stringResource(R.string.appearance_badges_group_summary),
-                    iconRes = R.drawable.ic_bookmark_selector,
-                    onClick = onBadgesSettingsClick,
-                )
-            }
-        }
-
-        item(key = "details") {
-            SettingsPreferenceSection(
-                title = stringResource(R.string.details),
-            ) {
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_details_content))
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.collapse_long_description),
-                    iconRes = R.drawable.ic_expand_more,
-                    checked = !state.isDescriptionExpanded,
-                    onCheckedChange = { onDescriptionExpandedChange(!it) },
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.show_pages_thumbs),
-                    iconRes = R.drawable.ic_book_page,
-                    checked = state.isPagesTabEnabled,
-                    summary = stringResource(R.string.show_pages_thumbs_summary),
-                    onCheckedChange = onPagesTabEnabledChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.details_translate_button_visible),
-                    iconRes = R.drawable.ic_translate,
-                    checked = state.isDetailsTranslateButtonVisible,
-                    summary = stringResource(R.string.details_translate_button_visible_summary),
-                    onCheckedChange = onDetailsTranslateButtonVisibleChange,
-                )
-                if (state.isPagesTabEnabled) {
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.default_tab),
-                        iconRes = R.drawable.ic_list_detailed,
-                        value = state.defaultDetailsTab,
-                        options = options.detailsTabs,
-                        onValueChange = onDefaultDetailsTabChange,
+                        onValueChange = onColorSchemeChange,
                     )
                 }
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_details_visual))
-                SettingsSplitSwitchPreference(
-                    title = stringResource(R.string.pref_panorama_cover),
-                    iconRes = R.drawable.ic_images,
-                    checked = state.isPanoramaCoverEnabled,
-                    summary = state.panoramaCoverSummary,
-                    onClick = onPanoramaSettingsClick,
-                    onCheckedChange = onPanoramaCoverEnabledChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.modern_details_dock),
-                    iconRes = R.drawable.ic_drawer_menu,
-                    checked = state.isModernDetailsDockEnabled,
-                    summary = stringResource(R.string.modern_details_dock_summary),
-                    onCheckedChange = onModernDetailsDockEnabledChange,
-                )
-            }
-        }
-
-        item(key = "main") {
-            SettingsPreferenceSection(
-                title = stringResource(R.string.main_screen),
-            ) {
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_home_display))
-                SettingsChoicePreference(
-                    title = stringResource(R.string.pref_home_hero_mode),
-                    iconRes = R.drawable.ic_home_filled,
-                    value = state.homeHeroMode,
-                    options = options.homeHeroModes,
-                    summary = stringResource(R.string.pref_home_hero_mode_summary),
-                    onValueChange = onHomeHeroModeChange,
-                )
-                if (state.homeHeroMode == HomeHeroMode.FIXED) {
-                    SettingsSectionDivider()
+                item {
                     SettingsChoicePreference(
-                        title = stringResource(R.string.pref_home_hero_background),
+                        title = stringResource(R.string.appearance_mode),
+                        iconRes = R.drawable.ic_timelapse,
+                        value = state.theme,
+                        options = options.themes,
+                        onValueChange = onThemeChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.background_style),
                         iconRes = R.drawable.ic_images,
-                        value = state.homeHeroBackground,
-                        options = options.homeHeroBackgrounds,
-                        onValueChange = onHomeHeroBackgroundChange,
-                    )
-                    SettingsSectionDivider()
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.pref_home_hero_content_layout),
-                        iconRes = R.drawable.ic_list_detailed,
-                        value = state.homeHeroContentLayout,
-                        options = options.homeHeroContentLayouts,
-                        onValueChange = onHomeHeroContentLayoutChange,
+                        value = state.backgroundStyle,
+                        options = options.backgroundStyles,
+                        summary = stringResource(R.string.background_style_summary),
+                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                            stringResource(R.string.appearance_background_ios_note)
+                        } else {
+                            null
+                        },
+                        onValueChange = onBackgroundStyleChange,
                     )
                 }
-                SettingsSectionDivider()
-                SettingsGroupLabel(text = stringResource(R.string.appearance_group_main_content))
-                SettingsMultiChoicePreference(
-                    title = stringResource(R.string.search_suggestions),
-                    iconRes = R.drawable.ic_suggestion,
-                    values = state.searchSuggestionTypes,
-                    options = options.searchSuggestionTypes,
-                    emptySelectionText = emptySelectionText,
-                    onValueChange = onSearchSuggestionTypesChange,
-                )
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.main_screen_sections),
-                    iconRes = R.drawable.ic_home,
-                    summary = state.navSummary,
-                    onClick = onNavConfigClick,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.main_screen_fab),
-                    iconRes = R.drawable.ic_shortcut,
-                    checked = state.isMainFabEnabled,
-                    summary = stringResource(R.string.main_screen_fab_summary),
-                    onCheckedChange = onMainFabChange,
-                )
-                if (state.isDynamicShortcutsVisible) {
-                    SettingsSectionDivider()
+                item {
                     SettingsSwitchPreference(
-                        title = stringResource(R.string.history_shortcuts),
-                        iconRes = R.drawable.ic_history,
-                        checked = state.isDynamicShortcutsEnabled,
-                        summary = stringResource(R.string.history_shortcuts_summary),
-                        onCheckedChange = onDynamicShortcutsChange,
+                        title = stringResource(R.string.black_dark_theme),
+                        iconRes = R.drawable.ic_eye_off,
+                        checked = state.isAmoledTheme,
+                        summary = stringResource(R.string.black_dark_theme_summary),
+                        onCheckedChange = onAmoledThemeChange,
                     )
                 }
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.search_bar_filters),
-                    summary = stringResource(R.string.appearance_search_filters_group_summary),
-                    iconRes = R.drawable.ic_filter_menu,
-                    onClick = onSearchFiltersSettingsClick,
-                )
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.appearance_navigation_group),
-                    summary = stringResource(R.string.appearance_navigation_group_summary),
-                    iconRes = R.drawable.ic_drawer_menu,
-                    onClick = onNavigationSettingsClick,
-                )
+            }
+        }
+
+        item(key = "appearance_text_and_language") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_text_and_language),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_app_font_preset),
+                        iconRes = R.drawable.ic_read,
+                        value = if (usesExpressiveTypography) {
+                            state.expressiveAppFontPreset
+                        } else {
+                            state.appFontPreset
+                        },
+                        options = options.fontPresets,
+                        summary = stringResource(R.string.pref_app_font_preset_summary),
+                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                            stringResource(
+                                R.string.appearance_ios_font_note,
+                                options.fontPresets.firstOrNull {
+                                    it.value == state.expressiveAppFontPreset
+                                }?.label.orEmpty(),
+                            )
+                        } else {
+                            null
+                        },
+                        onValueChange = if (usesExpressiveTypography) {
+                            onExpressiveAppFontPresetChange
+                        } else {
+                            onAppFontPresetChange
+                        },
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.language),
+                        iconRes = R.drawable.ic_language,
+                        value = state.appLocale,
+                        options = options.appLocales,
+                        onValueChange = onAppLocaleChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "appearance_interface_components") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_interface_components),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.tablet_ui_mode),
+                        iconRes = R.drawable.ic_aspect_ratio,
+                        value = state.tabletUiMode,
+                        options = options.tabletUiModes,
+                        onValueChange = onTabletUiModeChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_loading_circle_style),
+                        iconRes = R.drawable.ic_timer_run,
+                        value = state.loadingCircleStyle,
+                        options = options.loadingCircleStyles,
+                        summary = stringResource(R.string.pref_loading_circle_style_summary),
+                        onValueChange = onLoadingCircleStyleChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_popup_radius),
+                        iconRes = R.drawable.ic_aspect_ratio,
+                        value = state.popupRadius,
+                        options = options.popupRadii,
+                        styleHint = stringResource(
+                            if (state.popupRadius == -1) {
+                                R.string.appearance_style_default_value
+                            } else {
+                                R.string.appearance_style_custom_override
+                            },
+                            stringResource(state.interfaceStyle.titleResId),
+                            "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
+                        ),
+                        onValueChange = onPopupRadiusChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "manga_list_layout") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_list_layout),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.list_mode),
+                        iconRes = R.drawable.ic_list,
+                        value = state.listMode,
+                        options = options.listModes,
+                        onValueChange = onListModeChange,
+                    )
+                }
+                item {
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.grid_size),
+                        iconRes = R.drawable.ic_grid,
+                        value = state.gridSize,
+                        valueRange = 50..150,
+                        step = 5,
+                        valueText = { "$it%" },
+                        onValueChange = onGridSizeChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "manga_list_interaction") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_list_interaction),
+            ) {
+                item {
+                    SettingsSliderPreference(
+                        title = stringResource(R.string.pref_rail_animation_intensity),
+                        iconRes = R.drawable.ic_move_horizontal,
+                        value = state.railAnimationIntensityPercent,
+                        valueRange = 0..300,
+                        step = 10,
+                        summary = stringResource(R.string.pref_rail_animation_intensity_summary),
+                        valueText = { "$it%" },
+                        enabled = state.isRailAnimationSettingsEnabled,
+                        onValueChange = onRailAnimationIntensityChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.show_quick_filters),
+                        iconRes = R.drawable.ic_filter_menu,
+                        checked = state.isQuickFilterEnabled,
+                        summary = stringResource(R.string.show_quick_filters_summary),
+                        onCheckedChange = onQuickFilterChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "manga_list_information") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_list_information),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.show_reading_indicators),
+                        iconRes = R.drawable.ic_progress_marker,
+                        value = state.progressIndicatorMode,
+                        options = options.progressIndicatorModes,
+                        onValueChange = onProgressIndicatorModeChange,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.badges_in_lists),
+                        summary = stringResource(R.string.appearance_badges_group_summary),
+                        iconRes = R.drawable.ic_bookmark_selector,
+                        onClick = onBadgesSettingsClick,
+                    )
+                }
+            }
+        }
+
+        item(key = "details_content") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_details_content),
+            ) {
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.collapse_long_description),
+                        iconRes = R.drawable.ic_expand_more,
+                        checked = !state.isDescriptionExpanded,
+                        onCheckedChange = { onDescriptionExpandedChange(!it) },
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.show_pages_thumbs),
+                        iconRes = R.drawable.ic_book_page,
+                        checked = state.isPagesTabEnabled,
+                        summary = stringResource(R.string.show_pages_thumbs_summary),
+                        onCheckedChange = onPagesTabEnabledChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.details_translate_button_visible),
+                        iconRes = R.drawable.ic_translate,
+                        checked = state.isDetailsTranslateButtonVisible,
+                        summary = stringResource(R.string.details_translate_button_visible_summary),
+                        onCheckedChange = onDetailsTranslateButtonVisibleChange,
+                    )
+                }
+                if (state.isPagesTabEnabled) {
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.default_tab),
+                            iconRes = R.drawable.ic_list_detailed,
+                            value = state.defaultDetailsTab,
+                            options = options.detailsTabs,
+                            onValueChange = onDefaultDetailsTabChange,
+                        )
+                    }
+                }
+            }
+        }
+
+        item(key = "details_visual") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_details_visual),
+            ) {
+                item {
+                    SettingsSplitSwitchPreference(
+                        title = stringResource(R.string.pref_panorama_cover),
+                        iconRes = R.drawable.ic_images,
+                        checked = state.isPanoramaCoverEnabled,
+                        summary = state.panoramaCoverSummary,
+                        onClick = onPanoramaSettingsClick,
+                        onCheckedChange = onPanoramaCoverEnabledChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.modern_details_dock),
+                        iconRes = R.drawable.ic_drawer_menu,
+                        checked = state.isModernDetailsDockEnabled,
+                        summary = stringResource(R.string.modern_details_dock_summary),
+                        onCheckedChange = onModernDetailsDockEnabledChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "main_home_display") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_home_display),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_home_hero_mode),
+                        iconRes = R.drawable.ic_home_filled,
+                        value = state.homeHeroMode,
+                        options = options.homeHeroModes,
+                        summary = stringResource(R.string.pref_home_hero_mode_summary),
+                        onValueChange = onHomeHeroModeChange,
+                    )
+                }
+                if (state.homeHeroMode == HomeHeroMode.FIXED) {
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.pref_home_hero_background),
+                            iconRes = R.drawable.ic_images,
+                            value = state.homeHeroBackground,
+                            options = options.homeHeroBackgrounds,
+                            onValueChange = onHomeHeroBackgroundChange,
+                        )
+                    }
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.pref_home_hero_content_layout),
+                            iconRes = R.drawable.ic_list_detailed,
+                            value = state.homeHeroContentLayout,
+                            options = options.homeHeroContentLayouts,
+                            onValueChange = onHomeHeroContentLayoutChange,
+                        )
+                    }
+                }
+            }
+        }
+
+        item(key = "main_content") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_main_content),
+            ) {
+                item {
+                    SettingsMultiChoicePreference(
+                        title = stringResource(R.string.search_suggestions),
+                        iconRes = R.drawable.ic_suggestion,
+                        values = state.searchSuggestionTypes,
+                        options = options.searchSuggestionTypes,
+                        emptySelectionText = emptySelectionText,
+                        onValueChange = onSearchSuggestionTypesChange,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.main_screen_sections),
+                        iconRes = R.drawable.ic_home,
+                        summary = state.navSummary,
+                        onClick = onNavConfigClick,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.main_screen_fab),
+                        iconRes = R.drawable.ic_shortcut,
+                        checked = state.isMainFabEnabled,
+                        summary = stringResource(R.string.main_screen_fab_summary),
+                        onCheckedChange = onMainFabChange,
+                    )
+                }
+                if (state.isDynamicShortcutsVisible) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.history_shortcuts),
+                            iconRes = R.drawable.ic_history,
+                            checked = state.isDynamicShortcutsEnabled,
+                            summary = stringResource(R.string.history_shortcuts_summary),
+                            onCheckedChange = onDynamicShortcutsChange,
+                        )
+                    }
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.search_bar_filters),
+                        summary = stringResource(R.string.appearance_search_filters_group_summary),
+                        iconRes = R.drawable.ic_filter_menu,
+                        onClick = onSearchFiltersSettingsClick,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_navigation_group),
+                        summary = stringResource(R.string.appearance_navigation_group_summary),
+                        iconRes = R.drawable.ic_drawer_menu,
+                        onClick = onNavigationSettingsClick,
+                    )
+                }
             }
         }
 
         item(key = "interaction_behavior") {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_behavior_section),
             ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.shared_element_transitions),
-                    iconRes = R.drawable.ic_move_horizontal,
-                    checked = state.isSharedElementTransitionsEnabled,
-                    summary = stringResource(R.string.shared_element_transitions_summary),
-                    enabled = state.isSharedElementTransitionsSettingsEnabled,
-                    onCheckedChange = onSharedElementTransitionsChange,
-                )
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.exit_confirmation),
-                    iconRes = R.drawable.ic_alert_outline,
-                    checked = state.isExitConfirmationEnabled,
-                    summary = stringResource(R.string.exit_confirmation_summary),
-                    onCheckedChange = onExitConfirmationChange,
-                )
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.shared_element_transitions),
+                        iconRes = R.drawable.ic_move_horizontal,
+                        checked = state.isSharedElementTransitionsEnabled,
+                        summary = stringResource(R.string.shared_element_transitions_summary),
+                        enabled = state.isSharedElementTransitionsSettingsEnabled,
+                        onCheckedChange = onSharedElementTransitionsChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.exit_confirmation),
+                        iconRes = R.drawable.ic_alert_outline,
+                        checked = state.isExitConfirmationEnabled,
+                        summary = stringResource(R.string.exit_confirmation_summary),
+                        onCheckedChange = onExitConfirmationChange,
+                    )
+                }
             }
         }
 
         item(key = "privacy") {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.privacy),
             ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.protect_application),
-                    iconRes = R.drawable.ic_lock,
-                    checked = state.isAppProtected,
-                    summary = stringResource(R.string.protect_application_summary),
-                    onCheckedChange = onAppProtectionChange,
-                )
-                SettingsSectionDivider()
-                SettingsChoicePreference(
-                    title = stringResource(R.string.screenshots_policy),
-                    iconRes = R.drawable.ic_eye,
-                    value = state.screenshotsPolicy,
-                    options = options.screenshotsPolicies,
-                    onValueChange = onScreenshotsPolicyChange,
-                )
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.protect_application),
+                        iconRes = R.drawable.ic_lock,
+                        checked = state.isAppProtected,
+                        summary = stringResource(R.string.protect_application_summary),
+                        onCheckedChange = onAppProtectionChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.screenshots_policy),
+                        iconRes = R.drawable.ic_eye,
+                        value = state.screenshotsPolicy,
+                        options = options.screenshotsPolicies,
+                        onValueChange = onScreenshotsPolicyChange,
+                    )
+                }
             }
         }
         }
@@ -620,7 +695,7 @@ fun AppearanceSettingsScreen(
 
 @Composable
 private fun AppearanceSubpage(
-    content: @Composable () -> Unit,
+    content: @Composable SettingsItemGroupScope.() -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -636,7 +711,7 @@ private fun AppearanceSubpage(
             ),
         ) {
             item {
-                SettingsPreferenceSection(title = "", content = content)
+                SettingsPreferenceGroup(title = "", content = content)
             }
         }
     }
@@ -652,41 +727,46 @@ private fun AppearanceBadgesSettingsScreen(
     onBadgesBottomLeftChange: (Set<String>) -> Unit,
     onBadgesBottomRightChange: (Set<String>) -> Unit,
 ) = AppearanceSubpage {
-    SettingsMultiChoicePreference(
-        title = stringResource(R.string.badge_top_left),
-        iconRes = R.drawable.ic_bookmark,
-        values = state.badgesTopLeft,
-        options = options.badgeOptions,
-        emptySelectionText = emptySelectionText,
-        onValueChange = onBadgesTopLeftChange,
-    )
-    SettingsSectionDivider()
-    SettingsMultiChoicePreference(
-        title = stringResource(R.string.badge_top_right),
-        iconRes = R.drawable.ic_star_small,
-        values = state.badgesTopRight,
-        options = options.badgeOptions,
-        emptySelectionText = emptySelectionText,
-        onValueChange = onBadgesTopRightChange,
-    )
-    SettingsSectionDivider()
-    SettingsMultiChoicePreference(
-        title = stringResource(R.string.badge_bottom_left),
-        iconRes = R.drawable.ic_new,
-        values = state.badgesBottomLeft,
-        options = options.badgeOptions,
-        emptySelectionText = emptySelectionText,
-        onValueChange = onBadgesBottomLeftChange,
-    )
-    SettingsSectionDivider()
-    SettingsMultiChoicePreference(
-        title = stringResource(R.string.badge_bottom_right),
-        iconRes = R.drawable.ic_progress_marker,
-        values = state.badgesBottomRight,
-        options = options.bottomRightBadgeOptions,
-        emptySelectionText = emptySelectionText,
-        onValueChange = onBadgesBottomRightChange,
-    )
+    item {
+        SettingsMultiChoicePreference(
+            title = stringResource(R.string.badge_top_left),
+            iconRes = R.drawable.ic_bookmark,
+            values = state.badgesTopLeft,
+            options = options.badgeOptions,
+            emptySelectionText = emptySelectionText,
+            onValueChange = onBadgesTopLeftChange,
+        )
+    }
+    item {
+        SettingsMultiChoicePreference(
+            title = stringResource(R.string.badge_top_right),
+            iconRes = R.drawable.ic_star_small,
+            values = state.badgesTopRight,
+            options = options.badgeOptions,
+            emptySelectionText = emptySelectionText,
+            onValueChange = onBadgesTopRightChange,
+        )
+    }
+    item {
+        SettingsMultiChoicePreference(
+            title = stringResource(R.string.badge_bottom_left),
+            iconRes = R.drawable.ic_new,
+            values = state.badgesBottomLeft,
+            options = options.badgeOptions,
+            emptySelectionText = emptySelectionText,
+            onValueChange = onBadgesBottomLeftChange,
+        )
+    }
+    item {
+        SettingsMultiChoicePreference(
+            title = stringResource(R.string.badge_bottom_right),
+            iconRes = R.drawable.ic_progress_marker,
+            values = state.badgesBottomRight,
+            options = options.bottomRightBadgeOptions,
+            emptySelectionText = emptySelectionText,
+            onValueChange = onBadgesBottomRightChange,
+        )
+    }
 }
 
 @Composable
@@ -701,56 +781,63 @@ private fun AppearanceSearchFiltersSettingsScreen(
     onShowSourceTagFilterChange: (Boolean) -> Unit,
     onHiddenSourceTagChange: (Set<String>) -> Unit,
 ) = AppearanceSubpage {
+    item {
         SettingsSwitchPreference(
             title = stringResource(R.string.show_language_preset_filter),
             iconRes = R.drawable.ic_language,
             checked = state.isShowLanguagePresetFilter,
             onCheckedChange = onShowLanguagePresetFilterChange,
         )
+    }
         if (!state.isShowLanguagePresetFilter) {
-            SettingsSectionDivider()
-            SettingsChoicePreference(
-                title = stringResource(R.string.fixed_language_preset),
-                iconRes = R.drawable.ic_language,
-                value = state.hiddenLanguagePreset,
-                options = options.languagePresets,
-                onValueChange = onHiddenLanguagePresetChange,
-            )
+            item {
+                SettingsChoicePreference(
+                    title = stringResource(R.string.fixed_language_preset),
+                    iconRes = R.drawable.ic_language,
+                    value = state.hiddenLanguagePreset,
+                    options = options.languagePresets,
+                    onValueChange = onHiddenLanguagePresetChange,
+                )
+            }
         }
-        SettingsSectionDivider()
+        item {
         SettingsSwitchPreference(
             title = stringResource(R.string.show_content_type_filter),
             iconRes = R.drawable.ic_filter_content_type,
             checked = state.isShowContentTypeFilter,
             onCheckedChange = onShowContentTypeFilterChange,
         )
-        if (!state.isShowContentTypeFilter) {
-            SettingsSectionDivider()
-            SettingsChoicePreference(
-                title = stringResource(R.string.fixed_content_type),
-                iconRes = R.drawable.ic_filter_content_type,
-                value = state.hiddenContentType,
-                options = options.contentTypes,
-                onValueChange = onHiddenContentTypeChange,
-            )
         }
-        SettingsSectionDivider()
+        if (!state.isShowContentTypeFilter) {
+            item {
+                SettingsChoicePreference(
+                    title = stringResource(R.string.fixed_content_type),
+                    iconRes = R.drawable.ic_filter_content_type,
+                    value = state.hiddenContentType,
+                    options = options.contentTypes,
+                    onValueChange = onHiddenContentTypeChange,
+                )
+            }
+        }
+        item {
         SettingsSwitchPreference(
             title = stringResource(R.string.show_source_tag_filter),
             iconRes = R.drawable.ic_tag,
             checked = state.isShowSourceTagFilter,
             onCheckedChange = onShowSourceTagFilterChange,
         )
+        }
         if (!state.isShowSourceTagFilter) {
-            SettingsSectionDivider()
-            SettingsMultiChoicePreference(
-                title = stringResource(R.string.fixed_source_tag),
-                iconRes = R.drawable.ic_tag,
-                values = state.hiddenSourceTag,
-                options = options.sourceTags,
-                emptySelectionText = emptySelectionText,
-                onValueChange = onHiddenSourceTagChange,
-            )
+            item {
+                SettingsMultiChoicePreference(
+                    title = stringResource(R.string.fixed_source_tag),
+                    iconRes = R.drawable.ic_tag,
+                    values = state.hiddenSourceTag,
+                    options = options.sourceTags,
+                    emptySelectionText = emptySelectionText,
+                    onValueChange = onHiddenSourceTagChange,
+                )
+            }
         }
 }
 
@@ -764,60 +851,67 @@ private fun AppearanceNavigationSettingsScreen(
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
 ) = AppearanceSubpage {
-    SettingsSwitchPreference(
-        title = stringResource(R.string.pin_navigation_ui),
-        iconRes = R.drawable.ic_pin,
-        checked = state.isNavBarPinned,
-        summary = stringResource(R.string.pin_navigation_ui_summary),
-        onCheckedChange = onNavPinnedChange,
-    )
-    SettingsSectionDivider()
-    SettingsSwitchPreference(
-        title = stringResource(R.string.show_labels_in_navbar),
-        iconRes = R.drawable.ic_list_detailed,
-        checked = state.isNavLabelsVisible,
-        onCheckedChange = onNavLabelsVisibleChange,
-    )
-    SettingsSectionDivider()
-    SettingsSwitchPreference(
-        title = stringResource(R.string.pref_nav_floating),
-        iconRes = R.drawable.ic_move_horizontal,
-        checked = state.isNavFloating,
-        summary = stringResource(R.string.pref_nav_floating_summary),
-        onCheckedChange = onNavFloatingChange,
-    )
-    SettingsSectionDivider()
-    SettingsSwitchPreference(
-        title = stringResource(R.string.pref_nav_expressive_pill),
-        iconRes = R.drawable.ic_aspect_ratio,
-        checked = state.isNavExpressivePillEnabled,
-        summary = stringResource(R.string.pref_nav_expressive_pill_summary),
-        styleHint = stringResource(
-            R.string.appearance_style_default_value,
-            stringResource(state.interfaceStyle.titleResId),
-            stringResource(R.string.enabled),
-        ),
-        enabled = state.isNavFloating,
-        onCheckedChange = onNavExpressivePillChange,
-    )
-    SettingsSectionDivider()
-    SettingsSliderPreference(
-        title = stringResource(R.string.pref_nav_height),
-        iconRes = R.drawable.ic_size_large,
-        value = state.navHeight,
-        valueRange = 48..88,
-        step = 4,
-        valueText = { "${it}dp" },
-        onValueChange = onNavHeightChange,
-    )
-    SettingsSectionDivider()
-    SettingsSliderPreference(
-        title = stringResource(R.string.pref_nav_floating_height),
-        iconRes = R.drawable.ic_split_horizontal,
-        value = state.navFloatingHeight,
-        valueRange = 48..84,
-        step = 4,
-        valueText = { "${it}dp" },
-        onValueChange = onNavFloatingHeightChange,
-    )
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pin_navigation_ui),
+            iconRes = R.drawable.ic_pin,
+            checked = state.isNavBarPinned,
+            summary = stringResource(R.string.pin_navigation_ui_summary),
+            onCheckedChange = onNavPinnedChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.show_labels_in_navbar),
+            iconRes = R.drawable.ic_list_detailed,
+            checked = state.isNavLabelsVisible,
+            onCheckedChange = onNavLabelsVisibleChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_floating),
+            iconRes = R.drawable.ic_move_horizontal,
+            checked = state.isNavFloating,
+            summary = stringResource(R.string.pref_nav_floating_summary),
+            onCheckedChange = onNavFloatingChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_expressive_pill),
+            iconRes = R.drawable.ic_aspect_ratio,
+            checked = state.isNavExpressivePillEnabled,
+            summary = stringResource(R.string.pref_nav_expressive_pill_summary),
+            styleHint = stringResource(
+                R.string.appearance_style_default_value,
+                stringResource(state.interfaceStyle.titleResId),
+                stringResource(R.string.enabled),
+            ),
+            enabled = state.isNavFloating,
+            onCheckedChange = onNavExpressivePillChange,
+        )
+    }
+    item {
+        SettingsSliderPreference(
+            title = stringResource(R.string.pref_nav_height),
+            iconRes = R.drawable.ic_size_large,
+            value = state.navHeight,
+            valueRange = 48..88,
+            step = 4,
+            valueText = { "${it}dp" },
+            onValueChange = onNavHeightChange,
+        )
+    }
+    item {
+        SettingsSliderPreference(
+            title = stringResource(R.string.pref_nav_floating_height),
+            iconRes = R.drawable.ic_split_horizontal,
+            value = state.navFloatingHeight,
+            valueRange = 48..84,
+            step = 4,
+            valueText = { "${it}dp" },
+            onValueChange = onNavFloatingHeightChange,
+        )
+    }
 }

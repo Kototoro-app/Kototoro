@@ -43,51 +43,52 @@ fun DiscordSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.discord),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.discord_rpc),
-                    iconRes = R.drawable.ic_discord,
-                    checked = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit {
-                            putBoolean(AppSettings.KEY_DISCORD_RPC, checked)
-                        }
-                    },
-                )
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.sign_in),
-                    iconRes = R.drawable.ic_user,
-                    summary = tokenSummary ?: stringResource(R.string.discord_token_summary),
-                    enabled = isEnabled,
-                    onClick = onTokenClick,
-                )
-                if (isLogoutVisible) {
-                    SettingsSectionDivider()
-                    SettingsActionPreference(
-                        title = stringResource(R.string.logout),
-                        iconRes = R.drawable.ic_lock_open,
-                        summary = stringResource(R.string.discord_logout_summary),
-                        enabled = isEnabled,
-                        onClick = onLogoutClick,
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.discord_rpc),
+                        iconRes = R.drawable.ic_discord,
+                        checked = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.prefs.edit { putBoolean(AppSettings.KEY_DISCORD_RPC, checked) }
+                        },
                     )
                 }
-                SettingsSectionDivider()
-                SettingsSwitchPreference(
-                    title = stringResource(R.string.disable_nsfw),
-                    iconRes = R.drawable.ic_nsfw,
-                    summary = stringResource(R.string.rpc_skip_nsfw_summary),
-                    checked = skipNsfw,
-                    enabled = isEnabled,
-                    onCheckedChange = { checked ->
-                        settings.prefs.edit {
-                            putBoolean(AppSettings.KEY_DISCORD_RPC_SKIP_NSFW, checked)
-                        }
-                    },
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.sign_in),
+                        iconRes = R.drawable.ic_user,
+                        summary = tokenSummary ?: stringResource(R.string.discord_token_summary),
+                        enabled = isEnabled,
+                        onClick = onTokenClick,
+                    )
+                }
+                if (isLogoutVisible) {
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.logout),
+                            iconRes = R.drawable.ic_lock_open,
+                            summary = stringResource(R.string.discord_logout_summary),
+                            enabled = isEnabled,
+                            onClick = onLogoutClick,
+                        )
+                    }
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.disable_nsfw),
+                        iconRes = R.drawable.ic_nsfw,
+                        summary = stringResource(R.string.rpc_skip_nsfw_summary),
+                        checked = skipNsfw,
+                        enabled = isEnabled,
+                        onCheckedChange = { checked ->
+                            settings.prefs.edit { putBoolean(AppSettings.KEY_DISCORD_RPC_SKIP_NSFW, checked) }
+                        },
+                    )
+                }
             }
         }
     }

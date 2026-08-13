@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,72 +34,84 @@ fun AISettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_section_core),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsActionPreference(
-                    title = stringResource(R.string.reader_translation_manage_ocr_models),
-                    summary = stringResource(R.string.reader_translation_manage_ocr_models_summary),
-                    iconRes = R.drawable.ic_script,
-                    onClick = onOpenOcrModels
-                )
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.ai_api_settings),
-                    summary = stringResource(R.string.ai_api_settings_summary),
-                    iconRes = R.drawable.ic_key,
-                    onClick = onOpenApiSettings
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.reader_translation_manage_ocr_models),
+                        summary = stringResource(R.string.reader_translation_manage_ocr_models_summary),
+                        iconRes = R.drawable.ic_script,
+                        onClick = onOpenOcrModels,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.ai_api_settings),
+                        summary = stringResource(R.string.ai_api_settings_summary),
+                        iconRes = R.drawable.ic_key,
+                        onClick = onOpenApiSettings,
+                    )
+                }
             }
-            
-            SettingsPreferenceSection(
+
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_section_translation),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsActionPreference(
-                    title = stringResource(R.string.translation_settings),
-                    summary = stringResource(R.string.reader_translation_settings_entry_summary),
-                    iconRes = R.drawable.ic_translate,
-                    onClick = onOpenTranslationSettings
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.translation_settings),
+                        summary = stringResource(R.string.reader_translation_settings_entry_summary),
+                        iconRes = R.drawable.ic_translate,
+                        onClick = onOpenTranslationSettings,
+                    )
+                }
             }
-            
-            SettingsPreferenceSection(
+
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_section_image),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsActionPreference(
-                    title = stringResource(R.string.ai_image_enhancement_settings),
-                    summary = stringResource(R.string.ai_image_enhancement_summary),
-                    iconRes = R.drawable.ic_zoom_in,
-                    onClick = onOpenImageEnhancementSettings
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.ai_image_enhancement_settings),
+                        summary = stringResource(R.string.ai_image_enhancement_summary),
+                        iconRes = R.drawable.ic_zoom_in,
+                        onClick = onOpenImageEnhancementSettings,
+                    )
+                }
             }
-            
-            SettingsPreferenceSection(
+
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.tts_section_voice_subtitle),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsActionPreference(
-                    title = stringResource(R.string.tts_settings_title),
-                    summary = stringResource(R.string.tts_settings_summary),
-                    iconRes = R.drawable.ic_voice_input,
-                    onClick = onOpenTtsSettings
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.tts_settings_title),
+                        summary = stringResource(R.string.tts_settings_summary),
+                        iconRes = R.drawable.ic_voice_input,
+                        onClick = onOpenTtsSettings,
+                    )
+                }
             }
-            
-            SettingsPreferenceSection(
+
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_section_video),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsActionPreference(
-                    title = stringResource(R.string.ai_video_enhancement_settings),
-                    summary = stringResource(R.string.ai_video_enhancement_summary),
-                    iconRes = R.drawable.ic_content_video,
-                    onClick = onOpenVideoEnhancementSettings
-                )
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.ai_video_enhancement_settings),
+                        summary = stringResource(R.string.ai_video_enhancement_summary),
+                        iconRes = R.drawable.ic_content_video,
+                        onClick = onOpenVideoEnhancementSettings,
+                    )
+                }
             }
         }
     }

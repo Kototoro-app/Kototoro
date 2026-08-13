@@ -24,23 +24,23 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 @Composable
 fun TranslationSettingsScreen(
     settings: AppSettings,
-	onOcrModeChange: (ReaderOcrMode) -> Unit,
+    onOcrModeChange: (ReaderOcrMode) -> Unit,
     onOpenOcrModels: () -> Unit,
     onOpenApiSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-	val prefs = settings.prefs
+    val prefs = settings.prefs
 
-	val modeNames = stringArrayResource(R.array.values_reader_translation_modes).toList()
-	val sourceLangNames = stringArrayResource(R.array.values_reader_translation_source_languages).toList()
-	val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
-	val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
-	val currentMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_MODE) {
-		settings.readerTranslationMode
-	}.value
-	val currentOcrMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_MODE) {
-		settings.readerTranslationOcrMode
-	}.value
+    val modeNames = stringArrayResource(R.array.values_reader_translation_modes).toList()
+    val sourceLangNames = stringArrayResource(R.array.values_reader_translation_source_languages).toList()
+    val targetLangNames = stringArrayResource(R.array.values_reader_translation_target_languages).toList()
+    val renderStyleNames = stringArrayResource(R.array.values_reader_translation_render_styles).toList()
+    val currentMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_MODE) {
+        settings.readerTranslationMode
+    }.value
+    val currentOcrMode = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_OCR_MODE) {
+        settings.readerTranslationOcrMode
+    }.value
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -52,84 +52,105 @@ fun TranslationSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.reader_translation_section_general),
-				modifier = Modifier.fillMaxWidth(),
-			) {
-				SettingsChoicePreference(
-					title = stringResource(R.string.reader_translation_mode),
-					iconRes = R.drawable.ic_translate,
-					options = stringArrayResource(R.array.reader_translation_modes).mapIndexed { index, label ->
-						SettingsChoiceOption(modeNames[index], label)
-					},
-					value = currentMode.name,
-					onSettingsClick = onOpenApiSettings.takeIf { currentMode == ReaderTranslationMode.API_ONLY },
-					settingsContentDescription = stringResource(R.string.reader_translation_open_api_settings),
-					onValueChange = { prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_MODE, it) } },
-				)
-
-				SettingsChoicePreference(
-					title = stringResource(R.string.reader_translation_ocr_mode),
-					iconRes = R.drawable.ic_script,
-					options = listOf(
-						SettingsChoiceOption(ReaderOcrMode.BASIC, stringResource(R.string.reader_translation_ocr_mode_basic)),
-						SettingsChoiceOption(ReaderOcrMode.ADVANCED, stringResource(R.string.reader_translation_ocr_mode_advanced)),
-					),
-					value = currentOcrMode,
-					onSettingsClick = onOpenOcrModels.takeIf { currentOcrMode == ReaderOcrMode.ADVANCED },
-					settingsContentDescription = stringResource(R.string.reader_translation_ocr_advanced_settings),
-					onValueChange = onOcrModeChange,
-				)
-
-				SettingsChoicePreference(
-					title = stringResource(R.string.reader_translation_render_style),
-					iconRes = R.drawable.ic_palette,
-					options = stringArrayResource(R.array.reader_translation_render_styles).mapIndexed { index, label ->
-						SettingsChoiceOption(renderStyleNames[index], label)
-					},
-					value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) {
-						settings.readerTranslationRenderStyle
-					}.value,
-					onValueChange = {
-						prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) }
-					},
-				)
-
-				SettingsChoicePreference(
-                    title = stringResource(R.string.reader_translation_source_lang),
-                    iconRes = R.drawable.ic_language,
-                    options = stringArrayResource(R.array.reader_translation_source_languages).mapIndexed { index, label ->
-                        SettingsChoiceOption(sourceLangNames[index], label)
-                    },
-                    value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG, "auto") ?: "auto" }.value,
-                    onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG, it) } }
-                )
-
-                SettingsChoicePreference(
-                    title = stringResource(R.string.reader_translation_target_lang),
-                    iconRes = R.drawable.ic_language,
-                    options = stringArrayResource(R.array.reader_translation_target_languages).mapIndexed { index, label ->
-                        SettingsChoiceOption(targetLangNames[index], label)
-                    },
-                    value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG) { prefs.getString(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG, "zh") ?: "zh" }.value,
-                    onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG, it) } }
-                )
-
-                if (BuildConfig.DEBUG) {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.reader_translation_debug_logs),
-                        iconRes = R.drawable.ic_code,
-                        summary = stringResource(R.string.reader_translation_debug_logs_summary),
-                        checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS) {
-                            settings.isReaderTranslationDebugLogsEnabled
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_mode),
+                        iconRes = R.drawable.ic_translate,
+                        options = stringArrayResource(R.array.reader_translation_modes).mapIndexed { index, label ->
+                            SettingsChoiceOption(modeNames[index], label)
+                        },
+                        value = currentMode.name,
+                        onSettingsClick = onOpenApiSettings.takeIf {
+                            currentMode == ReaderTranslationMode.API_ONLY
+                        },
+                        settingsContentDescription = stringResource(R.string.reader_translation_open_api_settings),
+                        onValueChange = { prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_MODE, it) } },
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_ocr_mode),
+                        iconRes = R.drawable.ic_script,
+                        options = listOf(
+                            SettingsChoiceOption(
+                                ReaderOcrMode.BASIC,
+                                stringResource(R.string.reader_translation_ocr_mode_basic),
+                            ),
+                            SettingsChoiceOption(
+                                ReaderOcrMode.ADVANCED,
+                                stringResource(R.string.reader_translation_ocr_mode_advanced),
+                            ),
+                        ),
+                        value = currentOcrMode,
+                        onSettingsClick = onOpenOcrModels.takeIf { currentOcrMode == ReaderOcrMode.ADVANCED },
+                        settingsContentDescription =
+                            stringResource(R.string.reader_translation_ocr_advanced_settings),
+                        onValueChange = onOcrModeChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_render_style),
+                        iconRes = R.drawable.ic_palette,
+                        options = stringArrayResource(R.array.reader_translation_render_styles)
+                            .mapIndexed { index, label -> SettingsChoiceOption(renderStyleNames[index], label) },
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE) {
+                            settings.readerTranslationRenderStyle
                         }.value,
-                        onCheckedChange = {
-                            prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS, it) }
+                        onValueChange = {
+                            prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_RENDER_STYLE, it) }
                         },
                     )
                 }
-            }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_source_lang),
+                        iconRes = R.drawable.ic_language,
+                        options = stringArrayResource(R.array.reader_translation_source_languages)
+                            .mapIndexed { index, label -> SettingsChoiceOption(sourceLangNames[index], label) },
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG) {
+                            prefs.getString(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG, "auto") ?: "auto"
+                        }.value,
+                        onValueChange = {
+                            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_SOURCE_LANG, it) }
+                        },
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_target_lang),
+                        iconRes = R.drawable.ic_language,
+                        options = stringArrayResource(R.array.reader_translation_target_languages)
+                            .mapIndexed { index, label -> SettingsChoiceOption(targetLangNames[index], label) },
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG) {
+                            prefs.getString(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG, "zh") ?: "zh"
+                        }.value,
+                        onValueChange = {
+                            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_TARGET_LANG, it) }
+                        },
+                    )
+                }
 
+                if (BuildConfig.DEBUG) {
+                    item {
+                        SettingsSwitchPreference(
+                            title = stringResource(R.string.reader_translation_debug_logs),
+                            iconRes = R.drawable.ic_code,
+                            summary = stringResource(R.string.reader_translation_debug_logs_summary),
+                            checked = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS) {
+                                settings.isReaderTranslationDebugLogsEnabled
+                            }.value,
+                            onCheckedChange = {
+                                prefs.edit { putBoolean(AppSettings.KEY_READER_TRANSLATION_DEBUG_LOGS, it) }
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }

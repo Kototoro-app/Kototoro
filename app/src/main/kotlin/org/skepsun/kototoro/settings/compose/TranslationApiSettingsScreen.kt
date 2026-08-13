@@ -26,12 +26,12 @@ fun TranslationApiSettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val prefs = settings.prefs
-	val uriHandler = LocalUriHandler.current
+    val uriHandler = LocalUriHandler.current
 
-	val currentPreset = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET) {
-		settings.readerTranslationApiProviderPreset
-	}.value
-	val provider = TranslationApiProviderCatalog.find(currentPreset)
+    val currentPreset = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET) {
+        settings.readerTranslationApiProviderPreset
+    }.value
+    val provider = TranslationApiProviderCatalog.find(currentPreset)
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -43,88 +43,117 @@ fun TranslationApiSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
-            SettingsPreferenceSection(
+            SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_api_settings),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                SettingsChoicePreference(
-                    title = stringResource(R.string.reader_translation_api_provider_preset),
-                    iconRes = R.drawable.ic_key,
-                    options = listOf(
-						SettingsChoiceOption("CUSTOM", stringResource(R.string.reader_translation_api_provider_custom)),
-					) + TranslationApiProviderCatalog.providers.map { preset ->
-						SettingsChoiceOption(preset.id, preset.name)
-					},
-                    value = currentPreset,
-                    onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET, it) } },
-                )
-				if (provider != null) {
-					SettingsSectionDivider()
-					SettingsActionPreference(
-						title = stringResource(R.string.reader_translation_api_get_key),
-						iconRes = R.drawable.ic_key,
-						summary = stringResource(R.string.reader_translation_api_get_key_summary),
-						onClick = { uriHandler.openUri(provider.apiKeyUrl) },
-					)
-					SettingsSectionDivider()
-					SettingsActionPreference(
-						title = stringResource(R.string.reader_translation_api_open_docs),
-						iconRes = R.drawable.ic_open_external,
-						summary = stringResource(R.string.reader_translation_api_open_docs_summary),
-						onClick = { uriHandler.openUri(provider.documentationUrl) },
-					)
-				} else {
-					SettingsSectionDivider()
-					SettingsTextInputPreference(
-						title = stringResource(R.string.reader_translation_api_endpoint),
-						iconRes = R.drawable.ic_web,
-						summary = stringResource(R.string.reader_translation_api_endpoint_summary),
-						value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT) {
-							prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT, "") ?: ""
-						}.value,
-						onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT, it) } },
-					)
-				}
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.reader_translation_api_key),
-                    iconRes = R.drawable.ic_key,
-                    summary = stringResource(R.string.reader_translation_api_key_summary),
-                    value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_KEY) {
-                        prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_KEY, "") ?: ""
-                    }.value,
-                    isPassword = true,
-                    onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_KEY, it) } },
-                )
-                SettingsSectionDivider()
-                SettingsTextInputPreference(
-                    title = stringResource(R.string.reader_translation_api_model),
-                    iconRes = R.drawable.ic_auto_fix,
-                    summary = stringResource(R.string.reader_translation_api_model_summary),
-                    value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_MODEL) {
-                        prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, "gpt-4o-mini") ?: "gpt-4o-mini"
-                    }.value,
-                    onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, it) } },
-                )
-				if (provider == null) {
-					SettingsSectionDivider()
-					SettingsTextInputPreference(
-						title = stringResource(R.string.reader_translation_api_custom_headers),
-						iconRes = R.drawable.ic_code,
-						summary = stringResource(R.string.reader_translation_api_custom_headers_summary),
-						value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS) {
-							prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, "") ?: ""
-						}.value,
-						onValueChange = { settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, it) } },
-					)
-				}
-                SettingsSectionDivider()
-                SettingsActionPreference(
-                    title = stringResource(R.string.reader_translation_api_models_fetch),
-                    iconRes = R.drawable.ic_cloud_download,
-                    summary = stringResource(R.string.reader_translation_api_models_fetch_summary),
-                    onClick = onFetchModelsClick,
-                )
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.reader_translation_api_provider_preset),
+                        iconRes = R.drawable.ic_key,
+                        options = listOf(
+                            SettingsChoiceOption(
+                                "CUSTOM",
+                                stringResource(R.string.reader_translation_api_provider_custom),
+                            ),
+                        ) + TranslationApiProviderCatalog.providers.map { preset ->
+                            SettingsChoiceOption(preset.id, preset.name)
+                        },
+                        value = currentPreset,
+                        onValueChange = {
+                            settings.prefs.edit {
+                                putString(AppSettings.KEY_READER_TRANSLATION_API_PROVIDER_PRESET, it)
+                            }
+                        },
+                    )
+                }
+                if (provider != null) {
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.reader_translation_api_get_key),
+                            iconRes = R.drawable.ic_key,
+                            summary = stringResource(R.string.reader_translation_api_get_key_summary),
+                            onClick = { uriHandler.openUri(provider.apiKeyUrl) },
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.reader_translation_api_open_docs),
+                            iconRes = R.drawable.ic_open_external,
+                            summary = stringResource(R.string.reader_translation_api_open_docs_summary),
+                            onClick = { uriHandler.openUri(provider.documentationUrl) },
+                        )
+                    }
+                } else {
+                    item {
+                        SettingsTextInputPreference(
+                            title = stringResource(R.string.reader_translation_api_endpoint),
+                            iconRes = R.drawable.ic_web,
+                            summary = stringResource(R.string.reader_translation_api_endpoint_summary),
+                            value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT) {
+                                prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT, "") ?: ""
+                            }.value,
+                            onValueChange = {
+                                settings.prefs.edit {
+                                    putString(AppSettings.KEY_READER_TRANSLATION_API_ENDPOINT, it)
+                                }
+                            },
+                        )
+                    }
+                }
+                item {
+                    SettingsTextInputPreference(
+                        title = stringResource(R.string.reader_translation_api_key),
+                        iconRes = R.drawable.ic_key,
+                        summary = stringResource(R.string.reader_translation_api_key_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_KEY) {
+                            prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_KEY, "") ?: ""
+                        }.value,
+                        isPassword = true,
+                        onValueChange = {
+                            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_KEY, it) }
+                        },
+                    )
+                }
+                item {
+                    SettingsTextInputPreference(
+                        title = stringResource(R.string.reader_translation_api_model),
+                        iconRes = R.drawable.ic_auto_fix,
+                        summary = stringResource(R.string.reader_translation_api_model_summary),
+                        value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_MODEL) {
+                            prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, "gpt-4o-mini")
+                                ?: "gpt-4o-mini"
+                        }.value,
+                        onValueChange = {
+                            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_API_MODEL, it) }
+                        },
+                    )
+                }
+                if (provider == null) {
+                    item {
+                        SettingsTextInputPreference(
+                            title = stringResource(R.string.reader_translation_api_custom_headers),
+                            iconRes = R.drawable.ic_code,
+                            summary = stringResource(R.string.reader_translation_api_custom_headers_summary),
+                            value = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS) {
+                                prefs.getString(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, "") ?: ""
+                            }.value,
+                            onValueChange = {
+                                settings.prefs.edit {
+                                    putString(AppSettings.KEY_READER_TRANSLATION_API_CUSTOM_HEADERS, it)
+                                }
+                            },
+                        )
+                    }
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.reader_translation_api_models_fetch),
+                        iconRes = R.drawable.ic_cloud_download,
+                        summary = stringResource(R.string.reader_translation_api_models_fetch_summary),
+                        onClick = onFetchModelsClick,
+                    )
+                }
             }
         }
     }

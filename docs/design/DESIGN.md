@@ -252,6 +252,35 @@ components:
     supportingTypography: "{typography.supporting}"
     minimumTouchTarget: "{sizes.minimum-touch-target}"
     container: optional-group-only
+  settings-group:
+    canvas: "{colors.canvas}"
+    itemSurface: "{colors.surface-low}"
+    itemGap: 2dp
+    sectionGap: 20dp
+    titleTypography: "{typography.label}"
+    divider: semantic-boundary-only
+    positionAwareShape: required
+    material3-expressive:
+      outerCornerRadius: 24dp
+      innerCornerRadius: 4dp
+      boundary: none
+    ios-glass:
+      outerCornerRadius: 18dp
+      innerCornerRadius: 4dp
+      boundary: outline-hairline
+  settings-item:
+    titleTypography: "{typography.item-title}"
+    supportingTypography: "{typography.supporting}"
+    minimumHeight:
+      singleLine: 56dp
+      twoLine: 68dp
+    horizontalPadding: "{spacing.lg}"
+    verticalPadding: 10dp
+    iconVisibleSize: 22dp
+    iconContainerSize: 40dp
+    supportingLinesMaximum: 2
+    navigationIndicator: optional-when-destination-is-clear
+    callerPositionKnowledge: prohibited
   content-card:
     titleTypography: "{typography.card-title}"
     supportingTypography: "{typography.supporting}"
@@ -478,6 +507,8 @@ Kototoro 是漫画、小说和动画的统一内容消费工具。设计系统�
 - Popup、Dialog 等跨窗口组件不能采样根窗口 Backdrop，必须使用稳定 Surface。
 - 圆角表达容器关系；Pill 只用于短动作、状态或紧密选择组。
 - 内层圆角不得在视觉上大于外层轮廓，避免容器连续套层。
+- 设置组可由位置感知的组合 Surface 构成：条目保持独立命中与反馈，首尾外角共同表达组边界，
+  组内小圆角和紧凑间隙表达条目关系；这不等同于堆叠互不相关的悬浮卡片。
 
 ## 6. Components
 
