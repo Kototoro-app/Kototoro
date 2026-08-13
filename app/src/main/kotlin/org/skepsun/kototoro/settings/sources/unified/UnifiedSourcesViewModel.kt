@@ -12,6 +12,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
@@ -66,6 +68,7 @@ import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
@@ -230,6 +233,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 		refreshRepositories: Boolean = true,
 		showLoading: Boolean = true,
 	) {
+		val disabledSourcesBeforeRefresh = uiState.value.disabledSourcesForPackageRefresh()
 		val refreshBlock: suspend kotlinx.coroutines.CoroutineScope.() -> Unit = {
 			try {
 				withTimeout(REFRESH_PACKAGES_TIMEOUT_MS) {
@@ -246,6 +250,12 @@ class UnifiedSourcesViewModel @Inject constructor(
 			} catch (e: TimeoutCancellationException) {
 				if (showLoading) {
 					emitMessage(appContext.getString(R.string.unified_sources_refresh_timeout))
+				}
+			} finally {
+				if (disabledSourcesBeforeRefresh.isNotEmpty()) {
+					withContext(NonCancellable) {
+						contentSourcesRepository.setSourcesEnabled(disabledSourcesBeforeRefresh, false)
+					}
 				}
 			}
 		}
@@ -1686,6 +1696,17 @@ private fun externalExtensionTypes(): List<ExternalExtensionType> {
 		ExternalExtensionType.ANIYOMI,
 		ExternalExtensionType.IREADER,
 	)
+}
+
+internal fun UnifiedSourcesUiState.disabledSourcesForPackageRefresh(): List<ContentSource> {
+	return (this as? UnifiedSourcesUiState.Ready)
+		?.allSources
+		.orEmpty()
+		.asSequence()
+		.filterNot(UnifiedSourceItem::isEnabled)
+		.map(UnifiedSourceItem::source)
+		.distinctBy(ContentSource::name)
+		.toList()
 }
 
 private fun repositoryIdForAction(kind: UnifiedSourceKind, url: String): String {
