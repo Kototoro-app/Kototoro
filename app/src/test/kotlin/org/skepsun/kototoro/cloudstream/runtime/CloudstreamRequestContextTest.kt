@@ -75,6 +75,27 @@ class CloudstreamRequestContextTest {
 		assertFalse(browserExecutorAccessed)
 	}
 
+	@Test
+	fun `cloudstream source request reserves challenge for source solver`() = runTest {
+		server.enqueue(cloudflareChallenge())
+		var browserExecutorAccessed = false
+		val browserExecutor = Lazy<WebViewExecutor> {
+			browserExecutorAccessed = true
+			error("Shared browser transport must not preempt the Cloudstream source solver")
+		}
+		val client = OkHttpClient.Builder()
+			.addInterceptor(CloudstreamRequestContext.interceptor())
+			.addInterceptor(CloudFlareInterceptor(browserExecutor))
+			.build()
+
+		CloudstreamRequestContext.withSource(testSource) {
+			assertThrows(CloudFlareProtectedException::class.java) {
+				client.newCall(Request.Builder().url(server.url("/protected")).build()).execute().use { }
+			}
+		}
+		assertFalse(browserExecutorAccessed)
+	}
+
 	private fun cloudflareChallenge() = MockResponse()
 		.setResponseCode(403)
 		.setHeader("server", "cloudflare")

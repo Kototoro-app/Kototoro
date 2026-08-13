@@ -10,6 +10,7 @@ import okhttp3.HttpUrl
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class AndroidCookieJar : MutableCookieJar {
@@ -31,6 +32,9 @@ class AndroidCookieJar : MutableCookieJar {
 					"before=${cookies.size}, after=${deduplicated.size}",
 			)
 		}
+		cookies.firstOrNull { it.name == "cf_clearance" }?.let { clearance ->
+			logClearanceLoad(url.host, clearance.value)
+		}
 		return deduplicated
 	}
 
@@ -44,7 +48,8 @@ class AndroidCookieJar : MutableCookieJar {
 			if (cookie.name == "cf_clearance") {
 				android.util.Log.i(
 					"MihonNetwork",
-					"AndroidCookieJar save cf_clearance: url=$urlString, value=${maskCookieValue(cookie.value)}, " +
+					"AndroidCookieJar save cf_clearance: url=$urlString, " +
+						"fingerprint=${sensitiveValueFingerprint(cookie.value)}, " +
 						"domain=${cookie.domain}, path=${cookie.path}, expiresAt=${cookie.expiresAt}, hostOnly=${cookie.hostOnly}, secure=${cookie.secure}, httpOnly=${cookie.httpOnly}",
 				)
 			}
@@ -65,7 +70,8 @@ class AndroidCookieJar : MutableCookieJar {
 			if (c.name == "cf_clearance") {
 				android.util.Log.i(
 					"MihonNetwork",
-					"AndroidCookieJar remove cf_clearance: url=$urlString, value=${maskCookieValue(c.value)}, " +
+					"AndroidCookieJar remove cf_clearance: url=$urlString, " +
+						"fingerprint=${sensitiveValueFingerprint(c.value)}, " +
 						"domain=${c.domain}, path=${c.path}, hostOnly=${c.hostOnly}",
 				)
 			}
@@ -86,7 +92,14 @@ class AndroidCookieJar : MutableCookieJar {
 	}
 
 	override suspend fun clear() = suspendCoroutine<Boolean> { continuation ->
-		cookieManager.removeAllCookies(continuation::resume)
+		val clearCookies = {
+			cookieManager.removeAllCookies(continuation::resume)
+		}
+		if (Looper.myLooper() == Looper.getMainLooper()) {
+			clearCookies()
+		} else if (!mainHandler.post(clearCookies)) {
+			continuation.resume(false)
+		}
 	}
 
 	private fun setCookieBlocking(url: String, value: String) {
@@ -105,11 +118,6 @@ class AndroidCookieJar : MutableCookieJar {
 		}
 	}
 
-	private fun maskCookieValue(value: String?): String {
-		if (value.isNullOrEmpty()) return "<empty>"
-		return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
-	}
-
 	private fun maskRawCookies(raw: String?): String {
 		return raw
 			.orEmpty()
@@ -117,13 +125,37 @@ class AndroidCookieJar : MutableCookieJar {
 			.mapNotNull { rawCookie ->
 				val parts = rawCookie.trim().split("=", limit = 2)
 				if (parts.size == 2 && parts[0].isNotBlank()) {
-					"${parts[0]}=${maskCookieValue(parts[1])}"
+					"${parts[0]}=${sensitiveValueFingerprint(parts[1])}"
 				} else {
 					null
 				}
 			}
 			.joinToString(",")
 			.ifBlank { "<none>" }
+	}
+
+	private fun logClearanceLoad(host: String, value: String) {
+		val now = android.os.SystemClock.elapsedRealtime()
+		val fingerprint = sensitiveValueFingerprint(value)
+		val previous = clearanceLoadLogStates[host]
+		if (previous?.fingerprint == fingerprint && now - previous.loggedAtMs < CLEARANCE_LOG_INTERVAL_MS) {
+			return
+		}
+		clearanceLoadLogStates[host] = ClearanceLogState(fingerprint, now)
+		android.util.Log.d(
+			"MihonNetwork",
+			"AndroidCookieJar load cf_clearance: host=$host, fingerprint=$fingerprint",
+		)
+	}
+
+	private data class ClearanceLogState(
+		val fingerprint: String,
+		val loggedAtMs: Long,
+	)
+
+	private companion object {
+		const val CLEARANCE_LOG_INTERVAL_MS = 2_000L
+		val clearanceLoadLogStates = ConcurrentHashMap<String, ClearanceLogState>()
 	}
 }
 

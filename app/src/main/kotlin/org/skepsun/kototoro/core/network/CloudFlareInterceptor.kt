@@ -15,18 +15,26 @@ import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
+import org.koitharu.kotatsu.parsers.model.MangaSource as KotatsuMangaSource
 
 class CloudFlareInterceptor(
 	private val webViewExecutor: Lazy<WebViewExecutor>? = null,
 ) : Interceptor {
 
 	override fun intercept(chain: Interceptor.Chain): Response {
-		val request = chain.request()
+		val originalRequest = chain.request()
+		val source = originalRequest.resolveContentSource()
+		val request = if (source != null && originalRequest.tag(ContentSource::class.java) == null) {
+			originalRequest.newBuilder()
+				.tag(ContentSource::class.java, source)
+				.build()
+		} else {
+			originalRequest
+		}
 		val response = chain.proceed(request)
-		val source = request.tag(ContentSource::class.java) 
-			?: request.headers[org.skepsun.kototoro.core.network.CommonHeaders.MANGA_SOURCE]?.let { org.skepsun.kototoro.core.model.ContentSource(it) }
 		return when (CloudFlareHelper.checkResponseForProtection(response)) {
 			CloudFlareHelper.PROTECTION_BLOCKED -> {
 				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
@@ -53,7 +61,7 @@ class CloudFlareInterceptor(
 					headers = request.headers,
 				)
 				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
-				if (policy == null && webViewExecutor != null) {
+				if (policy?.allowBrowserTransport != false && webViewExecutor != null) {
 					val browserResponse = response.use { executeWithBrowserTransport(request) }
 					if (browserResponse != null) return browserResponse
 				}
@@ -98,6 +106,7 @@ class CloudFlareInterceptor(
 					body = body,
 					userAgent = request.header("User-Agent"),
 					headers = request.browserTransportHeaders(),
+					allowInteractiveChallenge = false,
 				)
 			}
 		}.onFailure { error ->
@@ -152,4 +161,11 @@ class CloudFlareInterceptor(
 		const val MAX_BROWSER_REQUEST_BODY_BYTES = 2L * 1024L * 1024L
 		val BINARY_MEDIA_TYPES = setOf("image/", "audio/", "video/", "application/octet-stream")
 	}
+}
+
+internal fun Request.resolveContentSource(): ContentSource? {
+	return tag(ContentSource::class.java)
+		?: tag(KotatsuMangaSource::class.java)?.let(::KotatsuParserSource)
+		?: headers[CommonHeaders.MANGA_SOURCE]
+			?.let { org.skepsun.kototoro.core.model.ContentSource(it) }
 }

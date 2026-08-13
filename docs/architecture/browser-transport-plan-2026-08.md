@@ -141,25 +141,26 @@ OkHttp
 
 ### Kagane API challenge 的当前边界
 
-Kagane 的首页 challenge 和 `/api/v2/search/series` challenge 可能是两次独立的
-Cloudflare Managed Challenge。即使首页自动求解成功，API 仍可能返回带勾选框的 403。
-当前 BrowserTransport 会在真实 origin WebView 中执行 API `fetch()`，因此不会再制造
-WebView 到 OkHttp 的 TLS/指纹切换；但如果该 `fetch()` 本身返回新的交互式 challenge，当前实现只会
-识别并拒绝 challenge，不会自动点击 API challenge，也不会把同一个 session 切换成可见的人工验证页面。
+Kagane 的首页 challenge 和 `/api/v2/search/series` 响应不能仅凭 URL 或已有 Cookie 推断为同一次
+Cloudflare 验证。BrowserTransport 会先在真实 origin WebView 中执行 API `fetch()`，避免 WebView 到
+OkHttp 的 TLS/指纹切换；如果业务请求仍返回 challenge，Mihon/JAR 路径不会把短生命周期
+BrowserSession 挂载成可见 overlay，也不会把 POST API 当作 GET 页面导航。
 
-要覆盖此场景，下一阶段需要让 `BrowserSession` 在同一 WebView 实例内执行：
+当前人工恢复路径刻意复现已在设备上验证有效的正常浏览流程：
 
 ```text
-API fetch -> 检测 Managed Challenge -> 解析 ChallengeContext
-           -> 自动/人工完成验证 -> 收集 ResolutionEvidence
-           -> 在同一 session 重试原始 API fetch
+API fetch 返回 challenge
+        -> 来源列表显示错误
+        -> 用户打开普通内置浏览器的源首页
+        -> 用户等待首页及其 API 请求完整加载
+        -> 用户主动返回
+        -> 列表重试原始 GET/POST
 ```
 
-GET challenge 可以导航到合适的 challenge/bootstrap 页面；POST 不应假定导航到 API URL 会复现
-同一 challenge，而应在验证完成后重试原始 POST。resolver 应接收包含 origin、URL、method、
-可选 navigation URL 和最多 64 KiB 的 `responseHtmlSnippet` 的 `ChallengeContext`，自行选择验证入口；
-完整响应仅通过临时 diagnostic 记录，不作为状态机对象长期持有。这不是单纯复制 Cookie；
-必须保留 WebView renderer、页面状态和 challenge 导航上下文。
+普通内置浏览器没有 success-cookie target，因此不会根据页面标题、已有 `cf_clearance` 或
+`onPageFinished` 自动关闭。底层 `BrowserSession` 仍保留 challenge context、原请求重试和交互事件协议，
+供能够可靠验证原请求的调用方使用；Mihon/Kagane 暂不启用该 overlay，避免旧 Cookie 或首页状态造成
+“checkbox 尚未出现就成功”的误判。
 
 设备日志进一步确认：修复 bridge 后，Kagane POST API 已在约 2 秒内返回真实 403，随后 Turnstile
 iframe 被加载；之前的 30 秒等待问题已经消失。新的失败点不是 API 本身丢失 source，而是
@@ -180,12 +181,12 @@ id/key、声明的 origins 和 transport policy。
 - [x] 支持 `DOCUMENT_START_SCRIPT` 时捕获原生 `fetch`；页面后续替换 `window.fetch` 不影响已捕获引用，
   但这不是 JavaScript execution isolation。
 - [x] Mihon 请求在 Cloudflare 响应后可将 GET/POST 文本 API 转交 BrowserTransport，再包装回 OkHttp `Response`。
-- [~] Mihon BrowserTransport 对 API challenge 优先在当前 BrowserSession 内交互并重试；同 Session 仍失败时返回真实
-  challenge 响应，禁止 `null` 回退触发旧 `CaptchaAutoResolveCoordinator` 循环。首页 resolver 与统一 session 状态机仍待合并。
+- [x] Mihon BrowserTransport 检测到 API challenge 后返回真实 challenge 响应，不挂载当前 BrowserSession 的交互
+  overlay，也不返回 `null` 触发旧 resolver 循环；人工恢复统一由来源列表打开普通内置浏览器首页。
 - [x] CloudFlareActivity 恢复“在浏览器中打开”人工兜底入口。
 - [x] Mihon POST challenge 保留 method/body/content-type，人工入口不再使用 `postUrl()` 重放 JSON。
-- [x] 人工 resolver 与 BrowserSession 共享同一 WebView；人工验证只产生 `ResolutionEvidence`，必须由同一
-  execution 重试原始 API 并检查实际响应后，才能宣称 transport 成功。正式 UI 事件协议仍归 P0.4。
+- [x] 底层 BrowserSession 交互 resolver 只有在同一 execution 重试原始 API 成功后才产生成功结果；Mihon/JAR
+  当前禁用该 overlay，人工浏览器仅在用户主动返回后触发来源列表重试，不提前宣称 API 已成功。
 - [x] 对同一 API method+URL 增加 30 秒 resolver cooldown，防止 API 仍被拒绝时反复打开主页/验证页。
 - [x] SearchContentList 错误态恢复嵌套 Cloudflare 异常的内置浏览器入口，并修复按钮点击回调。
 - [x] 共享 `ContentHttpClient` 增加 GET/POST 文本 Browser Transport fallback；无法安全转交时继续抛出原 Cloudflare 异常。
@@ -206,8 +207,9 @@ id/key、声明的 origins 和 transport policy。
 - [x] P0.2：同一 BrowserSession 内 transport execution 由 `BrowserSessionRecord.executionMutex` 串行化；不同
   origin session 可并行，避免 challenge navigation 破坏并发 operation。session 淘汰时 mutex 随 record 一起
   释放；设备级并发和 renderer 回收回归仍待补充。
-- [x] P0.3：BrowserTransport 已在同一 WebView 中检测 API challenge、呈现响应 HTML 并重试原始 GET/POST；
-  challenge 重试失败现在返回真实 403，不再回到旧 resolver 链。独立 `BrowserExecution` operation 持有
+- [x] P0.3：BrowserTransport 已具备在同一 WebView 中检测 API challenge并重试原始 GET/POST 的底层能力；
+  Mihon/JAR 禁用可见交互分支，challenge 返回真实 403，不再由 transport 挂载 overlay。独立
+  `BrowserExecution` operation 持有
   `executionId`、原始 request identity、challenge context、确定终态和受校验的状态转换，覆盖
   `FETCHING -> CHALLENGE_DETECTED -> RESOLVING_AUTOMATIC -> WAITING_FOR_USER -> VALIDATING ->
   RETRYING_REQUEST` 及 `FAILED`/`CANCELLED`；同时引入 `BrowserChallengeContext` 和
@@ -220,7 +222,7 @@ id/key、声明的 origins 和 transport policy。
   `challengeId + sessionId` ack/cancel，旧事件不能取消新的 operation；返回键会立即取消 resolver 等待，不再只依赖
   timeout。独立 `BrowserSessionManager` 负责 `sessionId -> WebView` 的 UI identity、register/unregister 和幂等
   attach/detach。普通 Compose 宿主和全屏 Compose 宿主都只在 RESUMED 生命周期消费 PENDING 事件，终态事件不会
-  重新挂载 WebView；resolver 仍是验证结果和最终 detach 的唯一权威方。
+  重新挂载 WebView；resolver 仍是验证结果和最终 detach 的唯一权威方。该协议目前不由 Mihon/JAR transport 发出。
 - [x] API 403 challenge 的上下文始终绑定原始 API URL；POST challenge 现在导航到真实 HTTPS API URL
   触发 Cloudflare 的浏览器验证，但绝不以导航重放原始 POST。验证完成后仅在同一 renderer/session 中重试原始
   method/body。这样避免 `loadDataWithBaseURL` 产生 `about:blank` document，导致 Turnstile 的 origin handshake
@@ -255,6 +257,43 @@ id/key、声明的 origins 和 transport policy。
   request origin policy 允许且路径为 `/api/**` 的 Chromium 请求，并通过 `onReceivedHttpError()` 记录失败状态。
   观测器不返回 `WebResourceResponse`、不使用 OkHttp 重放，也不改写页面 `fetch/XHR`；日志只包含 method、URL、
   main-frame 标记、header 名称和 Content-Type，不记录 header 值或 body。
+- [x] BrowserSession 采用最小干预的 Cloudflare WebView profile：保留 WebView provider 原生默认 UA，不再用
+  `UserAgentProvider` 删除 `; wv`/`Version/4.0` 后覆盖 Chromium UA；不屏蔽网络图片；保留 JavaScript、DOM
+  Storage、默认缓存和第三方 Cookie。Mihon 原请求 UA 仍只用于 OkHttp 路径，不进入 BrowserSession。
+- [x] 移除 `App.getPackageName()` 中针对 Chromium `BuildInfo/ApkInfo` 的全局宿主包名伪装。TVBox 动态运行时的
+  `HOST_IDENTITY` 兼容桥保持不变；BrowserSession 现在向 Chromium报告应用真实包名，避免 UA、Client Hints 与宿主
+  identity 互相矛盾。该身份在 Chromium首次初始化时可能被进程缓存，因此设备验证必须使用冷启动的新进程。
+- [x] BrowserSession Chromium profile 使用全局独立版本号持久化迁移状态。定向 tombstone 无法可靠删除设备上的
+  HttpOnly/Secure `cf_clearance`，因此 profile 版本首次升级时通过共享 `MutableCookieJar.clear()` 清理并等待完成；其
+  `AndroidCookieJar` 实现负责将 `CookieManager.removeAllCookies()` 调度到主 Looper。只有全局 CookieManager 和触发
+  origin 均确认不再携带 Cookie 后才记录迁移完成。该破坏性清理每个 profile 版本全局只执行一次，
+  不能按 origin 重复执行，否则访问新来源会不断清除其他来源的新浏览器会话。
+- [x] 对启用 BrowserSession 交互能力的调用方，`OK + cf_clearance` 只作为原请求验证的触发条件，不直接关闭页面
+  或标记成功。原始 API method/body/headers 必须在同一个仍可见的 BrowserSession 中重试且不再返回 challenge，
+  resolver 才进入 RESOLVED；验证失败时页面保持打开，避免旧 clearance 或页面状态误判造成自动关闭。
+- [x] BrowserSession 的 POST 交互 resolver 导航真实 origin 首页而非 API URL，复现“主页完成 challenge、页面发起
+  API”的正常浏览路径。观察到交互组件或 `__cf_chl_*` 导航后，页面回到 `OK` 即可触发原 POST 探测，不要求站点
+  一定签发 `cf_clearance`；Cookie 只作为诊断。Mihon/JAR 当前禁用该交互分支。
+- [x] Mihon/JAR Browser Transport 不再自行挂载短生命周期的交互 challenge overlay。浏览器 RPC 仍可自动尝试；若
+  仍为 challenge，则将错误交还来源列表。列表“开始验证”和自动流程的人工 fallback 统一打开普通内置浏览器的源首页，
+  浏览器不会根据页面标题或 Cookie 自动关闭；用户完成首页加载并返回后，列表请求再重试。错误卡片的“在浏览器中打开”
+  也使用同一首页 URL 并携带真实 source id，修复原 Elvis 表达式仅求值 URL、未实际执行跳转的问题。
+- [x] 同一人工交互策略已下沉到共享网络栈：Kotatsu、Legado、TVBox/JSON、LNReader、IReader 等使用
+  `ContentHttpClient` 的来源允许 BrowserTransport 自动处理文本请求，但不会由 transport 挂载交互 overlay；最终人工
+  入口统一为普通内置浏览器首页。Cloudstream 请求通过 `CloudFlareHandlingPolicy` 保留来源 solver 优先级，先执行其
+  `WebViewResolver`/插件兼容流程；来源 solver 和无交互 BrowserTransport 均失败后，应用级人工入口仍使用同一普通浏览器。
+- [x] LNReader QuickJS native fetch 在 repository 边界附加权威 `ContentSource` request tag，使共享 BrowserTransport
+  可以按来源授权；不使用 plugin id 或 host 反查扩大 origin 权限。二进制 fetch 仍不交给文本 BrowserTransport。
+- [x] Kotatsu/JAR 的 `OkHttpWebClient` 已携带权威 `MangaSource` tag；共享 CF interceptor 在第一次请求进入时直接
+  将其包装为 `KotatsuParserSource` 并附加 `ContentSource` tag，不再等到排在 CF 检测之后的通用 header interceptor，
+  也不通过 host 反查。通用 header interceptor 同时保留该 tag，供后续 retry、图片和诊断链路使用。
+- [x] 人工浏览器、全局 `AndroidCookieJar` 和 Mihon 请求日志使用相同的 SHA-256 截断指纹与长度记录
+  `cf_clearance`，同时记录 WebView/OkHttp UA 指纹；不输出 Cookie 原文。人工 resolver 返回日志附带 source 和
+  challenge URL，可据此确认浏览器前后 clearance 是否变化、Mihon 是否读取同一枚 Cookie，以及返回后是否真正 retry。
+- [x] CaptchaHandler 通知、自动流程的人工 fallback 和错误页不再创建新的 CloudFlareActivity 人工会话；统一
+  `AppRouter.cloudFlareResolveIntent()` 到普通 BrowserActivity 首页并携带 source/UA。旧 CloudFlareActivity 仅保留兼容入口。
+- [x] Mihon 裸请求补齐 source context 时按“请求显式 tag、当前扩展执行上下文、已注册 host hint”的顺序恢复；host
+  反查仅保留为旧扩展兼容兜底，避免 API host 与主页 host 不一致时将异常来源退化成 `UNKNOWN`。
 - [x] P1：BrowserSession 现在由 `BrowserSessionRecord` 统一持有 origin、sessionId、WebView、状态、pending
   operation、UI attach、renderer/navigation epoch 和最近使用时间；renderer 退出时 poison 并主动失败 pending RPC，
   同时记录 WebView provider 包名/版本，并记录 `onRenderProcessUnresponsive/Responsive` 持续时间。
@@ -334,9 +373,12 @@ UI 只接收 `InteractiveChallengeRequired(sessionId, challengeId, displayMetada
 
 ## Kagane 集成测试矩阵
 
-- 首页 challenge -> resolve -> GET API -> success。
-- 首页 challenge -> resolve -> POST API -> API challenge -> 同 session resolve -> retry POST -> success。
-- 交互 challenge 可见时取消 -> AbortController、pending RPC 和 session 状态确定性收敛。
+- BrowserTransport 的 GET/POST API 未遇 challenge -> 直接成功。
+- API challenge -> 来源列表错误态 -> 普通内置浏览器打开源首页 -> 用户主动返回 -> retry GET/POST -> success。
+- 首页出现 checkbox 或仍在加载时，BrowserActivity 不得因旧 Cookie、标题变化或 `onPageFinished` 自动关闭。
+- 用户从普通浏览器主动返回 -> resolver 只触发一次列表重试；若仍失败，后续只能由明确的用户操作再次打开，
+  不能形成自动弹窗循环。
+- 非 Mihon 调用方启用交互 challenge 时取消 -> AbortController、pending RPC 和 session 状态确定性收敛。
 - challenge 期间 renderer crash -> 所有请求失败、session 移除、下次请求重建。
 - API host 已声明时允许；未声明 host、跨 origin redirect 时拒绝。
 - 迟到消息必须同时匹配 `sessionId`、`rendererEpoch`、`navigationEpoch` 和 `requestId`，任一不匹配即忽略。

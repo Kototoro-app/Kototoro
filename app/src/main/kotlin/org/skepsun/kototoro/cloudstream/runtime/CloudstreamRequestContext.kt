@@ -29,6 +29,7 @@ internal object CloudstreamRequestContext {
 	suspend fun <T> withLoadLinksCompatibility(block: suspend () -> T): LoadLinksExecution<T> {
 		val challenge = AtomicReference<CloudFlareProtectedException?>()
 		val policy = CloudFlareHandlingPolicy(
+			allowBrowserTransport = false,
 			allowBlockedResponse = true,
 			allowCaptchaResponse = true,
 			onCaptchaDetected = { detected -> challenge.compareAndSet(null, detected) },
@@ -55,11 +56,7 @@ internal object CloudstreamRequestContext {
 				?: fallbackReferer
 			originalRequest.newBuilder()
 				.tag(ContentSource::class.java, source)
-				.apply {
-					if (policy != null) {
-						tag(CloudFlareHandlingPolicy::class.java, policy)
-					}
-				}
+				.tag(CloudFlareHandlingPolicy::class.java, policy ?: SOURCE_SOLVER_POLICY)
 				.header(CommonHeaders.MANGA_SOURCE, source.name)
 				.apply {
 					val configuredUserAgent = userAgent
@@ -140,4 +137,5 @@ internal object CloudstreamRequestContext {
 	private const val TAG = "CloudstreamRequest"
 	private const val ORIGIN = "Origin"
 	private const val LOAD_LINKS_BODY_PREVIEW_BYTES = 4096L
+	private val SOURCE_SOLVER_POLICY = CloudFlareHandlingPolicy(allowBrowserTransport = false)
 }

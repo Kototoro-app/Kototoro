@@ -131,6 +131,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -617,13 +618,19 @@ fun AppSearchContentListRoute(
             coroutineScope.launch {
                 Log.i("SearchCfResolver", "starting manual resolver")
                 val cloudflare = error.findCloudFlareException()
-                val resolverError = if (cloudflare is CloudFlareProtectedException && cloudflare.source == UnknownContentSource) {
+                val resolverError = if (
+                    cloudflare is CloudFlareProtectedException && cloudflare.source == UnknownContentSource
+                ) {
                     CloudFlareProtectedException(cloudflare.url, viewModel.source, cloudflare.headers)
                 } else {
                     error
                 }
                 if (exceptionResolver.resolve(resolverError, tryAutoResolve = false)) {
-                    Log.i("SearchCfResolver", "manual resolver succeeded, retrying")
+					Log.i(
+						"SearchCfResolver",
+						"manual resolver succeeded, retrying source=${viewModel.source.name} " +
+							"challengeUrl=${cloudflare?.url}",
+					)
                     viewModel.onRetry()
                 } else {
                     Log.w("SearchCfResolver", "manual resolver failed or was unavailable")
@@ -633,6 +640,15 @@ fun AppSearchContentListRoute(
             Log.w("SearchCfResolver", "no resolvable error or resolver, retrying directly")
             viewModel.onRetry()
         }
+    }
+
+    fun openErrorInBrowser(error: Throwable) {
+        val url = error.findCloudFlareException()?.url ?: error.getCauseUrl() ?: return
+        appRouter.openBrowser(
+            url = CloudFlareHelper.getChallengeUrl(url),
+            source = viewModel.source,
+            title = null,
+        )
     }
 
     val topBarContent: @Composable () -> Unit = {
@@ -805,11 +821,7 @@ fun AppSearchContentListRoute(
                                 selectedItemsIds = selectedItemsIds,
                                 showInlineSelectionTopBar = false,
                                 onRetry = ::resolveErrorAndRetry,
-								onSecondaryAction = { error ->
-									error.getCauseUrl()
-									?: error.findCloudFlareException()?.url
-									?.let { url -> appRouter.openBrowser(url, null, null) }
-                                },
+                                onSecondaryAction = ::openErrorInBrowser,
                                 gridState = if (listMode == ListMode.GRID || listMode == ListMode.COMPACT_GRID) {
                                     wideGridState
                                 } else {
@@ -980,11 +992,7 @@ fun AppSearchContentListRoute(
                             selectedItemsIds = selectedItemsIds,
                             showInlineSelectionTopBar = false,
                             onRetry = ::resolveErrorAndRetry,
-							onSecondaryAction = { error ->
-								error.getCauseUrl()
-									?: error.findCloudFlareException()?.url
-									?.let { url -> appRouter.openBrowser(url, null, null) }
-                            },
+                            onSecondaryAction = ::openErrorInBrowser,
                         )
                     }
                     Box(

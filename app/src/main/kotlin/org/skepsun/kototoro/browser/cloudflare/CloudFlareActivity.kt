@@ -133,10 +133,17 @@ class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 		R.id.action_open_browser -> {
 			val url = intent?.dataString
 			if (!url.isNullOrBlank()) {
-				runCatching {
-					val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
-						?.let { name -> org.skepsun.kototoro.core.model.ContentSource(name) }
-					startActivity(AppRouter.browserIntent(this, url, source, getString(R.string.open_in_browser)))
+					runCatching {
+						val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
+							?.let { name -> org.skepsun.kototoro.core.model.ContentSource(name) }
+						startActivity(
+							AppRouter.browserIntent(
+								this,
+								CloudFlareHelper.getChallengeUrl(url),
+								source,
+								getString(R.string.open_in_browser),
+							),
+						)
 				}.onFailure { showSnackbar(it.getDisplayMessage(resources)) }
 			}
 			true

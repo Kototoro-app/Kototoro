@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test
 
 class BrowserChallengeContextTest {
 	@Test
-	fun `post challenge does not expose a navigation url`() {
+	fun `post challenge navigates the visible resolver to the origin root`() {
 		val context = BrowserChallengeContext.create(
 			requestUrl = "https://kagane.to/api/v2/search/series?page=0",
 			method = "POST",
@@ -14,7 +14,7 @@ class BrowserChallengeContextTest {
 		)!!
 
 		assertEquals("https://kagane.to", context.origin)
-		assertNull(context.navigationUrl)
+		assertEquals("https://kagane.to/", context.navigationUrl)
 	}
 
 	@Test
@@ -45,7 +45,7 @@ class BrowserChallengeContextTest {
 
 		assertNull(tracker.observe(CloudFlarePageState.INTERACTIVE, hasClearance = true, clearanceChanged = false))
 		assertEquals(
-			BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE,
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(CloudFlarePageState.OK, hasClearance = true, clearanceChanged = false),
 		)
 	}
@@ -71,7 +71,7 @@ class BrowserChallengeContextTest {
 			),
 		)
 		assertEquals(
-			BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE,
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(
 				CloudFlarePageState.OK,
 				hasClearance = true,
@@ -104,22 +104,22 @@ class BrowserChallengeContextTest {
 	}
 
 	@Test
-	fun `post challenge accepts observed interactive checkbox`() {
+	fun `post challenge accepts normal page without requiring a clearance cookie`() {
 		val tracker = BrowserChallengeResolutionTracker()
 
 		assertNull(
 			tracker.observe(
 				CloudFlarePageState.INTERACTIVE,
-				hasClearance = true,
+				hasClearance = false,
 				clearanceChanged = false,
 				requiresInteractiveResolution = true,
 			),
 		)
 		assertEquals(
-			BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE,
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(
 				CloudFlarePageState.OK,
-				hasClearance = true,
+				hasClearance = false,
 				clearanceChanged = false,
 				requiresInteractiveResolution = true,
 			),
@@ -140,10 +140,10 @@ class BrowserChallengeContextTest {
 			),
 		)
 		assertEquals(
-			BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE,
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(
 				CloudFlarePageState.OK,
-				hasClearance = true,
+				hasClearance = false,
 				clearanceChanged = false,
 				currentUrl = "https://kagane.to/api",
 				requiresInteractiveResolution = true,
@@ -164,7 +164,7 @@ class BrowserChallengeContextTest {
 			),
 		)
 		assertEquals(
-			BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE,
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(
 				CloudFlarePageState.OK,
 				hasClearance = true,

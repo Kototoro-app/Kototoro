@@ -6,6 +6,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.skepsun.kototoro.parsers.model.ContentSource
 import java.io.IOException
 import java.net.URI
 import java.util.Base64
@@ -19,7 +20,8 @@ import java.util.Base64
  */
 class LNReaderFetchBridge(
 	private val httpClient: OkHttpClient,
-	private val pluginId: String
+	private val pluginId: String,
+	private val source: ContentSource? = null,
 ) {
 	companion object {
 		private const val TAG = "LNReaderFetchBridge"
@@ -59,6 +61,7 @@ class LNReaderFetchBridge(
 			// Build OkHttp request
 			val requestBuilder = Request.Builder()
 				.url(url)
+			source?.let { requestBuilder.tag(ContentSource::class.java, it) }
 			
 			// Add headers
 			val headerBuilder = Headers.Builder()
@@ -153,6 +156,7 @@ class LNReaderFetchBridge(
 
 			val request = Request.Builder()
 				.url(url)
+				.apply { source?.let { tag(ContentSource::class.java, it) } }
 				.headers(headerBuilder.build())
 				.post(requestBody)
 				.build()

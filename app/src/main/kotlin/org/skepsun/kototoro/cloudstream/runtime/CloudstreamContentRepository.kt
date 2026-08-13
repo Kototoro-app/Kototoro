@@ -776,6 +776,7 @@ class CloudstreamContentRepository(
 			webViewExecutor.fetchWithBrowserContext(
 				url = diagnosticUrl,
 				userAgent = CloudstreamRequestContext.userAgent ?: webViewExecutor.defaultUserAgent,
+				allowInteractiveChallenge = false,
 				settleDelayMs = 2_000,
 				timeoutMs = 15_000,
 			)

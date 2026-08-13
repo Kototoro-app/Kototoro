@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 
 class LNReaderFetchBridgeTest {
 
@@ -45,6 +46,24 @@ class LNReaderFetchBridgeTest {
 			assertEquals(referrer, request.getHeader("Referer"))
 			assertEquals("https://example.com", request.getHeader("Origin"))
 		}
+	}
+
+	@Test
+	fun `text fetch carries authoritative source tag`() {
+		server.enqueue(MockResponse().setBody("{}"))
+		val source = ContentSource("LNREADER_TEST")
+		var capturedSource: ParserContentSource? = null
+		val client = OkHttpClient.Builder()
+			.addInterceptor { chain ->
+				capturedSource = chain.request().tag(ParserContentSource::class.java)
+				chain.proceed(chain.request())
+			}
+			.build()
+
+		LNReaderFetchBridge(client, "TEST_PLUGIN", source)
+			.fetch(server.url("chapter").toString())
+
+		assertSame(source, capturedSource)
 	}
 
 	@Test

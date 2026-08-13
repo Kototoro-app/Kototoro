@@ -70,10 +70,6 @@ public class App extends MultiDexApplication implements Configuration.Provider {
     private static final String HOST_SIGNATURE =
             "308203833082026ba00302010202044d304996300d06092a864886f70d01010b050030723111300f060355040613085456426f784f53433111300f060355040813085456426f784f53433111300f060355040713085456426f784f53433111300f060355040a13085456426f784f53433111300f060355040b13085456426f784f53433111300f060355040313085456426f784f5343301e170d3232303632343033353330385a170d3332303632313033353330385a30723111300f060355040613085456426f784f53433111300f060355040813085456426f784f53433111300f060355040713085456426f784f53433111300f060355040a13085456426f784f53433111300f060355040b13085456426f784f53433111300f060355040313085456426f784f534330820122300d06092a864886f70d01010105000382010f003082010a0282010100a1d71e4c16d09a58b90dfc9a9299315bd427ca26500fc431abd177952e8b561df5ae44fde4f248805a2f30381fb9c8792fff84ba4c8054cfec6ae2b6f23de1c1185bf7b66f2c24cb57ba3aac2c9a0408feb935c36234392c75f5ad56cf847142084cb853965651643f73aef0f785fc0b222cffd8be245b61b98c0ca1f53466c2aef7b442c59cc6b7b7a9160f40e10cf5be98a896555542d11fb54555718435b74635344c1c9ecaa9202ec82aa5a582825baacc3f766c96fabadfe317a2194a11fffc36c408aa963a8f22fde0c1f4f91a1b6e3479fd6725bf6d0bf30d35b43facc1c5c3726e689ebd84037f5f4aa93eed4f0832fb43374d2664d7eb01f42d55af0203010001a321301f301d0603551d0e04160414cfae655491e6b7eaeb73badc6f7ba086af6b821e300d06092a864886f70d01010b0500038201010042ec8f6e3258fe6f2c4267c86f1150e04db8ce13631ba694e2107797608503b440ac02c5d667bd876ad2c48d890b776c81cbb1a854d74f561ab96b1b4d33e67e9bf1b3e01a628ec8070d3612406a5ed1dade0a86cbb16f9f41e6a55498428356a1df99a0b7e494e7bc51ce9e70b280322ff4a360058278665cb2fd27173ca883f83e89a6385b242b31357b44a8ee4821018369b6476f1f7fdb8d80f3c43944352f1b693a9964ab1a2042cc22a7930aed9cd1679de0eddf92f747142c95c90e2c8fa29d877c40dc9fb4ffc69bdbf10f74d34597cb2e9db7ab2754cb4c49c99e8e7cc42a2fa7b0d9d934eae071c5bf53a964c003108d7d76ee92a41ff230a611e8";
     private static final String HOST_APPLICATION_CLASS_NAME = "com.github.tvbox.osc.base.App";
-    private static final String CHROME_PACKAGE_NAME = "com.android.chrome";
-    private static final String SYSTEM_SETTINGS_PACKAGE_NAME = "com.android.settings";
-    private static final String YOUTUBE_FOR_TV_PACKAGE_NAME = "com.google.android.youtube.tv";
-
     private static App instance = new App();
     private static volatile Context appContext;
     private static volatile Context bridgeContext;
@@ -82,7 +78,6 @@ public class App extends MultiDexApplication implements Configuration.Provider {
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static volatile boolean attached = false;
     private static volatile boolean hostRuntimeBootstrapped = false;
-    private static volatile boolean webViewPackageSpoofLogged = false;
     private static final InheritableThreadLocal<Boolean> HOST_IDENTITY = new InheritableThreadLocal<>();
     private static volatile P2PClass p;
     private volatile Configuration workManagerConfiguration;
@@ -389,66 +384,10 @@ public class App extends MultiDexApplication implements Configuration.Provider {
 
     @Override
     public String getPackageName() {
-        try {
-            if (isChromiumPackageNameRequest()) {
-                String packageName = spoofedWebViewPackageName();
-                LOG.i("MihonNetwork", "WebView package spoof: requestedBy=Chromium, packageName=" + packageName);
-                return packageName;
-            }
-        } catch (Exception ignored) {
-        }
         if (shouldBridgeHostIdentity() && !hasRealHostIdentity()) {
             return HOST_PACKAGE_NAME;
         }
         return super.getPackageName();
-    }
-
-    private boolean isChromiumPackageNameRequest() {
-        for (StackTraceElement trace : Thread.currentThread().getStackTrace()) {
-            String className = trace.getClassName().toLowerCase();
-            String methodName = trace.getMethodName().toLowerCase();
-            boolean chromiumClass = className.equals("org.chromium.base.buildinfo")
-                    || className.equals("org.chromium.base.apkinfo");
-            boolean packageMethod = methodName.equals("getall")
-                    || methodName.equals("getpackagename")
-                    || methodName.equals("<init>");
-            if (chromiumClass && packageMethod) {
-                if (!webViewPackageSpoofLogged) {
-                    webViewPackageSpoofLogged = true;
-                    LOG.i(
-                            "MihonNetwork",
-                            "WebView package spoof trigger: class=" + trace.getClassName() + ", method=" + trace.getMethodName()
-                    );
-                }
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String spoofedWebViewPackageName() {
-        PackageManager packageManager = getPackageManager();
-        String packageName = firstInstalledPackageName(
-                packageManager,
-                CHROME_PACKAGE_NAME,
-                SYSTEM_SETTINGS_PACKAGE_NAME,
-                YOUTUBE_FOR_TV_PACKAGE_NAME
-        );
-        if (packageName != null) {
-            return packageName;
-        }
-        List<PackageInfo> packages = packageManager.getInstalledPackages(0);
-        return packages.isEmpty() ? super.getPackageName() : packages.get(0).packageName;
-    }
-
-    private static String firstInstalledPackageName(PackageManager packageManager, String... packageNames) {
-        for (String packageName : packageNames) {
-            try {
-                return packageManager.getPackageInfo(packageName, 0).packageName;
-            } catch (PackageManager.NameNotFoundException ignored) {
-            }
-        }
-        return null;
     }
 
     public static P2PClass getp2p() {

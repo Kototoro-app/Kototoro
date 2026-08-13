@@ -111,7 +111,15 @@ class CommonHeadersInterceptor @Inject constructor(
 			}
 		}
 
-		val newRequest = request.newBuilder().url(workingUrl).headers(headersBuilder.build()).build()
+		val newRequest = request.newBuilder()
+			.url(workingUrl)
+			.headers(headersBuilder.build())
+			.apply {
+				if (finalSource != null) {
+					tag(ContentSource::class.java, finalSource)
+				}
+			}
+			.build()
 		val response = (repository as? Interceptor)?.interceptSafe(ProxyChain(chain, newRequest)) ?: chain.proceed(newRequest)
 
 		// Log response for debugging blocked images

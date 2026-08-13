@@ -160,6 +160,8 @@ class WebViewExecutor @Inject constructor(
 	private var webViewCached: WeakReference<WebView>? = null
 	private val mutex = Mutex()
 	private val browserSessionCache = LinkedHashMap<String, BrowserSessionRecord>(BROWSER_SESSION_CACHE_SIZE, 0.75f, true)
+	private val browserSessionCreationMutex = Mutex()
+	private val browserSessionProfileStore = BrowserSessionProfileStore(context)
     private val captchaMutexes = ConcurrentHashMap<String, Mutex>()
 	private val recentFailureUntil = ConcurrentHashMap<String, Long>()
 	private val _interactiveChallenges = MutableSharedFlow<BrowserInteractiveChallenge>(
@@ -240,6 +242,7 @@ class WebViewExecutor @Inject constructor(
 		userAgent: String? = null,
 		headers: Map<String, String> = emptyMap(),
 		allowedOrigins: Set<String> = emptySet(),
+		allowInteractiveChallenge: Boolean = false,
 		settleDelayMs: Long = 1200,
 		timeoutMs: Long = 30000,
 	): BrowserFetchResult? {
@@ -265,7 +268,7 @@ class WebViewExecutor @Inject constructor(
 				val messageBridge = session.transportInstallation?.messageBridge?.bridge
 			try {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext start: $url")
-				webView.configureForParser(userAgent, blockImages = true)
+				configureBrowserSession(webView)
 				val transportResult = withTimeoutOrNull(timeoutMs) {
 					check(session.rendererEpoch == rendererEpoch && session.state != BrowserSessionState.POISONED) {
 						"BrowserSession renderer changed before request"
@@ -526,12 +529,38 @@ class WebViewExecutor @Inject constructor(
 								body = body,
 							)
 							session.transitionExecutionTo(BrowserExecutionState.RESOLVING_AUTOMATIC)
-							val resolutionEvidence = resolveChallengeInSession(
-								webView = webView,
-								exception = challenge,
-								context = challengeContext,
-								challengeDocumentHtml = fetchBody,
-							)
+							var validatedRetryJson: JSONObject? = null
+							val resolutionEvidence = if (allowInteractiveChallenge) {
+								resolveChallengeInSession(
+									webView = webView,
+									exception = challenge,
+									context = challengeContext,
+									challengeDocumentHtml = fetchBody,
+									validateOriginalRequest = {
+										val validationRaw = fetchViaWebMessage(
+											webView, messageBridge, originPolicy, targetUrlToFetch, url,
+											normalizedMethod, body, allowedHeaders, BrowserFetchExecutionWorld.PAGE,
+										) ?: fetchViaJavascriptPolling(
+											webView, targetUrlToFetch, url, normalizedMethod, body, allowedHeaders,
+										)
+										val validationJson = runCatching { JSONObject(validationRaw) }.getOrNull()
+										val validated = validationJson?.optBoolean("ok") == true && !isCloudflareChallenge(
+											validationJson.optInt("status"),
+											validationJson.optString("body"),
+											validationJson.optJSONObject("headers"),
+										)
+										if (validated) validatedRetryJson = validationJson
+										validated
+									},
+								)
+							} else {
+								Log.i(
+									TAG,
+									"Browser interactive challenge deferred to source UI: " +
+										"method=$normalizedMethod url=$targetUrlToFetch",
+								)
+								null
+							}
 							if (resolutionEvidence != null) {
 								session.transitionExecutionTo(BrowserExecutionState.VALIDATING)
 								session.transitionExecutionTo(BrowserExecutionState.RETRYING_REQUEST)
@@ -541,13 +570,7 @@ class WebViewExecutor @Inject constructor(
 									body = body,
 									executionWorld = BrowserFetchExecutionWorld.PAGE,
 								)
-								val retryRaw = fetchViaWebMessage(
-									webView, messageBridge, originPolicy, targetUrlToFetch, url, normalizedMethod, body,
-									allowedHeaders, BrowserFetchExecutionWorld.PAGE,
-								) ?: fetchViaJavascriptPolling(
-									webView, targetUrlToFetch, url, normalizedMethod, body, allowedHeaders,
-								)
-								val retryJson = runCatching { JSONObject(retryRaw) }.getOrNull()
+								val retryJson = validatedRetryJson
 								if (retryJson != null) {
 									logBrowserRpcResponse(
 										BrowserFetchExecutionWorld.PAGE,
@@ -666,6 +689,7 @@ class WebViewExecutor @Inject constructor(
 		exception: CloudFlareProtectedException,
 		context: BrowserChallengeContext,
 		challengeDocumentHtml: String,
+		validateOriginalRequest: suspend () -> Boolean,
 	): BrowserResolutionEvidence? {
 		val activity = foregroundActivityHolder.current ?: return null
 		val session = browserSessionCache.values.firstOrNull { it.webView === webView } ?: return null
@@ -681,11 +705,12 @@ class WebViewExecutor @Inject constructor(
 		interactiveChallengeStates[interactiveChallenge.challengeId] = interactiveChallenge
 		var terminalState = BrowserInteractiveChallengeState.FAILED
 		val evidence = try {
-			// Keep the clearance issued by the homepage. Kagane uses one browser
-			// session for the homepage and API; deleting it here recreates the loop.
+			// Keep any browser state issued by the homepage. The original API request,
+			// not the presence of a particular cookie, is the final success criterion.
 			val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
 			withTimeoutOrNull(DEFAULT_CAPTCHA_TIMEOUT_MS * 2) {
 				suspendCancellableCoroutine<BrowserResolutionEvidence?> { cont ->
+					val validationInFlight = AtomicBoolean(false)
 					interactiveChallengeCancellations[interactiveChallenge.challengeId] = {
 						if (cont.isActive) cont.resume(null) {}
 					}
@@ -718,8 +743,26 @@ class WebViewExecutor @Inject constructor(
 								"Session challenge state=$state url=${webView.url} " +
 									"hasClearance=${clearance != null} evidence=$evidence",
 							)
-							if (evidence != null && cont.isActive) {
-								cont.resume(evidence) {}
+							if (evidence != null && cont.isActive && validationInFlight.compareAndSet(false, true)) {
+								kotlinx.coroutines.CoroutineScope(cont.context).launch {
+									val validated = runCatchingCancellable { validateOriginalRequest() }
+										.onFailure { Log.w(TAG, "Interactive challenge validation failed", it) }
+										.getOrDefault(false)
+									Log.d(
+										TAG,
+										"Interactive challenge original request validation: " +
+											"url=${context.requestUrl} validated=$validated",
+									)
+									if (validated && cont.isActive) {
+										cont.resume(evidence) {}
+									} else {
+										validationInFlight.set(false)
+										if (cont.isActive) {
+											kotlinx.coroutines.delay(INTERACTIVE_VALIDATION_RETRY_MS)
+											if (cont.isActive) inspectState()
+										}
+									}
+								}
 							}
 						}
 					}
@@ -742,11 +785,8 @@ class WebViewExecutor @Inject constructor(
 					webView.webViewClient = client
 					webView.alpha = 1f
 					webView.visibility = View.VISIBLE
-					// A POST challenge must be opened as a real HTTPS document. Injecting the
-					// response with loadDataWithBaseURL() can leave Chromium reporting an
-					// about:blank document to Turnstile, which breaks its postMessage origin
-					// handshake. This navigation is a GET only; the original POST is retried
-					// below after resolution and is never downgraded to navigation.
+					// POST challenges use the real origin homepage, matching normal browsing;
+					// opening an API endpoint as a GET creates a different Turnstile flow.
 					advanceNavigationEpoch(webView)
 					val navigationUrl = context.navigationUrl ?: context.requestUrl
 					webView.loadUrl(navigationUrl)
@@ -1992,8 +2032,9 @@ class WebViewExecutor @Inject constructor(
 	}
 
 	@MainThread
-	private suspend fun obtainBrowserSession(host: String): BrowserSessionRecord {
-		browserSessionCache[host]?.let { return it }
+	private suspend fun obtainBrowserSession(host: String): BrowserSessionRecord = browserSessionCreationMutex.withLock {
+		browserSessionCache[host]?.let { return@withLock it }
+		ensureBrowserSessionProfile(host)
 		if (browserSessionCache.size >= BROWSER_SESSION_CACHE_SIZE) {
 			val eldest = browserSessionCache.entries.firstOrNull { it.value.canEvict }
 			if (eldest != null) {
@@ -2002,22 +2043,22 @@ class WebViewExecutor @Inject constructor(
 			}
 		}
 		val webView = WebView(context).also { webView ->
-			webView.configureForParser(null)
+			configureBrowserSession(webView)
 			proxyProvider.applyWebViewConfig()
 			webView.onResume()
 			webView.resumeTimers()
 		}
-		return BrowserSessionRecord(
+		return@withLock BrowserSessionRecord(
 			origin = host,
 			webView = webView,
 			provider = WebViewCompat.getCurrentWebViewPackage(context)?.let { "${it.packageName}/${it.versionName}" },
-			).also { session ->
-				val sessionOriginPolicy = checkNotNull(BrowserOriginPolicy.create(session.origin))
-				session.transportInstallation = BrowserTransportInstallation(
-					fetchScriptHandler = installBrowserFetchExecutor(webView, sessionOriginPolicy),
-					messageBridge = installBrowserMessageBridge(webView, session, sessionOriginPolicy),
-				)
-				WebViewCompat.setWebViewRenderProcessClient(webView, object : WebViewRenderProcessClient() {
+		).also { session ->
+			val sessionOriginPolicy = checkNotNull(BrowserOriginPolicy.create(session.origin))
+			session.transportInstallation = BrowserTransportInstallation(
+				fetchScriptHandler = installBrowserFetchExecutor(webView, sessionOriginPolicy),
+				messageBridge = installBrowserMessageBridge(webView, session, sessionOriginPolicy),
+			)
+			WebViewCompat.setWebViewRenderProcessClient(webView, object : WebViewRenderProcessClient() {
 				override fun onRenderProcessUnresponsive(view: WebView, renderer: androidx.webkit.WebViewRenderProcess?) {
 					session.unresponsiveAt = System.currentTimeMillis()
 					Log.w(TAG, "BrowserSession renderer unresponsive: id=${session.sessionId} origin=$host pending=${session.pendingOperations}")
@@ -2029,11 +2070,47 @@ class WebViewExecutor @Inject constructor(
 					Log.i(TAG, "BrowserSession renderer responsive: id=${session.sessionId} origin=$host durationMs=${started?.let { System.currentTimeMillis() - it } ?: 0}")
 				}
 			})
-					browserSessionCache[host] = session
-					browserSessionManager.register(session.sessionId, webView)
+			browserSessionCache[host] = session
+			browserSessionManager.register(session.sessionId, webView)
 			Log.i(TAG, "BrowserSession created: id=${session.sessionId} origin=$host provider=${session.provider}")
 		}
 	}
+
+	@MainThread
+	private suspend fun ensureBrowserSessionProfile(origin: String) {
+		val storedVersion = browserSessionProfileStore.storedVersion()
+		if (!BrowserSessionProfileStore.requiresMigration(storedVersion, BROWSER_SESSION_PROFILE_VERSION)) {
+			return
+		}
+		val originUrl = origin.toHttpUrlOrNull() ?: return
+		val hadClearance = hasCookie(CookieManager.getInstance().getCookie(origin), CF_CLEARANCE_COOKIE) ||
+			withContext(Dispatchers.IO) {
+				cookieJar.loadForRequest(originUrl).any { it.name == CF_CLEARANCE_COOKIE }
+			}
+
+		withContext(Dispatchers.IO) { cookieJar.clear() }
+		CookieManager.getInstance().flush()
+
+		val cleared = !CookieManager.getInstance().hasCookies() &&
+			!hasCookie(CookieManager.getInstance().getCookie(origin), CF_CLEARANCE_COOKIE) &&
+			withContext(Dispatchers.IO) {
+			cookieJar.loadForRequest(originUrl).none { it.name == CF_CLEARANCE_COOKIE }
+		}
+		val marked = cleared && withContext(Dispatchers.IO) {
+			browserSessionProfileStore.markMigrated(BROWSER_SESSION_PROFILE_VERSION)
+		}
+		Log.i(
+			TAG,
+			"BrowserSession global profile migration: triggerOrigin=$origin from=$storedVersion " +
+				"to=$BROWSER_SESSION_PROFILE_VERSION hadClearance=$hadClearance " +
+				"cleared=$cleared marked=$marked",
+		)
+	}
+
+	private fun hasCookie(rawCookies: String?, name: String): Boolean = rawCookies
+		.orEmpty()
+		.split(';')
+		.any { it.substringBefore('=').trim() == name }
 
 	@MainThread
 	private fun trimBrowserSessionCache() {
@@ -2611,6 +2688,20 @@ class WebViewExecutor @Inject constructor(
 	}
 
 	@MainThread
+	private fun configureBrowserSession(webView: WebView) {
+		with(webView.settings) {
+			javaScriptEnabled = true
+			domStorageEnabled = true
+			cacheMode = WebSettings.LOAD_DEFAULT
+			blockNetworkImage = false
+		}
+		CookieManager.getInstance().apply {
+			setAcceptCookie(true)
+			setAcceptThirdPartyCookies(webView, true)
+		}
+	}
+
+	@MainThread
 	private fun WebView.reset() {
 		stopLoading()
 		webChromeClient = WebChromeClient()
@@ -2630,6 +2721,8 @@ class WebViewExecutor @Inject constructor(
 			private const val BROWSER_DOCUMENT_QUIET_WINDOW_MS = 1_500L
 			private const val BROWSER_DOCUMENT_READY_POLL_MS = 250L
 		private const val BROWSER_SESSION_CACHE_SIZE = 3
+		private const val BROWSER_SESSION_PROFILE_VERSION = 3
+		private const val INTERACTIVE_VALIDATION_RETRY_MS = 2_000L
 	        private const val TAG = "WebViewExecutor"
 	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
 		        private const val MAX_CHALLENGE_MS = 30_000L

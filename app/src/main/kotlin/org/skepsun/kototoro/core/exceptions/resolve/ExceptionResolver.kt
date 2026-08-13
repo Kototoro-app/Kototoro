@@ -33,6 +33,7 @@ import org.skepsun.kototoro.parsers.exception.AuthRequiredException
 import org.skepsun.kototoro.parsers.exception.NotFoundException
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.scrobbling.common.domain.ScrobblerAuthRequiredException
 import org.skepsun.kototoro.scrobbling.common.ui.ScrobblerAuthHelper
 import org.skepsun.kototoro.settings.sources.auth.SourceAuthActivity
@@ -133,6 +134,15 @@ class ExceptionResolver private constructor(
     }
 
     private suspend fun resolveCF(e: CloudFlareProtectedException, tryAutoResolve: Boolean): Boolean {
+		if (!tryAutoResolve) {
+			return resolveBrowserAction(
+				InteractiveActionRequiredException(
+					source = e.source,
+					url = CloudFlareHelper.getChallengeUrl(e.url),
+					userAgent = e.headers[org.skepsun.kototoro.core.network.CommonHeaders.USER_AGENT],
+				),
+			)
+		}
         val autoResolveEnabled = tryAutoResolve &&
             (host.context?.let { !SourceSettings(it, e.source).isCaptchaAutoResolveDisabled } ?: true)
         return captchaAutoResolveCoordinator.resolve(

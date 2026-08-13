@@ -21,7 +21,7 @@ internal data class BrowserChallengeContext(
 				origin = originPolicy.primaryOrigin,
 				requestUrl = requestUrl,
 				method = normalizedMethod,
-				navigationUrl = requestUrl.takeIf { normalizedMethod == "GET" },
+				navigationUrl = if (normalizedMethod == "GET") requestUrl else "${originPolicy.primaryOrigin}/",
 				responseHtmlSnippet = responseHtml.take(MAX_HTML_SNIPPET_CHARS),
 			)
 		}
@@ -29,7 +29,7 @@ internal data class BrowserChallengeContext(
 }
 
 internal enum class BrowserResolutionEvidence {
-	CLEARANCE_AND_NON_CHALLENGE_PAGE,
+	CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 }
 
 internal class BrowserChallengeResolutionTracker {
@@ -39,7 +39,7 @@ internal class BrowserChallengeResolutionTracker {
 	/**
 	 * @param requiresInteractiveResolution when true (POST challenges), evidence is only produced
 	 * after the visible resolver observed either the interactive widget or a real Cloudflare token
-	 * navigation, then the page reached `OK` with a clearance. Some WebView providers complete
+	 * navigation, then the page reached `OK`. Some WebView providers complete
 	 * Turnstile between DOM samples and report `WAIT -> OK` without exposing `INTERACTIVE`.
 	 */
 	fun observe(
@@ -60,11 +60,11 @@ internal class BrowserChallengeResolutionTracker {
 			// navigation or observed widget prevents an initial WAIT -> OK with old clearance from
 			// being accepted while tolerating providers that miss the short INTERACTIVE state.
 			if (!interactiveChallengeObserved && !challengeNavigationObserved) return null
-			return BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE.takeIf {
-				pageState == CloudFlarePageState.OK && hasClearance
+			return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE.takeIf {
+				pageState == CloudFlarePageState.OK
 			}
 		}
-		return BrowserResolutionEvidence.CLEARANCE_AND_NON_CHALLENGE_PAGE.takeIf {
+		return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE.takeIf {
 			pageState == CloudFlarePageState.OK && hasClearance &&
 				(interactiveChallengeObserved || challengeNavigationObserved || clearanceChanged)
 		}

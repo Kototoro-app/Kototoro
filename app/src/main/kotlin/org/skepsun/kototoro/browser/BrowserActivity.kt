@@ -19,11 +19,13 @@ import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.network.jsonsource.LegadoHttpClient
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
+import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 import org.skepsun.kototoro.core.javascript.BrowserVerificationBridge
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -35,6 +37,9 @@ class BrowserActivity : BaseBrowserActivity() {
     @javax.inject.Inject
     lateinit var legadoHttpClient: LegadoHttpClient
 
+	@javax.inject.Inject
+	lateinit var captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator
+
 	private var pendingResult = RESULT_CANCELED
 	private var successCookieUrl: String? = null
 	private var successCookieName: String? = null
@@ -45,6 +50,7 @@ class BrowserActivity : BaseBrowserActivity() {
     private var refetchAfterSuccess: Boolean = true
 	private var sawChallengePage = false
     private var autoSavingVerificationResult = false
+	private var cfResolveResultNotified = false
 	private var sourceRequestHeaders: Map<String, String> = emptyMap()
 
 	override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
@@ -129,8 +135,14 @@ class BrowserActivity : BaseBrowserActivity() {
 		flushBrowserCookies()
 		val currentValue = getSuccessCookieValue()
 		logCookieState("finish", currentValue)
-        pendingResult = if (isSuccessCookieSatisfied(currentValue)) RESULT_OK else RESULT_CANCELED
-        setResult(pendingResult)
+		pendingResult = if (isSuccessCookieSatisfied(currentValue)) RESULT_OK else RESULT_CANCELED
+		setResult(pendingResult)
+		if (!cfResolveResultNotified) {
+			cfResolveResultNotified = true
+			intent?.getStringExtra(EXTRA_CF_RESOLVE_KEY)?.let { resolveKey ->
+				captchaAutoResolveCoordinator.notifyResolveResult(resolveKey, pendingResult == RESULT_OK)
+			}
+		}
 		super.finish()
 	}
 
@@ -194,7 +206,9 @@ class BrowserActivity : BaseBrowserActivity() {
 		val isSatisfied = !resolvedCurrentValue.isNullOrEmpty() && resolvedCurrentValue != initialSuccessCookieValue
 		android.util.Log.d(
 			TAG,
-			"success_check url=$cookieUrl cookie=$cookieName initial=${maskCookieValue(initialSuccessCookieValue)} current=${maskCookieValue(resolvedCurrentValue)} passed=$isSatisfied",
+			"success_check url=$cookieUrl cookie=$cookieName " +
+				"initial=${sensitiveValueFingerprint(initialSuccessCookieValue)} " +
+				"current=${sensitiveValueFingerprint(resolvedCurrentValue)} passed=$isSatisfied",
 		)
 		return isSatisfied
 	}
@@ -221,20 +235,28 @@ class BrowserActivity : BaseBrowserActivity() {
 		val rawCookie = CookieManager.getInstance().getCookie(cookieUrl)
 		android.util.Log.d(
 			TAG,
-			"cookie_state stage=$stage url=$cookieUrl cookie=$cookieName value=${maskCookieValue(cookieValue)} hasCookie=${!cookieValue.isNullOrEmpty()} rawHasCfClearance=${rawCookie?.contains("$cookieName=") == true}",
+			"cookie_state stage=$stage url=$cookieUrl cookie=$cookieName " +
+				"fingerprint=${sensitiveValueFingerprint(cookieValue)} hasCookie=${!cookieValue.isNullOrEmpty()} " +
+				"rawHasCfClearance=${rawCookie?.contains("$cookieName=") == true}",
 		)
 	}
 
 	private fun logBrowserState(stage: String, url: String? = browserWebView.url) {
 		val parsedUrl = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
 		val rawCookies = url?.let { runCatching { CookieManager.getInstance().getCookie(it).orEmpty() }.getOrDefault("") }
-		val cookieNames = rawCookies
+		val parsedCookies = rawCookies
 			.orEmpty()
 			.split(';')
-			.mapNotNull { it.trim().substringBefore('=').takeIf(String::isNotBlank) }
+			.mapNotNull { rawCookie ->
+				val parts = rawCookie.trim().split('=', limit = 2)
+				parts.takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
+			}
+		val cookieNames = parsedCookies
+			.map(Pair<String, String>::first)
 			.distinct()
 			.joinToString(",")
 			.ifBlank { "<none>" }
+		val clearance = parsedCookies.firstOrNull { it.first == "cf_clearance" }?.second
 		val queryNames = parsedUrl?.queryParameterNames
 			?.joinToString(",")
 			?.ifBlank { "<none>" }
@@ -243,14 +265,10 @@ class BrowserActivity : BaseBrowserActivity() {
 			TAG,
 			"browser_state stage=$stage host=${parsedUrl?.host ?: "<none>"} " +
 				"path=${parsedUrl?.path ?: "<none>"} queryNames=$queryNames " +
-				"cookieNames=[$cookieNames] ua=${browserWebView.settings.userAgentString} " +
+				"cookieNames=[$cookieNames] cfClearanceFingerprint=${sensitiveValueFingerprint(clearance)} " +
+				"uaFingerprint=${sensitiveValueFingerprint(browserWebView.settings.userAgentString)} " +
 				"title=${browserWebView.title.orEmpty().take(80)}",
 		)
-	}
-
-	private fun maskCookieValue(value: String?): String {
-		if (value.isNullOrEmpty()) return "<empty>"
-		return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
 	}
 
     private fun maybeCompleteAfterVerification() {
@@ -366,7 +384,7 @@ class BrowserActivity : BaseBrowserActivity() {
     }
 
 	companion object {
-
+		const val EXTRA_CF_RESOLVE_KEY = "cf_resolve_key"
 		const val TAG = "BrowserActivity"
 	}
 }

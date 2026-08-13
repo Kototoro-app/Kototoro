@@ -44,7 +44,6 @@ import org.skepsun.kototoro.alternatives.ui.compose.AlternativesSheetRoute
 import org.skepsun.kototoro.backups.ui.restore.RestoreDialogRoute
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.browser.BrowserActivity
-import org.skepsun.kototoro.browser.cloudflare.CloudFlareActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.image.CoilMemoryCacheKey
 import org.skepsun.kototoro.core.model.FavouriteCategory
@@ -63,6 +62,7 @@ import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderMode
@@ -1441,19 +1441,16 @@ class AppRouter private constructor(
         fun cloudFlareResolveIntent(
             context: Context,
             exception: CloudFlareProtectedException,
-            hidden: Boolean = false,
-        ): Intent =
-            Intent(context, CloudFlareActivity::class.java).apply {
-                data = Uri.parse(exception.url)
-                putExtra(KEY_SOURCE, exception.source.name)
-                putExtra(CloudFlareActivity.EXTRA_METHOD, exception.method)
-                exception.body?.let { putExtra(CloudFlareActivity.EXTRA_BODY, it) }
-				exception.contentType?.let { putExtra(CloudFlareActivity.EXTRA_CONTENT_TYPE, it) }
-                putExtra(CloudFlareActivity.EXTRA_HIDDEN, hidden)
-                exception.headers[CommonHeaders.USER_AGENT]?.let {
-                    putExtra(KEY_USER_AGENT, it)
-                }
+        ): Intent = browserIntent(
+            context = context,
+            url = CloudFlareHelper.getChallengeUrl(exception.url),
+            source = exception.source,
+            title = context.getString(R.string.open_in_reader_browser),
+        ).apply {
+            exception.headers[CommonHeaders.USER_AGENT]?.let {
+                putExtra(KEY_USER_AGENT, it)
             }
+        }
 
         fun browserIntent(
             context: Context,

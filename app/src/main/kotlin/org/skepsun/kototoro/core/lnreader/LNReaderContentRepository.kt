@@ -304,7 +304,7 @@ class LNReaderContentRepository(
 	 */
 	private suspend fun <T> executeInPluginContext(block: suspend (LNReaderPluginBridge) -> T): T {
 		return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-			val fetchBridge = LNReaderFetchBridge(httpClient, pluginId)
+			val fetchBridge = LNReaderFetchBridge(httpClient, pluginId, source)
 			val engine = LNReaderEngine(appContext, fetchBridge)
 			val qjs = engine.createPluginContext(jsContent, pluginId)
 			

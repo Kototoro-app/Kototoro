@@ -86,6 +86,7 @@ internal class CloudstreamCloudflareInterceptor(
 				userAgent = resolvedRequest.header(CommonHeaders.USER_AGENT)
 					?: WebViewResolver.getWebViewUserAgent(),
 				headers = resolvedRequest.headers.toBrowserHeaders(),
+				allowInteractiveChallenge = false,
 				settleDelayMs = BROWSER_SETTLE_DELAY_MS,
 				timeoutMs = BROWSER_TIMEOUT_MS,
 			)

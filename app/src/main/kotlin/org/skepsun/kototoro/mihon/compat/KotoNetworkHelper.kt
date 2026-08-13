@@ -20,6 +20,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.core.network.browserTransportHeaders
+import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
@@ -149,7 +150,11 @@ class KotoNetworkHelper(
             val cookieNames = requestCookies.joinToString(",") { it.name }
             android.util.Log.d(
                 "MihonNetwork",
-                "RequestMeta: host=${request.url.host}, ua=${maskUserAgent(request.header("User-Agent"))}, referer=${request.header("Referer")}, origin=${request.header("Origin")}, hasCfClearance=${cfClearanceCookie != null}, cfClearance=${maskCookieValue(cfClearanceCookie)}, cookies=[$cookieNames]",
+                "RequestMeta: host=${request.url.host}, ua=${maskUserAgent(request.header("User-Agent"))}, " +
+					"uaFingerprint=${sensitiveValueFingerprint(request.header("User-Agent"))}, " +
+					"referer=${request.header("Referer")}, origin=${request.header("Origin")}, " +
+					"hasCfClearance=${cfClearanceCookie != null}, " +
+					"cfClearanceFingerprint=${sensitiveValueFingerprint(cfClearanceCookie)}, cookies=[$cookieNames]",
             )
             android.util.Log.d("MihonNetwork", "Request: ${request.method} ${request.url}")
             
@@ -260,6 +265,7 @@ class KotoNetworkHelper(
                     userAgent = request.header("User-Agent"),
 					headers = request.browserTransportHeaders(),
 					allowedOrigins = requestContext.allowedBrowserOrigins,
+					allowInteractiveChallenge = false,
                     timeoutMs = BROWSER_TRANSPORT_TIMEOUT_MS,
                 )
             }
@@ -329,11 +335,12 @@ class KotoNetworkHelper(
 	private fun Request.withSourceRequestContext(): Request {
 		tag(SourceRequestContext::class.java)?.let { return this }
 		val legacySource = tag(ContentSource::class.java)
+			?: MihonRequestContext.currentSource()
 			?: MihonRequestContext.sourceForHost(url.host)
 			?: return this
 		android.util.Log.d(
 			"MihonNetwork",
-			"Recovered legacy source identity by registered host hint: host=${url.host}, source=${legacySource.name}",
+			"Recovered source request context: host=${url.host}, source=${legacySource.name}",
 		)
 		return newBuilder()
 			.tag(ContentSource::class.java, legacySource)
@@ -439,11 +446,6 @@ class KotoNetworkHelper(
         return if (modified) builder.build() else request
     }
 
-    private fun maskCookieValue(value: String?): String {
-        if (value.isNullOrEmpty()) return "<empty>"
-        return if (value.length <= 8) "***" else "${value.take(4)}...${value.takeLast(4)}"
-    }
-
     private fun maskUserAgent(value: String?): String {
         return value
             ?.replace(Regex("""Chrome/\d+(\.\d+)*"""), "Chrome/*")
@@ -453,7 +455,7 @@ class KotoNetworkHelper(
 
     private fun cookieDebugString(url: okhttp3.HttpUrl): String {
         return cookieJar.loadForRequest(url)
-            .joinToString(",") { cookie -> "${cookie.name}=${maskCookieValue(cookie.value)}" }
+            .joinToString(",") { cookie -> "${cookie.name}=${sensitiveValueFingerprint(cookie.value)}" }
             .ifBlank { "<none>" }
     }
 
@@ -478,7 +480,7 @@ class KotoNetworkHelper(
                 } else if (index == 0) {
                     val name = trimmed.substringBefore("=")
                     val value = trimmed.substringAfter("=", "")
-                    "$name=${maskCookieValue(value)}"
+                    "$name=${sensitiveValueFingerprint(value)}"
                 } else {
                     val attrName = trimmed.substringBefore("=").lowercase()
                     when (attrName) {
@@ -494,7 +496,7 @@ class KotoNetworkHelper(
     companion object {
         const val WEBVIEW_FINAL_URL_HEADER = "X-Kototoro-WebView-Final-Url"
         private const val MAX_BROWSER_REQUEST_BODY_BYTES = 2L * 1024L * 1024L
-        private const val BROWSER_TRANSPORT_TIMEOUT_MS = 30_000L
+		private const val BROWSER_TRANSPORT_TIMEOUT_MS = 60_000L
         private val BINARY_MEDIA_TYPES = setOf("image/", "audio/", "video/", "application/octet-stream")
         private val acceptedCloudflareUserAgents = ConcurrentHashMap<String, String>()
 
