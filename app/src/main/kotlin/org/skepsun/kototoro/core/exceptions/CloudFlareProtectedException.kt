@@ -12,6 +12,7 @@ class CloudFlareProtectedException(
 	@Transient val method: String = "GET",
 	@Transient val body: String? = null,
 	@Transient val contentType: String? = headers["Content-Type"],
+	val originalUrl: String = url,
 ) : CloudFlareException("Protected by CloudFlare", CloudFlareHelper.PROTECTION_CAPTCHA) {
 
 	override val source: ContentSource = source ?: UnknownContentSource

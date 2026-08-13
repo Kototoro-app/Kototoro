@@ -64,4 +64,45 @@ class CloudFlareResolverStateTest {
             state.plan("other.example", tryAutomatic = true, allowManual = true),
         )
     }
+
+    @Test
+    fun `probe failure enters cooldown and clears prior success`() {
+        state.recordSuccess("example.org", CloudFlareResolveStage.AUTOMATIC)
+
+        state.recordFailure("example.org")
+
+        assertEquals(
+            CloudFlareResolvePlan.FAIL_FAST,
+            state.plan("example.org", tryAutomatic = true, allowManual = true),
+        )
+        now += 60_000L
+        assertEquals(
+            CloudFlareResolvePlan.FAIL_FAST,
+            state.plan("example.org", tryAutomatic = true, allowManual = true),
+        )
+        now += 61_000L
+        assertEquals(
+            CloudFlareResolvePlan.AUTO_THEN_MANUAL,
+            state.plan("example.org", tryAutomatic = true, allowManual = true),
+        )
+    }
+
+    @Test
+    fun `multiple hosts keep independent success and cooldown state`() {
+        state.recordSuccess("a.example", CloudFlareResolveStage.AUTOMATIC)
+        state.recordSuccess("b.example", CloudFlareResolveStage.MANUAL)
+
+        assertEquals(
+            CloudFlareResolvePlan.MANUAL_ONLY,
+            state.plan("a.example", tryAutomatic = true, allowManual = true),
+        )
+        assertEquals(
+            CloudFlareResolvePlan.FAIL_FAST,
+            state.plan("b.example", tryAutomatic = true, allowManual = true),
+        )
+        assertEquals(
+            CloudFlareResolvePlan.AUTO_THEN_MANUAL,
+            state.plan("c.example", tryAutomatic = true, allowManual = true),
+        )
+    }
 }

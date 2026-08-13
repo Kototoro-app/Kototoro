@@ -62,7 +62,7 @@ Mihon、Aniyomi 及其他来源由上层页面或仓库操作重新执行原业�
 - [x] 修复 LNReader `fetchBinary/fetchProto` 的 CF 致命异常隧道。
 - [x] IReader 请求注入来源 tag，主动 bypass 接入统一 solver，并保留 CF/交互异常隧道。
 - [ ] 为 WebView 会话增加设备级仪器测试，覆盖真实窗口挂载与 Cookie 同步。
-- [ ] 增加求解成功后通用请求复验接口，逐步替代页面级粗粒度重载。
+- [x] 增加求解成功后通用请求复验接口，逐步替代页面级粗粒度重载（`CaptchaAutoResolveCoordinator.probeCleared` 在自动/人工求解后以原始请求 URL 做真实 HTTP probe，仍被 challenge 则进入 cooldown）。
 
 ## 风险与验证
 

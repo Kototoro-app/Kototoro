@@ -253,6 +253,13 @@ class WebViewExecutor @Inject constructor(
 		return withContext(Dispatchers.Main.immediate) {
 				val session = obtainBrowserSession(sessionKey)
 				session.executionMutex.withLock {
+				// A concurrent execution on the same origin may have discarded this session
+				// while we waited for the mutex. Its WebView is already destroyed; fail fast
+				// instead of driving a destroyed WebView (which stalls until timeout).
+				check(
+					session.state != BrowserSessionState.POISONED &&
+						session.state != BrowserSessionState.DESTROYED,
+				) { "BrowserSession was discarded by a concurrent execution" }
 				val webView = session.webView
 				val rendererEpoch = session.rendererEpoch
 				val execution = BrowserExecution(requestUrl = url, method = normalizedMethod)
@@ -1319,7 +1326,7 @@ class WebViewExecutor @Inject constructor(
 	) {
 		val tracker = BrowserDocumentReadinessTracker(quietWindowMs)
 		val startedAt = System.currentTimeMillis()
-		var lastState = CloudFlarePageState.WAIT
+		var lastState = CloudFlarePageState.LOADING
 		var lastReadyState = ""
 		var lastUrl = webView.url.orEmpty()
 		var lastResourceCount = 0
@@ -1572,7 +1579,7 @@ class WebViewExecutor @Inject constructor(
                     }
                     val requestHeaders = protectedHeaders?.toCloudFlareWebViewHeaders().orEmpty()
                     val useInterception = shouldUseCloudFlareInterception(exception.source)
-                    val resolved = withTimeoutOrNull(timeout) {
+				val resolved = withTimeoutOrNull(timeout) {
                         suspendCancellableCoroutine { cont ->
                             webView.webViewClient = createCloudFlareClient(
                                 webView = webView,
@@ -2222,6 +2229,7 @@ class WebViewExecutor @Inject constructor(
     ): CloudFlareClient {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
+        var interactiveSince: Long? = null
         val resumeOnce: (CaptchaAutoResolveResult) -> Unit = { result ->
             if (!finished) {
                 finished = true
@@ -2243,35 +2251,48 @@ class WebViewExecutor @Inject constructor(
                     if (finished) return@evaluateJavascript
                     val state = parseCloudFlarePageState(raw)
                     when (state) {
-                        CloudFlarePageState.INTERACTIVE -> {
-                            Log.i(TAG, "Interactive Cloudflare challenge detected; switching to visible resolver")
-                            resumeOnce(CaptchaAutoResolveResult.INTERACTIVE_REQUIRED)
+                        CloudFlarePageState.INTERACTIVE_CHALLENGE -> {
+                            // Managed challenges briefly expose the Turnstile widget before
+                            // resolving themselves; only escalate once the widget persists.
+                            val now = System.currentTimeMillis()
+                            val since = interactiveSince ?: now.also { interactiveSince = it }
+                            if (now - since >= INTERACTIVE_OBSERVE_WINDOW_MS) {
+                                Log.i(TAG, "Interactive Cloudflare challenge persisted; switching to visible resolver")
+                                resumeOnce(CaptchaAutoResolveResult.INTERACTIVE_REQUIRED)
+                            } else {
+                                handler.removeCallbacks(this)
+                                handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
+                            }
                         }
-                        // A normal document can report OK without having solved the
+                        // A normal document can report NORMAL without having solved the
                         // challenge. The old clearance was removed before loading,
                         // so only a newly issued clearance is a valid auto result.
-                        CloudFlarePageState.OK -> {
+                        CloudFlarePageState.NORMAL -> {
+                            interactiveSince = null
                             if (clearance != null && clearance != initialClearance) {
                                 resumeOnce(CaptchaAutoResolveResult.SOLVED)
                             } else if (System.currentTimeMillis() >= challengeDeadline) {
-                                Log.w(TAG, "Captcha page is OK but no new clearance was issued")
+                                Log.w(TAG, "Captcha page is normal but no new clearance was issued")
                                 resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
                             } else {
                                 handler.removeCallbacks(this)
                                 handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
                             }
                         }
-                        CloudFlarePageState.ERROR -> resumeOnce(CaptchaAutoResolveResult.HARD_BLOCKED)
-                        else -> if (System.currentTimeMillis() >= challengeDeadline) {
-                            Log.w(
-                                TAG,
-                                "Captcha auto-resolve deadline reached, " +
-                                    "state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
-                            )
-                            resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
-                        } else {
-                            handler.removeCallbacks(this)
-                            handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
+                        CloudFlarePageState.HARD_BLOCK -> resumeOnce(CaptchaAutoResolveResult.HARD_BLOCKED)
+                        else -> {
+                            interactiveSince = null
+                            if (System.currentTimeMillis() >= challengeDeadline) {
+                                Log.w(
+                                    TAG,
+                                    "Captcha auto-resolve deadline reached, " +
+                                        "state=$state hasNewClearance=${clearance != null && clearance != initialClearance}",
+                                )
+                                resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
+                            } else {
+                                handler.removeCallbacks(this)
+                                handler.postDelayed(this, CHALLENGE_POLL_INTERVAL_MS)
+                            }
                         }
                     }
                 }
@@ -2296,6 +2317,12 @@ class WebViewExecutor @Inject constructor(
             }
 
             override fun onLoopDetected() = Unit
+
+            override fun onMainFrameError() {
+                if (finished) return
+                Log.w(TAG, "Main-frame WebView error during automatic challenge resolve: url=${exception.url}")
+                resumeOnce(CaptchaAutoResolveResult.FAILED)
+            }
         }
         return if (useInterception) {
             CloudFlareInterceptClient(
@@ -2726,6 +2753,7 @@ class WebViewExecutor @Inject constructor(
 	        private const val TAG = "WebViewExecutor"
 	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
 		        private const val MAX_CHALLENGE_MS = 30_000L
+	        private const val INTERACTIVE_OBSERVE_WINDOW_MS = 2_500L
 	        private const val FAILURE_COOLDOWN_MS = 30_000L
 	        private const val CLOUDFLARE_WEBVIEW_WIDTH = 1024
 	        private const val CLOUDFLARE_WEBVIEW_HEIGHT = 768

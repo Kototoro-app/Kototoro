@@ -10,29 +10,37 @@ class CloudFlareDetectionTest {
 	fun `document readiness requires stable completed non challenge page`() {
 		val tracker = BrowserDocumentReadinessTracker(quietWindowMs = 1_500L)
 
-		assertFalse(tracker.observe(CloudFlarePageState.WAIT, "complete", "https://example.com", 4, 0L))
-		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 500L))
-		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 1_500L))
-		assertTrue(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 5, 3_000L))
+		assertFalse(tracker.observe(CloudFlarePageState.LOADING, "complete", "https://example.com", 4, 0L))
+		assertFalse(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 5, 500L))
+		assertFalse(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 5, 1_500L))
+		assertTrue(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 5, 3_000L))
 	}
 
 	@Test
 	fun `document readiness resets when resources or challenge navigation changes`() {
 		val tracker = BrowserDocumentReadinessTracker(quietWindowMs = 1_000L)
 
-		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 2, 0L))
-		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 1_000L))
+		assertFalse(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 2, 0L))
+		assertFalse(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 3, 1_000L))
 		assertFalse(
 			tracker.observe(
-				CloudFlarePageState.OK,
+				CloudFlarePageState.NORMAL,
 				"complete",
 				"https://example.com?__cf_chl_rt_tk=token",
 				3,
 				2_000L,
 			),
 		)
-		assertFalse(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 2_500L))
-		assertTrue(tracker.observe(CloudFlarePageState.OK, "complete", "https://example.com", 3, 3_500L))
+		assertFalse(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 3, 2_500L))
+		assertTrue(tracker.observe(CloudFlarePageState.NORMAL, "complete", "https://example.com", 3, 3_500L))
+	}
+
+	@Test
+	fun `managed challenge is not a stable document`() {
+		val tracker = BrowserDocumentReadinessTracker(quietWindowMs = 1_000L)
+
+		assertFalse(tracker.observe(CloudFlarePageState.MANAGED_CHALLENGE, "complete", "https://example.com", 1, 0L))
+		assertFalse(tracker.observe(CloudFlarePageState.MANAGED_CHALLENGE, "complete", "https://example.com", 1, 2_000L))
 	}
 
     @Test
@@ -46,11 +54,12 @@ class CloudFlareDetectionTest {
 
     @Test
     fun `parses WebView callback values conservatively`() {
-        assertEquals(CloudFlarePageState.OK, parseCloudFlarePageState("\"ok\""))
-        assertEquals(CloudFlarePageState.ERROR, parseCloudFlarePageState("\"error\""))
-        assertEquals(CloudFlarePageState.INTERACTIVE, parseCloudFlarePageState("\"interactive\""))
-        assertEquals(CloudFlarePageState.WAIT, parseCloudFlarePageState("\"wait\""))
-        assertEquals(CloudFlarePageState.WAIT, parseCloudFlarePageState(null))
-        assertEquals(CloudFlarePageState.WAIT, parseCloudFlarePageState("unexpected"))
+        assertEquals(CloudFlarePageState.NORMAL, parseCloudFlarePageState("\"normal\""))
+        assertEquals(CloudFlarePageState.HARD_BLOCK, parseCloudFlarePageState("\"hard_block\""))
+        assertEquals(CloudFlarePageState.INTERACTIVE_CHALLENGE, parseCloudFlarePageState("\"interactive\""))
+        assertEquals(CloudFlarePageState.MANAGED_CHALLENGE, parseCloudFlarePageState("\"managed\""))
+        assertEquals(CloudFlarePageState.LOADING, parseCloudFlarePageState("\"loading\""))
+        assertEquals(CloudFlarePageState.LOADING, parseCloudFlarePageState(null))
+        assertEquals(CloudFlarePageState.LOADING, parseCloudFlarePageState("unexpected"))
     }
 }

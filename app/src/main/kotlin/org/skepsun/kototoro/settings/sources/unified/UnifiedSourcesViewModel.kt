@@ -621,35 +621,71 @@ class UnifiedSourcesViewModel @Inject constructor(
 			val semaphore = Semaphore(SOURCE_TEST_MAX_PARALLELISM)
 			val results = sourceItems.map { item ->
 				async {
-					val isAvailable = runCatchingCancellable {
-						withTimeoutOrNull(SOURCE_TEST_TIMEOUT_MS) {
-							semaphore.withPermit {
-								val repository = contentRepositoryFactory.create(item.source)
-								repository.getList(
-									offset = 0,
-									order = repository.defaultSortOrder,
-									filter = ContentListFilter.EMPTY,
-								).isNotEmpty()
-							}
-						} ?: false
-					}.getOrDefault(false)
-					item to isAvailable
+					val outcome = testSource(item, semaphore)
+					item to outcome
 				}
 			}.awaitAll()
-			results.forEach { (item, isAvailable) ->
+			results.forEach { (item, outcome) ->
 				sourceAvailabilityRepository.setAvailability(
 					item.source,
-					if (isAvailable) ContentSourceAvailability.AVAILABLE else ContentSourceAvailability.EMPTY,
+					if (outcome.isAvailable) ContentSourceAvailability.AVAILABLE else ContentSourceAvailability.EMPTY,
 				)
 			}
+			logTestSummary(results)
 			emitMessage(
 				appContext.getString(
 					R.string.source_test_completed,
-					results.count { it.second },
-					results.count { !it.second },
+					results.count { it.second.isAvailable },
+					results.count { !it.second.isAvailable },
 				),
 			)
 		}
+	}
+
+	private data class SourceTestOutcome(
+		val isAvailable: Boolean,
+		val failure: String?,
+	)
+
+	private suspend fun testSource(item: UnifiedSourceItem, semaphore: Semaphore): SourceTestOutcome {
+		val result = runCatchingCancellable {
+			semaphore.withPermit {
+				withTimeoutOrNull(SOURCE_TEST_TIMEOUT_MS) {
+					val repository = contentRepositoryFactory.create(item.source)
+					repository.getList(
+						offset = 0,
+						order = repository.defaultSortOrder,
+						filter = ContentListFilter.EMPTY,
+					).isNotEmpty()
+				}
+			}
+		}
+		val exception = result.exceptionOrNull()
+		val isAvailable = result.getOrDefault(false) == true
+		val failure = when {
+			exception != null -> exception.javaClass.simpleName
+			result.getOrNull() == null -> "timeout"
+			!isAvailable -> "empty"
+			else -> null
+		}
+		if (failure != null) {
+			Log.w(
+				TAG,
+				"source_test_failed source=${item.source.name} type=${item.source::class.simpleName} " +
+					"failure=$failure error=${exception?.javaClass?.simpleName} " +
+					"msg=${exception?.message?.take(160)}",
+			)
+		}
+		return SourceTestOutcome(isAvailable = isAvailable, failure = failure)
+	}
+
+	private fun logTestSummary(results: List<Pair<UnifiedSourceItem, SourceTestOutcome>>) {
+		val failureCounts = results.mapNotNull { it.second.failure }.groupingBy { it }.eachCount()
+		Log.w(
+			TAG,
+			"source_test_summary total=${results.size} available=${results.count { it.second.isAvailable }} " +
+				"unavailable=${results.count { !it.second.isAvailable }} failures=$failureCounts",
+		)
 	}
 
 	fun setSourcePinned(sourceId: String, pinned: Boolean) {

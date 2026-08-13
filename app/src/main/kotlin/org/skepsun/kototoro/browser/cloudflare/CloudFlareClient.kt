@@ -68,14 +68,14 @@ open class CloudFlareClient(
 		webView.evaluateJavascript(CF_STATE_JS) { raw ->
 			val state = parseCloudFlarePageState(raw)
 			android.util.Log.d("CloudFlareClient", "Page state=$state url=$url")
-			if (state == CloudFlarePageState.OK) {
-				// Page state alone is insufficient: challenge pages can briefly expose
-				// an ordinary document before Cloudflare issues cf_clearance.
-				pageStatePassed = getClearance() != null && getClearance() != oldClearance
-				checkClearance(countFailure = false)
-			} else {
-				pageStatePassed = false
-			}
+		if (state == CloudFlarePageState.NORMAL) {
+			// Page state alone is insufficient: challenge pages can briefly expose
+			// an ordinary document before Cloudflare issues cf_clearance.
+			pageStatePassed = getClearance() != null && getClearance() != oldClearance
+			checkClearance(countFailure = false)
+		} else {
+			pageStatePassed = false
+		}
 		}
 	}
 
@@ -93,8 +93,31 @@ open class CloudFlareClient(
         request: android.webkit.WebResourceRequest?,
         error: android.webkit.WebResourceError?
     ) {
-        // Log errors to help debugging loops
-        android.util.Log.w("CloudFlareClient", "WebView error: ${error?.errorCode} - ${error?.description}")
+        val requestUrl = request?.url?.toString().orEmpty()
+        when {
+            request?.isForMainFrame == true -> {
+                callback.onMainFrameError()
+                android.util.Log.w(
+                    "CloudFlareClient",
+                    "Main-frame WebView error: code=${error?.errorCode} - ${error?.description}",
+                )
+            }
+
+            requestUrl.contains("challenges.cloudflare.com") -> {
+                android.util.Log.w(
+                    "CloudFlareClient",
+                    "Turnstile subresource error (ignored): code=${error?.errorCode} - " +
+                        "${error?.description} url=$requestUrl",
+                )
+            }
+
+            else -> {
+                android.util.Log.w(
+                    "CloudFlareClient",
+                    "WebView error: ${error?.errorCode} - ${error?.description} url=$requestUrl",
+                )
+            }
+        }
         super.onReceivedError(view, request, error)
     }
 

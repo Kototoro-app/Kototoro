@@ -49,7 +49,7 @@ internal class BrowserChallengeResolutionTracker {
 		currentUrl: String? = null,
 		requiresInteractiveResolution: Boolean = false,
 	): BrowserResolutionEvidence? {
-		if (pageState == CloudFlarePageState.INTERACTIVE) {
+		if (pageState == CloudFlarePageState.INTERACTIVE_CHALLENGE) {
 			interactiveChallengeObserved = true
 		}
 		if (currentUrl?.contains("__cf_chl_", ignoreCase = true) == true) {
@@ -57,15 +57,16 @@ internal class BrowserChallengeResolutionTracker {
 		}
 		if (requiresInteractiveResolution) {
 			// This tracker exists only after the interactive BrowserSession is attached. A token
-			// navigation or observed widget prevents an initial WAIT -> OK with old clearance from
-			// being accepted while tolerating providers that miss the short INTERACTIVE state.
+			// navigation or observed widget prevents an initial LOADING -> NORMAL with old clearance
+			// from being accepted while tolerating providers that miss the short
+			// INTERACTIVE_CHALLENGE state.
 			if (!interactiveChallengeObserved && !challengeNavigationObserved) return null
 			return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE.takeIf {
-				pageState == CloudFlarePageState.OK
+				pageState == CloudFlarePageState.NORMAL
 			}
 		}
 		return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE.takeIf {
-			pageState == CloudFlarePageState.OK && hasClearance &&
+			pageState == CloudFlarePageState.NORMAL && hasClearance &&
 				(interactiveChallengeObserved || challengeNavigationObserved || clearanceChanged)
 		}
 	}

@@ -11,4 +11,6 @@ interface CloudFlareCallback : BrowserCallback {
 	fun onCheckPassed()
 
 	fun onLoopDetected()
+
+	fun onMainFrameError() = Unit
 }

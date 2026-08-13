@@ -59,6 +59,7 @@ class LocalListViewModel @Inject constructor(
 	sourcesRepository: ContentSourcesRepository,
 	sourceAvailabilityRepository: SourceAvailabilityRepository,
 	mangaDataRepository: ContentDataRepository,
+	captchaAutoResolveCoordinator: org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator,
 	private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
 ) : RemoteListViewModel(
 	savedStateHandle = savedStateHandle,
@@ -70,6 +71,7 @@ class LocalListViewModel @Inject constructor(
 	sourcesRepository = sourcesRepository,
 	sourceAvailabilityRepository = sourceAvailabilityRepository,
 	mangaDataRepository = mangaDataRepository,
+	captchaAutoResolveCoordinator = captchaAutoResolveCoordinator,
 	localStorageChanges = localStorageChanges,
 ), SharedPreferences.OnSharedPreferenceChangeListener, QuickFilterListener {
 

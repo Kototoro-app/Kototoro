@@ -59,6 +59,9 @@ class CloudFlareInterceptor(
 					url = CloudFlareHelper.getBrowserChallengeUrl(request.url.toString()),
 					source = source,
 					headers = request.headers,
+					method = request.method,
+					body = request.readUtf8BodyOrNull(),
+					originalUrl = request.url.toString(),
 				)
 				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
 				if (policy?.allowBrowserTransport != false && webViewExecutor != null) {
@@ -116,15 +119,35 @@ class CloudFlareInterceptor(
 			Log.w(TAG, "Browser transport rejected invalid HTTP status: status=${browserResult.status}, url=${request.url}")
 			return null
 		}
-		if (browserResult.status == 403 || browserResult.status == 503) {
+		val browserResponse = browserResult.toResponse(request)
+		val browserProtection = CloudFlareHelper.checkResponseForProtection(browserResponse)
+		if (browserProtection != CloudFlareHelper.PROTECTION_NOT_DETECTED) {
+			// Still challenged after the same-session retry: return null so the caller throws
+			// CloudFlareProtectedException and routes into the auto-resolve coordinator instead
+			// of surfacing a bare 403 to the parser.
 			Log.w(TAG, "Browser transport exhausted same-session challenge: ${request.url}")
+			browserResponse.close()
+			return null
 		}
-		return browserResult.toResponse(request)
+		return browserResponse
 	}
 
 	private fun Request.isTextTransportRequest(): Boolean {
 		val accept = header("Accept")?.lowercase() ?: return true
 		return BINARY_MEDIA_TYPES.none(accept::contains)
+	}
+
+	private fun Request.readUtf8BodyOrNull(): String? {
+		val body = body ?: return null
+		if (body.isDuplex() || body.isOneShot()) return null
+		if (body.contentLength() > MAX_BROWSER_REQUEST_BODY_BYTES) return null
+		return runCatching {
+			Buffer().use { buffer ->
+				body.writeTo(buffer)
+				if (buffer.size > MAX_BROWSER_REQUEST_BODY_BYTES) return@runCatching null
+				buffer.readUtf8()
+			}
+		}.getOrNull()
 	}
 
 	private fun WebViewExecutor.BrowserFetchResult.toResponse(request: Request): Response {

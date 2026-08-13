@@ -7,18 +7,27 @@ import android.os.Looper
 import android.widget.Toast
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.browser.BrowserActivity
+import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.network.webview.CaptchaAutoResolveResult
 import org.skepsun.kototoro.core.ui.util.ForegroundActivityHolder
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -29,6 +38,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val foregroundActivityHolder: ForegroundActivityHolder,
     private val webViewExecutor: WebViewExecutor,
+    @ContentHttpClient private val httpClient: OkHttpClient,
 ) {
 
     private val hostMutexes = ConcurrentHashMap<String, Mutex>()
@@ -93,9 +103,10 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
         showToast: Boolean,
     ): Boolean {
         return try {
+            val context = CloudFlareRequestContext.from(exception)
             val plan = resolverState.plan(host, tryAutomatic, allowInteractiveFallback)
             if (plan == CloudFlareResolvePlan.FAIL_FAST) {
-                android.util.Log.w(TAG, "Resolver is cooling down for host=$host source=${source.name}")
+                logResolve(host, context, plan = plan)
                 return false
             }
             if (showToast && plan.runAutomatic) {
@@ -109,21 +120,92 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
             } else {
                 null
             }
-            android.util.Log.d(TAG, "host=$host plan=$plan automaticResult=$automaticResult")
             if (automaticResult == CaptchaAutoResolveResult.SOLVED) {
-                resolverState.recordSuccess(host, CloudFlareResolveStage.AUTOMATIC)
-                true
-            } else if (plan.runManual) {
-                manualMutex.withLock {
-                    launchAndAwait(source, exception, host)
-                }.also { resolved ->
-                    if (resolved) {
-                        resolverState.recordSuccess(host, CloudFlareResolveStage.MANUAL)
-                    }
+                val cleared = probeCleared(context)
+                logResolve(host, context, plan = plan, automaticResult = automaticResult, probeCleared = cleared)
+                if (cleared) {
+                    resolverState.recordSuccess(host, CloudFlareResolveStage.AUTOMATIC)
+                    true
+                } else {
+                    // A new clearance was issued but the real request still fails: treat as
+                    // failure and cool down instead of reporting a false success.
+                    resolverState.recordFailure(host)
+                    false
                 }
-            } else false
+            } else {
+                logResolve(host, context, plan = plan, automaticResult = automaticResult)
+                if (plan.runManual) {
+                    manualMutex.withLock {
+                        launchAndAwait(source, exception, host)
+                    }.let { resolved ->
+                        val cleared = resolved && probeCleared(context)
+                        logResolve(host, context, plan = plan, manualResult = resolved, probeCleared = cleared)
+                        when {
+                            !resolved -> Unit
+                            cleared -> resolverState.recordSuccess(host, CloudFlareResolveStage.MANUAL)
+                            else -> resolverState.recordFailure(host)
+                        }
+                        cleared
+                    }
+                } else false
+            }
         } catch (e: Throwable) {
             e.printStackTraceDebug()
+            false
+        }
+    }
+
+    private fun logResolve(
+        host: String,
+        context: CloudFlareRequestContext,
+        plan: CloudFlareResolvePlan? = null,
+        automaticResult: CaptchaAutoResolveResult? = null,
+        manualResult: Boolean? = null,
+        probeCleared: Boolean? = null,
+    ) {
+        android.util.Log.d(
+            TAG,
+            buildString {
+                append("host=").append(host)
+                append(" source=").append(context.source.name)
+                append(" method=").append(context.method)
+                append(" challengeUrl=").append(context.challengeUrl.take(240))
+                append(" originalUrl=").append(context.originalRequestUrl.take(240))
+                append(" userAgentPresent=").append(!context.userAgent.isNullOrBlank())
+                append(" headerNames=").append(context.headers.keys.sortedBy(String::lowercase))
+                append(" bodyLength=").append(context.body?.length ?: 0)
+                plan?.let { append(" plan=").append(it) }
+                automaticResult?.let { append(" automaticResult=").append(it) }
+                manualResult?.let { append(" manualResult=").append(it) }
+                probeCleared?.let { append(" probeCleared=").append(it) }
+            },
+        )
+    }
+
+    private suspend fun probeCleared(context: CloudFlareRequestContext): Boolean {
+        val url = context.originalRequestUrl.takeIf { it.isNotBlank() } ?: return false
+        val contentType = context.headers["Content-Type"]?.toMediaTypeOrNull()
+        val request = Request.Builder().url(url).apply {
+            context.headers.forEach { (name, value) ->
+                if (name.isNotBlank() && value.isNotBlank() && name.lowercase() !in PROBE_SKIP_HEADERS) {
+                    addHeader(name, value)
+                }
+            }
+            val body = context.body
+            if (context.method == "POST" && body != null) {
+                method("POST", body.toRequestBody(contentType))
+            }
+        }.build()
+        return try {
+            val response = withContext(Dispatchers.IO) { httpClient.newCall(request).execute() }
+            response.use {
+                CloudFlareHelper.checkResponseForProtection(it) == CloudFlareHelper.PROTECTION_NOT_DETECTED
+            }
+        } catch (e: CloudFlareProtectedException) {
+            false
+        } catch (e: CloudFlareBlockedException) {
+            false
+        } catch (e: Exception) {
             false
         }
     }
@@ -167,6 +249,17 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
 
     private companion object {
         const val TAG = "CaptchaAutoResolver"
+
+        // Browser/transport managed headers that the OkHttp probe must not re-emit
+        // manually; cookies are handled by the shared CookieJar.
+        private val PROBE_SKIP_HEADERS = setOf(
+            "host",
+            "content-length",
+            "cookie",
+            "connection",
+            "accept-encoding",
+            "transfer-encoding",
+        )
     }
 }
 
@@ -227,6 +320,11 @@ internal class CloudFlareResolverState(
     fun recordSuccess(host: String, stage: CloudFlareResolveStage) {
         cooldownUntil.remove(host)
         lastSuccess[host] = Success(stage, nowMillis())
+    }
+
+    fun recordFailure(host: String) {
+        lastSuccess.remove(host)
+        cooldownUntil[host] = nowMillis() + RESOLVER_COOLDOWN_MS
     }
 
     private companion object {

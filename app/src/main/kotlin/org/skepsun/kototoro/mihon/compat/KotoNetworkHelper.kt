@@ -123,6 +123,7 @@ class KotoNetworkHelper(
                         method = request.method,
                         body = request.replayableUtf8Body(),
 						contentType = request.header("Content-Type"),
+                        originalUrl = request.url.toString(),
                     )
                     val browserResponse = response.use {
 						executeWithBrowserTransport(request)
@@ -287,9 +288,10 @@ class KotoNetworkHelper(
 				"MihonNetwork",
 				"Browser transport exhausted same-session challenge: url=${request.url}, status=${browserResult.status}",
 			)
-			// A non-null response is intentional: the request has already gone through
-			// BrowserTransport and must not re-enter the legacy resolver chain.
-			return browserResult.toOkHttpResponse(request)
+			// Return null so the caller surfaces CloudFlareProtectedException, which drives the
+			// CF verification actions (verify / open in browser). The coordinator's cooldown and
+			// escalation chain prevent the legacy resolver loop.
+			return null
 		}
         android.util.Log.i(
             "MihonNetwork",

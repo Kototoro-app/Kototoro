@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
@@ -71,6 +73,7 @@ open class RemoteListViewModel @Inject constructor(
 	sourcesRepository: ContentSourcesRepository,
 	private val sourceAvailabilityRepository: SourceAvailabilityRepository,
 	mangaDataRepository: ContentDataRepository,
+	private val captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator,
 	@LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
 ) : ContentListViewModel(settings, mangaDataRepository, localStorageChanges), FilterCoordinator.Owner {
 
@@ -243,13 +246,15 @@ open class RemoteListViewModel @Inject constructor(
 			}
 		}
 		return launchLoadingJob(Dispatchers.Default) {
-			try {
-				listError.value = null
-				val offsetOrPageIndex = when (repository.listPagingMode) {
-					ContentRepository.ListPagingMode.OFFSET -> if (append) mangaList.value.sizeOrZero() else 0
-					ContentRepository.ListPagingMode.PAGE_INDEX -> {
-						val pageIndex = if (append) lastLoadedPageIndex + 1 else 0
-						lastRequestedPageIndex = pageIndex
+			var autoResolveAttempted = false
+			while (true) {
+				try {
+					listError.value = null
+					val offsetOrPageIndex = when (repository.listPagingMode) {
+						ContentRepository.ListPagingMode.OFFSET -> if (append) mangaList.value.sizeOrZero() else 0
+						ContentRepository.ListPagingMode.PAGE_INDEX -> {
+							val pageIndex = if (append) lastLoadedPageIndex + 1 else 0
+							lastRequestedPageIndex = pageIndex
 							pageIndex
 						}
 					}
@@ -279,20 +284,20 @@ open class RemoteListViewModel @Inject constructor(
 					if (!append) {
 						mangaList.value = list.distinctById()
 						if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX && list.isNotEmpty()) {
-						lastLoadedPageIndex = 0
+							lastLoadedPageIndex = 0
+						}
+					} else if (list.isNotEmpty()) {
+						mangaList.value = (prevList + list).distinctById()
+						if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX) {
+							lastLoadedPageIndex = lastRequestedPageIndex
+						}
 					}
-				} else if (list.isNotEmpty()) {
-					mangaList.value = (prevList + list).distinctById()
-					if (repository.listPagingMode == ContentRepository.ListPagingMode.PAGE_INDEX) {
-						lastLoadedPageIndex = lastRequestedPageIndex
-					}
-				}
 					hasNextPage.value = when (repository.listPagingMode) {
 						ContentRepository.ListPagingMode.OFFSET -> if (append) {
 							prevList != mangaList.value
-					} else {
-						list.size > prevList.size || hasNextPage.value
-					}
+						} else {
+							list.size > prevList.size || hasNextPage.value
+						}
 						ContentRepository.ListPagingMode.PAGE_INDEX -> list.isNotEmpty()
 					}
 					Log.d(
@@ -300,6 +305,7 @@ open class RemoteListViewModel @Inject constructor(
 						"loadList applied source=${source.name} append=$append total=${mangaList.value.sizeOrZero()} " +
 							"hasNext=${hasNextPage.value} lastLoadedPage=$lastLoadedPageIndex",
 					)
+					return@launchLoadingJob
 				} catch (e: CancellationException) {
 					throw e
 				} catch (e: Throwable) {
@@ -308,15 +314,27 @@ open class RemoteListViewModel @Inject constructor(
 						"loadList error source=${source.name} append=$append current=${mangaList.value.sizeOrZero()} " +
 							"error=${e.javaClass.simpleName}: ${e.message}",
 					)
+					if (!autoResolveAttempted && !append && e is CloudFlareProtectedException) {
+						autoResolveAttempted = true
+						Log.i(
+							RemoteListPaginationLogTag,
+							"loadList auto-resolve source=${source.name}",
+						)
+						if (captchaAutoResolveCoordinator.resolveInBackground(e.source, e)) {
+							continue
+						}
+					}
 					e.printStackTraceDebug()
 					listError.value = e
-				if (shouldUpdateSourceAvailability(append)) {
-					sourceAvailabilityRepository.markEmpty(source)
+					if (shouldUpdateSourceAvailability(append)) {
+						sourceAvailabilityRepository.markEmpty(source)
+					}
+					if (!mangaList.value.isNullOrEmpty()) {
+						errorEvent.call(e)
+					}
+					hasNextPage.value = false
+					return@launchLoadingJob
 				}
-				if (!mangaList.value.isNullOrEmpty()) {
-					errorEvent.call(e)
-				}
-				hasNextPage.value = false
 			}
 		}.also { loadingJob = it }
 	}
