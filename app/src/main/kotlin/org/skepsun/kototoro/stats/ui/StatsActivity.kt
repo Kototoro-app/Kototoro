@@ -7,10 +7,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
-import org.skepsun.kototoro.stats.domain.StatsPeriod
-import org.skepsun.kototoro.stats.domain.StatsRecord
-import org.skepsun.kototoro.stats.ui.views.PieChartView
-import org.skepsun.kototoro.parsers.model.Content
 
 @AndroidEntryPoint
 class StatsActivity : BaseComposeActivity() {
@@ -21,20 +17,18 @@ class StatsActivity : BaseComposeActivity() {
         super.onCreate(savedInstanceState)
         setComposeContent {
             val period by viewModel.period.collectAsStateWithLifecycle()
-            val categories by viewModel.favoriteCategories.collectAsStateWithLifecycle(emptyList())
-            val selectedCategories by viewModel.selectedCategories.collectAsStateWithLifecycle()
-            val stats by viewModel.readingStats.collectAsStateWithLifecycle()
+            val kind by viewModel.selectedKind.collectAsStateWithLifecycle()
+            val dashboard by viewModel.dashboard.collectAsStateWithLifecycle()
             val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
             StatsScreen(
                 period = period,
-                categories = categories,
-                selectedCategoryIds = selectedCategories,
-                stats = stats,
+                selectedKind = kind,
+                dashboard = dashboard,
                 isLoading = isLoading,
                 onNavigateUp = ::finish,
                 onPeriodSelected = { viewModel.period.value = it },
-                onCategoryChecked = viewModel::setCategoryChecked,
+                onKindSelected = { viewModel.selectedKind.value = it },
                 onClearStats = viewModel::clearStats,
                 onContentClick = { router.showStatisticSheet(it) },
             )

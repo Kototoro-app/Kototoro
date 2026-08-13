@@ -241,7 +241,7 @@ private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SettingsTopBarIconButton(
+fun SettingsTopBarIconButton(
 	onClick: () -> Unit,
 	content: @Composable () -> Unit,
 ) {

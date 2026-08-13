@@ -14,9 +14,9 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.model.DateTimeAgo
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.stats.data.StatsRepository
+import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.parsers.model.Content
 import java.time.Instant
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,7 +38,10 @@ class ContentStatsViewModel @Inject constructor(
 
 	val stats = MutableStateFlow(emptyIntList())
 	val startDate = MutableStateFlow<DateTimeAgo?>(null)
-	val totalPagesRead = MutableStateFlow(0)
+	val totalDuration = MutableStateFlow(0L)
+	val sessionCount = MutableStateFlow(0)
+	val units = MutableStateFlow(0)
+	val kind = MutableStateFlow(StatsContentKind.MANGA)
 
 	init {
 		launchJob(Dispatchers.Default) {
@@ -63,25 +66,19 @@ class ContentStatsViewModel @Inject constructor(
 		loadJob?.cancel()
 		stats.value = emptyIntList()
 		startDate.value = null
-		totalPagesRead.value = 0
+		totalDuration.value = 0L
+		sessionCount.value = 0
+		units.value = 0
 		loadJob = launchLoadingJob(Dispatchers.Default) {
-			val timeline = repository.getContentTimeline(manga.id)
-			if (timeline.isEmpty()) {
-				startDate.value = null
-				stats.value = emptyIntList()
-			} else {
-				val startDay = TimeUnit.MILLISECONDS.toDays(timeline.firstKey())
-				val endDay = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis())
-				val res = MutableIntList((endDay - startDay).toInt() + 1)
-				for (day in startDay..endDay) {
-					val from = TimeUnit.DAYS.toMillis(day)
-					val to = TimeUnit.DAYS.toMillis(day + 1)
-					res.add(timeline.subMap(from, true, to, false).values.sum())
-				}
-				stats.value = res
-				startDate.value = calculateTimeAgo(Instant.ofEpochMilli(timeline.firstKey()))
+			val snapshot = repository.getContentSnapshot(manga)
+			stats.value = MutableIntList(snapshot.dailyActivity.size).apply {
+				snapshot.dailyActivity.forEach(::add)
 			}
-			totalPagesRead.value = repository.getTotalPagesRead(manga.id)
+			startDate.value = snapshot.firstActivityAt?.let { calculateTimeAgo(Instant.ofEpochMilli(it)) }
+			totalDuration.value = snapshot.totalDuration
+			sessionCount.value = snapshot.sessionCount
+			units.value = snapshot.units
+			kind.value = snapshot.kind
 		}
 	}
 }

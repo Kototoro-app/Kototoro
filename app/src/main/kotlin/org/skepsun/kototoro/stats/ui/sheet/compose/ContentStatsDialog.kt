@@ -55,10 +55,11 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.model.DateTimeAgo
 import org.skepsun.kototoro.core.util.KototoroColors
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.parsers.util.format
+import org.skepsun.kototoro.stats.domain.StatsContentKind
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
 import androidx.collection.IntList
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import java.util.concurrent.TimeUnit
 
 private fun IntList.toList(): List<Int> = buildList { this@toList.forEach { add(it) } }
 
@@ -117,7 +118,10 @@ fun ContentStatsDialog(
     val context = LocalContext.current
     val stats by viewModel.stats.collectAsState()
     val startDate by viewModel.startDate.collectAsState()
-    val totalPagesRead by viewModel.totalPagesRead.collectAsState()
+    val totalDuration by viewModel.totalDuration.collectAsState()
+    val sessionCount by viewModel.sessionCount.collectAsState()
+    val units by viewModel.units.collectAsState()
+    val kind by viewModel.kind.collectAsState()
     val barColor = remember(manga) {
         Color(KototoroColors.ofContent(context, manga))
     }
@@ -165,7 +169,10 @@ fun ContentStatsDialog(
                     )
                     ContentStatsBody(
                         startDate = startDate,
-                        totalPagesRead = totalPagesRead,
+                        totalDuration = totalDuration,
+                        sessionCount = sessionCount,
+                        units = units,
+                        kind = kind,
                         stats = stats.toList(),
                         barColor = barColor,
                         modifier = Modifier.fillMaxWidth(),
@@ -199,7 +206,10 @@ fun ContentStatsSheetContent(
     val context = LocalContext.current
     val stats by viewModel.stats.collectAsState()
     val startDate by viewModel.startDate.collectAsState()
-    val totalPagesRead by viewModel.totalPagesRead.collectAsState()
+    val totalDuration by viewModel.totalDuration.collectAsState()
+    val sessionCount by viewModel.sessionCount.collectAsState()
+    val units by viewModel.units.collectAsState()
+    val kind by viewModel.kind.collectAsState()
     val barColor = remember(manga) {
         Color(KototoroColors.ofContent(context, manga))
     }
@@ -235,7 +245,10 @@ fun ContentStatsSheetContent(
 
         ContentStatsBody(
             startDate = startDate,
-            totalPagesRead = totalPagesRead,
+            totalDuration = totalDuration,
+            sessionCount = sessionCount,
+            units = units,
+            kind = kind,
             stats = stats.toList(),
             barColor = barColor,
             modifier = Modifier.fillMaxWidth(),
@@ -246,7 +259,10 @@ fun ContentStatsSheetContent(
 @Composable
 private fun ContentStatsBody(
     startDate: DateTimeAgo?,
-    totalPagesRead: Int,
+    totalDuration: Long,
+    sessionCount: Int,
+    units: Int,
+    kind: StatsContentKind,
     stats: List<Int>,
     barColor: Color,
     modifier: Modifier = Modifier,
@@ -279,11 +295,68 @@ private fun ContentStatsBody(
             )
         }
 
-        Text(
-            text = stringResource(R.string.pages_read_s, totalPagesRead.format()),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ContentStatsMetric(
+                value = formatContentStatsDuration(totalDuration),
+                label = stringResource(R.string.stats_total_time),
+                modifier = Modifier.weight(1f),
+            )
+            ContentStatsMetric(
+                value = sessionCount.toString(),
+                label = stringResource(R.string.stats_sessions),
+                modifier = Modifier.weight(1f),
+            )
+            ContentStatsMetric(
+                value = units.toString(),
+                label = kind.unitLabel(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContentStatsMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    GlassSurface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        style = GlassDefaults.subtleStyle(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatsContentKind.unitLabel(): String = when (this) {
+    StatsContentKind.MANGA -> stringResource(R.string.stats_unit_pages)
+    StatsContentKind.NOVEL -> stringResource(R.string.stats_unit_chapters)
+    StatsContentKind.VIDEO -> stringResource(R.string.stats_unit_episodes)
+    StatsContentKind.ALL -> stringResource(R.string.stats_works)
+}
+
+@Composable
+private fun formatContentStatsDuration(durationMs: Long): String {
+    val totalMinutes = TimeUnit.MILLISECONDS.toMinutes(durationMs).coerceAtLeast(0L)
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    return when {
+        hours > 0L && minutes > 0L -> stringResource(R.string.stats_duration_hours_minutes, hours, minutes)
+        hours > 0L -> stringResource(R.string.stats_duration_hours, hours)
+        else -> stringResource(R.string.stats_duration_minutes, minutes)
     }
 }
 

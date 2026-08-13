@@ -27,6 +27,9 @@ abstract class ReadingRecordDao {
 	@Query("SELECT * FROM reading_sessions WHERE manga_id IN (:mangaIds) ORDER BY end_at DESC, start_at DESC")
 	abstract suspend fun findSessions(mangaIds: List<Long>): List<ReadingRecordEntity>
 
+	@Query("SELECT * FROM reading_sessions WHERE end_at >= :fromDate ORDER BY start_at")
+	abstract suspend fun findSessionsSince(fromDate: Long): List<ReadingRecordEntity>
+
 	@Query(
 		"""
 		SELECT end_chapter_id AS chapter_id,
@@ -104,6 +107,9 @@ abstract class ReadingRecordDao {
 
 	@Query("DELETE FROM reading_sessions WHERE manga_id IN (:mangaIds)")
 	abstract suspend fun clearSessions(mangaIds: List<Long>)
+
+	@Query("DELETE FROM reading_sessions")
+	abstract suspend fun clearAllSessions()
 
 	@Query("DELETE FROM reading_jump_points WHERE manga_id = :mangaId")
 	abstract suspend fun clearJumpPoints(mangaId: Long)
