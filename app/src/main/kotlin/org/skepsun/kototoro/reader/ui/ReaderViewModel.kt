@@ -737,8 +737,6 @@ class ReaderViewModel @Inject constructor(
             prevJob?.cancelAndJoin()
             val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
             if (!continuousWebtoon) {
-                loadingJob?.join()
-                ensureActive()
                 if (pages !== content.value.pages) {
                     Log.d(
                         READER_WINDOW_LOG_TAG,
@@ -747,6 +745,11 @@ class ReaderViewModel @Inject constructor(
                     )
                     return@launchJob
                 }
+                // Visible-page state must not wait for an adjacent chapter's network load. The pager can
+                // continue settling while that request is in flight, especially when short chapters put
+                // every page inside the preload boundary. Waiting here freezes the page label and progress
+                // even though the reader has already moved to another page.
+                ensureActive()
             }
             val selectedPos = if (selectedPageKey != null) {
                 resolveWebtoonVisiblePageSelection(

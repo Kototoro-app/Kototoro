@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -108,6 +109,7 @@ import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
@@ -177,6 +179,14 @@ private data class ReaderPagerAnimationDebugState(
 	val anchorPage: Int,
 )
 
+private data class ReaderPagerReportState(
+	val isDragged: Boolean,
+	val isScrollInProgress: Boolean,
+	val settledPage: Int,
+	val targetPage: Int,
+	val isRestoringAnchor: Boolean,
+)
+
 private data class WebtoonListAnchor(
 	val pageKey: Long,
 	val offsetPx: Int,
@@ -244,6 +254,7 @@ fun ComposePagedReader(
 		initialPage = initialPage.coerceIn(displayedPages.indices),
 		pageCount = { displayedPages.size },
 	)
+	val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
 	val zoomedPages = remember { mutableStateMapOf<Long, Boolean>() }
 	val isCurrentPageZoomed = displayedPages.getOrNull(pagerState.currentPage)?.readerKey?.let {
 		zoomedPages[it]
@@ -313,17 +324,26 @@ fun ComposePagedReader(
 	}
 	LaunchedEffect(pagerState, displayedPages, isRestoringPageAnchor) {
 		snapshotFlow {
-			Triple(
-				pagerState.isScrollInProgress,
-				pagerState.settledPage,
-				isRestoringPageAnchor,
+			ReaderPagerReportState(
+				isDragged = isPagerDragged,
+				isScrollInProgress = pagerState.isScrollInProgress,
+				settledPage = pagerState.settledPage,
+				targetPage = pagerState.targetPage,
+				isRestoringAnchor = isRestoringPageAnchor,
 			)
 		}
+			.mapNotNull { state ->
+				resolveReaderPageToReport(
+					isDragged = state.isDragged,
+					isScrollInProgress = state.isScrollInProgress,
+					settledPage = state.settledPage,
+					targetPage = state.targetPage,
+					isRestoringAnchor = state.isRestoringAnchor,
+				)
+			}
 			.distinctUntilChanged()
-			.collect { (isScrolling, position, restoringAnchor) ->
-				if (shouldReportReaderSettledPage(isScrolling, restoringAnchor)) {
-					displayedPages.getOrNull(position)?.let(onPageChanged)
-				}
+			.collect { position ->
+				displayedPages.getOrNull(position)?.let(onPageChanged)
 			}
 	}
 
@@ -426,42 +446,44 @@ fun ComposePagedReader(
 				zoomMode = zoomMode,
 				isCropEnabled = isCropEnabled,
 				isPageVisible = pagerState.settledPage == position,
-				onZoomedChanged = { zoomed ->
-					if (zoomed) zoomedPages[page.readerKey] = true else zoomedPages.remove(page.readerKey)
-				},
-				modifier = Modifier.fillMaxSize(),
-			)
-			pageOverlay()
-			when (pageAnimation) {
-				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
-				else -> Unit
+					onZoomedChanged = { zoomed ->
+						if (zoomed) zoomedPages[page.readerKey] = true else zoomedPages.remove(page.readerKey)
+					},
+					modifier = Modifier.fillMaxSize(),
+				)
+				when (pageAnimation) {
+					ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
+					else -> Unit
 			}
 		}
 	}
 
-	if (isVertical) {
-		VerticalPager(
-			state = pagerState,
-			beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
-			modifier = modifier
-				.fillMaxSize()
-				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
-			key = { displayedPages[it].readerKey },
-			userScrollEnabled = !isCurrentPageZoomed,
-			pageContent = pageContent,
-		)
-	} else {
-		HorizontalPager(
-			state = pagerState,
-			beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
-			modifier = modifier
-				.fillMaxSize()
-				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
-			reverseLayout = reverseLayout,
-			key = { displayedPages[it].readerKey },
-			userScrollEnabled = !isCurrentPageZoomed,
-			pageContent = pageContent,
-		)
+	Box(modifier = modifier.fillMaxSize()) {
+		if (isVertical) {
+			VerticalPager(
+				state = pagerState,
+				beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
+				modifier = Modifier
+					.fillMaxSize()
+					.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
+				key = { displayedPages[it].readerKey },
+				userScrollEnabled = !isCurrentPageZoomed,
+				pageContent = pageContent,
+			)
+		} else {
+			HorizontalPager(
+				state = pagerState,
+				beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
+				modifier = Modifier
+					.fillMaxSize()
+					.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
+				reverseLayout = reverseLayout,
+				key = { displayedPages[it].readerKey },
+				userScrollEnabled = !isCurrentPageZoomed,
+				pageContent = pageContent,
+			)
+		}
+		pageOverlay()
 	}
 }
 
@@ -1243,6 +1265,7 @@ fun ComposeDoublePageReader(
 		initialPage = spreadModel.spreadIndexForPage(initialDisplayPosition),
 		pageCount = spreads::size,
 	)
+	val isPagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
 	var advancedAnchorSpread by remember(pagerState) { mutableIntStateOf(pagerState.currentPage) }
 	LaunchedEffect(pagerState, pageAnimation) {
 		snapshotFlow {
@@ -1427,15 +1450,25 @@ fun ComposeDoublePageReader(
 	}
 	LaunchedEffect(pagerState, spreads, isRestoringAnchor) {
 		snapshotFlow {
-			Triple(
-				pagerState.isScrollInProgress,
-				pagerState.settledPage,
-				isRestoringAnchor,
+			ReaderPagerReportState(
+				isDragged = isPagerDragged,
+				isScrollInProgress = pagerState.isScrollInProgress,
+				settledPage = pagerState.settledPage,
+				targetPage = pagerState.targetPage,
+				isRestoringAnchor = isRestoringAnchor,
 			)
 		}
+			.mapNotNull { state ->
+				resolveReaderPageToReport(
+					isDragged = state.isDragged,
+					isScrollInProgress = state.isScrollInProgress,
+					settledPage = state.settledPage,
+					targetPage = state.targetPage,
+					isRestoringAnchor = state.isRestoringAnchor,
+				)
+			}
 			.distinctUntilChanged()
-			.collect { (isScrolling, spreadIndex, restoringAnchor) ->
-				if (!shouldReportReaderSettledPage(isScrolling, restoringAnchor)) return@collect
+			.collect { spreadIndex ->
 				val spread = spreads[spreadIndex]
 				val visiblePages = spread.positions.mapNotNull {
 					displayItems[it].page
@@ -1678,20 +1711,21 @@ fun ComposeDoublePageReader(
 			}
 		}
 
-	HorizontalPager(
-		state = pagerState,
-		beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
-		reverseLayout = reverseLayout,
-		userScrollEnabled = spreadTransform(pagerState.currentPage).scale <= 1f + PAGED_ZOOM_EPSILON,
-		modifier = modifier
-			.fillMaxSize()
-			.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
-		key = { spreadIndex ->
-			spreads[spreadIndex].positions.joinToString(separator = ":") {
-				displayItems[it].page?.readerKey?.toString() ?: DoublePageSpreadModel.SPACER_KEY.toString()
-			}
-		},
-	) { spreadIndex ->
+	Box(modifier = modifier.fillMaxSize()) {
+		HorizontalPager(
+			state = pagerState,
+			beyondViewportPageCount = resolveReaderBeyondViewportPageCount(isPreloadReductionEnabled),
+			reverseLayout = reverseLayout,
+			userScrollEnabled = spreadTransform(pagerState.currentPage).scale <= 1f + PAGED_ZOOM_EPSILON,
+			modifier = Modifier
+				.fillMaxSize()
+				.trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION),
+			key = { spreadIndex ->
+				spreads[spreadIndex].positions.joinToString(separator = ":") {
+					displayItems[it].page?.readerKey?.toString() ?: DoublePageSpreadModel.SPACER_KEY.toString()
+				}
+			},
+		) { spreadIndex ->
 		val spread = spreads[spreadIndex]
 		val effectiveAdvancedAnchorSpread = if (
 			!pagerState.isScrollInProgress &&
@@ -1840,15 +1874,16 @@ fun ComposeDoublePageReader(
 					Box(modifier = Modifier.weight(1f).fillMaxSize())
 				}
 			}
-			pageOverlay()
-			when (pageAnimation) {
-				ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
-				else -> Unit
-			}
+				when (pageAnimation) {
+					ReaderAnimation.SIMULATION -> ComposeReaderSimulationPageShadow(transform)
+					else -> Unit
+				}
+				}
 			}
 		}
+		pageOverlay()
 	}
-	}
+}
 
 @Composable
 internal fun ComposeReaderPage(
@@ -2853,8 +2888,17 @@ internal fun resolveWebtoonGestureBoundaryHandoff(
 	isTransformGesture: Boolean,
 ): Int = if (isTransformGesture) 0 else resolveWebtoonBoundaryHandoff(scale, desiredY, boundedY)
 
-internal fun shouldReportReaderSettledPage(isScrollInProgress: Boolean, isRestoringAnchor: Boolean): Boolean =
-	!isScrollInProgress && !isRestoringAnchor
+internal fun resolveReaderPageToReport(
+	isDragged: Boolean,
+	isScrollInProgress: Boolean,
+	settledPage: Int,
+	targetPage: Int,
+	isRestoringAnchor: Boolean,
+): Int? = when {
+	isRestoringAnchor || isDragged -> null
+	isScrollInProgress -> targetPage
+	else -> settledPage
+}
 
 internal fun shouldFlingAfterTransform(singlePointerTransformed: Boolean, hadMultiplePointers: Boolean): Boolean =
 	singlePointerTransformed && !hadMultiplePointers

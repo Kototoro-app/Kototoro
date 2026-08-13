@@ -161,7 +161,7 @@ class ChaptersLoader @Inject constructor(
 	}
 
 	fun getPagesCount(chapterId: Long): Int {
-		return chapterPages.size(chapterId)
+		return synchronized(chapterPages) { chapterPages.size(chapterId) }
 	}
 
 	fun last() = chapterPages.last()
