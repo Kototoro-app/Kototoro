@@ -3148,14 +3148,14 @@ private fun DetailsPaneActionsRow(
         } else {
             lerpFloat(0.68f, 1f, paneOpacityProgress) * modernDragHandleRevealProgress
         },
-        animationSpec = KototoroMotion.Ease220,
+        animationSpec = KototoroMotion.fadeDefault(),
         label = "detailsPaneDragHandleAlpha",
     )
-    val dockItemEnter = fadeIn(KototoroMotion.Fade260) + expandHorizontally(
+    val dockItemEnter = fadeIn(KototoroMotion.fadeDefault()) + expandHorizontally(
         animationSpec = tween(ModernDetailsDockAnimationDurationMillis, easing = FastOutSlowInEasing),
         expandFrom = Alignment.Start,
     )
-    val dockItemExit = fadeOut(KototoroMotion.Fade200) + shrinkHorizontally(
+    val dockItemExit = fadeOut(KototoroMotion.fadeFast()) + shrinkHorizontally(
         animationSpec = KototoroMotion.tweenEaseOut(320),
         shrinkTowards = Alignment.Start,
     )
@@ -4203,7 +4203,7 @@ private fun ReadDock(
     )
     val dividerAlpha by animateFloatAsState(
         targetValue = if (modernStyle && !expanded) 0.22f else 0f,
-        animationSpec = KototoroMotion.Fade180,
+        animationSpec = KototoroMotion.fadeFast(),
         label = "readDockDividerAlpha",
     )
     val actionIconRes = when (contentType) {
@@ -4270,14 +4270,14 @@ private fun ReadDock(
                         )
                         AnimatedVisibility(
                             visible = !compact,
-                            enter = fadeIn(KototoroMotion.Fade260) + expandHorizontally(
+                            enter = fadeIn(KototoroMotion.fadeDefault()) + expandHorizontally(
                                 animationSpec = tween(
                                     ModernDetailsDockAnimationDurationMillis,
                                     easing = FastOutSlowInEasing,
                                 ),
                                 expandFrom = Alignment.Start,
                             ),
-                            exit = fadeOut(KototoroMotion.Fade200) + shrinkHorizontally(
+                            exit = fadeOut(KototoroMotion.fadeFast()) + shrinkHorizontally(
                                 animationSpec = KototoroMotion.tweenEaseOut(320),
                                 shrinkTowards = Alignment.Start,
                             ),

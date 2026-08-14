@@ -367,7 +367,8 @@ configurations.all {
 	implementation composeBom
 	implementation libs.androidx.compose.ui
 	implementation libs.androidx.compose.ui.text.google.fonts
-	implementation libs.androidx.compose.material3
+	// Phase D: explicit 1.5.0-alpha26 wins over the BOM-pinned material3 1.4.0 for the whole app.
+	implementation libs.androidx.compose.material3.expressive
 	implementation libs.androidx.compose.material.icons.extended
 	implementation libs.androidx.glance.appwidget
 	implementation libs.androidx.navigation.compose

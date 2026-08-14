@@ -117,8 +117,8 @@ fun KototoroRangeSlider(
         steps = steps,
         onValueChangeFinished = onValueChangeFinished,
         colors = colors,
-        startInteractionSource = startInteractionSource,
-        endInteractionSource = endInteractionSource,
+        startThumbInteractionSource = startInteractionSource,
+        endThumbInteractionSource = endInteractionSource,
         startThumb = {
             KototoroSliderThumb(
                 interactionSource = startInteractionSource,

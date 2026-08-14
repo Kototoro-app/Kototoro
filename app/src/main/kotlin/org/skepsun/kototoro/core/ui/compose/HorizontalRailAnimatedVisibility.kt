@@ -36,9 +36,9 @@ fun rememberHorizontalRailScrollIntensity(
     val scrollIntensity by animateFloatAsState(
         targetValue = velocityTarget,
         animationSpec = if (listState.isScrollInProgress) {
-            KototoroMotion.Ease90
+            KototoroMotion.fadeFast()
         } else {
-            KototoroMotion.Ease220
+            KototoroMotion.fadeDefault()
         },
         label = "horizontal_rail_scroll_intensity",
     )

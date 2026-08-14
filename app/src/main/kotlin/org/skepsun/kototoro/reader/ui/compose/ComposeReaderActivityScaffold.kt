@@ -530,9 +530,9 @@ internal fun ComposeReaderActivityScaffold(
 		AnimatedVisibility(
 			visible = state.infoBar.visible && !state.controlsVisible && !infoBarEmbedded,
 			enter = fadeIn(
-				animationSpec = KototoroMotion.Fade140Delayed160,
+				animationSpec = KototoroMotion.InfoBarEnter,
 			).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
-			exit = fadeOut(animationSpec = KototoroMotion.Fade80)
+			exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
 				.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
@@ -882,9 +882,9 @@ internal fun BoxScope.ReaderPageInfoBar(
 ) {
 	AnimatedVisibility(
 		visible = state.visible && !controlsVisible,
-		enter = fadeIn(animationSpec = KototoroMotion.Fade140Delayed160)
+		enter = fadeIn(animationSpec = KototoroMotion.InfoBarEnter)
 			.whenReaderAnimationsEnabled(animationsEnabled),
-		exit = fadeOut(animationSpec = KototoroMotion.Fade80)
+		exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
 			.whenReaderAnimationsEnabled(animationsEnabled),
 		modifier = Modifier.align(Alignment.TopCenter),
 	) {

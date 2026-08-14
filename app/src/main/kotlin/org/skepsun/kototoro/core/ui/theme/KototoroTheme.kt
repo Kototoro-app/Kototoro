@@ -2,7 +2,10 @@ package org.skepsun.kototoro.core.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -53,6 +56,7 @@ internal object AmoledSurfaceColors {
     val bright: Color = Color(0xFF303030)
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun KototoroTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -150,12 +154,25 @@ fun KototoroTheme(
         LocalBackgroundStyle provides backgroundStyle,
         LocalAmoledTheme provides effectiveAmoledTheme,
     ) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            shapes = shapes,
-            typography = typography,
-            content = content,
-        )
+        // Phase D: Material renders through the official MaterialExpressiveTheme when the
+        // expressive style is active; iOS keeps the classic MaterialTheme (glass chrome does not
+        // consume expressive shapes/motion). Both receive the same Kototoro color/typography.
+        if (expressiveComponents) {
+            MaterialExpressiveTheme(
+                colorScheme = colorScheme,
+                motionScheme = remember(expressiveComponents) { MotionScheme.expressive() },
+                shapes = shapes,
+                typography = typography,
+                content = content,
+            )
+        } else {
+            MaterialTheme(
+                colorScheme = colorScheme,
+                shapes = shapes,
+                typography = typography,
+                content = content,
+            )
+        }
     }
 }
 

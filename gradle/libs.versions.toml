@@ -105,6 +105,9 @@ androidx-compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = 
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+# Phase D: M3 1.5 expressive theme/motion APIs. The Compose BOM still pins material3 1.4.0,
+# so this override pulls the newer library; revert the override once a BOM pins 1.5.x.
+androidx-compose-material3-expressive = { group = "androidx.compose.material3", name = "material3", version = "1.5.0-alpha26" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
