@@ -1080,6 +1080,13 @@ private class SourceSettingsRouteController(
                     )
                 },
             ),
+            SourceSettingsActionRowUiState(
+                id = AppSettings.KEY_COOKIES_CLEAR,
+                title = context.getString(R.string.clear_cookies),
+                summary = context.getString(R.string.clear_source_cookies_summary),
+                showChevron = false,
+                onClick = viewModel::clearCookies,
+            ),
         )
     }
 

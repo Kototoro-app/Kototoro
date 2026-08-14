@@ -8,7 +8,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import okhttp3.HttpUrl
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -241,15 +240,13 @@ class SourceSettingsViewModel @Inject constructor(
 	}
 
 	fun clearCookies() {
-		if (repository !is ParserContentRepository) return
+		val url = browserUrl.value?.toHttpUrlOrNull() ?: return
 		launchLoadingJob(Dispatchers.Default) {
-			val url = HttpUrl.Builder()
-				.scheme("https")
-				.host(repository.domain)
-				.build()
 			cookieJar.removeCookies(url, null)
 			onActionDone.call(ReversibleAction(R.string.cookies_cleared, null))
-			loadUsername(repository.getAuthProvider())
+			(repository as? ParserContentRepository)?.let {
+				loadUsername(it.getAuthProvider())
+			}
 		}
 	}
 
