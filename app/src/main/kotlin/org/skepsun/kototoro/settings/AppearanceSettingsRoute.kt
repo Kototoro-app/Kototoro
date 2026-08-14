@@ -492,6 +492,7 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(AppFontPreset.GOOGLE_SANS, "Google Sans"),
             SettingsChoiceOption(AppFontPreset.NOTO_SANS, context.getString(R.string.font_preset_noto_sans)),
             SettingsChoiceOption(AppFontPreset.INTER, context.getString(R.string.font_preset_inter)),
+            SettingsChoiceOption(AppFontPreset.ALIMAMA_FANG_YUAN_TI_VF, context.getString(R.string.font_preset_alimama_fang_yuan_ti_vf)),
             SettingsChoiceOption(AppFontPreset.SARASA_GOTHIC, context.getString(R.string.font_preset_sarasa_gothic)),
             SettingsChoiceOption(AppFontPreset.LXGW_WENKAI, context.getString(R.string.font_preset_lxgw_wenkai)),
             SettingsChoiceOption(AppFontPreset.NOTO_SANS_CJK_SC, context.getString(R.string.font_preset_noto_sans_cjk_sc)),

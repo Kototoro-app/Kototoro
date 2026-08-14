@@ -7,6 +7,7 @@ import android.os.Looper
 import android.widget.Toast
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -40,7 +41,16 @@ enum class OnlineFontPreset(
 	val url: String,
 	val sha256: String,
 	val extension: String,
+	val isVariableWeight: Boolean = false,
 ) {
+	ALIMAMA_FANG_YUAN_TI_VF(
+		displayName = "Alimama FangYuanTi VF",
+		cacheName = "alimama-fang-yuan-ti-vf",
+		url = "https://unpkg.com/@fontpkg/alimama-fang-yuan-ti-vf@1.0.5/AlimamaFangYuanTiVF-Thin.ttf",
+		sha256 = "b0b8c4c057af7dbc6ccb52a3ad00138fed41d1ad37d4f4a666b6cd431c913d94",
+		extension = "ttf",
+		isVariableWeight = true,
+	),
 	SARASA_GOTHIC(
 		displayName = "Sarasa UI Gothic",
 		cacheName = "sarasa-gothic-sc",
@@ -103,9 +113,36 @@ class OnlineFontLoader @Inject constructor(
 	suspend fun load(preset: OnlineFontPreset): FontFamily? = downloadLocks.getValue(preset).withLock {
 		withContext(Dispatchers.IO) {
 			val fontFile = getOrDownload(preset) ?: return@withContext null
-			FontFamily(Font(fontFile))
+			if (preset.isVariableWeight) {
+				buildVariableWeightFontFamily(fontFile)
+			} else {
+				FontFamily(Font(fontFile))
+			}
 		}
 	}
+
+	/**
+	 * Builds a [FontFamily] from a variable-weight font file by pinning each requested
+	 * [FontWeight] to its [androidx.compose.ui.text.font.FontVariation] wght axis value.
+	 * Without this, a VF loaded as a single [Font] renders its default instance (which for
+	 * Alimama FangYuanTi is wght=700), making every text style bold.
+	 */
+	private fun buildVariableWeightFontFamily(fontFile: File): FontFamily = FontFamily(
+		listOf(
+			FontWeight.Normal to 400,
+			FontWeight.Medium to 500,
+			FontWeight.SemiBold to 600,
+			FontWeight.Bold to 700,
+		).map { (weight, wght) ->
+			Font(
+				fontFile,
+				weight = weight,
+				variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
+					androidx.compose.ui.text.font.FontVariation.weight(wght),
+				),
+			)
+		},
+	)
 
 	private fun getOrDownload(preset: OnlineFontPreset): File? {
 		cacheDirectory.mkdirs()

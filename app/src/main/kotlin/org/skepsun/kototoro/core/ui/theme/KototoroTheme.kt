@@ -164,6 +164,7 @@ private suspend fun AppFontPreset.toFontFamily(
     onlineFontLoader: OnlineFontLoader,
 ): FontFamily? {
     val fontName = when (this) {
+        AppFontPreset.ALIMAMA_FANG_YUAN_TI_VF -> return onlineFontLoader.load(OnlineFontPreset.ALIMAMA_FANG_YUAN_TI_VF)
         AppFontPreset.SARASA_GOTHIC -> return onlineFontLoader.load(OnlineFontPreset.SARASA_GOTHIC)
         AppFontPreset.LXGW_WENKAI -> return onlineFontLoader.load(OnlineFontPreset.LXGW_WENKAI)
         AppFontPreset.NOTO_SANS_CJK_SC -> return onlineFontLoader.load(OnlineFontPreset.NOTO_SANS_CJK_SC)

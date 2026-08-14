@@ -3320,6 +3320,7 @@
     <string name="font_preset_system">System default</string>
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
+    <string name="font_preset_alimama_fang_yuan_ti_vf">Alimama FangYuanTi (rounded)</string>
     <string name="font_preset_sarasa_gothic">Sarasa UI Gothic</string>
     <string name="font_preset_lxgw_wenkai">LXGW WenKai</string>
     <string name="font_preset_noto_sans_cjk_sc">Noto Sans CJK SC</string>

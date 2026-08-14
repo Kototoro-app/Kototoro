@@ -3202,6 +3202,7 @@ SHA-256 指纹:
     <string name="font_preset_system">系统默认</string>
     <string name="font_preset_noto_sans">Noto Sans</string>
     <string name="font_preset_inter">Inter</string>
+    <string name="font_preset_alimama_fang_yuan_ti_vf">阿里妈妈方圆体（圆体）</string>
     <string name="font_preset_sarasa_gothic">更纱黑体 UI</string>
     <string name="font_preset_lxgw_wenkai">霞鹜文楷</string>
     <string name="font_preset_noto_sans_cjk_sc">Noto Sans CJK SC</string>
