@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onStart
+import org.json.JSONArray
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.model.ZoomMode
@@ -43,9 +44,9 @@ import org.skepsun.kototoro.core.util.ext.connectivityManager
 import org.skepsun.kototoro.core.util.ext.getEnumValue
 import org.skepsun.kototoro.core.util.ext.getSafeFloat
 import org.skepsun.kototoro.core.util.ext.observeChanges
-import org.skepsun.kototoro.core.util.ext.putAll
 import org.skepsun.kototoro.core.util.ext.putEnumValue
 import org.skepsun.kototoro.core.util.ext.takeIfReadable
+import org.skepsun.kototoro.core.util.ext.toStringSet
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -428,13 +429,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putString(KEY_HIDDEN_SOURCE_TAG, value) }
 
 	var activeSourcePresetId: Long
-		get() = try {
-			prefs.getLong(KEY_ACTIVE_SOURCE_PRESET_ID, -1L)
-		} catch (_: ClassCastException) {
-			// After backup restore, JSON may deserialize Long as Int
-			val intValue = prefs.getInt(KEY_ACTIVE_SOURCE_PRESET_ID, -1)
-			intValue.toLong().also { activeSourcePresetId = it }
-		}
+		get() = prefs.getSafeLong(KEY_ACTIVE_SOURCE_PRESET_ID, -1L)
 		set(value) = prefs.edit { putLong(KEY_ACTIVE_SOURCE_PRESET_ID, value) }
 
 	var isDescriptionExpanded: Boolean
@@ -813,7 +808,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putEnumValue(KEY_VIDEO_ANIME4K_PRESET, value) }
 
 	var videoFsrSharpness: Float
-		get() = prefs.getFloat(KEY_VIDEO_FSR_SHARPNESS, 0.9f).coerceIn(0f, 1f)
+		get() = prefs.getSafeFloat(KEY_VIDEO_FSR_SHARPNESS, 0.9f).coerceIn(0f, 1f)
 		set(value) = prefs.edit { putFloat(KEY_VIDEO_FSR_SHARPNESS, value.coerceIn(0f, 1f)) }
 
 	var videoEnhancementRememberAcrossVideos: Boolean
@@ -1042,7 +1037,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		set(value) = prefs.edit { putBoolean(KEY_SHOW_ALL_UPDATES, value) }
 
 	var feedLimit: Int
-		get() = prefs.getInt(KEY_FEED_LIMIT, 200)
+		get() = prefs.getSafeInt(KEY_FEED_LIMIT, 200)
 		set(value) = prefs.edit { putInt(KEY_FEED_LIMIT, value) }
 
 	var feedLastOpenTime: Long
@@ -2207,7 +2202,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 				is Int -> putLong(key, value.toLong()) // JSON can't distinguish Int/Long; store as Long for safety
 				is Long -> putLong(key, value)
 				is Float -> putFloat(key, value)
+				is Double -> putFloat(key, value.toFloat())
 				is String -> putString(key, value)
+				is JSONArray -> putStringSet(key, value.toStringSet())
 				is Set<*> -> {
 					@Suppress("UNCHECKED_CAST")
 					putStringSet(key, value as? Set<String>)
