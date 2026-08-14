@@ -5,9 +5,10 @@ pluginManagement {
 			mavenCentral()
 			maven { url = uri("https://storage.googleapis.com/r8-releases/raw") }
 		}
+		// R8 override removed with AGP 9.3.1: its bundled R8 (9.3.16) is newer than the
+		// previously pinned 9.1.31 (kept for Kotlin 2.4 metadata compatibility, now satisfied
+		// by AGP's own toolchain).
 		dependencies {
-			// Kotlin 2.4 requires D8/R8 9.1.29 or newer.
-			classpath("com.android.tools:r8:9.1.31")
 		}
 	}
 	repositories {

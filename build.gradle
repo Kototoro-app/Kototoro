@@ -1,6 +1,15 @@
+// AGP 9 enables built-in Kotlin by default. Kototoro uses KGP 2.4.0 and KSP 2.3.11,
+// both newer than the built-in baseline (2.2.10), so they are declared on the top-level
+// buildscript classpath per https://kotl.in/gradle/agp-built-in-kotlin.
+buildscript {
+	dependencies {
+		classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.0")
+		classpath("com.google.devtools.ksp:symbol-processing-gradle-plugin:2.3.11")
+	}
+}
+
 plugins {
 	alias(libs.plugins.android.application) apply false
-	alias(libs.plugins.kotlin) apply false
 	alias(libs.plugins.hilt) apply false
 	alias(libs.plugins.ksp) apply false
 	alias(libs.plugins.kotlin.compose) apply false

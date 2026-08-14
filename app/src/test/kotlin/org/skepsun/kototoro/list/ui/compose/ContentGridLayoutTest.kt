@@ -35,10 +35,11 @@ class ContentGridLayoutTest {
 
     @Test
     fun `title size follows grid scale continuously`() {
-        assertEquals(10f, resolveGridTitleFontSize(0.5f).value)
-        assertEquals(12f, resolveGridTitleFontSize(1f).value)
-        assertEquals(14f, resolveGridTitleFontSize(1.5f).value)
-        assertEquals(13f, resolveGridTitleFontSize(1.25f).value)
+        // 12sp metadata floor + 4sp per grid-scale unit (see resolveGridTitleFontSize)
+        assertEquals(12f, resolveGridTitleFontSize(0.5f).value)
+        assertEquals(14f, resolveGridTitleFontSize(1f).value)
+        assertEquals(16f, resolveGridTitleFontSize(1.5f).value)
+        assertEquals(15f, resolveGridTitleFontSize(1.25f).value)
     }
 
     @Test

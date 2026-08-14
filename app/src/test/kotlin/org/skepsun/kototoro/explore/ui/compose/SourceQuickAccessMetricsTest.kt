@@ -7,9 +7,10 @@ class SourceQuickAccessMetricsTest {
 
     @Test
     fun `source title size follows grid scale`() {
-        assertEquals(10f, resolveSourceQuickAccessTitleTextSize(0.5f).value)
-        assertEquals(12f, resolveSourceQuickAccessTitleTextSize(1f).value)
-        assertEquals(14f, resolveSourceQuickAccessTitleTextSize(1.5f).value)
+        // 12sp metadata floor + 4sp per grid-scale unit (see resolveSourceQuickAccessTitleTextSize)
+        assertEquals(12f, resolveSourceQuickAccessTitleTextSize(0.5f).value)
+        assertEquals(14f, resolveSourceQuickAccessTitleTextSize(1f).value)
+        assertEquals(16f, resolveSourceQuickAccessTitleTextSize(1.5f).value)
     }
 
     @Test

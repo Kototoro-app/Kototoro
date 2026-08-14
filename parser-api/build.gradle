@@ -1,6 +1,5 @@
 plugins {
 	id 'com.android.library'
-	id 'kotlin-android'
 	id 'kotlin-parcelize'
 }
 
@@ -18,17 +17,20 @@ android {
 		targetCompatibility JavaVersion.VERSION_11
 	}
 
-	kotlinOptions {
-		jvmTarget = JavaVersion.VERSION_11.toString()
-		freeCompilerArgs += [
-			'-opt-in=kotlin.ExperimentalStdlibApi',
-			'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
-			'-opt-in=org.koitharu.kotatsu.parsers.InternalParsersApi',
-			'-opt-in=kotlin.contracts.ExperimentalContracts',
-			'-Xjspecify-annotations=strict',
-			'-Xannotation-default-target=first-only',
-			'-Xtype-enhancement-improvements-strict-mode'
-		]
+	// AGP 9 built-in Kotlin: kotlin-android plugin removed, use KGP compilerOptions block.
+	kotlin {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+			freeCompilerArgs.addAll(
+				'-opt-in=kotlin.ExperimentalStdlibApi',
+				'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
+				'-opt-in=org.koitharu.kotatsu.parsers.InternalParsersApi',
+				'-opt-in=kotlin.contracts.ExperimentalContracts',
+				'-Xjspecify-annotations=strict',
+				'-Xannotation-default-target=first-only',
+				'-Xtype-enhancement-improvements-strict-mode',
+			)
+		}
 	}
 }
 
