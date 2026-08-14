@@ -35,6 +35,11 @@ Glass 只用于少量顶级控制：
 同一屏幕最多保留一个主要 Glass 控制组。多个相邻控制应合并采样或组成一个视觉容器，
 避免每个按钮各自形成“玻璃泡”。
 
+**禁止玻璃叠玻璃（glass on glass）。** Apple 官方明确禁止在 Glass 之上再放 Glass：会迅速造成
+层次混乱。Glass 容器内的次级元素必须使用 fills、transparency 或 vibrancy 表达，即普通
+`Surface`/填充/透明度，而不是再套一层 Backdrop。详情 Sheet 内的评论卡、关系卡等属于 Glass
+容器内部的次级元素，一律使用稳定 Surface 或纯填充。
+
 ### 2.3 材质等级
 
 | 等级 | 使用场景 | 表现 |
@@ -43,14 +48,25 @@ Glass 只用于少量顶级控制：
 | Regular Glass | 大多数浮动导航与控制 | 适度模糊、主题染色、清晰轮廓 |
 | Clear Glass | 媒体背景上极少数强调控制 | 更高通透度，必须有稳定前景与对比保护 |
 
-Clear Glass 仅在背景是丰富媒体、内容不会因变暗而受损、前景足够醒目时使用。禁止把所有 Glass
-统一设为 Clear。
+**同一屏幕不得混用 Regular 与 Clear。** Apple 官方明确要求两种变体 never be mixed：每种变体
+有独立的适应行为，混用会破坏材质的可预测性。Kototoro 当前实现只有 Regular 一条渲染路径，
+Clear 属于保留语义，未实现前任何页面都不得通过调低 `containerAlpha` 模拟 Clear。
+
+Clear Glass 只有同时满足以下三个条件才可使用（Apple 官方定义）：
+
+1. 背景是媒体丰富内容（封面、漫画页、视频画面）；
+2. 背景内容可以接受变暗层，不会因变暗受损；
+3. 玻璃上的前景内容 bold and bright —— 粗体、明亮、有足够的视觉重量。
+
+不满足任一条件时使用 Regular 或 Stable。禁止把所有 Glass 统一设为 Clear。
 
 ## 3. 颜色与可读性
 
 - 表面染色从 `MaterialTheme.colorScheme.surfaceContainer` 等语义色派生，禁止固定纯白或纯黑。
 - 标准控制前景使用 `onSurface`；主动作才使用强调色。
 - 深色模式的主文字与关键图标必须接近高对比前景，不能为了“柔和”降为难辨的灰色。
+- 玻璃内部明暗跟随背景内容：小控件（顶栏、底栏、按钮）可以在深浅之间翻转；大型表面（菜单、
+  侧栏、Sidekick 面板）不翻转明暗，只做轻微色调调整 —— Apple 官方明确大表面翻转会造成干扰。
 - 背景采样之后再绘制主题表面染色，确保文字对比稳定。
 - 纯白、纯黑和大面积低纹理背景不能只依赖模糊、折射或外部阴影。均匀颜色经过这些效果后仍接近原色，
   Regular Glass 必须通过语义 Surface 产生克制但可见的内部明度差。
@@ -116,6 +132,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - iOS 风格判定统一使用 `LocalInterfaceStyle.current == InterfaceStyle.IOS`。
 - Backdrop 来源统一从 `LocalLiquidGlassBackdrop.current` 获取。
 - Backdrop 是唯一的实时 Glass 渲染器；项目不再依赖 Haze。
+- 依赖钉在 `io.github.kyant0:backdrop`，当前 2.0.0-alpha03；升级到 2.0.0（API 无变化、
+  含 LayoutCoordinates 泄漏修复）随[工具链大升级计划](../architecture/toolchain-upgrade-plan-2026-08.md)
+  Phase C 执行，本文件与对照表的版本记录届时同步。
 - 源与目标必须处于同一窗口；Popup、Dialog 优先走已有 Overlay 宿主或稳定表面降级。
 - 效果顺序固定为 `color filter -> blur -> lens`。
 - `lens` 只用于 `CornerBasedShape`，尺寸不足或轮廓不适合时直接省略。
@@ -126,7 +145,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - 不在 `drawBackdrop` 外层添加同形状 `clip`。Backdrop 已按 `shape` 裁切玻璃内容，外层裁切会截断
   Backdrop 自带的外扩阴影与高光。
 - 包含 Backdrop 外扩阴影的父容器不使用 `alpha`/淡入淡出动画。透明度低于 `1f` 时，Compose 会将
-  内容绘制到离屏图层并按图层边界裁切阴影；玻璃导航控件的进出场优先只使用位移动画。
+  内容绘制到离屏图层并按图层边界裁切阴影；玻璃导航控件的进出场优先只使用位移动画。Apple 官方
+  定义中 Glass 通过调制 lensing 形变 materialize，不存在 alpha fade；淡入淡出只作为 Android 12 以下
+  或效果能力不足时的降级。
 - 顶栏使用 `mainTopBarHeight` 作为布局槽位，并在其中居中放置 `topBarButtonSize` 控件，为原生阴影
   保留上下外扩空间。下方存在标签 rail 时，只在顶栏实际折叠期间裁切折叠槽位，完全展开时不裁切
   顶栏或 rail。
@@ -137,8 +158,11 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 
 ## 8. 无障碍与降级
 
-- “减少透明度”：Regular/Clear 全部降为 Stable。
-- “增强对比度”：提高表面不透明度和前景对比，保留语义色。
+- “减少视觉特效”（Kototoro 的开关，对应 iOS Reduced Motion 一类语义）：开启时**整体关闭
+  Glass 渲染**，所有 Glass 降为 Stable Surface。这是有意简化——Android 没有系统级
+  "Reduce Transparency" 开关，Apple 的 frostier 语义（更毛、遮住更多背景）仅作为参考记录，
+  Kototoro 不做 frostier 模拟。
+- “增强对比度”：提高表面不透明度和前景对比，关键元素可趋向黑白并保留对比边框，语义色不变。
 - “减少动态效果”：取消视差、折射变化和大幅形变。
 - 字体放大：容器允许增高或换行，不能裁切标题和主动作。
 - TalkBack：Glass 不改变语义顺序；装饰层不暴露无意义节点。
@@ -153,7 +177,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - 是否误将 Backdrop 自带阴影裁切，或同时叠加了 Backdrop 与 Compose 两套阴影？
 - Popup/Dialog 是否使用了正确的跨窗口降级？
 - 首帧、展开态和收起态的容器宽度是否一致合理？
-- 减少透明度、增强对比度和减少动态效果是否真正改变渲染策略？
+- 是否混用了 Regular 与 Clear？Glass 容器内是否还有次级 Glass？
+- “减少视觉特效”开启时是否所有 Glass 都降为 Stable、无残留 Backdrop 采样；增强对比度和
+  减少动态效果是否真正改变渲染策略？
 
 ## 10. 官方依据
 
@@ -165,3 +191,5 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - [Apple Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
 - [Backdrop Glass Bottom Bar](https://kyant.gitbook.io/backdrop/tutorials/glass-bottom-bar)
 - [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass)
+
+与官方逐条对照的差异说明见[官方依据对照表](./official-guidelines-mapping.md)。

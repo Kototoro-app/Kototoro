@@ -21,6 +21,8 @@ Kototoro 的理解方式。
 | L2 风格 | [iOS Glass](./ios-glass.md) | iOS 风格材质、层级、动效与降级规范 |
 | L3 场景 | [阅读与播放体验](./reading-experience.md) | 漫画、小说和动画的沉浸式体验 |
 | L4 组件 | [组件与令牌](./components-and-tokens.md) | 共享组件解剖、尺寸、密度和状态规则 |
+| 对照 | [官方依据对照表](./official-guidelines-mapping.md) | Kototoro 决策与 MD3 Expressive / iOS 26 官方要求的逐条差异 |
+| 决策 | [玻璃渲染后端决策](./glass-rendering-backend-decision.md) | Backdrop vs Cloudy 的事实核查、决策与引入条件 |
 
 工程迁移顺序、现状差距和历史依据继续维护在
 [界面风格系统实施文档](../development/interface-style-system.md) 中。

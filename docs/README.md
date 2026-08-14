@@ -56,6 +56,7 @@ This directory is organized by task, not by internal implementation. Start with 
 
 - [Development](./development.md)
 - [Contributing](./contributing.md)
+- [Toolchain Upgrade Plan (2026-08)](./architecture/toolchain-upgrade-plan-2026-08.md)
 
 ### Design drafts
 

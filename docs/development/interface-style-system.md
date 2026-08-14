@@ -337,13 +337,18 @@ iOS 路径可以共享 Material 的语义色和基础无障碍能力，但不应
 
 ## 10. 当前已知差距
 
-- `InterfaceStyle` 当前仍有三项。
+- `InterfaceStyle` 当前仍有三项（`MATERIAL_3` 仅保留用于旧偏好迁移）。
 - `GlassSurface` 已收敛为 iOS Backdrop 与 Material 稳定 Surface 两条路径。
 - 欢迎页、阅读器和主界面已移除 Haze state/source；Backdrop 只在 iOS 同窗口宿主创建。
 - `KototoroTheme` 仍通过布尔 CompositionLocal 区分 Expressive 组件。
 - Material 与 Expressive token 并存，造成三套几何参数。
 - 部分页面用玻璃效果表达本应由 surface container 表达的层级。
-- 当前主题尚未统一接入官方 `MotionScheme`。
+- 当前主题尚未统一接入官方 `MotionScheme`；动效时长与缓动仍散落在业务组件。
+- 业务层 `LocalMaterialExpressiveComponentsEnabled` / `isIosStyle` 分支尚未收敛到共享组件。
+- Hero 自动轮播已默认关闭且受系统动画门控（2026-08 完成）；`LoadingIndicator` 仍为
+  AndroidView 包装实现，非 Compose 组件。
+- iOS Glass 的 Reduced Transparency 已按官方语义修正为 frostier-first；动态阴影、连续圆角和
+  色差折射（有意关闭）仍需记录或实现，见[官方依据对照表](../design/official-guidelines-mapping.md)。
 
 上述差距是后续实现工作的任务清单，不应继续扩大。
 
@@ -505,7 +510,8 @@ Kototoro 是封面驱动产品，但不能把所有横向列表都改成 Express
 - “为你推荐”可使用 Multi-browse：允许大小节奏变化，但标题必须在稳定区域显示。
 - 单一重点内容才使用 Hero Carousel，并显示下一项的一小部分作为可滑动提示。
 - 收藏、历史、下载和搜索结果使用标准 Lazy grid/list，保证扫描和排序效率。
-- 禁止自动轮播；禁止让当前阅读进度因卡片变形而跳动。
+- 禁止自动轮播；禁止让当前阅读进度因卡片变形而跳动。若页面显式开启自动轮播，
+  系统动画缩放为 0（开发者选项）时必须停止。
 - Carousel shape 使用主题 shape，图片通过 `maskClip` 裁切，不额外包多层 Surface。
 
 ### 12.4 ButtonGroup 与工具栏
@@ -523,13 +529,21 @@ Kototoro 是封面驱动产品，但不能把所有横向列表都改成 Express
 
 ### 12.5 Expressive Loading
 
-形状变形的 `LoadingIndicator` 是高注意力组件：
+> [!NOTE]
+> 本节描述的是目标状态。当前实现使用 `KototoroLoadingIndicator`：一个基于
+> AndroidView 包装 `com.google.android.material.progressindicator.CircularProgressIndicator` 的
+> 共享组件，形状（直/波浪、粗/细）由 `ThemeOverlay_Kototoro_Loading_*` 与
+> `settings.loadingCircleStyle` 控制。它不是 Compose `LoadingIndicator`，不读取 Compose 的
+> reduced motion 上下文；在 Material3 1.5.0 公开稳定 API 可用前，它承担"高注意力加载"的角色，
+> 且已配合骨架屏使用（列表首屏、分页、封面加载使用 skeleton，见 ui-performance-remediation-plan）。
+
+目标状态下的高注意力 `LoadingIndicator`（形状变形）规则：
 
 - 仅用于用户明确发起、需要等待且当前页面被阻塞的任务；
 - 列表首屏骨架、分页、封面加载不使用；
 - 与明确文字状态组合，例如“正在准备离线内容”；
 - 超过 10 秒时提供阶段、取消或后台运行入口；
-- Reduced motion 下改为普通 determinate/indeterminate indicator；
+- 系统关闭动画或用户开启减少动态效果时降级为普通 determinate/indeterminate indicator；
 - 不在多个卡片中同时播放。
 
 ### 12.6 动效与触觉

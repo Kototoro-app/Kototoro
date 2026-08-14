@@ -232,6 +232,7 @@ depth:
       - content
       - long-text
       - forms
+      - glass-on-glass
 
 components:
   main-top-bar:
@@ -390,12 +391,16 @@ motion:
     - communicate-state-change
     - confirm-action-result
   simultaneousDominantMotionMaximum: 1
+  autoCarousel:
+    default: disabled
+    systemAnimationsDisabled: disabled
   reducedMotion:
     replace:
       - large-translation
       - large-scale
       - parallax
       - blur-transition
+      - auto-carousel-advance
     with:
       - fade
       - immediate-state-change
@@ -406,12 +411,14 @@ accessibility:
     - allow-container-growth
     - allow-wrapping-outside-single-line-top-bars
     - never-clip-required-actions
+    - metadata-minimum-12sp
   highContrast:
     - increase-surface-opacity
     - preserve-semantic-colors
     - keep-primary-content-on-high-contrast-foreground
   reducedTransparency:
     ios-glass: stable-surface
+    note: apple-frostier-is-reference-only
   talkBack:
     - preserve-semantic-order
     - hide-decorative-layers
@@ -538,7 +545,8 @@ Kototoro 是漫画、小说和动画的统一内容消费工具。设计系统�
 - 中等与展开窗口可使用 Navigation Rail、Drawer、Dialog 或 Supporting Pane。
 - 所有触摸操作保留至少 48 × 48 dp 命中区。
 - 字体放大时容器允许增高或换行；单行顶栏保留省略，但必要操作不得裁切。
-- 减少透明度时，iOS Glass 降级为 Stable Surface。
+- 减少视觉特效时，iOS Glass 整体降级为 Stable Surface；Apple 的 frostier 语义（更毛玻璃）
+  为参考记录，Kototoro 不做 frostier 模拟（Android 无系统级 Reduce Transparency 开关）。
 - TalkBack 顺序不随视觉风格变化，装饰层不暴露语义节点。
 
 ## 9. Do
@@ -566,6 +574,7 @@ Kototoro 是漫画、小说和动画的统一内容消费工具。设计系统�
 - [iOS Glass](./ios-glass.md)
 - [阅读与播放体验](./reading-experience.md)
 - [组件与令牌说明](./components-and-tokens.md)
+- [官方依据对照表](./official-guidelines-mapping.md)
 - [界面风格系统实施文档](../development/interface-style-system.md)
 
 ## 12. Known gaps
@@ -577,3 +586,5 @@ Kototoro 是漫画、小说和动画的统一内容消费工具。设计系统�
 - 部分业务组件仍直接覆盖 `fontWeight`、字号或透明度，尚未迁移到统一语义角色。
 - 缺少覆盖两种风格、字体放大、减少动态效果和减少透明度的系统化截图测试。
 - 当前 Material3 依赖版本尚不能直接采用公开稳定的 Expressive Theme/Motion API。
+- Hero 自动轮播已默认关闭，并在系统关闭动画时强制禁用；Material 路径下仍未接入统一 MotionSpecs，
+  动效时长与缓动散落在业务组件中。
