@@ -212,10 +212,37 @@
 - `2.0.0-alpha03` → `2.0.0`，API 零迁移，直接编译通过；`assembleDebug` ✅、`testDebugUnitTest` ✅。
 - 泄漏修复（rc01 #101）随本次生效，多 Space/路由 Backdrop 挂载场景为后续内存回归观察点。
 
+### Phase D：Material 3 1.5 Expressive 主题 ✅（2026-08-14 晚）
+
+- material3 显式覆盖为 `1.5.0-alpha26`（BOM 2026.08.00 仍锁 1.4.0，依赖解析确认
+  `1.4.0 -> 1.5.0-alpha26`）。
+- 主题根：Material 风格 → `MaterialExpressiveTheme(colorScheme, motionScheme =
+  MotionScheme.expressive(), shapes, typography)`；iOS 保持 `MaterialTheme`。`@OptIn` 标注在
+  `KototoroTheme` 函数上（`ExperimentalMaterial3ExpressiveApi`）。
+- `KototoroMotion` 重构：语义淡变/空间 spec 改为从 `MaterialTheme.motionScheme` 派生
+  （fast/default/slow × effects/spatial）；弹簧（Thumb/PullSettle/Rail×2）、`InfoBarEnter`
+  延迟淡变、`PullRefresh`/`PageZoom` 与 `tweenLinear/tweenEaseOut` 编排保留为命名常量。
+  调用点同步迁移（Rail、ReaderScaffold、DetailsScreen）。
+- 官方 API 差异记录：`RangeSlider` 参数改名为 `startThumbInteractionSource`/
+  `endThumbInteractionSource`（官方文档签名核实后修正）。
+- 验收：`assembleDebug` ✅；`testDebugUnitTest` ✅。
+
+### Phase E：targetSdk 37 与 Android 17 大屏自适应 ✅（2026-08-14 晚）
+
+- targetSdk 36 → 37。
+- `ScreenOrientationHelper`：新增 `isLargeScreen`（最小窗口尺寸 ≥ 600dp）守卫，
+  `isLandscape`/`isLocked`/`applySettings` 在大屏上跳过 `requestedOrientation`，
+  镜像 Android 17 系统行为；手机路径不变。
+- 移除 UCropActivity 的 `screenOrientation="portrait"` manifest 声明。
+- 保留观察项：App Bubbles/Bubble Bar/桌面 PiP 仍为候选特性，未纳入。
+- 验收：`assembleDebug` ✅；`testDebugUnitTest` ✅。
+
 ### 未执行（保持计划）
 
 - Kotlin 2.4.10（KSP 2.3.11 组合未验证，当前组合稳定，不引入）。
-- Phase D（M3 1.5 alpha）与 Phase E（targetSdk 37 / Android 17 大屏自适应）按计划留待后续任务。
+- M3 1.5 稳定版跟进：BOM 锁 1.4.0 期间保留显式版本覆盖；beta/stable 发布后重新过
+  MaterialExpressiveTheme 与 MotionScheme 签名回归。
+- 设备实机回归（阅读器/详情页/玻璃路径截图对照）留待日常发布流程执行。
 
 ### 验收门槛补充（2026-08-14 晚）
 

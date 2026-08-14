@@ -120,13 +120,13 @@ npm run docs:build
 
 ## 技术栈
 
-- **Kotlin** 2.2.10 / **AGP** 8.12.0 / **Gradle** 9.0.0（使用 `gradle/libs.versions.toml` 版本目录）
-- **compileSdk** 36 / **minSdk** 26 / **targetSdk** 36
+- **Kotlin** 2.4.0 / **AGP** 9.3.1 / **Gradle** 9.5.0（使用 `gradle/libs.versions.toml` 版本目录）
+- **compileSdk** 37 / **minSdk** 26 / **targetSdk** 37
 - **JVM 目标**: Java 11（开启 desugaring 以使用现代 API）
-- **UI**: Jetpack Compose + Material3 + ViewBinding（混合过渡期）
-- **数据库**: Room 2.7.2，KSP 代码生成
-- **DI**: Hilt/Dagger（dagger 2.57.2，hilt-gradle-plugin 1.3.0）
-- **网络**: OkHttp 5.2.1
+- **UI**: Jetpack Compose（BOM 2026.08.00，ui 1.12.0）+ Material3（1.5.0-alpha26 覆盖 BOM 的 1.4.0）+ ViewBinding（混合过渡期）
+- **数据库**: Room 2.8.4，KSP 代码生成
+- **DI**: Hilt/Dagger（dagger 2.60.1，androidx.hilt 1.3.0）
+- **网络**: OkHttp 5.4.0
 - **原生代码**: `app/src/main/cpp/CMakeLists.txt`（CMake 3.22.1，4 种 ABI）
 - **序列化**: kotlinx.serialization
 - **测试**: JUnit5 + Kotest + MockK + MockWebServer

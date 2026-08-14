@@ -22,6 +22,17 @@ class ScreenOrientationHelper @Inject constructor(
 	private val settings: AppSettings,
 ) {
 
+	/**
+	 * Android 17 (targetSdk 37) ignores orientation locks and resizeability restrictions on
+	 * large screens (>= 600dp smallest width). Mirror that behavior on every API level so
+	 * large-screen windows always resize-driven layouts instead of `requestedOrientation`.
+	 */
+	private val isLargeScreen: Boolean
+		get() {
+			val config = activity.resources.configuration
+			return minOf(config.screenWidthDp, config.screenHeightDp) >= 600
+		}
+
 	val isAutoRotationEnabled: Boolean
 		get() = Settings.System.getInt(
 			activity.contentResolver,
@@ -32,6 +43,7 @@ class ScreenOrientationHelper @Inject constructor(
 	var isLandscape: Boolean
 		get() = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 		set(value) {
+			if (isLargeScreen) return
 			activity.requestedOrientation = if (value) {
 				if (settings.videoLandscapeSensorEnabled) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
 			} else {
@@ -42,6 +54,7 @@ class ScreenOrientationHelper @Inject constructor(
 	var isLocked: Boolean
 		get() = activity.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_LOCKED
 		set(value) {
+			if (isLargeScreen) return
 			activity.requestedOrientation = if (value) {
 				ActivityInfo.SCREEN_ORIENTATION_LOCKED
 			} else {
@@ -50,6 +63,7 @@ class ScreenOrientationHelper @Inject constructor(
 		}
 
 	fun applySettings() {
+		if (isLargeScreen) return
 		if (activity.requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
 			// https://developer.android.com/reference/android/R.attr.html#screenOrientation
 			activity.requestedOrientation = settings.readerScreenOrientation

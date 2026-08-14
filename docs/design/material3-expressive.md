@@ -76,9 +76,14 @@ Kototoro 的 Expressive 不是普遍放大和普遍加粗，而是以下组合�
 
 ## 8. Compose 版本基线
 
-- 当前工程由 Compose BOM `2026.05.01` 管理，Material3 实际版本为 `1.4.0`。
-- 该版本的 `MaterialExpressiveTheme` 与 `MotionScheme` 仍是库内部 API，Kototoro 不绕过可见性调用。
-- 当前实现由 `InterfaceStyleTokens`、语义色、Expressive 排版与组件状态承载；业务组件不得散落私有动效常量。
-- 官方公开入口 `Material3 1.5.0-alpha24` 要求 Compose UI `1.12.0-beta01`、`compileSdk 37` 与 AGP `9.1`。
-- 只有在工程整体升级到上述构建基线并通过回归验证后，才将主题根替换为公开的
-  `MaterialExpressiveTheme`/`MotionScheme`；不得仅覆盖单个 Material3 依赖版本。
+- 当前工程由 Compose BOM `2026.08.00` 管理（Compose UI `1.12.0`），Material3 显式覆盖为
+  `1.5.0-alpha26`（BOM 仍锁 1.4.0）。
+- **主题根已接入官方公开 API（2026-08-14 完成）**：Material 风格经
+  `MaterialExpressiveTheme(colorScheme, motionScheme = MotionScheme.expressive(), shapes, typography)`
+  渲染；iOS 风格保持 `MaterialTheme`。`KototoroMotion` 的语义淡变/空间规格从
+  `MaterialTheme.motionScheme` 派生，物理弹簧与任务编排保留为命名常量。
+- 已知 API 差异记录：1.5.0-alpha26 中 `RangeSlider` 参数改名为
+  `startThumbInteractionSource`/`endThumbInteractionSource`。
+- 升级条件（compileSdk 37 + AGP 9.1+ + Compose UI 1.12）已随工具链大升级达成；
+  M3 1.5 仍是 alpha，BOM 锁 1.4.0 之前不得移除显式版本覆盖，也不得把 alpha 行为
+  当作长期契约。

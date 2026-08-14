@@ -46,7 +46,9 @@ android {
 	defaultConfig {
 		applicationId 'org.skepsun.kototoro'
 		minSdk = 26
-		targetSdk = 36
+		// Phase E: targetSdk 37. Large-screen orientation locks are skipped in
+		// ScreenOrientationHelper to match Android 17 behavior.
+		targetSdk = 37
 		versionCode = 1207
 		versionName = '1.9.4'
 		manifestPlaceholders = [
