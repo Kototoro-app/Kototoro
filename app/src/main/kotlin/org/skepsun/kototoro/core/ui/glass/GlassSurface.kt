@@ -39,6 +39,7 @@ import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 
 @Immutable
@@ -141,7 +142,10 @@ fun GlassSurface(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
-    if (isIosStyle && glassEnabled && backdrop != null && !dialogSurface) {
+    // AMOLED: a pure black canvas cannot produce a luminance difference behind the tint, so the
+    // glass would render as black-on-black (ios-glass.md §8). Fall back to a stable surface.
+    val amoledCanvas = LocalAmoledTheme.current
+    if (isIosStyle && glassEnabled && backdrop != null && !dialogSurface && !amoledCanvas) {
         LiquidGlassSurface(
             modifier = modifier,
             style = style,
@@ -195,7 +199,8 @@ fun LiquidGlassSurface(
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
-    if (LocalInterfaceStyle.current != InterfaceStyle.IOS || !glassEnabled || backdrop == null) {
+    val amoledCanvas = LocalAmoledTheme.current
+    if (LocalInterfaceStyle.current != InterfaceStyle.IOS || !glassEnabled || backdrop == null || amoledCanvas) {
         StableGlassFallback(
             modifier = modifier,
             style = style,

@@ -189,7 +189,7 @@ fun HomeScreen(
     actions: HomeScreenActions,
     isRandomLoading: Boolean,
     modifier: Modifier = Modifier,
-    autoAdvanceHero: Boolean = true,
+    autoAdvanceHero: Boolean = false,
 ) {
     val listState = rememberLazyListState()
     ScrollToTopEffect {
@@ -371,20 +371,8 @@ private fun HomeHighlightsSections(
     onRecentSearchClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val sectionShape = RoundedCornerShape(
-        when {
-            expressive -> 28.dp
-            isIosStyle -> 8.dp
-            else -> 20.dp
-        },
-    )
-    val sectionColor = if (expressive || isIosStyle) {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.64f)
-    }
+    // Highlight sections render as plain content in both interface styles; the legacy
+    // per-style Surface container was unreachable after InterfaceStyle normalization.
     val newChaptersLabel = stringResource(R.string.new_chapters)
     val historyDisplayItems = remember(historyItems) {
         historyItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
@@ -433,12 +421,7 @@ private fun HomeHighlightsSections(
         verticalArrangement = Arrangement.spacedBy(HOME_SECTION_GAP),
     ) {
         if (historyItems.isNotEmpty()) {
-            HomeHighlightSectionContainer(
-                expressive = expressive,
-                isIosStyle = isIosStyle,
-                shape = sectionShape,
-                color = sectionColor,
-            ) {
+            HomeHighlightSectionContainer {
                 HomeContentRowSection(
                     title = stringResource(R.string.recent_history),
                     sectionKey = "recent_history",
@@ -455,12 +438,7 @@ private fun HomeHighlightsSections(
             }
         }
         if (updateItems.isNotEmpty()) {
-            HomeHighlightSectionContainer(
-                expressive = expressive,
-                isIosStyle = isIosStyle,
-                shape = sectionShape,
-                color = sectionColor,
-            ) {
+            HomeHighlightSectionContainer {
                 HomeContentRowSection(
                     title = stringResource(R.string.home_recent_updates),
                     sectionKey = "recent_updates",
@@ -477,12 +455,7 @@ private fun HomeHighlightsSections(
             }
         }
         if (recommendationItems.isNotEmpty()) {
-            HomeHighlightSectionContainer(
-                expressive = expressive,
-                isIosStyle = isIosStyle,
-                shape = sectionShape,
-                color = sectionColor,
-            ) {
+            HomeHighlightSectionContainer {
                 HomeContentRowSection(
                     title = stringResource(R.string.suggestions),
                     sectionKey = "recommendations",
@@ -509,22 +482,12 @@ private fun HomeHighlightsSections(
 
 @Composable
 private fun HomeHighlightSectionContainer(
-    expressive: Boolean,
-    isIosStyle: Boolean,
-    shape: RoundedCornerShape,
-    color: Color,
     content: @Composable () -> Unit,
 ) {
-    if (expressive || isIosStyle) {
-        content()
-    } else {
-        Surface(
-            shape = shape,
-            color = color,
-            tonalElevation = 0.dp,
-            content = content,
-        )
-    }
+    // Seam for a future shared highlight-section component. Both interface styles currently
+    // render section content directly; the legacy per-style Surface wrapper was dead code
+    // after InterfaceStyle normalization (see material3-expressive spec: hierarchy first).
+    content()
 }
 
 @Composable
@@ -536,7 +499,7 @@ private fun HomeHeroSection(
     onClick: (Content, Rect?, String?) -> Unit,
     topContentInset: Dp = 0.dp,
     modifier: Modifier = Modifier,
-    autoAdvance: Boolean = true,
+    autoAdvance: Boolean = false,
 ) {
     if (entries.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { entries.size })

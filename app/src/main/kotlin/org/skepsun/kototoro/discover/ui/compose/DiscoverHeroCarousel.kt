@@ -274,6 +274,8 @@ fun DiscoverHeroCarousel(
         null
     }
 
+    // Auto-advance stays disabled by design (HeroAutoAdvanceEffect defaults to enabled = false):
+    // the design system forbids auto-carousels; users swipe the hero pager themselves.
     HeroAutoAdvanceEffect(
         pagerState = pagerState,
         pageCount = items.size,

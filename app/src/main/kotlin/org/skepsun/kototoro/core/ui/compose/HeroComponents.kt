@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -35,6 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 
 @Composable
 fun HeroBackdropCard(
@@ -102,17 +104,29 @@ fun HeroBackdropScrim(
     )
 }
 
+/**
+ * Auto-advance for hero pagers.
+ *
+ * Defaults to disabled: the design system forbids auto-carousels by default
+ * (see material3-expressive spec, "禁止自动轮播"). When a screen explicitly
+ * opts in, the system still disables it while animations are turned off
+ * (developer option "Animator duration scale") because auto-advance is a
+ * purely decorative motion effect and must respect the user's motion
+ * preferences.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HeroAutoAdvanceEffect(
     pagerState: PagerState,
     pageCount: Int,
     intervalMillis: Long = 4500L,
-    enabled: Boolean = true,
+    enabled: Boolean = false,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner, pagerState, pageCount, intervalMillis, enabled) {
-        if (!enabled || pageCount <= 1) {
+    val context = LocalContext.current
+    val animationsEnabled = context.isAnimationsEnabled
+    LaunchedEffect(lifecycleOwner, pagerState, pageCount, intervalMillis, enabled, animationsEnabled) {
+        if (!enabled || !animationsEnabled || pageCount <= 1) {
             return@LaunchedEffect
         }
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {

@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -183,7 +182,7 @@ private fun KototoroSliderThumb(
         } else {
             6.dp
         },
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
+        animationSpec = KototoroMotion.ThumbSpring,
         label = "sliderThumbWidth",
     )
     val height by animateDpAsState(
@@ -196,7 +195,7 @@ private fun KototoroSliderThumb(
         } else {
             visualSize
         },
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 520f),
+        animationSpec = KototoroMotion.ThumbSpring,
         label = "sliderThumbHeight",
     )
     Box(

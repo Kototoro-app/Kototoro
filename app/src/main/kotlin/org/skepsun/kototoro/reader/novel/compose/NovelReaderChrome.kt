@@ -62,6 +62,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
+import org.skepsun.kototoro.reader.novel.NovelReaderThemePreset
 import org.skepsun.kototoro.reader.novel.ReadingMode
 import org.skepsun.kototoro.reader.novel.novelReaderPalette
 import org.skepsun.kototoro.reader.novel.tts.TtsState
@@ -167,8 +168,15 @@ internal fun NovelReaderTopChrome(
 	callbacks: NovelReaderChromeCallbacks,
 	animationsEnabled: Boolean = true,
 ) {
-	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
+	// Chrome must follow the selected reading theme (paper/sepia/moss/slate), not the system
+	// dark mode alone: a dark reading theme in a light system would otherwise pair dark prose
+	// with a white chrome gradient.
+	val palette = novelReaderPalette(
+		preset = state.settings?.themePreset ?: NovelReaderThemePreset.PAPER,
+		isDarkTheme = isSystemInDarkTheme(),
+	)
+	val contentColor = Color(palette.chromeTextColor)
+	val immersiveBaseColor = Color(palette.chromeBackgroundColor)
 	val topHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 76.dp
 	AnimatedVisibility(
 		visible = state.controlsVisible,
@@ -291,7 +299,11 @@ internal fun NovelReaderBottomChrome(
 			exit = slideOutVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
 			modifier = Modifier.align(Alignment.BottomCenter),
 		) {
-			val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
+			val palette = novelReaderPalette(
+				preset = state.settings?.themePreset ?: NovelReaderThemePreset.PAPER,
+				isDarkTheme = isSystemInDarkTheme(),
+			)
+			val immersiveBaseColor = Color(palette.chromeBackgroundColor)
 			Box(
 				contentAlignment = Alignment.BottomCenter,
 				modifier = Modifier.fillMaxWidth().height(bottomChromeHeight),
@@ -359,7 +371,7 @@ internal fun NovelReaderBottomChrome(
 					Text(
 						text = state.chapterTitle,
 						color = statusTextColor,
-						style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+						style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
 						maxLines = 1,
 						overflow = TextOverflow.Ellipsis,
 						modifier = Modifier.weight(1f),
@@ -368,7 +380,7 @@ internal fun NovelReaderBottomChrome(
 						Text(
 							text = state.progressLabel,
 							color = statusTextColor,
-							style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+							style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
 							modifier = Modifier.padding(start = 10.dp),
 						)
 					}

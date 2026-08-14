@@ -297,7 +297,7 @@ internal fun sourceQuickAccessMetrics(gridScale: Float): SourceQuickAccessMetric
 
 internal fun resolveSourceQuickAccessTitleTextSize(gridScale: Float): TextUnit {
     val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
-    return (10f + 4f * normalized).sp
+    return (12f + 4f * normalized).sp
 }
 
 private fun calculateSourceGridColumns(

@@ -7,8 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -31,6 +29,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
@@ -143,26 +142,26 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
                                 enterTransition = {
                                     slideIntoContainer(
                                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                                        animationSpec = tween(320, easing = LinearEasing),
-                                    ) + fadeIn(tween(220, easing = LinearEasing))
+                                        animationSpec = KototoroMotion.tweenLinear(320),
+                                    ) + fadeIn(KototoroMotion.tweenLinear(220))
                                 },
                                 exitTransition = {
                                     slideOutOfContainer(
                                         towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                                        animationSpec = tween(320, easing = LinearEasing),
-                                    ) + fadeOut(tween(180, easing = LinearEasing))
+                                        animationSpec = KototoroMotion.tweenLinear(320),
+                                    ) + fadeOut(KototoroMotion.tweenLinear(180))
                                 },
                                 popEnterTransition = {
                                     slideIntoContainer(
                                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                                        animationSpec = tween(320, easing = LinearEasing),
-                                    ) + fadeIn(tween(180, easing = LinearEasing))
+                                        animationSpec = KototoroMotion.tweenLinear(320),
+                                    ) + fadeIn(KototoroMotion.tweenLinear(180))
                                 },
                                 popExitTransition = {
                                     slideOutOfContainer(
                                         towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                                        animationSpec = tween(320, easing = LinearEasing),
-                                    ) + fadeOut(tween(160, easing = LinearEasing))
+                                        animationSpec = KototoroMotion.tweenLinear(320),
+                                    ) + fadeOut(KototoroMotion.tweenLinear(160))
                                 },
                             ) {
                                 val detailsViewModel = hiltViewModel<DetailsViewModel>()

@@ -106,7 +106,7 @@ data class ContentCardBadgeMetrics(
     val containerVerticalPadding: androidx.compose.ui.unit.Dp = 4.dp,
     val itemSpacing: androidx.compose.ui.unit.Dp = 4.dp,
     val iconSize: androidx.compose.ui.unit.Dp = 14.dp,
-    val textSize: androidx.compose.ui.unit.TextUnit = 10.sp,
+    val textSize: androidx.compose.ui.unit.TextUnit = 11.sp,
     val outerPadding: androidx.compose.ui.unit.Dp = 7.dp,
     val badgeEdgePadding: androidx.compose.ui.unit.Dp = 0.dp,
     val progressSize: androidx.compose.ui.unit.Dp = 32.dp,
@@ -123,7 +123,7 @@ fun contentCardBadgeMetricsFor(coverWidth: androidx.compose.ui.unit.Dp): Content
         containerVerticalPadding = 4.dp * scale,
         itemSpacing = 4.dp * scale,
         iconSize = 14.dp * scale,
-        textSize = 10.sp * scale,
+        textSize = 11.sp * scale,
         outerPadding = 7.dp * scale,
         badgeEdgePadding = 0.dp,
         progressSize = if (isSmallCard) 24.dp else 32.dp,
@@ -511,7 +511,7 @@ private fun CompactGridTitleOverlay(
 
 internal fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
     val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
-    return (10f + 4f * normalized).sp
+    return (12f + 4f * normalized).sp
 }
 
 @Composable
@@ -571,8 +571,8 @@ fun ContentCardReadingProgressIndicator(
                 text = label,
                 color = contentColor,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 9.sp,
-                    lineHeight = 9.sp,
+                    fontSize = 11.sp,
+                    lineHeight = 11.sp,
                     fontWeight = FontWeight.Bold,
                 ),
                 maxLines = 1,

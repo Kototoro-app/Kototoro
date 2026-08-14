@@ -1031,18 +1031,12 @@ fun SettingsGroupDivider(
 
 @Composable
 private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val tokens = LocalInterfaceStyleTokens.current
+    // Legacy MATERIAL_3 was normalized to MATERIAL_3_EXPRESSIVE, so the branch below always
+    // applies; keep the iOS vs Material split via tokens only.
     return fillMaxWidth()
         .alpha(if (enabled) 1f else 0.5f)
-        .then(
-            if (expressive || isIosStyle) {
-                Modifier
-                    .heightIn(min = if (isIosStyle) 62.dp else tokens.controlHeight)
-                    .padding(horizontal = 16.dp, vertical = 10.dp)
-            } else {
-                Modifier.padding(horizontal = 20.dp, vertical = 14.dp)
-            },
-        )
+        .heightIn(min = if (isIosStyle) 62.dp else tokens.controlHeight)
+        .padding(horizontal = 16.dp, vertical = 10.dp)
 }

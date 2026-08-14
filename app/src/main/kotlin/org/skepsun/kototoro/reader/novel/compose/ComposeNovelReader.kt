@@ -34,7 +34,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +97,7 @@ import org.skepsun.kototoro.image.ui.NovelInlineImageLoader
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
+import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.reader.ui.compose.READER_PAGE_CAMERA_DISTANCE
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderSimulationPageShadow
 import org.skepsun.kototoro.reader.ui.compose.composeReaderPageCurl
@@ -807,10 +807,7 @@ private fun ComposeNovelPagedChapter(
 		coroutineScope.launch {
 			Animatable(startOffset).animateTo(
 				targetValue = 0f,
-				animationSpec = spring(
-					dampingRatio = 0.78f,
-					stiffness = 420f,
-				),
+				animationSpec = KototoroMotion.PullSettleSpring,
 			) {
 				pullOffsetPx = value
 			}
@@ -1278,14 +1275,14 @@ private fun NovelPageReadingStatus(
 		) {
 			Text(
 				text = chapterTitle,
-				style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+				style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
 				maxLines = 1,
 				overflow = TextOverflow.Ellipsis,
 				modifier = Modifier.weight(1f),
 			)
 			Text(
 				text = progressLabel,
-				style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+				style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
 				modifier = Modifier.padding(start = 10.dp),
 			)
 		}

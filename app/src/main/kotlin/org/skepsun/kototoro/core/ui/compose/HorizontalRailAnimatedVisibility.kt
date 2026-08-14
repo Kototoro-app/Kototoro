@@ -2,10 +2,7 @@ package org.skepsun.kototoro.core.ui.compose
 
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,10 +35,11 @@ fun rememberHorizontalRailScrollIntensity(
     var velocityTarget by remember(listState) { mutableFloatStateOf(0f) }
     val scrollIntensity by animateFloatAsState(
         targetValue = velocityTarget,
-        animationSpec = tween(
-            durationMillis = if (listState.isScrollInProgress) 90 else 220,
-            easing = FastOutSlowInEasing,
-        ),
+        animationSpec = if (listState.isScrollInProgress) {
+            KototoroMotion.Ease90
+        } else {
+            KototoroMotion.Ease220
+        },
         label = "horizontal_rail_scroll_intensity",
     )
 
@@ -127,10 +125,7 @@ fun HorizontalRailAnimatedVisibility(
                 delay((index.coerceAtMost(6) * 28L))
                 entryProgress.animateTo(
                     targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = 0.82f,
-                        stiffness = 420f,
-                    ),
+                    animationSpec = KototoroMotion.RailEntrySpring,
                 )
             }
     }

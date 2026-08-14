@@ -1176,7 +1176,6 @@ internal fun HomeTopLevelRouteContent(
             onContentClick = onHomeContentClick,
             actions = homeActions,
             isRandomLoading = isRandomLoading,
-            autoAdvanceHero = isRouteVisible,
         )
     }
 }

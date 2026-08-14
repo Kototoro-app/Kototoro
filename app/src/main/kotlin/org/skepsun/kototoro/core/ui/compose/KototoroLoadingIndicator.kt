@@ -2,7 +2,6 @@ package org.skepsun.kototoro.core.ui.compose
 
 import android.view.ContextThemeWrapper
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -157,7 +156,7 @@ fun KototoroPullToRefreshBox(
     val indicatorOffsetFactor = 1f
     val displayedDistancePx by animateFloatAsState(
         targetValue = if (isDragging) pullDistancePx else settledDistancePx,
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = KototoroMotion.PullRefresh,
         label = "kototoro_pull_refresh_distance",
     )
     val indicatorProgress = (displayedDistancePx / thresholdPx).coerceIn(0f, 1f)

@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -102,6 +101,7 @@ import org.skepsun.kototoro.core.prefs.ReaderControl
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
+import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -530,12 +530,9 @@ internal fun ComposeReaderActivityScaffold(
 		AnimatedVisibility(
 			visible = state.infoBar.visible && !state.controlsVisible && !infoBarEmbedded,
 			enter = fadeIn(
-				animationSpec = tween(
-					durationMillis = 140,
-					delayMillis = 160,
-				),
+				animationSpec = KototoroMotion.Fade140Delayed160,
 			).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
-			exit = fadeOut(animationSpec = tween(durationMillis = 80))
+			exit = fadeOut(animationSpec = KototoroMotion.Fade80)
 				.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
 			modifier = Modifier.align(Alignment.TopCenter),
 		) {
@@ -885,9 +882,9 @@ internal fun BoxScope.ReaderPageInfoBar(
 ) {
 	AnimatedVisibility(
 		visible = state.visible && !controlsVisible,
-		enter = fadeIn(animationSpec = tween(durationMillis = 140, delayMillis = 160))
+		enter = fadeIn(animationSpec = KototoroMotion.Fade140Delayed160)
 			.whenReaderAnimationsEnabled(animationsEnabled),
-		exit = fadeOut(animationSpec = tween(durationMillis = 80))
+		exit = fadeOut(animationSpec = KototoroMotion.Fade80)
 			.whenReaderAnimationsEnabled(animationsEnabled),
 		modifier = Modifier.align(Alignment.TopCenter),
 	) {

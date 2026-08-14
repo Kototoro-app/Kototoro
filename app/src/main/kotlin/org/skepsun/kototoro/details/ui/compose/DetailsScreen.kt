@@ -165,6 +165,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -1998,6 +1999,7 @@ private fun DetailsPlainBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val sheetColors = rememberGlassSurfaceColors(style = GlassDefaults.regularStyle())
+    val sheetCornerRadius = LocalInterfaceStyleTokens.current.sheetCornerRadius
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
@@ -2009,7 +2011,7 @@ private fun DetailsPlainBottomSheet(
         },
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
-        shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
+        shape = RoundedCornerShape(topStart = sheetCornerRadius, topEnd = sheetCornerRadius),
         dragHandle = null,
     ) {
         Column(
@@ -2028,11 +2030,11 @@ private fun DetailsTranslucentBottomSheet(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val sheetColors = rememberGlassSurfaceColors(
         style = GlassDefaults.regularStyle(),
         glassPrefs = rememberDetailsSheetGlassPrefs(),
     )
+    val sheetCornerRadius = LocalInterfaceStyleTokens.current.sheetCornerRadius
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -2049,7 +2051,7 @@ private fun DetailsTranslucentBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(modifier),
-            shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
+            shape = RoundedCornerShape(topStart = sheetCornerRadius, topEnd = sheetCornerRadius),
             color = sheetColors.containerColor.detailsPanelContainerColor(),
             border = sheetColors.border,
             tonalElevation = 0.dp,
@@ -3146,15 +3148,15 @@ private fun DetailsPaneActionsRow(
         } else {
             lerpFloat(0.68f, 1f, paneOpacityProgress) * modernDragHandleRevealProgress
         },
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        animationSpec = KototoroMotion.Ease220,
         label = "detailsPaneDragHandleAlpha",
     )
-    val dockItemEnter = fadeIn(tween(260)) + expandHorizontally(
+    val dockItemEnter = fadeIn(KototoroMotion.Fade260) + expandHorizontally(
         animationSpec = tween(ModernDetailsDockAnimationDurationMillis, easing = FastOutSlowInEasing),
         expandFrom = Alignment.Start,
     )
-    val dockItemExit = fadeOut(tween(200)) + shrinkHorizontally(
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
+    val dockItemExit = fadeOut(KototoroMotion.Fade200) + shrinkHorizontally(
+        animationSpec = KototoroMotion.tweenEaseOut(320),
         shrinkTowards = Alignment.Start,
     )
     val modernDockDragModifier = if (isModernDockEnabled) {
@@ -4201,7 +4203,7 @@ private fun ReadDock(
     )
     val dividerAlpha by animateFloatAsState(
         targetValue = if (modernStyle && !expanded) 0.22f else 0f,
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = KototoroMotion.Fade180,
         label = "readDockDividerAlpha",
     )
     val actionIconRes = when (contentType) {
@@ -4268,15 +4270,15 @@ private fun ReadDock(
                         )
                         AnimatedVisibility(
                             visible = !compact,
-                            enter = fadeIn(tween(260)) + expandHorizontally(
+                            enter = fadeIn(KototoroMotion.Fade260) + expandHorizontally(
                                 animationSpec = tween(
                                     ModernDetailsDockAnimationDurationMillis,
                                     easing = FastOutSlowInEasing,
                                 ),
                                 expandFrom = Alignment.Start,
                             ),
-                            exit = fadeOut(tween(200)) + shrinkHorizontally(
-                                animationSpec = tween(320, easing = FastOutSlowInEasing),
+                            exit = fadeOut(KototoroMotion.Fade200) + shrinkHorizontally(
+                                animationSpec = KototoroMotion.tweenEaseOut(320),
                                 shrinkTowards = Alignment.Start,
                             ),
                         ) {

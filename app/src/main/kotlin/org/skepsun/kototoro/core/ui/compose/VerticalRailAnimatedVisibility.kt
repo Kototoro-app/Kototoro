@@ -1,9 +1,6 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,10 +49,7 @@ fun VerticalRailAnimatedVisibility(
                 delay((index.coerceAtMost(8) * 24L))
                 entryProgress.animateTo(
                     targetValue = 1f,
-                    animationSpec = spring(
-                        dampingRatio = 0.84f,
-                        stiffness = 420f,
-                    ),
+                    animationSpec = KototoroMotion.VerticalRailEntrySpring,
                 )
             }
     }
