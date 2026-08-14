@@ -11,7 +11,7 @@ collections = "1.5.0"
 # https://github.com/google/conscrypt/issues/1268
 #noinspection NewerVersionAvailable,GradleDependency - 2.5.3 cause crashes
 conscrypt = "2.5.2"
-composeBom = "2026.05.01"
+composeBom = "2026.08.00"
 glance = "1.1.1"
 constraintlayout = "2.2.1"
 cryptography = "0.6.0"

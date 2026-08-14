@@ -26,7 +26,9 @@ def debugOnlyAbiBuild = !requestedTaskNames.isEmpty() &&
 def activeAbiFilters = debugOnlyAbiBuild ? ['arm64-v8a'] : allAbiFilters
 
 android {
-	compileSdk = 36
+	// Phase B: Compose 1.12 requires compileSdk 37; targetSdk stays 36
+	// (Android 17 orientation-lock behavior rework is tracked in Phase E).
+	compileSdk = 37
 	namespace = 'org.skepsun.kototoro'
 
 	signingConfigs {

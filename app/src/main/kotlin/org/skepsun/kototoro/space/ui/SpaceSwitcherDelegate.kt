@@ -374,7 +374,7 @@ class SpaceSwitcherDelegate @Inject constructor(
 		}
 		val activityManager = activity.getSystemService(ActivityManager::class.java)
 		val mainTask = activityManager.appTasks.firstOrNull { task ->
-			task.taskInfo.baseIntent.component?.className == MainActivity::class.java.name
+			task.taskInfo?.baseIntent?.component?.className == MainActivity::class.java.name
 		}
 		val options = ActivityOptions.makeCustomAnimation(activity, 0, 0).toBundle()
 		if (mainTask != null) {

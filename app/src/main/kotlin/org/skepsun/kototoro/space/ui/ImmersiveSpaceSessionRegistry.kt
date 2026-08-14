@@ -70,7 +70,7 @@ class ImmersiveSpaceSessionRegistry @Inject constructor() {
 		}
 		if (activity.taskId != callerTaskId) {
 			val appTask = context.getSystemService(ActivityManager::class.java).appTasks
-				.firstOrNull { it.taskInfo.taskId == activity.taskId }
+				.firstOrNull { it.taskInfo?.taskId == activity.taskId }
 				?: return false
 			if (suppressAnimation) {
 				appTask.startActivity(context, intent, options)
