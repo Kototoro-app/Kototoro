@@ -2804,6 +2804,12 @@
     <string name="unified_sources_disable_all">Disable all</string>
     <string name="unified_sources_enable_all_confirmation">Enable all %1$d sources in the current filter?</string>
     <string name="unified_sources_disable_all_confirmation">Disable all %1$d sources in the current filter?</string>
+    <string name="unified_sources_mark_nsfw">Mark NSFW</string>
+    <string name="unified_sources_unmark_nsfw">Remove NSFW</string>
+    <string name="unified_sources_set_nsfw">Set NSFW…</string>
+    <string name="unified_sources_set_nsfw_title">Set NSFW for selected sources</string>
+    <string name="unified_sources_mark_as_nsfw">Mark as NSFW</string>
+    <string name="unified_sources_mark_as_sfw">Mark as non-NSFW</string>
     <string name="show_extensions_in_grid">Show extensions in two columns</string>
     <string name="show_extensions_in_list">Show extensions in one column</string>
     <string name="setup_wizard">Setup wizard</string>

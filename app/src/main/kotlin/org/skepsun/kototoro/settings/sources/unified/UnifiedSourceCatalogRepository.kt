@@ -35,6 +35,7 @@ import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.isBroken
 import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.model.withNsfwFlag
 import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
@@ -295,7 +296,11 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		val settingsChanges = settings.observeAsFlow(AppSettings.KEY_SOURCES_ENABLED_ALL) {
 			isAllSourcesEnabled
 		}
-		return combine(dbChanges, runtimeChanges, settingsChanges) { _, _, _ -> Unit }
+		val nsfwOverrideChanges = combine(
+			settings.observeAsFlow(AppSettings.KEY_SOURCE_NSFW_OVERRIDES) { sourceNsfwOverrides },
+			settings.observeAsFlow(AppSettings.KEY_SOURCE_SFW_OVERRIDES) { sourceSfwOverrides },
+		) { _, _ -> Unit }
+		return combine(dbChanges, runtimeChanges, settingsChanges, nsfwOverrideChanges) { _, _, _, _ -> Unit }
 			.mapLatest { buildSourceItems() }
 			.combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
 				sources.map { source ->
@@ -374,13 +379,14 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		val kind = resolveKind()
 		val packageRef = resolvePackageRef(jsonSummary, jsonEntity)
 		val repositoryRef = resolveRepositoryRef(jsonEntity)
+		val nsfw = isNsfw()
 		return UnifiedSourceItem(
 			id = name,
 			kind = kind,
 			source = this,
 			title = getTitle(localizedContext),
 			language = resolveLanguage(),
-			contentType = getContentType(),
+			contentType = getContentType().withNsfwFlag(nsfw),
 			repositoryId = repositoryRef?.id,
 			repositoryName = repositoryRef?.title,
 			packageId = packageRef?.first,
@@ -389,7 +395,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 			isPinned = jsonSummary?.isPinned ?: (sourceEntity?.isPinned == true),
 			isAvailable = true,
 			isInstalled = kind != UnifiedSourceKind.NATIVE,
-			isNsfw = isNsfw(),
+			isNsfw = nsfw,
 			isBroken = isBroken,
 		)
 	}

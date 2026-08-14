@@ -2797,6 +2797,12 @@ SHA-256 指纹:
     <string name="unified_sources_disable_all">全部禁用</string>
     <string name="unified_sources_enable_all_confirmation">启用当前筛选结果中的 %1$d 个源？</string>
     <string name="unified_sources_disable_all_confirmation">禁用当前筛选结果中的 %1$d 个源？</string>
+    <string name="unified_sources_mark_nsfw">标记NSFW</string>
+    <string name="unified_sources_unmark_nsfw">取消NSFW</string>
+    <string name="unified_sources_set_nsfw">设置NSFW…</string>
+    <string name="unified_sources_set_nsfw_title">为所选源设置NSFW</string>
+    <string name="unified_sources_mark_as_nsfw">标记为NSFW</string>
+    <string name="unified_sources_mark_as_sfw">标记为非NSFW</string>
     <string name="unified_sources_delete_selected_only_skipped_jars">选择中包含 JAR 源。为避免意外删除，已跳过其扩展包: %1$s</string>
     <string name="unified_sources_delete_selected_with_skipped_jars">删除选中的 %1$d 个扩展包？
 

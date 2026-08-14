@@ -79,16 +79,42 @@ fun ContentSource(name: String?): ContentSource {
 
 fun Collection<String>.toContentSources() = map(::ContentSource)
 
-fun ContentSource.isNsfw(): Boolean = when (this) {
-	is ContentSourceInfo -> mangaSource.isNsfw()
-	is org.skepsun.kototoro.mihon.model.MihonMangaSource -> isNsfw
-	is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource -> isNsfw
-	is org.skepsun.kototoro.ireader.model.IReaderMangaSource -> isNsfw
-	else -> contentType in setOf(
-		ContentType.HENTAI_MANGA,
-		ContentType.HENTAI_NOVEL,
-		ContentType.HENTAI_VIDEO,
-	)
+fun ContentSource.isNsfw(): Boolean {
+	val override = SourceNsfwOverrides.resolve(name)
+	if (override != null) {
+		return override
+	}
+	return when (this) {
+		is ContentSourceInfo -> mangaSource.isNsfw()
+		is org.skepsun.kototoro.mihon.model.MihonMangaSource -> isNsfw
+		is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource -> isNsfw
+		is org.skepsun.kototoro.ireader.model.IReaderMangaSource -> isNsfw
+		else -> contentType in setOf(
+			ContentType.HENTAI_MANGA,
+			ContentType.HENTAI_NOVEL,
+			ContentType.HENTAI_VIDEO,
+		)
+	}
+}
+
+/**
+ * Maps a content type to its NSFW/SFW counterpart according to the given NSFW flag.
+ * Types without an adult counterpart are returned unchanged.
+ */
+fun ContentType.withNsfwFlag(isNsfw: Boolean): ContentType = when {
+	isNsfw -> when (this) {
+		ContentType.MANGA -> ContentType.HENTAI_MANGA
+		ContentType.NOVEL -> ContentType.HENTAI_NOVEL
+		ContentType.VIDEO -> ContentType.HENTAI_VIDEO
+		else -> this
+	}
+
+	else -> when (this) {
+		ContentType.HENTAI_MANGA -> ContentType.MANGA
+		ContentType.HENTAI_NOVEL -> ContentType.NOVEL
+		ContentType.HENTAI_VIDEO -> ContentType.VIDEO
+		else -> this
+	}
 }
 
 @get:StringRes
