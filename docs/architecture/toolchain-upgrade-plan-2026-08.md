@@ -172,6 +172,51 @@
 - 已知无关项不得顺手改：`decoroutinator` 插件保持注释状态、`generateLocaleConfig=false`
   保持、`kotlinx-serialization-json-okio` 1.7.3 钉住、命名空间不批量重命名。
 
+## 7.5 执行日志（2026-08-14）
+
+### Phase A：工具链内核 ✅
+
+- AGP 8.12.0 → 9.3.1；Gradle wrapper 9.0.0 → 9.5.0（官方 AGP 9.3 最低要求，release notes 实测）。
+- Dagger 2.58 → 2.60.1；Room 2.7.2 → 2.8.4；Kotlin 保持 2.4.0 / KSP 保持 2.3.11。
+- 实际迁移项（与 §4 Phase A 清单的偏差记录）：
+  1. **built-in Kotlin 强制**：`kotlin-android` 插件必须移除（官方报错指引 kotl.in/gradle/agp-built-in-kotlin）；
+     顶层 buildscript classpath 声明 KGP 2.4.0 + KSP 2.3.11（高于内置基线 2.2.10）；
+  2. `android.kotlinOptions` 不存在了 → `kotlin { compilerOptions { } }`；testOptions.kotlinOptions 删除，
+     其 opt-in 并入主 compilerOptions；
+  3. `packagingOptions` → `packaging`；`buildToolsVersion = '35.0.0'` 删除（AGP 9.3 默认 36.0.0）；
+  4. `applicationVariants` Groovy 属性已移除 → `androidComponents.onVariants(selector().withName('nightly'))`，
+     且 `output.versionCodeOverride` 改为 `output.versionCode.set(...)`（官方 VariantOutput API 为 Property）；
+  5. `resValue` 需要 `buildFeatures { resValues true }`（AGP 9 默认 false；此前试错
+     `androidResources.enableCustomResourceValues` 不存在，已按官方 release notes 修正）；
+  6. `android.nonFinalResIds=false` 已删除（deprecated，AGP 9 默认 true）；
+  7. **依赖解析修复**：`lifecycle-viewmodel-navigation3` 从未发布 2.9.4（版本线 1.0.0-alpha04 →
+     2.10.0），旧宽松解析掩盖了错误，AGP 9 严格解析暴露；改为独立版本 2.10.0；
+  8. settings.gradle 中 R8 9.1.31 类路径覆盖删除（AGP 9.3.1 自带 R8 9.3.16，警告消除）；
+  9. NDK 28.2.13676358 由 AGP 自动安装；CMake 3.22.1 路径不变。
+- 验收：`assembleDebug` ✅（含 Hilt 聚合、KSP、CMake、debug ABI 构建）；`testDebugUnitTest` ✅
+  1446 通过（2 个标题字号断言更新为 12sp 地板、1 个 AppSettings MockK stub 补齐 getString）。
+- 遗留观察：`androidx.multidex` 警告（minSdk 26 不需要）与 configuration-cache 对
+  dataBindingMergeDependencyArtifactsDebug 的序列化 warning，不影响构建，留待清理。
+
+### Phase B：Compose 1.12 + compileSdk 37 ✅
+
+- compileSdk 36 → 37（targetSdk 保持 36）；BOM 2026.05.01 → 2026.08.00（ui/foundation 1.12.0、
+  material3 仍 1.4.0）。
+- `Modifier.onFirstVisible()` 弃用无影响（项目零使用，与预检一致）。
+- 代码修复：API 37 下 `ActivityManager.RecentTaskInfo` 可空，
+  `ImmersiveSpaceSessionRegistry` / `SpaceSwitcherDelegate` 增加安全调用。
+- 验收：`assembleDebug` ✅；`testDebugUnitTest` ✅。
+
+### Phase C：backdrop 2.0.0 ✅
+
+- `2.0.0-alpha03` → `2.0.0`，API 零迁移，直接编译通过；`assembleDebug` ✅、`testDebugUnitTest` ✅。
+- 泄漏修复（rc01 #101）随本次生效，多 Space/路由 Backdrop 挂载场景为后续内存回归观察点。
+
+### 未执行（保持计划）
+
+- Kotlin 2.4.10（KSP 2.3.11 组合未验证，当前组合稳定，不引入）。
+- Phase D（M3 1.5 alpha）与 Phase E（targetSdk 37 / Android 17 大屏自适应）按计划留待后续任务。
+
 ## 8. 验收总门槛（全部 Phase 完成后）
 
 - `./gradlew :app:assembleDebug :app:assembleNightly` 通过；

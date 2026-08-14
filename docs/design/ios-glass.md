@@ -132,9 +132,9 @@ iOS Glass 不再使用额外的上下各 15 dp 来制造 74 dp 主行，也不�
 - iOS 风格判定统一使用 `LocalInterfaceStyle.current == InterfaceStyle.IOS`。
 - Backdrop 来源统一从 `LocalLiquidGlassBackdrop.current` 获取。
 - Backdrop 是唯一的实时 Glass 渲染器；项目不再依赖 Haze。
-- 依赖钉在 `io.github.kyant0:backdrop`，当前 2.0.0-alpha03；升级到 2.0.0（API 无变化、
-  含 LayoutCoordinates 泄漏修复）随[工具链大升级计划](../architecture/toolchain-upgrade-plan-2026-08.md)
-  Phase C 执行，本文件与对照表的版本记录届时同步。
+- 依赖钉在 `io.github.kyant0:backdrop`，当前 2.0.0（2026-08-14 由 2.0.0-alpha03 升级；
+  2.0.0 修复 LayoutCoordinates 引用泄漏，API 无变化，见
+  [工具链大升级计划](../architecture/toolchain-upgrade-plan-2026-08.md) Phase C 执行日志）。
 - 源与目标必须处于同一窗口；Popup、Dialog 优先走已有 Overlay 宿主或稳定表面降级。
 - 效果顺序固定为 `color filter -> blur -> lens`。
 - `lens` 只用于 `CornerBasedShape`，尺寸不足或轮廓不适合时直接省略。
