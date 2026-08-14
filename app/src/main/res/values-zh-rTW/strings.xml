@@ -2480,6 +2480,8 @@ SHA-256 指紋:
     <string name="video_skipping_intro">正在跳過片頭…</string>
     <string name="video_skipping_outro">已跳過片尾</string>
     <string name="video_subtitle_off">關閉</string>
+    <string name="video_subtitle_embedded">內嵌字幕</string>
+    <string name="video_subtitle_external">外掛字幕</string>
     <string name="video_subtitle_track">字幕軌道</string>
     <string name="video_super_resolution">超分辨率</string>
     <string name="video_super_resolution_advanced">高級</string>

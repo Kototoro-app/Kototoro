@@ -2,7 +2,6 @@ package org.skepsun.kototoro.video.player
 
 import android.content.Context
 import android.media.audiofx.LoudnessEnhancer
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -19,6 +18,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -29,12 +29,18 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.mp4.FragmentedMp4Extractor
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
+import androidx.media3.extractor.text.SubtitleExtractor
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import org.skepsun.kototoro.core.prefs.VideoDecoderMode
+import org.skepsun.kototoro.video.domain.PlaybackSubtitle
+import org.skepsun.kototoro.video.domain.SubtitleOrigin
 import java.util.concurrent.CopyOnWriteArraySet
 import okhttp3.OkHttpClient
 
@@ -45,6 +51,7 @@ class Media3VideoPlayerEngine(
 	private val cache: Cache,
 	decoderMode: VideoDecoderMode,
 ) : VideoPlayerEngine, Player.Listener, AnalyticsListener {
+	private val appContext = context.applicationContext
 
 	private data class TrackTarget(
 		val type: Int,
@@ -61,6 +68,7 @@ class Media3VideoPlayerEngine(
 	private val listeners = CopyOnWriteArraySet<VideoPlayerEngine.Listener>()
 	private val handler = Handler(Looper.getMainLooper())
 	private val trackSelector = DefaultTrackSelector(context)
+	private val subtitleParserFactory = DefaultSubtitleParserFactory()
 	private val renderersFactory = createRenderersFactory(context, decoderMode)
 	private val exoPlayer = ExoPlayer.Builder(context, renderersFactory)
 		.setTrackSelector(trackSelector)
@@ -68,7 +76,7 @@ class Media3VideoPlayerEngine(
 		.setLoadControl(Media3PlaybackConfig.loadControl())
 		.setLivePlaybackSpeedControl(Media3PlaybackConfig.livePlaybackSpeedControl())
 		.build()
-	private val trackTargets = LinkedHashMap<Int, TrackTarget>()
+	private val trackTargets = LinkedHashMap<String, TrackTarget>()
 	private var currentRequest: PlaybackRequest? = null
 	private var lastDuration = C.TIME_UNSET
 	private var lastIsPlaying = false
@@ -195,10 +203,9 @@ class Media3VideoPlayerEngine(
 			.setMediaId(request.requestId)
 			.setUri(request.uri)
 			.setMimeType(request.mediaKind.mimeType())
-			.setSubtitleConfigurations(request.subtitles.map(::subtitleConfiguration))
 			.build()
 		val primary = sourceFactory.createMediaSource(item)
-		if (request.externalAudio.isEmpty()) return primary
+		val subtitleSources = request.subtitles.map(::createSubtitleMediaSource)
 		val audioSources = request.externalAudio.map { track ->
 			sourceFactory.createMediaSource(
 				MediaItem.Builder()
@@ -207,14 +214,45 @@ class Media3VideoPlayerEngine(
 					.build(),
 			)
 		}
-		return MergingMediaSource(primary, *audioSources.toTypedArray())
+		val mergedSources = listOf(primary) + subtitleSources + audioSources
+		return if (mergedSources.size == 1) primary else MergingMediaSource(*mergedSources.toTypedArray())
 	}
 
-	private fun subtitleConfiguration(track: eu.kanade.tachiyomi.animesource.model.Track): MediaItem.SubtitleConfiguration {
-		return MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
-			.setLanguage(track.lang.takeIf(String::isNotBlank))
-			.setLabel(track.lang.takeIf(String::isNotBlank))
-			.setMimeType(inferSubtitleMimeType(track.url))
+	private fun createSubtitleDataSourceFactory(headers: Map<String, String>): DataSource.Factory {
+		val upstream = OkHttpDataSource.Factory(httpClient)
+			.setDefaultRequestProperties(headers.filterUnsafeRequestHeaders())
+		return DefaultDataSource.Factory(appContext, upstream)
+	}
+
+	private fun createSubtitleMediaSource(track: PlaybackSubtitle): MediaSource {
+		val configuration = subtitleConfiguration(track)
+		val inputFormat = Format.Builder()
+			.setId(configuration.id)
+			.setSampleMimeType(configuration.mimeType)
+			.setLanguage(configuration.language)
+			.setLabel(configuration.label)
+			.setSelectionFlags(configuration.selectionFlags)
+			.setRoleFlags(configuration.roleFlags)
+			.build()
+		check(subtitleParserFactory.supportsFormat(inputFormat)) {
+			"Unsupported external subtitle MIME type: ${configuration.mimeType}"
+		}
+		val extractorsFactory = ExtractorsFactory {
+			arrayOf(SubtitleExtractor(subtitleParserFactory.create(inputFormat), inputFormat))
+		}
+		return ProgressiveMediaSource.Factory(
+			createSubtitleDataSourceFactory(track.headers),
+			extractorsFactory,
+		).createMediaSource(MediaItem.fromUri(configuration.uri))
+	}
+
+	private fun subtitleConfiguration(track: PlaybackSubtitle): MediaItem.SubtitleConfiguration {
+		val uri = requireNotNull(track.uri) { "External subtitle ${track.id} has no URI" }
+		return MediaItem.SubtitleConfiguration.Builder(uri)
+			.setId(track.id)
+			.setLanguage(track.languageTag?.takeIf(String::isNotBlank))
+			.setLabel(track.label.takeIf(String::isNotBlank))
+			.setMimeType(SubtitleMimeTypeResolver.resolve(track.mimeType, uri.toString()))
 			.build()
 	}
 
@@ -278,11 +316,12 @@ class Media3VideoPlayerEngine(
 	private fun buildTracks(trackType: Int, label: String): List<VideoPlayerEngine.TrackInfo> {
 		trackTargets.entries.removeAll { it.value.type == trackType }
 		val result = mutableListOf<VideoPlayerEngine.TrackInfo>()
-		var nextId = trackType * 10_000
-		exoPlayer.currentTracks.groups.filter { it.type == trackType }.forEach { group ->
+		val externalSubtitleIds = currentRequest?.subtitles?.mapTo(HashSet(), PlaybackSubtitle::id).orEmpty()
+		exoPlayer.currentTracks.groups.filter { it.type == trackType }.forEachIndexed { groupIndex, group ->
 			for (index in 0 until group.length) {
-				val id = nextId++
 				val format = group.getTrackFormat(index)
+				val configuredId = format.id?.takeIf(String::isNotBlank)
+				val id = configuredId ?: "track:$trackType:${group.mediaTrackGroup.id}:$groupIndex:$index"
 				trackTargets[id] = TrackTarget(trackType, group, index)
 				result += VideoPlayerEngine.TrackInfo(
 					id = id,
@@ -290,6 +329,15 @@ class Media3VideoPlayerEngine(
 					title = format.label,
 					language = format.language,
 					codec = format.codecs ?: format.sampleMimeType,
+					origin = if (trackType == C.TRACK_TYPE_TEXT) {
+						if (id in externalSubtitleIds) {
+							currentRequest?.subtitles?.firstOrNull { it.id == id }?.origin
+						} else {
+							SubtitleOrigin.EMBEDDED
+						}
+					} else {
+						null
+					},
 					isDefault = (format.selectionFlags and C.SELECTION_FLAG_DEFAULT) != 0,
 					isSelected = group.isTrackSelected(index),
 				)
@@ -298,7 +346,7 @@ class Media3VideoPlayerEngine(
 		return result
 	}
 
-	override fun setSubtitleTrack(id: Int?) {
+	override fun setSubtitleTrack(id: String?) {
 		val builder = trackSelector.parameters.buildUpon()
 			.clearOverridesOfType(C.TRACK_TYPE_TEXT)
 		if (id == null) {
@@ -311,7 +359,7 @@ class Media3VideoPlayerEngine(
 		trackSelector.parameters = builder.build()
 	}
 
-	override fun setAudioTrack(id: Int) {
+	override fun setAudioTrack(id: String) {
 		val target = trackTargets[id] ?: return
 		trackSelector.parameters = trackSelector.parameters.buildUpon()
 			.clearOverridesOfType(C.TRACK_TYPE_AUDIO)
@@ -363,6 +411,11 @@ class Media3VideoPlayerEngine(
 
 	override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
 		dispatchDuration()
+	}
+
+	override fun onTracksChanged(tracks: Tracks) {
+		if (!isCurrentRequestEvent()) return
+		listeners.forEach { it.onSubtitleTracksChanged(getSubtitleTracks()) }
 	}
 
 	private fun dispatchDuration() {
@@ -496,14 +549,10 @@ class Media3VideoPlayerEngine(
 		-> null
 	}
 
-	private fun inferSubtitleMimeType(url: String): String {
-		val path = url.substringBefore('?').lowercase()
-		return when {
-			path.endsWith(".vtt") -> MimeTypes.TEXT_VTT
-			path.endsWith(".ass") || path.endsWith(".ssa") -> MimeTypes.TEXT_SSA
-			path.endsWith(".ttml") || path.endsWith(".xml") -> MimeTypes.APPLICATION_TTML
-			else -> MimeTypes.APPLICATION_SUBRIP
-		}
+	private fun Map<String, String>.filterUnsafeRequestHeaders(): Map<String, String> = filterKeys { key ->
+		!key.equals("Host", true) &&
+			!key.equals("Connection", true) &&
+			!key.equals("Content-Length", true)
 	}
 
 	private companion object {

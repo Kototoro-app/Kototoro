@@ -543,6 +543,8 @@
     <string name="video_subtitle_track">Subtitle Track</string>
     <string name="video_audio_track">Audio Track</string>
     <string name="video_subtitle_off">Off</string>
+    <string name="video_subtitle_embedded">Embedded</string>
+    <string name="video_subtitle_external">External</string>
     <string name="video_no_subtitle_tracks">No subtitle tracks available</string>
     <string name="video_no_audio_tracks">No audio tracks available</string>
     <string name="video_send_danmaku_hint">Send Danmaku…</string>

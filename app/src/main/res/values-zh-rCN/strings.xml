@@ -2861,6 +2861,8 @@ SHA-256 指纹:
     <string name="video_proxy_cache_limit">视频代理缓存限制</string>
     <string name="video_quality">画质</string>
     <string name="video_subtitle_off">关闭</string>
+    <string name="video_subtitle_embedded">内嵌字幕</string>
+    <string name="video_subtitle_external">外挂字幕</string>
     <string name="video_subtitle_track">字幕轨道</string>
     <string name="video_super_resolution_submode">子模式</string>
     <string name="video_super_resolution_submode_balanced">平衡</string>

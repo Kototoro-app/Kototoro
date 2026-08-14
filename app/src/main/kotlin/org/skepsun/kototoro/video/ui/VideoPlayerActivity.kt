@@ -118,6 +118,15 @@ import org.skepsun.kototoro.video.domain.isSuspiciousCloudstreamPlaybackDuration
 import org.skepsun.kototoro.video.domain.isStalledCloudstreamPlayback
 import org.skepsun.kototoro.video.domain.shouldProbeCloudstreamAsHls
 import org.skepsun.kototoro.video.domain.sortedCloudstreamVideos
+import org.skepsun.kototoro.video.domain.DefaultSubtitleSessionController
+import org.skepsun.kototoro.video.domain.PlaybackSubtitle
+import org.skepsun.kototoro.video.domain.SubtitleOrigin
+import org.skepsun.kototoro.video.domain.SubtitleSelectionExecutor
+import org.skepsun.kototoro.video.domain.SubtitleSelectionResult
+import org.skepsun.kototoro.video.domain.SubtitleSessionController
+import org.skepsun.kototoro.video.domain.toCloudstreamPlaybackSubtitle
+import org.skepsun.kototoro.video.domain.toPlaybackSubtitle
+import org.skepsun.kototoro.video.domain.toPlaybackSubtitles
 import org.skepsun.kototoro.video.danmaku.VideoDanmakuController
 import org.skepsun.kototoro.video.danmaku.DanmakuSettings
 import org.skepsun.kototoro.video.danmaku.DanmakuSourceManager
@@ -136,6 +145,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.activity.compose.setContent
@@ -201,6 +211,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val onClick: () -> Unit,
     )
 
+    private data class PendingSubtitleReload(
+        val trackId: String,
+        val shouldResumePlayback: Boolean,
+        val playbackSpeed: Float,
+        val completion: CompletableDeferred<SubtitleSelectionResult>,
+    )
+
     private enum class PlayerUiState {
         Hidden,
         ControlsVisible,
@@ -256,8 +273,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var currentMediaForceHls: Boolean = false
     private var currentMediaStartMs: Long = 0L
     private var skipHistorySeekForCurrentMedia: Boolean = false
-    private var pendingExternalSubtitles: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
+    private var pendingExternalSubtitles: List<PlaybackSubtitle> = emptyList()
+    private var activePlaybackSubtitles: List<PlaybackSubtitle> = emptyList()
     private var pendingExternalAudio: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList()
+    private lateinit var subtitleSessionController: SubtitleSessionController
+    private var pendingSubtitleReload: PendingSubtitleReload? = null
     private lateinit var playerView: PlayerView
     private lateinit var enhancementView: EnhancedVideoSurfaceView
     private var enhancementVideoSurface: Surface? = null
@@ -339,7 +359,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     // Track user's manual subtitle selection to restore after file reload
     private var userManualSubtitleSelection: ManualSubtitleSelection? = null
     // In-memory selected subtitle-track index (0 = off) for the subtitle panel, refreshed immediately on selection
-    private var subtitlePanelSelectedIndex: Int = 0
+    private var subtitlePanelSelectedIndex by mutableIntStateOf(0)
+    private var subtitleCatalogVersion by mutableIntStateOf(0)
     private val playerListener = object : VideoPlayerEngine.Listener {
         override fun onDurationChanged(durationMs: Long) {
             runOnUiThread { syncComposeControlState() }
@@ -415,7 +436,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 autoNextTriggered = false
                 applySuperResolutionFromSettings()
                 danmakuController.start()
-                playerRoot.postDelayed(::autoSelectTracksByLanguage, 250L)
+                playerRoot.postDelayed({
+                    finishPendingSubtitleReload()
+                    autoSelectTracksByLanguage()
+                }, 250L)
                 syncComposeControlState()
                 scheduleCloudstreamPlaybackHealthCheck()
             }
@@ -423,6 +447,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onPlaybackFailed(message: String?) {
             runOnUiThread {
+                pendingSubtitleReload?.let { pending ->
+                    pending.completion.complete(
+                        SubtitleSelectionResult.Failed(message ?: "Playback failed while reloading subtitle"),
+                    )
+                    pendingSubtitleReload = null
+                }
                 setPlaybackKeepScreenOn(false)
                 handlePlaybackFallback("media3_playback_error", message)
             }
@@ -430,6 +460,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         override fun onSubtitleTextChanged(text: String?) {
             updateSubtitleOverlay(text)
+        }
+
+        override fun onSubtitleTracksChanged(tracks: List<VideoPlayerEngine.TrackInfo>) {
+            runOnUiThread { updateSubtitleSessionFromPlayer(tracks) }
         }
 
         override fun onPositionChanged(positionMs: Long) {
@@ -906,6 +940,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun initializePlayerRuntime(): Boolean {
         return runCatching {
+            subtitleSessionController = DefaultSubtitleSessionController(
+                SubtitleSelectionExecutor(::selectSubtitleForPlayback),
+            )
             val mediaHttpClient = contentHttpClient.newBuilder()
                 .cache(null)
                 .build()
@@ -1384,7 +1421,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                 audios.add(eu.kanade.tachiyomi.animesource.model.Track(file.absolutePath, lang))
                             }
                         }
-                        pendingExternalSubtitles = subtitles
+                        updateExternalSubtitleCatalog(
+                            subtitles.map { it.toPlaybackSubtitle(SubtitleOrigin.LOCAL_FILE) },
+                        )
                         pendingExternalAudio = audios
                     } else {
                         pendingExternalSubtitles = emptyList()
@@ -1481,7 +1520,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                             .takeIf { it >= 0 } ?: 0
                                         val selected = videos[currentVideoIndex]
                                         val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                                        pendingExternalSubtitles = selected.subtitleTracks
+                                        updateExternalSubtitleCatalog(
+                                            selected.toPlaybackSubtitles(
+                                                origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                                                inheritedHeaders = mergedHeaders,
+                                            ),
+                                        )
                                         pendingExternalAudio = selected.audioTracks
                                         startPlayback(
                                             selected.videoUrl,
@@ -1528,7 +1572,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                                     currentVideoIndex = 0
                                     val selected = fallbackVideos[currentVideoIndex]
                                     val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                                    pendingExternalSubtitles = selected.subtitleTracks
+                                    updateExternalSubtitleCatalog(
+                                        selected.toPlaybackSubtitles(
+                                            origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                                            inheritedHeaders = mergedHeaders,
+                                        ),
+                                    )
                                     pendingExternalAudio = selected.audioTracks
                                     Log.d(
                                         "VideoPlayerActivity",
@@ -1819,13 +1868,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val requestId = "${++playbackRequestGeneration}:${playUrl.hashCode()}"
         val mediaKind = normalized.mediaKind.takeUnless { dynamicCloudstreamPlaylistUrl != null }
             ?: PlaybackMediaKind.HLS
+        activePlaybackSubtitles = pendingExternalSubtitles
+        if (::subtitleSessionController.isInitialized) {
+            subtitleSessionController.updateExternalTracks(activePlaybackSubtitles)
+            subtitleSessionController.updateEmbeddedTracks(emptyList())
+        }
         videoPlayer?.load(
             PlaybackRequest(
                 requestId = requestId,
                 uri = Uri.parse(playUrl),
                 mediaKind = mediaKind,
                 headers = playHeaders,
-                subtitles = selectExternalSubtitlesForCurrentMedia(pendingExternalSubtitles),
+                subtitles = activePlaybackSubtitles,
                 externalAudio = pendingExternalAudio,
                 startPositionMs = initialStartMs ?: 0L,
             ),
@@ -2228,7 +2282,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         pendingExternalAudio = emptyList()
         updateQualityButtonVisibility()
         val videosByUrl = LinkedHashMap<String, Video>()
-        val subtitlesByUrl = LinkedHashMap<String, eu.kanade.tachiyomi.animesource.model.Track>()
+        val subtitlesByUrl = LinkedHashMap<String, PlaybackSubtitle>()
         var startedVideoUrl: String? = null
 
         fun refreshVideos(): List<Video> {
@@ -2253,7 +2307,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             currentVideoIndex = availableVideos.indexOfFirst { it.videoUrl == selected.videoUrl }
                 .takeIf { it >= 0 }
                 ?: 0
-            pendingExternalSubtitles = subtitlesByUrl.values.toList()
+            updateExternalSubtitleCatalog(subtitlesByUrl.values.toList())
             pendingExternalAudio = selected.audioTracks
             Log.d(
                 "VideoPlayerActivity",
@@ -2287,10 +2341,21 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             if (playbackInstance != cloudstreamPlaybackInstance) return@collect
             when (event) {
                 is CloudstreamPlaybackEvent.Link -> {
+                    event.page.externalSubtitleTracks.forEach { sourceTrack ->
+                        subtitlesByUrl.putIfAbsent(
+                            sourceTrack.url,
+                            sourceTrack.toCloudstreamPlaybackSubtitle(),
+                        )
+                    }
                     val video = listOf(event.page).toFallbackVideos(repo).firstOrNull() ?: return@collect
                     val updatedVideo = video.copy(
                         videoTitle = video.videoTitle,
-                        subtitleTracks = subtitlesByUrl.values.toList(),
+                        subtitleTracks = subtitlesByUrl.values.map { subtitle ->
+                            eu.kanade.tachiyomi.animesource.model.Track(
+                                url = subtitle.uri.toString(),
+                                lang = subtitle.label,
+                            )
+                        },
                         internalData = when (event.type) {
                             com.lagradost.cloudstream3.utils.ExtractorLinkType.MAGNET,
                             com.lagradost.cloudstream3.utils.ExtractorLinkType.TORRENT -> TORRENT_VIDEO_MARKER
@@ -2312,20 +2377,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         )
                         return@collect
                     }
-                    val track = eu.kanade.tachiyomi.animesource.model.Track(
-                        url = resolveExternalSubtitleUrl(event.track.url, event.track.headers),
-                        lang = event.track.lang,
-                    )
-                    if (subtitlesByUrl.putIfAbsent(track.url, track) != null) return@collect
+                    val track = event.track.toCloudstreamPlaybackSubtitle()
+                    if (subtitlesByUrl.putIfAbsent(event.track.url, track) != null) return@collect
                     val updatedVideos = videosByUrl.values.map { video ->
                         video.copy(
                             videoTitle = video.videoTitle,
-                            subtitleTracks = subtitlesByUrl.values.toList(),
+                            subtitleTracks = subtitlesByUrl.values.map { subtitle ->
+                                eu.kanade.tachiyomi.animesource.model.Track(
+                                    url = subtitle.uri.toString(),
+                                    lang = subtitle.label,
+                                )
+                            },
                         )
                     }
                     videosByUrl.clear()
                     updatedVideos.forEach { videosByUrl[it.videoUrl] = it }
-                    pendingExternalSubtitles = subtitlesByUrl.values.toList()
+                    updateExternalSubtitleCatalog(subtitlesByUrl.values.toList())
                     refreshVideos()
                 }
             }
@@ -2754,45 +2821,88 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         autoSelectTracksByLanguage()
     }
 
-    private fun selectExternalSubtitlesForCurrentMedia(
-        tracks: List<eu.kanade.tachiyomi.animesource.model.Track>,
-    ): List<eu.kanade.tachiyomi.animesource.model.Track> {
-        if (currentVideoSource !is CloudstreamSource || tracks.size <= 1) return tracks
-        val selected = when (val selection = userManualSubtitleSelection) {
-            ManualSubtitleSelection.Off -> null
-            is ManualSubtitleSelection.Track -> tracks.firstOrNull { track ->
-                track.lang.equals(selection.language, ignoreCase = true) ||
-                    track.lang.equals(selection.title, ignoreCase = true)
-            }
-            null -> {
-                val locale = java.util.Locale.getDefault()
-                val languageNames = listOf(
-                    locale.language,
-                    locale.getDisplayLanguage(java.util.Locale.ENGLISH),
-                    locale.displayLanguage,
-                ).filter { it.isNotBlank() }
-                tracks.firstOrNull { track ->
-                    languageNames.any { language ->
-                        track.lang.contains(language, ignoreCase = true)
-                    }
-                } ?: tracks.firstOrNull()
-            }
+    private fun updateExternalSubtitleCatalog(tracks: List<PlaybackSubtitle>) {
+        pendingExternalSubtitles = tracks.distinctBy(PlaybackSubtitle::id)
+        if (::subtitleSessionController.isInitialized) {
+            subtitleSessionController.updateExternalTracks(pendingExternalSubtitles)
         }
-        Log.d(
-            "VideoPlayerActivity",
-            "Cloudstream subtitle auto-selection available=${tracks.size} selected=${selected?.lang}",
-        )
-        return listOfNotNull(selected)
+        subtitleCatalogVersion++
     }
 
-    private fun resolveExternalSubtitleUrl(url: String, headers: Map<String, String>? = null): String {
-        val resolvedHeaders = headers.orEmpty()
-        if (resolvedHeaders.isEmpty()) return url
-        return runCatching {
-            videoLocalCacheProxy.getProxyUrl(url, resolvedHeaders, currentVideoSource)
-        }.onFailure { error ->
-            Log.w("VideoPlayerActivity", "Failed to proxy external subtitle: $url", error)
-        }.getOrDefault(url)
+    private fun updateSubtitleSessionFromPlayer(tracks: List<VideoPlayerEngine.TrackInfo>) {
+        if (!::subtitleSessionController.isInitialized) return
+        val embedded = tracks.filter { it.origin == SubtitleOrigin.EMBEDDED }.map { track ->
+            PlaybackSubtitle(
+                id = track.id,
+                uri = null,
+                label = track.displayName(),
+                languageTag = track.language,
+                origin = SubtitleOrigin.EMBEDDED,
+                mimeType = track.codec,
+                headers = emptyMap(),
+            )
+        }
+        subtitleSessionController.updateEmbeddedTracks(embedded)
+        subtitleSessionController.updateSelection(tracks.firstOrNull { it.isSelected }?.id)
+        subtitleCatalogVersion++
+    }
+
+    private suspend fun selectSubtitleForPlayback(track: PlaybackSubtitle?): SubtitleSelectionResult {
+        val player = videoPlayer ?: return SubtitleSelectionResult.Failed("Player is not available")
+        if (track == null) {
+            player.setSubtitleTrack(null)
+            return SubtitleSelectionResult.Selected
+        }
+        val availableTrack = player.getSubtitleTracks().firstOrNull { it.id == track.id }
+        if (availableTrack != null) {
+            player.setSubtitleTrack(availableTrack.id)
+            return SubtitleSelectionResult.Selected
+        }
+        if (track.origin == SubtitleOrigin.EMBEDDED || track.uri == null) {
+            return SubtitleSelectionResult.Failed("Subtitle track is not available in the current media")
+        }
+        val existingReload = pendingSubtitleReload
+        if (existingReload?.trackId == track.id) return existingReload.completion.await()
+        val mediaUrl = currentMediaUrl
+            ?: return SubtitleSelectionResult.Failed("Current media URL is unavailable")
+        if (mediaUrl.isTorrentLocator()) {
+            return SubtitleSelectionResult.Failed("Late subtitle reload is not available for torrent playback")
+        }
+        val completion = CompletableDeferred<SubtitleSelectionResult>()
+        pendingSubtitleReload = PendingSubtitleReload(
+            trackId = track.id,
+            shouldResumePlayback = player.player.playWhenReady,
+            playbackSpeed = player.player.playbackParameters.speed,
+            completion = completion,
+        )
+        pendingExternalSubtitles = subtitleSessionController.state.value.tracks
+            .filter { it.origin != SubtitleOrigin.EMBEDDED }
+        startPlayback(
+            url = mediaUrl,
+            source = currentVideoSource,
+            headers = currentMediaHeaders,
+            startMs = player.positionMs,
+            forceHls = currentMediaForceHls,
+        )
+        val result = withTimeoutOrNull(10_000L) { completion.await() }
+        if (result != null) return result
+        if (pendingSubtitleReload?.completion === completion) pendingSubtitleReload = null
+        return SubtitleSelectionResult.Failed("Timed out while reloading subtitle")
+    }
+
+    private fun finishPendingSubtitleReload() {
+        val pending = pendingSubtitleReload ?: return
+        val player = videoPlayer ?: return
+        val target = player.getSubtitleTracks().firstOrNull { it.id == pending.trackId }
+        if (target == null) {
+            pending.completion.complete(SubtitleSelectionResult.Failed("Reloaded subtitle track was not found"))
+        } else {
+            player.setSubtitleTrack(target.id)
+            player.setRate(pending.playbackSpeed.toDouble())
+            if (!pending.shouldResumePlayback) player.pause()
+            pending.completion.complete(SubtitleSelectionResult.Selected)
+        }
+        pendingSubtitleReload = null
     }
 
     private fun pollSubtitleText() {
@@ -3205,10 +3315,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun buildSubtitleSettingsDialogState(): VideoSubtitleSettingsDialogState {
-        val player = videoPlayer
-        val tracks = player?.getSubtitleTracks().orEmpty()
+        @Suppress("UNUSED_EXPRESSION")
+        subtitleCatalogVersion
+        val state = subtitleSessionController.state.value
+        val tracks = state.tracks
         val trackOptions = arrayOf(getString(org.skepsun.kototoro.R.string.video_subtitle_off)) +
-            tracks.map { it.displayName() }.toTypedArray()
+            tracks.map(::subtitleDisplayName).toTypedArray()
         return VideoSubtitleSettingsDialogState(
             fontSizeSp = appSettings.videoSubtitleFontSize,
             bold = appSettings.videoSubtitleBold,
@@ -3226,9 +3338,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun showSubtitleSettingsDialog() {
-        subtitlePanelSelectedIndex = videoPlayer?.getSubtitleTracks()
-            ?.indexOfFirst { it.isSelected }
-            ?.takeIf { it >= 0 }
+        val state = subtitleSessionController.state.value
+        val selectedId = state.pendingTrackId ?: state.selectedTrackId
+        subtitlePanelSelectedIndex = state.tracks
+            .indexOfFirst { it.id == selectedId }
+            .takeIf { it >= 0 }
             ?.let { it + 1 }
             ?: 0
         subtitleSettingsDialogVisible = true
@@ -3236,19 +3350,28 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun selectSubtitleTrack(which: Int) {
         subtitlePanelSelectedIndex = which
-        val player = videoPlayer ?: return
-        val tracks = player.getSubtitleTracks()
+        val tracks = subtitleSessionController.state.value.tracks
         if (which == 0) {
-            player.setSubtitleTrack(null)
             userManualSubtitleSelection = ManualSubtitleSelection.Off
+            lifecycleScope.launch { subtitleSessionController.select(null) }
         } else {
             val track = tracks.getOrNull(which - 1) ?: return
-            player.setSubtitleTrack(track.id)
             userManualSubtitleSelection = ManualSubtitleSelection.Track(
-                language = track.language,
-                title = track.title,
+                language = track.languageTag,
+                title = track.label,
             )
+            lifecycleScope.launch { subtitleSessionController.select(track.id) }
         }
+    }
+
+    private fun subtitleDisplayName(track: PlaybackSubtitle): String {
+        val origin = if (track.origin == SubtitleOrigin.EMBEDDED) {
+            getString(R.string.video_subtitle_embedded)
+        } else {
+            getString(R.string.video_subtitle_external)
+        }
+        val language = track.languageTag?.takeIf { !it.equals(track.label, ignoreCase = true) }
+        return listOfNotNull(track.label.takeIf(String::isNotBlank), language, origin).joinToString(" · ")
     }
 
     private fun showAudioTrackDialog() {
@@ -3365,7 +3488,6 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val video = resolved.value
         currentVideoIndex = resolved.index
         updateQualityButtonLabel()
-        pendingExternalSubtitles = video.subtitleTracks
         pendingExternalAudio = video.audioTracks
         val repo = currentVideoSource?.let { src -> mangaRepositoryFactory.create(src) }
         val mergedHeaders = if (currentVideoSource is CloudstreamSource) {
@@ -3373,6 +3495,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             mergeHeaders(repo?.getRequestHeaders(), headersToMap(video.headers))
         }
+        val subtitles = if (currentVideoSource is CloudstreamSource) {
+            subtitleSessionController.state.value.tracks.filter { it.origin == SubtitleOrigin.CLOUDSTREAM_EXTERNAL }
+        } else {
+            video.toPlaybackSubtitles(
+                origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                inheritedHeaders = mergedHeaders,
+            )
+        }
+        updateExternalSubtitleCatalog(subtitles)
         startPlayback(
             url = video.videoUrl,
             source = currentVideoSource,
@@ -4328,7 +4459,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             .takeIf { it >= 0 } ?: 0
                         val selected = videos[currentVideoIndex]
                         val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
-                        pendingExternalSubtitles = selected.subtitleTracks
+                        updateExternalSubtitleCatalog(
+                            selected.toPlaybackSubtitles(
+                                origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                                inheritedHeaders = mergedHeaders,
+                            ),
+                        )
                         pendingExternalAudio = selected.audioTracks
                         
                         resetChapterState()
@@ -4359,12 +4495,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         updateQualityButtonVisibility()
                         currentVideoSource = manga.source
                         val selected = fallbackVideos[currentVideoIndex]
-                        pendingExternalSubtitles = selected.subtitleTracks
+                        val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
+                        updateExternalSubtitleCatalog(
+                            selected.toPlaybackSubtitles(
+                                origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                                inheritedHeaders = mergedHeaders,
+                            ),
+                        )
                         pendingExternalAudio = selected.audioTracks
 
                         resetChapterState()
 
-                        val mergedHeaders = mergeHeaders(repo.getRequestHeaders(), headersToMap(selected.headers))
                         startPlayback(selected.videoUrl, manga.source, mergedHeaders)
                         updateTitleAndSubtitle()
                         resolved = true

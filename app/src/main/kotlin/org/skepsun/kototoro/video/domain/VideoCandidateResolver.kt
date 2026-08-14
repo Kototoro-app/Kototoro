@@ -18,7 +18,7 @@ data class VideoCandidate(
     val title: String,
     val resolution: Int?,
     val headers: Map<String, String>?,
-    val subtitleTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
+    val subtitleTracks: List<PlaybackSubtitle> = emptyList(),
     val audioTracks: List<eu.kanade.tachiyomi.animesource.model.Track> = emptyList(),
     val isTorrent: Boolean = false,
     val mediaKind: PlaybackMediaKind = PlaybackMediaKind.AUTO,
@@ -30,15 +30,19 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
         return aniyomiRepo.getVideoListForChapter(chapter)
             .filter { it.videoUrl.isNotBlank() }
             .map { video ->
+                val headers = video.headers
+                    ?.toMultimap()
+                    ?.mapValues { entry -> entry.value.firstOrNull().orEmpty() }
+                    ?.filterValues { it.isNotBlank() }
                 VideoCandidate(
                     url = video.videoUrl,
                     title = video.videoTitle,
                     resolution = video.resolution,
-                    headers = video.headers
-                        ?.toMultimap()
-                        ?.mapValues { entry -> entry.value.firstOrNull().orEmpty() }
-                        ?.filterValues { it.isNotBlank() },
-                    subtitleTracks = video.subtitleTracks,
+                    headers = headers,
+                    subtitleTracks = video.toPlaybackSubtitles(
+                        origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                        inheritedHeaders = headers.orEmpty(),
+                    ),
                     audioTracks = video.audioTracks,
                     isTorrent = video.videoUrl.isTorrentLocator(),
                     mediaKind = inferPlaybackMediaKind(video.videoUrl),
@@ -48,7 +52,7 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
     val cloudstreamRepo = this as? CloudstreamContentRepository
     if (cloudstreamRepo != null) {
         val candidates = LinkedHashMap<String, VideoCandidate>()
-        val subtitles = LinkedHashMap<String, eu.kanade.tachiyomi.animesource.model.Track>()
+        val subtitles = LinkedHashMap<String, PlaybackSubtitle>()
         cloudstreamRepo.getPlaybackEvents(chapter).collect { event ->
             when (event) {
                 is CloudstreamPlaybackEvent.Link -> {
@@ -60,9 +64,7 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
                             title = buildFallbackTitle(page),
                             resolution = page.playbackQuality,
                             headers = page.headers?.takeIf { it.isNotEmpty() },
-                            subtitleTracks = page.externalSubtitleTracks.map {
-                                eu.kanade.tachiyomi.animesource.model.Track(it.url, it.lang)
-                            },
+                            subtitleTracks = page.externalSubtitleTracks.map { it.toCloudstreamPlaybackSubtitle() },
                             isTorrent = event.type == ExtractorLinkType.MAGNET ||
                                 event.type == ExtractorLinkType.TORRENT ||
                                 page.url.isTorrentLocator(),
@@ -79,13 +81,13 @@ suspend fun ContentRepository.resolveVideoCandidates(chapter: ContentChapter): L
                 is CloudstreamPlaybackEvent.Subtitle -> {
                     subtitles.putIfAbsent(
                         event.track.url,
-                        eu.kanade.tachiyomi.animesource.model.Track(event.track.url, event.track.lang),
+                        event.track.toCloudstreamPlaybackSubtitle(),
                     )
                 }
             }
         }
         return candidates.values.map { candidate ->
-            candidate.copy(subtitleTracks = (candidate.subtitleTracks + subtitles.values).distinctBy { it.url })
+            candidate.copy(subtitleTracks = (candidate.subtitleTracks + subtitles.values).distinctBy(PlaybackSubtitle::id))
         }
     }
     val pages = getPages(chapter, nextChapterUrl = null)
@@ -104,7 +106,13 @@ private suspend fun List<ContentPage>.toFallbackVideoCandidates(repo: ContentRep
             resolution = page.playbackQuality,
             headers = page.headers?.takeIf { it.isNotEmpty() },
             subtitleTracks = page.externalSubtitleTracks.map {
-                eu.kanade.tachiyomi.animesource.model.Track(it.url, it.lang)
+                PlaybackSubtitle.external(
+                    url = it.url,
+                    label = it.lang,
+                    languageTag = it.lang.takeIf(String::isNotBlank),
+                    origin = SubtitleOrigin.ANIYOMI_EXTERNAL,
+                    headers = it.headers.orEmpty(),
+                )
             },
             isTorrent = streamUrl.isTorrentLocator(),
             mediaKind = inferPlaybackMediaKind(streamUrl),

@@ -1737,7 +1737,11 @@ class DownloadWorker @AssistedInject constructor(
 			return VideoDownloadTarget(
 				url = selected.url,
 				headers = selected.headers,
-				subtitles = selected.subtitleTracks,
+				subtitles = selected.subtitleTracks.mapNotNull { subtitle ->
+					subtitle.uri?.let { uri ->
+						eu.kanade.tachiyomi.animesource.model.Track(uri.toString(), subtitle.label)
+					}
+				},
 				audios = selected.audioTracks,
 				isTorrent = selected.isTorrent,
 			)

@@ -5,6 +5,8 @@ import android.view.Surface
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import eu.kanade.tachiyomi.animesource.model.Track
+import org.skepsun.kototoro.video.domain.PlaybackSubtitle
+import org.skepsun.kototoro.video.domain.SubtitleOrigin
 
 enum class PlaybackMediaKind {
 	AUTO,
@@ -19,7 +21,7 @@ data class PlaybackRequest(
 	val uri: Uri,
 	val mediaKind: PlaybackMediaKind = PlaybackMediaKind.AUTO,
 	val headers: Map<String, String> = emptyMap(),
-	val subtitles: List<Track> = emptyList(),
+	val subtitles: List<PlaybackSubtitle> = emptyList(),
 	val externalAudio: List<Track> = emptyList(),
 	val startPositionMs: Long = 0L,
 )
@@ -52,15 +54,17 @@ interface VideoPlayerEngine {
 		fun onPlaybackFailed(message: String?) = Unit
 		fun onSeek(positionMs: Long) = Unit
 		fun onSubtitleTextChanged(text: String?) = Unit
+		fun onSubtitleTracksChanged(tracks: List<TrackInfo>) = Unit
 		fun onRenderedFirstFrame() = Unit
 	}
 
 	data class TrackInfo(
-		val id: Int,
+		val id: String,
 		val type: String,
 		val title: String?,
 		val language: String?,
 		val codec: String?,
+		val origin: SubtitleOrigin? = null,
 		val isDefault: Boolean,
 		val isSelected: Boolean,
 	) {
@@ -95,8 +99,8 @@ interface VideoPlayerEngine {
 	fun setVolumeBoost(enabled: Boolean)
 	fun getSubtitleTracks(): List<TrackInfo>
 	fun getAudioTracks(): List<TrackInfo>
-	fun setSubtitleTrack(id: Int?)
-	fun setAudioTrack(id: Int)
+	fun setSubtitleTrack(id: String?)
+	fun setAudioTrack(id: String)
 	fun getPropertyString(name: String): String?
 	fun release()
 }
