@@ -48,7 +48,7 @@ fun ProxySettingsScreen(
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        SettingsPreferenceGroup(title = "") {
+        SettingsPreferenceGroup(title = stringResource(R.string.network)) {
             item {
                 SettingsChoicePreference(
                     title = stringResource(R.string.type),
@@ -82,6 +82,19 @@ fun ProxySettingsScreen(
                     },
                 )
             }
+            item {
+                SettingsActionPreference(
+                    title = stringResource(R.string.test_connection),
+                    iconRes = R.drawable.ic_plug,
+                    summary = testSummary ?: if (!isProxyConfigured) {
+                        stringResource(R.string.invalid_proxy_configuration)
+                    } else {
+                        null
+                    },
+                    enabled = isProxyEnabled && isProxyConfigured && !isTestRunning,
+                    onClick = onTestConnection,
+                )
+            }
         }
         SettingsPreferenceGroup(title = stringResource(R.string.authorization_optional)) {
             item {
@@ -105,21 +118,6 @@ fun ProxySettingsScreen(
                     onValueChange = { value ->
                         settings.prefs.edit().putString(AppSettings.KEY_PROXY_PASSWORD, value).apply()
                     },
-                )
-            }
-        }
-        SettingsPreferenceGroup(title = "") {
-            item {
-                SettingsActionPreference(
-                    title = stringResource(R.string.test_connection),
-                    iconRes = R.drawable.ic_plug,
-                    summary = testSummary ?: if (!isProxyConfigured) {
-                        stringResource(R.string.invalid_proxy_configuration)
-                    } else {
-                        null
-                    },
-                    enabled = isProxyEnabled && isProxyConfigured && !isTestRunning,
-                    onClick = onTestConnection,
                 )
             }
         }

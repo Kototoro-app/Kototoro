@@ -131,6 +131,8 @@ fun StorageAndNetworkSettingsRoute(
         cacheLimitsTitle = context.getString(R.string.cache_limits),
         dataRemovalTitle = context.getString(R.string.data_removal),
         networkTitle = context.getString(R.string.network),
+        proxyMirrorsTitle = context.getString(R.string.network_group_proxy_mirrors),
+        securityTitle = context.getString(R.string.network_group_security),
         storageUsage = storageUsage,
         snackbarHostState = snackbarHostState,
         onCacheLimitsClick = onOpenCacheLimits,

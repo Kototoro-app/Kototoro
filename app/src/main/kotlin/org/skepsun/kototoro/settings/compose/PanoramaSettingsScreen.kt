@@ -1,10 +1,8 @@
 package org.skepsun.kototoro.settings.compose
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,10 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -23,11 +17,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,7 +48,6 @@ fun PanoramaSettingsScreen(
     onTopOpacityChange: (Int) -> Unit,
     onReset: () -> Unit,
 ) {
-    var advancedExpanded by rememberSaveable { mutableStateOf(false) }
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -71,8 +59,8 @@ fun PanoramaSettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "master") {
-                SettingsPreferenceGroup(title = "") {
+            item(key = "effect") {
+                SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_effect)) {
                     item {
                         SettingsSwitchPreference(
                             title = stringResource(R.string.pref_panorama_cover),
@@ -82,10 +70,6 @@ fun PanoramaSettingsScreen(
                             onCheckedChange = onEnabledChange,
                         )
                     }
-                }
-            }
-            item(key = "appearance") {
-                SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_effect)) {
                     item {
                         PanoramaLayoutModePreference(
                             selected = state.layoutMode,
@@ -132,67 +116,57 @@ fun PanoramaSettingsScreen(
                     }
                 }
             }
-            item(key = "advanced_toggle") {
-                SettingsPreferenceGroup(title = "") {
+            item(key = "advanced") {
+                SettingsCollapsiblePreferenceGroup(
+                    title = stringResource(R.string.panorama_settings_advanced),
+                    initiallyExpanded = false,
+                ) {
                     item {
-                        PanoramaAdvancedToggle(
-                            expanded = advancedExpanded,
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_blur),
+                            iconRes = R.drawable.ic_eye_off,
+                            value = state.blurPercent,
+                            valueRange = 0..100,
+                            step = 5,
                             enabled = state.enabled,
-                            onClick = { advancedExpanded = !advancedExpanded },
+                            valueText = { "$it%" },
+                            onValueChange = onBlurChange,
                         )
                     }
-                }
-            }
-            if (advancedExpanded) {
-                item(key = "advanced") {
-                    SettingsPreferenceGroup(title = stringResource(R.string.panorama_settings_advanced)) {
-                        item {
-                            SettingsSliderPreference(
-                                title = stringResource(R.string.pref_panorama_blur),
-                                iconRes = R.drawable.ic_eye_off,
-                                value = state.blurPercent,
-                                valueRange = 0..100,
-                                step = 5,
-                                enabled = state.enabled,
-                                valueText = { "$it%" },
-                                onValueChange = onBlurChange,
-                            )
-                        }
-                        item {
-                            SettingsSliderPreference(
-                                title = stringResource(R.string.pref_panorama_top_opacity),
-                                iconRes = R.drawable.ic_eye,
-                                value = state.topOpacityPercent,
-                                valueRange = 0..100,
-                                step = 5,
-                                summary = stringResource(R.string.pref_panorama_top_opacity_summary),
-                                enabled = state.enabled,
-                                valueText = { "$it%" },
-                                onValueChange = onTopOpacityChange,
-                            )
-                        }
-                        item {
-                            SettingsSliderPreference(
-                                title = stringResource(R.string.pref_panorama_transition_intensity),
-                                iconRes = R.drawable.ic_timelapse,
-                                value = state.transitionRangePercent,
-                                valueRange = 0..100,
-                                step = 5,
-                                summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
-                                enabled = state.enabled,
-                                valueText = { "$it%" },
-                                onValueChange = onTransitionRangeChange,
-                            )
-                        }
-                        item {
-                            SettingsActionPreference(
-                                title = stringResource(R.string.panorama_settings_restore_default),
-                                iconRes = R.drawable.ic_revert,
-                                enabled = state.enabled,
-                                showChevron = false,
-                                onClick = onReset,
-                            )
-                        }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_top_opacity),
+                            iconRes = R.drawable.ic_eye,
+                            value = state.topOpacityPercent,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.pref_panorama_top_opacity_summary),
+                            enabled = state.enabled,
+                            valueText = { "$it%" },
+                            onValueChange = onTopOpacityChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.pref_panorama_transition_intensity),
+                            iconRes = R.drawable.ic_timelapse,
+                            value = state.transitionRangePercent,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.pref_panorama_transition_intensity_summary),
+                            enabled = state.enabled,
+                            valueText = { "$it%" },
+                            onValueChange = onTransitionRangeChange,
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
+                            title = stringResource(R.string.panorama_settings_restore_default),
+                            iconRes = R.drawable.ic_revert,
+                            enabled = state.enabled,
+                            showChevron = false,
+                            onClick = onReset,
+                        )
                     }
                 }
             }
@@ -292,30 +266,3 @@ private fun panoramaPresetLabel(preset: PanoramaEffectPreset): String = stringRe
         PanoramaEffectPreset.CUSTOM -> R.string.panorama_preset_custom
     },
 )
-
-@Composable
-private fun PanoramaAdvancedToggle(
-    expanded: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.panorama_settings_advanced),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}

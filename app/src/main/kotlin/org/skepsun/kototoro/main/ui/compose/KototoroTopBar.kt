@@ -113,6 +113,7 @@ fun KototoroTopBar(
     onSearchClick: () -> Unit = {},
     onOpenListOptions: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
+    onHelpClick: () -> Unit = {},
     onSourceSettingsClick: () -> Unit = {},
     onManageSourcesClick: () -> Unit = onSourceSettingsClick,
     onTrackingAccountsClick: () -> Unit = {},
@@ -411,6 +412,19 @@ fun KototoroTopBar(
                                         onClick = {
                                             isMoreMenuExpanded = false
                                             onSettingsClick()
+                                        },
+                                    )
+                                    CompactDropdownMenuItem(
+                                        text = { CompactDropdownMenuText(stringResource(R.string.help_and_feedback)) },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_info_outline),
+                                                contentDescription = null,
+                                            )
+                                        },
+                                        onClick = {
+                                            isMoreMenuExpanded = false
+                                            onHelpClick()
                                         },
                                     )
                                     CompactDropdownMenuItem(

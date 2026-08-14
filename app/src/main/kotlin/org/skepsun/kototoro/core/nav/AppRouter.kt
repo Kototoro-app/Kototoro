@@ -703,6 +703,16 @@ class AppRouter private constructor(
         hostActivity?.applyHorizontalRouteOpenTransition()
     }
 
+    fun openAbout() {
+        val hostActivity = activity
+        startActivity(
+            Intent(contextOrNull() ?: return, SettingsActivity::class.java)
+                .setAction(ACTION_ABOUT)
+                .putExtra(SettingsActivity.EXTRA_USE_HORIZONTAL_ROUTE_TRANSITION, true),
+        )
+        hostActivity?.applyHorizontalRouteOpenTransition()
+    }
+
     fun openEntityOrganizeSettings(selectedContentIds: Set<Long> = emptySet()) {
         val hostActivity = activity
         startActivity(
@@ -1670,6 +1680,7 @@ class AppRouter private constructor(
         val ACTION_TRACKING_ACCOUNTS = "${BuildConfig.APPLICATION_ID}.action.MANAGE_TRACKING_ACCOUNTS"
         val ACTION_TRANSLATION = "${BuildConfig.APPLICATION_ID}.action.MANAGE_TRANSLATION"
         val ACTION_PERIODIC_BACKUP = "${BuildConfig.APPLICATION_ID}.action.MANAGE_PERIODIC_BACKUP"
+        val ACTION_ABOUT = "${BuildConfig.APPLICATION_ID}.action.ABOUT"
 
         private const val ACCOUNT_KEY = "account"
         private const val ACTION_ACCOUNT_SYNC_SETTINGS = "android.settings.ACCOUNT_SYNC_SETTINGS"

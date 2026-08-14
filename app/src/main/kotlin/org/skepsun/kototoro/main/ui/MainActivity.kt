@@ -437,6 +437,9 @@ class MainActivity : BaseComposeActivity() {
                 onSettingsClick = {
                     this.router.openSettings()
                 },
+                onHelpClick = {
+                    this.router.openAbout()
+                },
                 onSourceSettingsClick = {
                     this.router.openSourcesSettings()
                 },

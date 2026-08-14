@@ -98,7 +98,7 @@ fun AboutSettingsScreen(
                 }
             }
             item(key = "about_links") {
-                SettingsPreferenceGroup(title = stringResource(R.string.more)) {
+                SettingsPreferenceGroup(title = stringResource(R.string.about_group_support)) {
                     item {
                         SettingsActionPreference(
                             title = stringResource(R.string.user_manual),

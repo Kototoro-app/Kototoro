@@ -51,7 +51,7 @@ fun PeriodicalBackupSettingsScreen(
         val webDavEnabled = settings.prefs.getBoolean(AppSettings.KEY_BACKUP_WEBDAV_ENABLED, false)
         val keepLocal = settings.prefs.getBoolean(AppSettings.KEY_BACKUP_WEBDAV_KEEP_LOCAL_COPY, true)
 
-        SettingsPreferenceGroup(title = "") {
+        SettingsPreferenceGroup(title = stringResource(R.string.periodical_backup_group_schedule)) {
             item { SettingsActionPreference(
                 title = stringResource(R.string.backups_output_directory),
                 iconRes = R.drawable.ic_folder_file,
