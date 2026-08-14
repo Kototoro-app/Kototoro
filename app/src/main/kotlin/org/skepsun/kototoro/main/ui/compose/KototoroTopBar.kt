@@ -101,6 +101,7 @@ private val CompactTopTabsRailVisualHeight = 40.dp
 private val CompactTopFilterRailVisualHeight = 36.dp
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
+    val iconRes: Int? = null,
     val onClick: () -> Unit,
 )
 
@@ -307,6 +308,12 @@ fun KototoroTopBar(
                                     if (supportsDisplayModeMenu || supportsGridSizeSlider || displayOptionsExtraContent != null) {
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(R.string.display_options)) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_grid),
+                                                    contentDescription = null,
+                                                )
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 showDisplayOptionsSheet = true
@@ -318,6 +325,12 @@ fun KototoroTopBar(
                                     if (isLanguagePresetFilterVisible) {
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(R.string.show_language_preset_filter)) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_language),
+                                                    contentDescription = null,
+                                                )
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 isLanguagePresetMenuExpanded = true
@@ -328,6 +341,12 @@ fun KototoroTopBar(
                                     if (showSourceSettingsEntry) {
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(R.string.extension_management)) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_extension),
+                                                    contentDescription = null,
+                                                )
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onManageSourcesClick()
@@ -335,6 +354,12 @@ fun KototoroTopBar(
                                         )
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(R.string.manage_sources)) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_manga_source),
+                                                    contentDescription = null,
+                                                )
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onSourceSettingsClick()
@@ -342,6 +367,12 @@ fun KototoroTopBar(
                                         )
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(R.string.tracking_accounts)) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_user),
+                                                    contentDescription = null,
+                                                )
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 onTrackingAccountsClick()
@@ -352,6 +383,14 @@ fun KototoroTopBar(
                                     contextualMenuActions.forEach { action ->
                                         CompactDropdownMenuItem(
                                             text = { CompactDropdownMenuText(stringResource(action.titleRes)) },
+                                            leadingIcon = action.iconRes?.let { iconRes ->
+                                                {
+                                                    Icon(
+                                                        painter = painterResource(iconRes),
+                                                        contentDescription = null,
+                                                    )
+                                                }
+                                            },
                                             onClick = {
                                                 isMoreMenuExpanded = false
                                                 action.onClick()
@@ -363,6 +402,12 @@ fun KototoroTopBar(
                                     }
                                     CompactDropdownMenuItem(
                                         text = { CompactDropdownMenuText(stringResource(R.string.settings)) },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_settings),
+                                                contentDescription = null,
+                                            )
+                                        },
                                         onClick = {
                                             isMoreMenuExpanded = false
                                             onSettingsClick()
@@ -370,6 +415,12 @@ fun KototoroTopBar(
                                     )
                                     CompactDropdownMenuItem(
                                         text = { CompactDropdownMenuText(stringResource(R.string.incognito_mode)) },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_incognito),
+                                                contentDescription = null,
+                                            )
+                                        },
                                         trailingIcon = {
                                             Checkbox(
                                                 checked = isIncognitoModeEnabled,
@@ -424,6 +475,12 @@ fun KototoroTopBar(
                                     CompactDropdownMenuDivider()
                                     CompactDropdownMenuItem(
                                         text = { CompactDropdownMenuText(stringResource(R.string.manage_language_presets)) },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_edit),
+                                                contentDescription = null,
+                                            )
+                                        },
                                         onClick = {
                                             isLanguagePresetMenuExpanded = false
                                             onManageLanguagePresets()
