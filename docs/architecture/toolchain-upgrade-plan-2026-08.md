@@ -217,6 +217,17 @@
 - Kotlin 2.4.10（KSP 2.3.11 组合未验证，当前组合稳定，不引入）。
 - Phase D（M3 1.5 alpha）与 Phase E（targetSdk 37 / Android 17 大屏自适应）按计划留待后续任务。
 
+### 验收门槛补充（2026-08-14 晚）
+
+- `assembleNightly` ✅：`versionCode=260814` / `versionName=N20260814`（Variant API 日期版本生效）、
+  5 ABI 分片 + universal、compileSdk 37。
+- `assembleRelease` ✅：R8 9.3.16 全量 + shrinkResources 通过（无签名配置，产物为 unsigned）。
+- 构建环境治理：磁盘 3.4Gi 告急导致 nightly/release 并行构建 Kotlin daemon 崩溃
+  （"Daemon compilation failed"）；已删除旧 Gradle 分发（8.x/9.0/9.4.1/9.6.1）、旧版本 cache
+  （9.0/9.4.1/9.6.1）、build-cache-1、旧 NDK 27/28.0、旧 build-tools 34/35、旧 platforms
+  31/33/34/35，可用空间恢复至 35Gi；nightly/release 改为顺序执行。
+- 设备回归（阅读器/详情页/玻璃路径截图对照）留待后续 Phase D/E 任务或日常发布流程执行。
+
 ## 8. 验收总门槛（全部 Phase 完成后）
 
 - `./gradlew :app:assembleDebug :app:assembleNightly` 通过；
