@@ -94,7 +94,7 @@ fun SharedPreferences.getSafeFloat(key: String, defaultValue: Float): Float {
 	}
 }
 
-private fun JSONArray.toStringSet(): Set<String> {
+internal fun JSONArray.toStringSet(): Set<String> {
 	val len = length()
 	val result = ArraySet<String>(len)
 	for (i in 0 until len) {
