@@ -7,8 +7,13 @@
 	<color name="onErrorContainer">#410001</color>
 
 	<!-- AMOLED Theme -->
-	<color name="surface_amoled">#161616</color>
 	<color name="background_amoled">#000000</color>
+	<color name="surface_amoled_bright">#303030</color>
+	<color name="surface_amoled_container_low">#121212</color>
+	<color name="surface_amoled_container">#1A1A1A</color>
+	<color name="surface_amoled_container_high">#222222</color>
+	<color name="surface_amoled_container_highest">#2A2A2A</color>
+	<color name="surface_amoled_variant">#242424</color>
 
 	<!-- Other Colors -->
 

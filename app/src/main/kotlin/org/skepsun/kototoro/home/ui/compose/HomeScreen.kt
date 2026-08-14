@@ -125,6 +125,8 @@ import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.model.isNsfw
@@ -1702,7 +1704,6 @@ private fun QuickAccessButton(
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val containerColor = when {
-        isIosStyle -> Color.Transparent
         !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
         paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
         paletteIndex % 3 == 1 -> MaterialTheme.colorScheme.tertiaryContainer
@@ -1724,20 +1725,8 @@ private fun QuickAccessButton(
         !expressive -> MaterialTheme.colorScheme.onSurfaceVariant
         else -> expressiveContentColor
     }
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(if (expressive) 20.dp else 16.dp),
-        color = containerColor,
-        tonalElevation = if (expressive) 0.dp else 1.dp,
-        border = if (isIosStyle) {
-            BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
-            )
-        } else {
-            null
-        },
-    ) {
+    val shape = RoundedCornerShape(if (expressive) 20.dp else 16.dp)
+    val content: @Composable () -> Unit = {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1761,6 +1750,24 @@ private fun QuickAccessButton(
                 overflow = TextOverflow.Ellipsis,
                 color = textColor,
             )
+        }
+    }
+    if (isIosStyle) {
+        GlassSurface(
+            modifier = modifier,
+            shape = shape,
+            style = GlassDefaults.subtleStyle(),
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = shape,
+            color = containerColor,
+            tonalElevation = if (expressive) 0.dp else 1.dp,
+        ) {
+            content()
         }
     }
 }

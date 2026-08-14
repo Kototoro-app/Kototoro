@@ -95,9 +95,6 @@ import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.core.util.ext.mangaExtra
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.vibrancy
 
 private const val SPACE_SWITCHER_FAB_MIN_ALPHA = 0.60f
 
@@ -560,8 +557,7 @@ fun SpaceSwitcherFab(
 	)
 	val colorScheme = MaterialTheme.colorScheme
 	val fabAccentColor = colorScheme.primaryContainer
-	val backdrop = LocalLiquidGlassBackdrop.current
-    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 	val fabShape = CircleShape
 	val fabModifier = modifier
 		.clickable(
@@ -576,7 +572,7 @@ fun SpaceSwitcherFab(
 			modifier = Modifier
 				.fillMaxSize()
 				.background(
-					color = if (useBackdrop) {
+					color = if (isIosStyle) {
 						colorScheme.primary.copy(alpha = 0.16f)
 					} else {
 						fabAccentColor.copy(alpha = SPACE_SWITCHER_FAB_MIN_ALPHA)
@@ -586,7 +582,7 @@ fun SpaceSwitcherFab(
 			contentAlignment = Alignment.Center,
 		) {
 			CompositionLocalProvider(
-				LocalContentColor provides if (useBackdrop) {
+				LocalContentColor provides if (isIosStyle) {
 					colorScheme.onSurface
 				} else {
 					colorScheme.onPrimaryContainer
@@ -595,44 +591,21 @@ fun SpaceSwitcherFab(
 				SpaceGlyph(
 					presentation = iconState.presentation,
 					monogram = iconState.monogram,
-					modifier = if (useBackdrop) Modifier.size(25.dp) else Modifier,
+					modifier = if (isIosStyle) Modifier.size(25.dp) else Modifier,
 				)
 			}
 		}
 	}
-    if (useBackdrop) {
-        Box(
-            modifier = fabModifier
-                .background(Color.White.copy(alpha = 0.08f), fabShape)
-                .then(
-                    if (backdrop != null) {
-                        Modifier.drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { fabShape },
-                            effects = {
-                                vibrancy()
-                                blur(4.dp.toPx())
-                            },
-                        )
-                    } else {
-                        Modifier
-                    },
-                )
-				.border(1.dp, colorScheme.primary.copy(alpha = 0.24f), fabShape),
-			content = content,
-		)
-	} else {
-		GlassSurface(
-			modifier = fabModifier,
-			style = GlassDefaults.topBarChromeStyle().copy(
-				containerAlpha = SPACE_SWITCHER_FAB_MIN_ALPHA,
-				borderAlpha = 0.24f,
-			),
-			shape = CircleShape,
-			componentRole = GlassComponentRole.TopBar,
-			content = content,
-		)
-	}
+	GlassSurface(
+		modifier = fabModifier,
+		style = GlassDefaults.topBarChromeStyle().copy(
+			containerAlpha = SPACE_SWITCHER_FAB_MIN_ALPHA,
+			borderAlpha = 0.24f,
+		),
+		shape = fabShape,
+		componentRole = GlassComponentRole.TopBar,
+		content = content,
+	)
 }
 
 @Composable

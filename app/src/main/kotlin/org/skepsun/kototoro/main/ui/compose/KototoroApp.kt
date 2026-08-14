@@ -12,11 +12,8 @@ import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
@@ -62,7 +59,6 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -98,6 +94,9 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -106,9 +105,6 @@ import org.skepsun.kototoro.core.ui.compose.LiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.vibrancy
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.compose.ExploreSelectionTopBar
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -154,17 +150,15 @@ import org.skepsun.kototoro.core.ui.compose.LocalRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
@@ -280,6 +274,7 @@ private suspend fun NavHostController.awaitCurrentEntryResumed() {
 @Immutable
 private data class KototoroNavigationPrefs(
     val isFloating: Boolean,
+    val isLayeredSurface: Boolean,
 )
 
 @Immutable
@@ -489,9 +484,11 @@ fun KototoroApp(
     val configuration = LocalConfiguration.current
     val navigationPrefs by appSettings.observeAsState(
         AppSettings.KEY_NAV_FLOATING,
+        AppSettings.KEY_NAV_LAYERED_SURFACE,
     ) {
         KototoroNavigationPrefs(
             isFloating = isNavFloating,
+            isLayeredSurface = isNavLayeredSurface,
         )
     }
     val displayPrefs by appSettings.observeAsState(
@@ -553,6 +550,7 @@ fun KototoroApp(
     }
     val isNavBarPinned by appSettings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }
     val isFloating = navigationPrefs.isFloating
+    val isLayeredSurface = navigationPrefs.isLayeredSurface
     val activeSourcePresetId = displayPrefs.activeSourcePresetId
     val listMode = displayPrefs.listMode
     val browseListMode = displayPrefs.browseListMode
@@ -1306,12 +1304,7 @@ fun KototoroApp(
             LocalRailAnimationFactor provides railAnimationFactor,
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
-            val isDarkTheme = isSystemInDarkTheme()
-            val immersiveBaseColor = if (isDarkTheme) {
-                Color.Black
-            } else {
-                Color.White
-            }
+            val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
             val immersiveTransparent = immersiveBaseColor.toTransparentImmersiveColor()
             val topImmersiveOverflowPx = with(density) { 6.dp.roundToPx() }
             val topImmersiveHeight = with(density) {
@@ -1420,6 +1413,7 @@ fun KototoroApp(
                     MainTopChrome(
                         effectiveTopBarOverrideState = effectiveTopBarOverrideState,
                         isLandscapeNavigation = isLandscapeNavigation,
+                        isLayeredSurface = isLayeredSurface,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
                         heroTransitionInProgress = heroTransitionInProgress,
                         isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
@@ -1515,6 +1509,7 @@ fun KototoroApp(
                     )
                     MainBottomChrome(
                         isLandscapeNavigation = isLandscapeNavigation,
+                        isLayeredSurface = isLayeredSurface,
                         chromeSharedTransitionScope = chromeSharedTransitionScope,
                         heroTransitionInProgress = heroTransitionInProgress,
                         isDetailsChromeTransitionPending = isDetailsChromeTransitionPending,
@@ -1892,6 +1887,7 @@ fun KototoroApp(
 private fun BoxScope.MainTopChrome(
     effectiveTopBarOverrideState: TopBarOverrideState?,
     isLandscapeNavigation: Boolean,
+    isLayeredSurface: Boolean,
     chromeSharedTransitionScope: SharedTransitionScope?,
     heroTransitionInProgress: Boolean,
     isDetailsChromeTransitionPending: Boolean,
@@ -1968,6 +1964,12 @@ private fun BoxScope.MainTopChrome(
             modifier = topChromeModifier,
         )
     } else {
+        val compactTabsOffsetModifier = Modifier.offset {
+            androidx.compose.ui.unit.IntOffset(
+                0,
+                (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt(),
+            )
+        }
         val topContent: @Composable () -> Unit = {
             KototoroTopBar(
                 query = query,
@@ -2016,19 +2018,19 @@ private fun BoxScope.MainTopChrome(
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
                 displayOptionsExtraContent = displayOptionsExtraContent,
-                modifier = topChromeModifier.offset {
-                    androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
+                modifier = if (isLayeredSurface) {
+                    compactTabsOffsetModifier
+                } else {
+                    topChromeModifier.then(compactTabsOffsetModifier)
                 },
             )
         }
-        if (LocalBackgroundStyle.current == BackgroundStyle.ELEVATED_CONTAINERS) {
+        if (isLayeredSurface) {
             Surface(
                 shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 shadowElevation = 4.dp,
-                modifier = topChromeModifier.offset {
-                    androidx.compose.ui.unit.IntOffset(0, (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt())
-                }
+                modifier = topChromeModifier,
             ) {
                 topContent()
             }
@@ -2177,36 +2179,27 @@ private fun ContinueReadingFab(
     coverModel: Any?,
     modifier: Modifier = Modifier,
 ) {
-    val backdrop = LocalLiquidGlassBackdrop.current
-    val useBackdrop = LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val hasCover = coverModel != null
-    if (useBackdrop) {
-        Box(
-            modifier = modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick,
-                )
-                .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { CircleShape },
-                    effects = {
-                        vibrancy()
-                        blur(4.dp.toPx())
-                    },
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
-            contentAlignment = Alignment.Center,
+    if (isIosStyle) {
+        GlassSurface(
+            modifier = modifier.size(56.dp),
+            shape = CircleShape,
+            style = GlassDefaults.regularStyle(),
+            componentRole = GlassComponentRole.Surface,
         ) {
-            ResumeActionArtwork(
-                action = action,
-                coverModel = coverModel,
-                fallbackIconTint = MaterialTheme.colorScheme.onSurface,
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                ResumeActionArtwork(
+                    action = action,
+                    coverModel = coverModel,
+                    fallbackIconTint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
         }
     } else {
         Surface(
@@ -2260,6 +2253,7 @@ private fun BoxScope.ResumeActionArtwork(
 @Composable
 private fun BoxScope.MainBottomChrome(
     isLandscapeNavigation: Boolean,
+    isLayeredSurface: Boolean,
     chromeSharedTransitionScope: SharedTransitionScope?,
     heroTransitionInProgress: Boolean,
     isDetailsChromeTransitionPending: Boolean,
@@ -2326,15 +2320,12 @@ private fun BoxScope.MainBottomChrome(
                 continueReadingCoverModel = resumeCoverModel,
             )
         }
-        if (
-            LocalBackgroundStyle.current == BackgroundStyle.ELEVATED_CONTAINERS &&
-            !isLandscapeNavigation
-        ) {
+        if (isLayeredSurface && !isLandscapeNavigation) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 shadowElevation = 6.dp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 bottomNavContent()
             }

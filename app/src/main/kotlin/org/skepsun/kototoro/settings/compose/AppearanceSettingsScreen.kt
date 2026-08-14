@@ -78,6 +78,7 @@ data class AppearanceSettingsUiState(
     val isNavBarPinned: Boolean,
     val isNavLabelsVisible: Boolean,
     val isNavFloating: Boolean,
+    val isNavLayeredSurface: Boolean,
     val isNavExpressivePillEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
@@ -171,6 +172,7 @@ fun AppearanceSettingsScreen(
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
+    onNavLayeredSurfaceChange: (Boolean) -> Unit,
     onNavExpressivePillChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
@@ -215,6 +217,7 @@ fun AppearanceSettingsScreen(
                 onNavPinnedChange = onNavPinnedChange,
                 onNavLabelsVisibleChange = onNavLabelsVisibleChange,
                 onNavFloatingChange = onNavFloatingChange,
+                onNavLayeredSurfaceChange = onNavLayeredSurfaceChange,
                 onNavExpressivePillChange = onNavExpressivePillChange,
                 onNavHeightChange = onNavHeightChange,
                 onNavFloatingHeightChange = onNavFloatingHeightChange,
@@ -283,11 +286,6 @@ fun AppearanceSettingsScreen(
                         value = state.backgroundStyle,
                         options = options.backgroundStyles,
                         summary = stringResource(R.string.background_style_summary),
-                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                            stringResource(R.string.appearance_background_ios_note)
-                        } else {
-                            null
-                        },
                         onValueChange = onBackgroundStyleChange,
                     )
                 }
@@ -847,6 +845,7 @@ private fun AppearanceNavigationSettingsScreen(
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
+    onNavLayeredSurfaceChange: (Boolean) -> Unit,
     onNavExpressivePillChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
@@ -875,6 +874,15 @@ private fun AppearanceNavigationSettingsScreen(
             checked = state.isNavFloating,
             summary = stringResource(R.string.pref_nav_floating_summary),
             onCheckedChange = onNavFloatingChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_layered_surface),
+            iconRes = R.drawable.ic_view_column,
+            checked = state.isNavLayeredSurface,
+            summary = stringResource(R.string.pref_nav_layered_surface_summary),
+            onCheckedChange = onNavLayeredSurfaceChange,
         )
     }
     item {
@@ -911,6 +919,7 @@ private fun AppearanceNavigationSettingsScreen(
             valueRange = 48..84,
             step = 4,
             valueText = { "${it}dp" },
+            enabled = state.isNavFloating,
             onValueChange = onNavFloatingHeightChange,
         )
     }

@@ -203,6 +203,8 @@ private class AppearanceSettingsCoordinator(
         val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
         val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
         val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
+        val isNavLayeredSurface =
+            settings.observeAsState(AppSettings.KEY_NAV_LAYERED_SURFACE) { isNavLayeredSurface }.value
         val isNavExpressivePillEnabled =
             settings.observeAsState(AppSettings.KEY_NAV_EXPRESSIVE_PILL) { isNavExpressivePillEnabled }.value
         val navHeight = settings.observeAsState(AppSettings.KEY_NAV_HEIGHT) { navHeight }.value
@@ -260,7 +262,7 @@ private class AppearanceSettingsCoordinator(
         val effectiveSharedElementTransitionsEnabled =
             isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
 
-        val backgroundStyleOptions = buildBackgroundStyleOptions(interfaceStyle)
+        val backgroundStyleOptions = buildBackgroundStyleOptions()
         val effectiveBackgroundStyle = backgroundStyle.takeIf { selected ->
             backgroundStyleOptions.any { it.value == selected }
         } ?: BackgroundStyle.DEFAULT
@@ -337,6 +339,7 @@ private class AppearanceSettingsCoordinator(
             isNavBarPinned = isNavBarPinned,
             isNavLabelsVisible = isNavLabelsVisible,
             isNavFloating = isNavFloating,
+            isNavLayeredSurface = isNavLayeredSurface,
             isNavExpressivePillEnabled = isNavExpressivePillEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
@@ -404,6 +407,7 @@ private class AppearanceSettingsCoordinator(
             onNavPinnedChange = { settings.isNavBarPinned = it },
             onNavLabelsVisibleChange = { settings.isNavLabelsVisible = it },
             onNavFloatingChange = { settings.isNavFloating = it },
+            onNavLayeredSurfaceChange = { settings.isNavLayeredSurface = it },
             onNavExpressivePillChange = { settings.isNavExpressivePillEnabled = it },
             onNavHeightChange = { settings.navHeight = it },
             onNavFloatingHeightChange = { settings.navFloatingHeight = it },
@@ -474,21 +478,10 @@ private class AppearanceSettingsCoordinator(
         return labels.zip(values).map { (label, value) -> SettingsChoiceOption(value, label) }
     }
 
-    private fun buildBackgroundStyleOptions(
-        interfaceStyle: InterfaceStyle,
-    ): List<SettingsChoiceOption<BackgroundStyle>> {
-        val commonStyles = listOf(
-            SettingsChoiceOption(BackgroundStyle.DEFAULT, context.getString(R.string.bg_style_default)),
-            SettingsChoiceOption(BackgroundStyle.SYSTEM_DYNAMIC_TINT, context.getString(R.string.bg_style_system_tint)),
-            SettingsChoiceOption(BackgroundStyle.ELEVATED_CONTAINERS, context.getString(R.string.bg_style_elevated_containers)),
-            SettingsChoiceOption(BackgroundStyle.DYNAMIC_ARTWORK_BLUR, context.getString(R.string.bg_style_artwork_blur)),
-        )
-        if (interfaceStyle.normalized() != InterfaceStyle.IOS) {
-            return commonStyles
+    private fun buildBackgroundStyleOptions(): List<SettingsChoiceOption<BackgroundStyle>> {
+        return BackgroundStyle.selectableEntries.map { style ->
+            SettingsChoiceOption(style, context.getString(style.titleResId))
         }
-        return commonStyles + listOf(
-            SettingsChoiceOption(BackgroundStyle.DYNAMIC_TONAL_GLASS, context.getString(R.string.bg_style_tonal_glass)),
-        )
     }
 
     private fun buildFontPresetOptions(): List<SettingsChoiceOption<AppFontPreset>> {

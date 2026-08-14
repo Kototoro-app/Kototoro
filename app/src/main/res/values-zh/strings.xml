@@ -1533,6 +1533,8 @@
     <string name="pref_loading_circle_style">加载圆圈与进度条样式</string>
     <string name="pref_loading_circle_style_summary">控制加载圆圈与进度条的外观。</string>
     <string name="pref_nav_floating">悬浮导航栏</string>
+    <string name="pref_nav_layered_surface">层次表面</string>
+    <string name="pref_nav_layered_surface_summary">在顶栏和导航栏外添加圆角抬升表面</string>
     <string name="pref_nav_floating_adaptive_width">悬浮导航栏自适应宽度</string>
     <string name="pref_nav_floating_adaptive_width_summary">导航按钮较少时自动收窄悬浮导航栏</string>
     <string name="pref_nav_floating_height">浮动导航栏高度</string>
@@ -2800,20 +2802,12 @@ SHA-256 指纹:
 
     <!-- 外观与界面风格 -->
     <string name="appearance_mode">明暗模式</string>
-    <string name="background_style">背景与界面材质</string>
-    <string name="background_style_summary">选择页面背景，以及内容表面的呈现方式</string>
-    <string name="appearance_background_ios_note">iOS 风格默认使用色调玻璃，也可以在此修改。</string>
-    <string name="appearance_glass_material_ios_note">iOS 风格默认使用色调玻璃材质。</string>
-    <string name="bg_style_default">纯黑</string>
-    <string name="bg_style_default_summary">简约纯黑背景，同时适合 OLED 屏幕省电</string>
+    <string name="background_style">页面背景</string>
+    <string name="background_style_summary">选择标准主题背景或柔化后的作品图片</string>
+    <string name="bg_style_default">标准背景</string>
+    <string name="bg_style_default_summary">使用当前界面风格定义的标准背景</string>
     <string name="bg_style_artwork_blur">图片背景</string>
     <string name="bg_style_artwork_blur_summary">使用柔化后的作品封面作为应用背景</string>
-    <string name="bg_style_tonal_glass">色调玻璃</string>
-    <string name="bg_style_tonal_glass_summary">使用高级纯色基底和克制的半透明表面（推荐）</string>
-    <string name="bg_style_system_tint">系统配色</string>
-    <string name="bg_style_system_tint_summary">使用系统壁纸颜色为深色界面添加色调</string>
-    <string name="bg_style_elevated_containers">层次表面</string>
-    <string name="bg_style_elevated_containers_summary">使用更明亮的表面和圆角容器营造层次感</string>
     <string name="welcome_spaces_title">划分独立 Space</string>
     <string name="welcome_spaces_summary">Spaces 会为漫画、小说和动画分别保留导航、浏览偏好以及阅读或播放上下文。之后可在“设置 - 用户 - Spaces”中调整高级选项并创建自定义 Space。</string>
     <string name="theme_name_ios">iOS 蓝</string>

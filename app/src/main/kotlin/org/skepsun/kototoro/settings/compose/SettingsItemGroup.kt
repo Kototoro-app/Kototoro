@@ -13,7 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 
@@ -37,11 +39,16 @@ internal fun resolveSettingsGroupItemPosition(index: Int, total: Int): SettingsG
 
 internal fun settingsGroupItemContainerColor(
     interfaceStyle: InterfaceStyle,
-    surfaceColor: Color,
-): Color = if (interfaceStyle == InterfaceStyle.IOS) {
-    surfaceColor.copy(alpha = SETTINGS_IOS_CONTAINER_ALPHA)
+    backgroundStyle: BackgroundStyle,
+    surfaceContainerLow: Color,
+    surfaceContainer: Color,
+): Color = if (
+    interfaceStyle == InterfaceStyle.IOS &&
+    backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+) {
+    surfaceContainerLow.copy(alpha = SETTINGS_IOS_CONTAINER_ALPHA)
 } else {
-    surfaceColor
+    surfaceContainer
 }
 
 class SettingsItemGroupScope internal constructor() {
@@ -89,7 +96,9 @@ fun SettingsItemGroup(
     val tokens = LocalInterfaceStyleTokens.current
     val containerColor = settingsGroupItemContainerColor(
         interfaceStyle = LocalInterfaceStyle.current,
-        surfaceColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        backgroundStyle = LocalBackgroundStyle.current,
+        surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow,
+        surfaceContainer = MaterialTheme.colorScheme.surfaceContainer,
     )
     Column(
         modifier = modifier.fillMaxWidth(),

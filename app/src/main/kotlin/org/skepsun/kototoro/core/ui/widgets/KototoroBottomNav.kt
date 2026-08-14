@@ -59,12 +59,10 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
-import org.skepsun.kototoro.core.ui.glass.GlassBottomBarContainer
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
-import org.skepsun.kototoro.core.ui.glass.glassContainerShadow
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
@@ -197,8 +195,6 @@ fun KototoroBottomNav(
             borderAlpha = 0f,
         )
     }
-    val navBackdrop = LocalLiquidGlassBackdrop.current
-
     if (useNavigationRail) {
         Surface(
             modifier = navBarModifier,
@@ -319,15 +315,9 @@ fun KototoroBottomNav(
             ) {
                 MainNavBottomContainer(
                     modifier = Modifier
-                        .wrapContentWidth()
-                        .mainNavBackdrop(
-                            shape = RoundedCornerShape(28.dp),
-                            enabled = isIosStyle,
-                            backdrop = navBackdrop,
-                        ),
+                        .wrapContentWidth(),
                     style = navContainerStyle,
                     shape = RoundedCornerShape(28.dp),
-                    useBackdrop = isIosStyle,
                 ) {
                     FloatingBottomNavRow(
                         items = activeItems,
@@ -358,18 +348,10 @@ fun KototoroBottomNav(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-                MainNavSurface(
-                modifier = Modifier
-                    .weight(1f)
-                    .mainNavBackdrop(
-                        shape = RoundedCornerShape(0.dp),
-                        enabled = isIosStyle,
-                        backdrop = navBackdrop,
-                    ),
+            MainNavBottomContainer(
+                modifier = Modifier.weight(1f),
                 style = navContainerStyle,
                 shape = RoundedCornerShape(0.dp),
-                useBackdrop = isIosStyle,
-                backdrop = navBackdrop,
             ) {
                 NavigationBar(
                     containerColor = Color.Transparent,
@@ -434,52 +416,15 @@ private fun MainNavBottomContainer(
     modifier: Modifier,
     style: GlassStyle,
     shape: Shape,
-    useBackdrop: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    if (useBackdrop) {
-        Box(
-            modifier = modifier
-                .glassContainerShadow(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
-        ) {
-            content()
-        }
-    } else {
-        GlassBottomBarContainer(
-            modifier = modifier,
-            style = style,
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun MainNavSurface(
-    modifier: Modifier,
-    style: GlassStyle,
-    shape: Shape,
-    useBackdrop: Boolean,
-    backdrop: com.kyant.backdrop.Backdrop?,
-    content: @Composable BoxScope.() -> Unit,
-) {
-    if (useBackdrop) {
-        Box(
-            modifier = modifier
-                .glassContainerShadow(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.34f), shape),
-        ) {
-            content()
-        }
-    } else {
-        GlassSurface(
-            modifier = modifier,
-            style = style,
-            shape = shape,
-            componentRole = GlassComponentRole.BottomBar,
-            content = content,
-        )
-    }
+    GlassSurface(
+        modifier = modifier,
+        style = style,
+        shape = shape,
+        componentRole = GlassComponentRole.BottomBar,
+        content = content,
+    )
 }
 
 @Composable

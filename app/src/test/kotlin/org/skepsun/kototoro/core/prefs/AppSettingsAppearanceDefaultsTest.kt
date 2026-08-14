@@ -66,4 +66,27 @@ class AppSettingsAppearanceDefaultsTest {
 		settings.appFontPreset shouldBe AppFontPreset.INTER
 		settings.expressiveAppFontPreset shouldBe AppFontPreset.INTER
 	}
+
+	@Test
+	fun `legacy surface choices normalize to the standard background`() {
+		BackgroundStyle.DYNAMIC_TONAL_GLASS.normalized() shouldBe BackgroundStyle.DEFAULT
+		BackgroundStyle.SYSTEM_DYNAMIC_TINT.normalized() shouldBe BackgroundStyle.DEFAULT
+		BackgroundStyle.ELEVATED_CONTAINERS.normalized() shouldBe BackgroundStyle.DEFAULT
+		BackgroundStyle.DYNAMIC_ARTWORK_BLUR.normalized() shouldBe BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+	}
+
+	@Test
+	fun `only semantic page backgrounds are selectable`() {
+		BackgroundStyle.selectableEntries shouldBe listOf(
+			BackgroundStyle.DEFAULT,
+			BackgroundStyle.DYNAMIC_ARTWORK_BLUR,
+		)
+	}
+
+	@Test
+	fun `legacy layered background is recognized as a navigation surface`() {
+		BackgroundStyle.ELEVATED_CONTAINERS.usesLayeredNavigationSurface shouldBe true
+		BackgroundStyle.DEFAULT.usesLayeredNavigationSurface shouldBe false
+		BackgroundStyle.DYNAMIC_ARTWORK_BLUR.usesLayeredNavigationSurface shouldBe false
+	}
 }

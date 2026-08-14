@@ -1626,6 +1626,8 @@
     <string name="pref_loading_circle_style">加載圓圈與進度條樣式</string>
     <string name="pref_loading_circle_style_summary">控制加載圓圈與進度條的外觀。</string>
     <string name="pref_nav_floating">懸浮導航欄</string>
+    <string name="pref_nav_layered_surface">層次表面</string>
+    <string name="pref_nav_layered_surface_summary">在頂欄和導航欄外加入圓角抬升表面</string>
     <string name="pref_nav_floating_adaptive_width">懸浮導航欄自適應寬度</string>
     <string name="pref_nav_floating_adaptive_width_summary">導航按鈕較少時自動收窄懸浮導航欄</string>
     <string name="pref_nav_floating_height">浮動導航欄高度</string>
@@ -2637,20 +2639,12 @@ SHA-256 指紋:
 
     <!-- 外觀與界面風格 -->
     <string name="appearance_mode">明暗模式</string>
-    <string name="background_style">背景與界面材質</string>
-    <string name="background_style_summary">選擇頁面背景，以及內容表面的呈現方式</string>
-    <string name="appearance_background_ios_note">iOS 風格預設使用色調玻璃，也可以在此修改。</string>
-    <string name="appearance_glass_material_ios_note">iOS 風格預設使用色調玻璃材質。</string>
-    <string name="bg_style_default">純黑</string>
-    <string name="bg_style_default_summary">簡約純黑背景，同時適合 OLED 螢幕省電</string>
+    <string name="background_style">頁面背景</string>
+    <string name="background_style_summary">選擇標準主題背景或柔化後的作品圖片</string>
+    <string name="bg_style_default">標準背景</string>
+    <string name="bg_style_default_summary">使用目前界面風格定義的標準背景</string>
     <string name="bg_style_artwork_blur">圖片背景</string>
     <string name="bg_style_artwork_blur_summary">使用柔化後的作品封面作為應用背景</string>
-    <string name="bg_style_tonal_glass">色調玻璃</string>
-    <string name="bg_style_tonal_glass_summary">使用高級純色基底和克制的 Haze 表面（推薦）</string>
-    <string name="bg_style_system_tint">系統配色</string>
-    <string name="bg_style_system_tint_summary">使用系統桌布顏色為深色界面添加色調</string>
-    <string name="bg_style_elevated_containers">層次表面</string>
-    <string name="bg_style_elevated_containers_summary">使用更明亮的表面和圓角容器營造層次感</string>
     <string name="welcome_spaces_title">劃分獨立 Space</string>
     <string name="welcome_spaces_summary">Spaces 會為漫畫、小說和動畫分別保留導航、瀏覽偏好以及閱讀或播放上下文。之後可在「設定 - 使用者 - Spaces」中調整進階選項並建立自訂 Space。</string>
     <string name="theme_name_ios">iOS 藍</string>

@@ -189,6 +189,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
 	init {
 		clearDeprecatedAllSourcesEnabledFlag()
+		migrateLegacyAppearancePreferences()
+	}
+
+	private fun migrateLegacyAppearancePreferences() {
+		val legacyStyle = prefs.getEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DEFAULT)
+		val shouldMigrateLayeredSurface = legacyStyle.usesLayeredNavigationSurface &&
+			!prefs.contains(KEY_NAV_LAYERED_SURFACE)
+		if (legacyStyle == legacyStyle.normalized() && !shouldMigrateLayeredSurface) return
+		prefs.edit {
+			putEnumValue(KEY_BACKGROUND_STYLE, legacyStyle.normalized())
+			if (shouldMigrateLayeredSurface) {
+				putBoolean(KEY_NAV_LAYERED_SURFACE, true)
+			}
+		}
 	}
 
 	var hasSeenPluginWelcome: Boolean
@@ -299,6 +313,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_NAV_FLOATING, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING, value) }
 
+	var isNavLayeredSurface: Boolean
+		get() = prefs.getBoolean(KEY_NAV_LAYERED_SURFACE, false)
+		set(value) = prefs.edit { putBoolean(KEY_NAV_LAYERED_SURFACE, value) }
+
 	var isNavFloatingAdaptiveWidth: Boolean
 		get() = prefs.getBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, true)
 		set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
@@ -338,9 +356,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 					prefs.getString(KEY_COLOR_THEME, null) == ColorScheme.IOS.name
 				) {
 					putEnumValue(KEY_COLOR_THEME, ColorScheme.default)
-				}
-				if (normalizedValue == InterfaceStyle.IOS && !prefs.contains(KEY_BACKGROUND_STYLE)) {
-					putEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DYNAMIC_TONAL_GLASS)
 				}
 			}
 		}
@@ -2107,6 +2122,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	}
 
 	private fun migrateLegacyUiPreferences() {
+		migrateLegacyAppearancePreferences()
 		val sanitizedSearchSuggestionTypes = searchSuggestionTypes
 		val sanitizedBadges = mangaListBadges
 		val sanitizedSelectedGroupTab = BrowseGroupTab.fromId(getSelectedGroupTab() ?: BrowseGroupTab.All.id).id
@@ -2632,6 +2648,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_NAV_LABELS = "nav_labels"
 		const val KEY_NAV_PINNED = "nav_pinned"
 		const val KEY_NAV_FLOATING = "nav_floating"
+		const val KEY_NAV_LAYERED_SURFACE = "nav_layered_surface"
 		const val KEY_NAV_FLOATING_ADAPTIVE_WIDTH = "nav_floating_adaptive_width"
 		const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
 		const val KEY_NAV_HEIGHT = "nav_height"

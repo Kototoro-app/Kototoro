@@ -132,6 +132,16 @@ Material 顶栏建议：
 - 禁用态才允许 on-color alpha。
 - 深色模式禁止把正常文字统一处理成灰色；关键文字必须保持 `onSurface` 对比度。
 
+深色与 AMOLED 采用两套明确策略：普通深色直接使用当前主题生成的 `background`、`surface` 和
+`surfaceContainer*` 色阶，不额外向白色提升；AMOLED 在非图片背景下使用纯黑画布，并依次使用
+`#121212`、`#1A1A1A`、`#222222`、`#2A2A2A` 表达容器层级。动态图片背景属于用户主动选择，
+不由 AMOLED 设置覆盖，但其内容和 Chrome 仍必须使用语义 Surface 保证对比度。
+
+“页面背景”只决定背景来源：标准主题背景或动态图片背景。容器材质不得作为背景选项重复暴露；
+Material 3 Expressive 自动使用语义 `surfaceContainer*`，iOS 自动使用共享 Glass Surface，主题色由
+“配色方案”控制，纯黑画布由 AMOLED 开关控制。旧版色调玻璃、系统色调和抬升容器配置统一迁移为标准背景。
+旧“层次表面”迁移到“导航栏外观 → 层次表面”，并保留原有的普通或悬浮导航选择。
+
 ### 4.5 排版
 
 - 页面主标题：`headlineSmall` 或适配大顶栏的官方 title style。
@@ -426,7 +436,8 @@ Miuix Scaffold 为 overlay、popup 和 dialog 提供统一宿主。这与 Kototo
 - 顶栏滚动后使用克制的半透明 `surfaceContainer`，不模糊；
 - 分组标题置于共同容器外；
 - 分组使用位置感知的组合 Surface：每项保持独立命中与反馈，首尾外圆角共同表达组轮廓；
-- 组内条目使用稳定的 `surfaceContainerLow`，默认以 `2dp` 间隙分隔；
+- 组内条目在 Material 和普通背景 iOS 下使用稳定的 `surfaceContainer`；iOS 仅在动态图片背景下使用
+  半透明 `surfaceContainerLow`，默认以 `2dp` 间隙分隔；
 - 行之间默认不画全宽 Divider，仅在语义分区必要时使用；
 - 单行视觉高度目标 `52–56dp`，双行目标 `64–72dp`；
 - 尾部开关或箭头对齐主标题视觉中心；

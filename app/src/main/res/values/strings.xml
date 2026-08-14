@@ -240,20 +240,12 @@
     <string name="zoom_mode_keep_start">Keep at start</string>
     <string name="black_dark_theme">Black</string>
     <string name="black_dark_theme_summary">Uses less power on AMOLED screens</string>
-    <string name="background_style">Background and surfaces</string>
-    <string name="background_style_summary">Choose the page background and the look of its surfaces</string>
-    <string name="appearance_background_ios_note">iOS style defaults to Tonal glass; you can change it here.</string>
-    <string name="appearance_glass_material_ios_note">iOS style defaults to the Tonal glass material.</string>
-    <string name="bg_style_default">Solid black</string>
-    <string name="bg_style_default_summary">Pure black for a minimal look and OLED power savings</string>
+    <string name="background_style">Page background</string>
+    <string name="background_style_summary">Choose a standard theme background or blurred artwork</string>
+    <string name="bg_style_default">Standard background</string>
+    <string name="bg_style_default_summary">Use the standard background defined by the interface style</string>
     <string name="bg_style_artwork_blur">Blurred artwork</string>
     <string name="bg_style_artwork_blur_summary">Use a softened cover image as the app background</string>
-    <string name="bg_style_tonal_glass">Tonal glass</string>
-    <string name="bg_style_tonal_glass_summary">Use refined solid colors with restrained translucent surfaces (recommended)</string>
-    <string name="bg_style_system_tint">System colors</string>
-    <string name="bg_style_system_tint_summary">Tint dark surfaces with colors from the system wallpaper</string>
-    <string name="bg_style_elevated_containers">Layered surfaces</string>
-    <string name="bg_style_elevated_containers_summary">Use brighter surfaces and rounded containers to create depth</string>
     <string name="backup_restore">Backup and restore</string>
     <string name="create_backup">Backup</string>
     <string name="restore_backup">Restore from backup</string>
@@ -3290,6 +3282,8 @@
 
     <string name="pref_nav_floating">Floating navigation bar</string>
     <string name="pref_nav_floating_summary">Add a margin around the bottom navigation bar so it appears floating</string>
+    <string name="pref_nav_layered_surface">Layered surfaces</string>
+    <string name="pref_nav_layered_surface_summary">Add rounded elevated surfaces around the top and navigation bars</string>
     <string name="pref_nav_expressive_pill">Navigation pill button</string>
     <string name="pref_nav_expressive_pill_summary">Use a pill-shaped selected item with an expanding label in the floating navigation bar</string>
     <string name="pref_nav_floating_adaptive_width">Adaptive floating navigation width</string>
@@ -3453,7 +3447,7 @@
     <string name="appearance_badges_group_summary">Configure the information shown in each corner of list cards</string>
     <string name="appearance_search_filters_group_summary">Language, content type, and source-tag controls</string>
     <string name="appearance_navigation_group">Navigation appearance</string>
-    <string name="appearance_navigation_group_summary">Pinning, labels, floating style, and dimensions</string>
+    <string name="appearance_navigation_group_summary">Pinning, labels, floating and layered surfaces, and dimensions</string>
     <string name="custom_spaces">Space definitions</string>
     <string name="add_custom_space">Add custom space</string>
     <string name="edit_custom_space">Edit custom space</string>

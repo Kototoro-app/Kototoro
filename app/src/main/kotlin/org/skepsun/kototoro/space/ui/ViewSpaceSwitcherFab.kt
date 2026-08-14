@@ -10,7 +10,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.space.domain.SpaceContext
 import org.skepsun.kototoro.space.domain.SpaceId
@@ -23,8 +22,8 @@ internal fun ViewSpaceSwitcherFab(
 	Box(
 		modifier = Modifier
 			.fillMaxSize()
-			.background(Color.White.copy(alpha = 0.08f), CircleShape)
-			.border(1.dp, Color.White.copy(alpha = 0.24f), CircleShape),
+			.background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+			.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
 	) {
 		CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
 			SpaceSwitcherIcon(

@@ -8,14 +8,17 @@
 
 	<style name="ThemeOverlay.Kototoro.Amoled" parent="">
 		<item name="colorSurface">@color/background_amoled</item>
+		<item name="colorSurfaceDim">@color/background_amoled</item>
+		<item name="colorSurfaceBright">@color/surface_amoled_bright</item>
 		<item name="android:colorBackground">@color/background_amoled</item>
 		<item name="android:windowBackground">@color/background_amoled</item>
 		<item name="colorBackgroundFloating">@color/background_amoled</item>
-		<item name="colorSurfaceVariant">@color/surface_amoled</item>
-		<item name="colorSurfaceContainerLow">@color/background_amoled</item>
-		<item name="colorSurfaceContainer">@color/surface_amoled</item>
-		<item name="colorSurfaceContainerHigh">@color/surface_amoled</item>
-		<item name="colorSurfaceContainerHighest">@color/surface_amoled</item>
+		<item name="colorSurfaceVariant">@color/surface_amoled_variant</item>
+		<item name="colorSurfaceContainerLowest">@color/background_amoled</item>
+		<item name="colorSurfaceContainerLow">@color/surface_amoled_container_low</item>
+		<item name="colorSurfaceContainer">@color/surface_amoled_container</item>
+		<item name="colorSurfaceContainerHigh">@color/surface_amoled_container_high</item>
+		<item name="colorSurfaceContainerHighest">@color/surface_amoled_container_highest</item>
 	</style>
 
 	<!-- Monet theme only support S+ -->
