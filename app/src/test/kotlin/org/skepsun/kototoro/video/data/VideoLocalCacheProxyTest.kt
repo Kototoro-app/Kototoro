@@ -1,9 +1,20 @@
 package org.skepsun.kototoro.video.data
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class VideoLocalCacheProxyTest {
+
+    @Test
+    fun `sanitizes junk before a valid HLS manifest`() {
+        assertEquals(
+            "#EXTM3U\n#EXT-X-VERSION:3\nsegment.ts",
+            sanitizeHlsManifest("garbage-prefix\u0000\n#EXTM3U\n#EXT-X-VERSION:3\nsegment.ts"),
+        )
+        assertNull(sanitizeHlsManifest("<html>upstream error</html>"))
+        assertNull(sanitizeHlsManifest("error mentioning #EXTM3U without playlist tags"))
+    }
 
     @Test
     fun `dynamic source key ignores endpoint subpath`() {

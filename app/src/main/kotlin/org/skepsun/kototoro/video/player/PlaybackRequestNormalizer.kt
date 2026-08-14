@@ -2,6 +2,12 @@ package org.skepsun.kototoro.video.player
 
 import java.net.URI
 
+internal fun isAniyomiLocalHlsProxyUrl(url: String): Boolean {
+	val uri = runCatching { URI(url) }.getOrNull() ?: return false
+	return (uri.host.equals("localhost", ignoreCase = true) || uri.host == "127.0.0.1") &&
+		uri.path.equals("/m3u8", ignoreCase = true)
+}
+
 enum class PlaybackRoute {
 	DIRECT,
 	TRANSFORMING_HLS_PROXY,

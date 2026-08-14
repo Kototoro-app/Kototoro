@@ -123,6 +123,8 @@ private class VideoEnhancementRenderer(
 	private var frameDiagnostics = ""
 	private var configRevision = 0L
 	private var renderedConfigRevision = -1L
+	private var pendingPipelineChange = false
+	private var pendingSizeChange = false
 	private var nativeTarget: RenderTarget? = null
 	private var fsrTarget: RenderTarget? = null
 	private val animeTargets = mutableListOf<RenderTarget>()
@@ -156,14 +158,10 @@ private class VideoEnhancementRenderer(
 			)
 		}
 		if (pipelineChanged || sizeChanged) firstFrameSent = false
-		if (sizeChanged) {
-			surfaceTexture?.setDefaultBufferSize(config.sourceWidth, config.sourceHeight)
-			releaseRenderTargets()
-		}
-		if (pipelineChanged) {
-			releaseRenderTargets()
-			prepareAnimePrograms()
-		}
+		// queueEvent can run while GLSurfaceView is resuming but before EGL has made a
+		// context current. Defer every GL operation until a renderer callback.
+		pendingSizeChange = pendingSizeChange || sizeChanged
+		pendingPipelineChange = pendingPipelineChange || pipelineChanged
 	}
 
 	override fun onSurfaceCreated(gl: GL10?, eglConfig: EGLConfig?) {
@@ -184,6 +182,8 @@ private class VideoEnhancementRenderer(
 			fsrEasuProgram = createProgram(VERTEX_SHADER, FSR_EASU_SHADER, "AMD FSR 1.0 EASU")
 			fsrRcasProgram = createProgram(VERTEX_SHADER, FSR_RCAS_SHADER, "AMD FSR 1.0 RCAS")
 			prepareAnimePrograms()
+			pendingPipelineChange = false
+			pendingSizeChange = false
 			ensureDecoderSurface()
 		}.onFailure(onError)
 	}
@@ -196,6 +196,7 @@ private class VideoEnhancementRenderer(
 
 	override fun onDrawFrame(gl: GL10?) {
 		runCatching {
+			applyPendingConfigChanges()
 			val input = surfaceTexture ?: return
 			if (framePending) {
 				framePending = false
@@ -226,6 +227,17 @@ private class VideoEnhancementRenderer(
 				onFirstFrame()
 			}
 		}.onFailure(onError)
+	}
+
+	private fun applyPendingConfigChanges() {
+		if (!pendingPipelineChange && !pendingSizeChange) return
+		if (pendingSizeChange) {
+			surfaceTexture?.setDefaultBufferSize(config.sourceWidth, config.sourceHeight)
+		}
+		releaseRenderTargets()
+		if (pendingPipelineChange) prepareAnimePrograms()
+		pendingPipelineChange = false
+		pendingSizeChange = false
 	}
 
 	override fun onFrameAvailable(surfaceTexture: SurfaceTexture?) {

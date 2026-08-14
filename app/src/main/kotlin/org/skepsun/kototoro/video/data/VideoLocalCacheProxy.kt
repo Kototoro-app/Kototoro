@@ -44,6 +44,14 @@ internal fun rewriteHlsPlaylistUris(
     }
     .joinToString("\n")
 
+internal fun sanitizeHlsManifest(content: String): String? {
+    val markerIndex = content.indexOf("#EXTM3U")
+    if (markerIndex < 0) return null
+    val manifest = content.substring(markerIndex)
+    if (!manifest.contains("#EXT-X-") && !manifest.contains("#EXTINF")) return null
+    return manifest
+}
+
 internal fun dynamicSourceKey(uri: String): String? {
     if (!uri.startsWith("/dynamic/")) return null
     return uri.removePrefix("/dynamic/").substringBefore('/').takeIf { it.isNotBlank() }
@@ -133,11 +141,22 @@ class VideoLocalCacheProxy @Inject constructor(
     @Volatile
     private var server: ProxyServer? = null
 
-    fun getProxyUrl(url: String, headers: Map<String, String>, source: ContentSource? = null): String {
+    fun getProxyUrl(
+        url: String,
+        headers: Map<String, String>,
+        source: ContentSource? = null,
+        sanitizeHls: Boolean = false,
+    ): String {
         val normalizedHeaders = normalizeHeaders(headers)
-        val key = buildKey(url, normalizedHeaders)
-        sourceMap[key] = SourceEntry(url = url, headers = normalizedHeaders, source = source)
-        if (url.lowercase(Locale.ROOT).contains(".m3u8")) {
+        val key = buildKey(url, normalizedHeaders, sanitizeHls)
+        sourceMap[key] = SourceEntry(
+            url = url,
+            headers = normalizedHeaders,
+            source = source,
+            sanitizeHls = sanitizeHls,
+            forcePlaylist = sanitizeHls,
+        )
+        if (sanitizeHls || url.lowercase(Locale.ROOT).contains(".m3u8")) {
             // Playlists are rewritten dynamically; stale cached playlist content can break child URL proxying.
             File(cacheRoot, "$key.bin").delete()
             File(cacheRoot, "$key.meta").delete()
@@ -232,9 +251,15 @@ class VideoLocalCacheProxy @Inject constructor(
                 val lower = key.lowercase(Locale.ROOT)
                 lower != "host" &&
                     lower != "range" &&
-                    lower != "connection" &&
+                lower != "connection" &&
                     lower != "content-length" &&
-                    lower != "content-encoding"
+                    lower != "content-encoding" &&
+                    // Let OkHttp negotiate and transparently decode compression. Forwarding an
+                    // explicit value makes response bodies remain compressed for playlist parsing.
+                    lower != "accept-encoding" &&
+                    // The extension's loopback endpoint generates a fresh playlist on every call.
+                    lower != "if-modified-since" &&
+                    lower != "if-none-match"
             }
             .toSortedMap(String.CASE_INSENSITIVE_ORDER)
         if (normalized.keys.none { it.equals("Accept", ignoreCase = true) }) {
@@ -243,9 +268,14 @@ class VideoLocalCacheProxy @Inject constructor(
         return normalized
     }
 
-    private fun buildKey(url: String, headers: Map<String, String>): String {
+    private fun buildKey(
+        url: String,
+        headers: Map<String, String>,
+        sanitizeHls: Boolean = false,
+    ): String {
         val canonical = buildString {
             append(url)
+            append("\nsanitize-hls:").append(sanitizeHls)
             headers.forEach { (k, v) ->
                 append('\n').append(k).append(':').append(v)
             }
@@ -338,8 +368,13 @@ class VideoLocalCacheProxy @Inject constructor(
 
     private fun mapChildUrl(parent: SourceEntry, rawUri: String, hostOverride: String? = null): String {
         val abs = resolveAbsoluteUrl(parent.url, rawUri)
-        val childKey = buildKey(abs, parent.headers)
-        sourceMap[childKey] = SourceEntry(url = abs, headers = parent.headers, source = parent.source)
+        val childKey = buildKey(abs, parent.headers, parent.sanitizeHls)
+        sourceMap[childKey] = SourceEntry(
+            url = abs,
+            headers = parent.headers,
+            source = parent.source,
+            sanitizeHls = parent.sanitizeHls,
+        )
         val runningServer = ensureServer()
         val host = hostOverride ?: "127.0.0.1"
         return "http://$host:${runningServer.listeningPort}/video/$childKey"
@@ -395,10 +430,10 @@ class VideoLocalCacheProxy @Inject constructor(
             val lock = getLock(key)
             val requestRange = parseRangeHeader(session.headers["range"])
             val isHead = session.method == Method.HEAD
-            val isPlaylistByUrl = source.url.lowercase(Locale.ROOT).contains(".m3u8")
+            val isPlaylistByUrl = source.forcePlaylist || source.url.lowercase(Locale.ROOT).contains(".m3u8")
 
             val cachedMeta = synchronized(lock) { CacheMeta.load(metaFile) }
-            val bypassCacheForPlaylist = source.url.lowercase(Locale.ROOT).contains(".m3u8")
+            val bypassCacheForPlaylist = isPlaylistByUrl
             val canServeFromCache = synchronized(lock) {
                 if (bypassCacheForPlaylist) return@synchronized false
                 val total = cachedMeta.totalLength
@@ -431,6 +466,12 @@ class VideoLocalCacheProxy @Inject constructor(
                 tag(GZipOptions::class.java, GZipOptions(skip = true))
                 source.source?.let { tag(ContentSource::class.java, it) }
                 source.headers.forEach { (k, v) -> header(k, v) }
+                if (source.sanitizeHls) {
+                    // The extension loopback server can gzip its generated playlist. Requesting
+                    // identity avoids handing encoded bytes to the strict Media3 HLS parser.
+                    header("Accept-Encoding", "identity")
+                    header("Cache-Control", "no-store")
+                }
                 if (!isPlaylistByUrl) {
                     requestRange?.let {
                         header("Range", if (it.end != null) "bytes=${it.start}-${it.end}" else "bytes=${it.start}-")
@@ -458,18 +499,38 @@ class VideoLocalCacheProxy @Inject constructor(
             val contentTypeHeader = upstreamResponse.header("Content-Type")
             if (!isHead && (isPlaylistByUrl || isLikelyPlaylist(source.url, contentTypeHeader))) {
                 val playlistRaw = runCatching { body.string() }.getOrNull()
-                val playlistSource = source.copy(url = upstreamResponse.request.url.toString())
+                val playlistSource = source.copy(
+                    url = upstreamResponse.request.url.toString(),
+                    forcePlaylist = false,
+                )
                 upstreamResponse.close()
                 if (playlistRaw == null) {
                     return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", "Failed to read playlist")
+                }
+                val playlist = if (source.sanitizeHls) sanitizeHlsManifest(playlistRaw) else playlistRaw
+                if (playlist == null) {
+                    Log.w(
+                        TAG,
+                        "compatibility proxy rejected non-HLS response key=$key " +
+                            "contentType=${contentTypeHeader.orEmpty()} size=${playlistRaw.length}",
+                    )
+                    return newFixedLengthResponse(
+                        responseStatus(502),
+                        "text/plain; charset=utf-8",
+                        "Upstream did not return an HLS manifest",
+                    )
                 }
                 // If the request is from a LAN device (e.g. Kodi DLNA), use the LAN IP
                 // so that child URLs in the playlist are reachable from that device.
                 val clientIp = session.headers["remote-addr"]
                     ?: session.headers["http-client-ip"]
                 val hostOverride = resolveHostForClient(clientIp)
-                val rewritten = rewritePlaylistContent(playlistSource, playlistRaw, hostOverride)
-                Log.d(TAG, "rewrite playlist key=$key size=${playlistRaw.length} -> ${rewritten.length} hostOverride=$hostOverride clientIp=$clientIp")
+                val rewritten = rewritePlaylistContent(playlistSource, playlist, hostOverride)
+                Log.d(
+                    TAG,
+                    "rewrite playlist key=$key size=${playlistRaw.length} sanitized=${playlist.length} " +
+                        "rewritten=${rewritten.length} hostOverride=$hostOverride clientIp=$clientIp",
+                )
                 val response = newFixedLengthResponse(
                     Response.Status.OK,
                     "application/vnd.apple.mpegurl; charset=utf-8",
@@ -607,6 +668,8 @@ class VideoLocalCacheProxy @Inject constructor(
         val url: String,
         val headers: Map<String, String>,
         val source: ContentSource?,
+        val sanitizeHls: Boolean = false,
+        val forcePlaylist: Boolean = false,
     )
 
     private data class DynamicSourceEntry(

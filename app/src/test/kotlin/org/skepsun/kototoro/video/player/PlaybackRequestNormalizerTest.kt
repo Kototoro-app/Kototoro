@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.video.player
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PlaybackRequestNormalizerTest {
@@ -48,6 +50,10 @@ class PlaybackRequestNormalizerTest {
 
 		assertEquals(PlaybackMediaKind.HLS, result.mediaKind)
 		assertEquals(PlaybackRoute.DIRECT, result.route)
+		assertTrue(isAniyomiLocalHlsProxyUrl("http://localhost:41565/m3u8?url=video"))
+		assertTrue(isAniyomiLocalHlsProxyUrl("http://127.0.0.1:41565/m3u8?url=video"))
+		assertFalse(isAniyomiLocalHlsProxyUrl("http://localhost:41565/segment?url=video"))
+		assertFalse(isAniyomiLocalHlsProxyUrl("https://cdn.example/master.m3u8"))
 	}
 
 	@Test

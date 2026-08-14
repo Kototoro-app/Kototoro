@@ -97,6 +97,7 @@ import org.skepsun.kototoro.video.player.PlaybackMediaKind
 import org.skepsun.kototoro.video.player.PlaybackRequest
 import org.skepsun.kototoro.video.player.PlaybackRequestNormalizer
 import org.skepsun.kototoro.video.player.HlsManifestProbe
+import org.skepsun.kototoro.video.player.isAniyomiLocalHlsProxyUrl
 import org.skepsun.kototoro.video.player.VideoPlayerEngine
 import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
 import org.skepsun.kototoro.video.data.VideoCache
@@ -1769,13 +1770,32 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val isHttpSource = url.startsWith("http://", ignoreCase = true) ||
             url.startsWith("https://", ignoreCase = true)
         val useProxy = shouldUseLocalProxy(url, isHttpSource, source)
+        val aniyomiPlaylistProxyUrl = if (
+            source !is CloudstreamSource && isAniyomiLocalHlsProxyUrl(url)
+        ) {
+            runCatching {
+                videoLocalCacheProxy.getProxyUrl(
+                    url = url,
+                    headers = mergedHeaders,
+                    source = source,
+                    sanitizeHls = true,
+                )
+            }.onFailure { error ->
+                Log.w("VideoPlayerActivity", "Aniyomi HLS compatibility proxy unavailable", error)
+            }.getOrNull()
+        } else {
+            null
+        }
         val dynamicCloudstreamPlaylistUrl = createCloudstreamPlaylistProxyUrl(
             url = url,
             headers = mergedHeaders,
             source = source,
             forceHls = forceHls,
         )
-        val (playUrl, playHeaders) = if (dynamicCloudstreamPlaylistUrl != null) {
+        val (playUrl, playHeaders) = if (aniyomiPlaylistProxyUrl != null) {
+            Log.d("VideoPlayerActivity", "Using Aniyomi HLS compatibility proxy for URL: $url")
+            aniyomiPlaylistProxyUrl to emptyMap<String, String>()
+        } else if (dynamicCloudstreamPlaylistUrl != null) {
             Log.d("VideoPlayerActivity", "Using rewritten Cloudstream playlist proxy for URL: $url")
             dynamicCloudstreamPlaylistUrl to emptyMap<String, String>()
         } else if (useProxy) {
@@ -1790,7 +1810,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             Log.d("VideoPlayerActivity", "Bypass local proxy for URL: $url")
             url to mergedHeaders
         }
-        Log.d("VideoPlayerActivity", "Resolved playback URL: $playUrl, useProxy=$useProxy")
+        Log.d(
+            "VideoPlayerActivity",
+            "Resolved playback URL: $playUrl, useProxy=$useProxy " +
+                "aniyomiCompat=${aniyomiPlaylistProxyUrl != null}",
+        )
         
         val requestId = "${++playbackRequestGeneration}:${playUrl.hashCode()}"
         val mediaKind = normalized.mediaKind.takeUnless { dynamicCloudstreamPlaylistUrl != null }
@@ -2882,10 +2906,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         if (!::enhancementView.isInitialized || !enhancementSurfaceReady) {
-			if (::enhancementView.isInitialized) {
-				enhancementView.visibility = View.VISIBLE
-				enhancementView.alpha = 0f
-			}
+            if (::enhancementView.isInitialized) {
+                enhancementView.visibility = View.VISIBLE
+                enhancementView.alpha = 0f
+            }
             Log.w(
                 "VideoPlayerActivity",
                 "Enhancement requested but surface unavailable viewReady=${::enhancementView.isInitialized} " +
@@ -2911,7 +2935,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         currentEnhancementConfig = config
         enhancementView.configure(config)
         enhancementView.visibility = View.VISIBLE
-		enhancementView.alpha = 1f
+        enhancementView.alpha = 1f
         if (!enhancementOutputAttached) {
             playerView.player = null
             playerView.visibility = View.GONE
@@ -2959,14 +2983,23 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private fun fallbackToDirectOutput() {
+        val wasEnhancementOutputAttached = enhancementOutputAttached
         enhancementSessionEnabled = false
         enhancementOutputAttached = false
         enhancementDisplayedFirstFrame = false
         enhancementFallbackGeneration++
+        if (wasEnhancementOutputAttached) {
+            // setVideoSurface() installs an explicit decoder target. Clear it before PlayerView
+            // installs its SurfaceView, otherwise Media3 can keep rendering to the hidden GL surface.
+            videoPlayer?.clearVideoSurface()
+        }
         if (::enhancementView.isInitialized) {
-			enhancementView.visibility = View.VISIBLE
-			enhancementView.alpha = 0f
-		}
+            if (wasEnhancementOutputAttached) enhancementView.pauseVideoSurface()
+            // GLSurfaceView owns an independent SurfaceControl layer. Keeping it VISIBLE with
+            // alpha=0 can leave its last rendered frame above PlayerView on some devices.
+            enhancementView.visibility = View.GONE
+            enhancementView.alpha = 0f
+        }
         if (::playerView.isInitialized) {
             playerView.visibility = View.VISIBLE
             videoPlayer?.attachPlayerView(playerView)
@@ -3375,7 +3408,18 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (appSettings.videoEnhancementRememberAcrossVideos) {
             appSettings.videoEnhancementRememberedEnabled = enabled
         }
-        if (enabled) applySuperResolutionFromSettings() else fallbackToDirectOutput()
+        if (enabled) {
+            if (::enhancementView.isInitialized) {
+                // Make the GLSurfaceView visible before resuming so Surface creation can complete.
+                // applySuperResolutionFromSettings() will attach the decoder from onSurfaceReady.
+                enhancementView.visibility = View.VISIBLE
+                enhancementView.alpha = 0f
+                enhancementView.resumeVideoSurface()
+            }
+            applySuperResolutionFromSettings()
+        } else {
+            fallbackToDirectOutput()
+        }
         superResolutionDialogVersion++
     }
 
