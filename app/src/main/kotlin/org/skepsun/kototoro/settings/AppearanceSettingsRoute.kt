@@ -8,8 +8,11 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -96,10 +99,13 @@ fun AppearanceSettingsRoute(
     val appLocale = settings.observeAsState(AppSettings.KEY_APP_LOCALE) { appLocales.toLanguageTags() }.value
     val loadingCircleStyle = settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) { loadingCircleStyle }.value
     val popupRadius = settings.observeAsState(AppSettings.KEY_POPUP_RADIUS) { popupRadius }.value
-    val homeHeroMode = settings.observeAsState(
+    val persistedHomeHeroMode = settings.observeAsState(
         AppSettings.KEY_HOME_HERO_MODE,
         AppSettings.KEY_HOME_HERO_STYLE,
     ) { homeHeroMode }.value
+    var homeHeroMode by remember(persistedHomeHeroMode) {
+        mutableStateOf(persistedHomeHeroMode)
+    }
     val homeHeroBackground = settings.observeAsState(
         AppSettings.KEY_HOME_HERO_BACKGROUND,
         AppSettings.KEY_HOME_HERO_STYLE,
@@ -331,7 +337,10 @@ fun AppearanceSettingsRoute(
         onAppLocaleChange = coordinator::updateAppLocale,
         onLoadingCircleStyleChange = { coordinator.updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
         onPopupRadiusChange = { coordinator.updateAndRestart(coroutineScope) { settings.popupRadius = it } },
-        onHomeHeroModeChange = { settings.homeHeroMode = it },
+        onHomeHeroModeChange = {
+            homeHeroMode = it
+            settings.homeHeroMode = it
+        },
         onHomeHeroBackgroundChange = { settings.homeHeroBackground = it },
         onHomeHeroContentLayoutChange = { settings.homeHeroContentLayout = it },
         onListModeChange = { settings.listMode = it },
