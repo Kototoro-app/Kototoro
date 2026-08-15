@@ -3,6 +3,7 @@ package org.skepsun.kototoro.local.data.importer
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.hippo.unifile.UniFile
 import dagger.Reusable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -12,26 +13,18 @@ import kotlinx.coroutines.withContext
 import okio.buffer
 import okio.sink
 import org.skepsun.kototoro.core.exceptions.UnsupportedFileException
-import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.openSource
 import org.skepsun.kototoro.core.util.ext.resolveName
 import org.skepsun.kototoro.core.util.ext.writeAllCancellable
-import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.data.LocalStorageManager
+import org.skepsun.kototoro.local.data.LocalStorageRoot
 import org.skepsun.kototoro.local.data.hasZipExtension
 import org.skepsun.kototoro.local.data.input.LocalContentParser
-import org.skepsun.kototoro.local.data.output.LocalContentOutput
-import org.skepsun.kototoro.local.epub.LocalEpubParser
 import org.skepsun.kototoro.local.domain.model.LocalContent
-import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.parsers.model.ContentChapter
-import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
-import org.skepsun.kototoro.parsers.util.longHashCode
 import java.io.File
 import java.io.IOException
-import java.util.LinkedHashSet
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -93,22 +86,16 @@ class SingleContentImporter @Inject constructor(
 		if (overrideKind != null && overrideKind != kind && !hasZipExtension(name)) {
 			throw UnsupportedFileException("File $name does not match selected content type: $overrideKind")
 		}
-		val outputDir = getOutputDir(overrideKind ?: kind)
-		val dest = if (hasZipExtension(name)) {
-			File(outputDir, name)
+		val outputRoot = getOutputRoot(overrideKind ?: kind)
+		if (hasZipExtension(name)) {
+			publishFile(outputRoot, name) { target ->
+				copyUriTo(uri, target)
+			}
 		} else {
-			File(outputDir, LocalImportSupport.contentFolderName(name)).apply { mkdirs() }
-				.let { File(it, name) }
-		}
-		runInterruptible {
-			contentResolver.openSource(uri)
-		}.use { source ->
-			dest.sink().buffer().use { output ->
-				output.writeAllCancellable(source)
+			publishDirectory(outputRoot, LocalImportSupport.contentFolderName(name)) { target ->
+				copyUriTo(uri, checkNotNull(target.createFile(name)))
 			}
 		}
-		val parseTarget = if (hasZipExtension(name)) dest else requireNotNull(dest.parentFile)
-		LocalContentParser(parseTarget).getContent(withDetails = false)
 	}
 
 	/**
@@ -128,15 +115,12 @@ class SingleContentImporter @Inject constructor(
 		}
 		val childFiles = root.listFiles()
 		val kind = overrideKind ?: classifyImportKind(childFiles.mapNotNull { it.name })
-		val dest = File(getOutputDir(kind), root.requireName())
-		dest.mkdir()
-		for (docFile in childFiles) {
-			docFile.copyTo(dest)
+		val content = publishDirectory(getOutputRoot(kind), root.requireName()) { target ->
+			for (docFile in childFiles) {
+				docFile.copyInto(target)
+			}
 		}
-		if (kind == LocalImportKind.NOVEL) {
-			writeSingleNovelIndex(dest)
-		}
-		return listOf(LocalContentParser(dest).getContent(withDetails = false))
+		return listOf(content)
 	}
 
 	/**
@@ -154,158 +138,59 @@ class SingleContentImporter @Inject constructor(
 		}
 		
 		val results = mutableListOf<LocalContent>()
-		
-		// Import each subdirectory as a separate manga
-		for (folder in subDirs) {
-			val folderChildren = folder.listFiles()
-			val kind = overrideKind ?: classifyImportKind(folderChildren.mapNotNull { it.name })
-			val dest = File(getOutputDir(kind), folder.requireName())
-			dest.mkdir()
-			// Copy folder contents directly to dest (not the folder itself)
-			// to avoid double-nesting like "漫画1/漫画1/图片.webp"
-			for (docFile in folderChildren) {
-				docFile.copyTo(dest)
-			}
-			if (kind == LocalImportKind.NOVEL) {
-				writeSingleNovelIndex(dest)
-			}
-			runCatching { LocalContentParser(dest).getContent(withDetails = false) }
-				.getOrNull()
-				?.let { results.add(it) }
-		}
-		
-		// Also import any supported files at the top level
-		for (file in importableFiles) {
-			val name = file.name ?: continue
-			val kind = overrideKind ?: LocalImportSupport.classifyFileName(name)
-			val destRoot = getOutputDir(kind)
-			val dest = if (hasZipExtension(name)) {
-				File(destRoot, name)
-			} else {
-				File(destRoot, LocalImportSupport.contentFolderName(name)).apply { mkdirs() }
-					.let { File(it, name) }
-			}
-			file.source().use { input ->
-				dest.sink().buffer().use { output ->
-					output.writeAllCancellable(input)
-				}
-			}
-			val parseTarget = if (hasZipExtension(name)) dest else requireNotNull(dest.parentFile)
-			runCatching { LocalContentParser(parseTarget).getContent(withDetails = false) }
-				.getOrNull()
-				?.let { results.add(it) }
-		}
-		
-		return results
-	}
-
-	private suspend fun writeSingleNovelIndex(rootDir: File) = withContext(Dispatchers.IO) {
-		val chapterFiles = rootDir.listFiles()
-			.orEmpty()
-			.filter { file ->
-				file.isFile && when {
-					file.name.endsWith(".epub", ignoreCase = true) -> true
-					file.name.endsWith(".txt", ignoreCase = true) -> true
-					else -> false
-				}
-			}
-			.sortedWith(compareBy(AlphanumComparator()) { it.name })
-		if (chapterFiles.isEmpty()) {
-			return@withContext
-		}
-
-		val authors = LinkedHashSet<String>()
-		var firstDescription: String? = null
-		var order = 0
-		var volumeIndex = 0
-		val indexedChapters = ArrayList<Pair<ContentChapter, String?>>(chapterFiles.size)
-
-		for (file in chapterFiles) {
-			if (file.name.endsWith(".epub", ignoreCase = true)) {
-				val epubContent = runCatching { LocalEpubParser(file).parseContent() }.getOrNull()
-				// 单文件夹小说导入时，每个 EPUB 文件都应稳定对应一个分卷。
-				// 这里使用文件名而不是 EPUB 元数据标题，避免多个分卷因共享同一个书名被错误合并。
-				val volumeTitle = file.name.substringBeforeLast('.').toDisplayTitle()
-				epubContent?.authors?.filter { it.isNotBlank() }?.let(authors::addAll)
-				if (firstDescription == null) {
-					firstDescription = epubContent?.description?.takeIf { it.isNotBlank() }
-				}
-				val internalChapters = epubContent?.chapters.orEmpty()
-				if (internalChapters.isNotEmpty()) {
-					volumeIndex += 1
-					internalChapters.forEachIndexed { chapterIndex, chapter ->
-						order += 1
-						indexedChapters += ContentChapter(
-							id = "${file.absolutePath}#chapter/$chapterIndex".longHashCode(),
-							title = chapter.title,
-							number = order.toFloat(),
-							volume = volumeIndex,
-							url = "localepub://${file.absolutePath}#chapter/$chapterIndex",
-							scanlator = volumeTitle,
-							uploadDate = file.lastModified(),
-							branch = null,
-							source = LocalNovelSource,
-						) to null
+		try {
+			for (folder in subDirs) {
+				val folderChildren = folder.listFiles()
+				val kind = overrideKind ?: classifyImportKind(folderChildren.mapNotNull { it.name })
+				results += publishDirectory(getOutputRoot(kind), folder.requireName()) { target ->
+					for (docFile in folderChildren) {
+						docFile.copyInto(target)
 					}
-					continue
 				}
 			}
 
-			order += 1
-			indexedChapters += ContentChapter(
-				id = file.absolutePath.longHashCode(),
-				title = file.name.substringBeforeLast('.').toDisplayTitle(),
-				number = order.toFloat(),
-				volume = 0,
-				url = file.toURI().toString(),
-				scanlator = null,
-				uploadDate = file.lastModified(),
-				branch = null,
-				source = LocalNovelSource,
-			) to file.name
+			for (file in importableFiles) {
+				val name = file.name ?: continue
+				val kind = overrideKind ?: LocalImportSupport.classifyFileName(name)
+				val outputRoot = getOutputRoot(kind)
+				results += if (hasZipExtension(name)) {
+					publishFile(outputRoot, name) { target -> file.copyFileTo(target) }
+				} else {
+					publishDirectory(outputRoot, LocalImportSupport.contentFolderName(name)) { target ->
+						file.copyFileTo(checkNotNull(target.createFile(name)))
+					}
+				}
+			}
+			return results
+		} catch (e: Throwable) {
+			results.forEach { content -> UniFile.fromUri(context, content.toUri())?.delete() }
+			throw e
 		}
-
-		if (indexedChapters.isEmpty()) {
-			return@withContext
-		}
-
-		val content = Content(
-			id = rootDir.absolutePath.longHashCode(),
-			title = rootDir.name.toDisplayTitle(),
-			altTitles = emptySet(),
-			url = rootDir.toURI().toString(),
-			publicUrl = rootDir.toURI().toString(),
-			rating = RATING_UNKNOWN,
-			contentRating = null,
-			coverUrl = "",
-			tags = emptySet(),
-			state = null,
-			authors = authors,
-			largeCoverUrl = null,
-			description = firstDescription,
-			chapters = null,
-			source = LocalNovelSource,
-		)
-		val index = ContentIndex(null)
-		index.setContentInfo(content)
-		indexedChapters.forEachIndexed { idx, (chapter, fileName) ->
-			index.addChapter(IndexedValue(idx, chapter), fileName, null)
-		}
-		File(rootDir, LocalContentOutput.ENTRY_NAME_INDEX).writeText(index.toString())
 	}
 
-	private suspend fun DocumentFile.copyTo(destDir: File) {
+	private suspend fun DocumentFile.copyInto(destDir: UniFile) {
 		if (isDirectory) {
-			val subDir = File(destDir, requireName())
-			subDir.mkdir()
+			val subDir = checkNotNull(destDir.createDirectory(requireName()))
 			for (docFile in listFiles()) {
-				docFile.copyTo(subDir)
+				docFile.copyInto(subDir)
 			}
 		} else {
-			source().use { input ->
-				File(destDir, requireName()).sink().buffer().use { output ->
-					output.writeAllCancellable(input)
-				}
+			copyFileTo(checkNotNull(destDir.createFile(requireName())))
+		}
+	}
+
+	private suspend fun DocumentFile.copyFileTo(target: UniFile) {
+		source().use { input ->
+			target.openOutputStream().sink().buffer().use { output ->
+				output.writeAllCancellable(input)
+			}
+		}
+	}
+
+	private suspend fun copyUriTo(uri: Uri, target: UniFile) {
+		runInterruptible { contentResolver.openSource(uri) }.use { input ->
+			target.openOutputStream().sink().buffer().use { output ->
+				output.writeAllCancellable(input)
 			}
 		}
 	}
@@ -320,13 +205,111 @@ class SingleContentImporter @Inject constructor(
 		return LocalImportKind.MANGA
 	}
 
-	private suspend fun getOutputDir(kind: LocalImportKind): File {
-		val dir = when (kind) {
-			LocalImportKind.MANGA -> storageManager.getDefaultWriteableDir()
-			LocalImportKind.NOVEL -> storageManager.getDefaultNovelWriteableDir()
-			LocalImportKind.VIDEO -> storageManager.getVideoRoot()
+	private suspend fun getOutputRoot(kind: LocalImportKind): LocalStorageRoot {
+		val root = when (kind) {
+			LocalImportKind.MANGA -> storageManager.getDefaultWriteableRoot()
+			LocalImportKind.NOVEL -> storageManager.getDefaultNovelWriteableRoot()
+			LocalImportKind.VIDEO -> storageManager.getDefaultVideoWriteableRoot()
 		}
-		return dir ?: throw IOException("External files dir unavailable")
+		return root ?: throw IOException("External files dir unavailable")
+	}
+
+	private suspend fun publishFile(
+		root: LocalStorageRoot,
+		requestedName: String,
+		copy: suspend (UniFile) -> Unit,
+	): LocalContent = publish(root, requestedName, isDirectory = false) { staging ->
+		copy(staging)
+	}
+
+	private suspend fun publishDirectory(
+		root: LocalStorageRoot,
+		requestedName: String,
+		copy: suspend (UniFile) -> Unit,
+	): LocalContent = publish(root, requestedName, isDirectory = true, copy = copy)
+
+	private suspend fun publish(
+		root: LocalStorageRoot,
+		requestedName: String,
+		isDirectory: Boolean,
+		copy: suspend (UniFile) -> Unit,
+	): LocalContent {
+		root.file.listFiles().orEmpty()
+			.filter { it.name?.startsWith(LocalImportSupport.IMPORT_STAGING_PREFIX) == true }
+			.forEach(UniFile::delete)
+		val finalName = findAvailableName(root.file, requestedName)
+		val stagingName = buildStagingName(finalName)
+		val staging = checkNotNull(
+			if (isDirectory) root.file.createDirectory(stagingName) else root.file.createFile(stagingName),
+		) { "Cannot create import staging node in ${root.uri}" }
+		var published: UniFile? = null
+		try {
+			copy(staging)
+			val publishedFile = if (staging.renameTo(finalName)) {
+				checkNotNull(root.file.findFile(finalName)) { "Published content is missing: $finalName" }
+			} else {
+				val destination = checkNotNull(
+					if (isDirectory) root.file.createDirectory(finalName) else root.file.createFile(finalName),
+				) { "Cannot create imported content as $finalName" }
+				try {
+					staging.copyTo(destination)
+					check(staging.delete()) { "Cannot remove import staging node: $stagingName" }
+					destination
+				} catch (e: Throwable) {
+					destination.delete()
+					throw e
+				}
+			}
+			published = publishedFile
+			val rawFile = publishedFile.filePath?.let(::File)?.takeIf { publishedFile.uri.scheme == "file" }
+			return if (rawFile != null && publishedFile.isFile) {
+				LocalContentParser(rawFile).getContent(withDetails = false)
+			} else {
+				LocalContentParser(publishedFile, context.cacheDir).getContent(withDetails = false)
+			}
+		} catch (e: Throwable) {
+			(published ?: staging).delete()
+			throw e
+		}
+	}
+
+	private fun findAvailableName(root: UniFile, requestedName: String): String {
+		if (root.findFile(requestedName) == null) return requestedName
+		val extension = requestedName.substringAfterLast('.', "").takeIf { requestedName.contains('.') }
+		val baseName = extension?.let { requestedName.removeSuffix(".$it") } ?: requestedName
+		var suffix = 1
+		while (true) {
+			val candidate = buildString {
+				append(baseName)
+				append('_')
+				append(suffix++)
+				if (extension != null) append('.').append(extension)
+			}
+			if (root.findFile(candidate) == null) return candidate
+		}
+	}
+
+	private fun buildStagingName(finalName: String): String {
+		val extension = finalName.substringAfterLast('.', "").takeIf { finalName.contains('.') }
+		return buildString {
+			append(LocalImportSupport.IMPORT_STAGING_PREFIX)
+			append(UUID.randomUUID())
+			if (extension != null) append('.').append(extension)
+		}
+	}
+
+	private fun UniFile.copyTo(destination: UniFile) {
+		if (isDirectory) {
+			for (child in listFiles().orEmpty()) {
+				val name = checkNotNull(child.name) { "Imported document has no display name: ${child.uri}" }
+				val target = checkNotNull(
+					if (child.isDirectory) destination.createDirectory(name) else destination.createFile(name),
+				)
+				child.copyTo(target)
+			}
+		} else {
+			openInputStream().use { input -> destination.openOutputStream().use(input::copyTo) }
+		}
 	}
 
 	private suspend fun DocumentFile.source() = runInterruptible(Dispatchers.IO) {
@@ -343,9 +326,4 @@ class SingleContentImporter @Inject constructor(
 		}.isSuccess
 	}
 
-	private fun String.toDisplayTitle(): String {
-		return substringBeforeLast('.')
-			.replace('_', ' ')
-			.replaceFirstChar { it.uppercase() }
-	}
 }

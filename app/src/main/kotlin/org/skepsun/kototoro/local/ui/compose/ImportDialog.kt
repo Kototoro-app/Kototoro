@@ -92,7 +92,7 @@ fun ImportDialog(
         if (uris.isEmpty()) {
             return
         }
-        uris.forEach(storageManager::takePermissions)
+        uris.forEach { uri -> storageManager.takePermissions(uri, isReadOnly = true) }
         showResult(ImportService.start(context, uris, selectedType.kind))
         onDismissRequest()
     }
@@ -101,7 +101,7 @@ fun ImportDialog(
         if (uri == null) {
             return
         }
-        storageManager.takePermissions(uri)
+        storageManager.takePermissions(uri, isReadOnly = true)
         showResult(ImportService.start(context, uri, mode, selectedType.kind))
         onDismissRequest()
     }

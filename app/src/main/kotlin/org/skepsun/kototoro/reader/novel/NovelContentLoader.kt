@@ -14,11 +14,12 @@ import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.replace.ReplaceRuleRepository
 import org.skepsun.kototoro.local.data.LocalStorageCache
 import org.skepsun.kototoro.local.data.NovelCache
+import org.skepsun.kototoro.local.epub.parseEpubChapterReference
+import org.skepsun.kototoro.local.epub.resolveEpubFile
 import org.skepsun.kototoro.core.util.ext.toMimeType
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentPage
 import org.skepsun.kototoro.core.util.ext.URI_SCHEME_ZIP
-import org.skepsun.kototoro.core.util.ext.toMimeType
 import java.io.File
 import java.util.zip.ZipFile
 import javax.inject.Inject
@@ -77,17 +78,13 @@ class NovelContentLoader @Inject constructor(
         // 注入优先级到当前协程上下文，确保流的 upstream (repository.getPagesFlow) 能看到
         withContext(org.skepsun.kototoro.core.parser.legado.RequestPriority(priority)) {
             // 0. 本地/EPUB 逻辑（目前不支持增量，直接一次性返回）
-            if (org.skepsun.kototoro.local.epub.LocalEpubSource.isEpubUrl(chapter.url)) {
-                send(loadEpubChapterContent(chapter))
+            loadLocalEpubChapter(chapter)?.let { content ->
+                send(content)
                 return@withContext
             }
 
-            if (chapter.url.startsWith("localepub://")) {
-                val filePath = chapter.url.substringAfter("localepub://").substringBefore("#")
-                val chapterIndex = chapter.url.substringAfter("#chapter/").toIntOrNull() ?: 0
-                val epubParser = org.skepsun.kototoro.local.epub.LocalEpubParser(java.io.File(filePath), epubContentCache)
-                val rawContent = epubParser.getChapterContent(chapterIndex) ?: "加载本地小说失败: 内容为空"
-                send(htmlToPlainText(rawContent))
+            if (org.skepsun.kototoro.local.epub.LocalEpubSource.isEpubUrl(chapter.url)) {
+                send(loadEpubChapterContent(chapter))
                 return@withContext
             }
 
@@ -188,6 +185,13 @@ class NovelContentLoader @Inject constructor(
         return sb.toString()
     }
 
+	private suspend fun loadLocalEpubChapter(chapter: ContentChapter): String? = withContext(Dispatchers.IO) {
+		val reference = parseEpubChapterReference(chapter.url) ?: return@withContext null
+		val epubFile = resolveEpubFile(appContext, reference.fileReference) ?: return@withContext null
+		val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile, epubContentCache)
+		parser.getChapterContent(reference.chapterIndex)?.let(::htmlToPlainText)
+	}
+
     /**
      * 检查章节是否已缓存
      */
@@ -214,26 +218,18 @@ class NovelContentLoader @Inject constructor(
     ): String {
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal START: id=${chapter.id}, prefetched=${prefetchedPages != null}, force=$forceRefresh")
         
-        // 0. 本地 CBZ/ZIP 小说章节：通过 pages 读取 HTML
-        val localHtml = loadLocalHtmlViaPages(repository, chapter, prefetchedPages)
-        if (localHtml != null) {
-            android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loaded via local pages logic. Length=${localHtml.length}")
-            return localHtml
-        }
+        loadLocalEpubChapter(chapter)?.let { return it }
 
-        // Check if this is an EPUB chapter (NEW ARCHITECTURE)
         if (org.skepsun.kototoro.local.epub.LocalEpubSource.isEpubUrl(chapter.url)) {
             android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loading EPUB chapter: ${chapter.url}")
             return loadEpubChapterContent(chapter)
         }
 
-        if (chapter.url.startsWith("localepub://")) {
-            android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loading Local EPUB chapter: ${chapter.url}")
-            val filePath = chapter.url.substringAfter("localepub://").substringBefore("#")
-            val chapterIndex = chapter.url.substringAfter("#chapter/").toIntOrNull() ?: 0
-            val epubParser = org.skepsun.kototoro.local.epub.LocalEpubParser(java.io.File(filePath), epubContentCache)
-            val rawContent = epubParser.getChapterContent(chapterIndex) ?: "加载本地小说失败: 内容为空"
-            return htmlToPlainText(rawContent)
+        // 本地 CBZ/ZIP 小说章节：通过 pages 读取 HTML
+        val localHtml = loadLocalHtmlViaPages(repository, chapter, prefetchedPages)
+        if (localHtml != null) {
+            android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loaded via local pages logic. Length=${localHtml.length}")
+            return localHtml
         }
         
         val cacheKey = generateCacheKey(chapter)
@@ -613,8 +609,8 @@ class NovelContentLoader @Inject constructor(
             android.util.Log.d("NovelContentLoader", "Found EPUB file: ${mapping.epubFilePath}")
             
             // Get EPUB file from mapping
-            val epubFile = java.io.File(mapping.epubFilePath)
-            if (!epubFile.exists()) {
+            val epubFile = resolveEpubFile(appContext, mapping.epubFilePath)
+            if (epubFile == null || !epubFile.exists()) {
                 throw IllegalStateException("EPUB file not found: ${mapping.epubFilePath}")
             }
             

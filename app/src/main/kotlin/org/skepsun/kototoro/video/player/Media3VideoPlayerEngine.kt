@@ -189,15 +189,22 @@ class Media3VideoPlayerEngine(
 				!key.equals("Connection", true) &&
 				!key.equals("Content-Length", true)
 		}
-		val upstream = OkHttpDataSource.Factory(httpClient)
+		val httpUpstream = OkHttpDataSource.Factory(httpClient)
 			.setDefaultRequestProperties(safeHeaders)
-		val cachedFactory: DataSource.Factory = CacheDataSource.Factory()
+		val defaultUpstream = DefaultDataSource.Factory(appContext, httpUpstream)
+		val cachedFactory = CacheDataSource.Factory()
 			.setCache(cache)
-			.setUpstreamDataSourceFactory(upstream)
+			.setUpstreamDataSourceFactory(defaultUpstream)
 			.setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+		val isNetworkUri = request.uri.scheme.equals("http", true) || request.uri.scheme.equals("https", true)
+		val dataSourceFactory: DataSource.Factory = if (isNetworkUri) {
+			cachedFactory
+		} else {
+			defaultUpstream
+		}
 		val extractorsFactory = DefaultExtractorsFactory()
 			.setFragmentedMp4ExtractorFlags(FragmentedMp4Extractor.FLAG_MERGE_FRAGMENTED_SIDX)
-		val sourceFactory = DefaultMediaSourceFactory(cachedFactory, extractorsFactory)
+		val sourceFactory = DefaultMediaSourceFactory(dataSourceFactory, extractorsFactory)
 			.setLiveTargetOffsetMs(Media3PlaybackConfig.PREFERRED_LIVE_OFFSET_MS)
 		val item = MediaItem.Builder()
 			.setMediaId(request.requestId)

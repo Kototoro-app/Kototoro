@@ -133,6 +133,27 @@ class LocalContentZipOutput(
 
 		private const val FILENAME_PATTERN = "%08d_%04d%04d"
 
+		suspend fun filterChapters(
+			file: UniFile,
+			manga: Content,
+			idsToRemove: Set<Long>,
+			cacheDir: File,
+		) {
+			val localFile = runInterruptible(Dispatchers.IO) {
+				File.createTempFile("filter_", ".cbz", cacheDir).also { target ->
+					file.openInputStream().use { input -> target.outputStream().use(input::copyTo) }
+				}
+			}
+			try {
+				filterChapters(localFile, manga, idsToRemove)
+				runInterruptible(Dispatchers.IO) {
+					localFile.inputStream().use { input -> file.openOutputStream().use(input::copyTo) }
+				}
+			} finally {
+				runInterruptible(Dispatchers.IO) { localFile.delete() }
+			}
+		}
+
 		suspend fun filterChapters(file: File, manga: Content, idsToRemove: Set<Long>) =
 			runInterruptible(Dispatchers.IO) {
 				val subject = LocalContentZipOutput(checkNotNull(UniFile.fromFile(file)), manga, file.parentFile ?: file)

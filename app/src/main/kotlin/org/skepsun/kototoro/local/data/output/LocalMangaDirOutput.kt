@@ -10,6 +10,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.MimeType
 import org.skepsun.kototoro.core.util.ext.deleteAwait
+import org.skepsun.kototoro.core.util.ext.isImage
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.zip.ZipOutput
 import org.skepsun.kototoro.local.data.ContentIndex
@@ -115,28 +116,40 @@ class LocalContentDirOutput(
 			(index.getContentInfo() ?: LocalContentParser(rootFile, cacheDir).getContent(withDetails = true).manga).chapters,
 		) {
 			"No chapters found"
-		}.withIndex()
-		val victimsIds = ids.toMutableSet()
-		for (chapter in chapters) {
-			if (chapter.value.id !in victimsIds) {
-				continue
-			}
-			val chapterFile = index.getChapterFileName(chapter.value.id)?.let(rootFile::findFile)
-			if (chapterFile == null) {
-				// A cancelled download can leave remote chapter metadata without a completed local file.
-				victimsIds.remove(chapter.value.id)
-				continue
-			}
-			check(chapterFile.exists() && chapterFile.parentFile?.uri == rootFile.uri) {
-				"Chapter file is missing or outside the content directory: $chapterFile"
-			}
-			check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
-			index.removeChapter(chapter.value.id)
-			victimsIds.remove(chapter.value.id)
 		}
-		check(victimsIds.isEmpty()) {
-			"${victimsIds.size} of ${ids.size} chapters was not removed: not found"
+		val chaptersById = chapters.associateBy(ContentChapter::id)
+		val missingIds = ids - chaptersById.keys
+		check(missingIds.isEmpty()) { "${missingIds.size} of ${ids.size} chapters was not removed: not found" }
+
+		val selectedByFile = ids.groupBy { id -> index.getChapterFileName(id) }
+		for ((fileName, selectedIds) in selectedByFile) {
+			if (fileName != null) {
+				val hasRemainingReferences = chapters.any { chapter ->
+					chapter.id !in ids && index.getChapterFileName(chapter.id) == fileName
+				}
+				if (!hasRemainingReferences) {
+					if (fileName.isEmpty()) {
+						rootFile.listFiles().orEmpty()
+							.filter { child ->
+								child.isFile &&
+									MimeTypes.getMimeTypeFromExtension(child.name.orEmpty())?.isImage == true
+							}
+							.forEach { image -> check(image.delete()) { "Failed to delete chapter image: $image" } }
+					} else {
+						val chapterFile = rootFile.resolveRelative(fileName)
+						check(chapterFile?.exists() == true) { "Chapter file is missing: $fileName" }
+						check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
+					}
+				}
+			}
+			selectedIds.forEach(index::removeChapter)
 		}
+	}
+
+	private fun UniFile.resolveRelative(relativePath: String): UniFile? {
+		val segments = relativePath.split('/').filter(String::isNotEmpty)
+		if (segments.any { it == "." || it == ".." }) return null
+		return segments.fold(this as UniFile?) { parent, name -> parent?.findFile(name) }
 	}
 
 	fun setIndex(newIndex: ContentIndex) {

@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.util.ext.withChildren
 import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
+import org.skepsun.kototoro.local.data.importer.LocalImportSupport
 import org.skepsun.kototoro.local.data.output.LocalContentOutput
 import org.skepsun.kototoro.local.data.output.LocalContentUtil
 import org.skepsun.kototoro.local.domain.ContentLock
@@ -166,9 +167,11 @@ class LocalMangaRepository @Inject constructor(
 		
 		android.util.Log.d("LocalMangaRepository", "getPages: chapter.url=${chapter.url}, title=${chapter.title}")
 		
-		// NEW ARCHITECTURE: EPUB chapters use epub:// protocol
-		if (chapter.url.startsWith("epub://") || chapter.url.startsWith("localepub://")) {
-			android.util.Log.d("LocalMangaRepository", "EPUB chapter detected (new architecture / localepub)")
+		// EPUB chapters from every persisted format are handled by NovelContentLoader.
+		if (chapter.url.startsWith("epub://") ||
+			org.skepsun.kototoro.local.epub.parseEpubChapterReference(chapter.url) != null
+		) {
+			android.util.Log.d("LocalMangaRepository", "EPUB chapter detected")
 			// Return a special page that will be handled by NovelContentLoader
 			return listOf(
 				ContentPage(
@@ -178,15 +181,6 @@ class LocalMangaRepository @Inject constructor(
 					source = LocalMangaSource,
 				)
 			)
-		}
-		
-		// Legacy EPUB chapters with file://path#chapter/N format are no longer supported
-		// Users need to re-download to use the new architecture
-		if (chapter.url.contains("#chapter/") && chapter.url.startsWith("file://")) {
-			android.util.Log.d("LocalMangaRepository", "Legacy EPUB chapter format detected: ${chapter.url}")
-			android.util.Log.w("LocalMangaRepository", "Please re-download this manga to use the new EPUB architecture")
-			// Return empty list to indicate unsupported format
-			return emptyList()
 		}
 		
 		// 普通章节，使用LocalContentParser
@@ -233,8 +227,14 @@ class LocalMangaRepository @Inject constructor(
 				"Content is not stored on local storage"
 			}
 		}
-		LocalContentUtil(subject.manga, subject.file).deleteChapters(ids)
-		val updated = LocalContentParser(subject.file).getContent(withDetails = true)
+		val root = checkNotNull(UniFile.fromUri(App.getInstance(), subject.toUri())) {
+			"Cannot resolve local content URI: ${subject.toUri()}"
+		}
+		LocalContentUtil(subject.manga, root, App.getInstance().cacheDir).deleteChapters(ids)
+		val updated = LocalContentParser(root, App.getInstance().cacheDir).getContent(
+			withDetails = true,
+			forceRefresh = true,
+		)
 		localStorageChanges.emit(updated)
 	}
 
@@ -352,6 +352,7 @@ class LocalMangaRepository @Inject constructor(
 		.flatMap { root ->
 			root.file.listFiles().orEmpty().filterNot { child ->
 				child.name?.endsWith(BACKUP_SUFFIX, ignoreCase = true) == true ||
+					child.name?.startsWith(LocalImportSupport.IMPORT_STAGING_PREFIX) == true ||
 					child.isDirectory && child.findFile(FILENAME_SKIP) != null
 			}
 		}

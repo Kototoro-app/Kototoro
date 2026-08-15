@@ -9,10 +9,13 @@ import android.graphics.Rect
 import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import org.skepsun.kototoro.core.util.ext.isZipUri
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
+import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 
 class LocalImageRegionDecoder private constructor(
 	private val uri: Uri,
@@ -94,7 +97,19 @@ private inline fun <T> withUriInputStream(
 	uri: Uri,
 	block: (InputStream) -> T,
 ): T? {
-	return if (uri.isZipUri()) {
+	return if (uri.isContentZipUri()) {
+		val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")
+		contentResolver.openInputStream(uri.toUnderlyingZipUri())?.use { input ->
+			ZipInputStream(input.buffered()).use { zip ->
+				var entry = zip.nextEntry
+				while (entry != null && entry.name != entryName) {
+					entry = zip.nextEntry
+				}
+				if (entry == null) throw IOException("ZIP entry not found: $entryName")
+				block(zip)
+			}
+		}
+	} else if (uri.isZipUri()) {
 		ZipFile(uri.schemeSpecificPart).use { zip ->
 			val entryName = uri.fragment ?: throw IOException("ZIP URI has no entry name: $uri")
 			val entry = zip.getEntry(entryName) ?: throw IOException("ZIP entry not found: $entryName")

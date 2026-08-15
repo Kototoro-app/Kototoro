@@ -3,14 +3,15 @@ package org.skepsun.kototoro.local.novel
 import androidx.annotation.WorkerThread
 import androidx.core.net.toUri
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
+import com.github.tvbox.osc.base.App
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.runInterruptible
-import org.json.JSONObject
 import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.local.data.LocalStorageManager
+import org.skepsun.kototoro.local.data.importer.LocalImportSupport
+import org.skepsun.kototoro.local.data.input.LocalContentParser
+import org.skepsun.kototoro.local.epub.parseEpubChapterReference
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -41,11 +42,12 @@ class LocalNovelRepository @Inject constructor(
 
 	override suspend fun getFilterOptions(): ContentListFilterOptions = ContentListFilterOptions()
 
-	private suspend fun findNovelDirs(): List<File> {
-		// 统一使用 files/novel 存储根，不再复用漫画存储根
-		return storageManager.getNovelReadableDirs().flatMap { root ->
-			root.listFiles().orEmpty().filter { 
-				it.isDirectory || (it.isFile && (it.extension.equals("cbz", ignoreCase = true) || it.extension.equals("zip", ignoreCase = true)))
+	private suspend fun findNovelEntries(): List<UniFile> {
+		return storageManager.getNovelReadableRoots().flatMap { root ->
+			root.file.listFiles().orEmpty().filter { child ->
+				val name = child.name.orEmpty()
+				!name.startsWith(LocalImportSupport.IMPORT_STAGING_PREFIX) &&
+					(child.isDirectory || name.substringAfterLast('.', "").lowercase() in NOVEL_FILE_EXTENSIONS)
 			}
 		}
 	}
@@ -53,8 +55,8 @@ class LocalNovelRepository @Inject constructor(
 	override suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content> {
 		if (offset > 0) return emptyList()
 		val items = mutableListOf<Content>()
-		findNovelDirs().forEach { dir ->
-			parseIndex(dir)?.let { items.add(it.first) }
+		findNovelEntries().forEach { entry ->
+			parseIndex(entry)?.let { items.add(it.first) }
 		}
 		val query = filter?.query?.trim().orEmpty()
 		return if (query.isNotEmpty()) {
@@ -64,36 +66,20 @@ class LocalNovelRepository @Inject constructor(
 
 
 	override suspend fun getDetails(manga: Content): Content {
-		// Fast path: use manga.url if it points to a local file
-		if (manga.url.startsWith("file://") || manga.url.startsWith("zip://") || manga.url.startsWith("cbz://")) {
-			val uri = runCatching { android.net.Uri.parse(manga.url) }.getOrNull()
-			var filePath = uri?.path
-			if (uri?.scheme == "zip" || uri?.scheme == "cbz") {
-				// URI for zip looks like zip:///path/to/file.cbz
-				filePath = uri.path
-			}
-			val file = filePath?.let { File(it) }
-			if (file != null && file.exists()) {
-				val parsed = parseIndex(file)
-				if (parsed != null && parsed.first.id == manga.id) {
-					return parsed.first
-				}
-				if (parsed != null) {
-					return parsed.first
-				}
-			}
-		}
+		runCatching {
+			LocalContentParser(manga.url.toUri()).getContent(withDetails = true).manga
+		}.getOrNull()?.let { return it.withLocalNovelSource() }
 
 		// Try to find by filename pattern first (for multi-CBZ format)
-		val dirByName = findNovelDirs().firstOrNull { it.name.startsWith(manga.id.toString()) }
+		val entries = findNovelEntries()
+		val dirByName = entries.firstOrNull { it.name?.startsWith(manga.id.toString()) == true }
 		if (dirByName != null) {
 			return parseIndex(dirByName)?.first ?: manga
 		}
 		
 		// For single CBZ files, we need to parse each file to find the matching manga ID
-		val allDirs = findNovelDirs()
-		for (dir in allDirs) {
-			val parsed = parseIndex(dir)
+		for (entry in entries) {
+			val parsed = parseIndex(entry)
 			if (parsed != null && parsed.first.id == manga.id) {
 				return parsed.first
 			}
@@ -104,8 +90,11 @@ class LocalNovelRepository @Inject constructor(
 
 	override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> {
 		val uri = runCatching { android.net.Uri.parse(chapter.url) }.getOrNull()
-		if (uri != null && (uri.scheme == "file" || uri.scheme == "zip" || uri.scheme == "cbz")) {
-			return org.skepsun.kototoro.local.data.input.LocalContentParser(uri).getPages(chapter)
+		if (chapter.url.startsWith("epub://") || parseEpubChapterReference(chapter.url) != null) {
+			return listOf(ContentPage(chapter.id, chapter.url, null, source))
+		}
+		if (uri != null && uri.scheme in setOf("content", "file", "zip", "cbz")) {
+			return LocalContentParser(uri).getPages(chapter)
 		}
 		
 		return listOf(
@@ -126,9 +115,11 @@ class LocalNovelRepository @Inject constructor(
 	 * 列出所有本地小说（用于本地索引）。
 	 */
 	suspend fun getAllLocalNovels(): List<LocalContent> {
-		return findNovelDirs()
-			.filter { it.isDirectory && File(it, "index.json").exists() }
-			.mapNotNull { dir -> getLocalNovel(dir, withDetails = false) }
+		return findNovelEntries().mapNotNull { entry ->
+			runCatching { LocalContentParser(entry, App.getInstance().cacheDir).getContent(withDetails = false) }
+				.getOrNull()
+				?.let { it.copy(manga = it.manga.withLocalNovelSource()) }
+		}
 	}
 
 	/**
@@ -151,21 +142,34 @@ class LocalNovelRepository @Inject constructor(
 			val localContent = runBlocking { parser.getContent(withDetails = true) }
 			
 			// Map chapters to ensure they have the correct local source when applicable
-			val transformedChapters = localContent.manga.chapters?.map { chapter ->
-				if (chapter.source != null && !chapter.source!!.name.startsWith("LOCAL", ignoreCase = true)) {
-					chapter
-				} else {
-					chapter.copy(source = source)
-				}
-			}
-			
-			val transformedContent = localContent.manga.copy(
-				chapters = transformedChapters,
-				source = source
-			)
+			val transformedContent = localContent.manga.withLocalNovelSource()
+			val transformedChapters = transformedContent.chapters
 			transformedContent to (transformedChapters ?: emptyList())
 		}.onFailure {
 			it.printStackTrace()
 		}.getOrNull()
+	}
+
+	private suspend fun parseIndex(entry: UniFile): Pair<Content, List<ContentChapter>>? = runCatching {
+		val localContent = LocalContentParser(entry, App.getInstance().cacheDir).getContent(withDetails = true)
+		val transformedContent = localContent.manga.withLocalNovelSource()
+		transformedContent to transformedContent.chapters.orEmpty()
+	}.onFailure {
+		Log.w("LocalNovelRepository", "Cannot parse local novel: ${entry.uri}", it)
+	}.getOrNull()
+
+	private fun Content.withLocalNovelSource(): Content {
+		val transformedChapters = chapters?.map { chapter ->
+			if (!chapter.source.name.startsWith("LOCAL", ignoreCase = true)) {
+				chapter
+			} else {
+				chapter.copy(source = this@LocalNovelRepository.source)
+			}
+		}
+		return copy(chapters = transformedChapters, source = this@LocalNovelRepository.source)
+	}
+
+	private companion object {
+		val NOVEL_FILE_EXTENSIONS = setOf("cbz", "epub", "zip")
 	}
 }

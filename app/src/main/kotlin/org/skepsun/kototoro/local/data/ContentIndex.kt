@@ -13,7 +13,6 @@ import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.ContentSource as createContentSource
-import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.parsers.model.ContentRating
@@ -40,7 +39,6 @@ class ContentIndex(source: String?) {
 	private val json: JSONObject = source?.let(::JSONObject) ?: JSONObject()
 
 	fun setContentInfo(manga: Content) {
-		require(!manga.isLocal || manga.source == LocalNovelSource) { "Local manga information cannot be stored" }
 		json.put(KEY_ID, manga.id)
 		json.put(KEY_TITLE, manga.title)
 		json.put(KEY_TITLE_ALT, manga.altTitles.ifEmpty { null }?.firstOrNull()) // for backward compatibility
@@ -246,7 +244,10 @@ class ContentIndex(source: String?) {
 	}
 
 	fun getChapterFileName(chapterId: Long): String? {
-		return json.optJSONObject(KEY_CHAPTERS)?.optJSONObject(chapterId.toString())?.getStringOrNull(KEY_FILE)
+		val value = json.optJSONObject(KEY_CHAPTERS)
+			?.optJSONObject(chapterId.toString())
+			?.opt(KEY_FILE)
+		return value?.takeUnless { it === JSONObject.NULL }?.toString()
 	}
 
 	fun hasChapterEntries(chapterId: Long): Boolean {

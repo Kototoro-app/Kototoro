@@ -38,6 +38,7 @@ import androidx.glance.text.TextStyle
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.allowHardware
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -61,7 +62,7 @@ import org.skepsun.kototoro.widget.WidgetPrimaryTextColor
 import org.skepsun.kototoro.widget.widgetRootModifier
 
 private const val WIDGET_ITEM_LIMIT = 10
-private const val COVER_CACHE_READ_TIMEOUT_MILLIS = 500L
+private const val COVER_CACHE_READ_TIMEOUT_MILLIS = 5_000L
 
 class ShelfWidgetProvider : GlanceAppWidgetReceiver() {
 
@@ -165,6 +166,7 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 				imageLoader.execute(
 					ImageRequest.Builder(context)
 						.data(coverUrl)
+						.allowHardware(false)
 						.memoryCacheKey(cacheKey)
 						.diskCacheKey(cacheKey)
 						.mangaExtra(content)

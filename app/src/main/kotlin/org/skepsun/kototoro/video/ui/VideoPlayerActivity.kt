@@ -1439,17 +1439,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             availableVideos = emptyList()
             currentVideoIndex = 0
             updateQualityButtonVisibility()
-            var playbackUrl: String = localUrl
-            if (localUrl.startsWith("file://")) {
-                runCatching {
-                    val decodedPath = Uri.parse(localUrl).path
-                    if (decodedPath != null && File(decodedPath).exists()) {
-                        playbackUrl = decodedPath
-                    }
-                }
-            }
-            
-            startPlayback(playbackUrl, manga?.source ?: source, headers = null, startMs = startMs)
+            startPlayback(localUrl, manga?.source ?: source, headers = null, startMs = startMs)
             return
         }
 

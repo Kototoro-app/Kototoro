@@ -6,6 +6,7 @@ import okio.Path
 import java.io.File
 
 const val URI_SCHEME_ZIP = "file+zip"
+const val URI_SCHEME_CONTENT_ZIP = "content+zip"
 private const val URI_SCHEME_FILE = "file"
 private const val URI_SCHEME_HTTP = "http"
 private const val URI_SCHEME_HTTPS = "https"
@@ -16,7 +17,25 @@ fun Uri.isZipUri() = scheme.let {
 	it == URI_SCHEME_ZIP || it == URI_SCHEME_LEGACY_CBZ || it == URI_SCHEME_LEGACY_ZIP
 }
 
+fun Uri.isContentZipUri() = scheme == URI_SCHEME_CONTENT_ZIP
+
+fun Uri.toUnderlyingZipUri(): Uri = if (isContentZipUri()) {
+	buildUpon().scheme("content").fragment(null).build()
+} else {
+	this
+}
+
+fun Uri.toZipUri(entryPath: String): Uri = if (scheme == "content") {
+	buildUpon().scheme(URI_SCHEME_CONTENT_ZIP).fragment(entryPath).build()
+} else {
+	File(requireNotNull(path) { "File URI path is null: $this" }).toZipUri(entryPath)
+}
+
 fun Uri.isFileUri() = scheme == URI_SCHEME_FILE
+
+fun Uri.withFragmentFrom(other: Uri): Uri = buildUpon()
+	.encodedFragment(other.encodedFragment)
+	.build()
 
 fun Uri.isNetworkUri() = scheme.let {
 	it == URI_SCHEME_HTTP || it == URI_SCHEME_HTTPS

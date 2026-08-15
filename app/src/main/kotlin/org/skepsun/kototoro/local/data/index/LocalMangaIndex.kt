@@ -127,6 +127,6 @@ suspend fun update() = mutex.withLock {
 
 		private const val PREF_NAME = "_local_index"
 		private const val KEY_VERSION = "ver"
-		private const val VERSION = 3
+		private const val VERSION = 4
 	}
 }

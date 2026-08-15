@@ -152,6 +152,10 @@ class LocalStorageManager @Inject constructor(
 			.filter { it.isReadable() }
 	}
 
+	suspend fun getNovelReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isReadable)
+	}
+
 	suspend fun getNovelWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
 		getConfiguredNovelStorageDirs()
 			.filter { it.isWriteable() }
@@ -233,8 +237,9 @@ class LocalStorageManager @Inject constructor(
 		root.file.findFile(NOMEDIA) ?: root.file.createFile(NOMEDIA)?.openOutputStream()?.close()
 	}
 
-	fun takePermissions(uri: Uri) {
-		val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+	fun takePermissions(uri: Uri, isReadOnly: Boolean = false) {
+		val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+			(if (isReadOnly) 0 else Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
 		contentResolver.takePersistableUriPermission(uri, flags)
 	}
 

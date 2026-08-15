@@ -2,7 +2,9 @@ package org.skepsun.kototoro.local.data.output
 
 import com.hippo.unifile.UniFile
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -59,6 +61,81 @@ class LocalMangaDirOutputTest {
 
 		assertTrue(File(root, LocalContentOutput.ENTRY_NAME_INDEX).isFile)
 	}
+
+	@Test
+	fun `deleting one epub chapter preserves file until its final chapter is deleted`() = runTest {
+		val chapters = listOf(chapter(11L), chapter(12L))
+		val manga = content(chapters)
+		val epub = File(root, "volume.epub").apply { writeText("epub") }
+		writeIndex(manga, chapters.associateWith { epub.name })
+
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
+			output.deleteChapters(setOf(chapters[0].id))
+			output.finish()
+		}
+
+		assertTrue(epub.isFile)
+		val afterFirstDelete = readIndex()
+		assertNull(afterFirstDelete.getChapterFileName(chapters[0].id))
+		assertTrue(afterFirstDelete.getChapterFileName(chapters[1].id) == epub.name)
+
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
+			output.deleteChapters(setOf(chapters[1].id))
+			output.finish()
+		}
+
+		assertFalse(epub.exists())
+		assertNull(readIndex().getChapterFileName(chapters[1].id))
+	}
+
+	@Test
+	fun `deleting nested chapter removes its directory`() = runTest {
+		val selected = chapter(21L)
+		val manga = content(listOf(selected))
+		val chapterDirectory = File(root, "volume/chapter_1").apply { mkdirs() }
+		File(chapterDirectory, "page.jpg").writeText("page")
+		writeIndex(manga, mapOf(selected to "volume/chapter_1"))
+
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
+			output.deleteChapters(setOf(selected.id))
+			output.finish()
+		}
+
+		assertFalse(chapterDirectory.exists())
+	}
+
+	@Test
+	fun `deleting root image chapter removes only root images`() = runTest {
+		val selected = chapter(31L)
+		val manga = content(listOf(selected))
+		val firstPage = File(root, "001.jpg").apply { writeText("first") }
+		val secondPage = File(root, "002.png").apply { writeText("second") }
+		val unrelated = File(root, "notes.txt").apply { writeText("keep") }
+		writeIndex(manga, mapOf(selected to ""))
+		assertEquals("", readIndex().getChapterFileName(selected.id))
+
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
+			output.deleteChapters(setOf(selected.id))
+			output.finish()
+		}
+
+		assertFalse(firstPage.exists())
+		assertFalse(secondPage.exists())
+		assertTrue(unrelated.isFile)
+	}
+
+	private fun writeIndex(manga: Content, chapters: Map<ContentChapter, String>) {
+		val index = ContentIndex(null).apply {
+			setContentInfo(manga.copy(chapters = null))
+			chapters.entries.forEachIndexed { position, (chapter, fileName) ->
+				addChapter(chapter.withIndex(position), fileName)
+			}
+		}
+		File(root, LocalContentOutput.ENTRY_NAME_INDEX).writeText(index.toString())
+	}
+
+	private fun readIndex(): ContentIndex =
+		ContentIndex(File(root, LocalContentOutput.ENTRY_NAME_INDEX).readText())
 
 	private fun chapter(id: Long) = ContentChapter(
 		id = id,

@@ -31,11 +31,14 @@ import org.skepsun.kototoro.core.util.ext.isRegularFile
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toZipUri
 import org.skepsun.kototoro.core.util.ext.toListSorted
+import org.skepsun.kototoro.core.util.ext.withFragmentFrom
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.local.data.hasZipExtension
 import org.skepsun.kototoro.local.data.isZipArchive
 import org.skepsun.kototoro.local.data.output.LocalContentOutput.Companion.ENTRY_NAME_INDEX
+import org.skepsun.kototoro.local.epub.LocalEpubParser
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -44,6 +47,7 @@ import org.skepsun.kototoro.parsers.util.longHashCode
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.parsers.util.toTitleCase
 import java.io.File
+import java.util.LinkedHashSet
 
 /**
  * Content root {dir or zip file}
@@ -91,8 +95,8 @@ class LocalContentParser {
 		this.cacheDir = cacheDir
 	}
 
-	suspend fun getContent(withDetails: Boolean): LocalContent {
-		uniFile?.let { return getUniFileContent(it, withDetails) }
+	suspend fun getContent(withDetails: Boolean, forceRefresh: Boolean = false): LocalContent {
+		uniFile?.let { return getUniFileContent(it, withDetails, forceRefresh) }
 		val hasIndexFile = rootFile.isDirectory && File(rootFile, ENTRY_NAME_INDEX).isFile
 		if (rootFile.isFile && rootFile.name.endsWith(".epub", ignoreCase = true)) {
 			val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(rootFile)
@@ -327,9 +331,9 @@ class LocalContentParser {
 		uniFile?.let { file ->
 			return if (file.isDirectory) {
 				file.findFile(ENTRY_NAME_INDEX)?.openInputStream()?.bufferedReader()?.use { ContentIndex(it.readText()) }
-					?.getContentInfo()
+					?.getContentInfo() ?: getUniFileContent(file, withDetails = false, forceRefresh = false).manga
 			} else {
-				LocalContentParser(materialize(file)).getContentInfo()
+				getUniFileContent(file, withDetails = false, forceRefresh = false).manga
 			}
 		}
 		val hasIndexFile = rootFile.isDirectory && File(rootFile, ENTRY_NAME_INDEX).isFile
@@ -385,8 +389,22 @@ class LocalContentParser {
 
 	suspend fun getPages(chapter: ContentChapter): List<ContentPage> {
 		uniFile?.let { file ->
+			if (file.isDirectory) {
+				return file.listFiles().orEmpty()
+					.filter { child -> child.isFile && child.name?.isImageName() == true }
+					.sortedWith(compareBy(AlphanumComparator()) { child -> child.name.orEmpty() })
+					.map { child ->
+						ContentPage(
+							id = child.uri.toString().longHashCode(),
+							url = child.uri.toString(),
+							preview = null,
+							source = chapter.source ?: LocalMangaSource,
+						)
+					}
+			}
 			val localFile = materialize(file)
-			val localChapter = chapter.copy(url = localFile.toUri().toString())
+			val localUrl = localFile.toUri().withFragmentFrom(chapter.url.toUri()).toString()
+			val localChapter = chapter.copy(url = localUrl)
 			return LocalContentParser(localFile).getPages(localChapter)
 		}
 		return runInterruptible(Dispatchers.IO) {
@@ -427,34 +445,67 @@ class LocalContentParser {
 		}
 	}
 
-	private suspend fun getUniFileContent(file: UniFile, withDetails: Boolean): LocalContent {
+	private suspend fun getUniFileContent(file: UniFile, withDetails: Boolean, forceRefresh: Boolean): LocalContent {
 		if (file.isFile) {
-			val localFile = materialize(file)
+			val directFile = file.filePath?.let(::File)?.takeIf { file.uri.scheme == "file" }
+			if (directFile != null) {
+				return LocalContentParser(directFile).getContent(withDetails, forceRefresh)
+			}
+			val localFile = materialize(file, forceRefresh)
 			val parsed = LocalContentParser(localFile).getContent(withDetails)
+			val stableCoverUrl = parsed.manga.coverUrl
+				?.toUri()
+				?.takeIf(Uri::isZipUri)
+				?.fragment
+				?.takeIf(String::isNotBlank)
+				?.let { entry -> file.uri.toZipUri(entry).toString() }
 			val localManga = parsed.manga.copy(
 				url = file.uri.toString(),
 				publicUrl = file.uri.toString(),
+				coverUrl = stableCoverUrl ?: parsed.manga.coverUrl,
 				chapters = parsed.manga.chapters?.map { chapter ->
-					chapter.copy(url = file.uri.toString())
+					val chapterUri = file.uri.withFragmentFrom(chapter.url.toUri()).toString()
+					chapter.copy(url = chapterUri)
 				},
 			)
 			return LocalContent(localManga, localFile, file.uri)
 		}
 
-		val indexFile = file.findFile(ENTRY_NAME_INDEX)
-			?: throw IllegalArgumentException("No $ENTRY_NAME_INDEX in ${file.uri}")
-		val index = indexFile.openInputStream().bufferedReader().use { ContentIndex(it.readText()) }
+		val index = file.findFile(ENTRY_NAME_INDEX)
+			?.openInputStream()
+			?.bufferedReader()
+			?.use { ContentIndex(it.readText()) }
+			?: createUniFileIndex(file)
 		val info = checkNotNull(index.getContentInfo()) { "Invalid $ENTRY_NAME_INDEX in ${file.uri}" }
 		val localSource = when (info.source?.contentType) {
 			ContentType.NOVEL, ContentType.HENTAI_NOVEL -> LocalNovelSource
 			ContentType.VIDEO, ContentType.HENTAI_VIDEO -> LocalVideoSource
 			else -> LocalMangaSource
 		}
+		val epubFilesByTitle = lazy {
+			file.walkRelative()
+				.mapNotNull { (_, child) ->
+					child.name
+						?.takeIf { it.endsWith(".epub", ignoreCase = true) }
+						?.substringBeforeLast('.')
+						?.let { title -> title to child }
+				}
+				.toMap()
+		}
 		val chapters = if (withDetails) {
 			info.chapters?.mapNotNull { chapter ->
 				if (chapter.id in index.getHiddenChapterIds()) return@mapNotNull null
-				val child = index.getChapterFileName(chapter.id)?.let(file::findFile)
-				if (child != null) chapter.copy(url = child.uri.toString(), source = localSource) else chapter
+				val child = index.getChapterFileName(chapter.id)?.let { relativePath ->
+					file.resolveRelative(relativePath)
+				} ?: chapter.scanlator
+					?.takeIf { chapter.url.toUri().fragment.orEmpty().startsWith("chapter/") }
+					?.let { epubFilesByTitle.value[it] }
+				if (child != null) {
+					val chapterUrl = child.uri.withFragmentFrom(chapter.url.toUri()).toString()
+					chapter.copy(url = chapterUrl, source = localSource)
+				} else {
+					chapter
+				}
 			}
 		} else {
 			null
@@ -469,13 +520,174 @@ class LocalContentParser {
 		return LocalContent(manga, rootFile, file.uri)
 	}
 
-	private fun materialize(file: UniFile): File {
+	private suspend fun createUniFileIndex(root: UniFile): ContentIndex {
+		val entries = root.walkRelative()
+		val videoEntries = entries.filter { (_, child) -> child.name?.isVideoName() == true }
+		val novelEntries = entries.filter { (_, child) -> child.name?.isNovelName() == true }
+		val archiveEntries = entries.filter { (_, child) -> hasZipExtension(child.name.orEmpty()) }
+		val imageEntries = entries.filter { (_, child) -> child.name?.isImageName() == true }
+		val source = when {
+			videoEntries.isNotEmpty() -> LocalVideoSource
+			novelEntries.isNotEmpty() -> LocalNovelSource
+			else -> LocalMangaSource
+		}
+		val chapters = ArrayList<Pair<ContentChapter, String?>>()
+		val authors = LinkedHashSet<String>()
+		var description: String? = null
+		var order = 0
+		var volume = 0
+
+		if (source == LocalVideoSource) {
+			videoEntries.forEach { (relativePath, child) ->
+				order++
+				chapters += createUniFileChapter(child, relativePath, order, LocalVideoSource) to relativePath
+			}
+		} else if (source == LocalNovelSource) {
+			novelEntries.forEach { (relativePath, child) ->
+				if (child.name?.endsWith(".epub", ignoreCase = true) == true) {
+					val parsed = runCatchingCancellable { LocalEpubParser(materialize(child)).parseContent() }.getOrNull()
+					parsed?.authors?.filterTo(authors) { it.isNotBlank() }
+					if (description == null) description = parsed?.description?.takeIf(String::isNotBlank)
+					val internalChapters = parsed?.chapters.orEmpty()
+					if (internalChapters.isNotEmpty()) {
+						volume++
+						internalChapters.forEachIndexed { chapterIndex, chapter ->
+							order++
+							val chapterUri = child.uri.buildUpon().fragment("chapter/$chapterIndex").build().toString()
+							chapters += chapter.copy(
+								id = chapterUri.longHashCode(),
+								number = order.toFloat(),
+								volume = volume,
+								url = chapterUri,
+								scanlator = child.name?.substringBeforeLast('.'),
+								source = LocalNovelSource,
+							) to relativePath
+						}
+						return@forEach
+					}
+				}
+				order++
+				chapters += createUniFileChapter(child, relativePath, order, LocalNovelSource) to relativePath
+			}
+		} else {
+			val imageParents = imageEntries.mapTo(LinkedHashSet()) { (relativePath, _) ->
+				relativePath.substringBeforeLast('/', "")
+			}
+			imageParents.forEach { relativePath ->
+				order++
+				val chapterFile = if (relativePath.isEmpty()) root else root.resolveRelative(relativePath) ?: return@forEach
+				chapters += createUniFileChapter(chapterFile, relativePath, order, LocalMangaSource) to relativePath
+			}
+			archiveEntries.forEach { (relativePath, child) ->
+				order++
+				chapters += createUniFileChapter(child, relativePath, order, LocalMangaSource) to relativePath
+			}
+		}
+
+		check(chapters.isNotEmpty()) { "No supported local content in ${root.uri}" }
+		val coverUrl = imageEntries.firstOrNull()?.second?.uri?.toString().orEmpty()
+		val content = Content(
+			id = root.uri.toString().longHashCode(),
+			title = root.name.orEmpty().fileNameToTitle(),
+			altTitles = emptySet(),
+			url = root.uri.toString(),
+			publicUrl = root.uri.toString(),
+			rating = -1f,
+			contentRating = null,
+			coverUrl = coverUrl,
+			tags = emptySet(),
+			state = null,
+			authors = authors,
+			largeCoverUrl = null,
+			description = description,
+			chapters = null,
+			source = source,
+		)
+		val index = ContentIndex(null)
+		index.setContentInfo(content)
+		chapters.forEachIndexed { chapterIndex, (chapter, relativePath) ->
+			index.addChapter(IndexedValue(chapterIndex, chapter), relativePath, null)
+		}
+		runCatchingCancellable {
+			val indexFile = root.findFile(ENTRY_NAME_INDEX) ?: checkNotNull(root.createFile(ENTRY_NAME_INDEX))
+			indexFile.openOutputStream().bufferedWriter().use { it.write(index.toString()) }
+		}.onFailure { it.printStackTraceDebug() }
+		return index
+	}
+
+	private fun createUniFileChapter(
+		file: UniFile,
+		relativePath: String,
+		order: Int,
+		source: org.skepsun.kototoro.parsers.model.ContentSource,
+	): ContentChapter {
+		val url = file.uri.toString()
+		val title = file.name?.substringBeforeLast('.')?.replace('_', ' ')?.toTitleCase().orEmpty()
+		return ContentChapter(
+			id = "$relativePath#$url".longHashCode(),
+			title = title.ifBlank { order.toString() },
+			number = order.toFloat(),
+			volume = 0,
+			url = url,
+			scanlator = null,
+			uploadDate = file.lastModified(),
+			branch = null,
+			source = source,
+		)
+	}
+
+	private fun UniFile.walkRelative(): List<Pair<String, UniFile>> {
+		val result = ArrayList<Pair<String, UniFile>>()
+		fun visit(directory: UniFile, prefix: String) {
+			directory.listFiles().orEmpty()
+				.sortedWith(compareBy(AlphanumComparator()) { it.name.orEmpty() })
+				.forEach { child ->
+					val name = child.name ?: return@forEach
+					if (name.startsWith('.') || name == ENTRY_NAME_INDEX) return@forEach
+					val relativePath = if (prefix.isEmpty()) name else "$prefix/$name"
+					if (child.isDirectory) visit(child, relativePath) else result += relativePath to child
+				}
+		}
+		visit(this, "")
+		return result
+	}
+
+	private fun UniFile.resolveRelative(relativePath: String): UniFile? {
+		if (relativePath.isEmpty()) return this
+		val segments = relativePath.split('/').filter(String::isNotEmpty)
+		if (segments.any { it == "." || it == ".." }) return null
+		return segments.fold(this as UniFile?) { parent, name ->
+			parent?.findFile(name)
+		}
+	}
+
+	private fun String.isImageName(): Boolean =
+		MimeTypes.getMimeTypeFromExtension(this)?.isImage == true
+
+	private fun String.isVideoName(): Boolean = endsWith(".mp4", true) ||
+		endsWith(".mkv", true) ||
+		endsWith(".ts", true) ||
+		endsWith(".webm", true) ||
+		endsWith(".avi", true) ||
+		endsWith(".m3u8", true)
+
+	private fun String.isNovelName(): Boolean = endsWith(".epub", true) || endsWith(".txt", true)
+
+	private fun materialize(file: UniFile, forceRefresh: Boolean = false): File {
 		val directory = File(cacheDir, "local_saf").apply { mkdirs() }
 		val extension = file.name?.substringAfterLast('.', "").orEmpty()
 		val suffix = extension.takeIf(String::isNotEmpty)?.let { ".$it" }.orEmpty()
 		val target = File(directory, "${file.uri.toString().longHashCode()}$suffix")
-		if (!target.isFile || file.length() >= 0L && target.length() != file.length()) {
+		val sourceLength = file.length()
+		val sourceModified = file.lastModified()
+		if (
+			forceRefresh ||
+				!target.isFile ||
+				sourceLength >= 0L && target.length() != sourceLength ||
+				sourceModified > 0L && target.lastModified() != sourceModified
+		) {
 			file.openInputStream().use { input -> target.outputStream().use(input::copyTo) }
+			if (sourceModified > 0L) target.setLastModified(sourceModified)
 		}
 		return target
 	}
@@ -589,14 +801,7 @@ class LocalContentParser {
 				return LocalContentParser(file, cacheDir)
 			}
 			if (!file.isDirectory) return null
-			val children = file.listFiles().orEmpty()
-			return LocalContentParser(file, cacheDir).takeIf {
-				children.any { child ->
-					child.name == ENTRY_NAME_INDEX ||
-						child.name?.hasSupportedLocalContentExtension() == true ||
-						MimeTypes.getMimeTypeFromExtension(child.name?.substringAfterLast('.').orEmpty())?.isImage == true
-				}
-			}
+			return LocalContentParser(file, cacheDir).takeIf { file.hasSupportedLocalContent() }
 		}
 
 		suspend fun find(roots: Iterable<File>, manga: Content): LocalContentParser? = channelFlow {
@@ -631,9 +836,31 @@ class LocalContentParser {
 				.any { child ->
 					child.isFile && (
 						child.name.hasSupportedLocalContentExtension() ||
-							MimeTypes.getMimeTypeFromExtension(child.extension)?.isImage == true
+							MimeTypes.getMimeTypeFromExtension(child.name)?.isImage == true
 						)
 				}
+		}
+
+		private fun UniFile.hasSupportedLocalContent(): Boolean {
+			val pending = ArrayDeque<UniFile>()
+			pending.add(this)
+			while (pending.isNotEmpty()) {
+				val current = pending.removeFirst()
+				for (child in current.listFiles().orEmpty()) {
+					val name = child.name ?: continue
+					if (name.startsWith('.')) continue
+					if (child.isDirectory) {
+						pending.addLast(child)
+					} else if (
+						name == ENTRY_NAME_INDEX ||
+						name.hasSupportedLocalContentExtension() ||
+						MimeTypes.getMimeTypeFromExtension(name)?.isImage == true
+					) {
+						return true
+					}
+				}
+			}
+			return false
 		}
 
 		private fun String.hasSupportedLocalContentExtension(): Boolean {

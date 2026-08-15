@@ -10,6 +10,7 @@ enum class LocalImportKind {
 }
 
 internal object LocalImportSupport {
+	const val IMPORT_STAGING_PREFIX = ".kototoro_import_"
 
 	private val videoExtensions = setOf("mp4", "mkv", "ts", "webm", "avi", "m3u8")
 	private val novelExtensions = setOf("epub", "txt")

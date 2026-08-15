@@ -11,6 +11,8 @@ import org.skepsun.kototoro.local.epub.EpubError
 import org.skepsun.kototoro.local.epub.EpubErrorHandler
 import org.skepsun.kototoro.local.epub.EpubFileManager
 import org.skepsun.kototoro.local.epub.EpubReaderImpl
+import org.skepsun.kototoro.local.epub.parseEpubChapterReference
+import org.skepsun.kototoro.local.epub.resolveEpubFile
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import java.io.File
 
@@ -123,13 +125,7 @@ class EpubInternalChapterLoader(
      * @return The chapter index, or null if extraction fails
      */
     private fun extractChapterIndexFromUrl(url: String): Int? {
-        if (!url.contains("#chapter/")) return null
-        
-        val indexStr = url.substringAfter("#chapter/")
-            .substringBefore("?")  // Remove query parameters if any
-            .substringBefore("#")  // Remove additional fragments if any
-        
-        return indexStr.toIntOrNull()
+        return parseEpubChapterReference(url)?.chapterIndex
     }
     
     /**
@@ -147,19 +143,16 @@ class EpubInternalChapterLoader(
         // Strategy 1: Look up in database mapping
         val mapping = epubChapterMappingDao.getById(chapter.id)
         if (mapping != null) {
-            val file = File(mapping.epubFilePath)
-            if (file.exists()) {
+            val file = resolveEpubFile(context, mapping.epubFilePath)
+            if (file?.exists() == true) {
                 return file
             }
         }
         
         // Strategy 2: Extract file path from URL
-        if (chapter.url.startsWith("file://") || chapter.url.startsWith("localepub://")) {
-            val filePath = chapter.url.substringBefore("#chapter/")
-                .removePrefix("file://")
-                .removePrefix("localepub://")
-            val file = File(filePath)
-            if (file.exists()) {
+        parseEpubChapterReference(chapter.url)?.let { reference ->
+            val file = resolveEpubFile(context, reference.fileReference)
+            if (file?.exists() == true) {
                 return file
             }
         }
