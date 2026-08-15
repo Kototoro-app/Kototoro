@@ -105,6 +105,15 @@ data class KototoroTopBarMenuAction(
     val onClick: () -> Unit,
 )
 
+@Composable
+private fun UpdateBadgeDot(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .background(MaterialTheme.colorScheme.error, RoundedCornerShape(percent = 50)),
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun KototoroTopBar(
@@ -290,11 +299,20 @@ fun KototoroTopBar(
                                         onClick = { isMoreMenuExpanded = true },
                                         modifier = Modifier.size(topBarControlHeight),
                                     ) {
-                                        Icon(
-                                            painterResource(R.drawable.ic_more_vert),
-                                            contentDescription = stringResource(R.string.more),
-                                            modifier = Modifier.size(topBarIconSize),
-                                        )
+                                        Box {
+                                            Icon(
+                                                painterResource(R.drawable.ic_more_vert),
+                                                contentDescription = stringResource(R.string.more),
+                                                modifier = Modifier.size(topBarIconSize),
+                                            )
+                                            if (isAppUpdateAvailable) {
+                                                UpdateBadgeDot(
+                                                    modifier = Modifier
+                                                        .align(Alignment.TopEnd)
+                                                        .size(8.dp),
+                                                )
+                                            }
+                                        }
                                     }
                                     GlassDropdownMenu(
                                         expanded = isMoreMenuExpanded,
@@ -421,6 +439,11 @@ fun KototoroTopBar(
                                                 painter = painterResource(R.drawable.ic_info_outline),
                                                 contentDescription = null,
                                             )
+                                        },
+                                        trailingIcon = if (isAppUpdateAvailable) {
+                                            { UpdateBadgeDot() }
+                                        } else {
+                                            null
                                         },
                                         onClick = {
                                             isMoreMenuExpanded = false

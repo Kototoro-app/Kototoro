@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">Kototoro</string>
+    <string name="about_author" translatable="false">by skepsun</string>
     <string name="quick_access">Quick access</string>
     <string name="home">Home</string>
     <string name="local_storage">Local storage</string>

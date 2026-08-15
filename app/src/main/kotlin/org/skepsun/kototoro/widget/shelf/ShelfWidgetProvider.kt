@@ -38,18 +38,18 @@ import androidx.glance.text.TextStyle
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
-import coil3.request.transformations
-import coil3.size.Size
-import coil3.transform.RoundedCornersTransformation
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.prefs.AppWidgetConfig
-import org.skepsun.kototoro.core.ui.image.TrimTransformation
 import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -93,15 +93,17 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 
 	override suspend fun provideGlance(context: Context, id: GlanceId) {
 		val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-		val entryPoint = EntryPointAccessors.fromApplication<BaseApp.BaseAppEntryPoint>(context.applicationContext)
 		val config = AppWidgetConfig(context, ShelfWidgetProvider::class.java, appWidgetId)
-		val items = loadItems(
-			context = context,
-			favouritesRepository = entryPoint.favouritesRepository(),
-			imageLoader = entryPoint.imageLoader(),
-			settings = entryPoint.settings(),
-			categoryId = config.categoryId,
-		)
+		val items = runCatchingCancellable {
+			val entryPoint = EntryPointAccessors.fromApplication<BaseApp.BaseAppEntryPoint>(context.applicationContext)
+			loadItems(
+				context = context,
+				favouritesRepository = entryPoint.favouritesRepository(),
+				imageLoader = entryPoint.imageLoader(),
+				settings = entryPoint.settings(),
+				categoryId = config.categoryId,
+			)
+		}.getOrDefault(emptyList())
 		provideContent {
 			ShelfWidgetContent(
 				items = items,
@@ -135,36 +137,39 @@ private object ShelfGlanceWidget : GlanceAppWidget() {
 				favouritesRepository.getContent(categoryId).take(WIDGET_ITEM_LIMIT)
 			}
 		}.getOrDefault(emptyList())
-		content.map { item ->
-			ShelfWidgetItem(
-				id = item.id,
-				title = item.title,
-				cover = loadCover(context, imageLoader, item),
-				readerIntent = ReaderIntent.Builder(context)
-					.manga(item)
-					.build()
-					.intent,
-			)
+		coroutineScope {
+			content.map { item ->
+				async {
+					runCatchingCancellable {
+						ShelfWidgetItem(
+							id = item.id,
+							title = item.title,
+							cover = loadCover(context, imageLoader, item),
+							readerIntent = ReaderIntent.Builder(context)
+								.manga(item)
+								.build()
+								.intent,
+						)
+					}.getOrNull()
+				}
+			}.awaitAll().filterNotNull()
 		}
 	}
 
 	private suspend fun loadCover(context: Context, imageLoader: ImageLoader, content: Content): Bitmap? {
+		val coverUrl = content.coverUrl?.takeIf { it.isNotBlank() }
+			?.let { if (it.startsWith("//")) "https:$it" else it } ?: return null
+		val cacheKey = contentCoverCacheKey(content, coverUrl) ?: return null
 		return withTimeoutOrNull(COVER_CACHE_READ_TIMEOUT_MILLIS) {
 			runCatchingCancellable {
-				val size = Size(
-					context.resources.getDimensionPixelSize(R.dimen.widget_cover_width),
-					context.resources.getDimensionPixelSize(R.dimen.widget_cover_height),
-				)
-				val transformation = RoundedCornersTransformation(
-					context.resources.getDimension(R.dimen.appwidget_corner_radius_inner),
-				)
 				imageLoader.execute(
 					ImageRequest.Builder(context)
-						.data(content.coverUrl)
-						.size(size)
-						.networkCachePolicy(CachePolicy.DISABLED)
+						.data(coverUrl)
+						.memoryCacheKey(cacheKey)
+						.diskCacheKey(cacheKey)
 						.mangaExtra(content)
-						.transformations(transformation, TrimTransformation())
+						.diskCachePolicy(CachePolicy.READ_ONLY)
+						.networkCachePolicy(CachePolicy.DISABLED)
 						.build(),
 				).getDrawableOrThrow().toBitmap()
 			}.getOrNull()
@@ -207,7 +212,6 @@ private fun ShelfWidgetContent(
 			) {
 				items(
 					items = items,
-					itemId = { it.id },
 				) { item ->
 					ShelfCard(item)
 				}

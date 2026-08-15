@@ -39,16 +39,17 @@ import androidx.glance.text.TextStyle
 import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
-import coil3.request.transformations
-import coil3.size.Size
-import coil3.transform.RoundedCornersTransformation
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.nav.ReaderIntent
+import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.prefs.AppWidgetConfig
 import org.skepsun.kototoro.core.util.ext.getDrawableOrThrow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -93,9 +94,11 @@ private object RecentGlanceWidget : GlanceAppWidget() {
 
 	override suspend fun provideGlance(context: Context, id: GlanceId) {
 		val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-		val entryPoint = EntryPointAccessors.fromApplication<BaseApp.BaseAppEntryPoint>(context.applicationContext)
 		val config = AppWidgetConfig(context, RecentWidgetProvider::class.java, appWidgetId)
-		val items = loadItems(context, entryPoint.historyRepository(), entryPoint.imageLoader(), entryPoint.settings())
+		val items = runCatchingCancellable {
+			val entryPoint = EntryPointAccessors.fromApplication<BaseApp.BaseAppEntryPoint>(context.applicationContext)
+			loadItems(context, entryPoint.historyRepository(), entryPoint.imageLoader(), entryPoint.settings())
+		}.getOrDefault(emptyList())
 		provideContent {
 			RecentWidgetContent(
 				items = items,
@@ -121,39 +124,42 @@ private object RecentGlanceWidget : GlanceAppWidget() {
 		if (!settings.appPassword.isNullOrEmpty()) {
 			return@withContext emptyList()
 		}
-		runCatchingCancellable { historyRepository.getList(0, WIDGET_ITEM_LIMIT) }
+		val list = runCatchingCancellable { historyRepository.getList(0, WIDGET_ITEM_LIMIT) }
 			.getOrDefault(emptyList())
-			.map { content ->
-				RecentWidgetItem(
-					id = content.id,
-					title = content.title,
-					metadata = content.authors.firstOrNull() ?: content.source.name,
-					cover = loadCover(context, imageLoader, content),
-					readerIntent = ReaderIntent.Builder(context)
-						.manga(content)
-						.build()
-						.intent,
-				)
-			}
+		coroutineScope {
+			list.map { content ->
+				async {
+					runCatchingCancellable {
+						RecentWidgetItem(
+							id = content.id,
+							title = content.title,
+							metadata = content.authors.firstOrNull() ?: content.source.name,
+							cover = loadCover(context, imageLoader, content),
+							readerIntent = ReaderIntent.Builder(context)
+								.manga(content)
+								.build()
+								.intent,
+						)
+					}.getOrNull()
+				}
+			}.awaitAll().filterNotNull()
+		}
 	}
 
 	private suspend fun loadCover(context: Context, imageLoader: ImageLoader, content: Content): Bitmap? {
+		val coverUrl = content.coverUrl?.takeIf { it.isNotBlank() }
+			?.let { if (it.startsWith("//")) "https:$it" else it } ?: return null
+		val cacheKey = contentCoverCacheKey(content, coverUrl) ?: return null
 		return withTimeoutOrNull(COVER_CACHE_READ_TIMEOUT_MILLIS) {
 			runCatchingCancellable {
-				val size = Size(
-					context.resources.getDimensionPixelSize(R.dimen.widget_cover_width),
-					context.resources.getDimensionPixelSize(R.dimen.widget_cover_height),
-				)
-				val transformation = RoundedCornersTransformation(
-					context.resources.getDimension(R.dimen.appwidget_corner_radius_inner),
-				)
 				imageLoader.execute(
 					ImageRequest.Builder(context)
-						.data(content.coverUrl)
-						.size(size)
-						.networkCachePolicy(CachePolicy.DISABLED)
+						.data(coverUrl)
+						.memoryCacheKey(cacheKey)
+						.diskCacheKey(cacheKey)
 						.mangaExtra(content)
-						.transformations(transformation)
+						.diskCachePolicy(CachePolicy.READ_ONLY)
+						.networkCachePolicy(CachePolicy.DISABLED)
 						.build(),
 				).getDrawableOrThrow().toBitmap()
 			}.getOrNull()
@@ -188,7 +194,6 @@ private fun RecentWidgetContent(
 			LazyColumn(modifier = GlanceModifier.defaultWeight()) {
 				items(
 					items = items,
-					itemId = { it.id },
 				) { item ->
 					RecentCard(item)
 				}

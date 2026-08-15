@@ -172,6 +172,7 @@ fun AppUpdateScreen(
 				.fillMaxWidth()
 				.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
 				.navigationBarsPadding()
+				.padding(horizontal = screenPadding)
 				.height(64.dp),
 			verticalAlignment = Alignment.CenterVertically,
 			horizontalArrangement = Arrangement.SpaceBetween,
