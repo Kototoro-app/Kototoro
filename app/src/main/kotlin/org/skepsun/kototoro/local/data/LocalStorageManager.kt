@@ -122,6 +122,21 @@ class LocalStorageManager @Inject constructor(
 		preferredDir ?: getFallbackStorageDir()?.takeIfWriteable()
 	}
 
+	suspend fun getReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getConfiguredStorageRoots().filter(LocalStorageRoot::isReadable)
+	}
+
+	suspend fun getWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getConfiguredStorageRoots().filter(LocalStorageRoot::isWriteable)
+	}
+
+	suspend fun getDefaultWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+		settings.mangaStorageUri
+			?.let { LocalStorageRoot.fromUri(context, it) }
+			?.takeIf(LocalStorageRoot::isWriteable)
+			?: getFallbackStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+	}
+
 	suspend fun getAllReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
 		(getConfiguredStorageDirs() + getConfiguredNovelStorageDirs() + getConfiguredVideoStorageDirs())
 			.filter { it.isReadable() }
@@ -147,13 +162,47 @@ class LocalStorageManager @Inject constructor(
 		preferredDir ?: getFallbackNovelStorageDir()?.takeIfWriteable()
 	}
 
+	suspend fun getNovelWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isWriteable)
+	}
+
+	suspend fun getDefaultNovelWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+		settings.novelStorageUri
+			?.let { LocalStorageRoot.fromUri(context, it) }
+			?.takeIf(LocalStorageRoot::isWriteable)
+			?: getFallbackNovelStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+	}
+
 	suspend fun getVideoWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
 		getConfiguredVideoStorageDirs()
 			.filter { it.isWriteable() }
 	}
 
+	suspend fun getVideoWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getConfiguredVideoStorageRoots().filter(LocalStorageRoot::isWriteable)
+	}
+
+	suspend fun getDefaultVideoWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+		settings.videoStorageUri
+			?.let { LocalStorageRoot.fromUri(context, it) }
+			?.takeIf(LocalStorageRoot::isWriteable)
+			?: getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+	}
+
 	suspend fun getApplicationStorageDirs(): Set<File> = runInterruptible(Dispatchers.IO) {
 		getAvailableStorageDirs()
+	}
+
+	suspend fun getApplicationStorageRoots(): Set<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+	}
+
+	suspend fun getAllReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		(
+			getConfiguredStorageRoots() +
+				getConfiguredNovelStorageRoots() +
+				getConfiguredVideoStorageRoots()
+			).distinct().filter(LocalStorageRoot::isReadable)
 	}
 
 	suspend fun getReadableDirs(kind: StorageContentKind): List<File> = runInterruptible(Dispatchers.IO) {
@@ -172,8 +221,16 @@ class LocalStorageManager @Inject constructor(
 		}
 	}
 
+	suspend fun resolveRoot(uri: Uri): LocalStorageRoot = runInterruptible(Dispatchers.IO) {
+		LocalStorageRoot.fromUri(context, uri) ?: throw NonFileUriException(uri)
+	}
+
 	suspend fun setDirIsNoMedia(dir: File) = runInterruptible(Dispatchers.IO) {
 		File(dir, NOMEDIA).createNewFile()
+	}
+
+	suspend fun setDirIsNoMedia(root: LocalStorageRoot) = runInterruptible(Dispatchers.IO) {
+		root.file.findFile(NOMEDIA) ?: root.file.createFile(NOMEDIA)?.openOutputStream()?.close()
 	}
 
 	fun takePermissions(uri: Uri) {
@@ -209,11 +266,25 @@ class LocalStorageManager @Inject constructor(
 		}
 	}
 
+	suspend fun getDirectoryDisplayName(root: LocalStorageRoot, isFullPath: Boolean): String =
+		runInterruptible(Dispatchers.IO) {
+			if (isFullPath) root.displayPath else root.name
+		}
+
 	@WorkerThread
 	private fun getConfiguredStorageDirs(): MutableSet<File> {
 		val set = getAvailableStorageDirs()
 		set.addAll(settings.userSpecifiedContentDirectories)
 		return set
+	}
+
+	@WorkerThread
+	private fun getConfiguredStorageRoots(): MutableSet<LocalStorageRoot> {
+		val roots = getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+		settings.userSpecifiedContentDirectoryUris.mapNotNullTo(roots) {
+			LocalStorageRoot.fromUri(context, it)
+		}
+		return roots
 	}
 
 	@WorkerThread
@@ -242,6 +313,15 @@ class LocalStorageManager @Inject constructor(
 	}
 
 	@WorkerThread
+	private fun getConfiguredNovelStorageRoots(): MutableSet<LocalStorageRoot> {
+		val roots = getAvailableNovelStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+		settings.novelStorageUri?.let { uri ->
+			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
+		}
+		return roots
+	}
+
+	@WorkerThread
 	private fun getAvailableVideoStorageDirs(): MutableSet<File> {
 		val result = LinkedHashSet<File>()
 		result += File(context.filesDir, DIR_NAME_VIDEO)
@@ -255,6 +335,15 @@ class LocalStorageManager @Inject constructor(
 		val result = getAvailableVideoStorageDirs()
 		settings.videoStorageDir?.let(result::add)
 		return result
+	}
+
+	@WorkerThread
+	private fun getConfiguredVideoStorageRoots(): MutableSet<LocalStorageRoot> {
+		val roots = getAvailableVideoStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+		settings.videoStorageUri?.let { uri ->
+			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
+		}
+		return roots
 	}
 
 	/**

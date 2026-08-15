@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.download.ui.worker
 
+import android.net.Uri
 import android.os.Parcelable
+import androidx.core.net.toUri
 import androidx.work.Data
 import kotlinx.parcelize.Parcelize
 import org.skepsun.kototoro.core.prefs.DownloadFormat
@@ -10,7 +12,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
@@ -45,7 +46,7 @@ class DownloadTask(
 	val isSilent: Boolean,
 	val chaptersIds: LongArray?,
 	val chapterRefs: List<ExecutionChapterRef>? = null,
-	val destination: File?,
+	val destination: Uri?,
 	val format: DownloadFormat?,
 	val allowMeteredNetwork: Boolean,
 	val preferredQuality: String? = null,
@@ -69,7 +70,9 @@ class DownloadTask(
 		chaptersIds = data.getLongArray(CHAPTERS)?.takeUnless(LongArray::isEmpty),
 		chapterRefs = data.getByteArray(CHAPTER_REFS)?.let(::decodeChapterRefs)
 			?: data.getString(CHAPTER_REFS)?.let(::decodeChapterRefsJson),
-		destination = data.getString(DESTINATION)?.let { File(it) },
+		destination = data.getString(DESTINATION)?.let { value ->
+			value.toUri().takeIf { it.scheme != null } ?: java.io.File(value).toUri()
+		},
 		format = data.getString(FORMAT)?.let { DownloadFormat.entries.find(it) },
 		allowMeteredNetwork = data.getBoolean(ALLOW_METERED, true),
 		preferredQuality = data.getString(PREFERRED_QUALITY),
@@ -109,7 +112,7 @@ class DownloadTask(
 					putByteArray(CHAPTER_REFS, encodedChapterRefs)
 				}
 			}
-			.putString(DESTINATION, destination?.path)
+			.putString(DESTINATION, destination?.toString())
 			.putString(FORMAT, format?.name)
 			.putBoolean(ALLOW_METERED, allowMeteredNetwork)
 			.putString(PREFERRED_QUALITY, preferredQuality)
@@ -161,7 +164,7 @@ class DownloadTask(
 			isSilent: Boolean,
 			executionChapterIds: LongArray?,
 			executionChapterRefs: List<ExecutionChapterRef>? = null,
-			destination: File?,
+			destination: Uri?,
 			format: DownloadFormat?,
 			allowMeteredNetwork: Boolean,
 			preferredQuality: String? = null,

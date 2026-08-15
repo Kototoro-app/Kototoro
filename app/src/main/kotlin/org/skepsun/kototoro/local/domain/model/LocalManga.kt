@@ -18,6 +18,7 @@ data class LocalContent(
 			File(uri.schemeSpecificPart)
 		}
 	},
+	val storageUri: Uri? = null,
 ) {
 
 	var createdAt: Long = -1L
@@ -29,7 +30,7 @@ data class LocalContent(
 			return field
 		}
 
-	fun toUri(): Uri = manga.url.toUri()
+	fun toUri(): Uri = storageUri ?: manga.url.toUri()
 
 	fun isMatchesQuery(query: String): Boolean {
 		return manga.title.contains(query, ignoreCase = true) ||
@@ -50,6 +51,6 @@ data class LocalContent(
 	}
 
 	override fun toString(): String {
-		return "LocalContent(${file.path}: ${manga.title})"
+		return "LocalContent(${toUri()}: ${manga.title})"
 	}
 }

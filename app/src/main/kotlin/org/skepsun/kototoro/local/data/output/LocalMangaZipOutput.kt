@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.data.output
 
 import androidx.annotation.WorkerThread
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
@@ -19,11 +20,12 @@ import java.io.File
 import java.util.zip.ZipFile
 
 class LocalContentZipOutput(
-	rootFile: File,
+	rootFile: UniFile,
 	manga: Content,
-) : LocalContentOutput(rootFile) {
+	cacheDir: File,
+) : LocalContentOutput(rootFile, cacheDir) {
 
-	val output = ZipOutput(File(rootFile.path + ".tmp"))
+	val output = ZipOutput(File.createTempFile("content_", SUFFIX_TMP, cacheDir))
 	val index = ContentIndex(null)
 	private val mutex = Mutex()
 
@@ -34,9 +36,15 @@ class LocalContentZipOutput(
 	}
 
 	override suspend fun mergeWithExisting() = mutex.withLock {
-		if (rootFile.exists()) {
+		if (rootFile.exists() && rootFile.length() > 0L) {
 			runInterruptible(Dispatchers.IO) {
-				mergeWith(rootFile)
+				val existing = File.createTempFile("existing_", ".cbz", cacheDir)
+				try {
+					rootFile.openInputStream().use { input -> existing.outputStream().use(input::copyTo) }
+					mergeWith(existing)
+				} finally {
+					existing.delete()
+				}
 			}
 		}
 	}
@@ -84,8 +92,8 @@ class LocalContentZipOutput(
 				output.finish()
 			}
 		}
-		rootFile.deleteAwait()
-		output.file.renameTo(rootFile)
+		output.file.inputStream().use { input -> rootFile.openOutputStream().use(input::copyTo) }
+		output.file.delete()
 		Unit
 	}
 
@@ -127,9 +135,9 @@ class LocalContentZipOutput(
 
 		suspend fun filterChapters(file: File, manga: Content, idsToRemove: Set<Long>) =
 			runInterruptible(Dispatchers.IO) {
-				val subject = LocalContentZipOutput(file, manga)
+				val subject = LocalContentZipOutput(checkNotNull(UniFile.fromFile(file)), manga, file.parentFile ?: file)
 				try {
-					ZipFile(subject.rootFile).use { zip ->
+					ZipFile(file).use { zip ->
 						val index = ContentIndex(zip.readText(zip.getEntry(ENTRY_NAME_INDEX)))
 						idsToRemove.forEach { id -> index.removeChapter(id) }
 						val patterns = requireNotNull(index.getContentInfo()?.chapters)
@@ -162,8 +170,8 @@ class LocalContentZipOutput(
 						}
 						subject.output.finish()
 						subject.output.close()
-						subject.rootFile.delete()
-						subject.output.file.renameTo(subject.rootFile)
+						file.delete()
+						subject.output.file.renameTo(file)
 					}
 				} catch (e: Throwable) {
 					subject.closeQuietly()

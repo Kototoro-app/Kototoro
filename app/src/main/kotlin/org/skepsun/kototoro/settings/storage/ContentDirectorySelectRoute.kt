@@ -62,7 +62,7 @@ fun ContentDirectorySelectRoute(
         onDismissRequest = onDismiss,
         text = {
             LazyColumn {
-                items(entries, key = { it.file?.absolutePath ?: "custom-directory" }) { item ->
+                items(entries, key = { it.root?.key ?: "custom-directory" }) { item ->
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { viewModel.onItemClick(item) }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -74,7 +74,7 @@ fun ContentDirectorySelectRoute(
                                 .padding(start = 8.dp),
                         ) {
                             Text(item.title ?: stringResource(item.titleRes))
-                            item.file?.absolutePath?.let { path ->
+                            item.root?.displayPath?.let { path ->
                                 Text(
                                     text = path,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

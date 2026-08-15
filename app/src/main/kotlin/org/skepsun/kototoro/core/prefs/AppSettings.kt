@@ -1604,6 +1604,50 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			prefs.edit { putStringSet(KEY_LOCAL_MANGA_DIRS, set) }
 		}
 
+	var userSpecifiedContentDirectoryUris: Set<Uri>
+		get() {
+			val values = prefs.getStringSet(KEY_LOCAL_MANGA_DIR_URIS, emptySet()).orEmpty()
+			return if (values.isNotEmpty()) {
+				values.mapToSet(Uri::parse)
+			} else {
+				prefs.getStringSet(KEY_LOCAL_MANGA_DIRS, emptySet()).orEmpty()
+					.mapToSet { Uri.fromFile(File(it)) }
+			}
+		}
+		set(value) = prefs.edit {
+			putStringSet(KEY_LOCAL_MANGA_DIR_URIS, value.mapToSet(Uri::toString))
+		}
+
+	var mangaStorageUri: Uri?
+		get() = prefs.getString(KEY_LOCAL_STORAGE_URI, null)?.let(Uri::parse)
+			?: prefs.getString(KEY_LOCAL_STORAGE, null)?.let { Uri.fromFile(File(it)) }
+		set(value) {
+			if (value != null && value !in userSpecifiedContentDirectoryUris) {
+				userSpecifiedContentDirectoryUris += value
+			}
+			prefs.edit {
+				if (value == null) {
+					remove(KEY_LOCAL_STORAGE_URI)
+				} else {
+					putString(KEY_LOCAL_STORAGE_URI, value.toString())
+				}
+			}
+		}
+
+	var novelStorageUri: Uri?
+		get() = prefs.getString(KEY_LOCAL_NOVEL_STORAGE_URI, null)?.let(Uri::parse)
+			?: prefs.getString(KEY_LOCAL_NOVEL_STORAGE, null)?.let { Uri.fromFile(File(it)) }
+		set(value) = prefs.edit {
+			if (value == null) remove(KEY_LOCAL_NOVEL_STORAGE_URI) else putString(KEY_LOCAL_NOVEL_STORAGE_URI, value.toString())
+		}
+
+	var videoStorageUri: Uri?
+		get() = prefs.getString(KEY_LOCAL_VIDEO_STORAGE_URI, null)?.let(Uri::parse)
+			?: prefs.getString(KEY_LOCAL_VIDEO_STORAGE, null)?.let { Uri.fromFile(File(it)) }
+		set(value) = prefs.edit {
+			if (value == null) remove(KEY_LOCAL_VIDEO_STORAGE_URI) else putString(KEY_LOCAL_VIDEO_STORAGE_URI, value.toString())
+		}
+
 	var mangaStorageDir: File?
 		get() = prefs.getString(KEY_LOCAL_STORAGE, null)?.let {
 			File(it)
@@ -2403,6 +2447,9 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LOCAL_STORAGE = "local_storage"
 		const val KEY_LOCAL_NOVEL_STORAGE = "local_novel_storage"
 		const val KEY_LOCAL_VIDEO_STORAGE = "local_video_storage"
+		const val KEY_LOCAL_STORAGE_URI = "local_storage_uri"
+		const val KEY_LOCAL_NOVEL_STORAGE_URI = "local_novel_storage_uri"
+		const val KEY_LOCAL_VIDEO_STORAGE_URI = "local_video_storage_uri"
 		const val KEY_READER_DOUBLE_PAGES = "reader_double_pages"
 		const val KEY_READER_DOUBLE_PAGES_SENSITIVITY = "reader_double_pages_sensitivity_2"
 		const val KEY_READER_DOUBLE_FOLDABLE = "reader_double_foldable"
@@ -2686,6 +2733,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_PROXY_PASSWORD = "proxy_password"
 		const val KEY_IMAGES_PROXY = "images_proxy_2"
 		const val KEY_LOCAL_MANGA_DIRS = "local_manga_dirs"
+		const val KEY_LOCAL_MANGA_DIR_URIS = "local_manga_dir_uris"
 		const val KEY_HISTORY_EXCLUDE_NSFW = "history_exclude_nsfw"
 		const val KEY_FAVOURITES_EXCLUDE_NSFW = "favourites_exclude_nsfw"
 		const val KEY_FEED_EXCLUDE_NSFW = "feed_exclude_nsfw"

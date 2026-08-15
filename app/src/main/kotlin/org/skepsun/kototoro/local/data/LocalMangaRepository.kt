@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.local.data
 
+import android.net.Uri
 import androidx.core.net.toFile
 import androidx.core.net.toUri
+import com.github.tvbox.osc.base.App
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,6 +24,7 @@ import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.ext.deleteAwait
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.takeIfWriteable
+import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.util.ext.withChildren
 import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
@@ -142,7 +146,7 @@ class LocalMangaRepository @Inject constructor(
 			// For saved manga, always re-parse from disk to get fresh chapter data
 			// This ensures we get updated chapters after EPUB download/extraction
 			// Bypass localContentIndex cache by using LocalContentParser.find directly
-			val parser = LocalContentParser.find(storageManager.getAllReadableDirs(), manga)
+			val parser = findParser(manga)
 			if (parser != null) {
 				// Parse directly from disk to get fresh data
 				parser.getContent(withDetails = true).manga
@@ -199,17 +203,21 @@ class LocalMangaRepository @Inject constructor(
 	}
 
 	suspend fun delete(manga: Content): Boolean {
-		val file = if (manga.isLocal) {
-			val uri = manga.url.toUri()
-			if (uri.scheme == "file") {
+		val uri = if (manga.isLocal) {
+			manga.url.toUri()
+		} else {
+			findSavedContent(manga, withDetails = false)?.toUri() ?: return false
+		}
+		val result = if (uri.scheme == "content") {
+			UniFile.fromUri(App.getInstance(), uri)?.delete() == true
+		} else {
+			val file = if (uri.scheme == "file") {
 				File(requireNotNull(uri.path) { "File uri path is null: $uri" })
 			} else {
 				File(uri.schemeSpecificPart)
 			}
-		} else {
-			findSavedContent(manga, withDetails = false)?.file ?: return false
+			file.deleteAwait()
 		}
-		val result = file.deleteAwait()
 		if (result) {
 			localContentIndex.delete(manga.id)
 			localStorageChanges.emit(null)
@@ -244,15 +252,15 @@ class LocalMangaRepository @Inject constructor(
 			return@runCatchingCancellable cached
 		}
 		// fast path
-		LocalContentParser.find(storageManager.getAllReadableDirs(), remoteContent)?.let {
+		findParser(remoteContent)?.let {
 			return it.getContent(withDetails)
 		}
 		// slow path
-		val files = getAllFiles()
+		val files = getAllStorageFiles()
 		return channelFlow {
 			for (file in files) {
 				launch {
-					val mangaInput = LocalContentParser.getOrNull(file)
+				val mangaInput = LocalContentParser.getOrNull(file, App.getInstance().cacheDir)
 					runCatchingCancellable {
 						val mangaInfo = mangaInput?.getContentInfo()
 						if (mangaInfo != null && mangaInfo.id == remoteContent.id) {
@@ -276,29 +284,29 @@ class LocalMangaRepository @Inject constructor(
 
 	override suspend fun getRelated(seed: Content): List<Content> = emptyList()
 
-	suspend fun getOutputDir(manga: Content, fallback: File?): File? {
+	suspend fun getOutputDir(manga: Content, fallback: Uri?): LocalStorageRoot? {
 		val isVideo = manga.source?.getContentType() == ContentType.VIDEO
 		val isNovel = manga.source?.getContentType() == ContentType.NOVEL
 
-		val defaultDir = fallback?.takeIfWriteable() ?: when {
-			isVideo -> storageManager.getVideoRoot()?.takeIfWriteable()
-			isNovel -> storageManager.getDefaultNovelWriteableDir()
-			else -> storageManager.getDefaultWriteableDir()
+		val defaultDir = fallback?.let { storageManager.resolveRoot(it) }?.takeIf(LocalStorageRoot::isWriteable) ?: when {
+			isVideo -> storageManager.getDefaultVideoWriteableRoot()
+			isNovel -> storageManager.getDefaultNovelWriteableRoot()
+			else -> storageManager.getDefaultWriteableRoot()
 		}
 		
-		if (defaultDir != null && LocalContentOutput.get(defaultDir, manga) != null) {
+		if (defaultDir != null && LocalContentOutput.get(defaultDir, manga, App.getInstance().cacheDir) != null) {
 			return defaultDir
 		}
 		
 		val writeableDirs = when {
-			isVideo -> storageManager.getVideoWriteableDirs()
-			isNovel -> storageManager.getNovelWriteableDirs()
-			else -> storageManager.getWriteableDirs()
+			isVideo -> storageManager.getVideoWriteableRoots()
+			isNovel -> storageManager.getNovelWriteableRoots()
+			else -> storageManager.getWriteableRoots()
 		}
 		
 		return writeableDirs
 			.firstOrNull {
-				LocalContentOutput.get(it, manga) != null
+				LocalContentOutput.get(it, manga, App.getInstance().cacheDir) != null
 			} ?: defaultDir
 	}
 
@@ -323,12 +331,12 @@ class LocalMangaRepository @Inject constructor(
 	}
 
 	fun getRawListAsFlow(): Flow<LocalContent> = channelFlow {
-		val files = getAllFiles()
+		val files = getAllStorageFiles()
 		val dispatcher = Dispatchers.IO.limitedParallelism(MAX_PARALLELISM)
 		for (file in files) {
 			launch(dispatcher) {
 				runCatchingCancellable {
-					LocalContentParser.getOrNull(file)?.getContent(withDetails = false)
+					LocalContentParser.getOrNull(file, App.getInstance().cacheDir)?.getContent(withDetails = false)
 				}.onFailure { e ->
 					e.printStackTraceDebug()
 				}.onSuccess { m ->
@@ -340,18 +348,28 @@ class LocalMangaRepository @Inject constructor(
 
 	private suspend fun getRawList(): ArrayList<LocalContent> = getRawListAsFlow().toCollection(ArrayList())
 
-	private suspend fun getAllFiles() = storageManager.getAllReadableDirs()
-		.asSequence()
-		.flatMap { dir ->
-			dir.withChildren { children -> 
-				children.filterNot { it.isHidden || it.shouldSkip() }.toList()
+	private suspend fun getAllStorageFiles(): List<UniFile> = storageManager.getAllReadableRoots()
+		.flatMap { root ->
+			root.file.listFiles().orEmpty().filterNot { child ->
+				child.name?.endsWith(BACKUP_SUFFIX, ignoreCase = true) == true ||
+					child.isDirectory && child.findFile(FILENAME_SKIP) != null
 			}
 		}
 
+	private suspend fun findParser(manga: Content): LocalContentParser? {
+		val baseName = manga.title.toFileNameSafe()
+		val candidates = setOf(baseName, "$baseName.cbz", "${manga.id}_$baseName", "${manga.id}_$baseName.cbz")
+		return storageManager.getAllReadableRoots().firstNotNullOfOrNull { root ->
+			candidates.firstNotNullOfOrNull { name ->
+				root.file.findFile(name)?.let { file ->
+					LocalContentParser.getOrNull(file, App.getInstance().cacheDir)?.takeIf { parser ->
+						runCatchingCancellable { parser.getContentInfo()?.id == manga.id }.getOrDefault(false)
+					}
+				}
+				}
+			}
+	}
+
 	private fun Collection<LocalContent>.unwrap(): List<Content> = map { it.manga }
 
-	private fun File.shouldSkip(): Boolean {
-		return name.endsWith(BACKUP_SUFFIX, ignoreCase = true) ||
-			(isDirectory && File(this, FILENAME_SKIP).exists())
-	}
 }

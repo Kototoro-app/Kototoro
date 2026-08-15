@@ -9,8 +9,8 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
-import org.skepsun.kototoro.core.util.ext.isWriteable
 import org.skepsun.kototoro.local.data.LocalStorageManager
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -31,11 +31,11 @@ class ContentDirectorySelectViewModel @Inject constructor(
 	}
 
 	fun onItemClick(item: DirectoryModel) {
-		if (item.file != null) {
+		if (item.root != null) {
 			when (contentType) {
-				CONTENT_TYPE_NOVEL -> settings.novelStorageDir = item.file
-				CONTENT_TYPE_VIDEO -> settings.videoStorageDir = item.file
-				else -> settings.mangaStorageDir = item.file
+				CONTENT_TYPE_NOVEL -> settings.novelStorageUri = item.root.uri
+				CONTENT_TYPE_VIDEO -> settings.videoStorageUri = item.root.uri
+				else -> settings.mangaStorageUri = item.root.uri
 			}
 			onDismissDialog.call(Unit)
 		} else {
@@ -46,20 +46,16 @@ class ContentDirectorySelectViewModel @Inject constructor(
 	fun onCustomDirectoryPicked(uri: Uri) {
 		launchJob(Dispatchers.Default) {
 			storageManager.takePermissions(uri)
-			val dir = storageManager.resolveUri(uri)
-			if (!dir.isWriteable()) {
-				throw AccessDeniedException(dir)
+			val root = storageManager.resolveRoot(uri)
+			if (!root.isWriteable()) {
+				throw AccessDeniedException(File(root.displayPath))
 			}
 			when (contentType) {
-				CONTENT_TYPE_NOVEL -> settings.novelStorageDir = dir
-				CONTENT_TYPE_VIDEO -> settings.videoStorageDir = dir
-				else -> {
-					if (dir !in storageManager.getApplicationStorageDirs()) {
-						settings.mangaStorageDir = dir
-					}
-				}
+				CONTENT_TYPE_NOVEL -> settings.novelStorageUri = root.uri
+				CONTENT_TYPE_VIDEO -> settings.videoStorageUri = root.uri
+				else -> settings.mangaStorageUri = root.uri
 			}
-			storageManager.setDirIsNoMedia(dir)
+			storageManager.setDirIsNoMedia(root)
 			onDismissDialog.call(Unit)
 		}
 	}
@@ -67,22 +63,22 @@ class ContentDirectorySelectViewModel @Inject constructor(
 	fun refresh() {
 		launchJob(Dispatchers.Default) {
 			val defaultValue = when (contentType) {
-				CONTENT_TYPE_NOVEL -> storageManager.getDefaultNovelWriteableDir()
-				CONTENT_TYPE_VIDEO -> storageManager.getDefaultVideoWriteableDir()
-				else -> storageManager.getDefaultWriteableDir()
+				CONTENT_TYPE_NOVEL -> storageManager.getDefaultNovelWriteableRoot()
+				CONTENT_TYPE_VIDEO -> storageManager.getDefaultVideoWriteableRoot()
+				else -> storageManager.getDefaultWriteableRoot()
 			}
 			val available = when (contentType) {
-				CONTENT_TYPE_NOVEL -> storageManager.getNovelWriteableDirs()
-				CONTENT_TYPE_VIDEO -> storageManager.getVideoWriteableDirs()
-				else -> storageManager.getWriteableDirs()
+				CONTENT_TYPE_NOVEL -> storageManager.getNovelWriteableRoots()
+				CONTENT_TYPE_VIDEO -> storageManager.getVideoWriteableRoots()
+				else -> storageManager.getWriteableRoots()
 			}
 			items.value = buildList(available.size + 1) {
-				available.mapTo(this) { dir ->
+				available.mapTo(this) { root ->
 					DirectoryModel(
-						title = storageManager.getDirectoryDisplayName(dir, isFullPath = false),
+						title = storageManager.getDirectoryDisplayName(root, isFullPath = false),
 						titleRes = 0,
-						file = dir,
-						isChecked = dir == defaultValue,
+						root = root,
+						isChecked = root == defaultValue,
 						isAvailable = true,
 						isRemovable = false,
 					)
@@ -90,7 +86,7 @@ class ContentDirectorySelectViewModel @Inject constructor(
 				this += DirectoryModel(
 					title = null,
 					titleRes = R.string.pick_custom_directory,
-					file = null,
+					root = null,
 					isChecked = false,
 					isAvailable = true,
 					isRemovable = false,

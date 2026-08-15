@@ -87,6 +87,7 @@ rxjava2 = "2.2.21"
 rxjava3 = "3.1.10"
 mockk = "1.13.13"
 ucrop = "2.2.8"
+unifile = "08f224c8f9"
 nanohttpd = "2.3.1"
 mlkitText = "16.0.1"
 mlkitTranslate = "17.0.2"
@@ -126,6 +127,7 @@ androidx-collection = { module = "androidx.collection:collection-ktx", version.r
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-documentfile = { module = "androidx.documentfile:documentfile", version.ref = "documentfile" }
+unifile = { module = "com.github.mihon:unifile", version.ref = "unifile" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 androidx-fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hilt" }

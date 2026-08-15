@@ -1,11 +1,28 @@
 package org.skepsun.kototoro.download.ui.worker
 
+import android.net.Uri
 import androidx.work.Data
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class DownloadTaskDataTest {
+
+	@Test
+	fun `content destination uri survives WorkManager serialization`() {
+		val destination = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AComics")
+		val task = DownloadTask.createExecutionTask(
+			executionMangaId = 1L,
+			isPaused = false,
+			isSilent = false,
+			executionChapterIds = null,
+			destination = destination,
+			format = null,
+			allowMeteredNetwork = true,
+		)
+
+		assertEquals(destination, DownloadTask(task.toData()).destination)
+	}
 
 	@Test
 	fun `large chapter selection stays within WorkManager data limit`() {

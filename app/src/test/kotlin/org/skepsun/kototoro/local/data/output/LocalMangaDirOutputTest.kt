@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.local.data.output
 
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -30,7 +31,7 @@ class LocalMangaDirOutputTest {
 		}
 		File(root, LocalContentOutput.ENTRY_NAME_INDEX).writeText(index.toString())
 
-		LocalContentDirOutput(root, manga).use { output ->
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
 			output.deleteChapters(setOf(chapters[0].id))
 			output.finish()
 		}
@@ -51,7 +52,7 @@ class LocalMangaDirOutputTest {
 		}
 		File(root, LocalContentOutput.ENTRY_NAME_INDEX).writeText(index.toString())
 
-		LocalContentDirOutput(root, manga).use { output ->
+		LocalContentDirOutput(checkNotNull(UniFile.fromFile(root)), manga, root).use { output ->
 			output.deleteChapters(setOf(incompleteChapter.id))
 			output.finish()
 		}

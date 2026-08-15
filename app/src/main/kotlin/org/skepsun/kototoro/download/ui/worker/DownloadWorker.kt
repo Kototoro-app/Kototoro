@@ -378,9 +378,10 @@ class DownloadWorker @AssistedInject constructor(
 		Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${subject.id} title=${subject.title} excluded=${excludedIds.size}")
 		val chaptersToSkip = excludedIds.toMutableSet()
 		mangaLock.withLock(subject) {
-			var destination = localContentRepository.getOutputDir(subject, task.destination)
-			checkNotNull(destination) { applicationContext.getString(R.string.cannot_find_available_storage) }
-			Log.d("DownloadWorker", "downloadContentImpl outputDir=${destination.absolutePath}")
+			var storageRoot = localContentRepository.getOutputDir(subject, task.destination)
+			checkNotNull(storageRoot) { applicationContext.getString(R.string.cannot_find_available_storage) }
+			val destination = File(applicationContext.cacheDir, "downloads").apply { mkdirs() }
+			Log.d("DownloadWorker", "downloadContentImpl outputDir=${storageRoot.displayPath}")
 			var output: LocalContentOutput? = null
 			try {
 				val executionManga = resolvedContent.executionManga
@@ -426,14 +427,17 @@ class DownloadWorker @AssistedInject constructor(
 
 				if (isNovel && !hasEpubChapters) {
 					// 尝试获取小说专用的输出目录
-					destination = localStorageManager.getDefaultNovelWriteableDir() ?: localStorageManager.getNovelWriteableDirs().firstOrNull() ?: destination
-					Log.d("DownloadWorker", "downloadContentImpl novel outputDir=${destination.absolutePath}")
+					storageRoot = localStorageManager.getDefaultNovelWriteableRoot()
+						?: localStorageManager.getNovelWriteableRoots().firstOrNull()
+						?: storageRoot
+					Log.d("DownloadWorker", "downloadContentImpl novel outputDir=${storageRoot.displayPath}")
 				}
 
 				output = LocalContentOutput.getOrCreate(
-					root = destination,
+					root = storageRoot,
 					manga = executionDetails,
 					format = downloadFormat,
+					cacheDir = applicationContext.cacheDir,
 				)
 				val coverUrl = executionDetails.largeCoverUrl.ifNullOrEmpty { executionDetails.coverUrl }
 				if (!coverUrl.isNullOrEmpty()) {
@@ -446,7 +450,7 @@ class DownloadWorker @AssistedInject constructor(
 					downloadNovelChapters(executionDetails, task, repo, destination, output, chaptersToSkip)
 					output.mergeWithExisting()
 					output.finish()
-					val localContent = LocalContentParser(output.rootFile).getContent(withDetails = true)
+					val localContent = LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = true)
 					// 刷新缓存，确保 UI 能识别到本地 icon
 					localContentRepository.findSavedContent(executionDetails)
 					android.util.Log.d("DownloadWorker", "Novel download completed, emitting localStorageChanges for ${output.rootFile}")
@@ -458,7 +462,7 @@ class DownloadWorker @AssistedInject constructor(
 				publishState(currentState.copy(isIndeterminate = true, eta = -1L, isStuck = false))
 				output.mergeWithExisting()
 				output.finish()
-				val localContent = LocalContentParser(output.rootFile).getContent(withDetails = true)
+				val localContent = LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = true)
 				// 刷新缓存
 				localContentRepository.findSavedContent(executionDetails)
 				localStorageChanges.emit(localContent)
@@ -846,7 +850,7 @@ class DownloadWorker @AssistedInject constructor(
 						android.util.Log.i("DownloadWorker", "EPUB file saved at: ${epubFile.absolutePath}")
 						
 						// Notify UI about the new local chapters
-						localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
+						localStorageChanges.emit(LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = false))
 					}.onFailure { e ->
 						android.util.Log.e("DownloadWorker", "Failed to parse EPUB chapters", e)
 						e.printStackTrace()
@@ -933,7 +937,7 @@ class DownloadWorker @AssistedInject constructor(
 			if (output.flushChapter(chapter.value)) {
 				tempDir.deleteRecursively()
 				runCatchingCancellable {
-					localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
+					localStorageChanges.emit(LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = false))
 				}.onFailure(Throwable::printStackTraceDebug)
 			}
 			publishState(currentState.copy(downloadedChapters = currentState.downloadedChapters + 1))
@@ -1148,7 +1152,7 @@ class DownloadWorker @AssistedInject constructor(
 			output.putChapterImages(chapter.value.id, mapping)
 			if (output.flushChapter(chapter.value)) {
 				runCatchingCancellable {
-					localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
+					localStorageChanges.emit(LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = false))
 				}.onFailure(Throwable::printStackTraceDebug)
 			}
 
@@ -1495,7 +1499,7 @@ class DownloadWorker @AssistedInject constructor(
 			
 			// 通知本地存储变化
 			runCatchingCancellable {
-				localStorageChanges.emit(LocalContentParser(output.rootFile).getContent(withDetails = false))
+				localStorageChanges.emit(LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = false))
 			}.onFailure(Throwable::printStackTraceDebug)
 			
 			println("DownloadWorker.downloadEpubChapter: Completed successfully")

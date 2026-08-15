@@ -3,19 +3,19 @@ package org.skepsun.kototoro.settings.storage
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
-import java.io.File
+import org.skepsun.kototoro.local.data.LocalStorageRoot
 
 data class DirectoryModel(
 	val title: String?,
 	@StringRes val titleRes: Int,
-	val file: File?,
+	val root: LocalStorageRoot?,
 	val isRemovable: Boolean,
 	val isChecked: Boolean,
 	val isAvailable: Boolean,
 ) : ListModel {
 
 	override fun areItemsTheSame(other: ListModel): Boolean {
-		return other is DirectoryModel && other.file == file && other.title == title && other.titleRes == titleRes
+		return other is DirectoryModel && other.root == root && other.title == title && other.titleRes == titleRes
 	}
 
 	override fun getChangePayload(previousState: ListModel): Any? {

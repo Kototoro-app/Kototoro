@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.local.data.output
 
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,14 +11,18 @@ import org.skepsun.kototoro.core.util.ext.MimeType
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.local.data.input.LocalContentParser
+import org.skepsun.kototoro.local.data.LocalStorageRoot
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import java.io.File
 
 sealed class LocalContentOutput(
-	val rootFile: File,
+	val rootFile: UniFile,
+	protected val cacheDir: File,
 ) : Closeable {
+
+	val rootUri get() = rootFile.uri
 
 	abstract suspend fun mergeWithExisting()
 
@@ -40,9 +45,10 @@ sealed class LocalContentOutput(
 		private val mutex = Mutex()
 
 		suspend fun getOrCreate(
-			root: File,
+			root: LocalStorageRoot,
 			manga: Content,
 			format: DownloadFormat,
+			cacheDir: File,
 		): LocalContentOutput = withContext(Dispatchers.IO) {
 			val targetFormat = if (format == DownloadFormat.AUTOMATIC) {
 				if (manga.chapters.let { it != null && it.size <= 3 }) {
@@ -53,46 +59,51 @@ sealed class LocalContentOutput(
 			} else {
 				format
 			}
-			checkNotNull(getImpl(root, manga, onlyIfExists = false, format = targetFormat))
+			checkNotNull(getImpl(root, manga, onlyIfExists = false, format = targetFormat, cacheDir = cacheDir))
 		}
 
-		suspend fun get(root: File, manga: Content): LocalContentOutput? = withContext(Dispatchers.IO) {
-			getImpl(root, manga, onlyIfExists = true, format = DownloadFormat.AUTOMATIC)
+		suspend fun get(root: LocalStorageRoot, manga: Content, cacheDir: File): LocalContentOutput? = withContext(Dispatchers.IO) {
+			getImpl(root, manga, onlyIfExists = true, format = DownloadFormat.AUTOMATIC, cacheDir = cacheDir)
 		}
 
 		private suspend fun getImpl(
-			root: File,
+			root: LocalStorageRoot,
 			manga: Content,
 			onlyIfExists: Boolean,
 			format: DownloadFormat,
+			cacheDir: File,
 		): LocalContentOutput? {
 			mutex.withLock {
 				var i = 0
 				val baseName = manga.title.toFileNameSafe()
 				while (true) {
 					val fileName = if (i == 0) baseName else baseName + "_$i"
-					val dir = File(root, fileName)
-					val zip = File(root, "$fileName.cbz")
+					val dir = root.file.findFile(fileName)
+					val zip = root.file.findFile("$fileName.cbz")
 					i++
 					return when {
-						dir.isDirectory -> {
-							if (canWriteTo(dir, manga)) {
-								LocalContentDirOutput(dir, manga)
+						dir?.isDirectory == true -> {
+							if (canWriteTo(dir, manga, cacheDir)) {
+								LocalContentDirOutput(dir, manga, cacheDir)
 							} else {
 								continue
 							}
 						}
 
-						zip.isFile -> if (canWriteTo(zip, manga)) {
-							LocalContentZipOutput(zip, manga)
+						zip?.isFile == true -> if (canWriteTo(zip, manga, cacheDir)) {
+							LocalContentZipOutput(zip, manga, cacheDir)
 						} else {
 							continue
 						}
 
 						!onlyIfExists -> when (format) {
 							DownloadFormat.AUTOMATIC -> null
-							DownloadFormat.SINGLE_CBZ -> LocalContentZipOutput(zip, manga)
-							DownloadFormat.MULTIPLE_CBZ -> LocalContentDirOutput(dir, manga)
+							DownloadFormat.SINGLE_CBZ -> LocalContentZipOutput(
+								checkNotNull(root.file.createFile("$fileName.cbz")), manga, cacheDir,
+							)
+							DownloadFormat.MULTIPLE_CBZ -> LocalContentDirOutput(
+								checkNotNull(root.file.createDirectory(fileName)), manga, cacheDir,
+							)
 						}
 
 						else -> null
@@ -101,9 +112,9 @@ sealed class LocalContentOutput(
 			}
 		}
 
-		private suspend fun canWriteTo(file: File, manga: Content): Boolean {
+		private suspend fun canWriteTo(file: UniFile, manga: Content, cacheDir: File): Boolean {
 			val info = runCatchingCancellable {
-				LocalContentParser(file).getContentInfo()
+				LocalContentParser(file, cacheDir).getContentInfo()
 			}.onFailure {
 				it.printStackTraceDebug()
 			}.getOrNull() ?: return false

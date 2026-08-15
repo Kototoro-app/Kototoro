@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.withStyle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.FileSize
+import org.skepsun.kototoro.local.data.LocalStorageRoot
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,7 +59,7 @@ internal fun ContentDirectoriesScreen(
 	isLoading: Boolean,
 	onBack: () -> Unit,
 	onAddDirectory: () -> Unit,
-	onRemoveDirectory: (File) -> Unit,
+	onRemoveDirectory: (LocalStorageRoot) -> Unit,
 ) {
 	val listSpacing = dimensionResource(R.dimen.list_spacing_large)
 	Scaffold(
@@ -122,9 +123,9 @@ internal fun ContentDirectoriesScreen(
 		) {
 			items(
 				items = items,
-				key = { it.path.absolutePath },
+				key = { it.root.key },
 			) { item ->
-				DirectoryConfigCard(item = item, onRemove = { onRemoveDirectory(item.path) })
+				DirectoryConfigCard(item = item, onRemove = { onRemoveDirectory(item.root) })
 			}
 		}
 	}
@@ -147,7 +148,7 @@ private fun DirectoryConfigCard(
 				modifier = Modifier.padding(horizontal = horizontalPadding).padding(top = horizontalPadding),
 			)
 			Text(
-				text = item.path.absolutePath,
+				text = item.root.displayPath,
 				style = MaterialTheme.typography.bodyMedium,
 				modifier = Modifier.padding(horizontal = horizontalPadding).padding(top = dimensionResource(R.dimen.margin_small)),
 			)
@@ -159,20 +160,24 @@ private fun DirectoryConfigCard(
 				verticalAlignment = Alignment.CenterVertically,
 			) {
 				Text(
-					text = stringResource(
-						R.string.available_pattern,
-						FileSize.BYTES.format(androidx.compose.ui.platform.LocalContext.current, item.available),
-					),
+					text = item.available?.let { available ->
+						stringResource(
+							R.string.available_pattern,
+							FileSize.BYTES.format(androidx.compose.ui.platform.LocalContext.current, available),
+						)
+					} ?: stringResource(R.string.unknown),
 					style = MaterialTheme.typography.bodyMedium,
 					color = MaterialTheme.colorScheme.onSurfaceVariant,
 					maxLines = 1,
 					overflow = TextOverflow.Ellipsis,
 					modifier = Modifier.weight(1f).padding(end = dimensionResource(R.dimen.margin_small)),
 				)
-				LinearProgressIndicator(
-					progress = { directoryProgress(item) },
-					modifier = Modifier.width(160.dp).height(10.dp),
-				)
+				if (item.available != null) {
+					LinearProgressIndicator(
+						progress = { directoryProgress(item) },
+						modifier = Modifier.width(160.dp).height(10.dp),
+					)
+				}
 			}
 			if (info.isNotEmpty()) {
 				Text(
@@ -203,7 +208,7 @@ private fun SpacerForPrivateDirectory() {
 }
 
 private fun directoryProgress(item: DirectoryConfigModel): Float {
-	val availableKilobytes = FileSize.BYTES.convert(item.available, FileSize.KILOBYTES)
+	val availableKilobytes = FileSize.BYTES.convert(item.available ?: return 0f, FileSize.KILOBYTES)
 	if (availableKilobytes <= 0L) return 0f
 	val usedKilobytes = FileSize.BYTES.convert(item.size, FileSize.KILOBYTES)
 	return (usedKilobytes.toDouble() / availableKilobytes.toDouble()).toFloat().coerceIn(0f, 1f)
@@ -253,7 +258,7 @@ private fun ContentDirectoriesScreenPreview() {
 			items = listOf(
 				DirectoryConfigModel(
 					title = "App storage",
-					path = File("/storage/emulated/0/Android/data/org.skepsun.kototoro/files"),
+					root = LocalStorageRoot.fromFile(File("/storage/emulated/0/Android/data/org.skepsun.kototoro/files")),
 					isDefault = true,
 					isAppPrivate = true,
 					isAccessible = true,

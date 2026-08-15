@@ -5,7 +5,7 @@ import androidx.recyclerview.widget.DiffUtil.ItemCallback
 class DirectoryDiffCallback : ItemCallback<DirectoryModel>() {
 
 	override fun areItemsTheSame(oldItem: DirectoryModel, newItem: DirectoryModel): Boolean {
-		return oldItem.file == newItem.file
+		return oldItem.root == newItem.root
 	}
 
 	override fun areContentsTheSame(oldItem: DirectoryModel, newItem: DirectoryModel): Boolean {

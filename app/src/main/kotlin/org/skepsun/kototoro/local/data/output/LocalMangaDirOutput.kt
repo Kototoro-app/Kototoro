@@ -1,6 +1,6 @@
 package org.skepsun.kototoro.local.data.output
 
-import androidx.core.net.toUri
+import com.hippo.unifile.UniFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
@@ -10,9 +10,7 @@ import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.MimeType
 import org.skepsun.kototoro.core.util.ext.deleteAwait
-import org.skepsun.kototoro.core.util.ext.takeIfReadable
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
-import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.core.zip.ZipOutput
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
@@ -22,12 +20,15 @@ import org.skepsun.kototoro.parsers.util.nullIfEmpty
 import java.io.File
 
 class LocalContentDirOutput(
-	rootFile: File,
+	rootFile: UniFile,
 	manga: Content,
-) : LocalContentOutput(rootFile) {
+	cacheDir: File,
+) : LocalContentOutput(rootFile, cacheDir) {
 
-	val chaptersOutput = HashMap<ContentChapter, ZipOutput>()
-	val index = ContentIndex(File(rootFile, ENTRY_NAME_INDEX).takeIfReadable()?.readText())
+	private data class ChapterOutput(val zip: ZipOutput, val targetName: String)
+
+	private val chaptersOutput = HashMap<ContentChapter, ChapterOutput>()
+	val index = ContentIndex(rootFile.findFile(ENTRY_NAME_INDEX)?.openInputStream()?.bufferedReader()?.use { it.readText() })
 	private val mutex = Mutex()
 
 	init {
@@ -47,11 +48,8 @@ class LocalContentDirOutput(
 			}
 		}
 		runInterruptible(Dispatchers.IO) {
-			// Ensure rootFile directory exists
-			if (!rootFile.exists()) {
-				rootFile.mkdirs()
-			}
-			file.copyTo(File(rootFile, name), overwrite = true)
+			val target = rootFile.findFile(name) ?: checkNotNull(rootFile.createFile(name))
+			file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
 		}
 		index.setCoverEntry(name)
 		flushIndex()
@@ -60,11 +58,11 @@ class LocalContentDirOutput(
 	override suspend fun addPage(chapter: IndexedValue<ContentChapter>, file: File, pageNumber: Int, type: MimeType?) =
 		mutex.withLock {
 			val output = chaptersOutput.getOrPut(chapter.value) {
-				// Ensure rootFile directory exists before creating chapter CBZ
-				if (!rootFile.exists()) {
-					rootFile.mkdirs()
-				}
-				ZipOutput(File(rootFile, chapterFileName(chapter) + SUFFIX_TMP))
+				val targetName = chapterFileName(chapter)
+				ChapterOutput(
+					zip = ZipOutput(File.createTempFile("chapter_", SUFFIX_TMP, cacheDir)),
+					targetName = targetName,
+				)
 			}
 			val name = buildString {
 				append(FILENAME_PATTERN.format(chapter.value.branch.hashCode(), chapter.index + 1, pageNumber))
@@ -74,7 +72,7 @@ class LocalContentDirOutput(
 				}
 			}
 			runInterruptible(Dispatchers.IO) {
-				output.put(name, file)
+				output.zip.put(name, file)
 			}
 			index.addChapter(chapter, chapterFileName(chapter), null)
 		}
@@ -102,19 +100,19 @@ class LocalContentDirOutput(
 
 	override suspend fun cleanup() = mutex.withLock {
 		for (output in chaptersOutput.values) {
-			output.file.deleteAwait()
+			output.zip.file.deleteAwait()
 		}
 	}
 
 	override fun close() {
 		for (output in chaptersOutput.values) {
-			output.closeQuietly()
+			output.zip.closeQuietly()
 		}
 	}
 
 	suspend fun deleteChapters(ids: Set<Long>) = mutex.withLock {
 		val chapters = checkNotNull(
-			(index.getContentInfo() ?: LocalContentParser(rootFile).getContent(withDetails = true).manga).chapters,
+			(index.getContentInfo() ?: LocalContentParser(rootFile, cacheDir).getContent(withDetails = true).manga).chapters,
 		) {
 			"No chapters found"
 		}.withIndex()
@@ -123,20 +121,16 @@ class LocalContentDirOutput(
 			if (chapter.value.id !in victimsIds) {
 				continue
 			}
-			val chapterFile = index.getChapterFileName(chapter.value.id)?.let {
-				File(rootFile, it)
-			} ?: chapter.value.url?.toUri()?.toFileOrNull()
+			val chapterFile = index.getChapterFileName(chapter.value.id)?.let(rootFile::findFile)
 			if (chapterFile == null) {
 				// A cancelled download can leave remote chapter metadata without a completed local file.
 				victimsIds.remove(chapter.value.id)
 				continue
 			}
-			val contentRoot = rootFile.canonicalFile.toPath()
-			val chapterPath = chapterFile.canonicalFile.toPath()
-			check(chapterFile.exists() && chapterPath != contentRoot && chapterPath.startsWith(contentRoot)) {
+			check(chapterFile.exists() && chapterFile.parentFile?.uri == rootFile.uri) {
 				"Chapter file is missing or outside the content directory: $chapterFile"
 			}
-			chapterFile.deleteAwait()
+			check(chapterFile.delete()) { "Failed to delete chapter file: $chapterFile" }
 			index.removeChapter(chapter.value.id)
 			victimsIds.remove(chapter.value.id)
 		}
@@ -149,20 +143,21 @@ class LocalContentDirOutput(
 		index.setFrom(newIndex)
 	}
 
-	private suspend fun ZipOutput.flushAndFinish() = runInterruptible(Dispatchers.IO) {
+	private suspend fun ChapterOutput.flushAndFinish() = runInterruptible(Dispatchers.IO) {
 		val e: Throwable? = try {
-			finish()
+			zip.finish()
 			null
 		} catch (e: Throwable) {
 			e
 		} finally {
-			close()
+			zip.close()
 		}
 		if (e == null) {
-			val resFile = File(file.absolutePath.removeSuffix(SUFFIX_TMP))
-			file.renameTo(resFile)
+			val target = rootFile.findFile(targetName) ?: checkNotNull(rootFile.createFile(targetName))
+			zip.file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
+			zip.file.delete()
 		} else {
-			file.delete()
+			zip.file.delete()
 			throw e
 		}
 	}
@@ -184,7 +179,7 @@ class LocalContentDirOutput(
 		var i = 0
 		while (true) {
 			val name = (if (i == 0) baseName else baseName + "_$i") + ".cbz"
-			if (!File(rootFile, name).exists()) {
+			if (rootFile.findFile(name) == null) {
 				return name
 			}
 			i++
@@ -192,7 +187,8 @@ class LocalContentDirOutput(
 	}
 
 	private suspend fun flushIndex() = runInterruptible(Dispatchers.IO) {
-		File(rootFile, ENTRY_NAME_INDEX).writeText(index.toString())
+		val target = rootFile.findFile(ENTRY_NAME_INDEX) ?: checkNotNull(rootFile.createFile(ENTRY_NAME_INDEX))
+		target.openOutputStream().bufferedWriter().use { it.write(index.toString()) }
 	}
 
 	/**
@@ -236,12 +232,10 @@ class LocalContentDirOutput(
 			val originalChapterFileName = index.getChapterFileName(chapter.value.id)
 			android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Original chapter file name: $originalChapterFileName")
 			
-			val originalChapterFile = originalChapterFileName?.let {
-				File(rootFile, it)
-			}
+			val originalChapterFile = originalChapterFileName?.let(rootFile::findFile)
 			if (originalChapterFile != null && originalChapterFile.exists()) {
-				android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Deleting original chapter file: ${originalChapterFile.absolutePath}")
-				originalChapterFile.deleteAwait()
+				android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Deleting original chapter file: ${originalChapterFile.uri}")
+				check(originalChapterFile.delete()) { "Failed to delete $originalChapterFile" }
 				android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Original chapter file deleted")
 			} else {
 				android.util.Log.i("LocalContentDirOutput", "addEpubChapter: No original chapter file to delete (file=$originalChapterFile, exists=${originalChapterFile?.exists()})")
@@ -266,24 +260,12 @@ class LocalContentDirOutput(
 		// 第二步：保存EPUB文件（保持.epub扩展名，Requirement 1.1 & 1.2）
 		// Generate filename that preserves .epub extension
 		val chapterFileName = generateEpubChapterFileName(chapter, epubFile)
-		val targetFile = File(rootFile, chapterFileName)
+		val targetFile = rootFile.findFile(chapterFileName) ?: checkNotNull(rootFile.createFile(chapterFileName))
 		
-		android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Target file=${targetFile.absolutePath}")
-		android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Target extension=${targetFile.extension}")
+		android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Target file=${targetFile.uri}")
 		
 		runInterruptible(Dispatchers.IO) {
-			// 复制EPUB文件到目标位置，保持.epub扩展名
-			if (!epubFile.renameTo(targetFile)) {
-				println("LocalContentDirOutput.addEpubChapter: Rename failed, copying instead")
-				targetFile.outputStream().use { output ->
-					epubFile.inputStream().use { input ->
-						input.copyTo(output)
-					}
-				}
-				epubFile.delete()
-			} else {
-				println("LocalContentDirOutput.addEpubChapter: Rename succeeded")
-			}
+			epubFile.inputStream().use { input -> targetFile.openOutputStream().use(input::copyTo) }
 		}
 		
 		println("LocalContentDirOutput.addEpubChapter: File saved with .epub extension, size=${targetFile.length()}")
@@ -291,7 +273,7 @@ class LocalContentDirOutput(
 		// 第三步：解析EPUB并添加内部章节
 		// Requirements 2.1, 2.6, 5.1, 5.3
 		try {
-			val epubParser = org.skepsun.kototoro.local.epub.LocalEpubParser(targetFile)
+			val epubParser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile)
 			val epubContent = epubParser.parseContent()
 			val epubChapters = epubContent?.chapters
 			
@@ -318,7 +300,7 @@ class LocalContentDirOutput(
 						index = chapter.index, // 所有EPUB内部章节使用相同的index（原始卷章节的index）
 						value = epubChapter.copy(
 							id = internalChapterId, // Use generated stable ID
-							url = "file://${targetFile.absolutePath}#chapter/$epubChapterIndex",
+							url = "${targetFile.uri}#chapter/$epubChapterIndex",
 							branch = chapter.value.branch,
 							source = org.skepsun.kototoro.core.model.LocalNovelSource,
 						)
@@ -330,8 +312,8 @@ class LocalContentDirOutput(
 					val mapping = org.skepsun.kototoro.core.db.entity.EpubChapterMappingEntity(
 						internalChapterId = internalChapterId,
 						parentChapterId = chapter.value.id,
-						epubFilePath = targetFile.absolutePath,
-						epubFileName = targetFile.name,
+						epubFilePath = targetFile.uri.toString(),
+						epubFileName = targetFile.name ?: chapterFileName,
 						chapterIndex = epubChapterIndex,
 						chapterTitle = epubChapter.title ?: "Chapter ${epubChapterIndex + 1}",
 						createdAt = System.currentTimeMillis()
@@ -388,7 +370,7 @@ class LocalContentDirOutput(
 		// If file already exists, generate unique name
 		var targetFileName = baseFileName
 		var counter = 1
-		while (File(rootFile, targetFileName).exists()) {
+		while (rootFile.findFile(targetFileName) != null) {
 			val nameWithoutExt = baseFileName.removeSuffix(".epub")
 			targetFileName = "${nameWithoutExt}_${counter}.epub"
 			counter++

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.local.data.index
 
 import android.content.Context
+import androidx.core.net.toUri
 import androidx.core.content.edit
 import androidx.room.withTransaction
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -73,12 +74,15 @@ suspend fun update() = mutex.withLock {
 			return null
 		}
 	return runCatchingCancellable {
-		val dir = File(path)
-		val novel = localNovelRepositoryProvider.get().getLocalNovel(dir, withDetails)
-		if (novel != null) {
-			return@runCatchingCancellable novel
+		val uri = path.toUri()
+		if (uri.scheme == null) {
+			val dir = File(path)
+			val novel = localNovelRepositoryProvider.get().getLocalNovel(dir, withDetails)
+			if (novel != null) return@runCatchingCancellable novel
+			LocalContentParser(dir).getContent(withDetails)
+		} else {
+			LocalContentParser(uri).getContent(withDetails)
 		}
-		LocalContentParser(dir).getContent(withDetails)
 	}.onFailure {
 		it.printStackTraceDebug()
 	}.getOrNull()
@@ -114,7 +118,7 @@ suspend fun update() = mutex.withLock {
 
 	private fun LocalContent.toEntity() = LocalContentIndexEntity(
 		mangaId = manga.id,
-		path = file.path,
+		path = toUri().toString(),
 	)
 
 	private fun isUpdateRequired() = currentVersion < VERSION

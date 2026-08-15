@@ -151,7 +151,7 @@ class DownloadDialogViewModel @Inject constructor(
 					isSilent = false,
 					executionChapterIds = selectedChapterIds?.toLongArray(),
 					executionChapterRefs = selectedChapterRefs,
-					destination = destination?.file,
+					destination = destination?.root?.uri,
 					format = format,
 					allowMeteredNetwork = allowMetered,
 					preferredQuality = preferredQuality,
@@ -228,7 +228,7 @@ class DownloadDialogViewModel @Inject constructor(
 	private fun defaultDestination() = DirectoryModel(
 		title = null,
 		titleRes = R.string.system_default,
-		file = null,
+		root = null,
 		isRemovable = false,
 		isChecked = true,
 		isAvailable = true,
@@ -307,9 +307,9 @@ class DownloadDialogViewModel @Inject constructor(
 		val isNovel = manga.firstOrNull()?.source?.getContentType() == ContentType.NOVEL
 		
 		val dirs = when {
-			isVideo -> localStorageManager.getVideoWriteableDirs()
-			isNovel -> localStorageManager.getNovelWriteableDirs()
-			else -> localStorageManager.getWriteableDirs()
+			isVideo -> localStorageManager.getVideoWriteableRoots()
+			isNovel -> localStorageManager.getNovelWriteableRoots()
+			else -> localStorageManager.getWriteableRoots()
 		}
 		availableDestinations.value = buildList(dirs.size + 1) {
 			if (defaultDir == null) {
@@ -319,7 +319,7 @@ class DownloadDialogViewModel @Inject constructor(
 					DirectoryModel(
 						title = localStorageManager.getDirectoryDisplayName(defaultDir, isFullPath = false),
 						titleRes = 0,
-						file = defaultDir,
+						root = defaultDir,
 						isChecked = true,
 						isAvailable = true,
 						isRemovable = false,
@@ -330,7 +330,7 @@ class DownloadDialogViewModel @Inject constructor(
 				DirectoryModel(
 					title = localStorageManager.getDirectoryDisplayName(dir, isFullPath = false),
 					titleRes = 0,
-					file = dir,
+					root = dir,
 					isChecked = dir == defaultDir,
 					isAvailable = true,
 					isRemovable = false,

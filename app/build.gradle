@@ -400,6 +400,7 @@ configurations.all {
 	implementation libs.lifecycle.process
 	implementation libs.androidx.constraintlayout
 	implementation libs.androidx.documentfile
+	implementation libs.unifile
 	implementation libs.androidx.swiperefreshlayout
 	implementation libs.androidx.recyclerview
 	implementation libs.androidx.viewpager2
