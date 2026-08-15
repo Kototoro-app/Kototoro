@@ -448,14 +448,17 @@ fun KototoroExploreHostRoute(
         selectedSourceIds.mapNotNull(sourceInfoById::get)
     }
     val sourceMetrics = remember(gridScale) { sourceQuickAccessMetrics(gridScale) }
+    val sourceGridStartPadding = contentPadding.calculateStartPadding(layoutDirection) + SourceGridHorizontalPadding
+    val sourceGridEndPadding = contentPadding.calculateEndPadding(layoutDirection) + SourceGridHorizontalPadding
     var isSourcesExpanded by rememberSaveable(sources.size, browseListMode, isSourcesGroupedByLanguage) {
         mutableStateOf(false)
     }
-    val sourceContentWidth = remember(configuration.screenWidthDp, contentPadding, layoutDirection) {
-        configuration.screenWidthDp.dp -
-            contentPadding.calculateStartPadding(layoutDirection) -
-            contentPadding.calculateEndPadding(layoutDirection) -
-            SourceGridHorizontalPadding * 2
+    val sourceContentWidth = remember(
+        configuration.screenWidthDp,
+        sourceGridStartPadding,
+        sourceGridEndPadding,
+    ) {
+        configuration.screenWidthDp.dp - sourceGridStartPadding - sourceGridEndPadding
     }
     val sourceColumns = remember(sourceContentWidth, sourceMetrics, browseListMode) {
         calculateSourceGridColumns(
@@ -759,6 +762,8 @@ fun KototoroExploreHostRoute(
                     columns = sourceColumns,
                     visibleGroups = visibleSourceRows,
                     selectedSourceIds = selectedSourceIds,
+                    startPadding = sourceGridStartPadding,
+                    endPadding = sourceGridEndPadding,
                     hasMoreSources = hasMoreSources,
                     isExpanded = areSourcesExpanded,
                     topBackgroundOverlap = heroOverlapDp,
@@ -785,7 +790,11 @@ fun KototoroExploreHostRoute(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.background)
-                                .padding(start = CompactTopBarHorizontalPadding, end = CompactTopBarHorizontalPadding, bottom = 36.dp),
+                                .padding(
+                                    start = sourceGridStartPadding,
+                                    end = sourceGridEndPadding,
+                                    bottom = 36.dp,
+                                ),
                         )
                     }
                 }
@@ -1224,6 +1233,8 @@ private fun LazyListScope.sourceQuickAccessItems(
     columns: Int,
     visibleGroups: List<SourceQuickAccessRows>,
     selectedSourceIds: Set<Long>,
+    startPadding: androidx.compose.ui.unit.Dp,
+    endPadding: androidx.compose.ui.unit.Dp,
     hasMoreSources: Boolean,
     isExpanded: Boolean,
     topBackgroundOverlap: androidx.compose.ui.unit.Dp,
@@ -1243,8 +1254,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.background)
                 .padding(
-                    start = CompactTopBarHorizontalPadding,
-                    end = CompactTopBarHorizontalPadding,
+                    start = startPadding,
+                    end = endPadding,
                     top = topBackgroundOverlap,
                     bottom = 4.dp,
                 ),
@@ -1264,8 +1275,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background)
                         .padding(
-                            start = SourceGridHorizontalPadding,
-                            end = SourceGridHorizontalPadding,
+                            start = startPadding,
+                            end = endPadding,
                             top = 4.dp,
                             bottom = 4.dp,
                         ),
@@ -1293,8 +1304,8 @@ private fun LazyListScope.sourceQuickAccessItems(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background)
                     .padding(
-                        start = SourceGridHorizontalPadding,
-                        end = SourceGridHorizontalPadding,
+                        start = startPadding,
+                        end = endPadding,
                         bottom = if (rowIndex == rows.lastIndex) 0.dp else metrics.gridSpacing,
                     ),
             )

@@ -300,7 +300,7 @@ fun KototoroContentListScreen(
                                 state = actualGridState,
                                 contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(gridSpacing),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 if (listHeader != null) {
