@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -21,9 +24,10 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 
 @Composable
 fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
-    val algorithm by settings.observeAsState(AppSettings.KEY_VIDEO_ENHANCEMENT_ALGORITHM) {
+    val persistedAlgorithm by settings.observeAsState(AppSettings.KEY_VIDEO_ENHANCEMENT_ALGORITHM) {
         videoEnhancementAlgorithm
     }
+    var algorithm by remember(persistedAlgorithm) { mutableStateOf(persistedAlgorithm) }
     val preset by settings.observeAsState(AppSettings.KEY_VIDEO_ANIME4K_PRESET) { videoAnime4KPreset }
     val sharpness by settings.observeAsState(AppSettings.KEY_VIDEO_FSR_SHARPNESS) { videoFsrSharpness }
     val remember by settings.observeAsState(AppSettings.KEY_VIDEO_ENHANCEMENT_REMEMBER) {
@@ -39,6 +43,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_video_enhancement_settings),
                 modifier = Modifier.fillMaxWidth(),
+                contentKey = algorithm,
             ) {
                 item {
                     SettingsChoicePreference(
@@ -56,7 +61,9 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
                             ),
                         ),
                         onValueChange = {
-                            settings.videoEnhancementAlgorithm = VideoEnhancementAlgorithm.valueOf(it)
+                            val selectedAlgorithm = VideoEnhancementAlgorithm.valueOf(it)
+                            algorithm = selectedAlgorithm
+                            settings.videoEnhancementAlgorithm = selectedAlgorithm
                         },
                     )
                 }

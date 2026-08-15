@@ -9,6 +9,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
@@ -29,8 +33,14 @@ fun AIImageEnhancementSettingsScreen(
     val engineNames = stringArrayResource(R.array.values_reader_super_resolution_engines).toList()
     val anime4kNames = stringArrayResource(R.array.values_reader_super_resolution_anime4k_modes).toList()
 
-    val isEnabled = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED) { settings.isReaderSuperResolutionEnabled }.value
-    val engine = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ENGINE) { settings.readerSuperResolutionEngine }.value
+    val persistedIsEnabled = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED) {
+        settings.isReaderSuperResolutionEnabled
+    }.value
+    var isEnabled by remember(persistedIsEnabled) { mutableStateOf(persistedIsEnabled) }
+    val persistedEngine = settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_ENGINE) {
+        settings.readerSuperResolutionEngine
+    }.value
+    var engine by remember(persistedEngine) { mutableStateOf(persistedEngine) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -45,6 +55,7 @@ fun AIImageEnhancementSettingsScreen(
             SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_image_enhancement_settings),
                 modifier = Modifier.fillMaxWidth(),
+                contentKey = isEnabled to engine,
             ) {
                 item {
                     SettingsSwitchPreference(
@@ -53,6 +64,7 @@ fun AIImageEnhancementSettingsScreen(
                         summary = stringResource(R.string.reader_super_resolution_summary),
                         checked = isEnabled,
                         onCheckedChange = {
+                            isEnabled = it
                             settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SUPER_RESOLUTION_ENABLED, it) }
                         },
                     )
@@ -67,6 +79,7 @@ fun AIImageEnhancementSettingsScreen(
                                 .mapIndexed { index, label -> SettingsChoiceOption(engineNames[index], label) },
                             value = engine,
                             onValueChange = {
+                                engine = it
                                 settings.prefs.edit { putString(AppSettings.KEY_READER_SUPER_RESOLUTION_ENGINE, it) }
                             },
                         )
