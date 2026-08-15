@@ -165,6 +165,9 @@ private sealed interface UnifiedSourcesDialogState {
 	data class TrustRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesDialogState
 	data class DeleteRepository(val repository: UnifiedSourceRepositoryItem) : UnifiedSourcesDialogState
 	data class DeleteSelectedSources(val plan: UnifiedSelectedSourceDeletePlan) : UnifiedSourcesDialogState
+	data class SetSelectedSourcesNsfw(
+		val sourceIds: Set<String>,
+	) : UnifiedSourcesDialogState
 	data class SetFilteredSourcesEnabled(
 		val sourceIds: Set<String>,
 		val enabled: Boolean,
@@ -196,6 +199,28 @@ private data class UnifiedSelectedSourceDeletePlan(
 	val deletablePackageNames: List<String>,
 	val skippedJarPackageNames: List<String>,
 )
+
+internal enum class SelectedSourcesNsfwAction {
+	NONE,
+	SET_NSFW,
+	SET_SFW,
+	CHOOSE,
+}
+
+/**
+ * Decides what the NSFW toggle chip should do for the current selection:
+ * set NSFW when everything is non-NSFW, set SFW when everything is NSFW,
+ * and ask the user when the selection mixes both.
+ */
+internal fun resolveSelectedSourcesNsfwAction(
+	nsfwCount: Int,
+	selectedCount: Int,
+): SelectedSourcesNsfwAction = when {
+	selectedCount <= 0 -> SelectedSourcesNsfwAction.NONE
+	nsfwCount <= 0 -> SelectedSourcesNsfwAction.SET_NSFW
+	nsfwCount >= selectedCount -> SelectedSourcesNsfwAction.SET_SFW
+	else -> SelectedSourcesNsfwAction.CHOOSE
+}
 
 @Composable
 fun UnifiedSourcesRoute(
@@ -320,6 +345,26 @@ fun UnifiedSourcesRoute(
 		onTestSelectedSources = {
 			viewModel.testSources(selectedSourceIds)
 			selectedSourceIdList = emptyList()
+		},
+		onToggleSelectedSourcesNsfw = {
+			val readyStateForNsfw = state as? UnifiedSourcesUiState.Ready ?: return@UnifiedSourcesScreen
+			val selected = readyStateForNsfw.sources.filter { it.id in selectedSourceIds }
+			when (resolveSelectedSourcesNsfwAction(selected.count { it.isNsfw }, selected.size)) {
+				SelectedSourcesNsfwAction.NONE -> Unit
+				SelectedSourcesNsfwAction.SET_NSFW -> {
+					viewModel.setSourcesNsfw(selectedSourceIds, true)
+					selectedSourceIdList = emptyList()
+				}
+
+				SelectedSourcesNsfwAction.SET_SFW -> {
+					viewModel.setSourcesNsfw(selectedSourceIds, false)
+					selectedSourceIdList = emptyList()
+				}
+
+				SelectedSourcesNsfwAction.CHOOSE -> {
+					activeDialog = UnifiedSourcesDialogState.SetSelectedSourcesNsfw(selectedSourceIds)
+				}
+			}
 		},
 		onDeleteSelectedSources = {
 			val readyStateForDelete = state as? UnifiedSourcesUiState.Ready ?: return@UnifiedSourcesScreen
@@ -534,6 +579,26 @@ fun UnifiedSourcesRoute(
 			onDismiss = { activeDialog = null },
 			onConfirm = {
 				viewModel.deletePackages(dialog.plan.deletablePackageIds.toSet())
+				selectedSourceIdList = emptyList()
+				activeDialog = null
+			},
+		)
+
+		is UnifiedSourcesDialogState.SetSelectedSourcesNsfw -> UnifiedSelectionDialog(
+			title = stringResource(R.string.unified_sources_set_nsfw_title),
+			options = listOf(true, false),
+			optionLabel = { isNsfw ->
+				context.getString(
+					if (isNsfw) {
+						R.string.unified_sources_mark_as_nsfw
+					} else {
+						R.string.unified_sources_mark_as_sfw
+					},
+				)
+			},
+			onDismiss = { activeDialog = null },
+			onSelected = { isNsfw ->
+				viewModel.setSourcesNsfw(dialog.sourceIds, isNsfw)
 				selectedSourceIdList = emptyList()
 				activeDialog = null
 			},
@@ -1251,6 +1316,7 @@ fun UnifiedSourcesScreen(
 	onDisableSelectedSources: () -> Unit,
 	onTestSelectedSources: () -> Unit,
 	onDeleteSelectedSources: () -> Unit,
+	onToggleSelectedSourcesNsfw: () -> Unit,
 	onSourcePinnedChange: (String, Boolean) -> Unit,
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
@@ -1274,6 +1340,9 @@ fun UnifiedSourcesScreen(
 	val activeSelectedSourceIds = remember(readyState?.sources, selectedSourceIds) {
 		val visibleSourceIds = readyState?.sources.orEmpty().mapTo(LinkedHashSet()) { it.id }
 		selectedSourceIds intersect visibleSourceIds
+	}
+	val selectedNsfwCount = remember(readyState?.sources, activeSelectedSourceIds) {
+		readyState?.sources.orEmpty().count { it.id in activeSelectedSourceIds && it.isNsfw }
 	}
 	LaunchedEffect(activeSelectedSourceIds) {
 		if (selectedSourceIds != activeSelectedSourceIds) {
@@ -1360,10 +1429,13 @@ fun UnifiedSourcesScreen(
 						UnifiedSourceSelectionBar(
 							selectedCount = activeSelectedSourceIds.size,
 							allVisibleSelected = activeSelectedSourceIds.size == state.sources.size,
+							selectedNsfwCount = selectedNsfwCount,
+							selectedSfwCount = activeSelectedSourceIds.size - selectedNsfwCount,
 							onSelectAllVisibleSources = onSelectAllVisibleSources,
 							onClearSelection = onClearSourceSelection,
 							onEnableSelectedSources = onEnableSelectedSources,
 							onDisableSelectedSources = onDisableSelectedSources,
+							onToggleSelectedSourcesNsfw = onToggleSelectedSourcesNsfw,
 							onTestSelectedSources = onTestSelectedSources,
 							onDeleteSelectedSources = onDeleteSelectedSources,
 						)
@@ -1518,10 +1590,13 @@ private fun CompactFilterChip(
 private fun UnifiedSourceSelectionBar(
 	selectedCount: Int,
 	allVisibleSelected: Boolean,
+	selectedNsfwCount: Int,
+	selectedSfwCount: Int,
 	onSelectAllVisibleSources: () -> Unit,
 	onClearSelection: () -> Unit,
 	onEnableSelectedSources: () -> Unit,
 	onDisableSelectedSources: () -> Unit,
+	onToggleSelectedSourcesNsfw: () -> Unit,
 	onTestSelectedSources: () -> Unit,
 	onDeleteSelectedSources: () -> Unit,
 ) {
@@ -1558,6 +1633,18 @@ private fun UnifiedSourceSelectionBar(
 			CompactActionChip(
 				onClick = onDisableSelectedSources,
 				label = { Text(stringResource(R.string.disable)) },
+			)
+		}
+		item(key = "toggle_nsfw_selected") {
+			val mixedSelection = selectedNsfwCount > 0 && selectedSfwCount > 0
+			val label = when {
+				mixedSelection -> stringResource(R.string.unified_sources_set_nsfw)
+				selectedNsfwCount > 0 -> stringResource(R.string.unified_sources_unmark_nsfw)
+				else -> stringResource(R.string.unified_sources_mark_nsfw)
+			}
+			CompactActionChip(
+				onClick = onToggleSelectedSourcesNsfw,
+				label = { Text(label) },
 			)
 		}
 		item(key = "test_selected") {

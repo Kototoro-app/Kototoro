@@ -745,6 +745,7 @@ class SettingsActivity :
 			AppRouter.ACTION_SOURCE -> intent.getStringExtra(AppRouter.KEY_SOURCE)
 				?.takeIf { it.isNotBlank() }
 				?.let(SettingsDestination::SourceSettings)
+			AppRouter.ACTION_ABOUT -> SettingsDestination.AboutSettings
 			Intent.ACTION_VIEW -> when (intent.data?.host) {
 				HOST_ADD_REPO -> null
 				HOST_ABOUT -> SettingsDestination.AboutSettings
@@ -911,7 +912,7 @@ class SettingsActivity :
 			SettingsDestination.ProxySettings -> getString(R.string.proxy)
 			SettingsDestination.NavConfigSettings -> getString(R.string.main_screen_sections)
 			SettingsDestination.ChangelogSettings -> getString(R.string.changelog)
-			SettingsDestination.AboutSettings -> getString(R.string.about)
+			SettingsDestination.AboutSettings -> getString(R.string.help_and_feedback)
 			is SettingsDestination.SourceSettings -> org.skepsun.kototoro.core.model.ContentSource(
 				destination.sourceName,
 			).getTitle(this)
@@ -1307,7 +1308,7 @@ class SettingsActivity :
 					modifier = Modifier.fillMaxSize(),
 				)
 			}
-			SettingsDestination.AboutSettings -> RenderComposeSection(title = getString(R.string.about)) {
+			SettingsDestination.AboutSettings -> RenderComposeSection(title = getString(R.string.help_and_feedback)) {
 				AboutSettingsRoute(
 					settings = kototoroAppSettings,
 					viewModel = aboutSettingsViewModel,

@@ -2329,6 +2329,12 @@ SHA-256 指紋:
     <string name="unified_sources_repository_refreshed">倉庫已刷新</string>
     <string name="unified_sources_repository_sources_deleted">倉庫源已刪除</string>
     <string name="unified_sources_unsupported_repository_kind">不支持的擴展倉庫類型: %1$s</string>
+    <string name="unified_sources_mark_nsfw">標記NSFW</string>
+    <string name="unified_sources_unmark_nsfw">取消NSFW</string>
+    <string name="unified_sources_set_nsfw">設定NSFW…</string>
+    <string name="unified_sources_set_nsfw_title">爲所選來源設定NSFW</string>
+    <string name="unified_sources_mark_as_nsfw">標記爲NSFW</string>
+    <string name="unified_sources_mark_as_sfw">標記爲非NSFW</string>
     <string name="uninstall">卸載</string>
     <string name="unknown_author">未知作者</string>
     <string name="unknown_title">未知標題</string>

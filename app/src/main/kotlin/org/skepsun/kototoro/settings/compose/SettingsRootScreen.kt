@@ -128,15 +128,17 @@ private fun SettingsSectionCard(
     Column(
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = section.title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(
-                horizontal = 16.dp,
-                vertical = 6.dp,
-            ),
-        )
+        if (section.title.isNotBlank()) {
+            Text(
+                text = section.title,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(
+                    horizontal = 16.dp,
+                    vertical = 6.dp,
+                ),
+            )
+        }
         SettingsItemGroup(itemCount = section.items.size) { index ->
             SettingsRootRow(item = section.items[index])
         }

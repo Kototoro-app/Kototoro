@@ -21,6 +21,21 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.VersionId
 import org.skepsun.kototoro.core.github.isStable
 import org.skepsun.kototoro.core.prefs.AppSettings
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.drawable.toBitmap
 
 @Composable
 fun AboutSettingsScreen(
@@ -50,6 +65,9 @@ fun AboutSettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item(key = "about_banner") {
+                AboutBanner()
+            }
             item(key = "about_overview") {
                 SettingsPreferenceGroup(title = stringResource(R.string.about)) {
                     item {
@@ -98,7 +116,7 @@ fun AboutSettingsScreen(
                 }
             }
             item(key = "about_links") {
-                SettingsPreferenceGroup(title = stringResource(R.string.more)) {
+                SettingsPreferenceGroup(title = stringResource(R.string.about_group_support)) {
                     item {
                         SettingsActionPreference(
                             title = stringResource(R.string.user_manual),
@@ -132,6 +150,57 @@ fun AboutSettingsScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutBanner() {
+    val context = LocalContext.current
+    val appIcon = remember(context) {
+        runCatching {
+            context.applicationInfo.loadIcon(context.packageManager)
+                .toBitmap(192, 192)
+                .asImageBitmap()
+        }.getOrNull()
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (appIcon != null) {
+                    Image(
+                        bitmap = appIcon,
+                        contentDescription = stringResource(R.string.app_name),
+                        modifier = Modifier.size(44.dp),
+                    )
+                }
+            }
+            Column {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    text = stringResource(R.string.about_author),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                )
             }
         }
     }

@@ -18,8 +18,8 @@ fun buildSettingsRootSections(
 		context.resources.getQuantityStringSafe(R.plurals.items, totalSourcesCount, totalSourcesCount)
 	}
 
-	val coreSection = SettingsRootSection(
-		title = context.getString(R.string.settings),
+	val readingInterfaceSection = SettingsRootSection(
+		title = context.getString(R.string.settings_section_reading_interface),
 		items = listOf(
 			settingsRootItem(
 				key = "appearance",
@@ -27,20 +27,6 @@ fun buildSettingsRootSections(
 				title = context.getString(R.string.appearance),
 				summary = context.summaryOf(R.string.theme, R.string.list_mode, R.string.language),
 				onClick = { onOpenDestination(SettingsDestination.AppearanceSettings) },
-			),
-			settingsRootItem(
-				key = "remote_sources",
-				iconRes = R.drawable.ic_manga_source,
-				title = context.getString(R.string.remote_sources),
-				summary = contentSummary,
-				onClick = { onOpenDestination(SettingsDestination.SourcesSettings) },
-			),
-			settingsRootItem(
-				key = "extension_management",
-				iconRes = R.drawable.ic_extension,
-				title = context.getString(R.string.extension_management),
-				summary = context.getString(R.string.extension_management_summary),
-				onClick = { onOpenDestination(SettingsDestination.UnifiedSources()) },
 			),
 			settingsRootItem(
 				key = "reader",
@@ -66,8 +52,35 @@ fun buildSettingsRootSections(
 		),
 	)
 
-	val usersSection = SettingsRootSection(
-		title = context.getString(R.string.users),
+	val contentSourcesSection = SettingsRootSection(
+		title = context.getString(R.string.settings_section_content_sources),
+		items = listOf(
+			settingsRootItem(
+				key = "remote_sources",
+				iconRes = R.drawable.ic_manga_source,
+				title = context.getString(R.string.remote_sources),
+				summary = contentSummary,
+				onClick = { onOpenDestination(SettingsDestination.SourcesSettings) },
+			),
+			settingsRootItem(
+				key = "extension_management",
+				iconRes = R.drawable.ic_extension,
+				title = context.getString(R.string.extension_management),
+				summary = context.getString(R.string.extension_management_summary),
+				onClick = { onOpenDestination(SettingsDestination.UnifiedSources()) },
+			),
+			settingsRootItem(
+				key = "downloads",
+				iconRes = R.drawable.ic_download,
+				title = context.getString(R.string.downloads),
+				summary = context.summaryOf(R.string.manga_save_location, R.string.downloads_wifi_only),
+				onClick = { onOpenDestination(SettingsDestination.DownloadsSettings) },
+			),
+		),
+	)
+
+	val accountsDataSection = SettingsRootSection(
+		title = context.getString(R.string.settings_section_accounts_data),
 		items = listOf(
 			settingsRootItem(
 				key = "spaces",
@@ -77,13 +90,6 @@ fun buildSettingsRootSections(
 				onClick = { onOpenDestination(SettingsDestination.SpacesSettings) },
 			),
 			settingsRootItem(
-				key = "sync",
-				iconRes = R.drawable.ic_sync,
-				title = context.getString(R.string.sync_settings),
-				summary = context.getString(R.string.sync_settings_summary),
-				onClick = { onOpenDestination(SettingsDestination.SyncSettings) },
-			),
-			settingsRootItem(
 				key = "tracking_accounts",
 				iconRes = R.drawable.ic_user,
 				title = context.getString(R.string.tracking_accounts),
@@ -91,11 +97,45 @@ fun buildSettingsRootSections(
 				onClick = { onOpenDestination(SettingsDestination.UsersSettings) },
 			),
 			settingsRootItem(
+				key = "sync",
+				iconRes = R.drawable.ic_sync,
+				title = context.getString(R.string.sync_settings),
+				summary = context.getString(R.string.sync_settings_summary),
+				onClick = { onOpenDestination(SettingsDestination.SyncSettings) },
+			),
+			settingsRootItem(
 				key = "backups_settings",
 				iconRes = R.drawable.ic_backup_restore,
 				title = context.getString(R.string.backup_restore),
 				summary = context.summaryOf(R.string.create_backup, R.string.restore_backup, R.string.webdav_integration),
 				onClick = { onOpenDestination(SettingsDestination.BackupsSettings) },
+			),
+		),
+	)
+
+	val systemServicesSection = SettingsRootSection(
+		title = context.getString(R.string.settings_section_system_services),
+		items = listOf(
+			settingsRootItem(
+				key = "network",
+				iconRes = R.drawable.ic_usage,
+				title = context.getString(R.string.storage_and_network),
+				summary = context.summaryOf(R.string.storage_usage, R.string.proxy, R.string.prefetch_content),
+				onClick = { onOpenDestination(SettingsDestination.StorageAndNetworkSettings) },
+			),
+			settingsRootItem(
+				key = "tracker",
+				iconRes = R.drawable.ic_feed,
+				title = context.getString(R.string.check_for_new_chapters),
+				summary = context.summaryOf(R.string.track_sources, R.string.notifications_settings),
+				onClick = { onOpenDestination(SettingsDestination.TrackerSettings) },
+			),
+			settingsRootItem(
+				key = "services",
+				iconRes = R.drawable.ic_services,
+				title = context.getString(R.string.services),
+				summary = context.summaryOf(R.string.suggestions, R.string.reading_stats),
+				onClick = { onOpenDestination(SettingsDestination.ServicesSettings) },
 			),
 			settingsRootItem(
 				key = "entity_organize_settings",
@@ -107,58 +147,20 @@ fun buildSettingsRootSections(
 		),
 	)
 
-	val servicesSection = SettingsRootSection(
-		title = context.getString(R.string.services),
-		items = buildList {
-			add(
-				settingsRootItem(
-					key = "network",
-					iconRes = R.drawable.ic_usage,
-					title = context.getString(R.string.storage_and_network),
-					summary = context.summaryOf(R.string.storage_usage, R.string.proxy, R.string.prefetch_content),
-					onClick = { onOpenDestination(SettingsDestination.StorageAndNetworkSettings) },
-				),
-			)
-			add(
-				settingsRootItem(
-					key = "downloads",
-					iconRes = R.drawable.ic_download,
-					title = context.getString(R.string.downloads),
-					summary = context.summaryOf(R.string.manga_save_location, R.string.downloads_wifi_only),
-					onClick = { onOpenDestination(SettingsDestination.DownloadsSettings) },
-				),
-			)
-			add(
-				settingsRootItem(
-					key = "tracker",
-					iconRes = R.drawable.ic_feed,
-					title = context.getString(R.string.check_for_new_chapters),
-					summary = context.summaryOf(R.string.track_sources, R.string.notifications_settings),
-					onClick = { onOpenDestination(SettingsDestination.TrackerSettings) },
-				),
-			)
-			add(
-				settingsRootItem(
-					key = "services",
-					iconRes = R.drawable.ic_services,
-					title = context.getString(R.string.services),
-					summary = context.summaryOf(R.string.suggestions, R.string.reading_stats),
-					onClick = { onOpenDestination(SettingsDestination.ServicesSettings) },
-				),
-			)
-			add(
-				settingsRootItem(
-					key = "about",
-					iconRes = R.drawable.ic_info_outline,
-					title = context.getString(R.string.about),
-					summary = context.getString(R.string.app_version, BuildConfig.VERSION_NAME),
-					onClick = { onOpenDestination(SettingsDestination.AboutSettings) },
-				),
-			)
-		},
+	val helpFeedbackSection = SettingsRootSection(
+		title = "",
+		items = listOf(
+			settingsRootItem(
+				key = "help_feedback",
+				iconRes = R.drawable.ic_info_outline,
+				title = context.getString(R.string.help_and_feedback),
+				summary = context.getString(R.string.app_version, BuildConfig.VERSION_NAME),
+				onClick = { onOpenDestination(SettingsDestination.AboutSettings) },
+			),
+		),
 	)
 
-	return listOf(usersSection, coreSection, servicesSection)
+	return listOf(readingInterfaceSection, contentSourcesSection, accountsDataSection, systemServicesSection, helpFeedbackSection)
 }
 
 private fun settingsRootItem(

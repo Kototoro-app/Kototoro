@@ -598,6 +598,33 @@ class UnifiedSourcesViewModel @Inject constructor(
 		setSourcesEnabled(setOf(sourceId), enabled)
 	}
 
+	/**
+	 * Overrides the NSFW flag for the given sources. Only sources whose flag actually
+	 * changes are persisted, so sources already in the target state keep their current
+	 * (metadata or override based) behavior.
+	 */
+	fun setSourcesNsfw(sourceIds: Set<String>, isNsfw: Boolean) {
+		if (sourceIds.isEmpty()) {
+			return
+		}
+		val sourceItems = (uiState.value as? UnifiedSourcesUiState.Ready)
+			?.allSources
+			.orEmpty()
+			.filter { it.id in sourceIds }
+		if (sourceItems.isEmpty()) {
+			return
+		}
+		val changedIds = sourceItems
+			.filter { it.isNsfw != isNsfw }
+			.mapTo(LinkedHashSet()) { it.id }
+		if (changedIds.isEmpty()) {
+			return
+		}
+		viewModelScope.launch(Dispatchers.Default) {
+			settings.setSourceNsfwOverride(changedIds, isNsfw)
+		}
+	}
+
 	fun setSourcesEnabled(sourceIds: Set<String>, enabled: Boolean) {
 		if (sourceIds.isEmpty()) {
 			return

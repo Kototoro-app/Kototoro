@@ -539,7 +539,7 @@ fun AppearanceSettingsScreen(
             }
         }
 
-        item(key = "main_home_display") {
+        item(key = "main_home_display_${state.homeHeroMode}") {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_home_display),
             ) {

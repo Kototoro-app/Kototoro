@@ -280,7 +280,7 @@ class ContentSourcesRepository @Inject constructor(
 	private fun getEnabledMihonSources(): List<org.skepsun.kototoro.mihon.model.MihonMangaSource> {
 		val allSources = mihonExtensionManager.getMihonMangaSources()
 		val isNsfwDisabled = settings.isNsfwContentDisabled
-		return allSources.filter { !isNsfwDisabled || !it.isNsfw }
+		return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
 	}
 	
 	/**
@@ -303,7 +303,7 @@ class ContentSourcesRepository @Inject constructor(
 		// often watch subbed content regardless of the extension's declared language, 
 		// and Aniyomi extensions frequently mislabel locales or only offer 'en'/'pt-BR' etc.
 		return allSources.filter { source ->
-			if (isNsfwDisabled && source.isNsfw) return@filter false
+			if (isNsfwDisabled && source.isNsfw()) return@filter false
 			true
 		}
 	}
@@ -314,7 +314,7 @@ class ContentSourcesRepository @Inject constructor(
 	private fun getEnabledIReaderSources(): List<org.skepsun.kototoro.ireader.model.IReaderMangaSource> {
 		val allSources = ireaderExtensionManager.getIReaderMangaSources()
 		val isNsfwDisabled = settings.isNsfwContentDisabled
-		return allSources.filter { !isNsfwDisabled || !it.isNsfw }
+		return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
 	}
 	
 	/**

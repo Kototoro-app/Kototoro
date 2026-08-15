@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.onStart
 import org.json.JSONArray
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
+import org.skepsun.kototoro.core.model.SourceNsfwOverrides
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
@@ -102,6 +103,7 @@ enum class AppFontPreset {
 	GOOGLE_SANS,
 	NOTO_SANS,
 	INTER,
+	ALIMAMA_FANG_YUAN_TI_VF,
 	SARASA_GOTHIC,
 	LXGW_WENKAI,
 	NOTO_SANS_CJK_SC,
@@ -191,6 +193,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	init {
 		clearDeprecatedAllSourcesEnabledFlag()
 		migrateLegacyAppearancePreferences()
+		SourceNsfwOverrides.update(sourceNsfwOverrides, sourceSfwOverrides)
 	}
 
 	private fun migrateLegacyAppearancePreferences() {
@@ -515,6 +518,54 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var isNsfwContentDisabled: Boolean
 		get() = prefs.getBoolean(KEY_DISABLE_NSFW, true)
 		set(value) = prefs.edit { putBoolean(KEY_DISABLE_NSFW, value) }
+
+	/**
+	 * Source names that are forced NSFW by the user, regardless of their extension metadata.
+	 */
+	val sourceNsfwOverrides: Set<String>
+		get() = prefs.getStringSet(KEY_SOURCE_NSFW_OVERRIDES, emptySet()).orEmpty()
+
+	/**
+	 * Source names that are forced non-NSFW by the user, regardless of their extension metadata.
+	 */
+	val sourceSfwOverrides: Set<String>
+		get() = prefs.getStringSet(KEY_SOURCE_SFW_OVERRIDES, emptySet()).orEmpty()
+
+	/**
+	 * Overrides the NSFW flag for the given source names.
+	 *
+	 * @param isNsfw `true` forces the sources to NSFW, `false` forces them to non-NSFW,
+	 * and `null` restores the default behavior (metadata based).
+	 */
+	fun setSourceNsfwOverride(sourceNames: Collection<String>, isNsfw: Boolean?) {
+		val names = sourceNames.filterTo(LinkedHashSet(), String::isNotBlank)
+		if (names.isEmpty()) {
+			return
+		}
+		val nsfwSet = prefs.getStringSet(KEY_SOURCE_NSFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
+		val sfwSet = prefs.getStringSet(KEY_SOURCE_SFW_OVERRIDES, emptySet()).orEmpty().toMutableSet()
+		when (isNsfw) {
+			true -> {
+				nsfwSet.addAll(names)
+				sfwSet.removeAll(names)
+			}
+
+			false -> {
+				sfwSet.addAll(names)
+				nsfwSet.removeAll(names)
+			}
+
+			null -> {
+				nsfwSet.removeAll(names)
+				sfwSet.removeAll(names)
+			}
+		}
+		prefs.edit {
+			putStringSet(KEY_SOURCE_NSFW_OVERRIDES, nsfwSet)
+			putStringSet(KEY_SOURCE_SFW_OVERRIDES, sfwSet)
+		}
+		SourceNsfwOverrides.update(nsfwSet, sfwSet)
+	}
 
 	var globalTagBlacklist: Set<String>
 		get() = prefs.getStringSet(KEY_GLOBAL_TAG_BLACKLIST, emptySet())
@@ -2639,6 +2690,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_FAVOURITES_EXCLUDE_NSFW = "favourites_exclude_nsfw"
 		const val KEY_FEED_EXCLUDE_NSFW = "feed_exclude_nsfw"
 		const val KEY_DISABLE_NSFW = "no_nsfw"
+		const val KEY_SOURCE_NSFW_OVERRIDES = "source_nsfw_overrides"
+		const val KEY_SOURCE_SFW_OVERRIDES = "source_sfw_overrides"
 		const val KEY_GLOBAL_TAG_BLACKLIST = "global_tag_blacklist"
 		const val KEY_RELATED_MANGA = "related_manga"
 		const val KEY_NAV_MAIN = "nav_main"

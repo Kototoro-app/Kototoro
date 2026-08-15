@@ -1203,7 +1203,10 @@ internal fun BrowseTopLevelRouteContent(
             RouteScopedTopBarMenuActions(
                 ownerRoute,
                 listOf(
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.manage_sources) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.manage_sources,
+                        org.skepsun.kototoro.R.drawable.ic_manga_source,
+                    ) {
                         appRouter.openManageSources()
                     },
                     KototoroTopBarMenuAction(
@@ -1211,6 +1214,11 @@ internal fun BrowseTopLevelRouteContent(
                             org.skepsun.kototoro.R.string.show_empty_sources
                         } else {
                             org.skepsun.kototoro.R.string.hide_empty_sources
+                        },
+                        if (isEmptySourcesHidden) {
+                            org.skepsun.kototoro.R.drawable.ic_eye
+                        } else {
+                            org.skepsun.kototoro.R.drawable.ic_eye_off
                         },
                     ) {
                         exploreViewModel.setEmptySourcesHidden(!isEmptySourcesHidden)
@@ -1432,19 +1440,28 @@ internal fun LocalTopLevelRouteContent(
                 ownerRoute = TOP_BAR_OWNER_LOCAL,
                 actions = buildList {
                     add(
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string._import) {
+                        KototoroTopBarMenuAction(
+                            org.skepsun.kototoro.R.string._import,
+                            org.skepsun.kototoro.R.drawable.ic_import,
+                        ) {
                             appRouter.showImportDialog()
                         },
                     )
                     if (appRouter.isFilterSupported()) {
                         add(
-                            KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.filter) {
+                            KototoroTopBarMenuAction(
+                                org.skepsun.kototoro.R.string.filter,
+                                org.skepsun.kototoro.R.drawable.ic_filter_menu,
+                            ) {
                                 appRouter.showFilterSheet()
                             },
                         )
                     }
                     add(
-                        KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.directories) {
+                        KototoroTopBarMenuAction(
+                            org.skepsun.kototoro.R.string.directories,
+                            org.skepsun.kototoro.R.drawable.ic_folder_file,
+                        ) {
                             appRouter.openDirectoriesSettings()
                         },
                     )
@@ -1774,7 +1791,10 @@ internal fun HistoryTopLevelRouteContent(
             RouteScopedTopBarMenuActions(
                 ownerRoute = TOP_BAR_OWNER_HISTORY,
                 actions = listOf(
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.clear_history) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.clear_history,
+                        org.skepsun.kototoro.R.drawable.ic_clear_all,
+                    ) {
                         showClearDialog = true
                     },
                 ),
@@ -2235,22 +2255,40 @@ internal fun FavoritesTopLevelRouteContent(
             RouteScopedTopBarMenuActions(
                 ownerRoute = TOP_BAR_OWNER_FAVORITES,
                 actions = listOf(
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.reset_filter) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.reset_filter,
+                        org.skepsun.kototoro.R.drawable.ic_revert,
+                    ) {
                         viewModel.resetFilters()
                     },
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.favourites_categories) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.favourites_categories,
+                        org.skepsun.kototoro.R.drawable.ic_tag,
+                    ) {
                         appRouter.openFavoriteCategories()
                     },
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.entity_organize_title) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.entity_organize_title,
+                        org.skepsun.kototoro.R.drawable.ic_select_group,
+                    ) {
                         appRouter.openEntityOrganizeSettings()
                     },
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.import_favourites) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.import_favourites,
+                        org.skepsun.kototoro.R.drawable.ic_import,
+                    ) {
                         showImportDialog()
                     },
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.sync_favourites) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.sync_favourites,
+                        org.skepsun.kototoro.R.drawable.ic_sync,
+                    ) {
                         showSyncDialog()
                     },
-                    KototoroTopBarMenuAction(org.skepsun.kototoro.R.string.duplicates_finder) {
+                    KototoroTopBarMenuAction(
+                        org.skepsun.kototoro.R.string.duplicates_finder,
+                        org.skepsun.kototoro.R.drawable.ic_search,
+                    ) {
                         viewModel.openDuplicatesFinder()
                     },
                 ),

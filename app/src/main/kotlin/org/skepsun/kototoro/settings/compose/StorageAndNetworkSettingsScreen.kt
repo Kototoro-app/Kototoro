@@ -44,6 +44,8 @@ fun StorageAndNetworkSettingsScreen(
     cacheLimitsTitle: String,
     dataRemovalTitle: String,
     networkTitle: String,
+    proxyMirrorsTitle: String,
+    securityTitle: String,
     storageUsage: StorageUsage?,
     onCacheLimitsClick: () -> Unit,
     onDataRemovalClick: () -> Unit,
@@ -127,15 +129,23 @@ fun StorageAndNetworkSettingsScreen(
                 SettingsPreferenceGroup(title = networkTitle) {
                     prefetchContent()
                     preloadPages()
-                    proxy()
                     dns()
                     customDohUrl()
                     customDohIps()
+                }
+            }
+            item(key = "proxy_mirrors") {
+                SettingsPreferenceGroup(title = proxyMirrorsTitle) {
+                    proxy()
                     imageProxy()
                     githubMirror()
                     huggingFaceMirror()
                     bangumiMirror()
                     bangumiMirrorCustomBase()
+                }
+            }
+            item(key = "security") {
+                SettingsPreferenceGroup(title = securityTitle) {
                     sslBypass()
                     offlineCheck()
                     adBlock()
