@@ -85,6 +85,9 @@ enum class GlassComponentRole {
     Sheet,
 }
 
+internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
+    this == GlassComponentRole.TopBar || this == GlassComponentRole.BottomBar
+
 object GlassDefaults {
     val shape: Shape = RoundedCornerShape(28.dp)
     val navigationShadowElevation: Dp = 4.dp
@@ -142,10 +145,9 @@ fun GlassSurface(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
-    // AMOLED: a pure black canvas cannot produce a luminance difference behind the tint, so the
-    // glass would render as black-on-black (ios-glass.md §8). Fall back to a stable surface.
     val amoledCanvas = LocalAmoledTheme.current
-    if (isIosStyle && glassEnabled && backdrop != null && !dialogSurface && !amoledCanvas) {
+    val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
+    if (isIosStyle && glassEnabled && backdrop != null && !dialogSurface && allowsBackdrop) {
         LiquidGlassSurface(
             modifier = modifier,
             style = style,
@@ -200,7 +202,8 @@ fun LiquidGlassSurface(
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
     val amoledCanvas = LocalAmoledTheme.current
-    if (LocalInterfaceStyle.current != InterfaceStyle.IOS || !glassEnabled || backdrop == null || amoledCanvas) {
+    val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
+    if (LocalInterfaceStyle.current != InterfaceStyle.IOS || !glassEnabled || backdrop == null || !allowsBackdrop) {
         StableGlassFallback(
             modifier = modifier,
             style = style,
