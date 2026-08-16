@@ -58,11 +58,13 @@ import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
+import org.skepsun.kototoro.core.ui.glass.backdropSurfaceAlpha
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
@@ -432,6 +434,7 @@ private fun Modifier.mainNavBackdrop(
     shape: Shape,
     enabled: Boolean,
     backdrop: com.kyant.backdrop.Backdrop?,
+    surfaceTint: Color,
 ): Modifier {
     val blurRadius = if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
         8.dp
@@ -451,9 +454,12 @@ private fun Modifier.mainNavBackdrop(
                     chromaticAberration = true,
                 )
             },
+            onDrawSurface = {
+                drawRect(surfaceTint)
+            },
         )
     } else {
-        Modifier
+        Modifier.background(surfaceTint, shape)
     })
 }
 
@@ -518,7 +524,14 @@ private fun FloatingBottomNavRow(
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val amoledCanvas = LocalAmoledTheme.current
     val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
+    val pillSurfaceTint = MaterialTheme.colorScheme.surfaceContainerHigh.copy(
+        alpha = GlassDefaults.bottomBarChromeStyle().backdropSurfaceAlpha(
+            componentRole = GlassComponentRole.BottomBar,
+            amoledCanvas = amoledCanvas,
+        ),
+    )
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
@@ -562,14 +575,11 @@ private fun FloatingBottomNavRow(
                         width = with(density) { indicatorSize.width.toDp() },
                         height = with(density) { indicatorSize.height.toDp() },
                     )
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.42f),
-                        indicatorShape,
-                    )
                     .mainNavBackdrop(
                         shape = indicatorShape,
                         enabled = backdrop != null,
                         backdrop = backdrop,
+                        surfaceTint = pillSurfaceTint,
                     )
                     .border(
                         width = 1.dp,
@@ -682,10 +692,17 @@ private fun FloatingBottomNavRow(
                                     } else {
                                         Modifier
                                             .background(selectedContainerColor, CircleShape)
-                                            .mainNavBackdrop(
-                                                shape = CircleShape,
-                                                enabled = useLiquidGlassPill && backdrop != null,
-                                                backdrop = backdrop,
+                                            .then(
+                                                if (useLiquidGlassPill) {
+                                                    Modifier.mainNavBackdrop(
+                                                        shape = CircleShape,
+                                                        enabled = backdrop != null,
+                                                        backdrop = backdrop,
+                                                        surfaceTint = pillSurfaceTint,
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                },
                                             )
                                             .then(
                                                 if (useLiquidGlassPill) {
