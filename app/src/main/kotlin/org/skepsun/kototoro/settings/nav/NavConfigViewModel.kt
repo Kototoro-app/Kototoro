@@ -40,7 +40,7 @@ class NavConfigViewModel @Inject constructor(
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
-		emptyList(),
+		items.value.map { NavItemConfigModel(it, getUnavailabilityHint(it)) },
 	)
 
 	val availableItems: StateFlow<List<NavItem>> = items.map { snapshot ->
@@ -48,7 +48,7 @@ class NavConfigViewModel @Inject constructor(
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
-		emptyList(),
+		NavItem.entries.filterNot { item -> item in items.value || item == NavItem.DISCOVER },
 	)
 
 	val canShowAddAction: StateFlow<Boolean> = items.map { snapshot ->
@@ -56,7 +56,7 @@ class NavConfigViewModel @Inject constructor(
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
-		false,
+		items.value.size < NavItem.entries.size,
 	)
 
 	val canAddAction: StateFlow<Boolean> = items.map { snapshot ->
@@ -64,22 +64,15 @@ class NavConfigViewModel @Inject constructor(
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
-		false,
+		items.value.size < MAX_MAIN_NAV_ITEM_COUNT,
 	)
 
 	val content: StateFlow<List<ListModel>> = items.map { snapshot ->
-		buildList(snapshot.size + 1) {
-			snapshot.mapTo(this) {
-				NavItemConfigModel(it, getUnavailabilityHint(it))
-			}
-			if (size < NavItem.entries.size) {
-				add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
-			}
-		}
+		buildContent(snapshot)
 	}.stateIn(
 		viewModelScope + Dispatchers.Default,
 		SharingStarted.WhileSubscribed(5000),
-		emptyList(),
+		buildContent(items.value),
 	)
 
 	private var commitJob: Job? = null
@@ -134,5 +127,14 @@ class NavConfigViewModel @Inject constructor(
 		NavItem.FEED -> R.string.check_for_new_chapters_disabled
 		NavItem.SUGGESTIONS -> R.string.suggestions_unavailable_text
 		else -> 0
+	}
+
+	private fun buildContent(snapshot: List<NavItem>): List<ListModel> = buildList(snapshot.size + 1) {
+		snapshot.mapTo(this) {
+			NavItemConfigModel(it, getUnavailabilityHint(it))
+		}
+		if (size < NavItem.entries.size) {
+			add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
+		}
 	}
 }

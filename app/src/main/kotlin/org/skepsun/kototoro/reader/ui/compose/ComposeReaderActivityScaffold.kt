@@ -521,6 +521,7 @@ internal fun ComposeReaderActivityScaffold(
 		) {
 			ReaderComposeTopBar(
 				state = state,
+				presentation = resolveReaderTopBarPresentation(showControlLabels),
 				onNavigateBack = callbacks.onNavigateBack,
 				onChapters = callbacks.actions.onPages,
 				onOptions = callbacks.actions.onOptions,
@@ -933,6 +934,7 @@ private fun ReaderMessageHost(
 @Composable
 private fun ReaderComposeTopBar(
 	state: ComposeReaderChromeState,
+	presentation: ReaderTopBarPresentation,
 	onNavigateBack: () -> Unit,
 	onChapters: () -> Unit,
 	onOptions: () -> Unit,
@@ -963,30 +965,45 @@ private fun ReaderComposeTopBar(
 			shape = chapterControlShape,
 			modifier = Modifier
 				.align(Alignment.Center)
-				.widthIn(min = 148.dp, max = 176.dp)
+				.then(
+					if (presentation == ReaderTopBarPresentation.LABELS) {
+						Modifier.widthIn(min = 148.dp, max = 176.dp)
+					} else {
+						Modifier.size(48.dp)
+					},
+				)
 				.height(48.dp),
 			contentModifier = Modifier
 				.clip(chapterControlShape)
 				.clickable(onClick = onChapters),
 		) {
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
-				modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
-			) {
-				Text(
-					text = state.title,
-					color = contentColor,
-					style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
-					maxLines = 1,
-				)
-				if (state.subtitle.isNotEmpty()) {
+			if (presentation == ReaderTopBarPresentation.LABELS) {
+				Column(
+					horizontalAlignment = Alignment.CenterHorizontally,
+					modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
+				) {
 					Text(
-						text = state.subtitle,
-						color = contentColor.copy(alpha = 0.78f),
-						style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+						text = state.title,
+						color = contentColor,
+						style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
 						maxLines = 1,
 					)
+					if (state.subtitle.isNotEmpty()) {
+						Text(
+							text = state.subtitle,
+							color = contentColor.copy(alpha = 0.78f),
+							style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+							maxLines = 1,
+						)
+					}
 				}
+			} else {
+				Icon(
+					painter = painterResource(R.drawable.ic_grid),
+					contentDescription = stringResource(R.string.chapters),
+					tint = contentColor,
+					modifier = Modifier.size(24.dp),
+				)
 			}
 		}
 		ReaderTopControlSurface(
@@ -1005,6 +1022,14 @@ private fun ReaderComposeTopBar(
 		}
 	}
 }
+
+internal enum class ReaderTopBarPresentation {
+	LABELS,
+	ICON_ONLY,
+}
+
+internal fun resolveReaderTopBarPresentation(showControlLabels: Boolean): ReaderTopBarPresentation =
+	if (showControlLabels) ReaderTopBarPresentation.LABELS else ReaderTopBarPresentation.ICON_ONLY
 
 internal fun resolveReaderFloatingControls(
 	configured: Set<ReaderControl>,
