@@ -7,6 +7,7 @@
 [![Getting Started](https://img.shields.io/badge/docs-getting--started-blue)](https://kototoro-app.github.io/Kototoro/getting-started)
 [![Entity System](https://img.shields.io/badge/docs-entity--system-blue)](https://kototoro-app.github.io/Kototoro/entity-system)
 [![Translation Docs](https://img.shields.io/badge/docs-auto--translation-blue)](https://kototoro-app.github.io/Kototoro/automatic-translation)
+[![爱发电赞助我们](https://img.shields.io/badge/❤%20支持我们-爱发电-orange)](https://www.ifdian.net/a/kototoro)
 
 Kototoro is an open-source Android app that brings manga, novels, and video into one reader. It combines broad source compatibility with local OCR + translation, video super-resolution, and WebDAV-based multi-device sync.
 
@@ -128,7 +129,7 @@ limitations under the License.
 - [manga-translator-ui](https://github.com/hgmzhn/manga-translator-ui)
 
 ## Contact / 联系方式
-
+- 欢迎通过 [爱发电](https://www.ifdian.net/a/kototoro) 支持本项目。
 - Discord: [Join Server](https://discord.gg/xBXvPz7tr7)
 - QQ Group: 560955275
 - GitHub Issues: [Issue Tracker](https://github.com/Kototoro-app/Kototoro/issues)
