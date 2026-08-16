@@ -105,7 +105,7 @@ base64 -i release.keystore -o keystore.base64
 - `GITCODE_TOKEN`: GitCode 个人访问令牌，需要具备目标仓库的代码推送和 Release API 写入权限
 
 正式版发布到 GitCode 仓库 `2401_87187946/Kototoro`，Nightly 预发布版本发布到
-`2401_87187946/Kototoro-Nightly`。两个工作流使用同一个 Secret，同步 `devel` 分支和发布标签，
+`2401_87187946/Kototoro-Nightly`。两个工作流使用同一个 Secret，只创建不含源码的轻量标签，
 然后创建或更新同名 Release，并上传所有 ABI APK。不要把令牌直接写入 workflow、仓库 URL 或文档。
 
 ### 4. 删除本地Base64文件
@@ -167,7 +167,7 @@ A: GitHub Actions的免费额度有限制，可以考虑：
 5. 提取版本信息
 6. 重命名APK文件
 7. 创建 GitHub Release 并上传 APK
-8. 同步发布提交和标签到 GitCode
+8. 在 GitCode 创建不含源码的 Release 标签
 9. 创建或更新 GitCode Release 并上传 APK
 
 Nightly 工作流每天使用相同流程发布到独立的 GitHub 和 GitCode Nightly 仓库，并将 Release 标记为预发布版本。

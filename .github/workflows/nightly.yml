@@ -14,11 +14,11 @@ env:
   NIGHTLY_REPOSITORY: Kototoro-app/Kototoro-Nightly
   GITCODE_OWNER: '2401_87187946'
   GITCODE_REPOSITORY: Kototoro-Nightly
-  GITCODE_BRANCH: devel
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
 
@@ -110,6 +110,7 @@ jobs:
           fi
 
       - name: Publish GitCode Nightly Release
+        timeout-minutes: 35
         env:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           TAG_NAME: ${{ steps.assets.outputs.tag }}

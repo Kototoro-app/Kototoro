@@ -6,7 +6,6 @@ required_variables=(
   GITCODE_TOKEN
   GITCODE_OWNER
   GITCODE_REPOSITORY
-  GITCODE_BRANCH
   TAG_NAME
   RELEASE_NAME
   RELEASE_ASSETS_DIR
@@ -26,7 +25,7 @@ if [[ "$RELEASE_STATUS" != "latest" && "$RELEASE_STATUS" != "pre" ]]; then
   exit 1
 fi
 
-for command in curl git jq; do
+for command in curl git jq timeout; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Required command is not available: $command" >&2
     exit 1
@@ -63,17 +62,72 @@ chmod 700 "$work_dir/askpass.sh"
 export GIT_ASKPASS="$work_dir/askpass.sh"
 export GIT_TERMINAL_PROMPT=0
 
+curl_api_options=(
+  --connect-timeout 15
+  --max-time 120
+  --retry 3
+  --retry-delay 5
+  --retry-max-time 120
+  --retry-all-errors
+)
+curl_upload_options=(
+  --connect-timeout 15
+  --max-time 600
+  --retry 2
+  --retry-delay 5
+  --retry-max-time 600
+  --retry-all-errors
+)
+
+push_to_gitcode() {
+  local refspec=$1
+  local description=$2
+  local status
+
+  echo "$description"
+  if timeout --signal=TERM --kill-after=30s 2m \
+    git push --progress gitcode-release "$refspec"; then
+    return
+  else
+    status=$?
+  fi
+  if [[ $status -eq 124 ]]; then
+    echo "GitCode push timed out after 2 minutes: $refspec" >&2
+  fi
+  return "$status"
+}
+
 git remote remove gitcode-release >/dev/null 2>&1 || true
 git remote add gitcode-release "$gitcode_repository"
 
-# Keep GitCode source and tags aligned so a release always points to a valid commit.
-git push gitcode-release "HEAD:refs/heads/$GITCODE_BRANCH"
-if git rev-parse --verify --quiet "refs/tags/$TAG_NAME" >/dev/null; then
-  tag_source="refs/tags/$TAG_NAME"
+# A release only needs a tag that points to a remote commit. Keep the GitCode
+# repository binary-only by using an empty root commit instead of pushing HEAD.
+tag_exists_status=0
+if timeout --signal=TERM --kill-after=30s 2m \
+  git ls-remote --exit-code --refs gitcode-release "refs/tags/$TAG_NAME" >/dev/null 2>&1; then
+  echo "GitCode tag $TAG_NAME already exists"
 else
-  tag_source="HEAD"
+  tag_exists_status=$?
+  if [[ $tag_exists_status -eq 124 ]]; then
+    echo "Timed out checking GitCode tag $TAG_NAME" >&2
+    exit "$tag_exists_status"
+  elif [[ $tag_exists_status -ne 2 ]]; then
+    echo "Failed to check GitCode tag $TAG_NAME (exit $tag_exists_status)" >&2
+    exit "$tag_exists_status"
+  fi
+
+  empty_tree=$(git mktree </dev/null)
+  anchor_commit=$(printf 'GitCode release anchor: %s\n' "$TAG_NAME" | \
+    env \
+      GIT_AUTHOR_NAME='Kototoro Release Bot' \
+      GIT_AUTHOR_EMAIL='release-bot@kototoro.app' \
+      GIT_COMMITTER_NAME='Kototoro Release Bot' \
+      GIT_COMMITTER_EMAIL='release-bot@kototoro.app' \
+      git commit-tree "$empty_tree")
+  push_to_gitcode \
+    "$anchor_commit:refs/tags/$TAG_NAME" \
+    "Pushing empty release anchor for $TAG_NAME to GitCode"
 fi
-git push gitcode-release "$tag_source:refs/tags/$TAG_NAME"
 
 encoded_tag=$(jq -rn --arg value "$TAG_NAME" '$value | @uri')
 encoded_token=$(jq -rn --arg value "$GITCODE_TOKEN" '$value | @uri')
@@ -92,7 +146,8 @@ jq -n \
     release_status: $release_status
   }' >"$release_payload"
 
-release_status=$(curl --silent --show-error \
+echo "Querying GitCode release $TAG_NAME"
+release_status=$(curl "${curl_api_options[@]}" --silent --show-error \
   --output "$release_json" \
   --write-out '%{http_code}' \
   --header "Authorization: Bearer $GITCODE_TOKEN" \
@@ -101,7 +156,8 @@ release_status=$(curl --silent --show-error \
 case "$release_status" in
   200)
     jq '{name, body, release_status}' "$release_payload" >"$work_dir/update-payload.json"
-    curl --fail-with-body --silent --show-error \
+    echo "Updating GitCode release $TAG_NAME"
+    curl "${curl_api_options[@]}" --fail-with-body --silent --show-error \
       --request PATCH \
       --header "Authorization: Bearer $GITCODE_TOKEN" \
       --header 'Content-Type: application/json' \
@@ -110,7 +166,8 @@ case "$release_status" in
       "$gitcode_api/releases/$encoded_tag?access_token=$encoded_token"
     ;;
   404)
-    curl --fail-with-body --silent --show-error \
+    echo "Creating GitCode release $TAG_NAME"
+    curl --connect-timeout 15 --max-time 120 --fail-with-body --silent --show-error \
       --request POST \
       --header "Authorization: Bearer $GITCODE_TOKEN" \
       --header 'Content-Type: application/json' \
@@ -128,8 +185,10 @@ esac
 for apk in "${apk_files[@]}"; do
   file_name=$(basename "$apk")
 
+  echo "Preparing GitCode release asset $file_name"
+
   while IFS= read -r asset_id; do
-    curl --fail-with-body --silent --show-error \
+    curl "${curl_api_options[@]}" --fail-with-body --silent --show-error \
       --request DELETE \
       --header "Authorization: Bearer $GITCODE_TOKEN" \
       "$gitcode_api/releases/$encoded_tag/attach_files/$asset_id?access_token=$encoded_token"
@@ -139,7 +198,7 @@ for apk in "${apk_files[@]}"; do
 
   upload_json="$work_dir/upload.json"
   encoded_file_name=$(jq -rn --arg value "$file_name" '$value | @uri')
-  curl --fail-with-body --silent --show-error \
+  curl "${curl_api_options[@]}" --fail-with-body --silent --show-error \
     --header "Authorization: Bearer $GITCODE_TOKEN" \
     --output "$upload_json" \
     "$gitcode_api/releases/$encoded_tag/upload_url?access_token=$encoded_token&file_name=$encoded_file_name"
@@ -153,7 +212,8 @@ for apk in "${apk_files[@]}"; do
     curl_headers+=(--header "$header")
   done
 
-  curl --fail-with-body --silent --show-error \
+  echo "Uploading $file_name to GitCode"
+  curl "${curl_upload_options[@]}" --fail-with-body --show-error --progress-bar \
     --request PUT \
     "${curl_headers[@]}" \
     --upload-file "$apk" \
