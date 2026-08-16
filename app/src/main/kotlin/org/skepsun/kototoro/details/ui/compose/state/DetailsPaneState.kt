@@ -144,6 +144,13 @@ class DetailsPaneState internal constructor(
     val isFullyExpanded: Boolean
         get() = anchor == CompactDetailsPaneAnchor.Full
 
+    // Transfer gesture ownership at fling selection, before the visual anchor finishes settling.
+    val isPaneSurfaceDragEnabled: Boolean
+        get() = settlementAnchor != CompactDetailsPaneAnchor.Full && !isGridSizeControlsVisible
+
+    val isPaneTopBarDragEnabled: Boolean
+        get() = settlementAnchor == CompactDetailsPaneAnchor.Full && !isGridSizeControlsVisible
+
     val shouldHandleBack: Boolean
         get() = chapterSelectionState != null ||
             isGridSizeControlsVisible ||

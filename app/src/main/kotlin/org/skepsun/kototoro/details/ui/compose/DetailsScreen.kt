@@ -3163,8 +3163,7 @@ private fun DetailsPaneActionsRow(
         Modifier.anchoredDraggable(
             state = detailsPaneState.anchoredState,
             orientation = Orientation.Vertical,
-            enabled = detailsPaneState.anchor == CompactDetailsPaneAnchor.Full &&
-                !detailsPaneState.isGridSizeControlsVisible,
+            enabled = detailsPaneState.isPaneTopBarDragEnabled,
             flingBehavior = paneFlingBehavior,
         )
     } else {
@@ -3195,8 +3194,7 @@ private fun DetailsPaneActionsRow(
                     Modifier.anchoredDraggable(
                         state = detailsPaneState.anchoredState,
                         orientation = Orientation.Vertical,
-                        enabled = detailsPaneState.anchor == CompactDetailsPaneAnchor.Full &&
-                            !detailsPaneState.isGridSizeControlsVisible,
+                        enabled = detailsPaneState.isPaneTopBarDragEnabled,
                         flingBehavior = paneFlingBehavior,
                     )
                 },
@@ -3252,8 +3250,7 @@ private fun DetailsPaneActionsRow(
                                 .anchoredDraggable(
                                     state = detailsPaneState.anchoredState,
                                     orientation = Orientation.Vertical,
-                                    enabled = detailsPaneState.anchor == CompactDetailsPaneAnchor.Full &&
-                                        !detailsPaneState.isGridSizeControlsVisible,
+                                    enabled = detailsPaneState.isPaneTopBarDragEnabled,
                                     flingBehavior = paneFlingBehavior,
                                 )
                         } else {
