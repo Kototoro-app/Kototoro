@@ -2879,6 +2879,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LINK_DISCORD = "about_discord"
 		const val KEY_LINK_GITHUB = "about_github"
 		const val KEY_LINK_DONATE = "about_donate"
+		const val KEY_LINK_AFDIAN = "about_donate_afdian"
 		const val KEY_LINK_MANUAL = "about_help"
 		const val KEY_PROXY_TEST = "proxy_test"
 		const val KEY_OPEN_BROWSER = "open_browser"

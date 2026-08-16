@@ -1995,6 +1995,7 @@ class SettingsActivity :
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_WEBLATE -> R.string.url_weblate
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_GITHUB -> R.string.url_github
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_DONATE -> R.string.url_donate
+			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_AFDIAN -> R.string.url_afdian
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_MANUAL -> R.string.url_user_manual
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_DISCORD -> R.string.url_discord
 			else -> return false
@@ -2003,6 +2004,7 @@ class SettingsActivity :
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_WEBLATE -> getString(R.string.about_app_translation_summary)
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_GITHUB -> getString(R.string.source_code)
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_DONATE -> getString(R.string.about_donate)
+			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_AFDIAN -> getString(R.string.about_donate_afdian)
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_MANUAL -> getString(R.string.user_manual)
 			org.skepsun.kototoro.core.prefs.AppSettings.KEY_LINK_DISCORD -> getString(R.string.about_discord)
 			else -> null

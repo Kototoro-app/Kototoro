@@ -1107,6 +1107,8 @@
 
     <string name="about_donate" translatable="false">Donate</string>
     <string name="url_donate" translatable="false">https://ko-fi.com/skepsun</string>
+    <string name="about_donate_afdian">Support on Afdian</string>
+    <string name="url_afdian" translatable="false">https://www.ifdian.net/a/kototoro</string>
     <string name="about_discord" translatable="false">Discord Server</string>
     <string name="related_manga">Related manga</string>
     <string name="color_light">Light</string>

@@ -566,6 +566,7 @@ class SettingsSearchHelper @Inject constructor(
 			"about_help" to R.string.user_manual,
 			"about_github" to R.string.source_code,
 			"about_donate" to R.string.about_donate,
+			"about_donate_afdian" to R.string.about_donate_afdian,
 			"about_app_translation" to R.string.about_app_translation_summary,
 			"about_discord" to R.string.about_discord,
 			"crash_logs" to R.string.crash_logs

@@ -143,6 +143,14 @@ fun AboutSettingsScreen(
                     }
                     item {
                         SettingsActionPreference(
+                            title = stringResource(R.string.about_donate_afdian),
+                            iconRes = R.drawable.ic_heart_outline,
+                            summary = stringResource(R.string.url_afdian),
+                            onClick = { onLinkClick(AppSettings.KEY_LINK_AFDIAN) },
+                        )
+                    }
+                    item {
+                        SettingsActionPreference(
                             title = stringResource(R.string.about_discord),
                             iconRes = R.drawable.ic_discord,
                             summary = stringResource(R.string.url_discord),

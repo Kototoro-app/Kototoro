@@ -326,6 +326,7 @@
     <string name="about_app_translation_summary">协助翻译</string>
     <string name="about_discord">Discord</string>
     <string name="about_donate">打赏赞助</string>
+    <string name="about_donate_afdian">通过爱发电支持我们</string>
     <string name="access_denied_403">拒绝访问 (403)</string>
     <string name="account_already_exists">账号已存在</string>
     <string name="action_apply">应用</string>

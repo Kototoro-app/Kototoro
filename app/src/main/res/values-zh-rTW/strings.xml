@@ -740,6 +740,7 @@
     <string name="_install">安裝</string>
     <string name="about_discord">Discord</string>
     <string name="about_donate">打賞讚助</string>
+    <string name="about_donate_afdian">透過愛發電支持我們</string>
     <string name="access_denied_403">拒絕訪問 (403)</string>
     <string name="action_apply">應用</string>
     <string name="action_auto_restore">自動恢復</string>

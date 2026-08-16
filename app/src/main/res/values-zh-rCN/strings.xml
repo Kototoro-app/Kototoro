@@ -165,6 +165,7 @@
     <string name="share_image">分享图片</string>
     <string name="_import">导入</string>
     <string name="about_donate">打赏赞助</string>
+    <string name="about_donate_afdian">通过爱发电支持我们</string>
     <string name="about_discord" translatable="false">Discord</string>
     <string name="delete">删除</string>
     <string name="operation_not_supported">操作无效</string>
