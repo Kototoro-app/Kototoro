@@ -1623,6 +1623,18 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 			putStringSet(KEY_LOCAL_MANGA_DIR_URIS, value.mapToSet(Uri::toString))
 		}
 
+	var userSpecifiedNovelDirectoryUris: Set<Uri>
+		get() = prefs.getStringSet(KEY_LOCAL_NOVEL_DIR_URIS, emptySet()).orEmpty().mapToSet(Uri::parse)
+		set(value) = prefs.edit {
+			putStringSet(KEY_LOCAL_NOVEL_DIR_URIS, value.mapToSet(Uri::toString))
+		}
+
+	var userSpecifiedVideoDirectoryUris: Set<Uri>
+		get() = prefs.getStringSet(KEY_LOCAL_VIDEO_DIR_URIS, emptySet()).orEmpty().mapToSet(Uri::parse)
+		set(value) = prefs.edit {
+			putStringSet(KEY_LOCAL_VIDEO_DIR_URIS, value.mapToSet(Uri::toString))
+		}
+
 	var mangaStorageUri: Uri?
 		get() = prefs.getString(KEY_LOCAL_STORAGE_URI, null)?.let(Uri::parse)
 			?: prefs.getString(KEY_LOCAL_STORAGE, null)?.let { Uri.fromFile(File(it)) }
@@ -1642,15 +1654,25 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var novelStorageUri: Uri?
 		get() = prefs.getString(KEY_LOCAL_NOVEL_STORAGE_URI, null)?.let(Uri::parse)
 			?: prefs.getString(KEY_LOCAL_NOVEL_STORAGE, null)?.let { Uri.fromFile(File(it)) }
-		set(value) = prefs.edit {
-			if (value == null) remove(KEY_LOCAL_NOVEL_STORAGE_URI) else putString(KEY_LOCAL_NOVEL_STORAGE_URI, value.toString())
+		set(value) {
+			if (value != null && value !in userSpecifiedNovelDirectoryUris) {
+				userSpecifiedNovelDirectoryUris += value
+			}
+			prefs.edit {
+				if (value == null) remove(KEY_LOCAL_NOVEL_STORAGE_URI) else putString(KEY_LOCAL_NOVEL_STORAGE_URI, value.toString())
+			}
 		}
 
 	var videoStorageUri: Uri?
 		get() = prefs.getString(KEY_LOCAL_VIDEO_STORAGE_URI, null)?.let(Uri::parse)
 			?: prefs.getString(KEY_LOCAL_VIDEO_STORAGE, null)?.let { Uri.fromFile(File(it)) }
-		set(value) = prefs.edit {
-			if (value == null) remove(KEY_LOCAL_VIDEO_STORAGE_URI) else putString(KEY_LOCAL_VIDEO_STORAGE_URI, value.toString())
+		set(value) {
+			if (value != null && value !in userSpecifiedVideoDirectoryUris) {
+				userSpecifiedVideoDirectoryUris += value
+			}
+			prefs.edit {
+				if (value == null) remove(KEY_LOCAL_VIDEO_STORAGE_URI) else putString(KEY_LOCAL_VIDEO_STORAGE_URI, value.toString())
+			}
 		}
 
 	var mangaStorageDir: File?
@@ -2455,6 +2477,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_LOCAL_STORAGE_URI = "local_storage_uri"
 		const val KEY_LOCAL_NOVEL_STORAGE_URI = "local_novel_storage_uri"
 		const val KEY_LOCAL_VIDEO_STORAGE_URI = "local_video_storage_uri"
+		const val KEY_LOCAL_NOVEL_DIR_URIS = "local_novel_dir_uris"
+		const val KEY_LOCAL_VIDEO_DIR_URIS = "local_video_dir_uris"
 		const val KEY_READER_DOUBLE_PAGES = "reader_double_pages"
 		const val KEY_READER_DOUBLE_PAGES_SENSITIVITY = "reader_double_pages_sensitivity_2"
 		const val KEY_READER_DOUBLE_FOLDABLE = "reader_double_foldable"

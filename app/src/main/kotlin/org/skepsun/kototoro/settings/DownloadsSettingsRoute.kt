@@ -25,7 +25,6 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,9 +59,6 @@ fun DownloadsSettingsRoute(
     storageRefreshKey: Int,
     dozeRefreshKey: Int,
     onOpenMangaDirectories: () -> Unit,
-    onOpenMangaStorage: () -> Unit,
-    onOpenNovelStorage: () -> Unit,
-    onOpenVideoStorage: () -> Unit,
     onAllowMeteredNetworkChange: (TriStateOption) -> Unit,
     onRequestIgnoreDoze: () -> Boolean,
     onPickPagesDirectory: (Uri?) -> Boolean,
@@ -91,15 +87,6 @@ fun DownloadsSettingsRoute(
     val isPagesSavingAskEnabled =
         settings.observeAsState(AppSettings.KEY_PAGES_SAVE_ASK) { isPagesSavingAskEnabled }.value
     val mangaDirectoriesSummary = rememberMangaDirectoriesSummary(storageManager, storageRefreshKey)
-    val mangaStorageSummary = rememberStorageSummary(storageRefreshKey) {
-        loadStorageSummary(context, storageManager.getDefaultWriteableDir(), storageManager)
-    }
-    val novelStorageSummary = rememberStorageSummary(storageRefreshKey) {
-        loadStorageSummary(context, storageManager.getDefaultNovelWriteableDir(), storageManager)
-    }
-    val videoStorageSummary = rememberStorageSummary(storageRefreshKey) {
-        loadStorageSummary(context, storageManager.getDefaultVideoWriteableDir(), storageManager)
-    }
     val pagesDirectorySummary = rememberPagesDirectorySummary(storageRefreshKey, pagesSaveDirKey, settings)
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -117,9 +104,6 @@ fun DownloadsSettingsRoute(
 
     val state = DownloadsSettingsUiState(
         mangaDirectoriesSummary = mangaDirectoriesSummary,
-        mangaStorageSummary = mangaStorageSummary,
-        novelStorageSummary = novelStorageSummary,
-        videoStorageSummary = videoStorageSummary,
         preferredDownloadFormat = preferredDownloadFormat,
         isDownloadAlignedWithReader = isDownloadAlignedWithReader,
         isDownloadAutoRetryOnNetworkError = isDownloadAutoRetryOnNetworkError,
@@ -171,9 +155,6 @@ fun DownloadsSettingsRoute(
         downloadFormatOptions = downloadFormatOptions,
         meteredNetworkOptions = meteredNetworkOptions,
         onMangaDirectoriesClick = onOpenMangaDirectories,
-        onMangaStorageClick = onOpenMangaStorage,
-        onNovelStorageClick = onOpenNovelStorage,
-        onVideoStorageClick = onOpenVideoStorage,
         onPreferredDownloadFormatChange = { settings.preferredDownloadFormat = it },
         onDownloadAlignReaderChange = { settings.isDownloadAlignedWithReader = it },
         onDownloadAutoRetryChange = { settings.isDownloadAutoRetryOnNetworkError = it },
@@ -221,24 +202,9 @@ private fun rememberMangaDirectoriesSummary(
         key2 = refreshKey,
         key3 = context,
     ) {
-        val dirs = storageManager.getReadableDirs().size
+        val dirs = storageManager.getAllReadableRoots().size
         value = context.resources.getQuantityStringSafe(R.plurals.items, dirs, dirs)
     }.value
-}
-
-@Composable
-private fun rememberStorageSummary(
-    refreshKey: Int,
-    loader: suspend () -> String,
-): String {
-    val context = LocalContext.current
-    return produceState(
-        initialValue = context.getString(R.string.loading_),
-        key1 = refreshKey,
-        producer = {
-            value = loader()
-        },
-    ).value
 }
 
 @Composable
@@ -258,18 +224,6 @@ private fun rememberPagesDirectorySummary(
             settings.getPagesSaveDir(context)
         }?.getDisplayPath(context) ?: context.getString(androidx.preference.R.string.not_set)
     }.value
-}
-
-private suspend fun loadStorageSummary(
-    context: Context,
-    storage: File?,
-    storageManager: LocalStorageManager,
-): String {
-    return if (storage != null) {
-        storageManager.getDirectoryDisplayName(storage, isFullPath = true)
-    } else {
-        context.getString(R.string.not_set)
-    }
 }
 
 fun startIgnoreDozeActivity(

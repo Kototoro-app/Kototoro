@@ -50,6 +50,7 @@ import org.skepsun.kototoro.core.util.ext.ensureRamAtLeast
 import org.skepsun.kototoro.core.util.ext.ensureSuccess
 import org.skepsun.kototoro.core.util.ext.getCompletionResultOrNull
 import org.skepsun.kototoro.core.util.ext.isFileUri
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isNotEmpty
 import org.skepsun.kototoro.core.util.ext.isPowerSaveMode
 import org.skepsun.kototoro.core.util.ext.isZipUri
@@ -60,6 +61,7 @@ import org.skepsun.kototoro.core.util.ext.ramAvailable
 import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
 import org.skepsun.kototoro.core.util.ext.toMimeType
 import org.skepsun.kototoro.core.util.ext.toMimeTypeOrNull
+import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import org.skepsun.kototoro.core.util.ext.use
 import org.skepsun.kototoro.core.util.ext.withProgress
 import org.skepsun.kototoro.core.util.progress.ProgressDeferred
@@ -78,6 +80,7 @@ import java.io.IOException
 import java.util.LinkedList
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -218,7 +221,7 @@ class PageLoader @Inject constructor(
 
 	@CheckResult
 	suspend fun convertBimap(uri: Uri): Uri = convertLock.withLock {
-		if (uri.isZipUri()) {
+		if (uri.isZipUri() || uri.isContentZipUri()) {
 			val image = decodeZipBitmap(uri)
 			image.use {
 				cache.set(uri.toString(), image).toUri()
@@ -234,6 +237,27 @@ class PageLoader @Inject constructor(
 	}
 
 	private suspend fun decodeZipBitmap(uri: Uri): android.graphics.Bitmap {
+		if (uri.isContentZipUri()) {
+			val entryName = checkNotNull(uri.fragment) { "ZIP URI has no entry name: $uri" }
+			val bytes = runInterruptible(Dispatchers.IO) {
+				val input = checkNotNull(context.contentResolver.openInputStream(uri.toUnderlyingZipUri())) {
+					"Cannot open $uri"
+				}
+				ZipInputStream(input.buffered()).use { zip ->
+					var entry = zip.nextEntry
+					while (entry != null && entry.name != entryName) {
+						entry = zip.nextEntry
+					}
+					checkNotNull(entry) { "ZIP entry not found: $entryName" }
+					zip.readBytes()
+				}
+			}
+			val mimeType = MimeTypes.getMimeTypeFromExtension(entryName)
+			if (mimeType?.subtype == "svg+xml") {
+				return decodeSvgBitmap(bytes)
+			}
+			return BitmapDecoderCompat.decode(bytes.inputStream(), mimeType)
+		}
 		val svgBytes = runInterruptible(Dispatchers.IO) {
 			ZipFile(uri.schemeSpecificPart).use { zip ->
 				val entry = checkNotNull(zip.getEntry(uri.fragment)) {
@@ -290,7 +314,10 @@ class PageLoader @Inject constructor(
 
 	suspend fun getPageUrl(page: ContentPage): String {
 		val uri = page.url.toUri()
-		if (uri.isZipUri() || uri.isFileUri() || uri.scheme == "data" || uri.scheme == "content") {
+		if (
+			uri.isZipUri() || uri.isContentZipUri() || uri.isFileUri() ||
+			uri.scheme == "data" || uri.scheme == "content"
+		) {
 			return page.url
 		}
 		return getRepository(page.source).getPageUrl(page)
@@ -456,20 +483,23 @@ class PageLoader @Inject constructor(
 	): Uri = downloadPermits.withPermit(ticket) {
 			val pageUrl = pageUrlOverride ?: getPageUrl(page)
 			check(pageUrl.isNotBlank()) { "Cannot obtain full image url for $page" }
-			val sourceUri = if (!skipCache) {
+			val uri = pageUrl.toUri()
+			val directLocalUri = when {
+				uri.isZipUri() -> if (uri.scheme == URI_SCHEME_ZIP) {
+					uri
+				} else {
+					uri.buildUpon().scheme(URI_SCHEME_ZIP).build()
+				}
+
+				uri.isContentZipUri() || uri.scheme == "content" || uri.isFileUri() -> uri
+				else -> null
+			}
+			val sourceUri = directLocalUri ?: if (!skipCache) {
 				cache.get(pageUrl)?.toUri()
 			} else {
 				null
 			} ?: run {
-				val uri = pageUrl.toUri()
 				when {
-					uri.isZipUri() -> if (uri.scheme == URI_SCHEME_ZIP) {
-						uri
-					} else { // legacy uri
-						uri.buildUpon().scheme(URI_SCHEME_ZIP).build()
-					}
-
-					uri.isFileUri() -> uri
 					uri.scheme == "data" -> {
 						val dataUrl = pageUrl
 						val commaIndex = dataUrl.indexOf(',')
@@ -535,9 +565,38 @@ class PageLoader @Inject constructor(
 
 	private fun Deferred<Uri>.isValid(): Boolean {
 		return getCompletionResultOrNull()?.map { uri ->
-			uri.exists() && uri.isTargetNotEmpty()
+			uri.isExistingNonEmptyTarget()
 		}?.getOrDefault(false) != false
 	}
+
+	@Blocking
+	private fun Uri.isExistingNonEmptyTarget(): Boolean = when {
+		isFileUri() -> toFile().isNotEmpty()
+		isZipUri() -> {
+			val file = File(requireNotNull(schemeSpecificPart))
+			file.exists() && ZipFile(file).use { (it.getEntry(fragment)?.size ?: 0L) != 0L }
+		}
+
+		isContentZipUri() -> findContentZipEntrySize()?.let { it != 0L } == true
+		scheme == "content" -> runCatching {
+			context.contentResolver.openAssetFileDescriptor(this, "r")?.use { it.length != 0L }
+		}.getOrNull() == true
+
+		else -> false
+	}
+
+	@Blocking
+	private fun Uri.findContentZipEntrySize(): Long? = runCatching {
+		val entryName = fragment ?: return@runCatching null
+		val input = context.contentResolver.openInputStream(toUnderlyingZipUri()) ?: return@runCatching null
+		ZipInputStream(input.buffered()).use { zip ->
+			var entry = zip.nextEntry
+			while (entry != null && entry.name != entryName) {
+				entry = zip.nextEntry
+			}
+			entry?.size
+		}
+	}.getOrNull()
 
 	private class InternalErrorHandler : AbstractCoroutineContextElement(CoroutineExceptionHandler),
 		CoroutineExceptionHandler {
@@ -594,27 +653,5 @@ class PageLoader @Inject constructor(
 			return builder.build()
 		}
 
-
-		@Blocking
-		private fun Uri.exists(): Boolean = when {
-			isFileUri() -> toFile().exists()
-			isZipUri() -> {
-				val file = File(requireNotNull(schemeSpecificPart))
-				file.exists() && ZipFile(file).use { it.getEntry(fragment) != null }
-			}
-
-			else -> false
-		}
-
-		@Blocking
-		private fun Uri.isTargetNotEmpty(): Boolean = when {
-			isFileUri() -> toFile().isNotEmpty()
-			isZipUri() -> {
-				val file = File(requireNotNull(schemeSpecificPart))
-				file.exists() && ZipFile(file).use { (it.getEntry(fragment)?.size ?: 0L) != 0L }
-			}
-
-			else -> false
-		}
 	}
 }

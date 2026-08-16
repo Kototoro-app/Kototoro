@@ -35,6 +35,7 @@ import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.zoomable
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 import java.io.File
@@ -134,7 +135,7 @@ private fun ComposeTelephotoSubsamplingImage(
 	val currentOnImageError by rememberUpdatedState(onImageError)
 	val currentOnZoomedChanged by rememberUpdatedState(onZoomedChanged)
 	val imageSource = remember(uri, split, cropBounds, context) {
-		val source = if (uri.isAvifImage()) {
+		val source = if (uri.isAvifImage() || uri.isContentZipUri()) {
 			NativeSubSamplingImageSource(context, uri)
 		} else if (uri.isZipUri()) {
 			val entryName = uri.fragment

@@ -25,6 +25,7 @@ import org.skepsun.kototoro.core.util.AlphanumComparator
 import org.skepsun.kototoro.core.util.MimeTypes
 import org.skepsun.kototoro.core.util.ext.URI_SCHEME_ZIP
 import org.skepsun.kototoro.core.util.ext.isDirectory
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isFileUri
 import org.skepsun.kototoro.core.util.ext.isImage
 import org.skepsun.kototoro.core.util.ext.isRegularFile
@@ -33,6 +34,7 @@ import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
 import org.skepsun.kototoro.core.util.ext.toZipUri
 import org.skepsun.kototoro.core.util.ext.toListSorted
+import org.skepsun.kototoro.core.util.ext.toUnderlyingZipUri
 import org.skepsun.kototoro.core.util.ext.withFragmentFrom
 import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.local.data.hasZipExtension
@@ -75,8 +77,8 @@ class LocalContentParser {
 
 	constructor(uri: Uri) {
 		this.uri = uri
-		this.uniFile = if (uri.scheme == "content") {
-			UniFile.fromUri(App.getInstance(), uri.buildUpon().fragment(null).build())
+		this.uniFile = if (uri.scheme == "content" || uri.isContentZipUri()) {
+			UniFile.fromUri(App.getInstance(), uri.toUnderlyingZipUri().buildUpon().fragment(null).build())
 		} else {
 			null
 		}

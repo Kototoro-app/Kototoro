@@ -56,7 +56,10 @@ class ContentDirectorySelectViewModel @Inject constructor(
 			when (contentType) {
 				CONTENT_TYPE_NOVEL -> settings.novelStorageUri = root.uri
 				CONTENT_TYPE_VIDEO -> settings.videoStorageUri = root.uri
-				else -> settings.mangaStorageUri = root.uri
+				else -> {
+					settings.userSpecifiedContentDirectoryUris += root.uri
+					settings.mangaStorageUri = root.uri
+				}
 			}
 			storageManager.setDirIsNoMedia(root)
 			onDismissDialog.call(Unit)

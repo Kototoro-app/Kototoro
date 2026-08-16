@@ -697,6 +697,7 @@
     <string name="invalid_port_number">无效端口</string>
     <string name="no_access_to_file">没有权限访问该文件或目录</string>
     <string name="local_manga_directories">本地漫画目录</string>
+    <string name="local_content_directories">本地作品目录</string>
     <string name="port">端口</string>
     <string name="download_option_all_unread">所有未读章节</string>
     <string name="pick_custom_directory">选择自定义目录</string>
@@ -2399,6 +2400,8 @@
     <string name="available_extension_count">%d 个可用</string>
     <string name="available_extension_update_count">%d 个更新</string>
     <string name="available_pattern">%1$s 可用</string>
+    <string name="directory_usage_pattern">已用 %1$s，可用 %2$s</string>
+    <string name="directory_used_pattern">已用 %1$s</string>
     <string name="available_section">可用</string>
     <string name="bangumi">Bangumi</string>
     <string name="breadcrumbs_separator"><![CDATA[" > "]]></string>

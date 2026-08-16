@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.local.ui.info
 
+import android.content.Context
 import androidx.core.net.toUri
 import androidx.lifecycle.SavedStateHandle
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,17 +13,19 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
-import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.data.LocalStorageManager
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
+import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.computeStoredSize
 import org.skepsun.kototoro.parsers.model.Content
 import javax.inject.Inject
 
 @HiltViewModel
 class LocalInfoViewModel @Inject constructor(
 	savedStateHandle: SavedStateHandle,
+	@ApplicationContext private val context: Context,
 	private val contentDataRepository: ContentDataRepository,
 	private val localContentRepository: LocalMangaRepository,
 	private val storageManager: LocalStorageManager,
@@ -84,10 +88,12 @@ class LocalInfoViewModel @Inject constructor(
 	}
 
 	private fun computeSize() = launchLoadingJob(Dispatchers.Default) {
-		val file = manga.url.toUri().toFileOrNull() ?: localContentRepository.findSavedContent(manga)?.file
-		requireNotNull(file)
-		path.value = file.path
-		size.value = file.computeSize()
+		val local = localContentRepository.findSavedContent(manga)
+		val file = manga.url.toUri().toFileOrNull()
+		val resolvedLocal = local ?: file?.let { LocalContent(manga, it) }
+		requireNotNull(resolvedLocal)
+		path.value = resolvedLocal.storageUri?.toString() ?: resolvedLocal.file.path
+		size.value = resolvedLocal.computeStoredSize(context)
 		availableSize.value = storageManager.computeAvailableSize()
 	}
 }

@@ -24,9 +24,6 @@ import org.skepsun.kototoro.core.prefs.TriStateOption
 
 data class DownloadsSettingsUiState(
     val mangaDirectoriesSummary: String,
-    val mangaStorageSummary: String,
-    val novelStorageSummary: String,
-    val videoStorageSummary: String,
     val preferredDownloadFormat: DownloadFormat,
     val isDownloadAlignedWithReader: Boolean,
     val isDownloadAutoRetryOnNetworkError: Boolean,
@@ -50,9 +47,6 @@ fun DownloadsSettingsScreen(
     downloadFormatOptions: List<SettingsChoiceOption<DownloadFormat>>,
     meteredNetworkOptions: List<SettingsChoiceOption<TriStateOption>>,
     onMangaDirectoriesClick: () -> Unit,
-    onMangaStorageClick: () -> Unit,
-    onNovelStorageClick: () -> Unit,
-    onVideoStorageClick: () -> Unit,
     onPreferredDownloadFormatChange: (DownloadFormat) -> Unit,
     onDownloadAlignReaderChange: (Boolean) -> Unit,
     onDownloadAutoRetryChange: (Boolean) -> Unit,
@@ -90,34 +84,10 @@ fun DownloadsSettingsScreen(
                 SettingsPreferenceGroup(title = downloadsTitle) {
                     item {
                         SettingsActionPreference(
-                            title = stringResource(R.string.local_manga_directories),
+                            title = stringResource(R.string.local_content_directories),
                             iconRes = R.drawable.ic_folder_file,
                             summary = state.mangaDirectoriesSummary,
                             onClick = onMangaDirectoriesClick,
-                        )
-                    }
-                    item {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.manga_save_location),
-                            iconRes = R.drawable.ic_storage,
-                            summary = state.mangaStorageSummary,
-                            onClick = onMangaStorageClick,
-                        )
-                    }
-                    item {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.novel_save_location),
-                            iconRes = R.drawable.ic_storage,
-                            summary = state.novelStorageSummary,
-                            onClick = onNovelStorageClick,
-                        )
-                    }
-                    item {
-                        SettingsActionPreference(
-                            title = stringResource(R.string.video_save_location),
-                            iconRes = R.drawable.ic_storage,
-                            summary = state.videoStorageSummary,
-                            onClick = onVideoStorageClick,
                         )
                     }
                     item {

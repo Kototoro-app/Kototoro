@@ -447,6 +447,8 @@
     <string name="available_extension_count">%d 个可用</string>
     <string name="available_extension_update_count">%d 个更新</string>
     <string name="available_pattern">%1$s 可用</string>
+    <string name="directory_usage_pattern">已用 %1$s，可用 %2$s</string>
+    <string name="directory_used_pattern">已用 %1$s</string>
     <string name="available_section">可用</string>
     <string name="back">返回</string>
     <string name="background">阅读背景颜色</string>
@@ -1213,6 +1215,7 @@
     <string name="local_content_deleted_pattern">%1$s 已清除: %2$s，释放 %3$s</string>
     <string name="local_file">本地文件</string>
     <string name="local_manga_directories">本地漫画目录</string>
+    <string name="local_content_directories">本地作品目录</string>
     <string name="local_manga_processing">正在处理已保存内容</string>
     <string name="local_manga_storage">本地漫画</string>
     <string name="local_novel_storage">本地小说</string>

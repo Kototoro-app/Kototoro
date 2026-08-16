@@ -110,6 +110,7 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.DeleteLocalContentUseCase
 import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.local.domain.model.computeStoredSize
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.favourites.domain.MergeBackAndAddFavouriteUseCase
 import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDuplicatePrompt
@@ -3272,7 +3273,7 @@ class DetailsViewModel @Inject constructor(
 			if (local != null) {
 				// 普通本地漫画：计算文件夹大小
 				runCatchingCancellable {
-					local.file.computeSize()
+					local.computeStoredSize(context)
 				}.getOrDefault(0L)
 			} else {
 				// 检查是否有EPUB文件（对于非本地但有EPUB下载的manga）

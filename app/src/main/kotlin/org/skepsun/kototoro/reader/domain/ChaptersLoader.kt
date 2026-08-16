@@ -10,6 +10,7 @@ import kotlinx.coroutines.sync.withLock
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.util.ext.isFileUri
+import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -210,6 +211,7 @@ class ChaptersLoader @Inject constructor(
 		val uri = url.toUri()
 		return uri.isFileUri() ||
 			uri.isZipUri() ||
+			uri.isContentZipUri() ||
 			uri.scheme == "content" ||
 			uri.scheme == "epub" ||
 			uri.scheme == "localepub" ||

@@ -9,6 +9,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.os.storage.StorageManager
+import android.provider.DocumentsContract
 import androidx.annotation.WorkerThread
 import androidx.core.content.ContextCompat
 import androidx.core.net.toFile
@@ -103,6 +105,11 @@ class LocalStorageManager @Inject constructor(
 			.sum()
 	}
 
+	suspend fun computeAvailableSize(root: LocalStorageRoot): Long? = runInterruptible(Dispatchers.IO) {
+		val statTarget = root.rawFile ?: resolveExternalStorageVolumeTarget(root.uri) ?: return@runInterruptible null
+		runCatching { StatFs(statTarget.absolutePath).availableBytes }.getOrNull()
+	}
+
 	suspend fun clearCache(cache: CacheDir) = runInterruptible(Dispatchers.IO) {
 		getCacheDirsFor(cache).forEach { it.deleteRecursively() }
 	}
@@ -124,6 +131,14 @@ class LocalStorageManager @Inject constructor(
 
 	suspend fun getReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
 		getConfiguredStorageRoots().filter(LocalStorageRoot::isReadable)
+	}
+
+	suspend fun getReadableRoots(kind: StorageContentKind): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+		when (kind) {
+			StorageContentKind.MANGA -> getConfiguredStorageRoots()
+			StorageContentKind.NOVEL -> getConfiguredNovelStorageRoots()
+			StorageContentKind.VIDEO -> getConfiguredVideoStorageRoots()
+		}.filter(LocalStorageRoot::isReadable)
 	}
 
 	suspend fun getWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
@@ -247,6 +262,24 @@ class LocalStorageManager @Inject constructor(
 		return !file.absolutePath.contains(context.packageName)
 	}
 
+	@WorkerThread
+	private fun resolveExternalStorageVolumeTarget(uri: Uri): File? {
+		if (uri.authority != "com.android.externalstorage.documents" || !DocumentsContract.isTreeUri(uri)) {
+			return null
+		}
+		val volumeId = runCatching { DocumentsContract.getTreeDocumentId(uri).substringBefore(':') }.getOrNull()
+			?: return null
+		val storageManager = context.getSystemService(StorageManager::class.java) ?: return null
+		return context.getExternalFilesDirs(null).filterNotNull().firstOrNull { directory ->
+			val volume = storageManager.getStorageVolume(directory) ?: return@firstOrNull false
+			if (volumeId.equals("primary", ignoreCase = true)) {
+				volume.isPrimary
+			} else {
+				volume.uuid.equals(volumeId, ignoreCase = true)
+			}
+		}
+	}
+
 	fun hasExternalStoragePermission(isReadOnly: Boolean): Boolean {
 		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
 			Environment.isExternalStorageManager()
@@ -320,7 +353,7 @@ class LocalStorageManager @Inject constructor(
 	@WorkerThread
 	private fun getConfiguredNovelStorageRoots(): MutableSet<LocalStorageRoot> {
 		val roots = getAvailableNovelStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-		settings.novelStorageUri?.let { uri ->
+		(settings.userSpecifiedNovelDirectoryUris + listOfNotNull(settings.novelStorageUri)).forEach { uri ->
 			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
 		}
 		return roots
@@ -345,7 +378,7 @@ class LocalStorageManager @Inject constructor(
 	@WorkerThread
 	private fun getConfiguredVideoStorageRoots(): MutableSet<LocalStorageRoot> {
 		val roots = getAvailableVideoStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-		settings.videoStorageUri?.let { uri ->
+		(settings.userSpecifiedVideoDirectoryUris + listOfNotNull(settings.videoStorageUri)).forEach { uri ->
 			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
 		}
 		return roots

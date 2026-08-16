@@ -17,6 +17,8 @@ import org.skepsun.kototoro.local.data.ContentIndex
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.zip.ZipFile
 
 class LocalContentZipOutput(
@@ -191,9 +193,12 @@ class LocalContentZipOutput(
 						}
 						subject.output.finish()
 						subject.output.close()
-						file.delete()
-						subject.output.file.renameTo(file)
 					}
+					Files.move(
+						subject.output.file.toPath(),
+						file.toPath(),
+						StandardCopyOption.REPLACE_EXISTING,
+					)
 				} catch (e: Throwable) {
 					subject.closeQuietly()
 					try {

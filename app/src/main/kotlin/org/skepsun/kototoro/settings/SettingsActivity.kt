@@ -1206,17 +1206,6 @@ class SettingsActivity :
 					storageRefreshKey = storageRefreshKey,
 					dozeRefreshKey = dozeRefreshKey,
 					onOpenMangaDirectories = { router.openDirectoriesSettings() },
-					onOpenMangaStorage = { router.showDirectorySelectDialog() },
-					onOpenNovelStorage = {
-						router.showDirectorySelectDialog(
-							org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel.CONTENT_TYPE_NOVEL,
-						)
-					},
-					onOpenVideoStorage = {
-						router.showDirectorySelectDialog(
-							org.skepsun.kototoro.settings.storage.ContentDirectorySelectViewModel.CONTENT_TYPE_VIDEO,
-						)
-					},
 					onAllowMeteredNetworkChange = { option ->
 						kototoroAppSettings.allowDownloadOnMeteredNetwork = option
 						updateDownloadsConstraints()
