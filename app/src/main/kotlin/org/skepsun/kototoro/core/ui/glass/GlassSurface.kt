@@ -78,15 +78,20 @@ data class GlassStyle(
 
 enum class GlassComponentRole {
     Surface,
+    ContentOverlay,
     TopBar,
     BottomBar,
+    BottomPanel,
     Menu,
     Dialog,
     Sheet,
 }
 
 internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
-    this == GlassComponentRole.TopBar || this == GlassComponentRole.BottomBar
+    this == GlassComponentRole.ContentOverlay ||
+        this == GlassComponentRole.TopBar ||
+        this == GlassComponentRole.BottomBar ||
+        this == GlassComponentRole.BottomPanel
 
 object GlassDefaults {
     val shape: Shape = RoundedCornerShape(28.dp)
@@ -296,7 +301,9 @@ internal fun GlassStyle.backdropSurfaceAlpha(
         } else {
             (materialDensity * 0.48f).coerceIn(0.30f, 0.46f)
         }
-        GlassComponentRole.Sheet -> (materialDensity * 0.50f).coerceIn(0.42f, 0.48f)
+        GlassComponentRole.BottomPanel,
+        GlassComponentRole.Sheet,
+        -> (materialDensity * 0.50f).coerceIn(0.42f, 0.48f)
         else -> (materialDensity * 0.25f).coerceIn(0.14f, 0.28f)
     }
 }

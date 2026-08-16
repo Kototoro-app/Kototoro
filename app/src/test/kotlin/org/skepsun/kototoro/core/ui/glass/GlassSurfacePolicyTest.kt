@@ -14,6 +14,16 @@ class GlassSurfacePolicyTest {
     }
 
     @Test
+    fun `content overlays keep backdrop on amoled canvas`() {
+        GlassComponentRole.ContentOverlay.allowsAmoledBackdrop() shouldBe true
+    }
+
+    @Test
+    fun `bottom panels keep backdrop on amoled canvas`() {
+        GlassComponentRole.BottomPanel.allowsAmoledBackdrop() shouldBe true
+    }
+
+    @Test
     fun `other glass surfaces keep amoled fallback`() {
         GlassComponentRole.Surface.allowsAmoledBackdrop() shouldBe false
         GlassComponentRole.Menu.allowsAmoledBackdrop() shouldBe false
@@ -54,5 +64,13 @@ class GlassSurfacePolicyTest {
 
         style.backdropSurfaceAlpha(GlassComponentRole.Surface, amoledCanvas = true) shouldBe
             style.backdropSurfaceAlpha(GlassComponentRole.Surface, amoledCanvas = false)
+    }
+
+    @Test
+    fun `bottom panels use a dense translucent tint`() {
+        val style = GlassStyle(0.88f, 0.20f, 0.dp, 4.dp)
+
+        style.backdropSurfaceAlpha(GlassComponentRole.BottomPanel, amoledCanvas = true) shouldBe 0.44f
+        style.backdropSurfaceAlpha(GlassComponentRole.BottomPanel, amoledCanvas = false) shouldBe 0.44f
     }
 }

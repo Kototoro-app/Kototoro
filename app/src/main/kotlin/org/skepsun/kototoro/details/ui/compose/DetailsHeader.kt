@@ -131,6 +131,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.model.titleRes
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -848,6 +849,7 @@ private fun DetailsReadableSurface(
                 borderAlpha = 0.18f,
             ),
             shape = shape,
+            componentRole = GlassComponentRole.ContentOverlay,
         ) {
             content()
         }

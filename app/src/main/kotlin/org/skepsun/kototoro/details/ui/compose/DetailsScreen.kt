@@ -2987,7 +2987,7 @@ private fun DetailsPaneContent(
                 shape = paneShape,
                 style = paneGlassStyle,
                 dialogSurface = LocalInterfaceStyle.current != InterfaceStyle.IOS,
-                componentRole = GlassComponentRole.Sheet,
+                componentRole = GlassComponentRole.BottomPanel,
             ) {
                 Box(
                     modifier = Modifier
