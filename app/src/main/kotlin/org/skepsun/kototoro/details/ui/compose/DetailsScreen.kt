@@ -3953,7 +3953,7 @@ private fun ExpandedPaneUtilityDock(
                     )
                     if (showMergeRepeatedChapters) {
                         CompactDropdownMenuItem(
-                            text = { Text(stringResource(R.string.merge_repeated_chapters)) },
+                            text = { Text(stringResource(R.string.merge_branch_chapters)) },
                             leadingIcon = {
                                 MenuSelectionIndicator(selected = isMergeRepeatedChapters)
                             },
@@ -4390,7 +4390,7 @@ private fun ReadDock(
                 }
                 if (showMergeRepeatedChapters) {
                         CompactDropdownMenuItem(
-                        text = { Text(stringResource(R.string.merge_repeated_chapters)) },
+                        text = { Text(stringResource(R.string.merge_branch_chapters)) },
                         leadingIcon = {
                             MenuSelectionIndicator(selected = isMergeRepeatedChapters)
                         },

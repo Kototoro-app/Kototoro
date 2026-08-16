@@ -555,6 +555,7 @@
     <string name="chapters_empty">此作品没有章节</string>
     <string name="chapters_grid_view">网格视图</string>
     <string name="hide_read_chapters">隐藏已读章节</string>
+    <string name="merge_branch_chapters">合并分支章节</string>
     <string name="chapters_left">剩余章节数</string>
     <string name="chapters_load_failed">加载章节列表失败</string>
     <string name="chapters_read">已读章节数</string>

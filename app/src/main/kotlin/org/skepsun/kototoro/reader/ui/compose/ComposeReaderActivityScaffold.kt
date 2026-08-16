@@ -389,7 +389,7 @@ private fun ReaderChapterPanelMoreMenu(
 		)
 		if (state.showMergeRepeatedChapters) {
 			ReaderChapterPanelMenuItem(
-				text = stringResource(R.string.merge_repeated_chapters),
+				text = stringResource(R.string.merge_branch_chapters),
 				selected = state.mergeRepeatedChapters,
 				onClick = {
 					onDismissRequest()

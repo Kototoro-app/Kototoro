@@ -180,14 +180,10 @@ class ChaptersLoader @Inject constructor(
 		isNext: Boolean,
 	): Pair<List<ContentChapter>, Int> {
 		val contentType = manga.toContent().source.getContentType()
-		val useMerge = settings.isMergeRepeatedChapters && contentType.isManga()
-		val chaptersList = if (useMerge) {
-			manga.chapters.keys.flatMap { manga.chapters[it].orEmpty() }.mergeRepeated()
-		} else {
-			manga.allChapters
-		}
 		val currentChapter = peekChapter(currentId) ?: manga.allChapters.find { it.id == currentId }
-		val index = if (currentChapter != null && useMerge) {
+		val mergeBranches = settings.isMergeRepeatedChapters && contentType.isManga()
+		val chaptersList = resolveReaderChapterCatalog(manga, currentChapter, mergeBranches)
+		val index = if (currentChapter != null && mergeBranches) {
 			val currentKey = currentChapter.getMergeKey()
 			chaptersList.indexOfFirst { it.getMergeKey() == currentKey }
 		} else {
@@ -218,5 +214,19 @@ class ChaptersLoader @Inject constructor(
 			uri.scheme == "epub" ||
 			uri.scheme == "localepub" ||
 			source.isLocal
+	}
+}
+
+internal fun resolveReaderChapterCatalog(
+	manga: ContentDetails,
+	currentChapter: ContentChapter?,
+	mergeBranches: Boolean,
+): List<ContentChapter> {
+	return if (mergeBranches) {
+		manga.chapters.values.flatten().mergeRepeated()
+	} else if (currentChapter != null) {
+		manga.chapters[currentChapter.branch].orEmpty()
+	} else {
+		manga.allChapters
 	}
 }

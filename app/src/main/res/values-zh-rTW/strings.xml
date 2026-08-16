@@ -2642,6 +2642,7 @@ SHA-256 指紋:
     <!-- 章節範圍選擇 -->
     <string name="chapter_range_selection_hint">提示：選中兩個章節後，長按它們之間的可見章節可補全範圍。</string>
     <string name="hide_read_chapters">隱藏已讀章節</string>
+    <string name="merge_branch_chapters">合併分支章節</string>
 
     <!-- 外觀與界面風格 -->
     <string name="appearance_mode">明暗模式</string>

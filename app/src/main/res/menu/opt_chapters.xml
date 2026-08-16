@@ -31,7 +31,7 @@
 		android:id="@+id/action_merge_repeated_chapters"
 		android:checkable="true"
 		android:orderInCategory="21"
-		android:title="@string/merge_repeated_chapters"
+		android:title="@string/merge_branch_chapters"
 		app:showAsAction="never" />
 
 	<item

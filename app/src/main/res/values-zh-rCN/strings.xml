@@ -1072,6 +1072,7 @@
     <string name="migration_status_reused">已复用</string>
     <string name="chapters_grid_view">网格视图</string>
     <string name="hide_read_chapters">隐藏已读章节</string>
+    <string name="merge_branch_chapters">合并分支章节</string>
     <string name="delete_read_chapters_prompt">将会删除所有储存在本地并被标记为已读的章节，可之后再重新下载，但已导入的章节将永久丢失</string>
     <string name="delete_read_chapters_auto">自动删除已读章节</string>
     <string name="runs_on_app_start">启动应用时开始删除</string>
