@@ -203,6 +203,16 @@
     <string name="domain">内容源域名</string>
     <string name="app_update_available">发现新版本</string>
     <string name="app_update_mirror_summary">用于本次更新下载，并同步保存为全局 GitHub 镜像。</string>
+    <string name="app_update_source">更新下载源</string>
+    <string name="app_update_source_github">GitHub（全球线路）</string>
+    <string name="app_update_source_gitcode">GitCode（中国大陆线路）</string>
+    <string name="app_update_source_github_summary">全球发布线路；直连较慢或不可用时，可在下方选择 GitHub 代理。</string>
+    <string name="app_update_source_gitcode_summary">面向中国大陆用户的发布线路。</string>
+    <string name="app_update_source_saved_summary">选择会自动保存。API 响应时间仅供参考，不代表 APK 的实际下载速度。</string>
+    <string name="app_update_source_checking">正在检测 API…</string>
+    <string name="app_update_source_latency">API 响应：%1$d ms</string>
+    <string name="app_update_source_unavailable">API 当前不可用</string>
+    <string name="app_update_source_no_release">所选线路暂未返回可安装的新版本，请尝试另一条线路。</string>
     <string name="open_in_browser">在浏览器中打开</string>
     <string name="open_metadata_in_browser">在浏览器中打开元数据页面</string>
     <string name="open_local_source_in_browser">在浏览器中打开本地来源页面</string>

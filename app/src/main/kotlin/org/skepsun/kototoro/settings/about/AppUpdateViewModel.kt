@@ -8,12 +8,15 @@ import androidx.core.net.toUri
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateRepository
+import org.skepsun.kototoro.core.github.AppUpdateSource
+import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
@@ -29,6 +32,8 @@ class AppUpdateViewModel @Inject constructor(
 ) : BaseViewModel() {
 
 	val nextVersion = repository.observeAvailableUpdate()
+	val selectedSource = MutableStateFlow(repository.defaultSource)
+	val sourceProbes = MutableStateFlow<Map<AppUpdateSource, AppUpdateSourceProbe>>(emptyMap())
 	val selectedMirror = MutableStateFlow(settings.gitHubMirror)
 	val downloadProgress = MutableStateFlow(-1f)
 	val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
@@ -38,13 +43,24 @@ class AppUpdateViewModel @Inject constructor(
 
 	private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 	private val appName = context.getString(R.string.app_name)
+	private var sourceLoadJob: Job? = null
 
 	init {
-		if (nextVersion.value == null) {
-			launchLoadingJob(Dispatchers.Default) {
-				repository.fetchUpdate()
-			}
+		launchJob(Dispatchers.IO) {
+			sourceProbes.value = repository.probeUpdateSources()
 		}
+		if (nextVersion.value == null) {
+			loadSource(selectedSource.value, showEmptyMessage = false)
+		}
+	}
+
+	fun setSource(source: AppUpdateSource) {
+		if (source == selectedSource.value) {
+			return
+		}
+		settings.appUpdateSource = source
+		selectedSource.value = source
+		loadSource(source, showEmptyMessage = true)
 	}
 
 	fun startDownload() {
@@ -65,6 +81,17 @@ class AppUpdateViewModel @Inject constructor(
 	fun setMirror(mirror: AppSettings.GitHubMirror) {
 		settings.gitHubMirror = mirror
 		selectedMirror.value = mirror
+	}
+
+	private fun loadSource(source: AppUpdateSource, showEmptyMessage: Boolean) {
+		sourceLoadJob?.cancel()
+		updateMessage.value = null
+		sourceLoadJob = launchLoadingJob(Dispatchers.Default) {
+			val update = repository.fetchUpdate(source)
+			if (showEmptyMessage && update == null) {
+				updateMessage.value = context.getString(R.string.app_update_source_no_release)
+			}
+		}
 	}
 
 	fun getReleasePageUrl(): String? {
@@ -116,6 +143,9 @@ class AppUpdateViewModel @Inject constructor(
 	}
 
 	private fun applyMirror(url: String): String {
+		if (!url.startsWith("https://github.com/") && !url.startsWith("https://raw.githubusercontent.com/")) {
+			return url
+		}
 		return when (selectedMirror.value) {
 			AppSettings.GitHubMirror.NATIVE -> url
 			AppSettings.GitHubMirror.KKGITHUB -> url

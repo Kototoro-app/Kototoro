@@ -164,6 +164,16 @@
     <string name="domain">Domain</string>
     <string name="app_update_available">A new version of the app is available</string>
     <string name="app_update_mirror_summary">Used for this update download and saved as the global GitHub mirror.</string>
+    <string name="app_update_source">Update source</string>
+    <string name="app_update_source_github">GitHub (global route)</string>
+    <string name="app_update_source_gitcode">GitCode (Mainland China route)</string>
+    <string name="app_update_source_github_summary">Global release route. You can select a GitHub proxy below when direct access is slow or unavailable.</string>
+    <string name="app_update_source_gitcode_summary">Release route optimized for users in Mainland China.</string>
+    <string name="app_update_source_saved_summary">Your choice is saved. API response time is for reference only and does not represent actual APK download speed.</string>
+    <string name="app_update_source_checking">Checking API…</string>
+    <string name="app_update_source_latency">API response: %1$d ms</string>
+    <string name="app_update_source_unavailable">API currently unavailable</string>
+    <string name="app_update_source_no_release">The selected source did not return a newer installable version. Try the other source.</string>
     <string name="open_in_browser">Open in browser</string>
     <string name="open_metadata_in_browser">Open metadata page in browser</string>
     <string name="open_local_source_in_browser">Open local source page in browser</string>

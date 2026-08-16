@@ -72,6 +72,8 @@ class AppUpdateActivity : BaseComposeActivity() {
 			val downloadProgress = viewModel.downloadProgress.collectAsStateWithLifecycle().value
 			val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
 			val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
+			val selectedSource = viewModel.selectedSource.collectAsStateWithLifecycle().value
+			val sourceProbes = viewModel.sourceProbes.collectAsStateWithLifecycle().value
 			val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
 
 			AppUpdateScreen(
@@ -83,6 +85,9 @@ class AppUpdateActivity : BaseComposeActivity() {
 				operationErrorMessage = operationErrorMessage,
 				mirrorOptions = rememberMirrorOptions(),
 				selectedMirror = selectedMirror,
+				selectedSource = selectedSource,
+				sourceProbes = sourceProbes,
+				onSourceSelected = viewModel::setSource,
 				onMirrorSelected = viewModel::setMirror,
 				onCancel = ::finishAfterTransition,
 				onUpdate = ::doUpdate,

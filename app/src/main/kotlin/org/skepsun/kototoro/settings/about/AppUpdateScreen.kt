@@ -48,6 +48,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.TextViewCompat
 import io.noties.markwon.Markwon
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.github.AppUpdateSource
+import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -69,6 +71,9 @@ fun AppUpdateScreen(
 	operationErrorMessage: String?,
 	mirrorOptions: List<AppUpdateMirrorOption>,
 	selectedMirror: AppSettings.GitHubMirror,
+	selectedSource: AppUpdateSource,
+	sourceProbes: Map<AppUpdateSource, AppUpdateSourceProbe>,
+	onSourceSelected: (AppUpdateSource) -> Unit,
 	onMirrorSelected: (AppSettings.GitHubMirror) -> Unit,
 	onCancel: () -> Unit,
 	onUpdate: () -> Unit,
@@ -139,24 +144,36 @@ fun AppUpdateScreen(
 			)
 		}
 
-		MirrorSelector(
-			options = mirrorOptions,
-			selectedMirror = selectedMirror,
-			onMirrorSelected = onMirrorSelected,
+		SourceSelector(
+			selectedSource = selectedSource,
+			probes = sourceProbes,
+			onSourceSelected = onSourceSelected,
 			modifier = Modifier
 				.fillMaxWidth()
 				.padding(horizontal = screenPadding)
 				.padding(top = 16.dp),
 		)
-		Text(
-			text = stringResource(R.string.pref_github_mirror_summary),
-			style = MaterialTheme.typography.bodySmall,
-			color = MaterialTheme.colorScheme.onSurfaceVariant,
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(horizontal = screenPadding)
-				.padding(top = 4.dp),
-		)
+
+		if (selectedSource == AppUpdateSource.GITHUB) {
+			MirrorSelector(
+				options = mirrorOptions,
+				selectedMirror = selectedMirror,
+				onMirrorSelected = onMirrorSelected,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = screenPadding)
+					.padding(top = 16.dp),
+			)
+			Text(
+				text = stringResource(R.string.pref_github_mirror_summary),
+				style = MaterialTheme.typography.bodySmall,
+				color = MaterialTheme.colorScheme.onSurfaceVariant,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(horizontal = screenPadding)
+					.padding(top = 4.dp),
+			)
+		}
 
 		UpdateDescription(
 			version = version,
@@ -188,6 +205,88 @@ fun AppUpdateScreen(
 			}
 		}
 	}
+}
+
+@Composable
+private fun SourceSelector(
+	selectedSource: AppUpdateSource,
+	probes: Map<AppUpdateSource, AppUpdateSourceProbe>,
+	onSourceSelected: (AppUpdateSource) -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	var expanded by remember { mutableStateOf(false) }
+	val selectedLabel = sourceLabel(selectedSource)
+
+	Column(modifier = modifier) {
+		OutlinedTextField(
+			value = selectedLabel,
+			onValueChange = {},
+			readOnly = true,
+			label = { Text(stringResource(R.string.app_update_source)) },
+			leadingIcon = {
+				Icon(
+					painter = painterResource(R.drawable.ic_web),
+					contentDescription = null,
+				)
+			},
+			modifier = Modifier
+				.fillMaxWidth()
+				.clickable { expanded = true },
+		)
+		DropdownMenu(
+			expanded = expanded,
+			onDismissRequest = { expanded = false },
+			shape = RoundedCornerShape(4.dp),
+			modifier = Modifier.fillMaxWidth(),
+		) {
+			AppUpdateSource.entries.forEach { source ->
+				DropdownMenuItem(
+					text = {
+						Column {
+							Text(sourceLabel(source))
+							Text(
+								text = sourceProbeLabel(probes[source]),
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.onSurfaceVariant,
+							)
+						}
+					},
+					onClick = {
+						expanded = false
+						onSourceSelected(source)
+					},
+				)
+			}
+		}
+		Text(
+			text = when (selectedSource) {
+				AppUpdateSource.GITHUB -> stringResource(R.string.app_update_source_github_summary)
+				AppUpdateSource.GITCODE -> stringResource(R.string.app_update_source_gitcode_summary)
+			},
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.padding(top = 4.dp),
+		)
+		Text(
+			text = stringResource(R.string.app_update_source_saved_summary),
+			style = MaterialTheme.typography.bodySmall,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+			modifier = Modifier.padding(top = 2.dp),
+		)
+	}
+}
+
+@Composable
+private fun sourceLabel(source: AppUpdateSource): String = when (source) {
+	AppUpdateSource.GITHUB -> stringResource(R.string.app_update_source_github)
+	AppUpdateSource.GITCODE -> stringResource(R.string.app_update_source_gitcode)
+}
+
+@Composable
+private fun sourceProbeLabel(probe: AppUpdateSourceProbe?): String = when {
+	probe == null -> stringResource(R.string.app_update_source_checking)
+	!probe.isAvailable -> stringResource(R.string.app_update_source_unavailable)
+	else -> stringResource(R.string.app_update_source_latency, probe.latencyMillis ?: 0L)
 }
 
 @Composable
@@ -247,13 +346,11 @@ private fun UpdateDescription(
 		version?.let {
 			buildString {
 				append(context.getString(R.string.new_version_s, it.name))
-				appendLine()
-				append(
-					context.getString(
-						R.string.size_s,
-						FileSize.BYTES.format(context, it.patchSize ?: it.apkSize),
-					),
-				)
+				val downloadSize = it.patchSize ?: it.apkSize
+				if (downloadSize > 0L) {
+					appendLine()
+					append(context.getString(R.string.size_s, FileSize.BYTES.format(context, downloadSize)))
+				}
 				appendLine()
 				appendLine()
 				append(it.description)
@@ -298,6 +395,9 @@ private fun AppUpdateScreenPreview() {
 			operationErrorMessage = null,
 			mirrorOptions = emptyList(),
 			selectedMirror = AppSettings.GitHubMirror.NATIVE,
+			selectedSource = AppUpdateSource.GITCODE,
+			sourceProbes = emptyMap(),
+			onSourceSelected = {},
 			onMirrorSelected = {},
 			onCancel = {},
 			onUpdate = {},

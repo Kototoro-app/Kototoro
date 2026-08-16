@@ -36,6 +36,7 @@ release.keystore
 app/keystore/
 *.sh
 !scripts/build_cloudstream_runtime.sh
+!.github/scripts/publish_gitcode_release.sh
 *.log
 __pycache__/
 node_modules/

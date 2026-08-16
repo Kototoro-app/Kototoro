@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.onStart
 import org.json.JSONArray
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
+import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
 import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
@@ -620,6 +621,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 	var gitHubMirror: GitHubMirror
 		get() = GitHubMirror.fromValue(prefs.getString(KEY_GITHUB_MIRROR, GitHubMirror.NATIVE.value))
 		set(value) = prefs.edit { putString(KEY_GITHUB_MIRROR, value.value) }
+
+	var appUpdateSource: AppUpdateSource?
+		get() = AppUpdateSource.fromValue(prefs.getString(KEY_APP_UPDATE_SOURCE, null))
+		set(value) = prefs.edit { putString(KEY_APP_UPDATE_SOURCE, value?.value) }
 
 	enum class HuggingFaceMirror(val value: String) {
 		NATIVE("native"),
@@ -2708,6 +2713,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_EXTENSION_LANGUAGES = "extension_languages"
 		const val KEY_LOCAL_APK_HOT_RELOAD = "local_apk_hot_reload"
 		const val KEY_GITHUB_MIRROR = "github_mirror"
+		const val KEY_APP_UPDATE_SOURCE = "app_update_source"
 		const val KEY_SHOW_EXTRA_INFO_ON_CARDS = "show_extra_info_on_cards"
 		const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"
 		const val KEY_BANGUMI_MIRROR = "bangumi_mirror"

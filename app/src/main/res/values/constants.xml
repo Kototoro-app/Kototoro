@@ -9,6 +9,7 @@
 	<string name="url_error_report" translatable="false">https://bugs.kototoro.app/report</string>
 	<string name="account_type_sync" translatable="false">org.kototoro.sync</string>
     <string name="github_updates_repo" translatable="false">Kototoro-app/Kototoro</string>
+    <string name="gitcode_updates_repo" translatable="false">2401_87187946/Kototoro</string>
 	<string name="shikimori_clientId" translatable="false">5l5MXfd9WG7lsVlFSNSQG1ct1-A0M1LHqkg0HyEDiF4</string>
 	<string name="shikimori_clientSecret" translatable="false">YIGxvP6rxR-4Oi7L3nE7RhESIesosEUWmrMh9J6L_aY</string>
 	<string name="anilist_clientId" translatable="false">36636</string>

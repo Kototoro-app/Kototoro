@@ -12,6 +12,9 @@ concurrency:
 
 env:
   NIGHTLY_REPOSITORY: Kototoro-app/Kototoro-Nightly
+  GITCODE_OWNER: '2401_87187946'
+  GITCODE_REPOSITORY: Kototoro-Nightly
+  GITCODE_BRANCH: devel
 
 jobs:
   build:
@@ -25,6 +28,7 @@ jobs:
         with:
           ref: devel
           submodules: recursive
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -104,3 +108,13 @@ jobs:
               --notes "$notes" \
               --prerelease
           fi
+
+      - name: Publish GitCode Nightly Release
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          TAG_NAME: ${{ steps.assets.outputs.tag }}
+          RELEASE_NAME: ${{ steps.assets.outputs.version_name }}
+          RELEASE_BODY: Automated Nightly build from devel at ${{ github.sha }}.
+          RELEASE_STATUS: pre
+          RELEASE_ASSETS_DIR: release
+        run: bash .github/scripts/publish_gitcode_release.sh
