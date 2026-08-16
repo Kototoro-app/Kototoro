@@ -178,7 +178,6 @@ android {
 				'-opt-in=org.skepsun.kototoro.parsers.InternalParsersApi',
 				'-Xjspecify-annotations=strict',
 				'-Xannotation-default-target=first-only',
-				'-Xtype-enhancement-improvements-strict-mode',
 			)
 		}
 	}

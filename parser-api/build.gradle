@@ -28,7 +28,6 @@ android {
 				'-opt-in=kotlin.contracts.ExperimentalContracts',
 				'-Xjspecify-annotations=strict',
 				'-Xannotation-default-target=first-only',
-				'-Xtype-enhancement-improvements-strict-mode',
 			)
 		}
 	}
