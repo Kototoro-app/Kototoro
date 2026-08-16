@@ -4,33 +4,13 @@
   <component name="GradleSettings">
     <option name="linkedExternalProjectsSettings">
       <GradleProjectSettings>
-        <compositeConfiguration>
-          <compositeBuild compositeDefinitionSource="SCRIPT">
-            <builds>
-              <build path="$PROJECT_DIR$/../kototoro-parsers" name="kototoro-parsers">
-                <projects>
-                  <project path="$PROJECT_DIR$/../kototoro-parsers" />
-                  <project path="$PROJECT_DIR$/../kototoro-parsers/kototoro-parsers-ksp" />
-                </projects>
-              </build>
-              <build path="$PROJECT_DIR$/../kototoro-parsers/buildSrc" name="buildSrc">
-                <projects>
-                  <project path="$PROJECT_DIR$/../kototoro-parsers/buildSrc" />
-                </projects>
-              </build>
-            </builds>
-          </compositeBuild>
-        </compositeConfiguration>
         <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
-        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/../kototoro-parsers" />
-            <option value="$PROJECT_DIR$/../kototoro-parsers/buildSrc" />
-            <option value="$PROJECT_DIR$/../kototoro-parsers/kototoro-parsers-ksp" />
+            <option value="$PROJECT_DIR$/parser-api" />
           </set>
         </option>
       </GradleProjectSettings>
