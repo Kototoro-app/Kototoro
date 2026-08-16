@@ -44,6 +44,7 @@ import org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource
 import org.skepsun.kototoro.core.model.jsonsource.TVBoxStoredConfig
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.EmptyContentRepository
 import org.skepsun.kototoro.core.parser.JsContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
@@ -99,39 +100,48 @@ fun SourceSettingsRoute(
     val configKeysFlow = remember { MutableStateFlow<List<ConfigKey<*>>>(emptyList()) }
     val jsSettingsSchemaFlow = remember { MutableStateFlow<List<JsContentRepository.JsSettingItem>>(emptyList()) }
     val externalPreferenceScreenFlow = remember { MutableStateFlow<PreferenceScreen?>(null) }
+    val repositorySettingsLoadingFlow = remember(viewModel.repository) {
+        MutableStateFlow(viewModel.repository.hasDynamicSettings())
+    }
 
     LaunchedEffect(viewModel.repository) {
-        when (val repository = viewModel.repository) {
-            is ParserContentRepository -> {
-                configKeysFlow.value = repository.getConfigKeys()
-                jsSettingsSchemaFlow.value = emptyList()
-                externalPreferenceScreenFlow.value = null
+        repositorySettingsLoadingFlow.value = viewModel.repository.hasDynamicSettings()
+        try {
+            when (val repository = viewModel.repository) {
+                is ParserContentRepository -> {
+                    configKeysFlow.value = repository.getConfigKeys()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = null
+                }
+                is KotatsuParserRepository -> {
+                    configKeysFlow.value = repository.getConfigKeys()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = null
+                }
+                is JsContentRepository -> {
+                    configKeysFlow.value = emptyList()
+                    jsSettingsSchemaFlow.value =
+                        runCatching { repository.fetchSettingsSchema() }.getOrDefault(emptyList())
+                    externalPreferenceScreenFlow.value = null
+                }
+                is MihonMangaRepository -> {
+                    configKeysFlow.value = emptyList()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
+                }
+                is AniyomiAnimeRepository -> {
+                    configKeysFlow.value = emptyList()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
+                }
+                else -> {
+                    configKeysFlow.value = emptyList()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = null
+                }
             }
-            is KotatsuParserRepository -> {
-                configKeysFlow.value = repository.getConfigKeys()
-                jsSettingsSchemaFlow.value = emptyList()
-                externalPreferenceScreenFlow.value = null
-            }
-            is JsContentRepository -> {
-                configKeysFlow.value = emptyList()
-                jsSettingsSchemaFlow.value = runCatching { repository.fetchSettingsSchema() }.getOrDefault(emptyList())
-                externalPreferenceScreenFlow.value = null
-            }
-            is MihonMangaRepository -> {
-                configKeysFlow.value = emptyList()
-                jsSettingsSchemaFlow.value = emptyList()
-                externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
-            }
-            is AniyomiAnimeRepository -> {
-                configKeysFlow.value = emptyList()
-                jsSettingsSchemaFlow.value = emptyList()
-                externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
-            }
-            else -> {
-                configKeysFlow.value = emptyList()
-                jsSettingsSchemaFlow.value = emptyList()
-                externalPreferenceScreenFlow.value = null
-            }
+        } finally {
+            repositorySettingsLoadingFlow.value = false
         }
     }
 
@@ -156,17 +166,19 @@ fun SourceSettingsRoute(
     val configKeys = configKeysFlow.asStateFlow().collectAsStateWithLifecycle().value
     val jsSettingsSchema = jsSettingsSchemaFlow.asStateFlow().collectAsStateWithLifecycle().value
     val externalPreferenceScreen = externalPreferenceScreenFlow.asStateFlow().collectAsStateWithLifecycle().value
-    val isEnabled = viewModel.isEnabled.collectAsStateWithLifecycle(initialValue = false).value
-    val browserUrl = viewModel.browserUrl.collectAsStateWithLifecycle(initialValue = null).value
-    val username = viewModel.username.collectAsStateWithLifecycle(initialValue = null).value
-    val isAuthorized = viewModel.isAuthorized.collectAsStateWithLifecycle(initialValue = null).value
-    val isLoading = viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false).value
+    val isRepositorySettingsLoading = repositorySettingsLoadingFlow.collectAsStateWithLifecycle().value
+    val isEnabled = viewModel.isEnabled.collectAsStateWithLifecycle().value
+    val browserUrl = viewModel.browserUrl.collectAsStateWithLifecycle().value
+    val username = viewModel.username.collectAsStateWithLifecycle().value
+    val isAuthorized = viewModel.isAuthorized.collectAsStateWithLifecycle().value
+    val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
 
     SourceSettingsScreen(
         sections = controller.buildSections(
             configKeys = configKeys,
             jsSettingsSchema = jsSettingsSchema,
             externalPreferenceScreen = externalPreferenceScreen,
+            isRepositorySettingsLoading = isRepositorySettingsLoading,
             isEnabled = isEnabled,
             browserUrl = browserUrl,
             username = username,
@@ -204,7 +216,8 @@ private class SourceSettingsRouteController(
         configKeys: List<ConfigKey<*>>,
         jsSettingsSchema: List<JsContentRepository.JsSettingItem>,
         externalPreferenceScreen: PreferenceScreen?,
-        isEnabled: Boolean,
+        isRepositorySettingsLoading: Boolean,
+        isEnabled: Boolean?,
         browserUrl: String?,
         username: String?,
         isAuthorized: Boolean?,
@@ -228,6 +241,22 @@ private class SourceSettingsRouteController(
                 id = "source_config",
                 title = context.getString(R.string.settings),
                 rows = rows,
+            )
+        }
+
+        if (isRepositorySettingsLoading) {
+            sections += SourceSettingsSectionUiState(
+                id = "source_settings_loading",
+                title = context.getString(R.string.settings),
+                rows = listOf(
+                    SourceSettingsActionRowUiState(
+                        id = "source_settings_loading_row",
+                        title = context.getString(R.string.loading_),
+                        enabled = false,
+                        showChevron = false,
+                        onClick = {},
+                    ),
+                ),
             )
         }
 
@@ -369,14 +398,15 @@ private class SourceSettingsRouteController(
     private fun buildGeneralRows(
         contentType: ContentType,
         isValidSource: Boolean,
-        isEnabled: Boolean,
+        isEnabled: Boolean?,
     ): List<SourceSettingsRowUiState> {
         val rows = mutableListOf<SourceSettingsRowUiState>()
         if (isValidSource && !settings.isAllSourcesEnabled) {
             rows += SourceSettingsSwitchRowUiState(
                 id = "enable",
                 title = context.getString(contentType.getEnableSourceTitleResId()),
-                checked = isEnabled,
+                checked = isEnabled ?: true,
+                enabled = isEnabled != null,
                 onCheckedChange = viewModel::setEnabled,
             )
         }
@@ -1315,3 +1345,10 @@ private class SourceSettingsRouteController(
     private val SIGNED_INT_PATTERN = Pattern.compile("^-?\\d+$")
 
 }
+
+private fun ContentRepository.hasDynamicSettings(): Boolean =
+    this is ParserContentRepository ||
+        this is KotatsuParserRepository ||
+        this is JsContentRepository ||
+        this is MihonMangaRepository ||
+        this is AniyomiAnimeRepository

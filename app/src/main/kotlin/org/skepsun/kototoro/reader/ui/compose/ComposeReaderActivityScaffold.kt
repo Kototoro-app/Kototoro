@@ -521,7 +521,6 @@ internal fun ComposeReaderActivityScaffold(
 		) {
 			ReaderComposeTopBar(
 				state = state,
-				presentation = resolveReaderTopBarPresentation(showControlLabels),
 				onNavigateBack = callbacks.onNavigateBack,
 				onChapters = callbacks.actions.onPages,
 				onOptions = callbacks.actions.onOptions,
@@ -529,7 +528,9 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 		AnimatedVisibility(
-			visible = state.infoBar.visible && !state.controlsVisible && !infoBarEmbedded,
+			visible = shouldShowReaderInfoBar(state.infoBar.visible, showControlLabels) &&
+				!state.controlsVisible &&
+				!infoBarEmbedded,
 			enter = fadeIn(
 				animationSpec = KototoroMotion.InfoBarEnter,
 			).whenReaderAnimationsEnabled(!state.eInkModeEnabled),
@@ -878,11 +879,12 @@ internal fun rememberReaderSystemStatus(): ReaderSystemStatus {
 internal fun BoxScope.ReaderPageInfoBar(
 	state: ReaderInfoBarState,
 	controlsVisible: Boolean,
+	showControlLabels: Boolean,
 	systemStatus: ReaderSystemStatus,
 	animationsEnabled: Boolean = true,
 ) {
 	AnimatedVisibility(
-		visible = state.visible && !controlsVisible,
+		visible = shouldShowReaderInfoBar(state.visible, showControlLabels) && !controlsVisible,
 		enter = fadeIn(animationSpec = KototoroMotion.InfoBarEnter)
 			.whenReaderAnimationsEnabled(animationsEnabled),
 		exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
@@ -934,7 +936,6 @@ private fun ReaderMessageHost(
 @Composable
 private fun ReaderComposeTopBar(
 	state: ComposeReaderChromeState,
-	presentation: ReaderTopBarPresentation,
 	onNavigateBack: () -> Unit,
 	onChapters: () -> Unit,
 	onOptions: () -> Unit,
@@ -965,45 +966,30 @@ private fun ReaderComposeTopBar(
 			shape = chapterControlShape,
 			modifier = Modifier
 				.align(Alignment.Center)
-				.then(
-					if (presentation == ReaderTopBarPresentation.LABELS) {
-						Modifier.widthIn(min = 148.dp, max = 176.dp)
-					} else {
-						Modifier.size(48.dp)
-					},
-				)
+				.widthIn(min = 148.dp, max = 176.dp)
 				.height(48.dp),
 			contentModifier = Modifier
 				.clip(chapterControlShape)
 				.clickable(onClick = onChapters),
 		) {
-			if (presentation == ReaderTopBarPresentation.LABELS) {
-				Column(
-					horizontalAlignment = Alignment.CenterHorizontally,
-					modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
-				) {
+			Column(
+				horizontalAlignment = Alignment.CenterHorizontally,
+				modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
+			) {
+				Text(
+					text = state.title,
+					color = contentColor,
+					style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
+					maxLines = 1,
+				)
+				if (state.subtitle.isNotEmpty()) {
 					Text(
-						text = state.title,
-						color = contentColor,
-						style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
+						text = state.subtitle,
+						color = contentColor.copy(alpha = 0.78f),
+						style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
 						maxLines = 1,
 					)
-					if (state.subtitle.isNotEmpty()) {
-						Text(
-							text = state.subtitle,
-							color = contentColor.copy(alpha = 0.78f),
-							style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-							maxLines = 1,
-						)
-					}
 				}
-			} else {
-				Icon(
-					painter = painterResource(R.drawable.ic_grid),
-					contentDescription = stringResource(R.string.chapters),
-					tint = contentColor,
-					modifier = Modifier.size(24.dp),
-				)
 			}
 		}
 		ReaderTopControlSurface(
@@ -1023,13 +1009,8 @@ private fun ReaderComposeTopBar(
 	}
 }
 
-internal enum class ReaderTopBarPresentation {
-	LABELS,
-	ICON_ONLY,
-}
-
-internal fun resolveReaderTopBarPresentation(showControlLabels: Boolean): ReaderTopBarPresentation =
-	if (showControlLabels) ReaderTopBarPresentation.LABELS else ReaderTopBarPresentation.ICON_ONLY
+internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, showControlLabels: Boolean): Boolean =
+	infoBarEnabled && showControlLabels
 
 internal fun resolveReaderFloatingControls(
 	configured: Set<ReaderControl>,

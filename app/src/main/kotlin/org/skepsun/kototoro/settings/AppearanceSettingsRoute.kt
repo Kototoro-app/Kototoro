@@ -184,8 +184,10 @@ fun AppearanceSettingsRoute(
     val screenshotsPolicy =
         settings.observeAsState(AppSettings.KEY_SCREENSHOTS_POLICY) { screenshotsPolicy }.value
     val languagePresetOptions = sourcePresetsRepository.observeAll()
-        .map(coordinator::buildLanguagePresetOptions)
-        .collectAsStateWithLifecycle(initialValue = coordinator.buildLanguagePresetOptions(emptyList()))
+        .map { presets -> coordinator.buildLanguagePresetOptions(presets, hiddenLanguagePreset) }
+        .collectAsStateWithLifecycle(
+            initialValue = coordinator.buildLanguagePresetOptions(emptyList(), hiddenLanguagePreset),
+        )
         .value
 
     val effectivePanoramaCoverAnimationEnabled =
@@ -591,11 +593,17 @@ private class AppearanceSettingsCoordinator(
         }
     }
 
-    fun buildLanguagePresetOptions(presets: List<SourcePreset>): List<SettingsChoiceOption<String>> {
+    fun buildLanguagePresetOptions(
+        presets: List<SourcePreset>,
+        selectedValue: String? = null,
+    ): List<SettingsChoiceOption<String>> {
         return buildList {
             add(SettingsChoiceOption("all", context.getString(R.string.all)))
             presets.forEach { preset ->
                 add(SettingsChoiceOption(preset.id.toString(), preset.title))
+            }
+            if (selectedValue != null && selectedValue != "all" && none { it.value == selectedValue }) {
+                add(SettingsChoiceOption(selectedValue, context.getString(R.string.loading_)))
             }
         }
     }

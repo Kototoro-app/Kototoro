@@ -236,8 +236,11 @@ class ReaderViewModel @Inject constructor(
         valueProducer = { isReaderKeepScreenOn },
     )
 
-    val isWebtoonZooEnabled = observeIsWebtoonZoomEnabled()
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, false)
+    val isWebtoonZooEnabled = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_WEBTOON_ZOOM,
+        valueProducer = { isWebtoonZoomEnabled },
+    )
 
     val isWebtoonGapsEnabled = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
@@ -252,7 +255,7 @@ class ReaderViewModel @Inject constructor(
     )
 
 
-    val defaultWebtoonZoomOut = observeIsWebtoonZoomEnabled().flatMapLatest {
+    val defaultWebtoonZoomOut = isWebtoonZooEnabled.flatMapLatest {
         if (it) {
             observeWebtoonZoomOut()
         } else {
@@ -1314,11 +1317,6 @@ class ReaderViewModel @Inject constructor(
         if (fromIndex < 0 || toIndex < 0) return true
         return kotlin.math.abs(fromIndex - toIndex) > 1
     }
-
-    private fun observeIsWebtoonZoomEnabled() = settings.observeAsFlow(
-        key = AppSettings.KEY_WEBTOON_ZOOM,
-        valueProducer = { isWebtoonZoomEnabled },
-    )
 
     private fun observeWebtoonZoomOut() = settings.observeAsFlow(
         key = AppSettings.KEY_WEBTOON_ZOOM_OUT,

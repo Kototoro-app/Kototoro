@@ -56,7 +56,7 @@ fun ComposeReaderScreenRoot(
 ) {
 	val content by viewModel.content.collectAsStateWithLifecycle()
 	val mode by viewModel.readerMode.collectAsStateWithLifecycle()
-	val isWebtoonZoomEnabled by viewModel.isWebtoonZooEnabled.collectAsStateWithLifecycle(initialValue = false)
+	val isWebtoonZoomEnabled by viewModel.isWebtoonZooEnabled.collectAsStateWithLifecycle()
 	val defaultWebtoonZoomOut by viewModel.defaultWebtoonZoomOut.collectAsStateWithLifecycle(initialValue = 0f)
 	val isWebtoonGapsEnabled by viewModel.isWebtoonGapsEnabled.collectAsStateWithLifecycle(initialValue = false)
 	val isWebtoonPullGestureEnabled by viewModel.isWebtoonPullGestureEnabled.collectAsStateWithLifecycle(initialValue = false)

@@ -36,9 +36,11 @@ class ContentDirectoriesActivity : BaseComposeActivity() {
 			},
 		)
 		setComposeContent {
+			val isInitialLoading = viewModel.isInitialLoading.collectAsStateWithLifecycle().value
+			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
 			ContentDirectoriesScreen(
 				items = viewModel.items.collectAsStateWithLifecycle().value,
-				isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value,
+				isLoading = isInitialLoading || isLoading,
 				onBack = ::finish,
 				onAddDirectory = {
 					if (!pickFileTreeLauncher.tryLaunch(null)) {

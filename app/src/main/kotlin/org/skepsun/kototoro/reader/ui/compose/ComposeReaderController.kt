@@ -119,6 +119,7 @@ internal class ComposeReaderController(
 									ReaderPageInfoBar(
 										state = chromeState.infoBar,
 										controlsVisible = chromeState.controlsVisible,
+										showControlLabels = showControlLabels,
 										systemStatus = it,
 										animationsEnabled = !chromeState.eInkModeEnabled,
 									)

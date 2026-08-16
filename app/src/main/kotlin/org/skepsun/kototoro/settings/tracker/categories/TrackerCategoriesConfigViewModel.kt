@@ -5,6 +5,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.core.model.FavouriteCategory
@@ -18,7 +19,8 @@ class TrackerCategoriesConfigViewModel @Inject constructor(
 ) : BaseViewModel() {
 
 	val content = favouritesRepository.observeCategories()
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+		.map { categories -> TrackerCategoriesUiState(isLoading = false, categories = categories) }
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, TrackerCategoriesUiState())
 
 	private var updateJob: Job? = null
 
@@ -30,3 +32,8 @@ class TrackerCategoriesConfigViewModel @Inject constructor(
 		}
 	}
 }
+
+data class TrackerCategoriesUiState(
+	val isLoading: Boolean = true,
+	val categories: List<FavouriteCategory> = emptyList(),
+)

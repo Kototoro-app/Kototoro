@@ -2,12 +2,16 @@ package org.skepsun.kototoro.settings.sources
 
 import android.content.SharedPreferences
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -63,6 +67,8 @@ class SourceSettingsViewModel @Inject constructor(
 	val isAuthorized = MutableStateFlow<Boolean?>(null)
 	val browserUrl = MutableStateFlow<String?>(null)
 	val isEnabled = mangaSourcesRepository.observeIsEnabled(source)
+		.map<Boolean, Boolean?> { it }
+		.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 	private val _jsAccountMeta = MutableStateFlow<JsContentRepository.JsAccountMeta?>(null)
 	val jsAccountMeta: StateFlow<JsContentRepository.JsAccountMeta?> = _jsAccountMeta.asStateFlow()
 	private val _jsLoginState = MutableEventFlow<Boolean>()

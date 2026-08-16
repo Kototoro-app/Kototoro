@@ -7,9 +7,9 @@ import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.space.domain.MAX_CUSTOM_SPACES
@@ -28,21 +28,29 @@ class SpacesSettingsViewModel @Inject constructor(
     sourcesRepository: ContentSourcesRepository,
 ) : ViewModel() {
 
+    private val allSpaces = catalogRepository.allSpaces
+    private val enabledSources = sourcesRepository.observeEnabledSources()
+
     val uiState = combine(
-        catalogRepository.allSpaces,
-        sourcesRepository.observeEnabledSources().map { sources ->
-            sources.mapNotNullTo(sortedSetOf()) { it.getLocale()?.language?.takeIf(String::isNotBlank) }
-        },
-    ) { spaces, languages ->
-        SpaceDefinitionsUiState(
-            spaces = spaces,
-            availableLanguages = languages,
-            canCreate = spaces.count { !it.isBuiltIn } < MAX_CUSTOM_SPACES,
-        )
+        allSpaces,
+        enabledSources,
+    ) { spaces, sources ->
+        buildUiState(spaces, sources)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SpaceDefinitionsUiState(),
+        initialValue = buildUiState(allSpaces.value, enabledSources.value),
+    )
+
+    private fun buildUiState(
+        spaces: List<SpaceContext>,
+        sources: List<ContentSourceInfo>,
+    ) = SpaceDefinitionsUiState(
+        spaces = spaces,
+        availableLanguages = sources.mapNotNullTo(sortedSetOf()) {
+            it.getLocale()?.language?.takeIf(String::isNotBlank)
+        },
+        canCreate = spaces.count { !it.isBuiltIn } < MAX_CUSTOM_SPACES,
     )
 
     fun save(space: SpaceContext) {

@@ -82,6 +82,7 @@ internal abstract class FlexibleMangaParser @InternalParsersApi constructor(
 	@CallSuper
 	override fun onCreateConfig(keys: MutableCollection<ConfigKey<*>>) {
 		keys.add(configKeyDomain)
+		keys.add(userAgentKey)
 	}
 
 	override suspend fun getRelatedManga(seed: Manga): List<Manga> {

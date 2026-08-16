@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.local.data.LocalStorageManager
@@ -20,6 +21,8 @@ class ContentDirectoriesViewModel @Inject constructor(
 ) : BaseViewModel() {
 
     val items = MutableStateFlow(emptyList<DirectoryConfigModel>())
+    private val _isInitialLoading = MutableStateFlow(true)
+    val isInitialLoading = _isInitialLoading.asStateFlow()
     private var loadingJob: Job? = null
 
     init {
@@ -55,19 +58,23 @@ class ContentDirectoriesViewModel @Inject constructor(
 
     private fun loadList() {
         val prevJob = loadingJob
-        loadingJob = launchJob(Dispatchers.Default) {
-            prevJob?.cancelAndJoin()
-			val downloadRoot = storageManager.getDefaultWriteableRoot()
-			val applicationRoots = storageManager.getApplicationStorageRoots()
-			val customRoots = settings.userSpecifiedContentDirectoryUris.mapNotNull { uri ->
-				runCatching { storageManager.resolveRoot(uri) }.getOrNull()
-			}.toSet() - applicationRoots
-			items.value = (
-				applicationRoots.map { root -> root.toDirectoryModelSafe(downloadRoot, true) } +
-				customRoots.map { root -> root.toDirectoryModelSafe(downloadRoot, false) }
-			).filterNotNull()
-		}
-	}
+        loadingJob = launchLoadingJob(Dispatchers.Default) {
+            try {
+                prevJob?.cancelAndJoin()
+                val downloadRoot = storageManager.getDefaultWriteableRoot()
+                val applicationRoots = storageManager.getApplicationStorageRoots()
+                val customRoots = settings.userSpecifiedContentDirectoryUris.mapNotNull { uri ->
+                    runCatching { storageManager.resolveRoot(uri) }.getOrNull()
+                }.toSet() - applicationRoots
+                items.value = (
+                    applicationRoots.map { root -> root.toDirectoryModelSafe(downloadRoot, true) } +
+                        customRoots.map { root -> root.toDirectoryModelSafe(downloadRoot, false) }
+                    ).filterNotNull()
+            } finally {
+                _isInitialLoading.value = false
+            }
+        }
+    }
 
 	private suspend fun LocalStorageRoot.toDirectoryModelSafe(
 		downloadRoot: LocalStorageRoot?,

@@ -96,6 +96,7 @@ public abstract class AbstractContentParser @InternalParsersApi constructor(
 	@CallSuper
 	public override fun onCreateConfig(keys: MutableCollection<ConfigKey<*>>) {
 		keys.add(configKeyDomain)
+		keys.add(userAgentKey)
 	}
 
 	public override suspend fun getRelatedContent(seed: Content): List<Content> {

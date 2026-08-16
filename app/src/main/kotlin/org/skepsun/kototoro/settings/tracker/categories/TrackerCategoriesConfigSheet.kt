@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.tracker.categories
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +15,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -42,7 +44,7 @@ internal fun TrackerCategoriesConfigRoute(
 	onDismissRequest: () -> Unit,
 	viewModel: TrackerCategoriesConfigViewModel = hiltViewModel(),
 ) {
-	val categories by viewModel.content.collectAsStateWithLifecycle()
+	val uiState by viewModel.content.collectAsStateWithLifecycle()
 	val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
 	ModalBottomSheet(
@@ -52,7 +54,8 @@ internal fun TrackerCategoriesConfigRoute(
 	) {
 		KototoroTheme {
 			TrackerCategoriesConfigContent(
-				categories = categories,
+				categories = uiState.categories,
+				isLoading = uiState.isLoading,
 				onCategoryClick = viewModel::toggleItem,
 			)
 		}
@@ -63,6 +66,7 @@ internal fun TrackerCategoriesConfigRoute(
 @Composable
 internal fun TrackerCategoriesConfigContent(
 	categories: List<FavouriteCategory>,
+	isLoading: Boolean,
 	onCategoryClick: (FavouriteCategory) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
@@ -71,13 +75,18 @@ internal fun TrackerCategoriesConfigContent(
 		containerColor = MaterialTheme.colorScheme.background,
 		contentWindowInsets = WindowInsets(0, 0, 0, 0),
 		topBar = {
-			TopAppBar(
-				title = { Text(text = stringResource(R.string.favourites_categories)) },
-				windowInsets = WindowInsets(0, 0, 0, 0),
-				colors = TopAppBarDefaults.topAppBarColors(
-					containerColor = MaterialTheme.colorScheme.background,
-				),
-			)
+			Column {
+				TopAppBar(
+					title = { Text(text = stringResource(R.string.favourites_categories)) },
+					windowInsets = WindowInsets(0, 0, 0, 0),
+					colors = TopAppBarDefaults.topAppBarColors(
+						containerColor = MaterialTheme.colorScheme.background,
+					),
+				)
+				if (isLoading) {
+					LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+				}
+			}
 		},
 	) { contentPadding ->
 		LazyColumn(
@@ -155,6 +164,7 @@ private fun TrackerCategoriesConfigContentPreview() {
 					isVisibleInLibrary = true,
 				),
 			),
+			isLoading = false,
 			onCategoryClick = {},
 		)
 	}

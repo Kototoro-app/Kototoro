@@ -577,7 +577,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.detect_reader_mode_summary),
                 iconRes = R.drawable.ic_auto_fix,
                 checked = settings.observeAsState(AppSettings.KEY_READER_MODE_DETECT) {
-                    prefs.getBoolean(AppSettings.KEY_READER_MODE_DETECT, false)
+                    isReaderModeDetectionEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_MODE_DETECT, it) } },
             )
@@ -615,7 +615,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.reader_fullscreen_summary),
                 iconRes = R.drawable.ic_fullscreen,
                 checked = settings.observeAsState(AppSettings.KEY_READER_FULLSCREEN) {
-                    prefs.getBoolean(AppSettings.KEY_READER_FULLSCREEN, false)
+                    isReaderFullscreenEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_FULLSCREEN, it) } },
             )
@@ -704,7 +704,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.webtoon_zoom_summary),
                 iconRes = R.drawable.ic_gesture_vertical,
                 checked = settings.observeAsState(AppSettings.KEY_WEBTOON_ZOOM) {
-                    prefs.getBoolean(AppSettings.KEY_WEBTOON_ZOOM, false)
+                    isWebtoonZoomEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_WEBTOON_ZOOM, it) } },
             )
@@ -794,7 +794,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.reader_info_bar_summary),
                 iconRes = R.drawable.ic_timeline,
                 checked = settings.observeAsState(AppSettings.KEY_READER_BAR) {
-                    prefs.getBoolean(AppSettings.KEY_READER_BAR, false)
+                    isReaderBarEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR, it) } },
             )
@@ -804,7 +804,7 @@ private fun ReaderMangaSettingsPage(
                 title = stringResource(R.string.reader_info_bar_transparent),
                 iconRes = R.drawable.ic_drawer_menu,
                 checked = settings.observeAsState(AppSettings.KEY_READER_BAR_TRANSPARENT) {
-                    prefs.getBoolean(AppSettings.KEY_READER_BAR_TRANSPARENT, false)
+                    isReaderBarTransparent
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR_TRANSPARENT, it) } },
             )
@@ -823,7 +823,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.keep_screen_on_summary),
                 iconRes = R.drawable.ic_battery_outline,
                 checked = settings.observeAsState(AppSettings.KEY_READER_SCREEN_ON) {
-                    prefs.getBoolean(AppSettings.KEY_READER_SCREEN_ON, false)
+                    isReaderKeepScreenOn
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_SCREEN_ON, it) } },
             )
@@ -845,7 +845,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.reader_chapter_toast_summary),
                 iconRes = R.drawable.ic_comment,
                 checked = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_TOAST) {
-                    prefs.getBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, false)
+                    isReaderChapterToastEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TOAST, it) } },
             )

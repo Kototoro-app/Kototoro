@@ -4,12 +4,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,7 +54,7 @@ fun ContentDirectorySelectRoute(
             event?.consume { error -> onError(error) }
         }
     }
-    val entries by viewModel.items.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val title = when (contentType) {
         ContentDirectorySelectViewModel.CONTENT_TYPE_NOVEL -> R.string.novel_save_location
         ContentDirectorySelectViewModel.CONTENT_TYPE_VIDEO -> R.string.video_save_location
@@ -61,25 +64,37 @@ fun ContentDirectorySelectRoute(
         title = stringResource(title),
         onDismissRequest = onDismiss,
         text = {
-            LazyColumn {
-                items(entries, key = { it.root?.key ?: "custom-directory" }) { item ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.onItemClick(item) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = item.isChecked, onClick = null)
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 8.dp),
-                        ) {
-                            Text(item.title ?: stringResource(item.titleRes))
-                            item.root?.displayPath?.let { path ->
-                                Text(
-                                    text = path,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+            Box(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(uiState.items, key = { it.root?.key ?: "custom-directory" }) { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.onItemClick(item) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(selected = item.isChecked, onClick = null)
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(start = 8.dp),
+                                ) {
+                                    Text(item.title ?: stringResource(item.titleRes))
+                                    item.root?.displayPath?.let { path ->
+                                        Text(
+                                            text = path,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

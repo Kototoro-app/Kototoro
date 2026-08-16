@@ -23,7 +23,7 @@ class ReaderTapGridConfigViewModel @Inject constructor(
 	val content = tapGridSettings.observeChanges()
 		.onStart { emit(null) }
 		.map { getData() }
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
+		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, getData())
 
 	fun reset() {
 		tapGridSettings.reset()
