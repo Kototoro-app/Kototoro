@@ -45,5 +45,4 @@ dependencies {
 	api libs.okhttp
 	api libs.okio
 	api libs.rhino
-	api "androidx.multidex:multidex:2.0.1"
 }
