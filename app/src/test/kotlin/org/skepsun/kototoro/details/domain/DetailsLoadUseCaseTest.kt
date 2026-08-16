@@ -22,6 +22,9 @@ import org.skepsun.kototoro.explore.domain.RecoverContentUseCase
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentPage
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 
 class DetailsLoadUseCaseTest {
 
@@ -89,7 +92,100 @@ class DetailsLoadUseCaseTest {
 		coVerify(exactly = 1) { dataRepository.updateProjectionSnapshot(remote) }
 	}
 
-	private fun content(id: Long, title: String, description: String? = null): Content {
+	@Test
+	fun `missing manga cover falls back to first page of first chapter`() = runTest {
+		val seed = content(id = 4L, title = "Seed", source = TestMangaSource)
+		val remote = content(id = 4L, title = "Remote", source = TestMangaSource)
+		val repository = mockk<ContentRepository>()
+		val firstChapter = remote.chapters.orEmpty().first()
+		val firstPage = ContentPage(
+			id = 1L,
+			url = "/page/1",
+			preview = null,
+			source = TestMangaSource,
+		)
+		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
+		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.getOverride(seed.id) } returns null
+		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
+		every { repositoryFactory.create(TestMangaSource) } returns repository
+		coEvery { repository.getDetails(seed) } returns remote
+		coEvery { repository.getPages(firstChapter) } returns listOf(firstPage)
+		coEvery { repository.getPageUrl(firstPage) } returns "https://example.org/page/1.jpg"
+		coEvery { dataRepository.updateProjectionSnapshot(any()) } answers { firstArg() }
+
+		val result = useCase(ContentIntent.of(seed), force = true).toList().last().toContent()
+
+		assertEquals("https://example.org/page/1.jpg", result.coverUrl)
+		assertEquals("https://example.org/page/1.jpg", result.largeCoverUrl)
+		coVerify(exactly = 1) { repository.getPages(firstChapter) }
+	}
+
+	@Test
+	fun `existing manga cover does not request chapter pages`() = runTest {
+		val seed = content(id = 5L, title = "Seed", source = TestMangaSource)
+		val remote = content(
+			id = 5L,
+			title = "Remote",
+			coverUrl = "https://example.org/cover.jpg",
+			source = TestMangaSource,
+		)
+		val repository = mockk<ContentRepository>()
+		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns seed
+		coEvery { dataRepository.resolveStoredProjection(seed) } returns seed
+		coEvery { dataRepository.getOverride(seed.id) } returns null
+		coEvery { localContentRepository.findSavedContent(seed, withDetails = true) } returns null
+		every { repositoryFactory.create(TestMangaSource) } returns repository
+		coEvery { repository.getDetails(seed) } returns remote
+		coEvery { dataRepository.updateProjectionSnapshot(remote) } returns remote
+
+		val result = useCase(ContentIntent.of(seed), force = true).toList().last().toContent()
+
+		assertEquals("https://example.org/cover.jpg", result.coverUrl)
+		coVerify(exactly = 0) { repository.getPages(any()) }
+	}
+
+	@Test
+	fun `complete cached manga resolves and stores first page cover without refreshing details`() = runTest {
+		val cached = content(
+			id = 6L,
+			title = "Cached",
+			description = "Cached description",
+			source = TestMangaSource,
+		)
+		val repository = mockk<ContentRepository>()
+		val firstChapter = cached.chapters.orEmpty().first()
+		val firstPage = ContentPage(
+			id = 1L,
+			url = "/page/1",
+			preview = null,
+			source = TestMangaSource,
+		)
+		coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns cached
+		coEvery { dataRepository.resolveStoredProjection(cached) } returns cached
+		coEvery { dataRepository.getOverride(cached.id) } returns null
+		coEvery { localContentRepository.findSavedContent(cached, withDetails = true) } returns null
+		coEvery { dataRepository.findContentById(cached.id, withChapters = true) } returns cached
+		every { networkState.isOfflineOrRestricted() } returns false
+		every { repositoryFactory.create(TestMangaSource) } returns repository
+		coEvery { repository.getPages(firstChapter) } returns listOf(firstPage)
+		coEvery { repository.getPageUrl(firstPage) } returns "https://example.org/cached-page.jpg"
+		coEvery { dataRepository.updateProjectionSnapshot(any()) } answers { firstArg() }
+
+		val result = useCase(ContentIntent.of(cached), force = false).toList().last().toContent()
+
+		assertEquals("https://example.org/cached-page.jpg", result.coverUrl)
+		coVerify(exactly = 0) { repository.getDetails(any()) }
+		coVerify(exactly = 1) { dataRepository.updateProjectionSnapshot(any()) }
+	}
+
+	private fun content(
+		id: Long,
+		title: String,
+		description: String? = null,
+		coverUrl: String? = null,
+		source: ContentSource = TestContentSource,
+	): Content {
 		return Content(
 			id = id,
 			title = title,
@@ -98,7 +194,7 @@ class DetailsLoadUseCaseTest {
 			publicUrl = "https://example.org/$id",
 			rating = 0f,
 			contentRating = null,
-			coverUrl = null,
+			coverUrl = coverUrl,
 			largeCoverUrl = null,
 			tags = emptySet(),
 			state = null,
@@ -114,10 +210,16 @@ class DetailsLoadUseCaseTest {
 					scanlator = null,
 					uploadDate = 0L,
 					branch = null,
-					source = TestContentSource,
+					source = source,
 				),
 			),
-			source = TestContentSource,
+			source = source,
 		)
+	}
+
+	private data object TestMangaSource : ContentSource {
+		override val name = "TEST_MANGA"
+		override val locale = "en"
+		override val contentType = ContentType.MANGA
 	}
 }

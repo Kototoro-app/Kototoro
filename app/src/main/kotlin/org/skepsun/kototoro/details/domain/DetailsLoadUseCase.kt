@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runInterruptible
 import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.model.getContentType
+import org.skepsun.kototoro.core.model.isManga
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.os.NetworkState
@@ -26,6 +28,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.sanitize
+import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.explore.domain.RecoverContentUseCase
 import org.skepsun.kototoro.local.data.LocalMangaRepository
@@ -91,7 +94,12 @@ class DetailsLoadUseCase @Inject constructor(
 	 */
 	private suspend fun FlowCollector<ContentDetails>.loadLocal(manga: Content, override: ContentOverride?, force: Boolean) {
 		val skipNetworkLoad = !force && networkState.isOfflineOrRestricted()
-		val localDetails = localContentRepository.getDetails(manga)
+		val loadedLocalDetails = localContentRepository.getDetails(manga)
+		val localDetails = if (override?.coverUrl?.takeIfUsableImageUri() != null) {
+			loadedLocalDetails
+		} else {
+			loadedLocalDetails.withFirstPageCoverFallback(localContentRepository)
+		}
 		emit(
 			ContentDetails(
 				manga = localDetails,
@@ -116,7 +124,11 @@ class DetailsLoadUseCase @Inject constructor(
 				),
 			)
 		} else {
-			val remoteDetails = getDetails(remoteContent, force).getOrNull()
+			val remoteDetails = getDetails(
+				seed = remoteContent,
+				force = force,
+				hasCoverOverride = override?.coverUrl?.takeIfUsableImageUri() != null,
+			).getOrNull()
 			val storedDetails = if (remoteDetails != null) {
 				mangaDataRepository.updateProjectionSnapshot(remoteDetails)
 			} else {
@@ -159,6 +171,25 @@ class DetailsLoadUseCase @Inject constructor(
 
 		val isOfflineOrRestricted = !force && networkState.isOfflineOrRestricted()
 		val skipNetworkLoad = !force && (isOfflineOrRestricted || hasCachedDetails)
+		val hasAlternativeCover = override?.coverUrl?.takeIfUsableImageUri() != null ||
+			localContent?.manga?.coverUrl?.takeIfUsableImageUri() != null ||
+			localContent?.manga?.largeCoverUrl?.takeIfUsableImageUri() != null
+		val resolvedCachedProjection = if (
+			skipNetworkLoad &&
+			!isOfflineOrRestricted &&
+			!hasAlternativeCover &&
+			cachedProjection != null
+		) {
+			val resolved = cachedProjection.withFirstPageCoverFallback()
+			if (resolved != cachedProjection) {
+				runCatchingCancellable { mangaDataRepository.updateProjectionSnapshot(resolved) }
+					.getOrDefault(resolved)
+			} else {
+				cachedProjection
+			}
+		} else {
+			cachedProjection
+		}
 		android.util.Log.d(
 			DETAILS_TRACE_TAG,
 			"load.remote manga=${manga.traceSummary()} cached=${cachedProjection?.traceSummary()} " +
@@ -170,7 +201,7 @@ class DetailsLoadUseCase @Inject constructor(
 			if (localContent != null) {
 				emit(
 					ContentDetails(
-						manga = cachedProjection ?: manga,
+						manga = resolvedCachedProjection ?: manga,
 						localContent = localContent,
 						override = override,
 						description = (cachedProjection?.description ?: localContent.manga.description ?: manga.description)?.parseAsHtml(withImages = true),
@@ -179,7 +210,7 @@ class DetailsLoadUseCase @Inject constructor(
 				)
 				return@coroutineScope
 			} else if (hasCachedDetails) {
-				val cachedDetails = checkNotNull(cachedProjection)
+				val cachedDetails = checkNotNull(resolvedCachedProjection)
 				emit(
 					ContentDetails(
 						manga = cachedDetails,
@@ -194,7 +225,11 @@ class DetailsLoadUseCase @Inject constructor(
 		}
 
 		val remoteDeferred = async {
-			getDetails(manga, force)
+			getDetails(
+				seed = manga,
+				force = force,
+				hasCoverOverride = override?.coverUrl?.takeIfUsableImageUri() != null,
+			)
 		}
 		if (localContent != null) {
 			emit(
@@ -249,7 +284,11 @@ class DetailsLoadUseCase @Inject constructor(
 		}
 	}
 
-	private suspend fun getDetails(seed: Content, force: Boolean) = runCatchingCancellable {
+	private suspend fun getDetails(
+		seed: Content,
+		force: Boolean,
+		hasCoverOverride: Boolean,
+	) = runCatchingCancellable {
 		val start = SystemClock.elapsedRealtime()
 		val repository = mangaRepositoryFactory.create(seed.source)
 		android.util.Log.i(
@@ -286,17 +325,46 @@ class DetailsLoadUseCase @Inject constructor(
 		
 		// 检查是否有EPUB内部章节需要加载
 		val expanded = expandEpubChaptersIfNeeded(manga)
+		val resolved = if (hasCoverOverride) {
+			expanded
+		} else {
+			expanded.withFirstPageCoverFallback(repository)
+		}
 		android.util.Log.d(
 			"DetailsLoadUseCase",
-			"getDetails: returning manga with ${expanded.chapters?.size ?: 0} chapters after post-processing, totalCost=${SystemClock.elapsedRealtime() - start}ms",
+			"getDetails: returning manga with ${resolved.chapters?.size ?: 0} chapters after post-processing, totalCost=${SystemClock.elapsedRealtime() - start}ms",
 		)
-		expanded
+		resolved
 	}.recoverNotNull { e ->
 		if (e is NotFoundException) {
 			recoverUseCase(seed)
 		} else {
 			null
 		}
+	}
+
+	private suspend fun Content.withFirstPageCoverFallback(repository: ContentRepository? = null): Content {
+		if (
+			coverUrl?.takeIfUsableImageUri() != null ||
+			largeCoverUrl?.takeIfUsableImageUri() != null ||
+			!source.getContentType().isManga()
+		) {
+			return this
+		}
+		val firstChapter = chapters?.firstOrNull() ?: return this
+		val fallbackCoverUrl = runCatchingCancellable {
+			val contentRepository = repository ?: mangaRepositoryFactory.create(source)
+			val firstPage = contentRepository.getPages(firstChapter).firstOrNull()
+				?: return@runCatchingCancellable null
+			runCatchingCancellable { contentRepository.getPageUrl(firstPage) }
+				.getOrNull()
+				?.takeIfUsableImageUri()
+				?: firstPage.preview?.takeIfUsableImageUri()
+		}.getOrNull() ?: return this
+		return copy(
+			coverUrl = fallbackCoverUrl,
+			largeCoverUrl = fallbackCoverUrl,
+		)
 	}
 
 	/**
