@@ -313,9 +313,9 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 
 	private fun observeRuntimeSourceChanges(): Flow<Unit> {
 		val apkChanges = combine(
-			mihonExtensionManager.installedExtensions,
-			aniyomiExtensionManager.installedExtensions,
-			ireaderExtensionManager.installedExtensions,
+			mihonExtensionManager.changes,
+			aniyomiExtensionManager.changes,
+			ireaderExtensionManager.changes,
 		) { _, _, _ -> Unit }
 		val jarChanges = combine(
 			GlobalExtensionManager.mangaSources,

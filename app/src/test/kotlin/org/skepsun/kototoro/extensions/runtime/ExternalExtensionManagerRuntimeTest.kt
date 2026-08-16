@@ -2,9 +2,11 @@ package org.skepsun.kototoro.extensions.runtime
 
 import android.content.Context
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -52,6 +54,49 @@ class ExternalExtensionManagerRuntimeTest {
 		assertTrue(runtime.hasExtensions())
 		assertNull(runtime.getSourceById(99L))
 	}
+
+	@Test
+	fun `loadExtensions queues refresh requested while another load is running`() = runBlocking {
+		val runtime = ExternalExtensionManagerRuntime<FakeResult, FakeSuccess, FakeError, FakeSource, FakeWrappedSource>(
+			context = mockk<Context>(relaxed = true),
+			scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
+		)
+		val firstLoadStarted = CompletableDeferred<Unit>()
+		val releaseFirstLoad = CompletableDeferred<Unit>()
+
+		val firstLoad = async {
+			runtime.loadExtensions(
+				loadResults = {
+					firstLoadStarted.complete(Unit)
+					releaseFirstLoad.await()
+					listOf(FakeResult.Ok)
+				},
+				processResults = { processedExtensions("pkg.old") },
+			)
+		}
+		firstLoadStarted.await()
+		val refreshLoad = async {
+			runtime.loadExtensions(
+				loadResults = { listOf(FakeResult.Ok) },
+				processResults = { processedExtensions("pkg.new") },
+			)
+		}
+
+		releaseFirstLoad.complete(Unit)
+		firstLoad.await()
+		refreshLoad.await()
+
+		assertEquals(listOf(FakeSuccess("pkg.new")), runtime.installedExtensions.value)
+		assertEquals(2, runtime.changes.value)
+	}
+
+	private fun processedExtensions(packageName: String) = ProcessedExternalExtensions(
+		successful = listOf(FakeSuccess(packageName)),
+		failed = emptyList<FakeError>(),
+		sourceById = emptyMap<Long, FakeSource>(),
+		wrappedSourceById = emptyMap<Long, FakeWrappedSource>(),
+		untrustedPackages = emptyList(),
+	)
 
 	private sealed interface FakeResult {
 		data object Ok : FakeResult

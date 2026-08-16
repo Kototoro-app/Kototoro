@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, WrappedSourceT>(
 	private val context: Context,
@@ -42,21 +43,20 @@ class ExternalExtensionManagerRuntime<ResultT, SuccessT, ErrorT, SourceT, Wrappe
 		loadResults: suspend (Context) -> List<ResultT>,
 		processResults: (List<ResultT>) -> ProcessedExternalExtensions<SuccessT, ErrorT, SourceT, WrappedSourceT>,
 	) {
-		if (!loadMutex.tryLock()) return
-
-		_isLoading.value = true
-		try {
-			val processed = processResults(loadResults(context))
-			sourceSnapshot = SourceSnapshot(
-				sourceById = processed.sourceById,
-				wrappedSourceById = processed.wrappedSourceById,
-			)
-			_installedExtensions.value = processed.successful
-			_failedExtensions.value = processed.failed
-			_changes.value++
-		} finally {
-			_isLoading.value = false
-			loadMutex.unlock()
+		loadMutex.withLock {
+			_isLoading.value = true
+			try {
+				val processed = processResults(loadResults(context))
+				sourceSnapshot = SourceSnapshot(
+					sourceById = processed.sourceById,
+					wrappedSourceById = processed.wrappedSourceById,
+				)
+				_installedExtensions.value = processed.successful
+				_failedExtensions.value = processed.failed
+				_changes.value++
+			} finally {
+				_isLoading.value = false
+			}
 		}
 	}
 

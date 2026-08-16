@@ -412,7 +412,7 @@ class SettingsActivity :
 	private val unifiedSourcesInstallLauncher = registerForActivityResult(
 		ActivityResultContracts.StartActivityForResult(),
 	) {
-		unifiedSourcesViewModel.onInstallActivityResult()
+		unifiedSourcesViewModel.onInstallerActivityReturned()
 	}
 
 	private val unifiedSourcesUninstallLauncher = registerForActivityResult(
@@ -1368,7 +1368,10 @@ class SettingsActivity :
 						onOpenLocalJarPicker = ::openUnifiedSourcesLocalJarPicker,
 						onStartInstall = { intent ->
 							runCatching { unifiedSourcesInstallLauncher.launch(intent) }
-								.onFailure { Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show() }
+								.onFailure {
+									unifiedSourcesViewModel.onInstallerActivityReturned()
+									Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show()
+								}
 						},
 						onStartUninstall = { intent ->
 							runCatching { unifiedSourcesUninstallLauncher.launch(intent) }

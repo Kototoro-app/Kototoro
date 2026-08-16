@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test
 class ExtensionBatchUpdateStateMachineTest {
 
 	@Test
-	fun `start and installer result advance through queued packages then complete`() {
+	fun `completed installs advance through queued packages then finish`() {
 		val machine = ExtensionBatchUpdateStateMachine()
 
 		assertTrue(machine.start(listOf("pkg.one", "pkg.two")))
@@ -24,7 +24,7 @@ class ExtensionBatchUpdateStateMachineTest {
 
 		assertEquals(
 			ExtensionBatchUpdateStateMachine.NextAction.InstallNext("pkg.two"),
-			machine.onInstallActivityResult(),
+			machine.finishCurrentInstall(),
 		)
 
 		machine.beginInstall("pkg.two")
@@ -32,7 +32,7 @@ class ExtensionBatchUpdateStateMachineTest {
 
 		assertEquals(
 			ExtensionBatchUpdateStateMachine.NextAction.Completed,
-			machine.onInstallActivityResult(),
+			machine.finishCurrentInstall(),
 		)
 		assertFalse(machine.inProgress.value)
 	}

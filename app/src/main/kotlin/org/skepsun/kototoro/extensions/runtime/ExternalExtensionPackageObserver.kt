@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import androidx.core.content.ContextCompat
 import org.skepsun.kototoro.core.util.ext.goAsync
 
@@ -29,6 +28,7 @@ fun registerExternalExtensionPackageObserver(
 			addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED)
 			addDataScheme("package")
 		},
+		// Package broadcasts can originate from privileged OEM package manager processes.
 		ContextCompat.RECEIVER_EXPORTED,
 	)
 	return receiver

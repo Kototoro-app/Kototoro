@@ -48,14 +48,7 @@ internal class ExtensionBatchUpdateStateMachine {
 		awaitingInstallerResult = false
 	}
 
-	fun onInstallActivityResult(): NextAction {
-		if (!awaitingInstallerResult) return NextAction.None
-		currentPackage = null
-		awaitingInstallerResult = false
-		return nextAction()
-	}
-
-	fun onInstallInterrupted(): NextAction {
+	fun finishCurrentInstall(): NextAction {
 		currentPackage = null
 		awaitingInstallerResult = false
 		return nextAction()

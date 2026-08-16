@@ -1,8 +1,6 @@
 package org.skepsun.kototoro.extensions.install
 
 import android.content.Context
-import android.content.Intent
-import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.newCachelessCallWithProgress
@@ -16,13 +14,13 @@ import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibility
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibilityChecker
 import org.skepsun.kototoro.core.exceptions.IncompatiblePluginException
 import org.skepsun.kototoro.core.exceptions.MissingPluginHostClassesException
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
+import org.skepsun.kototoro.extensions.repo.toInstalledPackageName
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import java.io.File
@@ -39,6 +37,7 @@ class ExtensionInstallService @Inject constructor(
 	@ContentHttpClient private val httpClient: OkHttpClient,
 	private val settings: AppSettings,
 	private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
+	private val systemPackageInstaller: SystemPackageInstaller,
 ) {
 	private val githubHttpClient by lazy {
 		httpClient.newBuilder()
@@ -169,15 +168,16 @@ class ExtensionInstallService @Inject constructor(
 			}
 		}
 
-		val uri = FileProvider.getUriForFile(context, "${BuildConfig.APPLICATION_ID}.files", outputFile)
-		return ExtensionInstallResult.RequiresInstaller(
-			Intent(Intent.ACTION_VIEW).apply {
-				setDataAndType(uri, "application/vnd.android.package-archive")
-				addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-				addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-				putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-			},
+		val installSession = systemPackageInstaller.createSession(
+			apkFile = outputFile,
+			expectedPackageName = extension.type.toInstalledPackageName(extension.pkgName),
+			expectedVersionCode = extension.versionCode,
 		)
+		return ExtensionInstallResult.RequiresInstaller(installSession)
+	}
+
+	fun onInstallerActivityReturned() {
+		systemPackageInstaller.onInstallerActivityReturned()
 	}
 
 	fun cancelDownload(packageName: String) {
@@ -202,7 +202,7 @@ class ExtensionInstallService @Inject constructor(
 
 sealed interface ExtensionInstallResult {
 	data object Completed : ExtensionInstallResult
-	data class RequiresInstaller(val intent: Intent) : ExtensionInstallResult
+	data class RequiresInstaller(val session: SystemPackageInstallSession) : ExtensionInstallResult
 }
 
 enum class ExtensionInstallMode {

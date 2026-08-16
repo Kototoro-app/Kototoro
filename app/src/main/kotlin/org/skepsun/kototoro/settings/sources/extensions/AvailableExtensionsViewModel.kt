@@ -104,7 +104,12 @@ class AvailableExtensionsViewModel @Inject constructor(
 		launchLoadingJob(Dispatchers.IO) {
 			try {
 				when (val result = installService.install(extension)) {
-					is ExtensionInstallResult.RequiresInstaller -> onInstallIntent.call(result.intent)
+					is ExtensionInstallResult.RequiresInstaller -> {
+						result.session.awaitUserAction()?.let { onInstallIntent.call(it) }
+						result.session.awaitCompletion()
+						refresh()
+						onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
+					}
 					ExtensionInstallResult.Completed -> {
 						refresh()
 						onMessage.call(appContext.getString(R.string.unified_sources_package_installed))

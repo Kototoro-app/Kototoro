@@ -229,15 +229,42 @@ class UnifiedSourcesViewModel @Inject constructor(
 		)
 	}
 
-	fun refreshPackages(
+	fun refreshInstalledSources() {
+		val disabledSourcesBeforeRefresh = uiState.value.disabledSourcesForPackageRefresh()
+		launchLoadingJob(Dispatchers.IO) {
+			try {
+				withTimeout(REFRESH_PACKAGES_TIMEOUT_MS) {
+					reloadExternalExtensionManagers()
+				}
+			} catch (e: TimeoutCancellationException) {
+				emitMessage(appContext.getString(R.string.unified_sources_refresh_timeout))
+			} finally {
+				restoreDisabledSources(disabledSourcesBeforeRefresh)
+			}
+		}
+	}
+
+	fun refreshRepositories() {
+		refreshPackageCatalog(reloadInstalledExtensions = false)
+	}
+
+	fun refreshPackages() {
+		refreshPackageCatalog(reloadInstalledExtensions = true)
+	}
+
+	private fun refreshPackageCatalog(
 		refreshRepositories: Boolean = true,
 		showLoading: Boolean = true,
+		reloadInstalledExtensions: Boolean,
 	) {
 		val disabledSourcesBeforeRefresh = uiState.value.disabledSourcesForPackageRefresh()
 		val refreshBlock: suspend kotlinx.coroutines.CoroutineScope.() -> Unit = {
 			try {
 				withTimeout(REFRESH_PACKAGES_TIMEOUT_MS) {
 					val types = externalExtensionTypes()
+					if (reloadInstalledExtensions) {
+						reloadExternalExtensionManagers()
+					}
 					if (refreshRepositories) {
 						types.forEach { type -> extensionRepoRepository.refresh(type) }
 					}
@@ -252,17 +279,21 @@ class UnifiedSourcesViewModel @Inject constructor(
 					emitMessage(appContext.getString(R.string.unified_sources_refresh_timeout))
 				}
 			} finally {
-				if (disabledSourcesBeforeRefresh.isNotEmpty()) {
-					withContext(NonCancellable) {
-						contentSourcesRepository.setSourcesEnabled(disabledSourcesBeforeRefresh, false)
-					}
-				}
+				restoreDisabledSources(disabledSourcesBeforeRefresh)
 			}
 		}
 		if (showLoading) {
 			launchLoadingJob(Dispatchers.IO, block = refreshBlock)
 		} else {
 			launchJob(Dispatchers.IO, block = refreshBlock)
+		}
+	}
+
+	private suspend fun restoreDisabledSources(sources: List<ContentSource>) {
+		if (sources.isNotEmpty()) {
+			withContext(NonCancellable) {
+				contentSourcesRepository.setSourcesEnabled(sources, false)
+			}
 		}
 	}
 
@@ -386,14 +417,14 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 	}
 
-	fun onInstallActivityResult() {
-		handleBatchNextAction(batchUpdateState.onInstallActivityResult())
-	}
-
 	fun onUninstallActivityResult() {
 		viewModelScope.launch {
 			dispatchNextPendingUninstall()
 		}
+	}
+
+	fun onInstallerActivityReturned() {
+		installService.onInstallerActivityReturned()
 	}
 
 	fun importLocalJar(uri: Uri) {
@@ -877,10 +908,15 @@ class UnifiedSourcesViewModel @Inject constructor(
 			try {
 				when (val result = installService.install(extension, mode)) {
 					is ExtensionInstallResult.RequiresInstaller -> {
-						if (fromBatch) {
-							batchUpdateState.markInstallerIntentDispatched()
+						val userAction = result.session.awaitUserAction()
+						if (userAction != null) {
+							if (fromBatch) {
+								batchUpdateState.markInstallerIntentDispatched()
+							}
+							_events.emit(UnifiedSourcesEvent.StartInstall(userAction))
 						}
-						_events.emit(UnifiedSourcesEvent.StartInstall(result.intent))
+						result.session.awaitCompletion()
+						onPackageInstallCompleted(item, fromBatch)
 					}
 					ExtensionInstallResult.Completed -> {
 						onPackageInstallCompleted(item, fromBatch)
@@ -891,13 +927,13 @@ class UnifiedSourcesViewModel @Inject constructor(
 					emitMessage(appContext.getString(R.string.canceled))
 				}
 				if (fromBatch) {
-					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+					handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 				}
 			} catch (e: Throwable) {
 				_events.emit(UnifiedSourcesEvent.InstallFailed(e.getDisplayMessage(appContext.resources)))
 				if (fromBatch) {
 					emitMessage(appContext.getString(R.string.extension_update_failed, item.name))
-					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+					handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 				}
 			}
 		}
@@ -909,13 +945,21 @@ class UnifiedSourcesViewModel @Inject constructor(
 	) {
 		if (item.kind.isHotReloadableExternalKind()) {
 			reloadExternalExtensionManagers()
-			refreshPackages(refreshRepositories = false, showLoading = false)
+			refreshPackageCatalog(
+				refreshRepositories = false,
+				showLoading = false,
+				reloadInstalledExtensions = false,
+			)
 		} else if (item.kind == UnifiedSourceKind.CLOUDSTREAM) {
-			refreshPackages(refreshRepositories = false, showLoading = false)
+			refreshPackageCatalog(
+				refreshRepositories = false,
+				showLoading = false,
+				reloadInstalledExtensions = false,
+			)
 		}
 		emitMessage(appContext.getString(R.string.unified_sources_package_installed))
 		if (fromBatch) {
-			handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+			handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 		}
 	}
 

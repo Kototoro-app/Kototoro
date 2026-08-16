@@ -39,7 +39,7 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
 	}
 
 	private val installLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-		viewModel.onInstallActivityResult()
+		viewModel.onInstallerActivityReturned()
 	}
 
 	private val uninstallLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -81,7 +81,10 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
 			onOpenLocalJarPicker = ::openLocalJarPicker,
 			onStartInstall = { intent ->
 				runCatching { installLauncher.launch(intent) }
-					.onFailure { Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show() }
+					.onFailure {
+						viewModel.onInstallerActivityReturned()
+						Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show()
+					}
 			},
 			onStartUninstall = { intent ->
 				runCatching { uninstallLauncher.launch(intent) }

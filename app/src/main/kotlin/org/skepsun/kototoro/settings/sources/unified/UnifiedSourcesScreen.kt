@@ -58,6 +58,7 @@ import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,6 +80,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -89,6 +91,7 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
+import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
@@ -104,6 +107,8 @@ import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.sign
 
 enum class UnifiedToolbarFilterPanel {
 	LANGUAGE,
@@ -114,7 +119,7 @@ private const val UNIFIED_SOURCES_TAB_SOURCES = 0
 private const val UNIFIED_SOURCES_TAB_REPOSITORIES = 1
 private const val UNIFIED_SOURCES_TAB_PACKAGES = 2
 private const val UNIFIED_SOURCES_TAB_COUNT = 3
-private val unifiedCardListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+private val unifiedCardListPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 40.dp, bottom = 8.dp)
 private val unifiedCardContentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 private val unifiedCardSpacing = 8.dp
 
@@ -388,7 +393,6 @@ fun UnifiedSourcesRoute(
 		},
 		onRefreshRepository = { item -> viewModel.refreshRepository(item.id) },
 		onDeleteRepository = { item -> activeDialog = UnifiedSourcesDialogState.DeleteRepository(item) },
-		onRefreshPackages = { viewModel.refreshPackages() },
 		onUpdateAllPackages = viewModel::onUpdateAllPackagesAction,
 		onPackagePrimaryAction = viewModel::onPackagePrimaryAction,
 		onPackageSystemInstall = viewModel::installPackageWithSystemInstaller,
@@ -399,9 +403,9 @@ fun UnifiedSourcesRoute(
 		},
 		onPullRefresh = { tab ->
 			when (tab) {
-				UNIFIED_SOURCES_TAB_REPOSITORIES,
+				UNIFIED_SOURCES_TAB_SOURCES -> viewModel.refreshInstalledSources()
+				UNIFIED_SOURCES_TAB_REPOSITORIES -> viewModel.refreshRepositories()
 				UNIFIED_SOURCES_TAB_PACKAGES -> viewModel.refreshPackages()
-				else -> Unit
 			}
 		},
 		modifier = modifier,
@@ -1323,7 +1327,6 @@ fun UnifiedSourcesScreen(
 	onAddRepository: (UnifiedSourceRepositoryItem?) -> Unit,
 	onRefreshRepository: (UnifiedSourceRepositoryItem) -> Unit,
 	onDeleteRepository: (UnifiedSourceRepositoryItem) -> Unit,
-	onRefreshPackages: () -> Unit,
 	onUpdateAllPackages: () -> Unit,
 	onPackagePrimaryAction: (String) -> Unit,
 	onPackageSystemInstall: (String) -> Unit,
@@ -1336,7 +1339,22 @@ fun UnifiedSourcesScreen(
 	val readyState = state as? UnifiedSourcesUiState.Ready
 	val pagerState = rememberPagerState(pageCount = { UNIFIED_SOURCES_TAB_COUNT })
 	val coroutineScope = rememberCoroutineScope()
+	val sourceListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+	val repositoryListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+	val packageListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 	val selectedTab = pagerState.currentPage.coerceIn(0, UNIFIED_SOURCES_TAB_COUNT - 1)
+	val onTabClick: (Int, LazyListState) -> Unit = { tab, listState ->
+		if (tab != UNIFIED_SOURCES_TAB_SOURCES) {
+			onClearSourceSelection()
+		}
+		coroutineScope.launch {
+			if (selectedTab == tab) {
+				listState.animateScrollToItem(0)
+			} else {
+				pagerState.animateScrollToPage(tab)
+			}
+		}
+	}
 	val activeSelectedSourceIds = remember(readyState?.sources, selectedSourceIds) {
 		val visibleSourceIds = readyState?.sources.orEmpty().mapTo(LinkedHashSet()) { it.id }
 		selectedSourceIds intersect visibleSourceIds
@@ -1394,34 +1412,43 @@ fun UnifiedSourcesScreen(
 					SecondaryTabRow(
 						selectedTabIndex = selectedTab,
 						containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+						indicator = {
+							TabRowDefaults.SecondaryIndicator(
+								modifier = Modifier.tabIndicatorLayout { measurable, constraints, tabPositions ->
+									if (tabPositions.isEmpty()) {
+										val placeable = measurable.measure(constraints.copy(minWidth = 0))
+										return@tabIndicatorLayout layout(constraints.maxWidth, placeable.height) {}
+									}
+									val currentPage = pagerState.currentPage.coerceIn(tabPositions.indices)
+									val offset = pagerState.currentPageOffsetFraction
+									val targetPage = (currentPage + sign(offset).toInt()).coerceIn(tabPositions.indices)
+									val fraction = abs(offset)
+									val left = lerp(tabPositions[currentPage].left, tabPositions[targetPage].left, fraction)
+									val right = lerp(tabPositions[currentPage].right, tabPositions[targetPage].right, fraction)
+									val width = (right - left).roundToPx()
+									val placeable = measurable.measure(
+										constraints.copy(minWidth = width, maxWidth = width),
+									)
+									layout(constraints.maxWidth, placeable.height) {
+										placeable.placeRelative(left.roundToPx(), 0)
+									}
+								},
+							)
+						},
 					) {
 						Tab(
 							selected = selectedTab == UNIFIED_SOURCES_TAB_SOURCES,
-							onClick = {
-								coroutineScope.launch {
-									pagerState.animateScrollToPage(UNIFIED_SOURCES_TAB_SOURCES)
-								}
-							},
+							onClick = { onTabClick(UNIFIED_SOURCES_TAB_SOURCES, sourceListState) },
 							text = { Text(stringResource(R.string.sources_tab_title, state.sources.size)) },
 						)
 						Tab(
 							selected = selectedTab == UNIFIED_SOURCES_TAB_REPOSITORIES,
-							onClick = {
-								onClearSourceSelection()
-								coroutineScope.launch {
-									pagerState.animateScrollToPage(UNIFIED_SOURCES_TAB_REPOSITORIES)
-								}
-							},
+							onClick = { onTabClick(UNIFIED_SOURCES_TAB_REPOSITORIES, repositoryListState) },
 							text = { Text(stringResource(R.string.repositories_tab_title, state.repositories.size)) },
 						)
 						Tab(
 							selected = selectedTab == UNIFIED_SOURCES_TAB_PACKAGES,
-							onClick = {
-								onClearSourceSelection()
-								coroutineScope.launch {
-									pagerState.animateScrollToPage(UNIFIED_SOURCES_TAB_PACKAGES)
-								}
-							},
+							onClick = { onTabClick(UNIFIED_SOURCES_TAB_PACKAGES, packageListState) },
 							text = { Text(stringResource(R.string.packages_tab_title, state.packages.size)) },
 						)
 					}
@@ -1454,6 +1481,7 @@ fun UnifiedSourcesScreen(
 							when (page) {
 								UNIFIED_SOURCES_TAB_SOURCES -> UnifiedSourceList(
 									modifier = Modifier.fillMaxSize(),
+									listState = sourceListState,
 									sources = state.sources,
 									onBrowseSource = onBrowseSource,
 									onOpenSourceSettings = onOpenSourceSettings,
@@ -1466,6 +1494,7 @@ fun UnifiedSourcesScreen(
 								)
 								UNIFIED_SOURCES_TAB_REPOSITORIES -> UnifiedRepositoryList(
 									modifier = Modifier.fillMaxSize(),
+									listState = repositoryListState,
 									repositories = state.repositories,
 									onAddRepository = onAddRepository,
 									onRefreshRepository = onRefreshRepository,
@@ -1473,9 +1502,9 @@ fun UnifiedSourcesScreen(
 								)
 								UNIFIED_SOURCES_TAB_PACKAGES -> UnifiedPackageList(
 									modifier = Modifier.fillMaxSize(),
+									listState = packageListState,
 									packages = state.packages,
 									updateAllInProgress = updateAllInProgress,
-									onRefreshPackages = onRefreshPackages,
 									onUpdateAllPackages = onUpdateAllPackages,
 									onPackagePrimaryAction = onPackagePrimaryAction,
 									onPackageSystemInstall = onPackageSystemInstall,
@@ -1677,6 +1706,7 @@ private fun UnifiedSourceSelectionBar(
 @Composable
 private fun UnifiedSourceList(
 	modifier: Modifier = Modifier,
+	listState: LazyListState,
 	sources: List<UnifiedSourceItem>,
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
@@ -1687,58 +1717,68 @@ private fun UnifiedSourceList(
 	onSourceSelectionChange: (Set<String>) -> Unit,
 	onSourcePinnedChange: (String, Boolean) -> Unit,
 ) {
-    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
-	LazyColumn(state = listState,
-		modifier = modifier,
-		contentPadding = PaddingValues(
-			horizontal = if (expressive) 8.dp else 0.dp,
-			vertical = 4.dp,
-		),
-	) {
-		item(key = "source_actions") {
-			LazyRow(
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(bottom = 4.dp),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-			) {
-				item(key = "enable_all_sources") {
-					CompactActionChip(
-						onClick = onEnableAllSources,
-						enabled = sources.isNotEmpty(),
-						label = { Text(stringResource(R.string.unified_sources_enable_all)) },
-					)
+	val horizontalPadding = if (expressive) 8.dp else 0.dp
+	Box(modifier = modifier) {
+		LazyColumn(
+			state = listState,
+			modifier = Modifier.fillMaxSize(),
+			contentPadding = PaddingValues(
+				start = horizontalPadding,
+				top = 4.dp,
+				end = 32.dp,
+				bottom = 4.dp,
+			),
+		) {
+			item(key = "source_actions") {
+				LazyRow(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(bottom = 4.dp),
+					horizontalArrangement = Arrangement.spacedBy(8.dp),
+				) {
+					item(key = "enable_all_sources") {
+						CompactActionChip(
+							onClick = onEnableAllSources,
+							enabled = sources.isNotEmpty(),
+							label = { Text(stringResource(R.string.unified_sources_enable_all)) },
+						)
+					}
+					item(key = "disable_all_sources") {
+						CompactActionChip(
+							onClick = onDisableAllSources,
+							enabled = sources.isNotEmpty(),
+							label = { Text(stringResource(R.string.unified_sources_disable_all)) },
+						)
+					}
 				}
-				item(key = "disable_all_sources") {
-					CompactActionChip(
-						onClick = onDisableAllSources,
-						enabled = sources.isNotEmpty(),
-						label = { Text(stringResource(R.string.unified_sources_disable_all)) },
-					)
+			}
+			items(sources, key = { it.id }) { item ->
+				val isSelected = item.id in selectedSourceIds
+				UnifiedSourceRow(
+					item = item,
+					isSelectionMode = selectedSourceIds.isNotEmpty(),
+					isSelected = isSelected,
+					onSelectionToggle = {
+						onSourceSelectionChange(selectedSourceIds.toggle(item.id))
+					},
+					onBrowseSource = onBrowseSource,
+					onOpenSourceSettings = onOpenSourceSettings,
+					onSourceEnabledChange = onSourceEnabledChange,
+					onSourcePinnedChange = onSourcePinnedChange,
+				)
+				if (expressive) {
+					Spacer(modifier = Modifier.height(3.dp))
+				} else {
+					HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
 				}
 			}
 		}
-		items(sources, key = { it.id }) { item ->
-			val isSelected = item.id in selectedSourceIds
-			UnifiedSourceRow(
-				item = item,
-				isSelectionMode = selectedSourceIds.isNotEmpty(),
-				isSelected = isSelected,
-				onSelectionToggle = {
-					onSourceSelectionChange(selectedSourceIds.toggle(item.id))
-				},
-				onBrowseSource = onBrowseSource,
-				onOpenSourceSettings = onOpenSourceSettings,
-				onSourceEnabledChange = onSourceEnabledChange,
-				onSourcePinnedChange = onSourcePinnedChange,
-			)
-			if (expressive) {
-				Spacer(modifier = Modifier.height(3.dp))
-			} else {
-				HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
-			}
-		}
+		VerticalScrollbar(
+			state = listState,
+			alwaysVisible = true,
+			endInset = 4.dp,
+		)
 	}
 }
 
@@ -1907,61 +1947,63 @@ private fun UnifiedSourceRow(
 @Composable
 private fun UnifiedRepositoryList(
 	modifier: Modifier = Modifier,
+	listState: LazyListState,
 	repositories: List<UnifiedSourceRepositoryItem>,
 	onAddRepository: (UnifiedSourceRepositoryItem?) -> Unit,
 	onRefreshRepository: (UnifiedSourceRepositoryItem) -> Unit,
 	onDeleteRepository: (UnifiedSourceRepositoryItem) -> Unit,
 ) {
-	val listState2 = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
 	val style = rememberUnifiedSourcesVisualStyle()
-	LazyColumn(state = listState2,
-		modifier = modifier,
-		contentPadding = unifiedCardListPadding,
-		verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
-	) {
-		item(key = "add_repository") {
-			Row(
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(vertical = 4.dp),
-			) {
+	Box(modifier = modifier) {
+		LazyColumn(
+			state = listState,
+			modifier = Modifier.fillMaxSize(),
+			contentPadding = unifiedCardListPadding,
+			verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
+		) {
+			item(key = "add_repository") {
+				Row(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(vertical = 4.dp),
+				) {
 					AssistChip(
 						onClick = { onAddRepository(null) },
 						label = { Text(stringResource(R.string.add_repository_prompt)) },
-				)
+					)
+				}
 			}
-		}
-		items(repositories, key = { it.id }) { item ->
-			ElevatedCard(
-				modifier = Modifier.fillMaxWidth(),
-				shape = style.cardShape,
-				colors = CardDefaults.elevatedCardColors(
-					containerColor = if (expressive) {
-						MaterialTheme.colorScheme.surfaceContainerLow
-					} else {
-						MaterialTheme.colorScheme.surface
-					},
-				),
-				elevation = CardDefaults.elevatedCardElevation(
-					defaultElevation = style.cardElevation,
-				),
-			) {
-				Column(
-					modifier = Modifier.padding(unifiedCardContentPadding),
-					verticalArrangement = Arrangement.spacedBy(4.dp),
+			items(repositories, key = { it.id }) { item ->
+				ElevatedCard(
+					modifier = Modifier.fillMaxWidth(),
+					shape = style.cardShape,
+					colors = CardDefaults.elevatedCardColors(
+						containerColor = if (expressive) {
+							MaterialTheme.colorScheme.surfaceContainerLow
+						} else {
+							MaterialTheme.colorScheme.surface
+						},
+					),
+					elevation = CardDefaults.elevatedCardElevation(
+						defaultElevation = style.cardElevation,
+					),
 				) {
-					Row(
-						verticalAlignment = Alignment.CenterVertically,
-						horizontalArrangement = Arrangement.spacedBy(8.dp),
+					Column(
+						modifier = Modifier.padding(unifiedCardContentPadding),
+						verticalArrangement = Arrangement.spacedBy(4.dp),
 					) {
-						Text(
-							text = item.name,
-							modifier = Modifier.weight(1f),
-							style = MaterialTheme.typography.titleSmall,
-							fontWeight = FontWeight.SemiBold,
-						)
-						if (item.isConfigured) {
+						Row(
+							verticalAlignment = Alignment.CenterVertically,
+							horizontalArrangement = Arrangement.spacedBy(8.dp),
+						) {
+							Text(
+								text = item.name,
+								modifier = Modifier.weight(1f),
+								style = MaterialTheme.typography.titleSmall,
+								fontWeight = FontWeight.SemiBold,
+							)
+							if (item.isConfigured) {
 								AssistChip(
 									onClick = { onRefreshRepository(item) },
 									label = { Text(stringResource(R.string.refresh_action)) },
@@ -1976,40 +2018,46 @@ private fun UnifiedRepositoryList(
 									label = { Text(stringResource(R.string.add)) },
 								)
 							}
-					}
-					Text(
-						text = "${item.kind.displayLabel()} · ${item.locationType.displayLabel()}",
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-					)
-					Text(
-						text = item.url,
-						style = MaterialTheme.typography.bodySmall,
-						color = MaterialTheme.colorScheme.onSurfaceVariant,
-						maxLines = 1,
-						overflow = TextOverflow.Ellipsis,
-					)
-					item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
+						}
 						Text(
-							text = stringResource(R.string.unified_sources_repository_last_refresh_failed, error),
+							text = "${item.kind.displayLabel()} · ${item.locationType.displayLabel()}",
 							style = MaterialTheme.typography.bodySmall,
-							color = MaterialTheme.colorScheme.error,
-							maxLines = 2,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+						)
+						Text(
+							text = item.url,
+							style = MaterialTheme.typography.bodySmall,
+							color = MaterialTheme.colorScheme.onSurfaceVariant,
+							maxLines = 1,
 							overflow = TextOverflow.Ellipsis,
 						)
+						item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
+							Text(
+								text = stringResource(R.string.unified_sources_repository_last_refresh_failed, error),
+								style = MaterialTheme.typography.bodySmall,
+								color = MaterialTheme.colorScheme.error,
+								maxLines = 2,
+								overflow = TextOverflow.Ellipsis,
+							)
+						}
 					}
 				}
 			}
 		}
+		VerticalScrollbar(
+			state = listState,
+			alwaysVisible = true,
+			endInset = 4.dp,
+		)
 	}
 }
 
 @Composable
 private fun UnifiedPackageList(
 	modifier: Modifier = Modifier,
+	listState: LazyListState,
 	packages: List<UnifiedSourcePackageItem>,
 	updateAllInProgress: Boolean,
-	onRefreshPackages: () -> Unit,
 	onUpdateAllPackages: () -> Unit,
 	onPackagePrimaryAction: (String) -> Unit,
 	onPackageSystemInstall: (String) -> Unit,
@@ -2017,54 +2065,59 @@ private fun UnifiedPackageList(
 	onPackageCancelInstall: (String) -> Unit,
 	onImportLocalJar: () -> Unit,
 ) {
-	val listState3 = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
-	LazyColumn(state = listState3,
-		modifier = modifier,
-		contentPadding = unifiedCardListPadding,
-		verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
-	) {
-		item(key = "package_actions") {
-			LazyRow(
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(bottom = 4.dp),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-			) {
-				item(key = "refresh_packages") {
+	Box(modifier = modifier) {
+		LazyColumn(
+			state = listState,
+			modifier = Modifier.fillMaxSize(),
+			contentPadding = unifiedCardListPadding,
+			verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
+		) {
+			item(key = "package_actions") {
+				LazyRow(
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(bottom = 4.dp),
+					horizontalArrangement = Arrangement.spacedBy(8.dp),
+				) {
+					item(key = "update_all_packages") {
 						CompactActionChip(
-						onClick = onRefreshPackages,
-						label = { Text(stringResource(R.string.refresh_packages)) },
+							onClick = onUpdateAllPackages,
+							label = {
+								Text(
+									stringResource(
+										if (updateAllInProgress) {
+											R.string.cancel_update_all_packages
+										} else {
+											R.string.update_all_packages
+										},
+									),
+								)
+							},
 						)
-				}
-				item(key = "update_all_packages") {
+					}
+					item(key = "import_local_jar") {
 						CompactActionChip(
-						onClick = onUpdateAllPackages,
-						label = {
-							Text(
-								stringResource(
-									if (updateAllInProgress) R.string.cancel_update_all_packages else R.string.update_all_packages,
-								),
-							)
-						},
+							onClick = onImportLocalJar,
+							label = { Text(stringResource(R.string.import_local_jar)) },
 						)
-				}
-				item(key = "import_local_jar") {
-						CompactActionChip(
-						onClick = onImportLocalJar,
-						label = { Text(stringResource(R.string.import_local_jar)) },
-						)
+					}
 				}
 			}
+			items(packages, key = { it.id }) { item ->
+				UnifiedPackageRow(
+					item = item,
+					onPrimaryAction = { onPackagePrimaryAction(item.id) },
+					onSystemInstall = { onPackageSystemInstall(item.id) },
+					onUninstall = { onPackageUninstall(item.id) },
+					onCancelInstall = { onPackageCancelInstall(item.id) },
+				)
+			}
 		}
-		items(packages, key = { it.id }) { item ->
-			UnifiedPackageRow(
-				item = item,
-				onPrimaryAction = { onPackagePrimaryAction(item.id) },
-				onSystemInstall = { onPackageSystemInstall(item.id) },
-				onUninstall = { onPackageUninstall(item.id) },
-				onCancelInstall = { onPackageCancelInstall(item.id) },
-			)
-		}
+		VerticalScrollbar(
+			state = listState,
+			alwaysVisible = true,
+			endInset = 4.dp,
+		)
 	}
 }
 

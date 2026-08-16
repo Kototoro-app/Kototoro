@@ -291,10 +291,6 @@ class ExtensionsBrowserViewModel @Inject constructor(
 		}
 	}
 
-	fun onInstallActivityResult() {
-		handleBatchNextAction(batchUpdateState.onInstallActivityResult())
-	}
-
 	private fun requestInstall(item: ExtensionsBrowserListItem.Entry, fromBatch: Boolean) {
 		if (item.extension.pkgName in installService.downloadStates.value) {
 			return
@@ -306,16 +302,25 @@ class ExtensionsBrowserViewModel @Inject constructor(
 			try {
 				when (val result = installService.install(item.extension)) {
 					is ExtensionInstallResult.RequiresInstaller -> {
-						if (fromBatch) {
-							batchUpdateState.markInstallerIntentDispatched()
+						val userAction = result.session.awaitUserAction()
+						if (userAction != null) {
+							if (fromBatch) {
+								batchUpdateState.markInstallerIntentDispatched()
+							}
+							onInstallIntent.call(userAction)
 						}
-						onInstallIntent.call(result.intent)
+						result.session.awaitCompletion()
+						refresh()
+						onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
+						if (fromBatch) {
+							handleBatchNextAction(batchUpdateState.finishCurrentInstall())
+						}
 					}
 					ExtensionInstallResult.Completed -> {
 						refresh()
 						onMessage.call(appContext.getString(R.string.unified_sources_package_installed))
 						if (fromBatch) {
-							handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+							handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 						}
 					}
 				}
@@ -324,13 +329,13 @@ class ExtensionsBrowserViewModel @Inject constructor(
 					onMessage.call(appContext.getString(R.string.canceled))
 				}
 				if (fromBatch) {
-					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+					handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 				}
 			} catch (e: Throwable) {
 				errorEvent.call(e)
 				if (fromBatch) {
 					onMessage.call(appContext.getString(R.string.extension_update_failed, item.name))
-					handleBatchNextAction(batchUpdateState.onInstallInterrupted())
+					handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 				}
 			}
 		}
