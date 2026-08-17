@@ -235,8 +235,8 @@ import org.skepsun.kototoro.favourites.ui.categories.select.compose.FavoriteCate
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
-import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsSheetContent
 import org.skepsun.kototoro.stats.ui.sheet.ContentStatsViewModel
+import org.skepsun.kototoro.stats.ui.sheet.compose.ContentStatsHistoryChart
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -350,6 +350,7 @@ private fun DetailsScreenContent(
 ) {
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
+    val localSize by viewModel.localSize.collectAsStateWithLifecycle()
     val readingRecordSnapshot by viewModel.readingRecordSnapshot.collectAsStateWithLifecycle()
     val translationUiState by viewModel.translationUiState.collectAsStateWithLifecycle()
     val chaptersPaneControlsUiState by viewModel.chaptersPaneControlsUiState.collectAsStateWithLifecycle()
@@ -502,7 +503,6 @@ private fun DetailsScreenContent(
     var pendingTagSearch by remember { mutableStateOf<ContentTag?>(null) }
     var showFavoriteDialog by remember { mutableStateOf(false) }
     var showDownloadDialog by remember { mutableStateOf(false) }
-    var showStatsDialog by remember { mutableStateOf(false) }
     var showReadingRecordSheet by remember { mutableStateOf(false) }
     var showCommentsDialog by remember { mutableStateOf(false) }
     var showReviewsDialog by remember { mutableStateOf(false) }
@@ -1240,7 +1240,6 @@ private fun DetailsScreenContent(
                                         hasTranslationCache = hasTranslationCache,
                                         isShowingTranslation = isShowingTranslation,
                                         isTranslating = isTranslating,
-                                        isStatsAvailable = isWorkActionEnabled && isStatsAvailable,
                                         hasMetadataBrowserTarget = metadataBrowserTarget != null,
                                         hasLocalBrowserTarget = isWorkActionEnabled && localBrowserTarget != null,
                                         localBrowserTitleRes = when (contentType) {
@@ -1279,10 +1278,6 @@ private fun DetailsScreenContent(
                                                             ),
                                                         )
                                                     }
-                                                }
-
-                                                DetailsAction.OpenStatistics -> {
-                                                    showStatsDialog = true
                                                 }
 
                                                 else -> handleActionClick(action)
@@ -1348,6 +1343,7 @@ private fun DetailsScreenContent(
                                     bottomSpacerHeight = 40.dp,
                                     preferLightweightFirstFrame = false,
                                     mangaDetails = mangaDetails,
+                                    localSize = localSize,
                                     favouriteCategories = favouriteCategories,
                                     historyInfo = historyInfo,
                                     linkedTrackingItems = linkedTrackingItems,
@@ -1532,6 +1528,7 @@ private fun DetailsScreenContent(
                                 bottomSpacerHeight = if (isWorkDetails) compactPaneCollapsedHeight + 28.dp else 28.dp,
                                 preferLightweightFirstFrame = false,
                                 mangaDetails = mangaDetails,
+                                localSize = localSize,
                                 favouriteCategories = favouriteCategories,
                                 historyInfo = historyInfo,
                                 linkedTrackingItems = linkedTrackingItems,
@@ -1829,21 +1826,18 @@ private fun DetailsScreenContent(
             )
             }
 
-            if (showStatsDialog && isWorkActionEnabled && content != null) {
-                val statsViewModel: ContentStatsViewModel = hiltViewModel(key = "details-content-stats-${content.id}")
-                LaunchedEffect(content.id) {
-                    statsViewModel.initialize(content)
-                }
-                DetailsStatsSheet(
-                    manga = content,
-                    viewModel = statsViewModel,
-                    onDismissRequest = { showStatsDialog = false },
-                    onOpenDetails = { showStatsDialog = false },
-                )
-            }
-
             if (showReadingRecordSheet && isWorkActionEnabled && content != null) {
+                val statsViewModel = if (isStatsAvailable) {
+                    hiltViewModel<ContentStatsViewModel>(key = "details-reading-stats-${content.id}")
+                } else {
+                    null
+                }
+                LaunchedEffect(content.id, statsViewModel) {
+                    statsViewModel?.initialize(content)
+                }
                 ReadingRecordSheet(
+                    manga = content,
+                    statsViewModel = statsViewModel,
                     snapshot = readingRecordSnapshot,
                     chapterTitle = { chapterId ->
                         content.chapters
@@ -2062,25 +2056,6 @@ private fun DetailsTranslucentBottomSheet(
                 content = content,
             )
         }
-    }
-}
-
-@Composable
-private fun DetailsStatsSheet(
-    manga: Content,
-    viewModel: ContentStatsViewModel,
-    onDismissRequest: () -> Unit,
-    onOpenDetails: () -> Unit,
-) {
-    DetailsTranslucentBottomSheet(
-        onDismissRequest = onDismissRequest,
-    ) {
-        ContentStatsSheetContent(
-            manga = manga,
-            viewModel = viewModel,
-            onOpenDetails = onOpenDetails,
-            modifier = Modifier,
-        )
     }
 }
 
@@ -2580,6 +2555,7 @@ private fun TrackingCommentsSheet(
 @Composable
 private fun DetailsScrollableContent(
     mangaDetails: org.skepsun.kototoro.details.data.ContentDetails?,
+    localSize: Long,
     historyInfo: HistoryInfo,
     favouriteCategories: Set<org.skepsun.kototoro.core.model.FavouriteCategory>,
     linkedTrackingItems: List<org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel>,
@@ -2662,6 +2638,7 @@ private fun DetailsScrollableContent(
         }
         DetailsHeader(
             mangaDetails = mangaDetails,
+            localSize = localSize,
             favouriteCategories = favouriteCategories,
             historyInfo = historyInfo,
             linkedTrackingItems = linkedTrackingItems,
@@ -3921,6 +3898,9 @@ private fun ExpandedPaneUtilityDock(
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.reverse)) },
                         leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_sort_desc)
+                        },
+                        trailingIcon = {
                             MenuSelectionIndicator(selected = isChaptersReversed)
                         },
                         onClick = {
@@ -3931,6 +3911,9 @@ private fun ExpandedPaneUtilityDock(
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.chapters_grid_view)) },
                         leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_grid)
+                        },
+                        trailingIcon = {
                             MenuSelectionIndicator(selected = isChaptersInGridView)
                         },
                         onClick = {
@@ -3941,6 +3924,9 @@ private fun ExpandedPaneUtilityDock(
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.hide_read_chapters)) },
                         leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_eye_off)
+                        },
+                        trailingIcon = {
                             MenuSelectionIndicator(selected = isHideReadChapters)
                         },
                         onClick = {
@@ -3952,6 +3938,9 @@ private fun ExpandedPaneUtilityDock(
                         CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.merge_branch_chapters)) },
                             leadingIcon = {
+                                DetailsMenuIcon(R.drawable.ic_list_group)
+                            },
+                            trailingIcon = {
                                 MenuSelectionIndicator(selected = isMergeRepeatedChapters)
                             },
                             onClick = {
@@ -3963,6 +3952,9 @@ private fun ExpandedPaneUtilityDock(
                     if (isChaptersInGridView) {
                         CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.display_options)) },
+                            leadingIcon = {
+                                DetailsMenuIcon(R.drawable.ic_settings)
+                            },
                             onClick = {
                                 expanded = false
                                 onShowGridSizeControls()
@@ -3973,6 +3965,9 @@ private fun ExpandedPaneUtilityDock(
                         CompactDropdownMenuItem(
                             text = { Text(stringResource(R.string.downloaded)) },
                             leadingIcon = {
+                                DetailsMenuIcon(R.drawable.ic_download)
+                            },
+                            trailingIcon = {
                                 MenuSelectionIndicator(selected = isDownloadedOnly)
                             },
                             onClick = {
@@ -4015,6 +4010,15 @@ private fun MenuSelectionIndicator(
             )
         }
     }
+}
+
+@Composable
+private fun DetailsMenuIcon(iconRes: Int) {
+    Icon(
+        painter = rememberSafePainter(iconRes),
+        contentDescription = null,
+        modifier = Modifier.size(20.dp),
+    )
 }
 
 @Composable
@@ -4097,7 +4101,6 @@ sealed interface DetailsAction {
     ) : DetailsAction
     data object OpenMetadataInBrowser : DetailsAction
     data object OpenLocalSourceInBrowser : DetailsAction
-    data object OpenStatistics : DetailsAction
     data object OpenReadingRecord : DetailsAction
     data object ToggleSafe : DetailsAction
     data object ToggleList : DetailsAction
@@ -4141,7 +4144,6 @@ private fun DetailsAction.isWorkOnlyAction(): Boolean = when (this) {
     DetailsAction.OpenAlternatives,
     DetailsAction.OpenOnlineVariant,
     DetailsAction.OpenLocalSourceInBrowser,
-    DetailsAction.OpenStatistics,
     DetailsAction.OpenReadingRecord,
     DetailsAction.ToggleList,
     DetailsAction.ToggleGrid,
@@ -4358,6 +4360,9 @@ private fun ReadDock(
                 if (canOpenIncognito) {
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.incognito_mode)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_incognito)
+                        },
                         onClick = {
                             expanded = false
                             onIncognitoClick()
@@ -4367,6 +4372,9 @@ private fun ReadDock(
                 if (canForgetHistory) {
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.remove_from_history)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_delete)
+                        },
                         onClick = {
                             expanded = false
                             onForgetClick()
@@ -4376,6 +4384,9 @@ private fun ReadDock(
                 if (isDownloadAvailable) {
                     CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.download)) },
+                        leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_download)
+                        },
                         onClick = {
                             expanded = false
                             onDownloadClick()
@@ -4386,9 +4397,12 @@ private fun ReadDock(
                     HorizontalDivider()
                 }
                 if (showMergeRepeatedChapters) {
-                        CompactDropdownMenuItem(
+                    CompactDropdownMenuItem(
                         text = { Text(stringResource(R.string.merge_branch_chapters)) },
                         leadingIcon = {
+                            DetailsMenuIcon(R.drawable.ic_list_group)
+                        },
+                        trailingIcon = {
                             MenuSelectionIndicator(selected = isMergeRepeatedChapters)
                         },
                         onClick = {
@@ -4413,6 +4427,9 @@ private fun ReadDock(
                                 )
                             },
                             leadingIcon = {
+                                DetailsMenuIcon(R.drawable.ic_source_empty)
+                            },
+                            trailingIcon = {
                                 if (branch.isSelected) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
@@ -4475,6 +4492,8 @@ private fun rememberDetailsSheetGlassPrefs() =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReadingRecordSheet(
+    manga: Content,
+    statsViewModel: ContentStatsViewModel?,
     snapshot: ReadingRecordSnapshot,
     chapterTitle: (Long) -> String,
     progressPercent: Float,
@@ -4512,6 +4531,7 @@ private fun ReadingRecordSheet(
         sheetState = sheetState,
         sheetGesturesEnabled = false,
         containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
         shape = RoundedCornerShape(0.dp),
         dragHandle = null,
@@ -4522,6 +4542,7 @@ private fun ReadingRecordSheet(
                 .fillMaxWidth(),
             shape = RoundedCornerShape(topStart = if (expressive) 36.dp else 28.dp, topEnd = if (expressive) 36.dp else 28.dp),
             color = sheetColors.containerColor.detailsPanelContainerColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
             border = sheetColors.border,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
@@ -4552,6 +4573,22 @@ private fun ReadingRecordSheet(
                         lastReadAt = lastReadAt,
                         progress = progress,
                     )
+                }
+                if (statsViewModel != null) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.reading_stats),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    item {
+                        ContentStatsHistoryChart(
+                            manga = manga,
+                            viewModel = statsViewModel,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 if (snapshot.chapters.isNotEmpty()) {
                     item {
@@ -4960,7 +4997,6 @@ private fun DetailsOverflowMenu(
     hasTranslationCache: Boolean,
     isShowingTranslation: Boolean,
     isTranslating: Boolean,
-    isStatsAvailable: Boolean,
     hasMetadataBrowserTarget: Boolean,
     hasLocalBrowserTarget: Boolean,
     localBrowserTitleRes: Int,
@@ -4998,7 +5034,7 @@ private fun DetailsOverflowMenu(
             anchorBounds = menuAnchorBounds,
         ) {
             if (showTranslateAction) {
-                        CompactDropdownMenuItem(
+                CompactDropdownMenuItem(
                     text = {
                         Text(
                             stringResource(
@@ -5011,6 +5047,9 @@ private fun DetailsOverflowMenu(
                                 },
                             ),
                         )
+                    },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_translate)
                     },
                     enabled = !isTranslating,
                     onClick = {
@@ -5028,6 +5067,9 @@ private fun DetailsOverflowMenu(
             if (isReadingRecordAvailable) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.reading_record)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_history)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.OpenReadingRecord)
@@ -5036,6 +5078,9 @@ private fun DetailsOverflowMenu(
             }
             CompactDropdownMenuItem(
                 text = { Text(stringResource(if (isNsfw) R.string.mark_as_safe else R.string.mark_as_nsfw)) },
+                leadingIcon = {
+                    DetailsMenuIcon(R.drawable.ic_nsfw)
+                },
                 onClick = {
                     expanded = false
                     onActionClick(DetailsAction.ToggleSafe)
@@ -5044,6 +5089,9 @@ private fun DetailsOverflowMenu(
             if (isDeleteLocalAvailable) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.delete)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_delete)
+                    },
                     onClick = {
                         expanded = false
                         if (contentTitle != null) {
@@ -5055,6 +5103,9 @@ private fun DetailsOverflowMenu(
             if (isEditOverrideAvailable) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.edit)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_edit)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.EditOverride)
@@ -5064,6 +5115,9 @@ private fun DetailsOverflowMenu(
             if (isShortcutSupported) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.create_shortcut)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_shortcut)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.CreateShortcut)
@@ -5072,6 +5126,9 @@ private fun DetailsOverflowMenu(
             }
             CompactDropdownMenuItem(
                 text = { Text(stringResource(R.string.find_similar)) },
+                leadingIcon = {
+                    DetailsMenuIcon(R.drawable.ic_search)
+                },
                 onClick = {
                     expanded = false
                     onActionClick(DetailsAction.FindSimilar)
@@ -5080,6 +5137,9 @@ private fun DetailsOverflowMenu(
             if (hasOnlineVariant) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.online_variant)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_cloud_download)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.OpenOnlineVariant)
@@ -5089,6 +5149,9 @@ private fun DetailsOverflowMenu(
             if (hasMetadataBrowserTarget) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(R.string.open_metadata_in_browser)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_open_external)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.OpenMetadataInBrowser)
@@ -5098,18 +5161,12 @@ private fun DetailsOverflowMenu(
             if (hasLocalBrowserTarget) {
                 CompactDropdownMenuItem(
                     text = { Text(stringResource(localBrowserTitleRes)) },
+                    leadingIcon = {
+                        DetailsMenuIcon(R.drawable.ic_open_external)
+                    },
                     onClick = {
                         expanded = false
                         onActionClick(DetailsAction.OpenLocalSourceInBrowser)
-                    },
-                )
-            }
-            if (isStatsAvailable) {
-                CompactDropdownMenuItem(
-                    text = { Text(stringResource(R.string.statistics)) },
-                    onClick = {
-                        expanded = false
-                        onActionClick(DetailsAction.OpenStatistics)
                     },
                 )
             }

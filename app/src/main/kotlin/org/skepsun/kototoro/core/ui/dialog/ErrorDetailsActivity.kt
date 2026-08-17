@@ -2,11 +2,16 @@ package org.skepsun.kototoro.core.ui.dialog
 
 import android.os.Bundle
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import dagger.hilt.android.AndroidEntryPoint
 import org.skepsun.kototoro.R
@@ -39,6 +44,12 @@ class ErrorDetailsActivity : BaseComposeActivity() {
                         exception.message?.let { Text(it) }
                         if (causeUrl != null) {
                             TextButton(onClick = { router.openBrowser(causeUrl, null, null) }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_open_external),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
                                 Text(getString(R.string.open_in_browser))
                             }
                         }

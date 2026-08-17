@@ -100,7 +100,6 @@ internal fun handleDetailsAction(
         is DetailsAction.IgnoreTrackingSuggestion -> viewModel.ignoreTrackingSuggestion(action.match)
         is DetailsAction.RemoveTrackingMatch -> viewModel.removeTrackingMatch(action.match)
         DetailsAction.Download -> Unit
-        DetailsAction.OpenStatistics -> Unit
         DetailsAction.OpenReadingRecord -> Unit
 
         DetailsAction.ToggleList,

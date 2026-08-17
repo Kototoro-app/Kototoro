@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -598,6 +600,12 @@ private fun MetadataChapterDialog(
 		confirmButton = {
 			if (chapter.url.isNotBlank()) {
 				androidx.compose.material3.TextButton(onClick = onOpenBrowser) {
+					Icon(
+						painter = painterResource(R.drawable.ic_open_external),
+						contentDescription = null,
+						modifier = Modifier.size(18.dp),
+					)
+					Spacer(Modifier.width(8.dp))
 					Text(stringResource(R.string.open_in_browser))
 				}
 			}

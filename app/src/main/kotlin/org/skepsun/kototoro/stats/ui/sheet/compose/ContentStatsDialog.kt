@@ -257,6 +257,27 @@ fun ContentStatsSheetContent(
 }
 
 @Composable
+fun ContentStatsHistoryChart(
+    manga: Content,
+    viewModel: ContentStatsViewModel,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val stats by viewModel.stats.collectAsState()
+    val startDate by viewModel.startDate.collectAsState()
+    val barColor = remember(manga) {
+        Color(KototoroColors.ofContent(context, manga))
+    }
+
+    ContentStatsChart(
+        startDate = startDate,
+        stats = stats.toList(),
+        barColor = barColor,
+        modifier = modifier,
+    )
+}
+
+@Composable
 private fun ContentStatsBody(
     startDate: DateTimeAgo?,
     totalDuration: Long,
@@ -267,8 +288,47 @@ private fun ContentStatsBody(
     barColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        ContentStatsChart(
+            startDate = startDate,
+            stats = stats,
+            barColor = barColor,
+        )
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ContentStatsMetric(
+                value = formatContentStatsDuration(totalDuration),
+                label = stringResource(R.string.stats_total_time),
+                modifier = Modifier.weight(1f),
+            )
+            ContentStatsMetric(
+                value = sessionCount.toString(),
+                label = stringResource(R.string.stats_sessions),
+                modifier = Modifier.weight(1f),
+            )
+            ContentStatsMetric(
+                value = units.toString(),
+                label = kind.unitLabel(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContentStatsChart(
+    startDate: DateTimeAgo?,
+    stats: List<Int>,
+    barColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -292,27 +352,6 @@ private fun ContentStatsBody(
                 text = it.format(context),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            ContentStatsMetric(
-                value = formatContentStatsDuration(totalDuration),
-                label = stringResource(R.string.stats_total_time),
-                modifier = Modifier.weight(1f),
-            )
-            ContentStatsMetric(
-                value = sessionCount.toString(),
-                label = stringResource(R.string.stats_sessions),
-                modifier = Modifier.weight(1f),
-            )
-            ContentStatsMetric(
-                value = units.toString(),
-                label = kind.unitLabel(),
-                modifier = Modifier.weight(1f),
             )
         }
     }

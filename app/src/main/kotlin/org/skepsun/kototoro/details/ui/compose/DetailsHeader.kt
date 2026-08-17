@@ -71,7 +71,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -148,7 +147,6 @@ import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.discover.ui.details.LocalSearchState
@@ -186,6 +184,7 @@ private fun Color.detailsButtonContainerColor(): Color = withDetailsMinAlpha(0.8
 @Composable
 fun DetailsHeader(
     mangaDetails: ContentDetails?,
+    localSize: Long,
     historyInfo: HistoryInfo,
     favouriteCategories: Set<FavouriteCategory>,
     linkedTrackingItems: List<LinkedTrackingItemUiModel>,
@@ -291,17 +290,9 @@ fun DetailsHeader(
         "-"
     }
     val localContent = mangaDetails?.local
-    val onDeviceSizeLabel by produceState<String?>(
-        initialValue = null,
-        key1 = localContent?.file?.absolutePath,
-    ) {
-        val file = localContent?.file
-        value = if (file != null && file.exists()) {
-            Formatter.formatFileSize(context, file.computeSize())
-        } else {
-            null
-        }
-    }
+    val onDeviceSizeLabel = localSize
+        .takeIf { it > 0L }
+        ?.let { Formatter.formatFileSize(context, it) }
     val metadataSourceOption = metadataSourceOptions.firstOrNull { it.isSelected } ?: metadataSourceOptions.firstOrNull()
     val readingSourceOption = readingSourceOptions.firstOrNull { it.isSelected } ?: readingSourceOptions.firstOrNull()
     val visibleTrackingSuggestion = trackingSuggestion?.takeUnless { suggestion ->
@@ -442,7 +433,7 @@ fun DetailsHeader(
                 showNavigationIndicator = true,
             ),
         )
-        if (localContent != null) {
+        if (localContent != null || localSize > 0L) {
             add(
                 DetailsInfoItem(
                     label = stringResource(R.string.on_device),
