@@ -238,7 +238,7 @@ fun AppearanceSettingsScreen(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = 8.dp,
+                top = settingsContentTopInset(8.dp),
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -704,7 +704,7 @@ private fun AppearanceSubpage(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = 8.dp,
+                top = settingsContentTopInset(8.dp),
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),
         ) {

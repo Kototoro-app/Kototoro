@@ -33,6 +33,7 @@ fun AISettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .padding(top = settingsContentTopInset())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

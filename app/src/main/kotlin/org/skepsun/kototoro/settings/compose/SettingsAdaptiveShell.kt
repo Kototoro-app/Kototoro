@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.settings.SettingsDestination
 
 private val SettingsListPaneWidth = 360.dp
@@ -55,21 +57,50 @@ private fun SettingsSinglePaneShell(
 	destinationContent: @Composable (SettingsDestination) -> Unit,
 ) {
 	val saveableStateHolder = rememberSaveableStateHolder()
+	if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+		destination?.let { targetDestination ->
+			SettingsSinglePaneContent(
+				destination = targetDestination,
+				destinationKey = destinationKey,
+				modifier = modifier,
+				saveableStateHolder = saveableStateHolder,
+				destinationContent = destinationContent,
+			)
+		}
+		return
+	}
 	AnimatedContent(
 		targetState = destination,
 		modifier = modifier,
 		label = "settings_page",
 	) { targetDestination ->
 		if (targetDestination != null) {
-			Box(
-				modifier = Modifier
-					.fillMaxSize()
-					.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
-			) {
-				saveableStateHolder.SaveableStateProvider(destinationKey(targetDestination)) {
-					destinationContent(targetDestination)
-				}
-			}
+			SettingsSinglePaneContent(
+				destination = targetDestination,
+				destinationKey = destinationKey,
+				modifier = Modifier.fillMaxSize(),
+				saveableStateHolder = saveableStateHolder,
+				destinationContent = destinationContent,
+			)
+		}
+	}
+}
+
+@Composable
+private fun SettingsSinglePaneContent(
+	destination: SettingsDestination,
+	destinationKey: (SettingsDestination) -> String,
+	modifier: Modifier,
+	saveableStateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+	destinationContent: @Composable (SettingsDestination) -> Unit,
+) {
+	Box(
+		modifier = modifier
+			.fillMaxSize()
+			.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+	) {
+		saveableStateHolder.SaveableStateProvider(destinationKey(destination)) {
+			destinationContent(destination)
 		}
 	}
 }

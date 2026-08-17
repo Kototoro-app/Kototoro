@@ -24,6 +24,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "appearance",
 				iconRes = R.drawable.ic_appearance,
+				iosIconColor = SettingsRootIconColor.BLUE,
 				title = context.getString(R.string.appearance),
 				summary = context.summaryOf(R.string.theme, R.string.list_mode, R.string.language),
 				onClick = { onOpenDestination(SettingsDestination.AppearanceSettings) },
@@ -31,6 +32,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "reader",
 				iconRes = R.drawable.ic_book_page,
+				iosIconColor = SettingsRootIconColor.ORANGE,
 				title = context.getString(R.string.reader_settings),
 				summary = context.summaryOf(R.string.read_mode, R.string.scale_mode, R.string.switch_pages),
 				onClick = { onOpenDestination(SettingsDestination.ReaderSettings) },
@@ -38,6 +40,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "ai",
 				iconRes = R.drawable.ic_auto_fix,
+				iosIconColor = SettingsRootIconColor.PURPLE,
 				title = context.getString(R.string.ai_settings),
 				summary = context.getString(R.string.ai_settings_entry_summary),
 				onClick = { onOpenDestination(SettingsDestination.AISettings) },
@@ -45,6 +48,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "playback",
 				iconRes = R.drawable.ic_play,
+				iosIconColor = SettingsRootIconColor.RED,
 				title = context.getString(R.string.playback_settings),
 				summary = context.summaryOf(R.string.video_decoder_mode, R.string.video_cache_size),
 				onClick = { onOpenDestination(SettingsDestination.PlaybackSettings) },
@@ -58,6 +62,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "remote_sources",
 				iconRes = R.drawable.ic_manga_source,
+				iosIconColor = SettingsRootIconColor.GREEN,
 				title = context.getString(R.string.remote_sources),
 				summary = contentSummary,
 				onClick = { onOpenDestination(SettingsDestination.SourcesSettings) },
@@ -65,6 +70,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "extension_management",
 				iconRes = R.drawable.ic_extension,
+				iosIconColor = SettingsRootIconColor.INDIGO,
 				title = context.getString(R.string.extension_management),
 				summary = context.getString(R.string.extension_management_summary),
 				onClick = { onOpenDestination(SettingsDestination.UnifiedSources()) },
@@ -72,6 +78,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "downloads",
 				iconRes = R.drawable.ic_download,
+				iosIconColor = SettingsRootIconColor.BLUE,
 				title = context.getString(R.string.downloads),
 				summary = context.summaryOf(R.string.manga_save_location, R.string.downloads_wifi_only),
 				onClick = { onOpenDestination(SettingsDestination.DownloadsSettings) },
@@ -85,6 +92,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "spaces",
 				iconRes = R.drawable.ic_list_group,
+				iosIconColor = SettingsRootIconColor.ORANGE,
 				title = context.getString(R.string.spaces),
 				summary = context.getString(R.string.spaces_settings_summary),
 				onClick = { onOpenDestination(SettingsDestination.SpacesSettings) },
@@ -92,6 +100,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "tracking_accounts",
 				iconRes = R.drawable.ic_user,
+				iosIconColor = SettingsRootIconColor.CYAN,
 				title = context.getString(R.string.tracking_accounts),
 				summary = context.summaryOf(R.string.tracking, R.string.preferred_tracking_site),
 				onClick = { onOpenDestination(SettingsDestination.UsersSettings) },
@@ -99,6 +108,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "sync",
 				iconRes = R.drawable.ic_sync,
+				iosIconColor = SettingsRootIconColor.GREEN,
 				title = context.getString(R.string.sync_settings),
 				summary = context.getString(R.string.sync_settings_summary),
 				onClick = { onOpenDestination(SettingsDestination.SyncSettings) },
@@ -106,6 +116,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "backups_settings",
 				iconRes = R.drawable.ic_backup_restore,
+				iosIconColor = SettingsRootIconColor.TEAL,
 				title = context.getString(R.string.backup_restore),
 				summary = context.summaryOf(R.string.create_backup, R.string.restore_backup, R.string.webdav_integration),
 				onClick = { onOpenDestination(SettingsDestination.BackupsSettings) },
@@ -119,6 +130,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "network",
 				iconRes = R.drawable.ic_usage,
+				iosIconColor = SettingsRootIconColor.GRAY,
 				title = context.getString(R.string.storage_and_network),
 				summary = context.summaryOf(R.string.storage_usage, R.string.proxy, R.string.prefetch_content),
 				onClick = { onOpenDestination(SettingsDestination.StorageAndNetworkSettings) },
@@ -126,6 +138,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "tracker",
 				iconRes = R.drawable.ic_feed,
+				iosIconColor = SettingsRootIconColor.RED,
 				title = context.getString(R.string.check_for_new_chapters),
 				summary = context.summaryOf(R.string.track_sources, R.string.notifications_settings),
 				onClick = { onOpenDestination(SettingsDestination.TrackerSettings) },
@@ -133,6 +146,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "services",
 				iconRes = R.drawable.ic_services,
+				iosIconColor = SettingsRootIconColor.PURPLE,
 				title = context.getString(R.string.services),
 				summary = context.summaryOf(R.string.suggestions, R.string.reading_stats),
 				onClick = { onOpenDestination(SettingsDestination.ServicesSettings) },
@@ -140,6 +154,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "entity_organize_settings",
 				iconRes = R.drawable.ic_select_group,
+				iosIconColor = SettingsRootIconColor.ORANGE,
 				title = context.getString(R.string.entity_organize_title),
 				summary = context.getString(R.string.entity_organize_settings_summary),
 				onClick = { onOpenDestination(SettingsDestination.EntityOrganizeSettings) },
@@ -153,6 +168,7 @@ fun buildSettingsRootSections(
 			settingsRootItem(
 				key = "help_feedback",
 				iconRes = R.drawable.ic_info_outline,
+				iosIconColor = SettingsRootIconColor.BLUE,
 				title = context.getString(R.string.help_and_feedback),
 				summary = context.getString(R.string.app_version, BuildConfig.VERSION_NAME),
 				onClick = { onOpenDestination(SettingsDestination.AboutSettings) },
@@ -166,6 +182,7 @@ fun buildSettingsRootSections(
 private fun settingsRootItem(
 	key: String,
 	iconRes: Int,
+	iosIconColor: SettingsRootIconColor,
 	title: String,
 	summary: String,
 	onClick: () -> Unit,
@@ -173,6 +190,7 @@ private fun settingsRootItem(
 	return SettingsRootItem(
 		key = key,
 		iconRes = iconRes,
+		iosIconColor = iosIconColor,
 		title = title,
 		summary = summary,
 		onClick = onClick,

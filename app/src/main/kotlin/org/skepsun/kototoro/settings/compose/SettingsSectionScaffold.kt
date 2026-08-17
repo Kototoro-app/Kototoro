@@ -3,10 +3,18 @@ package org.skepsun.kototoro.settings.compose
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+internal val LocalSettingsContentTopInset = staticCompositionLocalOf { 0.dp }
+
+@Composable
+internal fun settingsContentTopInset(base: Dp = 0.dp): Dp = LocalSettingsContentTopInset.current + base
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,12 +33,14 @@ fun SettingsSectionScaffold(
 			modifier = modifier,
 			actions = actions,
 		) { innerPadding ->
-			Box(
-				modifier = Modifier
-					.fillMaxSize()
-					.padding(innerPadding),
-				content = { content() },
-			)
+			CompositionLocalProvider(
+				LocalSettingsContentTopInset provides innerPadding.calculateTopPadding(),
+			) {
+				Box(
+					modifier = Modifier.fillMaxSize(),
+					content = { content() },
+				)
+			}
 		}
 	} else {
 		Box(

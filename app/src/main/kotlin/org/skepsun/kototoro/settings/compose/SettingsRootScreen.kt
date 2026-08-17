@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +35,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,10 +57,57 @@ data class SettingsRootSection(
 data class SettingsRootItem(
     val key: String,
     @DrawableRes val iconRes: Int,
+    val iosIconColor: SettingsRootIconColor,
     val title: String,
     val summary: String,
     val onClick: () -> Unit,
 )
+
+enum class SettingsRootIconColor(val color: Color) {
+    BLUE(Color(0xFF007AFF)),
+    CYAN(Color(0xFF32ADE6)),
+    GREEN(Color(0xFF34C759)),
+    INDIGO(Color(0xFF5856D6)),
+    ORANGE(Color(0xFFFF9500)),
+    PURPLE(Color(0xFFAF52DE)),
+    RED(Color(0xFFFF3B30)),
+    TEAL(Color(0xFF30B0C7)),
+    GRAY(Color(0xFF8E8E93)),
+}
+
+@Composable
+private fun SettingsRootIconColor.containerColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return color
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsRootIconColor.BLUE -> scheme.primaryContainer
+        SettingsRootIconColor.INDIGO -> lerp(scheme.primaryContainer, scheme.tertiaryContainer, 0.35f)
+        SettingsRootIconColor.CYAN -> scheme.secondaryContainer
+        SettingsRootIconColor.GREEN -> lerp(scheme.secondaryContainer, scheme.tertiaryContainer, 0.28f)
+        SettingsRootIconColor.TEAL -> lerp(scheme.secondaryContainer, scheme.primaryContainer, 0.32f)
+        SettingsRootIconColor.ORANGE -> scheme.tertiaryContainer
+        SettingsRootIconColor.PURPLE -> lerp(scheme.tertiaryContainer, scheme.primaryContainer, 0.30f)
+        SettingsRootIconColor.RED -> lerp(scheme.tertiaryContainer, scheme.secondaryContainer, 0.38f)
+        SettingsRootIconColor.GRAY -> scheme.surfaceContainerHighest
+    }
+}
+
+@Composable
+private fun SettingsRootIconColor.contentColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return Color.White
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsRootIconColor.BLUE -> scheme.onPrimaryContainer
+        SettingsRootIconColor.INDIGO -> lerp(scheme.onPrimaryContainer, scheme.onTertiaryContainer, 0.35f)
+        SettingsRootIconColor.CYAN -> scheme.onSecondaryContainer
+        SettingsRootIconColor.GREEN -> lerp(scheme.onSecondaryContainer, scheme.onTertiaryContainer, 0.28f)
+        SettingsRootIconColor.TEAL -> lerp(scheme.onSecondaryContainer, scheme.onPrimaryContainer, 0.32f)
+        SettingsRootIconColor.ORANGE -> scheme.onTertiaryContainer
+        SettingsRootIconColor.PURPLE -> lerp(scheme.onTertiaryContainer, scheme.onPrimaryContainer, 0.30f)
+        SettingsRootIconColor.RED -> lerp(scheme.onTertiaryContainer, scheme.onSecondaryContainer, 0.38f)
+        SettingsRootIconColor.GRAY -> scheme.onSurfaceVariant
+    }
+}
 
 @Composable
 fun SettingsRootScreen(
@@ -75,7 +123,7 @@ fun SettingsRootScreen(
 ) {
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background,
+        color = settingsScreenBackgroundColor(),
     ) {
         val layoutDirection = LocalLayoutDirection.current
         val displayCutoutStart = if (applyHorizontalDisplayCutoutPadding) {
@@ -103,7 +151,9 @@ fun SettingsRootScreen(
                 top = topInset + 4.dp,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(
+                if (LocalInterfaceStyle.current == InterfaceStyle.IOS) 16.dp else 10.dp,
+            ),
         ) {
             if (searchQuery.isBlank()) {
                 items(sections, key = { it.title }, contentType = { "settings_section" }) { section ->
@@ -132,7 +182,7 @@ private fun SettingsSectionCard(
             Text(
                 text = section.title,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = settingsSectionLabelColor(),
                 modifier = Modifier.padding(
                     horizontal = 16.dp,
                     vertical = 6.dp,
@@ -209,7 +259,7 @@ private fun SettingsSearchResultRow(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -232,24 +282,17 @@ private fun SettingsRootRow(
         Box(
             modifier = Modifier
                 .size(tokens.settingsItemIconContainerSize)
-                .background(
-                    color = if (isIosStyle) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.11f)
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
+                .settingsIconBackground(
+                    baseColor = item.iosIconColor.containerColor(isIosStyle),
                     shape = RoundedCornerShape(if (isIosStyle) 9.dp else 12.dp),
+                    isIosStyle = isIosStyle,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 painter = rememberSafePainter(item.iconRes),
                 contentDescription = null,
-                tint = if (isIosStyle) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                },
+                tint = item.iosIconColor.contentColor(isIosStyle),
                 modifier = Modifier.size(if (isIosStyle) 18.dp else 22.dp),
             )
         }
@@ -277,7 +320,7 @@ private fun SettingsRootRow(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
             modifier = Modifier.size(20.dp),
         )
     }

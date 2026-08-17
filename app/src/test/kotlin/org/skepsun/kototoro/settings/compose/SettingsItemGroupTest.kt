@@ -69,7 +69,7 @@ class SettingsItemGroupTest {
     }
 
     @Test
-    fun `iOS group items use the opaque standard container over a plain background`() {
+    fun `iOS group items use the theme container over a plain background`() {
         val surfaceContainer = Color(0xFF336699)
 
         settingsGroupItemContainerColor(

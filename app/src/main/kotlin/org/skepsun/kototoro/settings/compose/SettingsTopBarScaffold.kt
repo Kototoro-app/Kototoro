@@ -29,23 +29,30 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 
 internal val SettingsContentHorizontalPadding = CompactTopBarHorizontalPadding
+private val SettingsTopBarBottomExtension = 6.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,19 +64,47 @@ fun SettingsTopBarScaffold(
 	actions: (@Composable BoxScope.() -> Unit)? = null,
 	content: @Composable (PaddingValues) -> Unit,
 ) {
-	Scaffold(
-		modifier = modifier.fillMaxSize(),
-		topBar = {
-			searchContent?.invoke() ?: SettingsSeparatedTopAppBar(
-				title = title,
-				onNavigateUp = onNavigateUp,
-				actions = actions,
-			)
-		},
-		containerColor = MaterialTheme.colorScheme.background,
-		contentWindowInsets = WindowInsets(0, 0, 0, 0),
-		content = content,
-	)
+	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+	val backdropColor = settingsScreenBackgroundColor()
+	val contentBackdrop = if (isIosStyle) {
+		rememberLayerBackdrop {
+			drawRect(backdropColor)
+			drawContent()
+		}
+	} else {
+		null
+	}
+	CompositionLocalProvider(
+		LocalLiquidGlassBackdrop provides contentBackdrop,
+		LocalLiquidGlassLayerBackdrop provides contentBackdrop,
+	) {
+		Scaffold(
+			modifier = modifier.fillMaxSize(),
+			topBar = {
+				searchContent?.invoke() ?: SettingsSeparatedTopAppBar(
+					title = title,
+					onNavigateUp = onNavigateUp,
+					actions = actions,
+				)
+			},
+			containerColor = backdropColor,
+			contentWindowInsets = WindowInsets(0, 0, 0, 0),
+			content = { innerPadding ->
+				Box(
+					modifier = Modifier
+						.fillMaxSize()
+						.then(contentBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
+				) {
+					CompositionLocalProvider(
+						LocalLiquidGlassBackdrop provides null,
+						LocalLiquidGlassLayerBackdrop provides null,
+					) {
+						content(innerPadding)
+					}
+				}
+			},
+		)
+	}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,35 +208,72 @@ private fun SettingsSeparatedTopAppBar(
 	val colorScheme = MaterialTheme.colorScheme
 	val tokens = LocalInterfaceStyleTokens.current
 	SettingsTopBarSurface {
-		Row(
-			modifier = Modifier
-				.fillMaxWidth()
-				.height(tokens.secondaryTopBarHeight),
-			horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			if (onNavigateUp != null) {
-				SettingsTopBarIconButton(onClick = onNavigateUp) {
-					Icon(
-						imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-						contentDescription = null,
-						modifier = Modifier.size(tokens.topBarIconSize),
+		if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+			Box(
+				modifier = Modifier
+					.fillMaxWidth()
+					.height(tokens.secondaryTopBarHeight),
+			) {
+				if (onNavigateUp != null) {
+					Box(modifier = Modifier.align(Alignment.CenterStart)) {
+						SettingsTopBarIconButton(onClick = onNavigateUp) {
+							Icon(
+								imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+								contentDescription = null,
+								modifier = Modifier.size(tokens.topBarIconSize),
+							)
+						}
+					}
+				}
+				Text(
+					text = title,
+					style = MaterialTheme.typography.titleMedium,
+					color = colorScheme.onSurface,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+					modifier = Modifier
+						.align(Alignment.Center)
+						.padding(horizontal = 64.dp),
+				)
+				if (actions != null) {
+					Box(
+						modifier = Modifier.align(Alignment.CenterEnd),
+						contentAlignment = Alignment.CenterEnd,
+						content = actions,
 					)
 				}
 			}
-			Text(
-				text = title,
-				style = MaterialTheme.typography.titleLarge,
-				color = colorScheme.onSurface,
-				maxLines = 1,
-				overflow = TextOverflow.Ellipsis,
-				modifier = Modifier.weight(1f),
-			)
-			if (actions != null) {
-				Box(
-					contentAlignment = Alignment.CenterEnd,
-					content = actions,
+		} else {
+			Row(
+				modifier = Modifier
+					.fillMaxWidth()
+					.height(tokens.secondaryTopBarHeight),
+				horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
+				verticalAlignment = Alignment.CenterVertically,
+			) {
+				if (onNavigateUp != null) {
+					SettingsTopBarIconButton(onClick = onNavigateUp) {
+						Icon(
+							imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+							contentDescription = null,
+							modifier = Modifier.size(tokens.topBarIconSize),
+						)
+					}
+				}
+				Text(
+					text = title,
+					style = MaterialTheme.typography.titleLarge,
+					color = colorScheme.onSurface,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+					modifier = Modifier.weight(1f),
 				)
+				if (actions != null) {
+					Box(
+						contentAlignment = Alignment.CenterEnd,
+						content = actions,
+					)
+				}
 			}
 		}
 	}
@@ -209,24 +281,7 @@ private fun SettingsSeparatedTopAppBar(
 
 @Composable
 private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
-	val surface = MaterialTheme.colorScheme.surface
-	val surfaceHalf = surface.copy(alpha = 0.52f)
-	Box(
-		modifier = Modifier
-			.fillMaxWidth()
-			.drawBehind {
-				drawRect(
-					brush = Brush.verticalGradient(
-						*arrayOf(
-							0.0f to surface,
-							0.28f to surface,
-							0.68f to surfaceHalf,
-							1.0f to Color.Transparent,
-							),
-						endY = 220.dp.toPx(),
-				),
-			)
-		}	) {
+	val topBarContent: @Composable () -> Unit = {
 		Box(
 			modifier = Modifier
 				.fillMaxWidth()
@@ -234,9 +289,28 @@ private fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 				.padding(
 					start = CompactTopBarHorizontalPadding,
 					end = CompactTopBarHorizontalPadding,
-				),
+				)
+				.padding(bottom = SettingsTopBarBottomExtension),
 			content = { content() },
 		)
+	}
+	if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+		GlassSurface(
+			modifier = Modifier.fillMaxWidth(),
+			style = GlassDefaults.topBarChromeStyle().copy(shadowElevation = 0.dp),
+			shape = RoundedCornerShape(0.dp),
+			componentRole = GlassComponentRole.TopBar,
+		) {
+			topBarContent()
+		}
+	} else {
+		Box(
+			modifier = Modifier
+				.fillMaxWidth()
+				.background(settingsScreenBackgroundColor()),
+		) {
+			topBarContent()
+		}
 	}
 }
 

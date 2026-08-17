@@ -34,6 +34,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.settings.SettingsActivity
+import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 
 @Composable
 fun ChangelogRoute(
@@ -70,7 +71,7 @@ fun ChangelogRoute(
 					.padding(
 						PaddingValues(
 							start = 20.dp,
-							top = 20.dp,
+							top = settingsContentTopInset(20.dp),
 							end = 20.dp,
 							bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
 						),

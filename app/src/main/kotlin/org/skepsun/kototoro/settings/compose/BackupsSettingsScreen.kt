@@ -118,7 +118,7 @@ fun BackupsSettingsScreen(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = innerPadding.calculateTopPadding(),
+                top = settingsContentTopInset(),
                 bottom = innerPadding.calculateBottomPadding() +
                     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),

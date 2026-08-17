@@ -97,6 +97,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
+import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -1382,6 +1383,7 @@ fun UnifiedSourcesScreen(
 		contentWindowInsets = WindowInsets(0, 0, 0, 0),
 		topBar = {
 			Column {
+				Spacer(modifier = Modifier.height(settingsContentTopInset()))
 				if (isLoading || state == UnifiedSourcesUiState.Loading) {
 					LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
 				}

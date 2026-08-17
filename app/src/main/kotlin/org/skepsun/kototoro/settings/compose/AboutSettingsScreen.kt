@@ -41,6 +41,7 @@ import androidx.core.graphics.drawable.toBitmap
 fun AboutSettingsScreen(
     settings: AppSettings,
     isUpdateSupported: Boolean,
+    isUpdateAvailable: Boolean,
     isLoading: Boolean,
     onCheckUpdate: () -> Unit,
     onChangelogClick: () -> Unit,
@@ -60,7 +61,7 @@ fun AboutSettingsScreen(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = 8.dp,
+                top = settingsContentTopInset(8.dp),
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -76,6 +77,7 @@ fun AboutSettingsScreen(
                             iconRes = R.drawable.ic_app_update,
                             summary = stringResource(R.string.check_for_updates),
                             enabled = isUpdateSupported && !isLoading,
+                            showUpdateBadge = isUpdateAvailable,
                             onClick = onCheckUpdate,
                         )
                     }

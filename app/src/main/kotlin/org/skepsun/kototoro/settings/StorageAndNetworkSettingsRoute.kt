@@ -36,6 +36,7 @@ import org.skepsun.kototoro.settings.compose.SettingsActionPreference
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
 import org.skepsun.kototoro.settings.compose.SettingsChoicePreference
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
+import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.settings.compose.SettingsPreferenceGroup
 import org.skepsun.kototoro.settings.compose.SettingsSliderPreference
 import org.skepsun.kototoro.settings.compose.SettingsSwitchPreference
@@ -337,6 +338,7 @@ fun CacheLimitsSettingsRoute(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(top = settingsContentTopInset())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
     ) {
         SettingsPreferenceGroup(title = context.getString(R.string.image_caches)) {

@@ -99,8 +99,10 @@ fun SpacesSettingsScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                horizontal = SettingsContentHorizontalPadding,
-                vertical = 20.dp,
+                start = SettingsContentHorizontalPadding,
+                top = settingsContentTopInset(20.dp),
+                end = SettingsContentHorizontalPadding,
+                bottom = 20.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {

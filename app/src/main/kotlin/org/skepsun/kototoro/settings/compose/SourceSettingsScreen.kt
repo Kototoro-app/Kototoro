@@ -119,7 +119,7 @@ fun SourceSettingsScreen(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = innerPadding.calculateTopPadding(),
+                top = settingsContentTopInset(),
                 bottom = innerPadding.calculateBottomPadding() + bottomInset + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),

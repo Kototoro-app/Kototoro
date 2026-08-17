@@ -38,6 +38,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .padding(top = settingsContentTopInset())
                 .padding(horizontal = SettingsContentHorizontalPadding, vertical = 20.dp),
         ) {
             SettingsPreferenceGroup(

@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -117,6 +118,7 @@ import org.skepsun.kototoro.settings.compose.SettingsSearchTopAppBar
 import org.skepsun.kototoro.settings.compose.SettingsTopBarScaffold
 import org.skepsun.kototoro.settings.compose.SpacesSettingsRoute
 import org.skepsun.kototoro.settings.compose.buildSettingsRootSections
+import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.settings.nav.NavConfigRoute
 import org.skepsun.kototoro.settings.nav.NavConfigViewModel
 import org.skepsun.kototoro.settings.userdata.storage.DataCleanupSettingsRoute
@@ -1167,6 +1169,7 @@ class SettingsActivity :
 				SourceMigrationPanel(
 					initialSelectedContentIds = initialEntityOrganizeSelection,
 					onDismiss = ::handleComposeNavigateUp,
+					contentPadding = PaddingValues(top = settingsContentTopInset()),
 					showHeader = false,
 				)
 			}

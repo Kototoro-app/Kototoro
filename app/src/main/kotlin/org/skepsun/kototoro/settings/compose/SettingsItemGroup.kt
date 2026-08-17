@@ -26,11 +26,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -53,20 +51,6 @@ internal fun resolveSettingsGroupItemPosition(index: Int, total: Int): SettingsG
         index == total - 1 -> SettingsGroupItemPosition.LAST
         else -> SettingsGroupItemPosition.MIDDLE
     }
-}
-
-internal fun settingsGroupItemContainerColor(
-    interfaceStyle: InterfaceStyle,
-    backgroundStyle: BackgroundStyle,
-    surfaceContainerLow: Color,
-    surfaceContainer: Color,
-): Color = if (
-    interfaceStyle == InterfaceStyle.IOS &&
-    backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-) {
-    surfaceContainerLow.copy(alpha = SETTINGS_IOS_CONTAINER_ALPHA)
-} else {
-    surfaceContainer
 }
 
 class SettingsItemGroupScope internal constructor() {
@@ -104,7 +88,7 @@ private fun SettingsPreferenceGroupContent(
             androidx.compose.material3.Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = settingsSectionLabelColor(),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
@@ -130,27 +114,43 @@ fun SettingsItemGroup(
         surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow,
         surfaceContainer = MaterialTheme.colorScheme.surfaceContainer,
     )
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(tokens.settingsItemGap),
-    ) {
-        repeat(itemCount) { index ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = settingsGroupItemShape(
-                    position = resolveSettingsGroupItemPosition(index, itemCount),
-                    outerCornerRadius = tokens.settingsGroupOuterCornerRadius,
-                    innerCornerRadius = tokens.settingsGroupInnerCornerRadius,
-                ),
-                color = containerColor,
-            ) {
-                itemContent(index)
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius),
+            color = containerColor,
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                repeat(itemCount) { index ->
+                    itemContent(index)
+                    if (index != itemCount - 1) {
+                        // iOS groups use one continuous surface with inset row separators.
+                        SettingsGroupDivider(startPadding = 70.dp, endPadding = 0.dp)
+                    }
+                }
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(tokens.settingsItemGap),
+        ) {
+            repeat(itemCount) { index ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = settingsGroupItemShape(
+                        position = resolveSettingsGroupItemPosition(index, itemCount),
+                        outerCornerRadius = tokens.settingsGroupOuterCornerRadius,
+                        innerCornerRadius = tokens.settingsGroupInnerCornerRadius,
+                    ),
+                    color = containerColor,
+                ) {
+                    itemContent(index)
+                }
             }
         }
     }
 }
-
-private const val SETTINGS_IOS_CONTAINER_ALPHA = 0.74f
 
 private fun settingsGroupItemShape(
     position: SettingsGroupItemPosition,

@@ -31,11 +31,13 @@ fun AboutSettingsRoute(
     onCrashLogsClick: () -> Unit,
 ) {
     val isUpdateSupported by viewModel.isUpdateSupported.collectAsState(initial = false)
+    val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsState(initial = false)
     val isLoading by viewModel.isLoading.collectAsState(initial = false)
 
     AboutSettingsScreen(
         settings = settings,
         isUpdateSupported = isUpdateSupported,
+        isUpdateAvailable = isUpdateAvailable,
         isLoading = isLoading,
         onCheckUpdate = { viewModel.checkForUpdates() },
         onChangelogClick = onChangelogClick,

@@ -4,6 +4,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,12 +12,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -55,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -76,25 +80,79 @@ data class SettingsChoiceOption<T>(
     val label: String,
 )
 
+private enum class SettingsIconTone(val iosColor: Color) {
+    PRIMARY(Color(0xFF007AFF)),
+    SECONDARY(Color(0xFF34C759)),
+    TERTIARY(Color(0xFFFF9500)),
+    PRIMARY_VARIANT(Color(0xFF5856D6)),
+    SECONDARY_VARIANT(Color(0xFF32ADE6)),
+    TERTIARY_VARIANT(Color(0xFFAF52DE)),
+}
+
+@Composable
+private fun SettingsIconTone.containerColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return iosColor
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsIconTone.PRIMARY -> scheme.primaryContainer
+        SettingsIconTone.PRIMARY_VARIANT -> lerp(scheme.primaryContainer, scheme.tertiaryContainer, 0.35f)
+        SettingsIconTone.SECONDARY -> scheme.secondaryContainer
+        SettingsIconTone.SECONDARY_VARIANT -> lerp(scheme.secondaryContainer, scheme.primaryContainer, 0.35f)
+        SettingsIconTone.TERTIARY -> scheme.tertiaryContainer
+        SettingsIconTone.TERTIARY_VARIANT -> lerp(scheme.tertiaryContainer, scheme.secondaryContainer, 0.35f)
+    }
+}
+
+@Composable
+private fun SettingsIconTone.contentColor(isIosStyle: Boolean): Color {
+    if (isIosStyle) return Color.White
+    val scheme = MaterialTheme.colorScheme
+    return when (this) {
+        SettingsIconTone.PRIMARY -> scheme.onPrimaryContainer
+        SettingsIconTone.PRIMARY_VARIANT -> lerp(scheme.onPrimaryContainer, scheme.onTertiaryContainer, 0.35f)
+        SettingsIconTone.SECONDARY -> scheme.onSecondaryContainer
+        SettingsIconTone.SECONDARY_VARIANT -> lerp(scheme.onSecondaryContainer, scheme.onPrimaryContainer, 0.35f)
+        SettingsIconTone.TERTIARY -> scheme.onTertiaryContainer
+        SettingsIconTone.TERTIARY_VARIANT -> lerp(scheme.onTertiaryContainer, scheme.onSecondaryContainer, 0.35f)
+    }
+}
+
 @Composable
 private fun SettingsLeadingIcon(
     imageVector: ImageVector,
     @DrawableRes iconRes: Int? = null,
+    tone: SettingsIconTone,
 ) {
-    if (iconRes != null) {
-        Icon(
-            painter = rememberSafePainter(iconRes),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    } else {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val tokens = LocalInterfaceStyleTokens.current
+    val contentColor = tone.contentColor(isIosStyle)
+    Box(
+        modifier = Modifier
+            .size(tokens.settingsItemIconContainerSize)
+            .settingsIconBackground(
+                baseColor = tone.containerColor(isIosStyle),
+                shape = RoundedCornerShape(if (isIosStyle) 9.dp else 12.dp),
+                isIosStyle = isIosStyle,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (iconRes != null) {
+            Icon(
+                painter = rememberSafePainter(iconRes),
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(if (isIosStyle) 18.dp else 20.dp),
+            )
+        } else {
+            Icon(
+                imageVector = imageVector,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(if (isIosStyle) 18.dp else 20.dp),
+            )
+        }
     }
-    Spacer(modifier = Modifier.width(16.dp))
+    Spacer(modifier = Modifier.width(14.dp))
 }
 
 @Composable
@@ -131,12 +189,22 @@ fun SettingsGroupLabel(
 }
 
 @Composable
+internal fun SettingsUpdateBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(8.dp)
+            .background(MaterialTheme.colorScheme.error, CircleShape),
+    )
+}
+
+@Composable
 fun SettingsActionPreference(
     title: String,
     summary: String? = null,
     @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
     showChevron: Boolean = true,
+    showUpdateBadge: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(
@@ -146,7 +214,11 @@ fun SettingsActionPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.Settings, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.Settings,
+            iconRes = iconRes,
+            tone = SettingsIconTone.PRIMARY,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -164,12 +236,16 @@ fun SettingsActionPreference(
                 )
             }
         }
+        if (showUpdateBadge) {
+            Spacer(modifier = Modifier.width(8.dp))
+            SettingsUpdateBadge()
+        }
         if (showChevron) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = settingsChevronColor(),
             )
         }
     }
@@ -202,7 +278,11 @@ fun SettingsSplitSwitchPreference(
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SettingsLeadingIcon(imageVector = Icons.Filled.Tune, iconRes = iconRes)
+            SettingsLeadingIcon(
+                imageVector = Icons.Filled.Tune,
+                iconRes = iconRes,
+                tone = SettingsIconTone.SECONDARY,
+            )
             Column(
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
@@ -241,7 +321,11 @@ fun SettingsInfoPreference(
             .settingsPreferenceLayout(enabled = true),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.Info, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.Info,
+            iconRes = iconRes,
+            tone = SettingsIconTone.TERTIARY,
+        )
         Column(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -280,7 +364,11 @@ fun SettingsSwitchPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.ToggleOn, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.ToggleOn,
+            iconRes = iconRes,
+            tone = SettingsIconTone.SECONDARY_VARIANT,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -339,7 +427,11 @@ fun <T> SettingsChoicePreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.AutoMirrored.Filled.ListAlt, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.AutoMirrored.Filled.ListAlt,
+            iconRes = iconRes,
+            tone = SettingsIconTone.PRIMARY_VARIANT,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -384,7 +476,7 @@ fun <T> SettingsChoicePreference(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
         )
     }
 
@@ -482,7 +574,11 @@ fun <T> SettingsMultiChoicePreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.Checklist, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.Checklist,
+            iconRes = iconRes,
+            tone = SettingsIconTone.TERTIARY_VARIANT,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -511,7 +607,7 @@ fun <T> SettingsMultiChoicePreference(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
         )
     }
 
@@ -621,7 +717,11 @@ fun SettingsSliderPreference(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingsLeadingIcon(imageVector = Icons.Filled.Tune, iconRes = iconRes)
+            SettingsLeadingIcon(
+                imageVector = Icons.Filled.Tune,
+                iconRes = iconRes,
+                tone = SettingsIconTone.SECONDARY_VARIANT,
+            )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = title,
@@ -685,7 +785,11 @@ fun SettingsTextInputPreference(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SettingsLeadingIcon(imageVector = Icons.Filled.Edit, iconRes = iconRes)
+            SettingsLeadingIcon(
+                imageVector = Icons.Filled.Edit,
+                iconRes = iconRes,
+                tone = SettingsIconTone.TERTIARY_VARIANT,
+            )
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = title,
@@ -753,7 +857,11 @@ fun SettingsDialogTextPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.Edit, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.Edit,
+            iconRes = iconRes,
+            tone = SettingsIconTone.TERTIARY,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -782,7 +890,7 @@ fun SettingsDialogTextPreference(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
         )
     }
 
@@ -891,7 +999,11 @@ fun SettingsReorderPreference(
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SettingsLeadingIcon(imageVector = Icons.Filled.Reorder, iconRes = iconRes)
+        SettingsLeadingIcon(
+            imageVector = Icons.Filled.Reorder,
+            iconRes = iconRes,
+            tone = SettingsIconTone.PRIMARY_VARIANT,
+        )
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -920,7 +1032,7 @@ fun SettingsReorderPreference(
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = settingsChevronColor(),
         )
     }
 
@@ -1025,7 +1137,7 @@ fun SettingsGroupDivider(
 ) {
     HorizontalDivider(
         modifier = Modifier.padding(start = startPadding, end = endPadding),
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.18f),
+        color = settingsSeparatorColor(),
     )
 }
 
@@ -1037,6 +1149,6 @@ private fun Modifier.settingsPreferenceLayout(enabled: Boolean): Modifier {
     // applies; keep the iOS vs Material split via tokens only.
     return fillMaxWidth()
         .alpha(if (enabled) 1f else 0.5f)
-        .heightIn(min = if (isIosStyle) 62.dp else tokens.controlHeight)
-        .padding(horizontal = 16.dp, vertical = 10.dp)
+        .heightIn(min = if (isIosStyle) 56.dp else tokens.controlHeight)
+        .padding(horizontal = 16.dp, vertical = if (isIosStyle) 8.dp else 10.dp)
 }

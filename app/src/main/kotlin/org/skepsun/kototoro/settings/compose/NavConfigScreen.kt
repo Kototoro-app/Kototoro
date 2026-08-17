@@ -64,7 +64,7 @@ fun NavConfigScreen(
             contentPadding = PaddingValues(
                 start = SettingsContentHorizontalPadding,
                 end = SettingsContentHorizontalPadding,
-                top = 20.dp,
+                top = settingsContentTopInset(20.dp),
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),

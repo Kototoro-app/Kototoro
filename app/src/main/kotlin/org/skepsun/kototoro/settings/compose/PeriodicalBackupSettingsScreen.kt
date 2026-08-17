@@ -45,6 +45,7 @@ fun PeriodicalBackupSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .padding(top = settingsContentTopInset())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {

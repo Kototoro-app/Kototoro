@@ -83,6 +83,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -361,11 +362,16 @@ fun SourceMigrationPanel(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        val layoutDirection = LocalLayoutDirection.current
+        val listContentPadding = PaddingValues(
+            start = contentPadding.calculateLeftPadding(layoutDirection) + 10.dp,
+            top = contentPadding.calculateTopPadding() + 8.dp,
+            end = contentPadding.calculateRightPadding(layoutDirection) + 10.dp,
+            bottom = contentPadding.calculateBottomPadding() + 8.dp,
+        )
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(contentPadding)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = listContentPadding,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (showHeader) {
