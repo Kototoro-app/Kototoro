@@ -37,6 +37,9 @@ import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionShader
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
+import org.skepsun.kototoro.extensions.install.decodeExtensionInstallPolicies
+import org.skepsun.kototoro.extensions.install.encodeExtensionInstallPolicies
 import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.parsers.util.find
 import org.skepsun.kototoro.parsers.util.mapNotNullToSet
@@ -664,6 +667,33 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getStringSet(KEY_EXTENSION_LANGUAGES, null) ?: emptySet()
 		set(value) = prefs.edit { putStringSet(KEY_EXTENSION_LANGUAGES, value) }
 
+	var extensionInstallPolicies: Map<String, ExtensionInstallPolicy>
+		get() = decodeExtensionInstallPolicies(prefs.getStringSet(KEY_EXTENSION_INSTALL_POLICIES, null))
+		set(value) = prefs.edit {
+			putStringSet(
+				KEY_EXTENSION_INSTALL_POLICIES,
+				encodeExtensionInstallPolicies(value),
+			)
+		}
+
+	fun getExtensionInstallPolicy(type: String): ExtensionInstallPolicy {
+		return extensionInstallPolicies[type]
+			?: ExtensionInstallPolicy.ASK_EVERY_TIME
+	}
+
+	fun setExtensionInstallPolicy(
+		type: String,
+		policy: ExtensionInstallPolicy,
+	) {
+		extensionInstallPolicies = extensionInstallPolicies.toMutableMap().apply {
+			if (policy == ExtensionInstallPolicy.ASK_EVERY_TIME) {
+				remove(type)
+			} else {
+				put(type, policy)
+			}
+		}
+	}
+
 	var isLocalApkHotReloadEnabled: Boolean
 		get() = prefs.getBoolean(KEY_LOCAL_APK_HOT_RELOAD, false)
 		set(value) = prefs.edit { putBoolean(KEY_LOCAL_APK_HOT_RELOAD, value) }
@@ -672,6 +702,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getStringSet(KEY_LNREADER_REPOS, null)
 			?: setOf(org.skepsun.kototoro.core.lnreader.LNReaderRepository.OFFICIAL_REPO_URL)
 		set(value) = prefs.edit { putStringSet(KEY_LNREADER_REPOS, value) }
+
+	var legadoRepoUrls: Set<String>
+		get() = prefs.getStringSet(KEY_LEGADO_REPOS, null) ?: emptySet()
+		set(value) = prefs.edit { putStringSet(KEY_LEGADO_REPOS, value) }
+
+	var tvBoxRepoUrls: Set<String>
+		get() = prefs.getStringSet(KEY_TVBOX_REPOS, null) ?: emptySet()
+		set(value) = prefs.edit { putStringSet(KEY_TVBOX_REPOS, value) }
 
 	var isReaderAutoscrollPauseOnUi: Boolean
 		get() = prefs.getBoolean(KEY_READER_AUTOSCROLL_PAUSE_ON_UI, true)
@@ -2735,6 +2773,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_APP_LOCALE = "app_locale"
 		const val KEY_CONTENT_LANGUAGES = "content_languages"
 		const val KEY_EXTENSION_LANGUAGES = "extension_languages"
+		const val KEY_EXTENSION_INSTALL_POLICIES = "extension_install_policies"
 		const val KEY_LOCAL_APK_HOT_RELOAD = "local_apk_hot_reload"
 		const val KEY_GITHUB_MIRROR = "github_mirror"
 		const val KEY_APP_UPDATE_SOURCE = "app_update_source"
@@ -2743,6 +2782,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_BANGUMI_MIRROR = "bangumi_mirror"
 		const val KEY_BANGUMI_MIRROR_CUSTOM_BASE = "bangumi_mirror_custom_base"
 		const val KEY_LNREADER_REPOS = "lnreader_repository_urls"
+		const val KEY_LEGADO_REPOS = "legado_repository_urls"
+		const val KEY_TVBOX_REPOS = "tvbox_repository_urls"
 		const val KEY_SOURCES_GRID = "sources_grid"
 		const val KEY_SHOW_SOURCE_ON_CARDS = "show_source_on_cards"
 		const val KEY_SHARED_ELEMENT_TRANSITIONS = "shared_element_transitions"

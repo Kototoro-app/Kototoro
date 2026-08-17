@@ -58,6 +58,7 @@ import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import org.skepsun.kototoro.extensions.install.ExtensionInstallDownloadState
 import org.skepsun.kototoro.extensions.install.ExtensionInstallMode
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.install.ExtensionInstallResult
 import org.skepsun.kototoro.extensions.install.ExtensionInstallService
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
@@ -106,13 +107,15 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 	private val availableExternalExtensions = MutableStateFlow<List<RepoAvailableExtension>>(emptyList())
 	private val availableLnReaderPlugins = MutableStateFlow<List<LnReaderAvailablePlugin>>(emptyList())
+	private val availableJsonPackages = MutableStateFlow<List<UnifiedSourcePackageItem>>(emptyList())
 	private val installingLnReaderPackageIds = MutableStateFlow<Set<String>>(emptySet())
 	private val pendingUninstallIntents = ArrayDeque<Intent>()
 	private val lnReaderPackageSnapshot = combine(
 		availableLnReaderPlugins,
 		installingLnReaderPackageIds,
-	) { plugins, installingIds ->
-		LnReaderPackageSnapshot(plugins, installingIds)
+		availableJsonPackages,
+	) { plugins, installingIds, jsonPackages ->
+		AvailablePackageSnapshot(plugins, installingIds, jsonPackages)
 	}
 	private val lnReaderRepository = LNReaderRepository(okHttpClient, jsonSourceManager)
 	private val batchUpdateState = ExtensionBatchUpdateStateMachine()
@@ -135,6 +138,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 		catalog
 			.withAvailableExternalPackages(availableExtensions, downloadStates)
 			.withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
+			.withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
 			.toUiState(filters)
 	}.stateIn(
 		scope = viewModelScope,
@@ -270,6 +274,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 					}
 					refreshAvailableExternalPackages(types)
 					refreshAvailableLnReaderPackages()
+					refreshAvailableJsonPackages()
 					if (showLoading) {
 						emitRefreshFailures(types)
 					}
@@ -319,14 +324,53 @@ class UnifiedSourcesViewModel @Inject constructor(
 
 	fun installPackage(packageId: String, mode: ExtensionInstallMode) {
 		val item = currentPackage(packageId) ?: return
-		if (item.kind == UnifiedSourceKind.LNREADER && item.lnReaderPayload != null) {
-			requestLnReaderInstall(item)
-			return
-		}
 		if (item.state == UnifiedSourcePackageState.INSTALLED || item.packageName in installService.downloadStates.value) {
 			return
 		}
-		requestInstall(item, fromBatch = false, mode = mode)
+		if (item.state == UnifiedSourcePackageState.UPDATE_AVAILABLE) {
+			requestPackageInstall(item, mode, enableAfterInstall = null)
+			return
+		}
+		when (settings.getExtensionInstallPolicy(item.kind.name)) {
+			ExtensionInstallPolicy.ASK_EVERY_TIME -> {
+				_events.tryEmit(
+					UnifiedSourcesEvent.ConfirmPackageInstall(
+						packageId = item.id,
+						kind = item.kind,
+						name = item.name,
+						sourceCount = item.sourceCount,
+						mode = mode,
+					),
+				)
+			}
+			ExtensionInstallPolicy.INSTALL_ONLY -> requestPackageInstall(item, mode, enableAfterInstall = false)
+			ExtensionInstallPolicy.INSTALL_AND_ENABLE -> requestPackageInstall(item, mode, enableAfterInstall = true)
+		}
+	}
+
+	fun confirmPackageInstall(
+		packageId: String,
+		mode: ExtensionInstallMode,
+		policy: ExtensionInstallPolicy,
+		remember: Boolean,
+	) {
+		val item = currentPackage(packageId) ?: return
+		if (remember) {
+			settings.setExtensionInstallPolicy(item.kind.name, policy)
+		}
+		requestPackageInstall(
+			item = item,
+			mode = mode,
+			enableAfterInstall = policy == ExtensionInstallPolicy.INSTALL_AND_ENABLE,
+		)
+	}
+
+	fun getInstallPolicy(kind: UnifiedSourceKind): ExtensionInstallPolicy {
+		return settings.getExtensionInstallPolicy(kind.name)
+	}
+
+	fun setInstallPolicy(kind: UnifiedSourceKind, policy: ExtensionInstallPolicy) {
+		settings.setExtensionInstallPolicy(kind.name, policy)
 	}
 
 	fun installPackageWithSystemInstaller(packageId: String) {
@@ -444,31 +488,50 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 	}
 
-	fun addRepositoryFromUrl(kind: UnifiedSourceKind, url: String, title: String? = null) {
+	fun addRepositoryFromUrl(
+		kind: UnifiedSourceKind,
+		url: String,
+		title: String? = null,
+		enableImportedSources: Boolean = true,
+	) {
 		val cleanUrl = url.trim()
 		if (cleanUrl.isBlank()) return
 		launchLoadingJob(Dispatchers.IO) {
 			when (kind) {
-				UnifiedSourceKind.LEGADO,
+				UnifiedSourceKind.LEGADO -> {
+					if (settings.legadoRepoUrls.containsRepositoryUrl(cleanUrl)) {
+						emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
+						return@launchLoadingJob
+					}
+					val packageItem = fetchAvailableLegadoPackage(cleanUrl, title)
+					settings.legadoRepoUrls = settings.legadoRepoUrls + cleanUrl
+					availableJsonPackages.update { packages ->
+						(packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
+							.sortedBy { it.name.lowercase() }
+					}
+					emitMessage(appContext.getString(R.string.unified_sources_repository_added))
+				}
 				UnifiedSourceKind.JS -> {
 					importJsonRepository(
 						kind = kind,
 						content = fetchRemoteText(cleanUrl),
 						sourceLocator = cleanUrl,
 						sourceTitle = title,
+						enableImportedSources = enableImportedSources,
 					)
 				}
 				UnifiedSourceKind.TVBOX -> {
-					importJsonRepository(
-						kind = kind,
-						content = if (cleanUrl.isMacCmsApiUrlForAction()) {
-							cleanUrl
-						} else {
-							fetchRemoteText(cleanUrl)
-						},
-						sourceLocator = cleanUrl,
-						sourceTitle = title,
-					)
+					if (settings.tvBoxRepoUrls.containsRepositoryUrl(cleanUrl)) {
+						emitMessage(appContext.getString(R.string.unified_sources_repository_already_exists))
+						return@launchLoadingJob
+					}
+					val packageItem = fetchAvailableTvBoxPackage(cleanUrl, title)
+					settings.tvBoxRepoUrls = settings.tvBoxRepoUrls + cleanUrl
+					availableJsonPackages.update { packages ->
+						(packages.filterNot { it.repositoryId == packageItem.repositoryId } + packageItem)
+							.sortedBy { it.name.lowercase() }
+					}
+					emitMessage(appContext.getString(R.string.unified_sources_repository_added))
 				}
 				UnifiedSourceKind.LNREADER -> addLnReaderRepository(cleanUrl)
 				UnifiedSourceKind.CLOUDSTREAM,
@@ -481,7 +544,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 	}
 
-	fun addRepositoryFromFile(kind: UnifiedSourceKind, uri: Uri) {
+	fun addRepositoryFromFile(kind: UnifiedSourceKind, uri: Uri, enableImportedSources: Boolean = true) {
 		launchLoadingJob(Dispatchers.IO) {
 			val title = resolveDisplayName(uri)
 			val content = appContext.contentResolver.openInputStream(uri)
@@ -493,11 +556,17 @@ class UnifiedSourcesViewModel @Inject constructor(
 				content = content,
 				sourceLocator = uri.toString(),
 				sourceTitle = title,
+				enableImportedSources = enableImportedSources,
 			)
 		}
 	}
 
-	fun addRepositoryFromInline(kind: UnifiedSourceKind, content: String, title: String? = null) {
+	fun addRepositoryFromInline(
+		kind: UnifiedSourceKind,
+		content: String,
+		title: String? = null,
+		enableImportedSources: Boolean = true,
+	) {
 		val cleanContent = content.trim()
 		if (cleanContent.isBlank()) return
 		launchLoadingJob(Dispatchers.Default) {
@@ -510,6 +579,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 				content = cleanContent,
 				sourceLocator = inlineLocator,
 				sourceTitle = title,
+				enableImportedSources = enableImportedSources,
 			)
 		}
 	}
@@ -521,8 +591,20 @@ class UnifiedSourcesViewModel @Inject constructor(
 			?: return
 		launchLoadingJob(Dispatchers.IO) {
 			when (repository.kind) {
-				UnifiedSourceKind.LEGADO,
-				UnifiedSourceKind.TVBOX,
+				UnifiedSourceKind.LEGADO -> {
+					val packageItem = fetchAvailableLegadoPackage(repository.url, repository.name)
+					availableJsonPackages.update { packages ->
+						packages.filterNot { it.repositoryId == repository.id } + packageItem
+					}
+					emitMessage(appContext.getString(R.string.unified_sources_repository_refreshed))
+				}
+				UnifiedSourceKind.TVBOX -> {
+					val packageItem = fetchAvailableTvBoxPackage(repository.url, repository.name)
+					availableJsonPackages.update { packages ->
+						packages.filterNot { it.repositoryId == repository.id } + packageItem
+					}
+					emitMessage(appContext.getString(R.string.unified_sources_repository_refreshed))
+				}
 				UnifiedSourceKind.JS -> {
 					if (repository.locationType == UnifiedRepositoryLocationType.INLINE_IMPORT ||
 						repository.locationType == UnifiedRepositoryLocationType.PRESET_ONLY
@@ -532,15 +614,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 					}
 					importJsonRepository(
 						kind = repository.kind,
-						content = if (repository.kind == UnifiedSourceKind.TVBOX) {
-							if (repository.url.isMacCmsApiUrlForAction()) {
-								repository.url
-							} else {
-								loadRepositoryText(repository.url)
-							}
-						} else {
-							loadRepositoryText(repository.url)
-						},
+						content = loadRepositoryText(repository.url),
 						sourceLocator = repository.url,
 						sourceTitle = repository.name,
 					)
@@ -564,24 +638,30 @@ class UnifiedSourcesViewModel @Inject constructor(
 		val repository = ready.allRepositories.firstOrNull { it.id == repositoryId } ?: return
 		launchLoadingJob(Dispatchers.IO) {
 			when (repository.kind) {
-				UnifiedSourceKind.LEGADO,
-				UnifiedSourceKind.TVBOX,
-				UnifiedSourceKind.JS -> {
-					val sourceIds = ready.allSources
-						.filter { it.repositoryId == repository.id }
-						.map { it.id }
-					val ids = if (sourceIds.isNotEmpty()) {
-						sourceIds
+				UnifiedSourceKind.LEGADO -> {
+					if (settings.legadoRepoUrls.containsRepositoryUrl(repository.url)) {
+						settings.legadoRepoUrls = settings.legadoRepoUrls.withoutRepositoryUrl(repository.url)
+						availableJsonPackages.update { packages ->
+							packages.filterNot { it.repositoryId == repository.id }
+						}
+						emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
 					} else {
-						jsonSourceManager.observeAllJsonSources()
-							.first()
-							.filter { it.jsonRepositoryIdForAction() == repository.id }
-							.map { it.id }
+						deleteImportedJsonRepositorySources(repository, ready)
 					}
-					if (ids.isNotEmpty()) {
-						jsonSourceManager.deleteSourcesBatch(ids)
+				}
+				UnifiedSourceKind.TVBOX -> {
+					if (settings.tvBoxRepoUrls.containsRepositoryUrl(repository.url)) {
+						settings.tvBoxRepoUrls = settings.tvBoxRepoUrls.withoutRepositoryUrl(repository.url)
+						availableJsonPackages.update { packages ->
+							packages.filterNot { it.repositoryId == repository.id }
+						}
+						emitMessage(appContext.getString(R.string.unified_sources_repository_deleted))
+					} else {
+						deleteImportedJsonRepositorySources(repository, ready)
 					}
-					emitMessage(appContext.getString(R.string.unified_sources_repository_sources_deleted))
+				}
+				UnifiedSourceKind.JS -> {
+					deleteImportedJsonRepositorySources(repository, ready)
 				}
 				UnifiedSourceKind.LNREADER -> {
 					settings.lnReaderRepoUrls = settings.lnReaderRepoUrls - repository.url
@@ -892,10 +972,43 @@ class UnifiedSourcesViewModel @Inject constructor(
 		_events.emit(UnifiedSourcesEvent.StartUninstall(next))
 	}
 
+	private fun requestPackageInstall(
+		item: UnifiedSourcePackageItem,
+		mode: ExtensionInstallMode,
+		enableAfterInstall: Boolean?,
+	) {
+		if (item.jsonPayload != null) {
+			requestJsonPackageInstall(item, enableAfterInstall ?: true)
+		} else if (item.kind == UnifiedSourceKind.LNREADER && item.lnReaderPayload != null) {
+			requestLnReaderInstall(item, enableAfterInstall)
+		} else {
+			requestInstall(
+				item = item,
+				fromBatch = false,
+				mode = mode,
+				enableAfterInstall = enableAfterInstall,
+			)
+		}
+	}
+
+	private fun requestJsonPackageInstall(item: UnifiedSourcePackageItem, enableAfterInstall: Boolean) {
+		val payload = item.jsonPayload ?: return
+		launchLoadingJob(Dispatchers.IO) {
+			importJsonRepository(
+				kind = item.kind,
+				content = payload.content,
+				sourceLocator = payload.sourceLocator,
+				sourceTitle = payload.sourceTitle,
+				enableImportedSources = enableAfterInstall,
+			)
+		}
+	}
+
 	private fun requestInstall(
 		item: UnifiedSourcePackageItem,
 		fromBatch: Boolean,
 		mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
+		enableAfterInstall: Boolean? = null,
 	) {
 		val extension = item.installPayload ?: return
 		if (extension.pkgName in installService.downloadStates.value) {
@@ -916,10 +1029,10 @@ class UnifiedSourcesViewModel @Inject constructor(
 							_events.emit(UnifiedSourcesEvent.StartInstall(userAction))
 						}
 						result.session.awaitCompletion()
-						onPackageInstallCompleted(item, fromBatch)
+						onPackageInstallCompleted(item, fromBatch, enableAfterInstall)
 					}
 					ExtensionInstallResult.Completed -> {
-						onPackageInstallCompleted(item, fromBatch)
+						onPackageInstallCompleted(item, fromBatch, enableAfterInstall)
 					}
 				}
 			} catch (e: CancellationException) {
@@ -942,6 +1055,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 	private suspend fun onPackageInstallCompleted(
 		item: UnifiedSourcePackageItem,
 		fromBatch: Boolean,
+		enableAfterInstall: Boolean?,
 	) {
 		if (item.kind.isHotReloadableExternalKind()) {
 			reloadExternalExtensionManagers()
@@ -957,13 +1071,19 @@ class UnifiedSourcesViewModel @Inject constructor(
 				reloadInstalledExtensions = false,
 			)
 		}
+		if (enableAfterInstall != null) {
+			val sources = catalogRepository.getSourcesForPackage(item.id).map { it.source }
+			if (sources.isNotEmpty()) {
+				contentSourcesRepository.setSourcesEnabled(sources, enableAfterInstall)
+			}
+		}
 		emitMessage(appContext.getString(R.string.unified_sources_package_installed))
 		if (fromBatch) {
 			handleBatchNextAction(batchUpdateState.finishCurrentInstall())
 		}
 	}
 
-	private fun requestLnReaderInstall(item: UnifiedSourcePackageItem) {
+	private fun requestLnReaderInstall(item: UnifiedSourcePackageItem, enableAfterInstall: Boolean?) {
 		val plugin = item.lnReaderPayload ?: return
 		if (item.state == UnifiedSourcePackageState.INSTALLED || item.id in installingLnReaderPackageIds.value) {
 			return
@@ -971,6 +1091,11 @@ class UnifiedSourcesViewModel @Inject constructor(
 		installingLnReaderPackageIds.update { it + item.id }
 		launchLoadingJob(Dispatchers.IO) {
 			try {
+				val enabled = enableAfterInstall ?: (uiState.value as? UnifiedSourcesUiState.Ready)
+					?.allSources
+					?.firstOrNull { it.packageId == item.id }
+					?.isEnabled
+					?: true
 				val jsContent = fetchRemoteText(plugin.url)
 				jsonSourceManager.importLNReaderPlugin(
 					jsContent = jsContent,
@@ -982,6 +1107,7 @@ class UnifiedSourcesViewModel @Inject constructor(
 						lang = plugin.lang,
 						icon = plugin.iconUrl,
 					),
+					enabled = enabled,
 				).getOrThrow()
 				emitMessage(appContext.getString(R.string.unified_sources_package_installed))
 			} finally {
@@ -1113,20 +1239,23 @@ class UnifiedSourcesViewModel @Inject constructor(
 		content: String,
 		sourceLocator: String?,
 		sourceTitle: String?,
+		enableImportedSources: Boolean? = null,
 	) {
 		val result = when (kind) {
 			UnifiedSourceKind.LEGADO -> jsonSourceManager.importLegadoJson(
 				jsonContent = content,
 				sourceLocator = sourceLocator,
 				sourceTitle = sourceTitle,
+				enabled = enableImportedSources,
 			)
 			UnifiedSourceKind.TVBOX -> jsonSourceManager.importTvBoxJson(
 				jsonContent = content,
 				sourceLocator = sourceLocator,
 				sourceTitle = sourceTitle,
+				enabled = enableImportedSources,
 			)
-			UnifiedSourceKind.JS -> jsonSourceManager.importJsSource(content)
-			UnifiedSourceKind.LNREADER -> jsonSourceManager.importLNReaderPlugin(content)
+			UnifiedSourceKind.JS -> jsonSourceManager.importJsSource(content, enabled = enableImportedSources)
+			UnifiedSourceKind.LNREADER -> jsonSourceManager.importLNReaderPlugin(content, enabled = enableImportedSources)
 			else -> Result.failure(
 				IllegalArgumentException(
 					appContext.getString(
@@ -1147,6 +1276,25 @@ class UnifiedSourcesViewModel @Inject constructor(
 				emitMessage(appContext.getString(R.string.unified_sources_imported_sources, count))
 			}
 			.onFailure { error -> emitMessage(error.getDisplayMessage(appContext.resources)) }
+	}
+
+	private suspend fun deleteImportedJsonRepositorySources(
+		repository: UnifiedSourceRepositoryItem,
+		ready: UnifiedSourcesUiState.Ready,
+	) {
+		val sourceIds = ready.allSources
+			.filter { it.repositoryId == repository.id }
+			.map { it.id }
+		val ids = sourceIds.ifEmpty {
+			jsonSourceManager.observeAllJsonSources()
+				.first()
+				.filter { it.jsonRepositoryIdForAction() == repository.id }
+				.map { it.id }
+		}
+		if (ids.isNotEmpty()) {
+			jsonSourceManager.deleteSourcesBatch(ids)
+		}
+		emitMessage(appContext.getString(R.string.unified_sources_repository_sources_deleted))
 	}
 
 	private suspend fun loadRepositoryText(locator: String): String {
@@ -1217,6 +1365,91 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 		availableLnReaderPlugins.value = plugins.withPreferredLnReaderVersions()
 		fillMissingLnReaderIcons(availableLnReaderPlugins.value.map { it.plugin })
+	}
+
+	private suspend fun refreshAvailableJsonPackages() {
+		val legadoPackages = settings.legadoRepoUrls.mapNotNull { repoUrl ->
+			runCatching { fetchAvailableLegadoPackage(repoUrl) }.getOrNull()
+		}
+		val tvBoxPackages = settings.tvBoxRepoUrls.mapNotNull { repoUrl ->
+			runCatching { fetchAvailableTvBoxPackage(repoUrl) }.getOrNull()
+		}
+		availableJsonPackages.value = (legadoPackages + tvBoxPackages).sortedBy { it.name.lowercase() }
+	}
+
+	private suspend fun fetchAvailableLegadoPackage(
+		repoUrl: String,
+		preferredTitle: String? = null,
+	): UnifiedSourcePackageItem {
+		val content = fetchRemoteText(repoUrl)
+		val sources = jsonSourceManager.inspectLegadoJson(content).getOrThrow()
+		require(sources.isNotEmpty()) { appContext.getString(R.string.unified_sources_empty_response_body) }
+		val repoName = preferredTitle?.trim()?.takeIf { it.isNotBlank() }
+			?: UnifiedRecommendedRepositories.all.firstOrNull { preset ->
+				preset.kind == UnifiedSourceKind.LEGADO &&
+					normalizeRepositoryUrlForAction(preset.url) == normalizeRepositoryUrlForAction(repoUrl)
+			}?.name
+			?: repositoryTitleForAction(repoUrl, fallback = "Legado")
+		val repositoryId = repositoryIdForAction(UnifiedSourceKind.LEGADO, repoUrl)
+		return UnifiedSourcePackageItem(
+			id = packageIdForAction(UnifiedSourceKind.LEGADO, repositoryId),
+			kind = UnifiedSourceKind.LEGADO,
+			name = repoName,
+			packageName = repositoryId,
+			repositoryId = repositoryId,
+			repositoryName = repoName,
+			versionName = null,
+			versionCode = null,
+			language = null,
+			isInstalled = false,
+			isNsfw = false,
+			sourceCount = sources.size,
+			sourceNames = sources.map { it.bookSourceName }.distinct().sorted(),
+			jsonPayload = UnifiedJsonPackagePayload(
+				content = content,
+				sourceLocator = repoUrl,
+				sourceTitle = repoName,
+			),
+		)
+	}
+
+	private suspend fun fetchAvailableTvBoxPackage(
+		repoUrl: String,
+		preferredTitle: String? = null,
+	): UnifiedSourcePackageItem {
+		val content = if (repoUrl.isMacCmsApiUrlForAction()) repoUrl else fetchRemoteText(repoUrl)
+		val sourceNames = jsonSourceManager.inspectTvBoxJson(
+			jsonContent = content,
+			sourceLocator = repoUrl,
+			sourceTitle = preferredTitle,
+		).getOrThrow()
+		val repoName = preferredTitle?.trim()?.takeIf { it.isNotBlank() }
+			?: UnifiedRecommendedRepositories.all.firstOrNull { preset ->
+				preset.kind == UnifiedSourceKind.TVBOX &&
+					normalizeRepositoryUrlForAction(preset.url) == normalizeRepositoryUrlForAction(repoUrl)
+			}?.name
+			?: repositoryTitleForAction(repoUrl, fallback = "TVBox")
+		val repositoryId = repositoryIdForAction(UnifiedSourceKind.TVBOX, repoUrl)
+		return UnifiedSourcePackageItem(
+			id = packageIdForAction(UnifiedSourceKind.TVBOX, repositoryId),
+			kind = UnifiedSourceKind.TVBOX,
+			name = repoName,
+			packageName = repositoryId,
+			repositoryId = repositoryId,
+			repositoryName = repoName,
+			versionName = null,
+			versionCode = null,
+			language = null,
+			isInstalled = false,
+			isNsfw = false,
+			sourceCount = sourceNames.size,
+			sourceNames = sourceNames,
+			jsonPayload = UnifiedJsonPackagePayload(
+				content = content,
+				sourceLocator = repoUrl,
+				sourceTitle = repoName,
+			),
+		)
 	}
 
 	private suspend fun fillMissingLnReaderIcons(plugins: List<LNReaderPluginInfo>) {
@@ -1307,6 +1540,27 @@ class UnifiedSourcesViewModel @Inject constructor(
 		}
 		return copy(
 			packages = (installedWithoutCatalogMatch + availablePackages)
+				.sortedWith(packageItemComparator)
+				.withUniquePackageIds(),
+		)
+	}
+
+	private fun UnifiedSourceCatalogState.withAvailableJsonPackages(
+		availablePackages: List<UnifiedSourcePackageItem>,
+	): UnifiedSourceCatalogState {
+		val installedById = packages
+			.filter { it.kind == UnifiedSourceKind.LEGADO || it.kind == UnifiedSourceKind.TVBOX }
+			.associateBy { it.id }
+		val mergedPackages = availablePackages.map { available ->
+			installedById[available.id]?.copy(
+				repositoryId = available.repositoryId,
+				repositoryName = available.repositoryName,
+				jsonPayload = available.jsonPayload,
+			) ?: available
+		}
+		val availableIds = availablePackages.mapTo(HashSet()) { it.id }
+		return copy(
+			packages = (packages.filterNot { it.id in availableIds } + mergedPackages)
 				.sortedWith(packageItemComparator)
 				.withUniquePackageIds(),
 		)
@@ -1535,6 +1789,13 @@ class UnifiedSourcesViewModel @Inject constructor(
 sealed interface UnifiedSourcesEvent {
 	data class Message(val message: String) : UnifiedSourcesEvent
 	data class InstallFailed(val message: String) : UnifiedSourcesEvent
+	data class ConfirmPackageInstall(
+		val packageId: String,
+		val kind: UnifiedSourceKind,
+		val name: String,
+		val sourceCount: Int,
+		val mode: ExtensionInstallMode,
+	) : UnifiedSourcesEvent
 	data class TrustExternalRepository(val repo: ExternalExtensionRepo) : UnifiedSourcesEvent
 	data class StartInstall(val intent: Intent) : UnifiedSourcesEvent
 	data class StartUninstall(val intent: Intent) : UnifiedSourcesEvent
@@ -1784,6 +2045,16 @@ private fun repositoryIdForAction(kind: UnifiedSourceKind, url: String): String 
 	return "repo:${kind.name}:${normalizeRepositoryUrlForAction(url)}"
 }
 
+private fun Set<String>.containsRepositoryUrl(url: String): Boolean {
+	val normalizedUrl = normalizeRepositoryUrlForAction(url)
+	return any { normalizeRepositoryUrlForAction(it) == normalizedUrl }
+}
+
+private fun Set<String>.withoutRepositoryUrl(url: String): Set<String> {
+	val normalizedUrl = normalizeRepositoryUrlForAction(url)
+	return filterNotTo(linkedSetOf()) { normalizeRepositoryUrlForAction(it) == normalizedUrl }
+}
+
 private fun packageIdForAction(kind: UnifiedSourceKind, value: String): String {
 	return "package:${kind.name}:${value.trim()}"
 }
@@ -1830,9 +2101,10 @@ private fun lnReaderSourceId(plugin: LNReaderPluginInfo): String {
 	return "JSON_LNREADER_${sourceKey.hashCode().toUInt().toString(16).uppercase()}"
 }
 
-private data class LnReaderPackageSnapshot(
+private data class AvailablePackageSnapshot(
 	val plugins: List<LnReaderAvailablePlugin>,
 	val installingPackageIds: Set<String>,
+	val jsonPackages: List<UnifiedSourcePackageItem>,
 )
 
 private fun UnifiedSourceKind.displayNameForMessage(context: Context): String {

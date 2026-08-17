@@ -20,6 +20,14 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
+
+data class ExtensionInstallBehaviorItem(
+    val type: String,
+    val title: String,
+    val iconRes: Int,
+    val policy: ExtensionInstallPolicy,
+)
 
 data class SourcesSettingsUiState(
     val sourcesSortOrder: SourcesSortOrder,
@@ -33,6 +41,7 @@ data class SourcesSettingsUiState(
     val isTagsWarningsEnabled: Boolean,
     val isMirrorSwitchingEnabled: Boolean,
     val isHandleLinksEnabled: Boolean,
+    val extensionInstallBehaviors: List<ExtensionInstallBehaviorItem>,
 )
 
 enum class AdultContentFilterTarget {
@@ -54,6 +63,7 @@ fun SourcesSettingsScreen(
     snackbarHostState: SnackbarHostState,
     sortOrderOptions: List<SettingsChoiceOption<SourcesSortOrder>>,
     incognitoOptions: List<SettingsChoiceOption<TriStateOption>>,
+    extensionInstallPolicyOptions: List<SettingsChoiceOption<ExtensionInstallPolicy>>,
     onSourcesSortOrderChange: (SourcesSortOrder) -> Unit,
     onSourcesGridModeChange: (Boolean) -> Unit,
     onSourcesGroupedByLanguageChange: (Boolean) -> Unit,
@@ -66,6 +76,7 @@ fun SourcesSettingsScreen(
     onTagsWarningsEnabledChange: (Boolean) -> Unit,
     onMirrorSwitchingChange: (Boolean) -> Unit,
     onHandleLinksEnabledChange: (Boolean) -> Unit,
+    onExtensionInstallPolicyChange: (String, ExtensionInstallPolicy) -> Unit,
 ) {
     val adultContentFilterOptions = listOf(
         SettingsChoiceOption(
@@ -146,6 +157,21 @@ fun SourcesSettingsScreen(
                         summary = stringResource(R.string.show_broken_sources_summary),
                         onCheckedChange = onShowBrokenSourcesChange,
                     ) }
+                }
+            }
+            item(key = "extension_install_behavior") {
+                SettingsPreferenceGroup(title = stringResource(R.string.extension_install_behavior)) {
+                    state.extensionInstallBehaviors.forEach { behavior ->
+                        item { SettingsChoicePreference(
+                            title = behavior.title,
+                            iconRes = behavior.iconRes,
+                            value = behavior.policy,
+                            options = extensionInstallPolicyOptions,
+                            onValueChange = { policy ->
+                                onExtensionInstallPolicyChange(behavior.type, policy)
+                            },
+                        ) }
+                    }
                 }
             }
             item(key = "adult_filtering") {

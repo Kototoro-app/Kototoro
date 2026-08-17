@@ -428,7 +428,7 @@ class JsonSourceManager @Inject constructor(
 	/**
 	 * Imports a single Venera-style JavaScript source.
 	 */
-	suspend fun importJsSource(jsContent: String): Result<Int> {
+	suspend fun importJsSource(jsContent: String, enabled: Boolean? = null): Result<Int> {
 		val parser = jsSourceParser ?: return Result.failure(IllegalStateException("JS parser unavailable"))
 		
 		return parser.parseMetadata(jsContent).mapCatching { meta ->
@@ -442,7 +442,7 @@ class JsonSourceManager @Inject constructor(
 				name = meta.name,
 				type = JsonSourceType.JS,
 				config = jsContent,
-				enabled = true,
+				enabled = enabled ?: jsonSourceDao.getById(sourceId)?.enabled ?: true,
 				createdAt = timestamp,
 				updatedAt = timestamp,
 				lastUsedAt = 0,
@@ -466,6 +466,7 @@ class JsonSourceManager @Inject constructor(
 	suspend fun importLNReaderPlugin(
 		jsContent: String,
 		metadataOverride: LNReaderPluginMetadata? = null,
+		enabled: Boolean? = null,
 	): Result<Int> {
 		return try {
 			val fallbackId = "lnreader_${System.currentTimeMillis()}"
@@ -484,7 +485,7 @@ class JsonSourceManager @Inject constructor(
 				name = meta.name,
 				type = JsonSourceType.LNREADER,
 				config = jsContent,
-				enabled = true,
+				enabled = enabled ?: jsonSourceDao.getById(sourceId)?.enabled ?: true,
 				createdAt = timestamp,
 				updatedAt = timestamp,
 				lastUsedAt = 0,
@@ -545,6 +546,7 @@ class JsonSourceManager @Inject constructor(
 		skipNoExplore: Boolean = false,
 		sourceLocator: String? = null,
 		sourceTitle: String? = null,
+		enabled: Boolean? = null,
 	): Result<Int> {
 		val startTime = System.currentTimeMillis()
 		JsonSourceLogger.logImportStart("LEGADO", jsonContent.length)
@@ -576,6 +578,7 @@ class JsonSourceManager @Inject constructor(
 						skipNoExplore = skipNoExplore,
 						sourceLocator = sourceLocator,
 						sourceTitle = sourceTitle,
+						enabled = enabled,
 					)
 				}
 				
@@ -636,6 +639,13 @@ class JsonSourceManager @Inject constructor(
 		}
 	}
 
+	fun inspectLegadoJson(jsonContent: String): Result<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>> {
+		return runCatching {
+			json.decodeFromString<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>>(jsonContent)
+				.filter { source -> source.bookSourceName.isNotBlank() && source.bookSourceUrl.isNotBlank() }
+		}
+	}
+
 	/**
 	 * Imports TVBox JSON.
 	 *
@@ -647,6 +657,7 @@ class JsonSourceManager @Inject constructor(
 		jsonContent: String,
 		sourceLocator: String? = null,
 		sourceTitle: String? = null,
+		enabled: Boolean? = null,
 	): Result<Int> {
 		val startTime = System.currentTimeMillis()
 		JsonSourceLogger.logImportStart("TVBOX", jsonContent.length)
@@ -675,6 +686,7 @@ class JsonSourceManager @Inject constructor(
 				rawContent = contentToProcess,
 				sourceLocator = effectiveSourceLocator,
 				sourceTitle = effectiveSourceTitle,
+				enabled = enabled,
 				depth = 0,
 				visitedUrls = visitedUrls,
 				entities = entities,
@@ -702,6 +714,41 @@ class JsonSourceManager @Inject constructor(
 			Result.failure(e)
 		}
 	}
+
+	suspend fun inspectTvBoxJson(
+		jsonContent: String,
+		sourceLocator: String? = null,
+		sourceTitle: String? = null,
+	): Result<List<String>> {
+		return runCatching {
+			val entities = mutableListOf<JsonSourceEntity>()
+			val visitedUrls = linkedSetOf<String>()
+			val errors = mutableListOf<String>()
+			val normalizedInput = jsonContent.trim()
+			val directMacCmsUrl = detectMacCmsApiUrl(sourceLocator.orEmpty())
+				?: detectMacCmsApiUrl(normalizedInput)
+				?: detectMacCmsPayloadApiUrl(normalizedInput, sourceLocator)
+			val contentToProcess = if (directMacCmsUrl != null) {
+				buildMacCmsTvBoxDocument(directMacCmsUrl, sourceTitle)
+			} else {
+				jsonContent
+			}
+			processTvBoxDocument(
+				rawContent = contentToProcess,
+				sourceLocator = directMacCmsUrl ?: sourceLocator,
+				sourceTitle = sourceTitle ?: directMacCmsUrl?.let { buildTvBoxRepositoryTitle(it, null) },
+				enabled = null,
+				depth = 0,
+				visitedUrls = visitedUrls,
+				entities = entities,
+				errors = errors,
+			)
+			require(entities.isNotEmpty()) {
+				errors.firstOrNull() ?: "No valid TVBox sites found"
+			}
+			entities.map { it.name }.distinct().sorted()
+		}
+	}
 	
 	/**
 	 * Process a single source (validation, ID generation, entity creation)
@@ -714,6 +761,7 @@ class JsonSourceManager @Inject constructor(
 		skipNoExplore: Boolean,
 		sourceLocator: String?,
 		sourceTitle: String?,
+		enabled: Boolean?,
 	): SourceProcessResult {
 		return try {
 			// Validate the source
@@ -764,7 +812,7 @@ class JsonSourceManager @Inject constructor(
 				name = source.bookSourceName,
 				type = JsonSourceType.LEGADO,
 				config = configJson,
-				enabled = source.enabled,
+				enabled = enabled ?: jsonSourceDao.getById(sourceId)?.enabled ?: source.enabled,
 				createdAt = timestamp,
 				updatedAt = timestamp,
 				lastUsedAt = 0,
@@ -914,6 +962,7 @@ class JsonSourceManager @Inject constructor(
 		rawContent: String,
 		sourceLocator: String?,
 		sourceTitle: String?,
+		enabled: Boolean?,
 		depth: Int,
 		visitedUrls: MutableSet<String>,
 		entities: MutableList<JsonSourceEntity>,
@@ -943,6 +992,7 @@ class JsonSourceManager @Inject constructor(
 					root = root,
 					sourceLocator = sourceLocator,
 					sourceTitle = repositoryTitle,
+					enabled = enabled,
 				)
 				entities += importedEntities
 				JsonSourceLogger.logInfo(
@@ -1011,6 +1061,7 @@ class JsonSourceManager @Inject constructor(
 						rawContent = childContent,
 						sourceLocator = childUrl,
 						sourceTitle = childTitle,
+						enabled = enabled,
 						depth = depth + 1,
 						visitedUrls = visitedUrls,
 						entities = entities,
@@ -1141,6 +1192,7 @@ class JsonSourceManager @Inject constructor(
 		root: JSONObject,
 		sourceLocator: String?,
 		sourceTitle: String?,
+		enabled: Boolean?,
 	): List<JsonSourceEntity> {
 		val sites = root.optJSONArray("sites") ?: JSONArray()
 		if (sites.length() == 0) {
@@ -1195,7 +1247,7 @@ class JsonSourceManager @Inject constructor(
 				name = name,
 				type = JsonSourceType.TVBOX,
 				config = configJson,
-				enabled = true,
+				enabled = enabled ?: jsonSourceDao.getById(sourceId)?.enabled ?: true,
 				createdAt = timestamp,
 				updatedAt = timestamp,
 				lastUsedAt = 0,

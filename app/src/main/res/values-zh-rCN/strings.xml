@@ -2607,6 +2607,13 @@
     <string name="incompatible_section">不兼容</string>
     <string name="inline_preference_pattern">%1$s: %2$s</string>
     <string name="install_extension">安装</string>
+    <string name="extension_install_choice_title">安装 %1$s</string>
+    <string name="extension_install_choice_message">该扩展包含 %1$d 个来源。请选择安装后是否启用。</string>
+    <string name="extension_install_choice_message_unknown">请选择安装后是否启用导入的来源。</string>
+    <string name="extension_install_remember_choice">对所有 %1$s 扩展记住此选择</string>
+    <string name="extension_install_only">仅安装</string>
+    <string name="extension_install_and_enable">安装并启用</string>
+    <string name="extension_install_behavior">扩展安装行为</string>
     <string name="installed">已安装</string>
     <string name="installed_extension">已安装</string>
     <string name="installed_repo_label">已安装</string>

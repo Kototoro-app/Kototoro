@@ -2874,6 +2874,13 @@
     <string name="available_extension_update_count">%d updates</string>
     <string name="open_website">Open website</string>
     <string name="install_extension">Install</string>
+    <string name="extension_install_choice_title">Install %1$s</string>
+    <string name="extension_install_choice_message">This extension provides %1$d source(s). Choose whether to enable them after installation.</string>
+    <string name="extension_install_choice_message_unknown">Choose whether to enable the imported sources after installation.</string>
+    <string name="extension_install_remember_choice">Remember for all %1$s extensions</string>
+    <string name="extension_install_only">Install only</string>
+    <string name="extension_install_and_enable">Install and enable</string>
+    <string name="extension_install_behavior">Extension installation behavior</string>
     <string name="update_extension">Update</string>
     <string name="update_all_extensions">Update all</string>
     <string name="cancel_update_all_extensions">Cancel update all</string>

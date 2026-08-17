@@ -23,13 +23,14 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
 
 	private val viewModel by viewModels<UnifiedSourcesViewModel>()
 	private var pendingFileImportKind: UnifiedSourceKind? = null
+	private var pendingFileImportEnabled = true
 
 	private val openRepositoryFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
 		if (uri == null) return@registerForActivityResult
 		val kind = pendingFileImportKind ?: return@registerForActivityResult
 		pendingFileImportKind = null
 		persistReadPermission(uri)
-		viewModel.addRepositoryFromFile(kind, uri)
+		viewModel.addRepositoryFromFile(kind, uri, pendingFileImportEnabled)
 	}
 
 	private val openLocalJar = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -94,8 +95,9 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
 		)
 	}
 
-	private fun openRepositoryFilePicker(kind: UnifiedSourceKind) {
+	private fun openRepositoryFilePicker(kind: UnifiedSourceKind, enableImportedSources: Boolean) {
 		pendingFileImportKind = kind
+		pendingFileImportEnabled = enableImportedSources
 		openRepositoryFile.launch(
 			arrayOf(
 				"application/json",

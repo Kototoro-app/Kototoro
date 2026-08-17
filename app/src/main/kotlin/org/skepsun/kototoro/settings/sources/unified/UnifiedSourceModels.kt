@@ -98,8 +98,15 @@ data class UnifiedSourcePackageItem(
 	val installLocation: UnifiedSourcePackageInstallLocation? = null,
 	val installPayload: RepoAvailableExtension? = null,
 	val lnReaderPayload: LNReaderPluginInfo? = null,
+	val jsonPayload: UnifiedJsonPackagePayload? = null,
 	val activeSourceCount: Int = 0,
 	val shadowedSourceCount: Int = 0,
+)
+
+data class UnifiedJsonPackagePayload(
+	val content: String,
+	val sourceLocator: String,
+	val sourceTitle: String,
 )
 
 data class UnifiedSourceItem(

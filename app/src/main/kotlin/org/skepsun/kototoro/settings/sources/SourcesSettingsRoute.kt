@@ -23,8 +23,11 @@ import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.settings.SettingsActivity
 import org.skepsun.kototoro.settings.compose.AdultContentFilterTarget
 import org.skepsun.kototoro.settings.compose.SettingsChoiceOption
+import org.skepsun.kototoro.settings.compose.ExtensionInstallBehaviorItem
 import org.skepsun.kototoro.settings.compose.SourcesSettingsScreen
 import org.skepsun.kototoro.settings.compose.SourcesSettingsUiState
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 import javax.inject.Inject
 
 @Composable
@@ -66,6 +69,9 @@ fun SourcesSettingsRoute(
         settings.observeAsState(AppSettings.KEY_TAGS_WARNINGS) { isTagsWarningsEnabled }.value
     val isMirrorSwitchingEnabled =
         settings.observeAsState(AppSettings.KEY_MIRROR_SWITCHING) { isMirrorSwitchingEnabled }.value
+    val extensionInstallPolicies = settings.observeAsState(AppSettings.KEY_EXTENSION_INSTALL_POLICIES) {
+        extensionInstallPolicies
+    }.value
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -78,6 +84,22 @@ fun SourcesSettingsRoute(
         SettingsChoiceOption(TriStateOption.DISABLED, stringResource(R.string.disable)),
     )
     val operationNotSupported = stringResource(R.string.operation_not_supported)
+    val extensionInstallPolicyOptions = listOf(
+        SettingsChoiceOption(ExtensionInstallPolicy.ASK_EVERY_TIME, stringResource(R.string.ask_every_time)),
+        SettingsChoiceOption(ExtensionInstallPolicy.INSTALL_ONLY, stringResource(R.string.extension_install_only)),
+        SettingsChoiceOption(
+            ExtensionInstallPolicy.INSTALL_AND_ENABLE,
+            stringResource(R.string.extension_install_and_enable),
+        ),
+    )
+    val extensionInstallBehaviors = extensionInstallBehaviorTypes.map { kind ->
+        ExtensionInstallBehaviorItem(
+            type = kind.name,
+            title = stringResource(kind.installBehaviorTitleResId()),
+            iconRes = kind.installBehaviorIconResId(),
+            policy = extensionInstallPolicies[kind.name] ?: ExtensionInstallPolicy.ASK_EVERY_TIME,
+        )
+    }
 
     val state = SourcesSettingsUiState(
         sourcesSortOrder = sourcesSortOrder,
@@ -98,6 +120,7 @@ fun SourcesSettingsRoute(
         isTagsWarningsEnabled = isTagsWarningsEnabled,
         isMirrorSwitchingEnabled = isMirrorSwitchingEnabled,
         isHandleLinksEnabled = isLinksEnabled,
+        extensionInstallBehaviors = extensionInstallBehaviors,
     )
 
     SourcesSettingsScreen(
@@ -109,6 +132,7 @@ fun SourcesSettingsRoute(
         snackbarHostState = snackbarHostState,
         sortOrderOptions = sortOrderOptions,
         incognitoOptions = incognitoOptions,
+        extensionInstallPolicyOptions = extensionInstallPolicyOptions,
         onSourcesSortOrderChange = { settings.sourcesSortOrder = it },
         onSourcesGridModeChange = { settings.isSourcesGridMode = it },
         onSourcesGroupedByLanguageChange = { settings.isSourcesGroupedByLanguage = it },
@@ -154,5 +178,44 @@ fun SourcesSettingsRoute(
                 }
             }
         },
+        onExtensionInstallPolicyChange = settings::setExtensionInstallPolicy,
     )
+}
+
+private val extensionInstallBehaviorTypes = listOf(
+    UnifiedSourceKind.LEGADO,
+    UnifiedSourceKind.LNREADER,
+    UnifiedSourceKind.TVBOX,
+    UnifiedSourceKind.JS,
+    UnifiedSourceKind.MIHON,
+    UnifiedSourceKind.ANIYOMI,
+    UnifiedSourceKind.IREADER,
+    UnifiedSourceKind.JAR,
+    UnifiedSourceKind.CLOUDSTREAM,
+)
+
+private fun UnifiedSourceKind.installBehaviorTitleResId(): Int = when (this) {
+    UnifiedSourceKind.LEGADO -> R.string.source_type_legado_json
+    UnifiedSourceKind.LNREADER -> R.string.source_type_lnreader
+    UnifiedSourceKind.TVBOX -> R.string.source_type_tvbox_json
+    UnifiedSourceKind.JS -> R.string.source_type_js_source
+    UnifiedSourceKind.MIHON -> R.string.source_type_mihon_apk
+    UnifiedSourceKind.ANIYOMI -> R.string.source_type_aniyomi_apk
+    UnifiedSourceKind.IREADER -> R.string.source_type_ireader_apk
+    UnifiedSourceKind.JAR -> R.string.source_type_jar
+    UnifiedSourceKind.CLOUDSTREAM -> R.string.source_type_cloudstream
+    UnifiedSourceKind.NATIVE -> R.string.source_type_native
+}
+
+private fun UnifiedSourceKind.installBehaviorIconResId(): Int = when (this) {
+    UnifiedSourceKind.LEGADO -> R.drawable.ic_source_legado
+    UnifiedSourceKind.LNREADER -> R.drawable.ic_source_lnreader
+    UnifiedSourceKind.TVBOX -> R.drawable.ic_source_tvbox
+    UnifiedSourceKind.JS -> R.drawable.ic_source_js
+    UnifiedSourceKind.MIHON -> R.drawable.ic_source_mihon
+    UnifiedSourceKind.ANIYOMI -> R.drawable.ic_source_aniyomi
+    UnifiedSourceKind.IREADER -> R.drawable.ic_source_ireader
+    UnifiedSourceKind.CLOUDSTREAM -> R.drawable.ic_source_cloudstream
+    UnifiedSourceKind.JAR,
+    UnifiedSourceKind.NATIVE -> R.drawable.ic_extension
 }

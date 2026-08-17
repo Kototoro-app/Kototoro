@@ -34,9 +34,9 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -72,8 +72,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -89,6 +87,7 @@ import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
@@ -99,13 +98,18 @@ import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
 import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
+import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.settings.sources.extensions.formatExtensionFingerprint
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
 import org.skepsun.kototoro.settings.sources.extensions.toInstalledIReaderPackageName
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
+import org.skepsun.kototoro.settings.compose.SettingsCompactSearchField
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
+import org.skepsun.kototoro.settings.compose.SettingsTopBarIconButton
+import org.skepsun.kototoro.settings.compose.SettingsTopBarSurface
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import java.util.Locale
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -179,6 +183,13 @@ private sealed interface UnifiedSourcesDialogState {
 		val enabled: Boolean,
 	) : UnifiedSourcesDialogState
 	data class PackageDetails(val item: UnifiedSourcePackageItem) : UnifiedSourcesDialogState
+	data class InstallChoice(
+		val kind: UnifiedSourceKind,
+		val name: String,
+		val sourceCount: Int,
+		val packageRequest: UnifiedSourcesEvent.ConfirmPackageInstall? = null,
+		val importAction: UnifiedThirdPartyAction? = null,
+	) : UnifiedSourcesDialogState
 	data class InstallError(val message: String) : UnifiedSourcesDialogState
 	data class ThirdPartyDisclaimer(val action: UnifiedThirdPartyAction) : UnifiedSourcesDialogState
 }
@@ -232,7 +243,7 @@ internal fun resolveSelectedSourcesNsfwAction(
 fun UnifiedSourcesRoute(
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
-	onOpenRepositoryFile: (UnifiedSourceKind) -> Unit,
+	onOpenRepositoryFile: (UnifiedSourceKind, Boolean) -> Unit,
 	onOpenLocalJarPicker: () -> Unit,
 	onStartInstall: (Intent) -> Unit,
 	onStartUninstall: (Intent) -> Unit,
@@ -254,16 +265,16 @@ fun UnifiedSourcesRoute(
 	var selectedSourceIdList by rememberSaveable { mutableStateOf(emptyList<String>()) }
 	val selectedSourceIds = remember(selectedSourceIdList) { selectedSourceIdList.toSet() }
 
-	fun proceedThirdPartyAction(action: UnifiedThirdPartyAction) {
+	fun proceedThirdPartyAction(action: UnifiedThirdPartyAction, enableImportedSources: Boolean = true) {
 		when (action) {
 			is UnifiedThirdPartyAction.AddRepositoryUrl -> {
-				viewModel.addRepositoryFromUrl(action.kind, action.url, action.title)
+				viewModel.addRepositoryFromUrl(action.kind, action.url, action.title, enableImportedSources)
 			}
 			is UnifiedThirdPartyAction.AddInlineRepository -> {
-				viewModel.addRepositoryFromInline(action.kind, action.content, action.title)
+				viewModel.addRepositoryFromInline(action.kind, action.content, action.title, enableImportedSources)
 			}
 			is UnifiedThirdPartyAction.OpenRepositoryFile -> {
-				onOpenRepositoryFile(action.kind)
+				onOpenRepositoryFile(action.kind, enableImportedSources)
 			}
 			UnifiedThirdPartyAction.OpenLocalJar -> {
 				onOpenLocalJarPicker()
@@ -279,6 +290,14 @@ fun UnifiedSourcesRoute(
 				}
 				is UnifiedSourcesEvent.InstallFailed -> {
 					activeDialog = UnifiedSourcesDialogState.InstallError(event.message)
+				}
+				is UnifiedSourcesEvent.ConfirmPackageInstall -> {
+					activeDialog = UnifiedSourcesDialogState.InstallChoice(
+						kind = event.kind,
+						name = event.name,
+						sourceCount = event.sourceCount,
+						packageRequest = event,
+					)
 				}
 				is UnifiedSourcesEvent.TrustExternalRepository -> {
 					activeDialog = UnifiedSourcesDialogState.TrustRepository(event.repo)
@@ -555,7 +574,56 @@ fun UnifiedSourcesRoute(
 		is UnifiedSourcesDialogState.ThirdPartyDisclaimer -> UnifiedDisclaimerDialog(
 			onDismiss = { activeDialog = null },
 			onConfirm = {
-				proceedThirdPartyAction(dialog.action)
+				val kind = dialog.action.installKindOrNull()
+				if (kind == null) {
+					proceedThirdPartyAction(dialog.action)
+					activeDialog = null
+				} else {
+					when (viewModel.getInstallPolicy(kind)) {
+						ExtensionInstallPolicy.ASK_EVERY_TIME -> {
+							activeDialog = UnifiedSourcesDialogState.InstallChoice(
+								kind = kind,
+								name = context.getString(kind.dialogLabelResId()),
+								sourceCount = 0,
+								importAction = dialog.action,
+							)
+						}
+						ExtensionInstallPolicy.INSTALL_ONLY -> {
+							proceedThirdPartyAction(dialog.action, enableImportedSources = false)
+							activeDialog = null
+						}
+						ExtensionInstallPolicy.INSTALL_AND_ENABLE -> {
+							proceedThirdPartyAction(dialog.action, enableImportedSources = true)
+							activeDialog = null
+						}
+					}
+				}
+			},
+		)
+
+		is UnifiedSourcesDialogState.InstallChoice -> UnifiedInstallChoiceDialog(
+			kind = dialog.kind,
+			name = dialog.name,
+			sourceCount = dialog.sourceCount,
+			onDismiss = { activeDialog = null },
+			onChoice = { policy, remember ->
+				dialog.packageRequest?.let { request ->
+					viewModel.confirmPackageInstall(
+						packageId = request.packageId,
+						mode = request.mode,
+						policy = policy,
+						remember = remember,
+					)
+				}
+				dialog.importAction?.let { action ->
+					if (remember) {
+						viewModel.setInstallPolicy(dialog.kind, policy)
+					}
+					proceedThirdPartyAction(
+						action,
+						enableImportedSources = policy == ExtensionInstallPolicy.INSTALL_AND_ENABLE,
+					)
+				}
 				activeDialog = null
 			},
 		)
@@ -689,6 +757,71 @@ private fun <T> UnifiedSelectionDialog(
 							modifier = Modifier.fillMaxWidth(),
 						)
 					}
+				}
+			}
+		},
+	)
+}
+
+@Composable
+private fun UnifiedInstallChoiceDialog(
+	kind: UnifiedSourceKind,
+	name: String,
+	sourceCount: Int,
+	onDismiss: () -> Unit,
+	onChoice: (ExtensionInstallPolicy, Boolean) -> Unit,
+) {
+	var rememberChoice by rememberSaveable(kind) { mutableStateOf(false) }
+	SettingsAlertDialog(
+		title = stringResource(R.string.extension_install_choice_title, name),
+		onDismissRequest = onDismiss,
+		confirmButton = {
+			SettingsDialogActionButton(
+				text = stringResource(R.string.extension_install_and_enable),
+				onClick = {
+					onChoice(ExtensionInstallPolicy.INSTALL_AND_ENABLE, rememberChoice)
+				},
+			)
+		},
+		dismissButton = {
+			Row(verticalAlignment = Alignment.CenterVertically) {
+				SettingsDialogActionButton(
+					text = stringResource(android.R.string.cancel),
+					onClick = onDismiss,
+				)
+				SettingsDialogActionButton(
+					text = stringResource(R.string.extension_install_only),
+					onClick = {
+						onChoice(ExtensionInstallPolicy.INSTALL_ONLY, rememberChoice)
+					},
+				)
+			}
+		},
+		text = {
+			Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+				Text(
+					text = if (sourceCount > 0) {
+						stringResource(R.string.extension_install_choice_message, sourceCount)
+					} else {
+						stringResource(R.string.extension_install_choice_message_unknown)
+					},
+				)
+				Row(
+					modifier = Modifier
+						.fillMaxWidth()
+						.combinedClickable(onClick = { rememberChoice = !rememberChoice }),
+					verticalAlignment = Alignment.CenterVertically,
+				) {
+					Checkbox(
+						checked = rememberChoice,
+						onCheckedChange = { rememberChoice = it },
+					)
+					Text(
+						text = stringResource(
+							R.string.extension_install_remember_choice,
+							stringResource(kind.dialogLabelResId()),
+						),
+					)
 				}
 			}
 		},
@@ -1068,63 +1201,6 @@ private fun UnifiedLanguageFilterDialog(
 }
 
 @Composable
-private fun ToolbarSearchField(
-	query: String,
-	onQueryChange: (String) -> Unit,
-	modifier: Modifier = Modifier,
-	autofocus: Boolean = false,
-) {
-	val focusRequester = remember { FocusRequester() }
-	if (autofocus) {
-		LaunchedEffect(Unit) {
-			focusRequester.requestFocus()
-		}
-	}
-	Surface(
-		modifier = modifier.height(40.dp),
-		shape = RoundedCornerShape(20.dp),
-		color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
-		contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-	) {
-		BasicTextField(
-			value = query,
-			onValueChange = onQueryChange,
-			modifier = Modifier
-				.fillMaxSize()
-				.focusRequester(focusRequester),
-			singleLine = true,
-			textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-			decorationBox = { innerTextField ->
-				Row(
-					modifier = Modifier
-						.fillMaxSize()
-						.padding(horizontal = 12.dp),
-					verticalAlignment = Alignment.CenterVertically,
-				) {
-					Icon(
-						Icons.Filled.Search,
-						contentDescription = null,
-						modifier = Modifier.size(18.dp),
-					)
-					Spacer(modifier = Modifier.width(8.dp))
-					Box(modifier = Modifier.weight(1f)) {
-						if (query.isEmpty()) {
-								Text(
-									text = stringResource(R.string.search),
-								style = MaterialTheme.typography.bodyMedium,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
-								maxLines = 1,
-							)
-						}
-						innerTextField()
-					}
-				}
-			},
-		)
-	}
-}
-
-@Composable
 private fun ToolbarSearchIconButton(
 	active: Boolean,
 	onClick: () -> Unit,
@@ -1196,50 +1272,61 @@ private fun ToolbarFilterIconButton(
 }
 
 @Composable
-fun UnifiedSourcesToolbarActions(
+fun UnifiedSourcesSearchTopBar(
 	readyState: UnifiedSourcesUiState.Ready?,
-	searchActive: Boolean,
-	onSearchClick: () -> Unit,
-	onSearchClose: () -> Unit,
+	onNavigateUp: () -> Unit,
 	onSearchQueryChange: (String) -> Unit,
 	onLanguageFilterClick: () -> Unit,
 	onMoreFiltersClick: () -> Unit,
-	modifier: Modifier = Modifier,
 ) {
-	if (searchActive && readyState != null) {
+	BackHandler(onBack = onNavigateUp)
+	val tokens = LocalInterfaceStyleTokens.current
+	SettingsTopBarSurface {
 		Row(
-			modifier = modifier,
-			horizontalArrangement = Arrangement.End,
+			modifier = Modifier
+				.fillMaxWidth()
+				.height(tokens.secondaryTopBarHeight),
 			verticalAlignment = Alignment.CenterVertically,
 		) {
-			ToolbarSearchField(
-				query = readyState.filters.query,
+			SettingsTopBarIconButton(onClick = onNavigateUp) {
+				Icon(
+					imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+					contentDescription = stringResource(android.R.string.cancel),
+					modifier = Modifier.size(tokens.topBarIconSize),
+				)
+			}
+			Spacer(modifier = Modifier.width(CompactTopBarItemSpacing))
+			SettingsCompactSearchField(
+				query = readyState?.filters?.query.orEmpty(),
 				onQueryChange = onSearchQueryChange,
 				modifier = Modifier.weight(1f),
 				autofocus = true,
 			)
-			IconButton(onClick = onSearchClose) {
-				Icon(
-					imageVector = Icons.Filled.Close,
-					contentDescription = stringResource(android.R.string.cancel),
-					tint = MaterialTheme.colorScheme.onSurface,
-				)
-			}
+			Spacer(modifier = Modifier.width(CompactTopBarItemSpacing))
 			ToolbarFilterIconButton(
 				iconRes = R.drawable.ic_language,
-				activeCount = readyState.filters.languages.size,
+				activeCount = readyState?.filters?.languages?.size ?: 0,
 				contentDescription = stringResource(R.string.filter_extensions_by_language),
 				onClick = onLanguageFilterClick,
 			)
 			ToolbarFilterIconButton(
 				iconRes = R.drawable.ic_filter_menu,
-				activeCount = readyState.filters.otherFilterCount(),
+				activeCount = readyState?.filters?.otherFilterCount() ?: 0,
 				contentDescription = stringResource(R.string.more_filters),
 				onClick = onMoreFiltersClick,
 			)
 		}
-		return
 	}
+}
+
+@Composable
+fun UnifiedSourcesToolbarActions(
+	readyState: UnifiedSourcesUiState.Ready?,
+	onSearchClick: () -> Unit,
+	onLanguageFilterClick: () -> Unit,
+	onMoreFiltersClick: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
 	Row(
 		modifier = modifier,
 		horizontalArrangement = Arrangement.End,
@@ -2516,6 +2603,15 @@ private fun UnifiedSourceKind.supportsJsonImport(): Boolean {
 		UnifiedSourceKind.JS,
 		UnifiedSourceKind.LNREADER -> true
 		else -> false
+	}
+}
+
+private fun UnifiedThirdPartyAction.installKindOrNull(): UnifiedSourceKind? {
+	return when (this) {
+		is UnifiedThirdPartyAction.AddRepositoryUrl -> kind.takeIf { it == UnifiedSourceKind.JS }
+		is UnifiedThirdPartyAction.AddInlineRepository -> kind
+		is UnifiedThirdPartyAction.OpenRepositoryFile -> kind
+		UnifiedThirdPartyAction.OpenLocalJar -> null
 	}
 }
 

@@ -26,6 +26,7 @@ object UnifiedRecommendedRepositories {
 
 	private val jsonRepoCapabilities = setOf(
 		UnifiedRepositoryCapability.REFRESH,
+		UnifiedRepositoryCapability.INSTALL_PACKAGE,
 		UnifiedRepositoryCapability.IMPORT_JSON_LIST,
 	)
 

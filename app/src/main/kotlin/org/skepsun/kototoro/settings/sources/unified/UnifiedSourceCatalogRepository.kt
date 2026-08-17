@@ -100,11 +100,19 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		val lnReaderRepos = settings.observeAsFlow(AppSettings.KEY_LNREADER_REPOS) {
 			lnReaderRepoUrls
 		}
+		val legadoRepos = settings.observeAsFlow(AppSettings.KEY_LEGADO_REPOS) {
+			legadoRepoUrls
+		}
+		val tvBoxRepos = settings.observeAsFlow(AppSettings.KEY_TVBOX_REPOS) {
+			tvBoxRepoUrls
+		}
 		return combine(
 			externalRepos,
 			lnReaderRepos,
+			legadoRepos,
+			tvBoxRepos,
 			database.getJsonSourceDao().observeAll(),
-		) { external, lnReader, jsonSources ->
+		) { external, lnReader, legado, tvBox, jsonSources ->
 			val configured = external.map { it.toUnifiedRepositoryItem(isPreset = false) } +
 				lnReader.map { url ->
 					UnifiedSourceRepositoryItem(
@@ -122,10 +130,48 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 							UnifiedRepositoryCapability.IMPORT_JSON_LIST,
 						),
 					)
+				} + legado.map { url ->
+					val preset = UnifiedRecommendedRepositories.all.firstOrNull { item ->
+						item.kind == UnifiedSourceKind.LEGADO && normalizeRepositoryUrl(item.url) == normalizeRepositoryUrl(url)
+					}
+					UnifiedSourceRepositoryItem(
+						id = repositoryId(UnifiedSourceKind.LEGADO, url),
+						kind = UnifiedSourceKind.LEGADO,
+						name = preset?.name ?: repositoryTitleFromUrl(url, fallback = "Legado"),
+						url = url,
+						locationType = resolveLocationType(url),
+						website = url,
+						isConfigured = true,
+						isPreset = preset != null,
+						capabilities = setOf(
+							UnifiedRepositoryCapability.REFRESH,
+							UnifiedRepositoryCapability.IMPORT_JSON_LIST,
+							UnifiedRepositoryCapability.INSTALL_PACKAGE,
+						),
+					)
+				} + tvBox.map { url ->
+					val preset = UnifiedRecommendedRepositories.all.firstOrNull { item ->
+						item.kind == UnifiedSourceKind.TVBOX && normalizeRepositoryUrl(item.url) == normalizeRepositoryUrl(url)
+					}
+					UnifiedSourceRepositoryItem(
+						id = repositoryId(UnifiedSourceKind.TVBOX, url),
+						kind = UnifiedSourceKind.TVBOX,
+						name = preset?.name ?: repositoryTitleFromUrl(url, fallback = "TVBox"),
+						url = url,
+						locationType = resolveLocationType(url),
+						website = url,
+						isConfigured = true,
+						isPreset = preset != null,
+						capabilities = setOf(
+							UnifiedRepositoryCapability.REFRESH,
+							UnifiedRepositoryCapability.IMPORT_JSON_LIST,
+							UnifiedRepositoryCapability.INSTALL_PACKAGE,
+						),
+					)
 				} +
 				jsonSources.toJsonRepositoryItems()
 
-			configured.withPresetRepositories()
+			configured.distinctBy { it.id }.withPresetRepositories()
 		}
 	}
 
@@ -309,6 +355,10 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 					)
 				}
 			}
+	}
+
+	suspend fun getSourcesForPackage(packageId: String): List<UnifiedSourceItem> {
+		return buildSourceItems().filter { it.packageId == packageId }
 	}
 
 	private fun observeRuntimeSourceChanges(): Flow<Unit> {

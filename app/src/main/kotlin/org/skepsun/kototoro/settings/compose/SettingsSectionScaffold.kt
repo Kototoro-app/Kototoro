@@ -23,6 +23,7 @@ fun SettingsSectionScaffold(
 	onNavigateUp: (() -> Unit)?,
 	modifier: Modifier = Modifier,
 	showTopBar: Boolean = true,
+	searchContent: (@Composable () -> Unit)? = null,
 	actions: (@Composable BoxScope.() -> Unit)? = null,
 	content: @Composable () -> Unit,
 ) {
@@ -31,6 +32,7 @@ fun SettingsSectionScaffold(
 			title = title,
 			onNavigateUp = onNavigateUp,
 			modifier = modifier,
+			searchContent = searchContent,
 			actions = actions,
 		) { innerPadding ->
 			CompositionLocalProvider(

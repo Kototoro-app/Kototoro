@@ -137,8 +137,10 @@ import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsViewModel
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesToolbarActions
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesSearchTopBar
 import org.skepsun.kototoro.settings.sources.unified.UnifiedToolbarFilterPanel
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesRoute
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesUiState
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesViewModel
 import org.skepsun.kototoro.settings.tracker.TrackerSettingsRoute
 import org.skepsun.kototoro.settings.tracker.TrackerSettingsViewModel
@@ -279,6 +281,7 @@ class SettingsActivity :
 	private var hasAppliedCloseRouteTransition = false
 	private var pendingExternalBackupApp: ExternalBackupApp? = null
 	private var pendingUnifiedSourcesFileImportKind: UnifiedSourceKind? = null
+	private var pendingUnifiedSourcesFileImportEnabled = true
 	private var unifiedSourcesSearchActive by mutableStateOf(false)
 	private var unifiedSourcesActivePanel by mutableStateOf<UnifiedToolbarFilterPanel?>(null)
 	private var isLegacyTopBarVisible = false
@@ -400,7 +403,7 @@ class SettingsActivity :
 		val kind = pendingUnifiedSourcesFileImportKind ?: return@registerForActivityResult
 		pendingUnifiedSourcesFileImportKind = null
 		persistReadPermission(uri)
-		unifiedSourcesViewModel.addRepositoryFromFile(kind, uri)
+		unifiedSourcesViewModel.addRepositoryFromFile(kind, uri, pendingUnifiedSourcesFileImportEnabled)
 	}
 
 	private val openUnifiedSourcesLocalJar = registerForActivityResult(
@@ -652,6 +655,7 @@ class SettingsActivity :
 	@Composable
 	private fun RenderComposeSection(
 		title: String,
+		searchContent: (@Composable () -> Unit)? = null,
 		actions: (@Composable BoxScope.() -> Unit)? = null,
 		content: @Composable () -> Unit,
 	) {
@@ -659,6 +663,7 @@ class SettingsActivity :
 			title = title,
 			onNavigateUp = if (isMasterDetails) null else ::handleComposeNavigateUp,
 			showTopBar = true,
+			searchContent = searchContent,
 			actions = actions,
 			content = content,
 		)
@@ -1334,28 +1339,43 @@ class SettingsActivity :
 				)
 			}
 			is SettingsDestination.UnifiedSources -> {
-				val readyState by unifiedSourcesViewModel.uiState.collectAsStateWithLifecycle()
+				val state by unifiedSourcesViewModel.uiState.collectAsStateWithLifecycle()
+				val readyState = state as? UnifiedSourcesUiState.Ready
+				val closeSearch = {
+					updateUnifiedSourcesSearchActive(false)
+					unifiedSourcesViewModel.setSearchQuery("")
+				}
+				val openLanguageFilter = {
+					unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.LANGUAGE
+				}
+				val openMoreFilters = {
+					unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.MORE
+				}
+				val toolbarActions: @Composable (Modifier) -> Unit = { modifier ->
+					UnifiedSourcesToolbarActions(
+						readyState = readyState,
+						onSearchClick = { updateUnifiedSourcesSearchActive(true) },
+						onLanguageFilterClick = openLanguageFilter,
+						onMoreFiltersClick = openMoreFilters,
+						modifier = modifier,
+					)
+				}
 				RenderComposeSection(
 					title = getString(R.string.extension_management),
-					actions = {
-						UnifiedSourcesToolbarActions(
-							readyState = readyState as? org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesUiState.Ready,
-							searchActive = unifiedSourcesSearchActive,
-							onSearchClick = { updateUnifiedSourcesSearchActive(true) },
-							onSearchClose = {
-								updateUnifiedSourcesSearchActive(false)
-								unifiedSourcesViewModel.setSearchQuery("")
-							},
-							onSearchQueryChange = unifiedSourcesViewModel::setSearchQuery,
-							onLanguageFilterClick = {
-								unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.LANGUAGE
-							},
-							onMoreFiltersClick = {
-								unifiedSourcesActivePanel = UnifiedToolbarFilterPanel.MORE
-							},
-							modifier = Modifier.fillMaxSize(),
-						)
+					searchContent = if (unifiedSourcesSearchActive) {
+						{
+							UnifiedSourcesSearchTopBar(
+								readyState = readyState,
+								onNavigateUp = closeSearch,
+								onSearchQueryChange = unifiedSourcesViewModel::setSearchQuery,
+								onLanguageFilterClick = openLanguageFilter,
+								onMoreFiltersClick = openMoreFilters,
+							)
+						}
+					} else {
+						null
 					},
+					actions = { toolbarActions(Modifier.fillMaxSize()) },
 				) {
 					UnifiedSourcesRoute(
 						searchActive = unifiedSourcesSearchActive,
@@ -1792,8 +1812,9 @@ class SettingsActivity :
 		finishAfterTransition()
 	}
 
-	private fun openUnifiedSourcesRepositoryFilePicker(kind: UnifiedSourceKind) {
+	private fun openUnifiedSourcesRepositoryFilePicker(kind: UnifiedSourceKind, enableImportedSources: Boolean) {
 		pendingUnifiedSourcesFileImportKind = kind
+		pendingUnifiedSourcesFileImportEnabled = enableImportedSources
 		openUnifiedSourcesRepositoryFile.launch(
 			arrayOf(
 				"application/json",
