@@ -1271,7 +1271,10 @@ private fun NovelPageReadingStatus(
 		Row(
 			horizontalArrangement = Arrangement.SpaceBetween,
 			verticalAlignment = Alignment.CenterVertically,
-			modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+			modifier = Modifier.padding(
+				horizontal = settings.marginHorizontal.dp,
+				vertical = 5.dp,
+			),
 		) {
 			Text(
 				text = chapterTitle,

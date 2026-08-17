@@ -484,6 +484,9 @@ class NovelReaderActivity :
                 val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
                     novelReaderControls
                 }
+                val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+                    isReaderControlLabelsEnabled
+                }
                 val readerBackdrop = if (LocalInterfaceStyle.current == InterfaceStyle.IOS && !isEInkModeEnabled) {
                     rememberLayerBackdrop { drawContent() }
                 } else {
@@ -589,6 +592,7 @@ class NovelReaderActivity :
                         NovelReaderFloatingControls(
                             state = state,
                             controls = floatingControls,
+                            showLabels = showFloatingControlLabels,
                             callbacks = callbacks,
                             animationsEnabled = !isEInkModeEnabled,
                             modifier = Modifier

@@ -425,6 +425,19 @@ fun ReaderSettingsScreen(
                                         },
                                     )
                                 }
+                                item {
+                                    SettingsSwitchPreference(
+                                        title = stringResource(R.string.reader_control_labels),
+                                        summary = stringResource(R.string.reader_control_labels_summary),
+                                        iconRes = R.drawable.ic_list_detailed,
+                                        checked = settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+                                            isReaderControlLabelsEnabled
+                                        }.value,
+                                        onCheckedChange = {
+                                            prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LABELS, it) }
+                                        },
+                                    )
+                                }
                             }
 
                             SettingsPreferenceGroup(
@@ -747,19 +760,6 @@ private fun ReaderMangaSettingsPage(
             .fillMaxWidth()
             .padding(top = 20.dp),
     ) {
-        item {
-            SettingsSwitchPreference(
-                title = stringResource(R.string.reader_control_labels),
-                summary = stringResource(R.string.reader_control_labels_summary),
-                iconRes = R.drawable.ic_list_detailed,
-                checked = settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
-                    isReaderControlLabelsEnabled
-                }.value,
-                onCheckedChange = {
-                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CONTROL_LABELS, it) }
-                },
-            )
-        }
         item {
             SettingsMultiChoicePreference(
                 title = stringResource(R.string.reader_floating_controls),

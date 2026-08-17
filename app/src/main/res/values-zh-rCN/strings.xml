@@ -1272,8 +1272,8 @@
     <string name="reader_controls_in_bottom_bar">阅读器底部控制栏</string>
     <string name="reader_floating_controls">阅读器悬浮按钮</string>
     <string name="reader_floating_controls_summary">最多选择 %1$d 个悬浮按钮</string>
-    <string name="reader_control_labels">显示阅读器控件名称</string>
-    <string name="reader_control_labels_summary">在漫画和小说阅读器的控制栏按钮下显示文字名称</string>
+    <string name="reader_control_labels">显示悬浮按钮名称</string>
+    <string name="reader_control_labels_summary">在漫画和小说阅读器的悬浮按钮中显示操作名称</string>
     <string name="disable_captcha_notifications">禁用人机验证通知</string>
     <string name="disable_captcha_notifications_summary">启用后将不会在本内容源收到需要通过人机验证的通知，但会导致后台进程出现异常 (章节更新和推荐作品等)</string>
     <string name="disable_captcha_auto_solve">禁用自动人机验证</string>

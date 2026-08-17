@@ -550,11 +550,11 @@ class ReaderActivity :
         )
         spaceSwitcherDelegate.setControlsVisible(areControlsVisible)
 		setComposeContent {
-			val showControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+			val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
 				isReaderControlLabelsEnabled
 			}
 			Box(modifier = Modifier.fillMaxSize()) {
-				composeReaderController.Content(showControlLabels = showControlLabels)
+				composeReaderController.Content(showFloatingControlLabels = showFloatingControlLabels)
 				spaceSwitcherDelegate.Fab(
 					modifier = Modifier.fillMaxSize(),
 				)

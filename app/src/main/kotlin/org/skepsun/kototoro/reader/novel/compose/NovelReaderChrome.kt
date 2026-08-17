@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,9 +48,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -103,6 +107,7 @@ internal data class NovelReaderChromeCallbacks(
 internal fun NovelReaderFloatingControls(
 	state: NovelComposeReaderUiState,
 	controls: Set<ReaderControl>,
+	showLabels: Boolean,
 	callbacks: NovelReaderChromeCallbacks,
 	animationsEnabled: Boolean = true,
 	modifier: Modifier = Modifier,
@@ -120,9 +125,17 @@ internal fun NovelReaderFloatingControls(
 		exit = slideOutVertically { it }.whenReaderAnimationsEnabled(animationsEnabled),
 		modifier = modifier,
 	) {
-		Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+		Column(
+			horizontalAlignment = Alignment.End,
+			verticalArrangement = Arrangement.spacedBy(8.dp),
+			modifier = if (showLabels) {
+				Modifier.width(IntrinsicSize.Max).widthIn(max = 200.dp)
+			} else {
+				Modifier
+			},
+		) {
 			supportedControls.forEach { control ->
-				NovelFloatingControlButton(control, state, callbacks)
+				NovelFloatingControlButton(control, state, callbacks, showLabels)
 			}
 		}
 	}
@@ -133,6 +146,7 @@ private fun NovelFloatingControlButton(
 	control: ReaderControl,
 	state: NovelComposeReaderUiState,
 	callbacks: NovelReaderChromeCallbacks,
+	showLabel: Boolean,
 ) {
 	val icon = when (control) {
 		ReaderControl.BOOKMARK -> if (state.isCurrentPageBookmarked) R.drawable.ic_bookmark_added else R.drawable.ic_bookmark
@@ -147,17 +161,44 @@ private fun NovelFloatingControlButton(
 		ReaderControl.BOOKMARK -> callbacks.onBookmark
 		ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
 	}
-	NovelTopControlSurface(shape = CircleShape, modifier = Modifier.size(44.dp)) {
-		IconButton(onClick = onClick) {
+	val shape = if (showLabel) RoundedCornerShape(22.dp) else CircleShape
+	val modifier = if (showLabel) {
+		Modifier.fillMaxWidth().height(44.dp)
+	} else {
+		Modifier.size(44.dp)
+	}
+	val contentColor = if (control == ReaderControl.TRANSLATE && state.settings?.isTranslationEnabled == true) {
+		MaterialTheme.colorScheme.primary
+	} else {
+		MaterialTheme.colorScheme.onSurface
+	}
+	NovelTopControlSurface(
+		shape = shape,
+		modifier = modifier,
+		contentModifier = Modifier
+			.clip(shape)
+			.clickable(role = Role.Button, onClickLabel = stringResource(label), onClick = onClick),
+	) {
+		Row(
+			horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier.fillMaxSize().padding(horizontal = if (showLabel) 8.dp else 0.dp),
+		) {
 			Icon(
 				painter = painterResource(icon),
 				contentDescription = stringResource(label),
-				tint = if (control == ReaderControl.TRANSLATE && state.settings?.isTranslationEnabled == true) {
-					MaterialTheme.colorScheme.primary
-				} else {
-					MaterialTheme.colorScheme.onSurface
-				},
+				tint = contentColor,
+				modifier = Modifier.size(24.dp),
 			)
+			if (showLabel) {
+				Text(
+					text = stringResource(label),
+					color = contentColor,
+					style = MaterialTheme.typography.labelMedium,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+			}
 		}
 	}
 }
@@ -362,9 +403,9 @@ internal fun NovelReaderBottomChrome(
 					horizontalArrangement = Arrangement.SpaceBetween,
 					verticalAlignment = Alignment.CenterVertically,
 					modifier = Modifier.padding(
-						start = 14.dp,
+						start = statusSettings.marginHorizontal.dp,
 						top = 5.dp,
-						end = 14.dp,
+						end = statusSettings.marginHorizontal.dp,
 						bottom = navigationBarBottomInset + 5.dp,
 					),
 				) {
@@ -421,6 +462,7 @@ internal fun NovelReaderBottomChrome(
 private fun NovelTopControlSurface(
 	shape: androidx.compose.ui.graphics.Shape,
 	modifier: Modifier = Modifier,
+	contentModifier: Modifier = Modifier,
 	content: @Composable () -> Unit,
 ) {
 	GlassSurface(
@@ -432,7 +474,7 @@ private fun NovelTopControlSurface(
 		),
 		componentRole = GlassComponentRole.TopBar,
 	) {
-		Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+		Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().then(contentModifier)) {
 			content()
 		}
 	}

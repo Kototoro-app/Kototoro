@@ -1651,8 +1651,8 @@
     <string name="reader_control_ltr">人性化操作</string>
     <string name="reader_control_ltr_summary">硬件输入设备控制下，翻页方向将不随阅读模式调整。例：按下右键总是翻到下一页</string>
     <string name="reader_controls_in_bottom_bar">阅读器底部控制栏</string>
-    <string name="reader_control_labels">显示阅读器控件名称</string>
-    <string name="reader_control_labels_summary">在漫画和小说阅读器的控制栏按钮下显示文字名称</string>
+    <string name="reader_control_labels">显示悬浮按钮名称</string>
+    <string name="reader_control_labels_summary">在漫画和小说阅读器的悬浮按钮中显示操作名称</string>
     <string name="reader_dual_page">横屏/大屏双栏显示</string>
     <string name="reader_font_size">字体大小</string>
     <string name="reader_fullscreen_summary">将系统状态栏与通知栏隐藏</string>

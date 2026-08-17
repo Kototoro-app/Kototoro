@@ -70,12 +70,12 @@ internal class ComposeReaderController(
 	private var lastLayoutAnchor: ReaderState? = null
 
 	@Composable
-	fun Content(showControlLabels: Boolean) {
+	fun Content(showFloatingControlLabels: Boolean) {
 		val infoBarEmbedded = readerMode != ReaderMode.WEBTOON
 		val systemStatus = if (infoBarEmbedded) rememberReaderSystemStatus() else null
 		ComposeReaderActivityScaffold(
 					state = chromeState,
-					showControlLabels = showControlLabels,
+					showFloatingControlLabels = showFloatingControlLabels,
 					infoBarEmbedded = infoBarEmbedded,
 					chapterPanelTabId = chaptersTabId,
 					chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
@@ -119,7 +119,6 @@ internal class ComposeReaderController(
 									ReaderPageInfoBar(
 										state = chromeState.infoBar,
 										controlsVisible = chromeState.controlsVisible,
-										showControlLabels = showControlLabels,
 										systemStatus = it,
 										animationsEnabled = !chromeState.eInkModeEnabled,
 									)

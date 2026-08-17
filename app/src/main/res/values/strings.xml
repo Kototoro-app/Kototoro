@@ -2322,8 +2322,8 @@
     <string name="reader_controls_in_bottom_bar">Reader controls in bottom bar</string>
     <string name="reader_floating_controls">Reader floating buttons</string>
     <string name="reader_floating_controls_summary">Select up to %1$d floating buttons</string>
-    <string name="reader_control_labels">Show reader control labels</string>
-    <string name="reader_control_labels_summary">Show text labels below buttons in the manga and novel reader control bars</string>
+    <string name="reader_control_labels">Show floating button labels</string>
+    <string name="reader_control_labels_summary">Show action names in floating buttons in the manga and novel readers</string>
     <string name="chapters_and_pages">Chapters and pages</string>
     <string name="pages_slider">Page switch slider</string>
     <string name="screen_rotation_locked">Screen rotation has been locked</string>

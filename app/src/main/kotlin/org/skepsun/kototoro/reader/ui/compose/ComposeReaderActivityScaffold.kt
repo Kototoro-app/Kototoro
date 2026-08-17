@@ -21,6 +21,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.asPaddingValues
@@ -76,6 +77,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
@@ -439,7 +441,7 @@ private fun ReaderChapterPanelMenuItem(
 internal fun ComposeReaderActivityScaffold(
 	state: ComposeReaderChromeState,
 	callbacks: ComposeReaderChromeCallbacks,
-	showControlLabels: Boolean,
+	showFloatingControlLabels: Boolean,
 	infoBarEmbedded: Boolean = false,
 	modifier: Modifier = Modifier,
 	chapterPanelTabId: Int = DETAILS_TAB_CHAPTERS,
@@ -528,8 +530,7 @@ internal fun ComposeReaderActivityScaffold(
 		}
 
 		AnimatedVisibility(
-			visible = shouldShowReaderInfoBar(state.infoBar.visible, showControlLabels) &&
-				!state.controlsVisible &&
+			visible = shouldShowReaderInfoBar(state.infoBar.visible, state.controlsVisible) &&
 				!infoBarEmbedded,
 			enter = fadeIn(
 				animationSpec = KototoroMotion.InfoBarEnter,
@@ -578,12 +579,21 @@ internal fun ComposeReaderActivityScaffold(
 				.navigationBarsPadding()
 				.padding(end = 16.dp, bottom = 62.dp),
 		) {
-			Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			Column(
+				horizontalAlignment = Alignment.End,
+				verticalArrangement = Arrangement.spacedBy(8.dp),
+				modifier = if (showFloatingControlLabels) {
+					Modifier.width(IntrinsicSize.Max).widthIn(max = 200.dp)
+				} else {
+					Modifier
+				},
+			) {
 				floatingControls.forEach { control ->
 					ReaderFloatingControlButton(
 						control = control,
 						state = state.actions,
 						callbacks = callbacks.actions,
+						showLabel = showFloatingControlLabels,
 					)
 				}
 			}
@@ -825,17 +835,30 @@ internal fun ReaderComposeInfoBar(
 		modifier = Modifier.fillMaxWidth(),
 	) {
 		Row(
+			horizontalArrangement = Arrangement.Center,
 			verticalAlignment = Alignment.CenterVertically,
 			modifier = Modifier
+				.fillMaxWidth()
 				.padding(horizontal = 8.dp, vertical = 6.dp),
 		) {
-			Text(text = state.text, style = textStyle, maxLines = 1, modifier = Modifier.weight(1f))
+			Text(
+				text = state.text,
+				style = textStyle,
+				maxLines = 1,
+				modifier = Modifier.weight(1f, fill = false),
+			)
 			if (state.showSystemStatus) {
 				Icon(
-					painter = painterResource(R.drawable.ic_battery_outline),
+					painter = painterResource(
+						if (systemStatus.isCharging) {
+							R.drawable.ic_battery_charging_outline
+						} else {
+							R.drawable.ic_battery_outline
+						},
+					),
 					contentDescription = null,
 					tint = contentColor,
-					modifier = Modifier.size(16.dp),
+					modifier = Modifier.padding(start = 10.dp).size(16.dp),
 				)
 				Text(text = systemStatus.battery, style = textStyle, modifier = Modifier.width(38.dp))
 				Text(text = systemStatus.time, style = textStyle, maxLines = 1)
@@ -845,7 +868,11 @@ internal fun ReaderComposeInfoBar(
 }
 
 @Immutable
-internal data class ReaderSystemStatus(val time: String = "", val battery: String = "")
+internal data class ReaderSystemStatus(
+	val time: String = "",
+	val battery: String = "",
+	val isCharging: Boolean = false,
+)
 
 @Composable
 internal fun rememberReaderSystemStatus(): ReaderSystemStatus {
@@ -856,9 +883,17 @@ internal fun rememberReaderSystemStatus(): ReaderSystemStatus {
 			override fun onReceive(context: Context, intent: Intent) {
 				val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
 				val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+				val batteryStatus = intent.getIntExtra(
+					BatteryManager.EXTRA_STATUS,
+					BatteryManager.BATTERY_STATUS_UNKNOWN,
+				)
 				val battery = if (level >= 0 && scale > 0) "${level * 100 / scale}%" else status.battery
 				val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date())
-				status = ReaderSystemStatus(time = time, battery = battery)
+				status = ReaderSystemStatus(
+					time = time,
+					battery = battery,
+					isCharging = isReaderBatteryCharging(batteryStatus),
+				)
 			}
 		}
 		ContextCompat.registerReceiver(
@@ -879,12 +914,11 @@ internal fun rememberReaderSystemStatus(): ReaderSystemStatus {
 internal fun BoxScope.ReaderPageInfoBar(
 	state: ReaderInfoBarState,
 	controlsVisible: Boolean,
-	showControlLabels: Boolean,
 	systemStatus: ReaderSystemStatus,
 	animationsEnabled: Boolean = true,
 ) {
 	AnimatedVisibility(
-		visible = shouldShowReaderInfoBar(state.visible, showControlLabels) && !controlsVisible,
+		visible = shouldShowReaderInfoBar(state.visible, controlsVisible),
 		enter = fadeIn(animationSpec = KototoroMotion.InfoBarEnter)
 			.whenReaderAnimationsEnabled(animationsEnabled),
 		exit = fadeOut(animationSpec = KototoroMotion.fadeFast())
@@ -1009,8 +1043,11 @@ private fun ReaderComposeTopBar(
 	}
 }
 
-internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, showControlLabels: Boolean): Boolean =
-	infoBarEnabled && showControlLabels
+internal fun shouldShowReaderInfoBar(infoBarEnabled: Boolean, controlsVisible: Boolean): Boolean =
+	infoBarEnabled && !controlsVisible
+
+internal fun isReaderBatteryCharging(status: Int): Boolean =
+	status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
 
 internal fun resolveReaderFloatingControls(
 	configured: Set<ReaderControl>,
@@ -1033,6 +1070,7 @@ private fun ReaderFloatingControlButton(
 	control: ReaderControl,
 	state: ReaderActionsUiState,
 	callbacks: ReaderActionsCallbacks,
+	showLabel: Boolean,
 ) {
 	val icon = when (control) {
 		ReaderControl.SCREEN_ROTATION -> if (state.autoRotationEnabled) {
@@ -1062,6 +1100,11 @@ private fun ReaderFloatingControlButton(
 		ReaderControl.DOWNLOAD -> stringResource(R.string.download)
 		else -> return
 	}
+	val visibleLabel = if (control == ReaderControl.TRANSLATE) {
+		stringResource(R.string.novel_translate)
+	} else {
+		contentDescription
+	}
 	val onClick: () -> Unit = when (control) {
 		ReaderControl.SCREEN_ROTATION -> callbacks.onScreenRotation
 		ReaderControl.SAVE_PAGE -> callbacks.onSavePage
@@ -1083,11 +1126,18 @@ private fun ReaderFloatingControlButton(
 		ReaderControl.TRANSLATE -> state.translateActive
 		else -> false
 	}
+	val shape = if (showLabel) RoundedCornerShape(22.dp) else CircleShape
+	val modifier = if (showLabel) {
+		Modifier.fillMaxWidth().height(44.dp)
+	} else {
+		Modifier.size(44.dp)
+	}
+	val contentColor = if (active) MaterialTheme.colorScheme.primary else readerControlContentColor()
 	ReaderTopControlSurface(
-		shape = CircleShape,
-		modifier = Modifier.size(44.dp),
+		shape = shape,
+		modifier = modifier,
 		contentModifier = Modifier
-			.clip(CircleShape)
+			.clip(shape)
 			.combinedClickable(
 				role = Role.Button,
 				onClickLabel = contentDescription,
@@ -1096,11 +1146,27 @@ private fun ReaderFloatingControlButton(
 				onLongClick = onLongClick,
 			),
 	) {
-		Icon(
-			painter = painterResource(icon),
-			contentDescription = contentDescription,
-			tint = if (active) MaterialTheme.colorScheme.primary else readerControlContentColor(),
-		)
+		Row(
+			horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+			verticalAlignment = Alignment.CenterVertically,
+			modifier = Modifier.fillMaxSize().padding(horizontal = if (showLabel) 8.dp else 0.dp),
+		) {
+			Icon(
+				painter = painterResource(icon),
+				contentDescription = contentDescription,
+				tint = contentColor,
+				modifier = Modifier.size(24.dp),
+			)
+			if (showLabel) {
+				Text(
+					text = visibleLabel,
+					color = contentColor,
+					style = MaterialTheme.typography.labelMedium,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
+				)
+			}
+		}
 	}
 }
 
