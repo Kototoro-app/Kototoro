@@ -12,8 +12,6 @@ concurrency:
 
 env:
   NIGHTLY_REPOSITORY: Kototoro-app/Kototoro-Nightly
-  GITCODE_OWNER: '2401_87187946'
-  GITCODE_REPOSITORY: Kototoro-Nightly
 
 jobs:
   build:
@@ -108,14 +106,3 @@ jobs:
               --notes "$notes" \
               --prerelease
           fi
-
-      - name: Publish GitCode Nightly Release
-        timeout-minutes: 35
-        env:
-          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-          TAG_NAME: ${{ steps.assets.outputs.tag }}
-          RELEASE_NAME: ${{ steps.assets.outputs.version_name }}
-          RELEASE_BODY: Automated Nightly build from devel at ${{ github.sha }}.
-          RELEASE_STATUS: pre
-          RELEASE_ASSETS_DIR: release
-        run: bash .github/scripts/publish_gitcode_release.sh

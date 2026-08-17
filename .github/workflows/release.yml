@@ -11,8 +11,6 @@ on:
 # 定义 tag 名称变量，根据触发方式选择来源
 env:
   TAG_NAME: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.tag || github.ref_name }}
-  GITCODE_OWNER: '2401_87187946'
-  GITCODE_REPOSITORY: Kototoro
 
 jobs:
   build:
@@ -136,12 +134,3 @@ jobs:
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Publish GitCode Release
-      timeout-minutes: 35
-      env:
-        GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
-        RELEASE_NAME: Kototoro ${{ steps.version.outputs.version_name }}
-        RELEASE_BODY: ${{ steps.changelog.outputs.changelog }}
-        RELEASE_ASSETS_DIR: release
-      run: bash .github/scripts/publish_gitcode_release.sh
