@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.network.webview
 
+import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -30,7 +31,12 @@ class RequestInterceptorWebViewClient(
     private val mutex = Mutex()
     private val isCapturing = AtomicBoolean(true)
     private val startTime = System.currentTimeMillis()
-    private val scriptInjected = AtomicBoolean(false)
+    private val scriptInjection = PageScriptInjectionState()
+
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        scriptInjection.onPageStarted(url)
+        super.onPageStarted(view, url, favicon)
+    }
 
     @WorkerThread
     override fun shouldInterceptRequest(
@@ -58,12 +64,12 @@ class RequestInterceptorWebViewClient(
         return super.shouldOverrideUrlLoading(view, request)
     }
 
-    override fun onPageFinished(view: WebView, url: String) {
-        super.onPageFinished(view, url)
+    override fun onPageFinished(webView: WebView, url: String) {
+        super.onPageFinished(webView, url)
         val script = config.pageScript
-        if (!script.isNullOrBlank() && scriptInjected.compareAndSet(false, true)) {
+        if (!script.isNullOrBlank() && scriptInjection.shouldInject(url)) {
             Log.d(TAG_VRF, "Injecting pageScript for URL: $url")
-            view.evaluateJavascript(script, null)
+            webView.evaluateJavascript(script, null)
         } else if (!script.isNullOrBlank()) {
             Log.v(TAG_VRF, "PageScript already injected, skipping for URL: $url")
         }
@@ -140,5 +146,26 @@ class RequestInterceptorWebViewClient(
         return synchronized(capturedRequests) {
             capturedRequests.toList()
         }
+    }
+}
+
+internal class PageScriptInjectionState {
+
+    private var navigationEpoch = 0L
+    private var currentUrl: String? = null
+    private var injectedEpoch = -1L
+
+    @Synchronized
+    fun onPageStarted(url: String?) {
+        navigationEpoch++
+        currentUrl = url
+    }
+
+    @Synchronized
+    fun shouldInject(url: String): Boolean {
+        if (currentUrl != null && currentUrl != url) return false
+        if (injectedEpoch == navigationEpoch) return false
+        injectedEpoch = navigationEpoch
+        return true
     }
 }

@@ -8,6 +8,7 @@ import android.widget.Toast
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -41,7 +42,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     @ContentHttpClient private val httpClient: OkHttpClient,
 ) {
 
-    private val hostMutexes = ConcurrentHashMap<String, Mutex>()
+    private val singleFlight = CloudFlareSingleFlight()
     private val manualMutex = Mutex()
     private val pendingActivityResult = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
     private val resolverState = CloudFlareResolverState()
@@ -82,7 +83,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
         showToast: Boolean,
     ): Boolean {
         val host = exception.url.resolveHostKey()
-        return hostMutexes.getOrPut(host) { Mutex() }.withLock {
+        return singleFlight.run(host) {
             runOrchestration(
                 source = source,
                 exception = exception,
@@ -183,6 +184,14 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     }
 
     private suspend fun probeCleared(context: CloudFlareRequestContext): Boolean {
+        repeat(PROBE_MAX_ATTEMPTS) { attempt ->
+            if (probeClearedOnce(context)) return true
+            if (attempt < PROBE_MAX_ATTEMPTS - 1) delay(PROBE_RETRY_DELAY_MS)
+        }
+        return false
+    }
+
+    private suspend fun probeClearedOnce(context: CloudFlareRequestContext): Boolean {
         val url = context.originalRequestUrl.takeIf { it.isNotBlank() } ?: return false
         val contentType = context.headers["Content-Type"]?.toMediaTypeOrNull()
         val request = Request.Builder().url(url).apply {
@@ -249,6 +258,8 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
 
     private companion object {
         const val TAG = "CaptchaAutoResolver"
+        const val PROBE_MAX_ATTEMPTS = 10
+        const val PROBE_RETRY_DELAY_MS = 1_000L
 
         // Browser/transport managed headers that the OkHttp probe must not re-emit
         // manually; cookies are handled by the shared CookieJar.

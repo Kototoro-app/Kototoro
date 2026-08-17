@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.InteractiveActionRequiredException
 import org.skepsun.kototoro.core.exceptions.ProxyConfigException
 import org.skepsun.kototoro.core.prefs.SourceSettings
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.parsers.ContentParser
 import org.skepsun.kototoro.parsers.CategorizedFavoritesProvider
 import org.skepsun.kototoro.parsers.FavoritesProvider
@@ -218,11 +219,11 @@ class ParserContentRepository(
 			}
 		},
 		onFailure = {
-			when (it.cause) {
-				is CloudFlareProtectedException,
-				is AuthRequiredException,
-				is InteractiveActionRequiredException,
-				is ProxyConfigException -> true
+			when {
+				it.findCloudFlareException() is CloudFlareProtectedException -> true
+				it.cause is AuthRequiredException ||
+					it.cause is InteractiveActionRequiredException ||
+				it.cause is ProxyConfigException -> true
 
 				else -> false
 			}

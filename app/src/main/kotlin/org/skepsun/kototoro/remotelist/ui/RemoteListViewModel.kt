@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -314,13 +315,17 @@ open class RemoteListViewModel @Inject constructor(
 						"loadList error source=${source.name} append=$append current=${mangaList.value.sizeOrZero()} " +
 							"error=${e.javaClass.simpleName}: ${e.message}",
 					)
-					if (!autoResolveAttempted && !append && e is CloudFlareProtectedException) {
+					val cloudFlareException = e.findCloudFlareException() as? CloudFlareProtectedException
+					if (!autoResolveAttempted && !append && cloudFlareException != null) {
 						autoResolveAttempted = true
 						Log.i(
 							RemoteListPaginationLogTag,
 							"loadList auto-resolve source=${source.name}",
 						)
-						if (captchaAutoResolveCoordinator.resolveInBackground(e.source, e)) {
+						if (captchaAutoResolveCoordinator.resolveInBackground(
+								cloudFlareException.source,
+								cloudFlareException,
+							)) {
 							continue
 						}
 					}

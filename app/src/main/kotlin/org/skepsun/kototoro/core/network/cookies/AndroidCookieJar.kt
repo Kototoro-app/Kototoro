@@ -169,6 +169,9 @@ internal fun buildCookieDeletionHeaders(
 	}
 	val domains = linkedSetOf(host, ".$host")
 	return buildList {
+		// Match CookieManager's default-path deletion used by Mihon/Komikku before
+		// covering attributes that cannot be recovered from getCookie().
+		add("$name=;Max-Age=0")
 		for (path in normalizedPaths) {
 			val base = "$name=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=$path"
 			add("$base; Secure")

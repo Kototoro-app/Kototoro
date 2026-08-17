@@ -14,11 +14,12 @@ class AndroidCookieJarTest {
 			paths = setOf("/"),
 		)
 
-		assertEquals(3, headers.size)
+		assertEquals(4, headers.size)
+		assertTrue(headers.contains("cf_clearance=;Max-Age=0"))
 		assertTrue(headers.any { "; Domain=" !in it })
 		assertTrue(headers.any { "; Domain=comix.to;" in it })
 		assertTrue(headers.any { "; Domain=.comix.to;" in it })
-		assertTrue(headers.all { "Max-Age=0" in it && "Path=/" in it && "; Secure" in it })
+		assertTrue(headers.drop(1).all { "Max-Age=0" in it && "Path=/" in it && "; Secure" in it })
 	}
 
 	@Test
@@ -29,7 +30,7 @@ class AndroidCookieJarTest {
 			paths = setOf("/browse", "invalid", "/"),
 		)
 
-		assertEquals(6, headers.size)
+		assertEquals(7, headers.size)
 		assertTrue(headers.any { "Path=/browse" in it })
 		assertTrue(headers.any { "Path=/;" in it })
 	}

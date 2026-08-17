@@ -47,6 +47,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.favicon.faviconUri
 import org.skepsun.kototoro.core.prefs.SourceSettings
 import org.skepsun.kototoro.core.util.ext.checkNotificationPermission
+import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getNotificationIconSize
 import org.skepsun.kototoro.core.util.ext.goAsync
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
@@ -87,14 +88,14 @@ class CaptchaHandler @Inject constructor(
 
 	override fun onError(request: ImageRequest, result: ErrorResult) {
 		super.onError(request, result)
-		val e = result.throwable
-		if (e is CloudFlareException) {
+		val cloudFlareException = result.throwable.findCloudFlareException()
+		if (cloudFlareException != null) {
 			val scope = request.lifecycle?.coroutineScope ?: processLifecycleScope
 			scope.launch {
 				if (
 					handleException(
-						source = e.source,
-						exception = e,
+						source = cloudFlareException.source,
+						exception = cloudFlareException,
 						notify = request.extras[suppressCaptchaKey] != true,
 						tryAutoResolve = false,
 					)

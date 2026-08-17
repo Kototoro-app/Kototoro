@@ -251,18 +251,31 @@ class WebViewExecutor @Inject constructor(
 		val originPolicy = BrowserOriginPolicy.create(url, allowedOrigins) ?: return null
 		val sessionKey = originPolicy.primaryOrigin
 		return withContext(Dispatchers.Main.immediate) {
-				val session = obtainBrowserSession(sessionKey)
-				session.executionMutex.withLock {
+			val session = obtainBrowserSession(sessionKey)
+			session.executionMutex.withLock {
 				// A concurrent execution on the same origin may have discarded this session
-				// while we waited for the mutex. Its WebView is already destroyed; fail fast
-				// instead of driving a destroyed WebView (which stalls until timeout).
-				check(
-					session.state != BrowserSessionState.POISONED &&
-						session.state != BrowserSessionState.DESTROYED,
-				) { "BrowserSession was discarded by a concurrent execution" }
+				// while we waited for the mutex. Its WebView is already destroyed, so retry
+				// with the replacement session instead of driving it until timeout.
+				if (session.state == BrowserSessionState.POISONED ||
+						session.state == BrowserSessionState.DESTROYED
+				) {
+						Log.i(TAG, "BrowserSession replaced after concurrent discard: origin=$sessionKey")
+						return@withLock fetchWithBrowserContext(
+							url = url,
+							method = method,
+							body = body,
+							userAgent = userAgent,
+							headers = headers,
+							allowedOrigins = allowedOrigins,
+							allowInteractiveChallenge = allowInteractiveChallenge,
+							settleDelayMs = settleDelayMs,
+							timeoutMs = timeoutMs,
+						)
+					}
 				val webView = session.webView
 				val rendererEpoch = session.rendererEpoch
 				val execution = BrowserExecution(requestUrl = url, method = normalizedMethod)
+				var preserveSessionAfterDeferredChallenge = false
 				check(session.activeExecution == null) { "BrowserSession already has an active execution" }
 				session.activeExecution = execution
 				session.pendingOperations++
@@ -601,10 +614,11 @@ class WebViewExecutor @Inject constructor(
 										body = retryJson.optString("body"),
 									)
 								}
-								session.transitionExecutionTo(BrowserExecutionState.FAILED)
-							} else {
-								session.transitionExecutionTo(BrowserExecutionState.FAILED)
-							}
+									session.transitionExecutionTo(BrowserExecutionState.FAILED)
+								} else {
+									preserveSessionAfterDeferredChallenge = true
+									session.transitionExecutionTo(BrowserExecutionState.FAILED)
+								}
 						}
 						val failedHeaders = fetchHeaders?.let { obj ->
 							buildMap { obj.keys().forEach { key -> put(key, obj.optString(key)) } }
@@ -661,12 +675,12 @@ class WebViewExecutor @Inject constructor(
 				null
 			} finally {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext end: $url")
-					if (execution.state == BrowserExecutionState.FAILED) {
-						Log.w(TAG, "Discarding BrowserSession after failed execution: session=${session.sessionId} url=$url")
-						discardWebView(webView)
-					} else {
-						runCatching { prepareBrowserSessionForReuse(webView) }.onFailure { discardWebView(webView) }
-					}
+				if (execution.state == BrowserExecutionState.FAILED && !preserveSessionAfterDeferredChallenge) {
+					Log.w(TAG, "Discarding BrowserSession after failed execution: session=${session.sessionId} url=$url")
+					discardWebView(webView)
+				} else {
+					runCatching { prepareBrowserSessionForReuse(webView) }.onFailure { discardWebView(webView) }
+				}
 				session.pendingOperations = (session.pendingOperations - 1).coerceAtLeast(0)
 				if (session.state == BrowserSessionState.BUSY) {
 					session.state = BrowserSessionState.READY
@@ -2242,12 +2256,8 @@ class WebViewExecutor @Inject constructor(
         val check = object : Runnable {
             override fun run() {
                 if (finished) return
-                val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-                if (clearance != null && clearance != initialClearance) {
-                    resumeOnce(CaptchaAutoResolveResult.SOLVED)
-                    return
-                }
-                webView.evaluateJavascript(CF_STATE_JS) { raw ->
+				val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+				webView.evaluateJavascript(CF_STATE_JS) { raw ->
                     if (finished) return@evaluateJavascript
                     val state = parseCloudFlarePageState(raw)
                     when (state) {
@@ -2739,7 +2749,7 @@ class WebViewExecutor @Inject constructor(
 	}
 
 	companion object {
-		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 15_000L
+		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 30_000L
 		private const val TRANSPORT_BRIDGE_NAME = "KototoroTransport"
 		private const val ISOLATED_TRANSPORT_BRIDGE_NAME = "KototoroIsolatedTransport"
 		private const val MAX_BROWSER_TEXT_BYTES = 8 * 1024 * 1024
