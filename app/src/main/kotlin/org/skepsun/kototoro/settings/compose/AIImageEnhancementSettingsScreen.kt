@@ -56,7 +56,6 @@ fun AIImageEnhancementSettingsScreen(
             SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_image_enhancement_settings),
                 modifier = Modifier.fillMaxWidth(),
-                contentKey = isEnabled to engine,
             ) {
                 item {
                     SettingsSwitchPreference(

@@ -81,6 +81,7 @@ fun DownloadsSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "downloads") {
+                val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
                 SettingsPreferenceGroup(title = downloadsTitle) {
                     item {
                         SettingsActionPreference(
@@ -129,7 +130,6 @@ fun DownloadsSettingsScreen(
                             onValueChange = onDownloadThreadsChange,
                         )
                     }
-                    val uncappedText = stringResource(R.string.download_max_active_series_uncapped)
                     item {
                         SettingsSliderPreference(
                             title = stringResource(R.string.download_max_active_series),

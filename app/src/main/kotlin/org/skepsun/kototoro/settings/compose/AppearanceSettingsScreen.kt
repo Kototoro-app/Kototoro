@@ -693,7 +693,7 @@ fun AppearanceSettingsScreen(
 
 @Composable
 private fun AppearanceSubpage(
-    content: @Composable SettingsItemGroupScope.() -> Unit,
+    content: SettingsItemGroupScope.() -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),

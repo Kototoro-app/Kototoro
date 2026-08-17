@@ -44,7 +44,6 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.ai_video_enhancement_settings),
                 modifier = Modifier.fillMaxWidth(),
-                contentKey = algorithm,
             ) {
                 item {
                     SettingsChoicePreference(

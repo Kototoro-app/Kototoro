@@ -20,7 +20,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -61,23 +60,12 @@ class SettingsItemGroupScope internal constructor() {
     }
 }
 
+// Keep the builder non-composable so state changes invalidate and rebuild the complete item structure.
 @Composable
 fun SettingsPreferenceGroup(
     title: String,
     modifier: Modifier = Modifier,
-    contentKey: Any? = Unit,
-    content: @Composable SettingsItemGroupScope.() -> Unit,
-) {
-    key(contentKey) {
-        SettingsPreferenceGroupContent(title, modifier, content)
-    }
-}
-
-@Composable
-private fun SettingsPreferenceGroupContent(
-    title: String,
-    modifier: Modifier,
-    content: @Composable SettingsItemGroupScope.() -> Unit,
+    content: SettingsItemGroupScope.() -> Unit,
 ) {
     val scope = SettingsItemGroupScope()
     scope.content()
@@ -180,7 +168,7 @@ fun SettingsCollapsiblePreferenceGroup(
     summary: String? = null,
     initiallyExpanded: Boolean = false,
     enabled: Boolean = true,
-    content: @Composable SettingsItemGroupScope.() -> Unit,
+    content: SettingsItemGroupScope.() -> Unit,
 ) {
     val scope = SettingsItemGroupScope()
     scope.content()
