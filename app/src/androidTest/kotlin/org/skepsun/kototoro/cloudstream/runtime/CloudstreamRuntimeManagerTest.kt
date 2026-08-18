@@ -16,6 +16,7 @@ import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.SortOrder
 import java.io.File
@@ -36,6 +37,9 @@ class CloudstreamRuntimeManagerTest {
 
 	@Inject
 	lateinit var webViewExecutor: WebViewExecutor
+
+	@Inject
+	lateinit var settings: AppSettings
 
 	@Inject
 	lateinit var cookieJar: MutableCookieJar
@@ -70,6 +74,7 @@ class CloudstreamRuntimeManagerTest {
 			cache = memoryContentCache,
 			webViewExecutor = webViewExecutor,
 			cookieJar = cookieJar,
+			settings = settings,
 		)
 
 		val result = repository.getList(
