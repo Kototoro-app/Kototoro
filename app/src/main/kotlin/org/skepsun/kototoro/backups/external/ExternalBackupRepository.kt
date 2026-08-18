@@ -455,10 +455,15 @@ internal object ExternalBackupCategoryMapper {
         category: ExternalBackupFavoriteCategoryRecord,
         localCategoryId: Long,
     ) {
-        // Mihon manga.category values reference category order during restore.
+        // Stored order keys must always win: Mihon exports manga.category as the
+        // category ORDER (MangaBackupCreator writes categoriesForManga.map { it.order },
+        // and MangaRestorer resolves via backupCategories.associateBy { it.order }).
         target[category.order] = localCategoryId
-        // Keep id mapping as a fallback for previously exported or non-standard backups.
-        if (category.id != category.order) {
+        // Keep the raw DB id mapping as a fallback for previously exported or
+        // non-standard backups, but never let it clobber an order key. Otherwise a
+        // category whose id happens to equal another category's order silently
+        // re-routes that group's members (groups merge and the losing group stays empty).
+        if (category.id != category.order && !target.containsKey(category.id)) {
             target[category.id] = localCategoryId
         }
     }
