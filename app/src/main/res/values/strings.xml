@@ -2392,6 +2392,13 @@
     <string name="expand">Expand</string>
     <string name="adblock">Block ads in browser</string>
     <string name="adblock_summary">Block advertisement in the built-in browser (beta)</string>
+    <string name="pref_cloudflare_strategy">Cloudflare auto-resolve strategy</string>
+    <string name="pref_cloudflare_strategy_summary">How Cloudflare challenges are handled: manual in-app browser, Mihon/Komikku-style automatic WebView solving, or the archived WebView transport.</string>
+    <string-array name="cloudflare_strategies">
+        <item>Manual (in-app browser)</item>
+        <item>Automatic (Mihon/Komikku style)</item>
+        <item>Automatic (legacy WebView transport, archived)</item>
+    </string-array>
     <string name="collapse_long_description">Collapse long description</string>
     <string name="creating_backup">Creating backup</string>
     <string name="share_backup">Share backup</string>

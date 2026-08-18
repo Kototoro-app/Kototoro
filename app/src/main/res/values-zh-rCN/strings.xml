@@ -1337,6 +1337,13 @@
     <string name="expand">展开</string>
     <string name="adblock">屏蔽广告</string>
     <string name="adblock_summary">屏蔽内置浏览器内显示的广告 (实验性)</string>
+    <string name="pref_cloudflare_strategy">Cloudflare 自动验证策略</string>
+    <string name="pref_cloudflare_strategy_summary">Cloudflare 挑战的处理方式：人工内置浏览器、Mihon/Komikku 风格自动 WebView 求解，或归档的旧 WebView 传输。</string>
+    <string-array name="cloudflare_strategies">
+        <item>手动（内置浏览器）</item>
+        <item>自动（Mihon/Komikku 风格）</item>
+        <item>自动（旧 WebView 传输，已归档）</item>
+    </string-array>
     <string name="theme_name_expressive">印象 (实验性)</string>
     <string name="collapse_long_description">折叠过长简介</string>
     <string name="changelog_summary">最近已发布版本的更新日志</string>

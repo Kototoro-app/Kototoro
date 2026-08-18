@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.core.prefs.NetworkPolicy
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -58,6 +59,9 @@ fun StorageAndNetworkSettingsRoute(
     val prefetchPolicy = settings.observeAsState(AppSettings.KEY_PREFETCH_CONTENT) { contentPrefetchPolicy }.value
     val pagesPreloadPolicy = settings.observeAsState(AppSettings.KEY_PAGES_PRELOAD) { pagesPreloadPolicy }.value
     val dnsOverHttps = settings.observeAsState(AppSettings.KEY_DOH) { dnsOverHttps }.value
+    val cloudflareStrategy = settings.observeAsState(AppSettings.KEY_CLOUDFLARE_STRATEGY) {
+        cloudflareStrategy
+    }.value
     val dohCustomUrl = settings.observeAsState(AppSettings.KEY_DOH_CUSTOM_URL) { dohCustomUrl.orEmpty() }.value
     val dohCustomIps = settings.observeAsState(AppSettings.KEY_DOH_CUSTOM_IPS) { dohCustomIps.orEmpty() }.value
     val imagesProxy = settings.observeAsState(AppSettings.KEY_IMAGES_PROXY) { imagesProxy }.value
@@ -75,6 +79,10 @@ fun StorageAndNetworkSettingsRoute(
     val coroutineScope = rememberCoroutineScope()
     val dohLabels = context.resources.getStringArray(R.array.doh_providers)
     val imageProxyLabels = context.resources.getStringArray(R.array.image_proxies)
+    val cloudflareStrategyLabels = context.resources.getStringArray(R.array.cloudflare_strategies)
+    val cloudflareStrategyOptions = CloudflareStrategy.entries.mapIndexed { index, strategy ->
+        SettingsChoiceOption(strategy, cloudflareStrategyLabels.getOrElse(index) { strategy.name })
+    }
 
     val showRestartRequired: () -> Unit = {
         coroutineScope.launch {
@@ -203,6 +211,18 @@ fun StorageAndNetworkSettingsRoute(
                         onValueChange = { settings.dohCustomIps = it },
                     )
                 }
+            }
+        },
+        webViewTransport = {
+            item {
+                SettingsChoicePreference(
+                    title = context.getString(R.string.pref_cloudflare_strategy),
+                    iconRes = R.drawable.ic_web,
+                    value = cloudflareStrategy,
+                    options = cloudflareStrategyOptions,
+                    summary = context.getString(R.string.pref_cloudflare_strategy_summary),
+                    onValueChange = { settings.cloudflareStrategy = it },
+                )
             }
         },
         imageProxy = {

@@ -55,6 +55,7 @@ fun StorageAndNetworkSettingsScreen(
     dns: SettingsItemGroupScope.() -> Unit,
     customDohUrl: SettingsItemGroupScope.() -> Unit,
     customDohIps: SettingsItemGroupScope.() -> Unit,
+    webViewTransport: SettingsItemGroupScope.() -> Unit,
     imageProxy: SettingsItemGroupScope.() -> Unit,
     githubMirror: SettingsItemGroupScope.() -> Unit,
     huggingFaceMirror: SettingsItemGroupScope.() -> Unit,
@@ -132,6 +133,7 @@ fun StorageAndNetworkSettingsScreen(
                     dns()
                     customDohUrl()
                     customDohIps()
+                    webViewTransport()
                 }
             }
             item(key = "proxy_mirrors") {
