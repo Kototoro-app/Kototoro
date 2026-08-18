@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.core.ui.compose
 
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
+import com.kyant.shapes.RoundedRectangle
 
 /** Shared application layout tokens. Reader/player page content has its own geometry. */
 object AppLayoutTokens {
@@ -11,7 +11,7 @@ object AppLayoutTokens {
     val compactItemHorizontalPadding = 12.dp
 }
 
-val CompactTopBarPillShape = RoundedCornerShape(28.dp)
+val CompactTopBarPillShape = RoundedRectangle(28.dp)
 val CompactTopBarPillHeight = 40.dp
 val CompactTopBarCompactButtonSize = 36.dp
 /** Shared horizontal edge for application chrome and page content. */

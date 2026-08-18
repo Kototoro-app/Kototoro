@@ -6,9 +6,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -58,7 +58,7 @@ fun ReaderToolbarChrome(
 				} else {
 					Modifier.fillMaxWidth().height(96.dp)
 				},
-				shape = if (isIosStyle) RoundedCornerShape(25.dp) else androidx.compose.ui.graphics.RectangleShape,
+				shape = if (isIosStyle) RoundedRectangle(25.dp) else RoundedRectangle(0.dp),
 				style = GlassDefaults.topBarChromeStyle(),
 				componentRole = GlassComponentRole.TopBar,
 			) { }

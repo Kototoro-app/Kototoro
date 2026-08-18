@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,7 +54,7 @@ fun DetailsBindingCard(
     GlassSurface(
         modifier = modifier.fillMaxWidth(),
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedRectangle(24.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),

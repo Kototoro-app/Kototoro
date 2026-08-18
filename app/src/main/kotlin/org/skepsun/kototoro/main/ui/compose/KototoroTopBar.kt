@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -616,7 +618,9 @@ internal fun TopBarControlSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    val shape = if (expressive) RoundedCornerShape(999.dp) else CompactTopBarPillShape
+    // iOS top bar controls are fully pill-shaped (the upstream LiquidBottomTabs
+    // track is a Capsule); capsule corners look correct for the 40–48.dp buttons.
+    val shape = Capsule()
     val style = if (expressive) {
             GlassDefaults.topBarChromeStyle().copy(
                 containerAlpha = 0.90f,

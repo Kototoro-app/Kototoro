@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,6 +30,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -86,7 +86,7 @@ object ReaderControlTokens {
 	val SheetHorizontalPadding = 16.dp
 	val SheetMaxWidth = 760.dp
 	val DockMaxWidth = 360.dp
-	val DockShape = RoundedCornerShape(28.dp)
+	val DockShape = RoundedRectangle(28.dp)
 	val ChromeShadowElevation = 6.dp
 }
 
@@ -109,7 +109,7 @@ fun ReaderPrimaryControlBar(
 		}
 	}
 	Surface(
-		shape = RoundedCornerShape(26.dp),
+		shape = RoundedRectangle(26.dp),
 		color = if (transparentContainer) {
 			androidx.compose.ui.graphics.Color.Transparent
 		} else {
@@ -269,7 +269,7 @@ fun ReaderProgressDock(
 	if (isIosStyle) {
 		GlassSurface(
 			modifier = dockModifier,
-			shape = RoundedCornerShape(22.dp),
+			shape = RoundedRectangle(22.dp),
 			style = GlassDefaults.bottomBarChromeStyle().copy(
 				containerAlpha = 0.86f,
 				shadowElevation = ReaderControlTokens.ChromeShadowElevation,
@@ -446,7 +446,7 @@ fun ReaderPanelSection(
 	content: @Composable () -> Unit,
 ) {
 	Surface(
-		shape = RoundedCornerShape(18.dp),
+		shape = RoundedRectangle(18.dp),
 		color = if (embedded) {
 			MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.16f)
 		} else {

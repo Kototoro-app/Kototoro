@@ -38,8 +38,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -320,7 +321,7 @@ private fun ReaderChapterPanelTab(
 	onClick: () -> Unit,
 ) {
 	Surface(
-		shape = RoundedCornerShape(18.dp),
+		shape = RoundedRectangle(18.dp),
 		color = if (selected) {
 			MaterialTheme.colorScheme.surfaceContainerHigh
 		} else {
@@ -975,7 +976,7 @@ private fun ReaderComposeTopBar(
 	onOptions: () -> Unit,
 ) {
 	val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-	val chapterControlShape = RoundedCornerShape(24.dp)
+	val chapterControlShape = RoundedRectangle(24.dp)
 	Box(
 		modifier = Modifier
 			.fillMaxWidth()
@@ -983,7 +984,7 @@ private fun ReaderComposeTopBar(
 			.padding(horizontal = 14.dp, vertical = 6.dp),
 	) {
 		ReaderTopControlSurface(
-			shape = CircleShape,
+			shape = Capsule(),
 			modifier = Modifier
 				.align(Alignment.CenterStart)
 				.size(48.dp),
@@ -1027,7 +1028,7 @@ private fun ReaderComposeTopBar(
 			}
 		}
 		ReaderTopControlSurface(
-			shape = CircleShape,
+			shape = Capsule(),
 			modifier = Modifier
 				.align(Alignment.CenterEnd)
 				.size(48.dp),
@@ -1126,7 +1127,7 @@ private fun ReaderFloatingControlButton(
 		ReaderControl.TRANSLATE -> state.translateActive
 		else -> false
 	}
-	val shape = if (showLabel) RoundedCornerShape(22.dp) else CircleShape
+	val shape = if (showLabel) RoundedRectangle(22.dp) else Capsule()
 	val modifier = if (showLabel) {
 		Modifier.fillMaxWidth().height(44.dp)
 	} else {

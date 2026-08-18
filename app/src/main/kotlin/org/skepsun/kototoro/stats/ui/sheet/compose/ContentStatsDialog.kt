@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -149,7 +150,7 @@ fun ContentStatsDialog(
                         indication = null,
                         onClick = {},
                     ),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedRectangle(28.dp),
                 style = GlassDefaults.prominentStyle(),
                 dialogSurface = true,
                 componentRole = GlassComponentRole.Dialog,

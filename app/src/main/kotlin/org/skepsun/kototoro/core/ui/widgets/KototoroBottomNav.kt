@@ -2,8 +2,10 @@ package org.skepsun.kototoro.core.ui.widgets
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.animateIntSizeAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,7 +19,6 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
@@ -69,8 +71,12 @@ import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
 import coil3.compose.rememberAsyncImagePainter
 
 data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
@@ -319,7 +325,7 @@ fun KototoroBottomNav(
                     modifier = Modifier
                         .wrapContentWidth(),
                     style = navContainerStyle,
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedRectangle(28.dp),
                 ) {
                     FloatingBottomNavRow(
                         items = activeItems,
@@ -353,7 +359,7 @@ fun KototoroBottomNav(
             MainNavBottomContainer(
                 modifier = Modifier.weight(1f),
                 style = navContainerStyle,
-                shape = RoundedCornerShape(0.dp),
+                shape = RoundedRectangle(0.dp),
             ) {
                 NavigationBar(
                     containerColor = Color.Transparent,
@@ -435,6 +441,7 @@ private fun Modifier.mainNavBackdrop(
     enabled: Boolean,
     backdrop: com.kyant.backdrop.Backdrop?,
     surfaceTint: Color,
+    pressProgress: () -> Float = { 0f },
 ): Modifier {
     val blurRadius = if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
         8.dp
@@ -446,13 +453,40 @@ private fun Modifier.mainNavBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
+                val p = pressProgress()
                 vibrancy()
-                blur(blurRadius.toPx())
+                blur(blurRadius.toPx() * (1f - 0.25f * p))
                 lens(
-                    refractionHeight = 10.dp.toPx(),
-                    refractionAmount = 12.dp.toPx(),
+                    refractionHeight = 10.dp.toPx() * (1f - 0.5f * p),
+                    refractionAmount = 12.dp.toPx() * (1f + 0.5f * p),
                     chromaticAberration = true,
                 )
+            },
+            // Bottom-nav pill indicators are navigation chrome; like the top and
+            // bottom bars they render without the always-on edge highlight and
+            // gain press-driven depth feedback only while dragged/pressed (the
+            // library's LiquidBottomTabs pill animates blur/lens/innerShadow
+            // with pressProgress).
+            highlight = null,
+            shadow = {
+                Shadow(
+                    radius = 4.dp,
+                    offset = DpOffset(0.dp, 2.dp),
+                    color = Color.Black.copy(alpha = 0.08f),
+                )
+            },
+            innerShadow = {
+                val p = pressProgress()
+                InnerShadow(
+                    radius = 2.dp * p,
+                    alpha = p,
+                )
+            },
+            layerBlock = {
+                val p = pressProgress()
+                val scale = 1f + 0.08f * p
+                scaleX = scale
+                scaleY = scale
             },
             onDrawSurface = {
                 drawRect(surfaceTint)
@@ -535,6 +569,13 @@ private fun FloatingBottomNavRow(
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
+    val pillPressProgress = remember { Animatable(0f) }
+    LaunchedEffect(dragPreviewItemId) {
+        pillPressProgress.animateTo(
+            targetValue = if (dragPreviewItemId != null) 1f else 0f,
+            animationSpec = tween(if (dragPreviewItemId != null) 90 else 160),
+        )
+    }
     val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
     val selectedBounds = itemBounds[displayedSelectedItemId]
     val density = LocalDensity.current
@@ -566,7 +607,7 @@ private fun FloatingBottomNavRow(
         contentAlignment = Alignment.Center,
     ) {
         if (useSharedLiquidGlassPill && targetIndicatorSize != IntSize.Zero) {
-            val indicatorShape = RoundedCornerShape(20.dp)
+            val indicatorShape = Capsule()
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -580,6 +621,7 @@ private fun FloatingBottomNavRow(
                         enabled = backdrop != null,
                         backdrop = backdrop,
                         surfaceTint = pillSurfaceTint,
+                        pressProgress = { pillPressProgress.value },
                     )
                     .border(
                         width = 1.dp,
@@ -691,11 +733,11 @@ private fun FloatingBottomNavRow(
                                         Modifier
                                     } else {
                                         Modifier
-                                            .background(selectedContainerColor, CircleShape)
+                                            .background(selectedContainerColor, Capsule())
                                             .then(
                                                 if (useLiquidGlassPill) {
                                                     Modifier.mainNavBackdrop(
-                                                        shape = CircleShape,
+                                                        shape = Capsule(),
                                                         enabled = backdrop != null,
                                                         backdrop = backdrop,
                                                         surfaceTint = pillSurfaceTint,
@@ -709,7 +751,7 @@ private fun FloatingBottomNavRow(
                                                     Modifier.border(
                                                         1.dp,
                                                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f),
-                                                        CircleShape,
+                                                        Capsule(),
                                                     )
                                                 } else {
                                                     Modifier

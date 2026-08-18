@@ -1,10 +1,10 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kyant.shapes.RoundedRectangle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
@@ -24,7 +24,7 @@ fun KototoroSheetSurface(
 ) {
 	GlassSurface(
 		modifier = modifier,
-		shape = RoundedCornerShape(28.dp),
+		shape = RoundedRectangle(28.dp),
 		style = style,
 		dialogSurface = true,
 		componentRole = GlassComponentRole.Sheet,

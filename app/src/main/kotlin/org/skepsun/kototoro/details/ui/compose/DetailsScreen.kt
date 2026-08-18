@@ -47,6 +47,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -2884,7 +2885,7 @@ private fun DetailsPaneContent(
         76.dp
     }
     val useCompactPaneSurfaceTint = showCollapsedHandle
-    val paneShape = RoundedCornerShape(28.dp)
+    val paneShape = RoundedRectangle(28.dp)
     val paneGlassStyle = if (useCompactPaneSurfaceTint || !showCollapsedHandle) {
         GlassDefaults.prominentStyle()
     } else {
@@ -5439,7 +5440,7 @@ private fun DetailsSupplementMetadataCard(
             .fillMaxWidth()
             .padding(horizontal = outerHorizontalPadding),
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedRectangle(24.dp),
     ) {
         Column(
             modifier = Modifier
@@ -5686,7 +5687,7 @@ private fun DetailsRelationSectionContainer(
     GlassSurface(
         modifier = modifier,
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedRectangle(24.dp),
     ) {
         Column(
             modifier = Modifier
@@ -5714,7 +5715,7 @@ private fun DetailsRelationItemCard(
             .width(width)
             .clickable(onClick = onClick),
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedRectangle(22.dp),
     ) {
         Column(
             modifier = Modifier

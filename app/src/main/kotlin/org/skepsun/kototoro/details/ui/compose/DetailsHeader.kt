@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -831,7 +833,7 @@ private fun DetailsReadableSurface(
     content: @Composable () -> Unit,
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val shape = RoundedCornerShape(LocalInterfaceStyleTokens.current.groupCornerRadius)
+    val shape = RoundedRectangle(LocalInterfaceStyleTokens.current.groupCornerRadius)
     if (isIosStyle) {
         LiquidGlassSurface(
             modifier = modifier,
@@ -841,6 +843,9 @@ private fun DetailsReadableSurface(
             ),
             shape = shape,
             componentRole = GlassComponentRole.ContentOverlay,
+            // Large static info panel: no always-on edge highlight, brightens
+            // only while the user is pressing it.
+            highlightOnIdle = false,
         ) {
             content()
         }
@@ -1105,7 +1110,7 @@ private fun TrackingSuggestionCard(
             containerAlpha = 0.78f,
             borderAlpha = if (expressive) 0.26f else 0.22f,
         ),
-        shape = RoundedCornerShape(if (expressive) 28.dp else 22.dp),
+        shape = if (expressive) Capsule() else RoundedRectangle(22.dp),
     ) {
         cardContent()
     }
@@ -2801,7 +2806,7 @@ private fun DetailsSearchRowSurface(
         GlassSurface(
             modifier = Modifier.fillMaxWidth(),
             style = GlassDefaults.subtleStyle(),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedRectangle(24.dp),
         ) {
             content()
         }
@@ -2809,7 +2814,7 @@ private fun DetailsSearchRowSurface(
         GlassSurface(
             modifier = Modifier.fillMaxWidth(),
             style = GlassDefaults.subtleStyle(),
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedRectangle(20.dp),
         ) {
             content()
         }
@@ -2967,7 +2972,7 @@ private fun ReadingSearchResultRow(
     GlassSurface(
         modifier = Modifier.fillMaxWidth(),
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedRectangle(20.dp),
     ) {
         Row(
             modifier = Modifier
@@ -3181,7 +3186,7 @@ private fun EntityChapterSourceCard(
     GlassSurface(
         modifier = Modifier.fillMaxWidth(),
         style = GlassDefaults.subtleStyle(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedRectangle(24.dp),
     ) {
         Row(
             modifier = Modifier

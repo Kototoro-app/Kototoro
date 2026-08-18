@@ -381,6 +381,7 @@ configurations.all {
 	debugImplementation libs.androidx.compose.ui.tooling
 	implementation libs.lifecycle.runtime.compose
 	implementation libs.backdrop
+	implementation libs.kyant.shapes
 
 	coreLibraryDesugaring libs.desugar.jdk.libs
 	implementation libs.kotlin.stdlib

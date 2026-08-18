@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.core.ui.compose
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
@@ -28,7 +29,12 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStylePolicy
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -165,6 +171,11 @@ private fun KototoroSliderThumb(
     val pressed by interactionSource.collectIsPressedAsState()
     val dragged by interactionSource.collectIsDraggedAsState()
     val active = pressed || dragged
+    val pressProgress by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = tween(120),
+        label = "sliderThumbPressProgress",
+    )
     val visualSize = if (compact) {
         if (isIosStyle) 16.dp else 20.dp
     } else {
@@ -198,6 +209,7 @@ private fun KototoroSliderThumb(
         animationSpec = KototoroMotion.ThumbSpring,
         label = "sliderThumbHeight",
     )
+    val thumbShape = Capsule()
     Box(
         modifier = Modifier.size(tokens.sliderThumbSize),
         contentAlignment = Alignment.Center,
@@ -210,20 +222,50 @@ private fun KototoroSliderThumb(
                     if (isIosStyle && backdrop != null) {
                         Modifier.drawBackdrop(
                             backdrop = backdrop,
-                            shape = { CircleShape },
+                            shape = { thumbShape },
                             effects = {
+                                // Mirrors the library's LiquidSlider: blur eases
+                                // out and refraction ramps up while dragging.
+                                blur(8f.dp.toPx() * (1f - pressProgress))
                                 lens(
-                                    refractionHeight = 8.dp.toPx(),
-                                    refractionAmount = 10.dp.toPx(),
+                                    refractionHeight = 10f.dp.toPx() * pressProgress,
+                                    refractionAmount = 14f.dp.toPx() * pressProgress,
                                     chromaticAberration = true,
                                 )
                             },
+                            // Same press-driven highlight as the library's own
+                            // LiquidSlider (Highlight.Ambient @ pressProgress):
+                            // idle = clean glass, held/dragged = soft glow.
+                            highlight = {
+                                Highlight.Ambient.copy(
+                                    width = Highlight.Ambient.width / 1.5f,
+                                    blurRadius = Highlight.Ambient.blurRadius / 1.5f,
+                                    alpha = pressProgress,
+                                )
+                            },
+                            shadow = {
+                                Shadow(
+                                    radius = 4f.dp,
+                                    color = Color.Black.copy(alpha = 0.05f),
+                                )
+                            },
+                            innerShadow = {
+                                InnerShadow(
+                                    radius = 4f.dp * pressProgress,
+                                    alpha = pressProgress,
+                                )
+                            },
+                            layerBlock = {
+                                val scale = 1f + 0.1f * pressProgress
+                                scaleX = scale
+                                scaleY = scale
+                            },
                         )
                     } else {
-                        Modifier.background(color.copy(alpha = if (active) 0.88f else 1f), CircleShape)
+                        Modifier.background(color.copy(alpha = if (active) 0.88f else 1f), thumbShape)
                     },
                 )
-                .border(1.dp, Color.White.copy(alpha = if (active) 0.28f else 0f), CircleShape),
+                .border(1.dp, Color.White.copy(alpha = if (active) 0.28f else 0f), thumbShape),
         )
     }
 }

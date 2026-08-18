@@ -7,6 +7,7 @@ avifDecoder = "1.1.1.14d8e3c4"
 biometric = "1.4.0-alpha04"
 coil = "3.4.0"
 backdrop = "2.0.0"
+kyantShapes = "1.2.0"
 collections = "1.5.0"
 # https://github.com/google/conscrypt/issues/1268
 #noinspection NewerVersionAvailable,GradleDependency - 2.5.3 cause crashes
@@ -241,6 +242,7 @@ djl-tokenizers = { module = "ai.djl.huggingface:tokenizers", version.ref = "djlT
 djl-sentencepiece = { module = "ai.djl.sentencepiece:sentencepiece", version.ref = "djlSentencepiece" }
 ireader-source-api = { module = "io.github.ireaderorg:source-api", version.ref = "ireaderSourceApi" }
 backdrop = { module = "io.github.kyant0:backdrop", version.ref = "backdrop" }
+kyant-shapes = { group = "io.github.kyant0", name = "shapes", version.ref = "kyantShapes" }
 
 [plugins]
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
@@ -40,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -55,6 +55,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.shapes.RoundedRectangle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
@@ -71,7 +72,7 @@ internal data class RootGlassMenuRequest(
     val id: Any,
     val backdrop: Backdrop,
     val anchorBounds: Rect,
-    val shape: RoundedCornerShape,
+    val shape: Shape,
     val openAboveAnchor: Boolean,
     val scrollState: androidx.compose.foundation.ScrollState,
     val onDismissRequest: () -> Unit,
@@ -133,6 +134,9 @@ internal fun RootGlassMenuOverlay(
                         vibrancy()
                         blur(6.dp.toPx())
                     },
+                    // Menus are passive floating containers (not a press target
+                    // themselves); like sheets they render without any highlight.
+                    highlight = null,
                     onDrawSurface = {
                         drawRect(surfaceColor.copy(alpha = 0.42f))
                     },
@@ -174,7 +178,7 @@ fun GlassDropdownMenu(
     useRootOverlay: Boolean = false,
     anchorBounds: Rect? = null,
     openAboveAnchor: Boolean = false,
-    shape: RoundedCornerShape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedRectangle(20.dp),
     style: GlassStyle = GlassDefaults.prominentStyle(),
     content: @Composable ColumnScope.() -> Unit,
 ) {

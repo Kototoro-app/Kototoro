@@ -27,9 +27,9 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.kyant.shapes.Capsule
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -161,7 +161,7 @@ private fun NovelFloatingControlButton(
 		ReaderControl.BOOKMARK -> callbacks.onBookmark
 		ReaderControl.TRANSLATE -> callbacks.onToggleTranslation
 	}
-	val shape = if (showLabel) RoundedCornerShape(22.dp) else CircleShape
+	val shape = if (showLabel) RoundedRectangle(22.dp) else Capsule()
 	val modifier = if (showLabel) {
 		Modifier.fillMaxWidth().height(44.dp)
 	} else {
@@ -249,7 +249,7 @@ internal fun NovelReaderTopChrome(
 					.padding(horizontal = 14.dp, vertical = 6.dp),
 			) {
 				NovelTopControlSurface(
-					shape = CircleShape,
+					shape = Capsule(),
 					modifier = Modifier.align(Alignment.CenterStart).size(48.dp),
 				) {
 					IconButton(onClick = callbacks.onNavigateBack) {
@@ -261,7 +261,7 @@ internal fun NovelReaderTopChrome(
 					}
 				}
 				NovelTopControlSurface(
-					shape = RoundedCornerShape(24.dp),
+					shape = RoundedRectangle(24.dp),
 					modifier = Modifier
 						.align(Alignment.Center)
 						.widthIn(min = 148.dp, max = 176.dp)
@@ -291,7 +291,7 @@ internal fun NovelReaderTopChrome(
 					}
 				}
 				NovelTopControlSurface(
-					shape = CircleShape,
+					shape = Capsule(),
 					modifier = Modifier.align(Alignment.CenterEnd).size(48.dp),
 				) {
 					IconButton(onClick = callbacks.onShowSettings) {

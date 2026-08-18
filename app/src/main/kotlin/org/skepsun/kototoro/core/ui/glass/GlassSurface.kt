@@ -1,10 +1,14 @@
 package org.skepsun.kototoro.core.ui.glass
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalAbsoluteTonalElevation
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -14,11 +18,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -29,8 +35,13 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.Shadow
+import androidx.compose.foundation.shape.CornerBasedShape
+import com.kyant.shapes.RoundedRectangle
+import com.kyant.shapes.RoundedRectangularShape
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
@@ -94,7 +105,7 @@ internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
         this == GlassComponentRole.BottomPanel
 
 object GlassDefaults {
-    val shape: Shape = RoundedCornerShape(28.dp)
+    val shape: Shape = RoundedRectangle(28.dp)
     val navigationShadowElevation: Dp = 4.dp
 
     @Composable
@@ -144,6 +155,7 @@ fun GlassSurface(
     shape: Shape = GlassDefaults.shape,
     dialogSurface: Boolean = false,
     componentRole: GlassComponentRole = defaultGlassComponentRole(dialogSurface),
+    highlightOnIdle: Boolean = true,
     @Suppress("UNUSED_PARAMETER") debugLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -158,6 +170,7 @@ fun GlassSurface(
             style = style,
             shape = shape,
             componentRole = componentRole,
+            highlightOnIdle = highlightOnIdle,
             content = content,
         )
         return
@@ -202,6 +215,7 @@ fun LiquidGlassSurface(
     style: GlassStyle = GlassDefaults.regularStyle(),
     shape: Shape = GlassDefaults.shape,
     componentRole: GlassComponentRole = GlassComponentRole.Surface,
+    highlightOnIdle: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
@@ -234,9 +248,38 @@ fun LiquidGlassSurface(
         else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
 
+    // Persistent glass follows the upstream Control Center pattern: an
+    // always-on specular highlight whose angle tracks the device gravity (the
+    // sensor mirrors iOS "specular highlight responding to device motion");
+    // a touch additionally boosts exposure. Navigation chrome (top/bottom bars)
+    // deliberately renders without the edge highlight. Callers may opt out of
+    // the idle highlight (highlightOnIdle = false) so large static info panels
+    // render clean while idle and only brighten while pressed.
+    val uiSensor = if (isNavigationChrome || !highlightOnIdle) null else UiSensor.remember()
+    val pressProgress = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val pressTracking = if (isNavigationChrome) {
+        Modifier
+    } else {
+        // Pure observer: never consumes, so nested controls keep their own
+        // gestures; any touch landing on the glass boosts its exposure.
+        Modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                coroutineScope.launch { pressProgress.animateTo(1f, tween(90)) }
+                try {
+                    waitForUpOrCancellation()
+                } finally {
+                    coroutineScope.launch { pressProgress.animateTo(0f, tween(160)) }
+                }
+            }
+        }
+    }
+
     CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
         Box(
             modifier = modifier
+                .then(pressTracking)
                 .drawBackdrop(
                     backdrop = backdrop,
                     exportedBackdrop = exportedBackdrop,
@@ -244,20 +287,61 @@ fun LiquidGlassSurface(
                     effects = {
                         vibrancy()
                         blur(8.dp.toPx())
-                        lens(
-                            refractionHeight = 12.dp.toPx(),
-                            refractionAmount = 10.dp.toPx(),
-                            chromaticAberration = false,
-                        )
+                        // lens() requires a CornerBasedShape or the kyant
+                        // RoundedRectangularShape; guard so callers passing a
+                        // plain RectangleShape (edge-to-edge top chrome) degrade
+                        // to blur instead of crashing during composition.
+                        if (shape is CornerBasedShape || shape is RoundedRectangularShape) {
+                            lens(
+                                refractionHeight = 16.dp.toPx(),
+                                refractionAmount = 24.dp.toPx(),
+                                depthEffect = !isNavigationChrome,
+                                chromaticAberration = false,
+                            )
+                        }
                     },
-                    highlight = { Highlight.Default },
+                    highlight = {
+                        // iOS navigation chrome (top bar + bottom bar) stays
+                        // without the edge highlight. Content glass defaults to
+                        // the upstream Control Center always-on specular highlight
+                        // that follows device gravity; surfaces with
+                        // highlightOnIdle = false (large static info panels)
+                        // render without an idle edge and brighten only while
+                        // pressed, mirroring the library's own controls.
+                        if (isNavigationChrome) {
+                            null
+                        } else if (!highlightOnIdle) {
+                            if (pressProgress.value == 0f) null
+                            else {
+                                Highlight(
+                                    style = HighlightStyle.Default(
+                                        angle = 45f,
+                                        falloff = 2f,
+                                    ),
+                                    alpha = pressProgress.value,
+                                )
+                            }
+                        } else {
+                            Highlight(
+                                style = HighlightStyle.Default(
+                                    angle = uiSensor?.gravityAngle ?: 45f,
+                                    falloff = 2f,
+                                ),
+                                alpha = 0.65f + 0.35f * pressProgress.value,
+                            )
+                        }
+                    },
                     shadow = if (style.shadowElevation > 0.dp) {
                         {
+                            // Light floating shadow, matching the library's own
+                            // controls (Shadow.Default is a heavy 24.dp drop that
+                            // reads as a hard ring on glass); use only a subtle
+                            // separation cue per the upstream glass bottom bar.
                             Shadow(
-                                radius = style.shadowElevation * 3f,
-                                offset = DpOffset(0.dp, style.shadowElevation / 2f),
+                                radius = 4.dp,
+                                offset = DpOffset(0.dp, 2.dp),
                                 color = Color.Black.copy(
-                                    alpha = if (isNavigationChrome) 0.14f else 0.10f,
+                                    alpha = if (isNavigationChrome) 0.10f else 0.06f,
                                 ),
                             )
                         }
@@ -393,7 +477,7 @@ fun GlassTopBarContainer(
     GlassSurface(
         modifier = modifier,
         style = style,
-        shape = RoundedCornerShape(30.dp),
+        shape = RoundedRectangle(30.dp),
         componentRole = GlassComponentRole.TopBar,
         content = content,
     )
@@ -408,7 +492,7 @@ fun GlassBottomBarContainer(
     GlassSurface(
         modifier = modifier,
         style = style,
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedRectangle(32.dp),
         componentRole = GlassComponentRole.BottomBar,
         content = content,
     )

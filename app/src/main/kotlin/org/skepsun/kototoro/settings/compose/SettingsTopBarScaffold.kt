@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
@@ -320,7 +321,7 @@ internal fun SettingsTopBarSurface(content: @Composable () -> Unit) {
 		GlassSurface(
 			modifier = Modifier.fillMaxWidth(),
 			style = GlassDefaults.topBarChromeStyle().copy(shadowElevation = 0.dp),
-			shape = RoundedCornerShape(0.dp),
+			shape = RoundedRectangle(0.dp),
 			componentRole = GlassComponentRole.TopBar,
 		) {
 			topBarContent()

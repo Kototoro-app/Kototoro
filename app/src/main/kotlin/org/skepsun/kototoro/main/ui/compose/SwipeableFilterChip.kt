@@ -3,6 +3,7 @@ package org.skepsun.kototoro.main.ui.compose
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -14,7 +15,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -44,12 +45,17 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.zIndex
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.InnerShadow
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.shapes.Capsule
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
@@ -82,6 +88,13 @@ fun SwipeableFilterChip(
 
     val expansion = remember { Animatable(0f) }
     var isPressed by remember { mutableStateOf(false) }
+    val pressProgress = remember { Animatable(0f) }
+    LaunchedEffect(isPressed) {
+        pressProgress.animateTo(
+            targetValue = if (isPressed) 1f else 0f,
+            animationSpec = tween(if (isPressed) 80 else 160),
+        )
+    }
     var highlightIndex by remember { mutableIntStateOf(1) }
     var dragOffsetX by remember { mutableStateOf(0f) }
     val types = listOf(ContentType.VIDEO, ContentType.MANGA, ContentType.NOVEL)
@@ -100,7 +113,7 @@ fun SwipeableFilterChip(
     val exp = expansion.value
     val slotWidth = controlSize * (1f + exp)
     val panelWidth = controlSize * swipeableFilterChipWidthMultiplier(exp)
-    val panelShape = RoundedCornerShape(999.dp)
+    val panelShape = Capsule()
     val backdrop = LocalLiquidGlassBackdrop.current
     val useBackdrop = exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
     val exportedBackdrop = if (useBackdrop) rememberLayerBackdrop() else null
@@ -211,13 +224,40 @@ fun SwipeableFilterChip(
                                     exportedBackdrop = exportedBackdrop!!,
                                     shape = { panelShape },
                                     effects = {
+                                        val p = pressProgress.value
                                         vibrancy()
                                         blur(4.dp.toPx())
                                         lens(
-                                            refractionHeight = 8.dp.toPx(),
-                                            refractionAmount = 8.dp.toPx(),
-                                            chromaticAberration = false,
+                                            refractionHeight = 10.dp.toPx(),
+                                            refractionAmount = 14.dp.toPx(),
+                                            chromaticAberration = true,
                                         )
+                                    },
+                                    // The chip is an interactive control; its
+                                    // glass edge highlight only shows while held,
+                                    // matching the press-driven library pattern.
+                                    highlight = {
+                                        Highlight.Default.copy(alpha = pressProgress.value)
+                                    },
+                                    shadow = {
+                                        Shadow(
+                                            radius = 4.dp,
+                                            offset = DpOffset(0.dp, 2.dp),
+                                            color = Color.Black.copy(alpha = 0.06f),
+                                        )
+                                    },
+                                    innerShadow = {
+                                        val p = pressProgress.value
+                                        InnerShadow(
+                                            radius = 2.dp * p,
+                                            alpha = p,
+                                        )
+                                    },
+                                    layerBlock = {
+                                        val p = pressProgress.value
+                                        val scale = 1f + 0.06f * p
+                                        scaleX = scale
+                                        scaleY = scale
                                     },
                                 )
                         } else {

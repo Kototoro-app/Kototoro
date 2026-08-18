@@ -47,6 +47,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -282,7 +283,7 @@ private fun SearchDialogSurface(
 ) {
     GlassSurface(
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedRectangle(24.dp),
         style = GlassDefaults.prominentStyle(),
         dialogSurface = true,
         componentRole = GlassComponentRole.Dialog,
@@ -1711,7 +1712,7 @@ private fun MoreActionsButton(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedRectangle(28.dp),
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
             anchorBounds = anchorBounds,

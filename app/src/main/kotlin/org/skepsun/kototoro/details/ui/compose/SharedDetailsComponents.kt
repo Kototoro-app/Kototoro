@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.kyant.shapes.Capsule
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -587,7 +588,7 @@ fun DetailsHeroBadge(
     } else {
         GlassSurface(
             style = GlassDefaults.subtleStyle(),
-            shape = RoundedCornerShape(999.dp),
+            shape = Capsule(),
         ) {
             content()
         }
