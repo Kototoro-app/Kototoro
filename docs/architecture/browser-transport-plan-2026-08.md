@@ -1,6 +1,37 @@
 # Browser Transport 实施计划
 
-更新时间：2026-08-12
+更新时间：2026-08-12（2026-08-18 归档，2026-08-18 升级为三策略选择）
+
+> ## 归档状态（重要，已升级为 Cloudflare 策略选择器）
+>
+> **WebView transport（Browser Transport / 自动 Cloudflare 求解传输）已归档，不再是唯一自动路径。**
+>
+> 原布尔开关已替换为三选一策略 `AppSettings.cloudflareStrategy`（枚举
+> `org.skepsun.kototoro.core.prefs.CloudflareStrategy`，持久键 `cloudflare_strategy`，**默认 MIHON**）：
+>
+> - **MIHON（默认，Mihon/Komikku 风格）**：应用层 OkHttp 拦截器（`CloudFlareInterceptor` 共享 client 与
+>   `KotoNetworkHelper` Mihon client）收到挑战后，用 `WebViewClearanceSolver`（移植自 komikku
+>   `CloudflareInterceptor`/`WebViewInterceptor` 约 240 行）在离屏 WebView 加载同一 URL 求解，等到新
+>   `cf_clearance` 写入共享 CookieManager 后**重试原请求**；解不动时降级抛异常走人工浏览器。
+> - **MANUAL（Kotatsu-Redo/上游 Kotatsu 风格）**：无自动求解。检测到挑战后抛
+>   `CloudFlareProtectedException`，由错误卡/协调器打开内置浏览器（`BrowserActivity`）人工验证。
+> - **TRANSPORT（旧 WebView transport，已归档）**：`fetchWithBrowserContext` /
+>   `resolveCaptchaAutomatically` / `tryResolveCaptcha` 路径，仅在该策略被显式选择时启用。
+>
+> 各调用点的策略语义：
+> - `CloudFlareInterceptor`（共享 OkHttp client，覆盖 Kotatsu/JAR、Legado、TVBox、LNReader）：
+>   MIHON → 拦截器内求解+重试；TRANSPORT → transport；MANUAL → 直接抛异常。
+> - `KotoNetworkHelper`（Mihon/Kagane 扩展）：同上按策略分发（`resolveByStrategy`）。
+> - `CloudstreamCloudflareInterceptor` / `CloudstreamContentRepository`：仅 TRANSPORT 时启用
+>   transport 兜底与自动求解；MIHON/MANUAL 依赖共享拦截器与人工路径。
+> - `CaptchaAutoResolveCoordinator`：仅 TRANSPORT 时进入自动求解阶段；MIHON 求解失败也由此
+>   降级到人工浏览器。
+>
+> - 本文件描述的 transport 代码、配套单测与实现状态**全部保留**；`WebViewExecutor`
+>   相关方法保持 `@Deprecated` 标记。
+> - 不受影响：解析器侧 WebView API（`evaluateJs` / `loadPageHtml` / `loadHtml` / `sniff*` /
+>   `loginAndCheck` / `WebViewRequestInterceptorExecutor`）、Cloudstream 插件的原生
+>   `WebViewResolver` 优先路径、手动验证 UI（`browser/cloudflare/*`）。
 
 ## 目标
 
