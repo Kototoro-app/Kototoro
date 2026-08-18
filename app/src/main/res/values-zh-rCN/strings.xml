@@ -3318,6 +3318,11 @@ SHA-256 指纹:
     <string name="appearance_group_interface_components">界面组件</string>
     <string name="appearance_group_home_display">首页展示</string>
     <string name="appearance_group_list_layout">列表布局</string>
+    <string name="appearance_group_tablet_list">横屏平板列表行为</string>
+    <string name="pref_tablet_list_preview">点击卡片先显示详情预览</string>
+    <string name="pref_tablet_list_preview_summary">在平板上点击作品卡片时，先在右侧半屏展示只读的详情预览，再次点击才打开完整详情页。</string>
+    <string name="pref_tablet_list_filter_panel">进入列表时默认打开过滤器面板</string>
+    <string name="pref_tablet_list_filter_panel_summary">在平板横屏打开作品列表时，在右侧半屏显示过滤器面板。</string>
     <string name="appearance_group_list_interaction">列表交互与动效</string>
     <string name="appearance_group_list_information">列表信息</string>
     <string name="appearance_group_details_content">内容与操作</string>

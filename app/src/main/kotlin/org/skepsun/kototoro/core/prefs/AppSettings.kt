@@ -410,6 +410,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_QUICK_FILTER, true)
 		set(value) = prefs.edit { putBoolean(KEY_QUICK_FILTER, value) }
 
+	var isTabletListPreviewEnabled: Boolean
+		get() = prefs.getBoolean(KEY_TABLET_LIST_PREVIEW, true)
+		set(value) = prefs.edit { putBoolean(KEY_TABLET_LIST_PREVIEW, value) }
+
+	var isTabletListFilterPanelDefaultOpen: Boolean
+		get() = prefs.getBoolean(KEY_TABLET_LIST_FILTER_PANEL_DEFAULT, true)
+		set(value) = prefs.edit { putBoolean(KEY_TABLET_LIST_FILTER_PANEL_DEFAULT, value) }
+
 	var isShowLanguagePresetFilter: Boolean
 		get() = prefs.getBoolean(KEY_SHOW_LANGUAGE_PRESET_FILTER, true)
 		set(value) = prefs.edit { putBoolean(KEY_SHOW_LANGUAGE_PRESET_FILTER, value) }
@@ -2497,6 +2505,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_APP_FONT_PRESET = "app_font_preset"
 		const val KEY_EXPRESSIVE_APP_FONT_PRESET = "expressive_app_font_preset"
 		const val KEY_TABLET_UI_MODE = "tablet_ui_mode"
+		const val KEY_TABLET_LIST_PREVIEW = "tablet_list_preview"
+		const val KEY_TABLET_LIST_FILTER_PANEL_DEFAULT = "tablet_list_filter_panel_default"
 		const val KEY_OFFLINE_DISABLED = "no_offline"
 		const val KEY_PAGES_CACHE_CLEAR = "pages_cache_clear"
 		const val KEY_NOVEL_CACHE_CLEAR = "novel_cache_clear"

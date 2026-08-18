@@ -396,6 +396,14 @@ fun AppSearchContentListRoute(
     val gridSize = settings.observeAsState(AppSettings.KEY_GRID_SIZE) { gridSize }.value
     val gridScale = gridSize / 100f
     val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
+    val isTabletListPreviewEnabled by settings.observeAsState(AppSettings.KEY_TABLET_LIST_PREVIEW) {
+        isTabletListPreviewEnabled
+    }
+    val isTabletListFilterPanelDefaultOpen by settings.observeAsState(
+        AppSettings.KEY_TABLET_LIST_FILTER_PANEL_DEFAULT,
+    ) {
+        isTabletListFilterPanelDefaultOpen
+    }
     val globalTagBlacklist by settings.observeAsState(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) {
         this.globalTagBlacklist
     }
@@ -445,7 +453,9 @@ fun AppSearchContentListRoute(
     var searchMode by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf(filterSnapshot.listFilter.query.orEmpty()) }
     var collapseOffsetPx by rememberSaveable { mutableStateOf(0f) }
-    var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(isWideAdaptiveLayout) }
+    var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) {
+        mutableStateOf(isWideAdaptiveLayout && isTabletListFilterPanelDefaultOpen)
+    }
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
     var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
@@ -516,10 +526,10 @@ fun AppSearchContentListRoute(
         }
     }
 
-    LaunchedEffect(isWideAdaptiveLayout) {
+    LaunchedEffect(isWideAdaptiveLayout, isTabletListFilterPanelDefaultOpen) {
         if (isWideAdaptiveLayout) {
             sidePaneMode = SearchSidePaneMode.Filter
-            showFilterPanel = true
+            showFilterPanel = isTabletListFilterPanelDefaultOpen
         } else {
             previewContent = null
             sidePaneMode = SearchSidePaneMode.Filter
@@ -782,8 +792,18 @@ fun AppSearchContentListRoute(
                                     } else {
                                         val content = item.toContentWithOverride()
                                         if (viewModel.onContentClick(content)) return@itemClick
-                                        previewContent = content
-                                        sidePaneMode = SearchSidePaneMode.Preview
+                                        if (isTabletListPreviewEnabled) {
+                                            previewContent = content
+                                            sidePaneMode = SearchSidePaneMode.Preview
+                                        } else {
+                                            previewContent = null
+                                            sidePaneMode = SearchSidePaneMode.Filter
+                                            val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
+                                            openDetailsHandler(
+                                                content,
+                                                sharedElementKey,
+                                            )
+                                        }
                                     }
                                 },
                                 onItemLongClick = { item ->

@@ -52,6 +52,8 @@ data class AppearanceSettingsUiState(
     val railAnimationIntensityPercent: Int,
     val isRailAnimationSettingsEnabled: Boolean,
     val isQuickFilterEnabled: Boolean,
+    val isTabletListPreviewEnabled: Boolean,
+    val isTabletListFilterPanelDefaultOpen: Boolean,
     val progressIndicatorMode: ProgressIndicatorMode,
     val badgesTopLeft: Set<String>,
     val badgesTopRight: Set<String>,
@@ -146,6 +148,8 @@ fun AppearanceSettingsScreen(
     onGridSizeChange: (Int) -> Unit,
     onRailAnimationIntensityChange: (Int) -> Unit,
     onQuickFilterChange: (Boolean) -> Unit,
+    onTabletListPreviewChange: (Boolean) -> Unit,
+    onTabletListFilterPanelDefaultChange: (Boolean) -> Unit,
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
     onBadgesTopLeftChange: (Set<String>) -> Unit,
     onBadgesTopRightChange: (Set<String>) -> Unit,
@@ -384,6 +388,31 @@ fun AppearanceSettingsScreen(
                             "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
                         ),
                         onValueChange = onPopupRadiusChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "appearance_tablet_list") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_tablet_list),
+            ) {
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_list_preview),
+                        iconRes = R.drawable.ic_view_column,
+                        checked = state.isTabletListPreviewEnabled,
+                        summary = stringResource(R.string.pref_tablet_list_preview_summary),
+                        onCheckedChange = onTabletListPreviewChange,
+                    )
+                }
+                item {
+                    SettingsSwitchPreference(
+                        title = stringResource(R.string.pref_tablet_list_filter_panel),
+                        iconRes = R.drawable.ic_filter_menu,
+                        checked = state.isTabletListFilterPanelDefaultOpen,
+                        summary = stringResource(R.string.pref_tablet_list_filter_panel_summary),
+                        onCheckedChange = onTabletListFilterPanelDefaultChange,
                     )
                 }
             }

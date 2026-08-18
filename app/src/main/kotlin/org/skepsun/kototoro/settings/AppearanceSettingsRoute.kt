@@ -119,6 +119,11 @@ fun AppearanceSettingsRoute(
     val railAnimationIntensityPercent =
         settings.observeAsState(AppSettings.KEY_RAIL_ANIMATION_INTENSITY) { railAnimationIntensityPercent }.value
     val isQuickFilterEnabled = settings.observeAsState(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled }.value
+    val isTabletListPreviewEnabled =
+        settings.observeAsState(AppSettings.KEY_TABLET_LIST_PREVIEW) { isTabletListPreviewEnabled }.value
+    val isTabletListFilterPanelDefaultOpen = settings.observeAsState(
+        AppSettings.KEY_TABLET_LIST_FILTER_PANEL_DEFAULT,
+    ) { isTabletListFilterPanelDefaultOpen }.value
     val progressIndicatorMode = settings.observeAsState(AppSettings.KEY_PROGRESS_INDICATORS) { progressIndicatorMode }.value
     val mangaListBadges = settings.observeAsState(AppSettings.KEY_MANGA_LIST_BADGES) { mangaListBadges }.value
     val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
@@ -282,6 +287,8 @@ fun AppearanceSettingsRoute(
         railAnimationIntensityPercent = railAnimationIntensityPercent,
         isRailAnimationSettingsEnabled = !isReducedVisualEffectsEnabled,
         isQuickFilterEnabled = isQuickFilterEnabled,
+        isTabletListPreviewEnabled = isTabletListPreviewEnabled,
+        isTabletListFilterPanelDefaultOpen = isTabletListFilterPanelDefaultOpen,
         progressIndicatorMode = progressIndicatorMode,
         badgesTopLeft = settings.observeAsState(AppSettings.KEY_BADGES_TOP_LEFT) { badgesTopLeft }.value,
         badgesTopRight = settings.observeAsState(AppSettings.KEY_BADGES_TOP_RIGHT) { badgesTopRight }.value,
@@ -349,6 +356,8 @@ fun AppearanceSettingsRoute(
         onGridSizeChange = { settings.gridSize = it },
         onRailAnimationIntensityChange = { settings.railAnimationIntensityPercent = it },
         onQuickFilterChange = { settings.isQuickFilterEnabled = it },
+        onTabletListPreviewChange = { settings.isTabletListPreviewEnabled = it },
+        onTabletListFilterPanelDefaultChange = { settings.isTabletListFilterPanelDefaultOpen = it },
         onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
         onBadgesTopLeftChange = { settings.badgesTopLeft = it },
         onBadgesTopRightChange = { settings.badgesTopRight = it },

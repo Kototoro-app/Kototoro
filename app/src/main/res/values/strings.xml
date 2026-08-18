@@ -3475,6 +3475,11 @@
     <string name="appearance_group_interface_components">Interface components</string>
     <string name="appearance_group_home_display">Home presentation</string>
     <string name="appearance_group_list_layout">List layout</string>
+    <string name="appearance_group_tablet_list">Tablet list behavior</string>
+    <string name="pref_tablet_list_preview">Preview details in side pane</string>
+    <string name="pref_tablet_list_preview_summary">On tablets, tapping a card shows a read-only details preview in the right half. Tap it again to open the full details page.</string>
+    <string name="pref_tablet_list_filter_panel">Open filter panel on entering list</string>
+    <string name="pref_tablet_list_filter_panel_summary">On tablets, show the filter panel in the right half when opening a manga list.</string>
     <string name="appearance_group_list_interaction">List interaction and motion</string>
     <string name="appearance_group_list_information">List information</string>
     <string name="appearance_group_details_content">Content and controls</string>
