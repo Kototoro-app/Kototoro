@@ -1966,17 +1966,23 @@ private fun UnifiedSourceRow(
 						tint = MaterialTheme.colorScheme.primary,
 					)
 				}
+			}
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = Arrangement.spacedBy(6.dp),
+			) {
 				CompactTag(text = item.kind.displayLabel())
 				if (!item.isAvailable || item.isBroken) {
-					CompactTag(text = stringResource(R.string.unavailable), isWarning = true)
+					CompactTag(text = stringResource(R.string.unavailable), tone = CompactTagTone.Warning)
 				}
 				when (item.testAvailability) {
 					ContentSourceAvailability.AVAILABLE -> CompactTag(
 						text = stringResource(R.string.source_test_available),
+						tone = CompactTagTone.TestedAvailable,
 					)
 					ContentSourceAvailability.EMPTY -> CompactTag(
 						text = stringResource(R.string.source_test_unavailable),
-						isWarning = true,
+						tone = CompactTagTone.TestedUnavailable,
 					)
 					ContentSourceAvailability.UNKNOWN -> Unit
 				}
@@ -2534,23 +2540,34 @@ private fun CompactActionChip(
 	)
 }
 
+private enum class CompactTagTone {
+	Neutral,
+	Warning,
+	TestedAvailable,
+	TestedUnavailable,
+}
+
 @Composable
 private fun CompactTag(
 	text: String,
 	isWarning: Boolean = false,
+	tone: CompactTagTone? = null,
 ) {
+	val resolvedTone = tone ?: if (isWarning) CompactTagTone.Warning else CompactTagTone.Neutral
+	val (containerColor, contentColor) = when (resolvedTone) {
+		CompactTagTone.Neutral ->
+			MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+		CompactTagTone.Warning ->
+			MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+		CompactTagTone.TestedAvailable ->
+			MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+		CompactTagTone.TestedUnavailable ->
+			MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+	}
 	Surface(
 		shape = RoundedCornerShape(4.dp),
-		color = if (isWarning) {
-			MaterialTheme.colorScheme.errorContainer
-		} else {
-			MaterialTheme.colorScheme.secondaryContainer
-		},
-		contentColor = if (isWarning) {
-			MaterialTheme.colorScheme.onErrorContainer
-		} else {
-			MaterialTheme.colorScheme.onSecondaryContainer
-		},
+		color = containerColor,
+		contentColor = contentColor,
 	) {
 		Text(
 			text = text,

@@ -908,8 +908,8 @@
     <string name="source_mark_available">Mark available</string>
     <string name="source_test_availability_filter_title">Test availability</string>
     <string name="source_test_action">Test sources</string>
-    <string name="source_test_available">Tested available</string>
-    <string name="source_test_unavailable">Tested unavailable</string>
+    <string name="source_test_available">Available</string>
+    <string name="source_test_unavailable">Unavailable</string>
     <string name="source_untested">Untested</string>
     <string name="source_test_completed">Source test completed: %1$d available, %2$d unavailable</string>
     <string name="source_empty_badge">Empty source</string>

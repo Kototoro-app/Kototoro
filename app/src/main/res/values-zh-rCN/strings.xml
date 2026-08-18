@@ -2597,8 +2597,8 @@
     <string name="source_mark_available">标记为可用</string>
     <string name="source_test_availability_filter_title">测试可用性</string>
     <string name="source_test_action">测试源</string>
-    <string name="source_test_available">测试可用</string>
-    <string name="source_test_unavailable">测试不可用</string>
+    <string name="source_test_available">可用</string>
+    <string name="source_test_unavailable">不可用</string>
     <string name="source_untested">未测试</string>
     <string name="source_test_completed">源测试完成：%1$d 个可用，%2$d 个不可用</string>
     <string name="source_empty_badge">空源</string>
