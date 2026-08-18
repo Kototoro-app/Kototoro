@@ -34,6 +34,8 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.RelatedContentSearchFallback
@@ -64,6 +66,7 @@ class CloudstreamContentRepository(
 	cache: MemoryContentCache,
 	private val webViewExecutor: WebViewExecutor,
 	private val cookieJar: MutableCookieJar,
+	private val settings: AppSettings,
 ) : CachingContentRepository(cache) {
 	private val gateway = CloudstreamApiGateway(source)
 	private val terminalSearchPages = ConcurrentHashMap<String, Int>()
@@ -725,6 +728,13 @@ class CloudstreamContentRepository(
 		url: String,
 		stage: String,
 	): Boolean {
+		if (settings.cloudflareStrategy != CloudflareStrategy.TRANSPORT) {
+			Log.w(
+				TAG,
+				"$stage webview transport not selected (${settings.cloudflareStrategy}); skipping cloudstream auto resolve url=$url",
+			)
+			return false
+		}
 		val resolved = webViewExecutor.tryResolveCaptcha(
 			error,
 			timeout = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS,
@@ -774,6 +784,7 @@ class CloudstreamContentRepository(
 		slot: Int,
 		requestPage: Int,
 	) {
+		if (settings.cloudflareStrategy != CloudflareStrategy.TRANSPORT) return
 		val diagnosticUrl = request.data.takeIf { it.isNotBlank() } ?: source.api.mainUrl
 		val result = runCatchingCancellable {
 			webViewExecutor.fetchWithBrowserContext(

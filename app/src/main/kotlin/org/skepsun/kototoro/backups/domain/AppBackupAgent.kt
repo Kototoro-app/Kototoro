@@ -115,6 +115,7 @@ class AppBackupAgent : BackupAgent() {
 					cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(
 						context = applicationContext,
 						contentHttpClient = okhttp3.OkHttpClient(),
+						settings = appSettings,
 					),
 					sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
 					projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
@@ -215,6 +216,7 @@ class AppBackupAgent : BackupAgent() {
 						cloudstreamRuntimeManager = org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager(
 							context = applicationContext,
 							contentHttpClient = okhttp3.OkHttpClient(),
+							settings = appSettings,
 						),
 						sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
 						projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),

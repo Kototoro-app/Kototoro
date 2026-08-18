@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import java.io.File
 import java.io.InputStreamReader
@@ -40,6 +41,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 	@ApplicationContext private val context: Context,
 	@ContentHttpClient private val contentHttpClient: OkHttpClient,
 	private val webViewExecutor: WebViewExecutor? = null,
+	private val settings: AppSettings,
 ) {
 
 	private val loadedPlugins = ConcurrentHashMap<String, LoadedCloudstreamPlugin>()
@@ -125,7 +127,7 @@ class CloudstreamRuntimeManager @Inject constructor(
 		app.baseClient = contentHttpClient.newBuilder()
 			.apply {
 				interceptors().add(0, CloudstreamRequestContext.interceptor())
-				webViewExecutor?.let { interceptors().add(1, CloudstreamCloudflareInterceptor(it)) }
+				webViewExecutor?.let { interceptors().add(1, CloudstreamCloudflareInterceptor(it, settings)) }
 			}
 			.build()
 		app.defaultHeaders = mapOf("User-Agent" to cloudstreamUserAgent)

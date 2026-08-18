@@ -4,6 +4,7 @@ import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.cache.MemoryContentCache
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ContentRepositoryProvider
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -13,6 +14,7 @@ class CloudstreamContentRepositoryProvider @Inject constructor(
 	private val contentCache: MemoryContentCache,
 	private val webViewExecutor: WebViewExecutor,
 	private val cookieJar: MutableCookieJar,
+	private val settings: AppSettings,
 ) : ContentRepositoryProvider {
 
 	override fun supports(source: ContentSource): Boolean = source is CloudstreamSource
@@ -24,6 +26,7 @@ class CloudstreamContentRepositoryProvider @Inject constructor(
 			cache = contentCache,
 			webViewExecutor = webViewExecutor,
 			cookieJar = cookieJar,
+			settings = settings,
 		)
 	}
 }

@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.Headers
+import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.Request
@@ -21,7 +22,10 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.core.network.browserTransportHeaders
 import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
+import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.parsers.network.UserAgents
@@ -46,6 +50,8 @@ class KotoNetworkHelper(
     val cookieJar: okhttp3.CookieJar,
     private val defaultUserAgent: String = UserAgents.CHROME_MOBILE,
     private val webViewExecutor: dagger.Lazy<WebViewExecutor>? = null,
+    private val settings: AppSettings? = null,
+    private val clearanceSolver: WebViewClearanceSolver? = null,
 ) : NetworkHelper() {
 
     // Dynamically loaded extensions reference this class outside the app's static dex graph.
@@ -125,18 +131,7 @@ class KotoNetworkHelper(
 						contentType = request.header("Content-Type"),
                         originalUrl = request.url.toString(),
                     )
-                    val browserResponse = response.use {
-						executeWithBrowserTransport(request)
-                    }
-					if (browserResponse != null) {
-						browserResponse
-					} else {
-						android.util.Log.w(
-							"MihonNetwork",
-							"Browser transport could not handle challenge; returning original error without legacy resolver: ${request.url}",
-						)
-						response.closeThrowing(error)
-					}
+                    resolveByStrategy(chain, request, response, error)
                 }
 
                 else -> response
@@ -226,8 +221,58 @@ class KotoNetworkHelper(
         throw error
     }
 
+    private fun resolveByStrategy(
+        chain: Interceptor.Chain,
+        request: Request,
+        response: Response,
+        error: CloudFlareProtectedException,
+    ): Response {
+        val strategy = settings?.cloudflareStrategy ?: CloudflareStrategy.MIHON
+        return when (strategy) {
+            CloudflareStrategy.MIHON -> {
+                val solver = clearanceSolver
+                if (solver == null) {
+                    response.closeThrowing(error)
+                }
+                val solved = runCatching { solver.solve(request) }.getOrDefault(false)
+                if (solved) {
+                    response.close()
+                    android.util.Log.i(
+                        "MihonNetwork",
+                        "WebView clearance solved (MIHON); retrying: " + request.url,
+                    )
+                    chain.proceed(request)
+                } else {
+                    android.util.Log.w(
+                        "MihonNetwork",
+                        "MIHON solve failed; returning error: " + request.url,
+                    )
+                    response.closeThrowing(error)
+                }
+            }
+
+            CloudflareStrategy.TRANSPORT -> {
+                val browserResponse = response.use { executeWithBrowserTransport(request) }
+                if (browserResponse != null) {
+                    browserResponse
+                } else {
+                    response.closeThrowing(error)
+                }
+            }
+
+            CloudflareStrategy.MANUAL -> response.closeThrowing(error)
+        }
+    }
+
     private fun executeWithBrowserTransport(request: Request): Response? {
         val executor = webViewExecutor ?: return null
+        if (settings?.cloudflareStrategy != CloudflareStrategy.TRANSPORT) {
+            android.util.Log.i(
+                "MihonNetwork",
+                "WebView transport not selected (strategy=${settings?.cloudflareStrategy}); skipping browser transport " + request.url,
+            )
+            return null
+        }
 		val requestContext = request.tag(SourceRequestContext::class.java)
 		if (requestContext == null) {
 			android.util.Log.w(

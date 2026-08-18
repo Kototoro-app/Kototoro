@@ -14,14 +14,19 @@ import okio.IOException
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.koitharu.kotatsu.parsers.model.MangaSource as KotatsuMangaSource
 
 class CloudFlareInterceptor(
 	private val webViewExecutor: Lazy<WebViewExecutor>? = null,
+	private val settings: AppSettings? = null,
+	private val clearanceSolver: WebViewClearanceSolver? = null,
 ) : Interceptor {
 
 	override fun intercept(chain: Interceptor.Chain): Response {
@@ -64,9 +69,23 @@ class CloudFlareInterceptor(
 					originalUrl = request.url.toString(),
 				)
 				val policy = request.tag(CloudFlareHandlingPolicy::class.java)
-				if (policy?.allowBrowserTransport != false && webViewExecutor != null) {
-					val browserResponse = response.use { executeWithBrowserTransport(request) }
-					if (browserResponse != null) return browserResponse
+				val strategy = settings?.cloudflareStrategy ?: CloudflareStrategy.MIHON
+				if (policy?.allowBrowserTransport != false) {
+					when (strategy) {
+						CloudflareStrategy.MIHON -> {
+							val retried = response.use { resolveAndRetryWithWebView(chain, request) }
+							if (retried != null) return retried
+						}
+
+						CloudflareStrategy.TRANSPORT -> {
+							if (webViewExecutor != null) {
+								val browserResponse = response.use { executeWithBrowserTransport(request) }
+								if (browserResponse != null) return browserResponse
+							}
+						}
+
+						CloudflareStrategy.MANUAL -> Unit
+					}
 				}
 				if (policy?.allowCaptchaResponse == true) {
 					policy.onCaptchaDetected?.invoke(error)
@@ -86,6 +105,13 @@ class CloudFlareInterceptor(
 
 	private fun executeWithBrowserTransport(request: Request): Response? {
 		val executor = webViewExecutor ?: return null
+		if (settings?.cloudflareStrategy != CloudflareStrategy.TRANSPORT) {
+			Log.i(
+				TAG,
+				"WebView transport not selected (strategy=${settings?.cloudflareStrategy}); skipping browser transport " + request.url,
+			)
+			return null
+		}
 		if (request.tag(ContentSource::class.java) == null) {
 			Log.w(TAG, "Browser transport skipped: missing ContentSource tag, url=${request.url}")
 			return null
@@ -130,6 +156,23 @@ class CloudFlareInterceptor(
 			return null
 		}
 		return browserResponse
+	}
+
+	private fun resolveAndRetryWithWebView(chain: Interceptor.Chain, request: Request): Response? {
+		val solver = clearanceSolver ?: return null
+		return try {
+			val solved = solver.solve(request)
+			if (solved) {
+				Log.i(TAG, "WebView clearance solved; retrying request: " + request.url)
+				chain.proceed(request)
+			} else {
+				Log.w(TAG, "WebView clearance solve failed: " + request.url)
+				null
+			}
+		} catch (e: Exception) {
+			Log.w(TAG, "WebView clearance solve error: " + request.url, e)
+			null
+		}
 	}
 
 	private fun Request.isTextTransportRequest(): Boolean {

@@ -16,12 +16,15 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CommonHeaders
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import java.util.concurrent.ConcurrentHashMap
 
 /** Resolves Cloudflare before Cloudstream failures escape into Kototoro's global captcha flow. */
 internal class CloudstreamCloudflareInterceptor(
 	private val webViewExecutor: WebViewExecutor,
+	private val settings: AppSettings? = null,
 ) : Interceptor {
 	private val resolverMutexes = ConcurrentHashMap<String, Mutex>()
 	private val lastResolverAttemptAt = ConcurrentHashMap<String, Long>()
@@ -77,6 +80,14 @@ internal class CloudstreamCloudflareInterceptor(
 			Log.i(TAG, "Existing clearance was rejected by OkHttp; using browser response: ${request.url}")
 		} else {
 			Log.w(TAG, "Cloudstream resolver did not obtain clearance: ${request.url}")
+			throw originalError
+		}
+
+		if (settings?.cloudflareStrategy != CloudflareStrategy.TRANSPORT) {
+			Log.i(
+				TAG,
+				"WebView transport not selected (strategy=${settings?.cloudflareStrategy}); skipping browser transport fallback: " + request.url,
+			)
 			throw originalError
 		}
 

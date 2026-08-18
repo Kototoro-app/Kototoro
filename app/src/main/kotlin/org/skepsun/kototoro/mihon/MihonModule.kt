@@ -9,7 +9,9 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.mihon.compat.KotoInjektBridge
+import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import javax.inject.Singleton
 
@@ -24,6 +26,8 @@ object MihonModule {
         @ContentHttpClient okHttpClient: OkHttpClient,
         cookieJar: CookieJar,
         webViewExecutor: dagger.Lazy<WebViewExecutor>,
+        settings: AppSettings,
+        clearanceSolver: WebViewClearanceSolver,
     ): KotoInjektBridge {
         return try {
             KotoInjektBridge(
@@ -31,6 +35,8 @@ object MihonModule {
                 httpClient = okHttpClient,
                 cookieJar = cookieJar,
                 webViewExecutor = webViewExecutor,
+                settings = settings,
+                clearanceSolver = clearanceSolver,
             )
         } catch (e: Throwable) {
             android.util.Log.e("MihonModule", "CRITICAL ERROR: Failed to create KotoInjektBridge!", e)

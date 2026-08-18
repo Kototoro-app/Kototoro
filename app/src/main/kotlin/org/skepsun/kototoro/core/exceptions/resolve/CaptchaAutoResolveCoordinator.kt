@@ -24,6 +24,8 @@ import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.core.network.webview.CaptchaAutoResolveResult
 import org.skepsun.kototoro.core.ui.util.ForegroundActivityHolder
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -40,6 +42,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     private val foregroundActivityHolder: ForegroundActivityHolder,
     private val webViewExecutor: WebViewExecutor,
     @ContentHttpClient private val httpClient: OkHttpClient,
+    private val settings: AppSettings,
 ) {
 
     private val singleFlight = CloudFlareSingleFlight()
@@ -105,7 +108,10 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
     ): Boolean {
         return try {
             val context = CloudFlareRequestContext.from(exception)
-            val plan = resolverState.plan(host, tryAutomatic, allowInteractiveFallback)
+            // WebView transport 仅在该策略被显式选择时参与自动求解；MIHON 策略在拦截器内联求解，
+            // 失败后由此处走人工浏览器兜底；MANUAL 直接走人工浏览器。
+            val effectiveTryAutomatic = tryAutomatic && settings.cloudflareStrategy == CloudflareStrategy.TRANSPORT
+            val plan = resolverState.plan(host, effectiveTryAutomatic, allowInteractiveFallback)
             if (plan == CloudFlareResolvePlan.FAIL_FAST) {
                 logResolve(host, context, plan = plan)
                 return false

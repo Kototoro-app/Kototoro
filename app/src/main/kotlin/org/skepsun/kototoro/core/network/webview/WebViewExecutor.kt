@@ -93,6 +93,12 @@ enum class CaptchaAutoResolveResult {
     FAILED,
 }
 
+/**
+ * WebView 执行器。解析器侧 WebView API（evaluateJs / loadPageHtml / loadHtml / sniff* /
+ * loginAndCheck / [WebViewRequestInterceptorExecutor]）仍在使用；WebView transport
+ * （fetchWithBrowserContext 及自动 Cloudflare 求解）已归档，由
+ * 通过 `AppSettings.cloudflareStrategy`（默认 `CloudflareStrategy.MIHON`，Komikku 风格）选择；仅 `TRANSPORT` 策略使用本传输。代码与测试保留。
+ */
 @Singleton
 class WebViewExecutor @Inject constructor(
 	@ApplicationContext private val context: Context,
@@ -234,7 +240,12 @@ class WebViewExecutor @Inject constructor(
 	/**
 	 * Execute a same-origin GET request in a real WebView context and return response data.
 	 * Useful for sources where Cloudflare still challenges OkHttp even with valid cookies.
+	 *
+	 * @deprecated 已归档的 WebView transport（Browser Transport）。自归档日起由
+	 * 仅当 `AppSettings.cloudflareStrategy == CloudflareStrategy.TRANSPORT` 时启用；代码与其测试保留，
+	 * 供将来重新启用。解析器侧 WebView API（evaluateJs / loadPageHtml / sniff*）不受影响。
 	 */
+	@Deprecated("Archived webview transport; used only when AppSettings.cloudflareStrategy == CloudflareStrategy.TRANSPORT")
 	suspend fun fetchWithBrowserContext(
 		url: String,
 		method: String = "GET",
@@ -1642,9 +1653,11 @@ class WebViewExecutor @Inject constructor(
 		}
 	}
 
+    @Deprecated("Archived webview transport automatic resolver; used only when AppSettings.cloudflareStrategy == CloudflareStrategy.TRANSPORT")
     suspend fun tryResolveCaptcha(exception: CloudFlareException, timeout: Long): Boolean =
         resolveCaptchaAutomatically(exception, timeout) == CaptchaAutoResolveResult.SOLVED
 
+	@Deprecated("Archived webview transport automatic resolver; used only when AppSettings.cloudflareStrategy == CloudflareStrategy.TRANSPORT")
 	suspend fun resolveCaptchaAutomatically(
         exception: CloudFlareException,
         timeout: Long,

@@ -1924,6 +1924,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_SSL_BYPASS, false)
 		set(value) = prefs.edit { putBoolean(KEY_SSL_BYPASS, value) }
 
+	/**
+	 * Cloudflare 自动验证策略（见 [CloudflareStrategy]）。默认 [CloudflareStrategy.MIHON]
+	 * （Komikku/Mihon 风格：拦截器内离屏 WebView 求解 + 重试，解不动转人工浏览器）。
+	 *
+	 * - MANUAL：无自动求解，挑战抛 CloudFlareProtectedException 走人工浏览器。
+	 * - MIHON：Mihon/Komikku 风格，拦截器内离屏 WebView 求解后重试原请求。
+	 * - TRANSPORT：归档的旧 Browser Transport（fetchWithBrowserContext /
+	 *   resolveCaptchaAutomatically），显式选择才启用。
+	 * 解析器侧 WebView API（evaluateJs / loadPageHtml / sniff* / loginAndCheck /
+	 * WebViewRequestInterceptorExecutor）不受本策略影响。
+	 */
+	var cloudflareStrategy: CloudflareStrategy
+		get() = prefs.getEnumValue(KEY_CLOUDFLARE_STRATEGY, CloudflareStrategy.MIHON)
+		set(value) = prefs.edit { putEnumValue(KEY_CLOUDFLARE_STRATEGY, value) }
+
 	val proxyType: Proxy.Type
 		get() {
 			val raw = prefs.getString(KEY_PROXY_TYPE, null) ?: return Proxy.Type.DIRECT
@@ -2790,6 +2805,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_UPDATES_UNSTABLE = "updates_unstable"
 		const val KEY_TIPS_CLOSED = "tips_closed"
 		const val KEY_SSL_BYPASS = "ssl_bypass"
+		const val KEY_CLOUDFLARE_STRATEGY = "cloudflare_strategy"
 		const val KEY_READER_AUTOSCROLL_SPEED = "as_speed"
 		const val DEFAULT_READER_AUTOSCROLL_SPEED = 0.24f
 		const val KEY_READER_AUTOSCROLL_FAB = "as_fab"

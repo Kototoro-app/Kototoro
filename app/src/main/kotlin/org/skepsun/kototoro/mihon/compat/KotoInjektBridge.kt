@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.UserAgentProvider
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektModule
@@ -25,6 +27,8 @@ class KotoInjektBridge(
     private val httpClient: OkHttpClient,
     private val cookieJar: okhttp3.CookieJar,
     private val webViewExecutor: dagger.Lazy<WebViewExecutor>? = null,
+    private val settings: AppSettings? = null,
+    private val clearanceSolver: WebViewClearanceSolver? = null,
 ) {
     
     private val application: Application
@@ -49,6 +53,8 @@ class KotoInjektBridge(
                 cookieJar = cookieJar,
                 defaultUserAgent = UserAgentProvider.get(context),
                 webViewExecutor = webViewExecutor,
+                settings = settings,
+                clearanceSolver = clearanceSolver,
             )
             
             Injekt.importModule(object : InjektModule {
