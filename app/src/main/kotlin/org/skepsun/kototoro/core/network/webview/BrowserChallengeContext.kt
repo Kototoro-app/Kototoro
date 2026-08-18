@@ -7,6 +7,9 @@ internal data class BrowserChallengeContext(
 	val navigationUrl: String?,
 	val responseHtmlSnippet: String,
 ) {
+	fun matchesOriginalGetDocument(currentUrl: String?): Boolean =
+		method == "GET" && currentUrl?.trimEnd('/') == requestUrl.trimEnd('/')
+
 	companion object {
 		const val MAX_HTML_SNIPPET_CHARS = 64 * 1024
 
@@ -34,6 +37,7 @@ internal enum class BrowserResolutionEvidence {
 
 internal class BrowserChallengeResolutionTracker {
 	private var interactiveChallengeObserved = false
+	private var managedChallengeObserved = false
 	private var challengeNavigationObserved = false
 
 	/**
@@ -52,8 +56,16 @@ internal class BrowserChallengeResolutionTracker {
 		if (pageState == CloudFlarePageState.INTERACTIVE_CHALLENGE) {
 			interactiveChallengeObserved = true
 		}
+		if (pageState == CloudFlarePageState.MANAGED_CHALLENGE) {
+			managedChallengeObserved = true
+		}
 		if (currentUrl?.contains("__cf_chl_", ignoreCase = true) == true) {
 			challengeNavigationObserved = true
+		}
+		// A replacement clearance is sufficient to probe the original request even when
+		// Cloudflare has not yet navigated the challenge document back to a normal page.
+		if (hasClearance && clearanceChanged) {
+			return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE
 		}
 		if (requiresInteractiveResolution) {
 			// This tracker exists only after the interactive BrowserSession is attached. A token
@@ -66,8 +78,9 @@ internal class BrowserChallengeResolutionTracker {
 			}
 		}
 		return BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE.takeIf {
-			pageState == CloudFlarePageState.NORMAL && hasClearance &&
-				(interactiveChallengeObserved || challengeNavigationObserved || clearanceChanged)
+			pageState == CloudFlarePageState.NORMAL &&
+				(managedChallengeObserved || interactiveChallengeObserved || challengeNavigationObserved ||
+					(hasClearance && clearanceChanged))
 		}
 	}
 }

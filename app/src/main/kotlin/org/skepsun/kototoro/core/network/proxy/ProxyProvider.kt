@@ -6,6 +6,8 @@ import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asExecutor
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Authenticator
 import okhttp3.Credentials
 import okhttp3.Request
@@ -35,6 +37,8 @@ class ProxyProvider @Inject constructor(
 
 	@Volatile
 	private var cachedSelection: CachedSelection? = null
+	private val webViewConfigMutex = Mutex()
+	private var appliedWebViewProxy: ProxySnapshot? = null
 
 	private val directSelection = listOf(Proxy.NO_PROXY)
 
@@ -54,7 +58,7 @@ class ProxyProvider @Inject constructor(
 		JavaAuthenticator.setDefault(authenticator)
 	}
 
-	suspend fun applyWebViewConfig() {
+	suspend fun applyWebViewConfig() = webViewConfigMutex.withLock {
 		val isProxyEnabled = isProxyEnabled()
 		if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
 			if (isProxyEnabled) {
@@ -63,6 +67,9 @@ class ProxyProvider @Inject constructor(
 		} else {
 			val controller = ProxyController.getInstance()
 			if (settings.proxyType == Proxy.Type.DIRECT) {
+				if (appliedWebViewProxy == null) {
+					return@withLock
+				}
 				suspendCoroutine { cont ->
 					controller.clearProxyOverride(
 						(cont.context[CoroutineDispatcher] ?: Dispatchers.Main).asExecutor(),
@@ -70,8 +77,17 @@ class ProxyProvider @Inject constructor(
 						cont.resume(Unit)
 					}
 				}
+				appliedWebViewProxy = null
 			} else {
 				val proxyConfigData = requireProxyConfig()
+				val snapshot = ProxySnapshot(
+					type = proxyConfigData.type,
+					address = proxyConfigData.address,
+					port = proxyConfigData.port,
+				)
+				if (appliedWebViewProxy == snapshot) {
+					return@withLock
+				}
 				val url = buildString {
 					when (proxyConfigData.type) {
 						Proxy.Type.DIRECT -> Unit
@@ -98,6 +114,7 @@ class ProxyProvider @Inject constructor(
 						cont.resume(Unit)
 					}
 				}
+				appliedWebViewProxy = snapshot
 			}
 		}
 	}

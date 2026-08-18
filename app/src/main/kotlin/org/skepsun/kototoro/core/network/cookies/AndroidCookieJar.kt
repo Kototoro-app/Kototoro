@@ -75,6 +75,9 @@ class AndroidCookieJar : MutableCookieJar {
 						"domain=${c.domain}, path=${c.path}, hostOnly=${c.hostOnly}",
 				)
 			}
+			// Match Komikku/Mihon's direct deletion strategy first. CookieManager resolves
+			// the existing host/path identity from the original request URL.
+			setCookieBlocking(urlString, "${c.name}=;Max-Age=0")
 			// CookieManager only exposes name=value when reading cookies, so Cookie.parse()
 			// cannot recover whether the stored cookie was host-only or Domain scoped.
 			// Expire every possible domain identity instead of trusting reconstructed attrs.

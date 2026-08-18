@@ -198,9 +198,9 @@ internal class CloudstreamCloudflareInterceptor(
 
 	private companion object {
 		const val TAG = "CloudstreamCfResolver"
-		const val RESOLVER_TIMEOUT_MS = 30_000L
+		const val RESOLVER_TIMEOUT_MS = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS
 		const val RESOLVER_RETRY_COOLDOWN_MS = 30_000L
-		const val BROWSER_TIMEOUT_MS = 30_000L
+		const val BROWSER_TIMEOUT_MS = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS
 		const val BROWSER_SETTLE_DELAY_MS = 500L
 		val BROWSER_MANAGED_HEADERS = setOf(
 			"connection",

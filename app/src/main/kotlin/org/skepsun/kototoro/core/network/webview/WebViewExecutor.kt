@@ -244,7 +244,7 @@ class WebViewExecutor @Inject constructor(
 		allowedOrigins: Set<String> = emptySet(),
 		allowInteractiveChallenge: Boolean = false,
 		settleDelayMs: Long = 1200,
-		timeoutMs: Long = 30000,
+		timeoutMs: Long = DEFAULT_CAPTCHA_TIMEOUT_MS,
 	): BrowserFetchResult? {
 		val target = url.toHttpUrlOrNull() ?: return null
 		val normalizedMethod = method.uppercase().takeIf { it == "GET" || it == "POST" } ?: return null
@@ -288,7 +288,7 @@ class WebViewExecutor @Inject constructor(
 				val messageBridge = session.transportInstallation?.messageBridge?.bridge
 			try {
 				android.util.Log.d("WebViewExecutor", "fetchWithBrowserContext start: $url")
-				configureBrowserSession(webView)
+				configureBrowserSession(webView, userAgent)
 				val transportResult = withTimeoutOrNull(timeoutMs) {
 					check(session.rendererEpoch == rendererEpoch && session.state != BrowserSessionState.POISONED) {
 						"BrowserSession renderer changed before request"
@@ -550,48 +550,83 @@ class WebViewExecutor @Inject constructor(
 							)
 							session.transitionExecutionTo(BrowserExecutionState.RESOLVING_AUTOMATIC)
 							var validatedRetryJson: JSONObject? = null
-							val resolutionEvidence = if (allowInteractiveChallenge) {
-								resolveChallengeInSession(
-									webView = webView,
-									exception = challenge,
-									context = challengeContext,
-									challengeDocumentHtml = fetchBody,
-									validateOriginalRequest = {
-										val validationRaw = fetchViaWebMessage(
-											webView, messageBridge, originPolicy, targetUrlToFetch, url,
-											normalizedMethod, body, allowedHeaders, BrowserFetchExecutionWorld.PAGE,
-										) ?: fetchViaJavascriptPolling(
-											webView, targetUrlToFetch, url, normalizedMethod, body, allowedHeaders,
-										)
-										val validationJson = runCatching { JSONObject(validationRaw) }.getOrNull()
-										val validated = validationJson?.optBoolean("ok") == true && !isCloudflareChallenge(
-											validationJson.optInt("status"),
-											validationJson.optString("body"),
-											validationJson.optJSONObject("headers"),
-										)
-										if (validated) validatedRetryJson = validationJson
-										validated
-									},
-								)
-							} else {
+							var validatedRetrySnapshot: BrowserFetchResult? = null
+							val validateOriginalRequest = suspend {
+								if (normalizedMethod == "GET" && webView.url?.toHttpUrlOrNull()?.let { current ->
+									current.toString().trimEnd('/') == targetUrlToFetch.trimEnd('/')
+								} == true) {
+									// A main-frame GET is the original request. Some WAFs keep denying
+									// fetch/XHR after the rendered document has already passed the challenge.
+									validatedRetrySnapshot = snapshotCurrentPage(
+										webView,
+										targetUrlToFetch,
+										"challenge-main-frame",
+									)
+									validatedRetrySnapshot != null
+								} else {
+									val validationRaw = fetchViaWebMessage(
+										webView, messageBridge, originPolicy, targetUrlToFetch, url,
+										normalizedMethod, body, allowedHeaders, BrowserFetchExecutionWorld.PAGE,
+									) ?: fetchViaJavascriptPolling(
+										webView, targetUrlToFetch, url, normalizedMethod, body, allowedHeaders,
+									)
+									val validationJson = runCatching { JSONObject(validationRaw) }.getOrNull()
+									val validated = validationJson?.optBoolean("ok") == true && !isCloudflareChallenge(
+										validationJson.optInt("status"),
+										validationJson.optString("body"),
+										validationJson.optJSONObject("headers"),
+									)
+									if (validated) validatedRetryJson = validationJson
+									validated
+								}
+							}
+							val automaticResult = resolveChallengeInSession(
+								webView = webView,
+								exception = challenge,
+								context = challengeContext,
+								challengeDocumentHtml = fetchBody,
+								interactive = false,
+								validateOriginalRequest = validateOriginalRequest,
+							)
+							val resolutionEvidence = when {
+								automaticResult == BrowserChallengeAttemptResult.RESOLVED ->
+									BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE
+								automaticResult == BrowserChallengeAttemptResult.INTERACTIVE_REQUIRED &&
+									allowInteractiveChallenge -> {
+									resolveChallengeInSession(
+										webView = webView,
+										exception = challenge,
+										context = challengeContext,
+										challengeDocumentHtml = fetchBody,
+										interactive = true,
+										validateOriginalRequest = validateOriginalRequest,
+									)
+										.takeIf { it == BrowserChallengeAttemptResult.RESOLVED }
+										?.let { BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE }
+								}
+								else -> null
+							}
+							if (automaticResult == BrowserChallengeAttemptResult.INTERACTIVE_REQUIRED &&
+								!allowInteractiveChallenge
+							) {
 								Log.i(
 									TAG,
-									"Browser interactive challenge deferred to source UI: " +
+									"Browser managed challenge requires interaction; deferred to source UI: " +
 										"method=$normalizedMethod url=$targetUrlToFetch",
 								)
-								null
 							}
 							if (resolutionEvidence != null) {
 								session.transitionExecutionTo(BrowserExecutionState.VALIDATING)
 								session.transitionExecutionTo(BrowserExecutionState.RETRYING_REQUEST)
-								logBrowserRpcRequest(
-									method = normalizedMethod,
-									headers = allowedHeaders,
-									body = body,
-									executionWorld = BrowserFetchExecutionWorld.PAGE,
-								)
 								val retryJson = validatedRetryJson
+								val retrySnapshot = validatedRetrySnapshot
 								if (retryJson != null) {
+									logBrowserRpcRequest(
+										method = normalizedMethod,
+										headers = allowedHeaders,
+										body = body,
+										executionWorld = BrowserFetchExecutionWorld.PAGE,
+									)
 									logBrowserRpcResponse(
 										BrowserFetchExecutionWorld.PAGE,
 										retryJson,
@@ -614,11 +649,15 @@ class WebViewExecutor @Inject constructor(
 										body = retryJson.optString("body"),
 									)
 								}
-									session.transitionExecutionTo(BrowserExecutionState.FAILED)
-								} else {
-									preserveSessionAfterDeferredChallenge = true
-									session.transitionExecutionTo(BrowserExecutionState.FAILED)
+								if (retrySnapshot != null) {
+									session.transitionExecutionTo(BrowserExecutionState.COMPLETED)
+									return@withTimeoutOrNull retrySnapshot.copy(status = 200, statusText = "OK")
 								}
+								session.transitionExecutionTo(BrowserExecutionState.FAILED)
+							} else {
+								preserveSessionAfterDeferredChallenge = true
+								session.transitionExecutionTo(BrowserExecutionState.FAILED)
+							}
 						}
 						val failedHeaders = fetchHeaders?.let { obj ->
 							buildMap { obj.keys().forEach { key -> put(key, obj.optString(key)) } }
@@ -710,46 +749,63 @@ class WebViewExecutor @Inject constructor(
 		exception: CloudFlareProtectedException,
 		context: BrowserChallengeContext,
 		challengeDocumentHtml: String,
+		interactive: Boolean,
 		validateOriginalRequest: suspend () -> Boolean,
-	): BrowserResolutionEvidence? {
-		val activity = foregroundActivityHolder.current ?: return null
-		val session = browserSessionCache.values.firstOrNull { it.webView === webView } ?: return null
-		val host = attachBrowserSession(session.sessionId, activity) ?: return null
-		session.transitionExecutionTo(BrowserExecutionState.WAITING_FOR_USER)
-		val interactiveChallenge = BrowserInteractiveChallenge(
+	): BrowserChallengeAttemptResult {
+		val session = browserSessionCache.values.firstOrNull { it.webView === webView }
+			?: return BrowserChallengeAttemptResult.FAILED
+		val activity = foregroundActivityHolder.current
+		val host = when {
+			interactive -> activity?.let { attachBrowserSession(session.sessionId, it) }
+			else -> activity?.let { attachToHost(webView, it) }
+		}
+		if (interactive && host == null) return BrowserChallengeAttemptResult.FAILED
+		if (interactive) session.transitionExecutionTo(BrowserExecutionState.WAITING_FOR_USER)
+		val interactiveChallenge = if (interactive) BrowserInteractiveChallenge(
 			sessionId = session.sessionId,
 			origin = context.origin,
 			requestUrl = context.requestUrl,
 			method = context.method,
 			displayUrl = context.navigationUrl ?: context.requestUrl,
-		)
-		interactiveChallengeStates[interactiveChallenge.challengeId] = interactiveChallenge
+		) else null
+		interactiveChallenge?.let { interactiveChallengeStates[it.challengeId] = it }
 		var terminalState = BrowserInteractiveChallengeState.FAILED
-		val evidence = try {
+		val result = try {
 			// Keep any browser state issued by the homepage. The original API request,
 			// not the presence of a particular cookie, is the final success criterion.
 			val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
-			withTimeoutOrNull(DEFAULT_CAPTCHA_TIMEOUT_MS * 2) {
-				suspendCancellableCoroutine<BrowserResolutionEvidence?> { cont ->
+			(withTimeoutOrNull(if (interactive) DEFAULT_CAPTCHA_TIMEOUT_MS * 2 else DEFAULT_CAPTCHA_TIMEOUT_MS) {
+				suspendCancellableCoroutine<BrowserChallengeAttemptResult> { cont ->
+					val handler = Handler(Looper.getMainLooper())
 					val validationInFlight = AtomicBoolean(false)
-					interactiveChallengeCancellations[interactiveChallenge.challengeId] = {
-						if (cont.isActive) cont.resume(null) {}
+					var interactiveSince: Long? = null
+					fun complete(result: BrowserChallengeAttemptResult) {
+						if (!cont.isActive) return
+						handler.removeCallbacksAndMessages(null)
+						cont.resume(result)
 					}
-					if (!_interactiveChallenges.tryEmit(interactiveChallenge)) {
+					interactiveChallenge?.let { challenge ->
+						interactiveChallengeCancellations[challenge.challengeId] = {
+							complete(BrowserChallengeAttemptResult.FAILED)
+						}
+					}
+					if (interactiveChallenge != null && !_interactiveChallenges.tryEmit(interactiveChallenge)) {
 						interactiveChallengeCancellations.remove(interactiveChallenge.challengeId)
-						cont.resume(null) {}
+						complete(BrowserChallengeAttemptResult.FAILED)
 						return@suspendCancellableCoroutine
 					}
 					Log.i(
 						TAG,
-						"Interactive challenge attached to BrowserSession: session=${interactiveChallenge.sessionId} " +
-							"challenge=${interactiveChallenge.challengeId} origin=${context.origin} " +
+						"${if (interactive) "Interactive" else "Managed automatic"} challenge in BrowserSession: " +
+							"session=${session.sessionId} origin=${context.origin} " +
 							"url=${context.requestUrl} method=${context.method} " +
 							"snippetLength=${context.responseHtmlSnippet.length}",
 					)
 					val resolutionTracker = BrowserChallengeResolutionTracker()
 					fun inspectState() {
+						if (!cont.isActive) return
 						webView.evaluateJavascript(CF_STATE_JS) { raw ->
+							if (!cont.isActive) return@evaluateJavascript
 							val state = parseCloudFlarePageState(raw)
 							val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
 							val evidence = resolutionTracker.observe(
@@ -757,25 +813,46 @@ class WebViewExecutor @Inject constructor(
 								hasClearance = clearance != null,
 								clearanceChanged = clearance != null && clearance != initialClearance,
 								currentUrl = webView.url,
-								requiresInteractiveResolution = context.method == "POST",
+								requiresInteractiveResolution = interactive && context.method == "POST",
 							)
+							val originalGetDocumentReady = !interactive &&
+								state == CloudFlarePageState.NORMAL &&
+								context.matchesOriginalGetDocument(webView.url)
 							Log.d(
 								TAG,
-								"Session challenge state=$state url=${webView.url} " +
-									"hasClearance=${clearance != null} evidence=$evidence",
+								"${if (interactive) "Interactive" else "Managed automatic"} session challenge " +
+									"state=$state url=${webView.url} " +
+									"hasClearance=${clearance != null} evidence=$evidence " +
+									"originalGetDocumentReady=$originalGetDocumentReady",
 							)
-							if (evidence != null && cont.isActive && validationInFlight.compareAndSet(false, true)) {
+							if (!interactive && state == CloudFlarePageState.INTERACTIVE_CHALLENGE) {
+								val now = System.currentTimeMillis()
+								val since = interactiveSince ?: now.also { interactiveSince = it }
+								if (now - since >= INTERACTIVE_OBSERVE_WINDOW_MS) {
+									complete(BrowserChallengeAttemptResult.INTERACTIVE_REQUIRED)
+									return@evaluateJavascript
+								}
+							} else if (state != CloudFlarePageState.INTERACTIVE_CHALLENGE) {
+								interactiveSince = null
+							}
+							if (state == CloudFlarePageState.HARD_BLOCK) {
+								complete(BrowserChallengeAttemptResult.FAILED)
+								return@evaluateJavascript
+							}
+							if ((evidence != null || originalGetDocumentReady) && cont.isActive &&
+								validationInFlight.compareAndSet(false, true)
+							) {
 								kotlinx.coroutines.CoroutineScope(cont.context).launch {
 									val validated = runCatchingCancellable { validateOriginalRequest() }
 										.onFailure { Log.w(TAG, "Interactive challenge validation failed", it) }
 										.getOrDefault(false)
 									Log.d(
 										TAG,
-										"Interactive challenge original request validation: " +
+										"BrowserSession challenge original request validation: " +
 											"url=${context.requestUrl} validated=$validated",
 									)
 									if (validated && cont.isActive) {
-										cont.resume(evidence) {}
+										complete(BrowserChallengeAttemptResult.RESOLVED)
 									} else {
 										validationInFlight.set(false)
 										if (cont.isActive) {
@@ -784,6 +861,8 @@ class WebViewExecutor @Inject constructor(
 										}
 									}
 								}
+							} else if (cont.isActive) {
+								handler.postDelayed({ inspectState() }, CHALLENGE_POLL_INTERVAL_MS)
 							}
 						}
 					}
@@ -794,7 +873,12 @@ class WebViewExecutor @Inject constructor(
 						override fun onPageFinished(webView: WebView, url: String) = Unit
 						override fun onPageLoaded() = inspectState()
 						override fun onLoopDetected() {
-							if (cont.isActive) cont.resume(null) {}
+							if (cont.isActive) {
+								complete(
+									if (interactive) BrowserChallengeAttemptResult.FAILED
+									else BrowserChallengeAttemptResult.INTERACTIVE_REQUIRED,
+								)
+							}
 						}
 
 						override fun onCheckPassed() {
@@ -802,9 +886,9 @@ class WebViewExecutor @Inject constructor(
 							// Re-check the actual page and cookie before retrying the original request.
 							inspectState()
 						}
-					}, adBlock, exception.url)
+					}, null, exception.url)
 					webView.webViewClient = client
-					webView.alpha = 1f
+					webView.alpha = if (interactive) 1f else 0.01f
 					webView.visibility = View.VISIBLE
 					// POST challenges use the real origin homepage, matching normal browsing;
 					// opening an API endpoint as a GET creates a different Turnstile flow.
@@ -813,14 +897,18 @@ class WebViewExecutor @Inject constructor(
 					webView.loadUrl(navigationUrl)
 					Log.i(
 						TAG,
-						"Interactive challenge navigated to real HTTPS origin: url=$navigationUrl " +
+						"${if (interactive) "Interactive" else "Managed automatic"} challenge navigated: " +
+							"url=$navigationUrl " +
 							"method=${context.method} htmlSnippetLength=${challengeDocumentHtml.length}",
 					)
-					cont.invokeOnCancellation { webView.stopLoading() }
+					cont.invokeOnCancellation {
+						handler.removeCallbacksAndMessages(null)
+						webView.stopLoading()
+					}
 				}
-			}.also { result ->
-				terminalState = if (result != null) BrowserInteractiveChallengeState.RESOLVED
-				else BrowserInteractiveChallengeState.FAILED
+			} ?: BrowserChallengeAttemptResult.FAILED).also { attempt ->
+				terminalState = if (attempt == BrowserChallengeAttemptResult.RESOLVED) BrowserInteractiveChallengeState.RESOLVED
+					else BrowserInteractiveChallengeState.FAILED
 			}
 		} catch (error: CancellationException) {
 			terminalState = BrowserInteractiveChallengeState.CANCELLED
@@ -829,18 +917,29 @@ class WebViewExecutor @Inject constructor(
 			terminalState = BrowserInteractiveChallengeState.FAILED
 			throw error
 		} finally {
-			interactiveChallengeCancellations.remove(interactiveChallenge.challengeId)
-			val currentState = interactiveChallengeStates[interactiveChallenge.challengeId]?.state
-			if (currentState != BrowserInteractiveChallengeState.CANCELLED) {
-				updateInteractiveChallenge(interactiveChallenge.challengeId, interactiveChallenge.sessionId, terminalState)
+			interactiveChallenge?.let { challenge ->
+				interactiveChallengeCancellations.remove(challenge.challengeId)
+				val currentState = interactiveChallengeStates[challenge.challengeId]?.state
+				if (currentState != BrowserInteractiveChallengeState.CANCELLED) {
+					updateInteractiveChallenge(challenge.challengeId, challenge.sessionId, terminalState)
+				}
+				interactiveChallengeStates.remove(challenge.challengeId)
 			}
-			interactiveChallengeStates.remove(interactiveChallenge.challengeId)
 			withContext(Dispatchers.Main.immediate) {
-				detachBrowserSession(session.sessionId, host)
+				if (host != null) {
+					if (interactive) detachBrowserSession(session.sessionId, host)
+					else detachFromHost(webView, host)
+				}
 				webView.alpha = 0.01f
 			}
 		}
-		return evidence
+		return result
+	}
+
+	private enum class BrowserChallengeAttemptResult {
+		RESOLVED,
+		INTERACTIVE_REQUIRED,
+		FAILED,
 	}
 
 	@MainThread
@@ -1291,7 +1390,7 @@ class WebViewExecutor @Inject constructor(
 						title: document.title || '',
 						readyState: document.readyState || '',
 						contentType: document.contentType || '',
-						bodyText: document.body ? (document.body.innerText || document.body.textContent || '').trim().slice(0, 1000) : '',
+								bodyText: document.body ? (document.body.innerText || document.body.textContent || '').trim().slice(0, $MAX_BROWSER_TEXT_BYTES) : '',
 						html: html || ''
 					});
 				})()"""
@@ -1316,7 +1415,15 @@ class WebViewExecutor @Inject constructor(
 		responseHeaders["x-kototoro-snapshot-reason"] = reason
 		responseHeaders["x-kototoro-snapshot-title"] = json?.optString("title").orEmpty()
 		responseHeaders["x-kototoro-snapshot-ready-state"] = json?.optString("readyState").orEmpty()
-		val snapshotBody = body.ifBlank { bodyText }
+		val snapshotBody = if (contentType.contains("json", ignoreCase = true) && bodyText.isNotBlank()) {
+			bodyText
+		} else {
+			body.ifBlank { bodyText }
+		}
+		if (snapshotBody.length > MAX_BROWSER_TEXT_BYTES) {
+			Log.w(TAG, "fetchWithBrowserContext snapshot exceeds text transport limit")
+			return null
+		}
 		android.util.Log.w(
 			"WebViewExecutor",
 			"fetchWithBrowserContext snapshot success: href=${json?.optString("href")} " +
@@ -1562,28 +1669,15 @@ class WebViewExecutor @Inject constructor(
                     return@withLock CaptchaAutoResolveResult.COOLDOWN
                 }
             }
-            exception.url.toHttpUrlOrNull()?.let { challengeUrl ->
-                withContext(Dispatchers.IO) {
-                    cookieJar.removeCookies(challengeUrl) { cookie ->
-                        cookie.name == CF_CLEARANCE_COOKIE
-                    }
-                }
-            }
+            // Keep the previous clearance as the comparison baseline. Cloudflare can issue a
+            // replacement before the challenge document navigates away, and the coordinator
+            // validates that replacement by replaying the original request.
             runCatchingCancellable { proxyProvider.applyWebViewConfig() }.onFailure { it.printStackTraceDebug() }
             withContext(Dispatchers.Main.immediate) {
-                val activity = foregroundActivityHolder.current
-                val webView: WebView
-                val host: ViewGroup?
-                val isThrowaway: Boolean
-                if (activity != null) {
-                    webView = WebView(activity).apply { configureForParser(null) }
-                    host = attachToHost(webView, activity)
-                    isThrowaway = true
-                } else {
-                    webView = WebView(context).apply { configureForParser(null) }
-                    host = null
-                    isThrowaway = true
-                }
+                // Match the proven Komikku flow: a clean, unattached throwaway WebView using
+                // application context. Attaching it to the activity changes viewport/lifecycle
+                // behavior while providing no benefit for a managed challenge.
+                val webView = WebView(context).apply { configureForMihonCloudflare(null) }
                 try {
                     val protectedHeaders = (exception as? CloudFlareProtectedException)?.headers
                     val userAgent = protectedHeaders?.get(CommonHeaders.USER_AGENT)
@@ -1596,10 +1690,11 @@ class WebViewExecutor @Inject constructor(
 				val resolved = withTimeoutOrNull(timeout) {
                         suspendCancellableCoroutine { cont ->
                             webView.webViewClient = createCloudFlareClient(
-                                webView = webView,
-                                exception = exception,
-                                continuation = cont,
-                                useInterception = useInterception,
+                            webView = webView,
+                            exception = exception,
+                            continuation = cont,
+                            useInterception = useInterception,
+                            adBlockOverride = null,
                             )
                             if (requestHeaders.isEmpty()) {
                                 webView.loadUrl(exception.url)
@@ -1619,14 +1714,9 @@ class WebViewExecutor @Inject constructor(
                     e.printStackTraceDebug()
                     CaptchaAutoResolveResult.FAILED
                 } finally {
-                    if (isThrowaway) {
-                        runCatching { webView.stopLoading() }
-                        webView.webViewClient = WebViewClient()
-                        host?.let { detachFromHost(webView, it) }
-                        runCatching { webView.destroy() }
-                    } else {
-                        webView.reset()
-                    }
+                    runCatching { webView.stopLoading() }
+                    webView.webViewClient = WebViewClient()
+                    runCatching { webView.destroy() }
                 }
             }
         }
@@ -2240,6 +2330,7 @@ class WebViewExecutor @Inject constructor(
         exception: CloudFlareException,
         continuation: kotlin.coroutines.Continuation<CaptchaAutoResolveResult>,
         useInterception: Boolean,
+        adBlockOverride: AdBlock? = adBlock,
     ): CloudFlareClient {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
@@ -2254,8 +2345,8 @@ class WebViewExecutor @Inject constructor(
         val initialClearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
         val challengeDeadline = System.currentTimeMillis() + MAX_CHALLENGE_MS
         val check = object : Runnable {
-            override fun run() {
-                if (finished) return
+				override fun run() {
+				if (finished) return
 				val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
 				webView.evaluateJavascript(CF_STATE_JS) { raw ->
                     if (finished) return@evaluateJavascript
@@ -2275,13 +2366,10 @@ class WebViewExecutor @Inject constructor(
                             }
                         }
                         // A normal document can report NORMAL without having solved the
-                        // challenge. The old clearance was removed before loading,
-                        // so only a newly issued clearance is a valid auto result.
+                        // challenge, so it is not sufficient without a replacement clearance.
                         CloudFlarePageState.NORMAL -> {
                             interactiveSince = null
-                            if (clearance != null && clearance != initialClearance) {
-                                resumeOnce(CaptchaAutoResolveResult.SOLVED)
-                            } else if (System.currentTimeMillis() >= challengeDeadline) {
+                            if (System.currentTimeMillis() >= challengeDeadline) {
                                 Log.w(TAG, "Captcha page is normal but no new clearance was issued")
                                 resumeOnce(CaptchaAutoResolveResult.TIMED_OUT)
                             } else {
@@ -2311,7 +2399,17 @@ class WebViewExecutor @Inject constructor(
         val callback = object : org.skepsun.kototoro.browser.cloudflare.CloudFlareCallback {
             override fun onLoadingStateChanged(isLoading: Boolean) = Unit
             override fun onHistoryChanged() = Unit
-            override fun onPageFinished(webView: android.webkit.WebView, url: String) = Unit
+            override fun onPageFinished(webView: android.webkit.WebView, url: String) {
+                val clearance = CloudFlareHelper.getClearanceCookie(cookieJar, exception.url)
+                if (clearance != null && clearance != initialClearance) {
+                    Log.i(
+                        TAG,
+                        "Cloudflare page finished with new clearance; validating original request: " +
+                            "url=${exception.url}",
+                    )
+                    resumeOnce(CaptchaAutoResolveResult.SOLVED)
+                }
+            }
 
             override fun onPageLoaded() {
                 if (finished) return
@@ -2326,7 +2424,17 @@ class WebViewExecutor @Inject constructor(
                 handler.postDelayed(check, 100L)
             }
 
-            override fun onLoopDetected() = Unit
+            override fun onLoopDetected() {
+                // CloudFlareClient has already observed repeated challenge redirects.
+                // Do not leave the suspend call waiting for the global timeout; let the
+                // coordinator switch to its manual fallback immediately.
+                Log.w(
+                    TAG,
+                    "Cloudflare challenge loop detected during automatic resolve: " +
+                        "url=${exception.url}",
+                )
+                resumeOnce(CaptchaAutoResolveResult.INTERACTIVE_REQUIRED)
+            }
 
             override fun onMainFrameError() {
                 if (finished) return
@@ -2338,14 +2446,14 @@ class WebViewExecutor @Inject constructor(
             CloudFlareInterceptClient(
                 cookieJar = cookieJar,
                 callback = callback,
-                adBlock = adBlock,
+                adBlock = adBlockOverride,
                 targetUrl = exception.url,
             )
         } else {
             CloudFlareClient(
                 cookieJar = cookieJar,
                 callback = callback,
-                adBlock = adBlock,
+                adBlock = adBlockOverride,
                 targetUrl = exception.url,
             )
         }
@@ -2725,13 +2833,9 @@ class WebViewExecutor @Inject constructor(
 	}
 
 	@MainThread
-	private fun configureBrowserSession(webView: WebView) {
-		with(webView.settings) {
-			javaScriptEnabled = true
-			domStorageEnabled = true
-			cacheMode = WebSettings.LOAD_DEFAULT
-			blockNetworkImage = false
-		}
+	private fun configureBrowserSession(webView: WebView, userAgent: String? = null) {
+		webView.configureForMihonCloudflare(userAgent)
+		webView.settings.blockNetworkImage = false
 		CookieManager.getInstance().apply {
 			setAcceptCookie(true)
 			setAcceptThirdPartyCookies(webView, true)
@@ -2749,7 +2853,7 @@ class WebViewExecutor @Inject constructor(
 	}
 
 	companion object {
-		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 30_000L
+		const val DEFAULT_CAPTCHA_TIMEOUT_MS = 15_000L
 		private const val TRANSPORT_BRIDGE_NAME = "KototoroTransport"
 		private const val ISOLATED_TRANSPORT_BRIDGE_NAME = "KototoroIsolatedTransport"
 		private const val MAX_BROWSER_TEXT_BYTES = 8 * 1024 * 1024
@@ -2762,7 +2866,7 @@ class WebViewExecutor @Inject constructor(
 		private const val INTERACTIVE_VALIDATION_RETRY_MS = 2_000L
 	        private const val TAG = "WebViewExecutor"
 	        private const val CHALLENGE_POLL_INTERVAL_MS = 700L
-		        private const val MAX_CHALLENGE_MS = 30_000L
+		        private const val MAX_CHALLENGE_MS = DEFAULT_CAPTCHA_TIMEOUT_MS
 	        private const val INTERACTIVE_OBSERVE_WINDOW_MS = 2_500L
 	        private const val FAILURE_COOLDOWN_MS = 30_000L
 	        private const val CLOUDFLARE_WEBVIEW_WIDTH = 1024

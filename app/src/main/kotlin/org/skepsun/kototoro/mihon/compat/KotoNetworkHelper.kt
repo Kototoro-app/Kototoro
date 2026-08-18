@@ -498,7 +498,7 @@ class KotoNetworkHelper(
     companion object {
         const val WEBVIEW_FINAL_URL_HEADER = "X-Kototoro-WebView-Final-Url"
         private const val MAX_BROWSER_REQUEST_BODY_BYTES = 2L * 1024L * 1024L
-		private const val BROWSER_TRANSPORT_TIMEOUT_MS = 60_000L
+		private const val BROWSER_TRANSPORT_TIMEOUT_MS = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS
         private val BINARY_MEDIA_TYPES = setOf("image/", "audio/", "video/", "application/octet-stream")
         private val acceptedCloudflareUserAgents = ConcurrentHashMap<String, String>()
 

@@ -15,7 +15,7 @@ private const val LOOP_COUNTER = 3
 open class CloudFlareClient(
 	private val cookieJar: MutableCookieJar,
 	private val callback: CloudFlareCallback,
-	adBlock: AdBlock,
+	adBlock: AdBlock?,
 	private val targetUrl: String,
 ) : BrowserClient(callback, adBlock) {
 

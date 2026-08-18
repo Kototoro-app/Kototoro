@@ -84,7 +84,8 @@ internal const val CF_STATE_JS = """
 			}
 			if (t.indexOf('just a moment') !== -1 || t.indexOf('un instant') !== -1 ||
 				t.indexOf('einen moment') !== -1 || t.indexOf('un momento') !== -1 ||
-				t.indexOf('один момент') !== -1) return 'managed';
+				t.indexOf('один момент') !== -1 || t.indexOf('请稍候') !== -1 ||
+				t.indexOf('請稍候') !== -1) return 'managed';
 			if (document.readyState !== 'complete') return 'loading';
 			if (!document.body || document.body.children.length === 0) return 'loading';
 			return 'normal';

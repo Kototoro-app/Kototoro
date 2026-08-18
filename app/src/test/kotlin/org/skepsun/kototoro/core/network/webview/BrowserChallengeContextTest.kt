@@ -33,6 +33,26 @@ class BrowserChallengeContextTest {
 	}
 
 	@Test
+	fun `get challenge recognizes the original main frame document`() {
+		val context = BrowserChallengeContext.create(
+			"https://comix.to/browse?page=1&content_rating=safe%2Csuggestive",
+			"GET",
+			"challenge",
+		)!!
+
+		assertEquals(true, context.matchesOriginalGetDocument(context.requestUrl))
+		assertEquals(false, context.matchesOriginalGetDocument("https://comix.to/"))
+		assertEquals(false, context.matchesOriginalGetDocument("${context.requestUrl}&__cf_chl_rt_tk=token"))
+	}
+
+	@Test
+	fun `post challenge never accepts a main frame get as the original response`() {
+		val context = BrowserChallengeContext.create("https://example.com/api", "POST", "challenge")!!
+
+		assertEquals(false, context.matchesOriginalGetDocument(context.requestUrl))
+	}
+
+	@Test
 	fun `existing clearance before challenge is not resolution evidence`() {
 		val tracker = BrowserChallengeResolutionTracker()
 
@@ -47,6 +67,31 @@ class BrowserChallengeContextTest {
 		assertEquals(
 			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
 			tracker.observe(CloudFlarePageState.NORMAL, hasClearance = true, clearanceChanged = false),
+		)
+	}
+
+	@Test
+	fun `managed challenge followed by normal page triggers validation without a clearance cookie`() {
+		val tracker = BrowserChallengeResolutionTracker()
+
+		assertNull(tracker.observe(CloudFlarePageState.MANAGED_CHALLENGE, false, false))
+		assertEquals(
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
+			tracker.observe(CloudFlarePageState.NORMAL, false, false),
+		)
+	}
+
+	@Test
+	fun `replacement clearance triggers validation while challenge document remains managed`() {
+		val tracker = BrowserChallengeResolutionTracker()
+
+		assertEquals(
+			BrowserResolutionEvidence.CHALLENGE_FLOW_REACHED_NORMAL_PAGE,
+			tracker.observe(
+				CloudFlarePageState.MANAGED_CHALLENGE,
+				hasClearance = true,
+				clearanceChanged = true,
+			),
 		)
 	}
 

@@ -725,7 +725,10 @@ class CloudstreamContentRepository(
 		url: String,
 		stage: String,
 	): Boolean {
-		val resolved = webViewExecutor.tryResolveCaptcha(error, timeout = 30_000)
+		val resolved = webViewExecutor.tryResolveCaptcha(
+			error,
+			timeout = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS,
+		)
 		Log.w(
 			TAG,
 			"$stage cloudflare resolve result source=${source.displayName} url=$url " +
