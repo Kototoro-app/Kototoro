@@ -654,7 +654,7 @@ class SettingsActivity :
 
 	@Composable
 	private fun RenderComposeSection(
-		title: String,
+		title: String?,
 		searchContent: (@Composable () -> Unit)? = null,
 		actions: (@Composable BoxScope.() -> Unit)? = null,
 		content: @Composable () -> Unit,
@@ -1361,7 +1361,7 @@ class SettingsActivity :
 					)
 				}
 				RenderComposeSection(
-					title = getString(R.string.extension_management),
+					title = null,
 					searchContent = if (unifiedSourcesSearchActive) {
 						{
 							UnifiedSourcesSearchTopBar(

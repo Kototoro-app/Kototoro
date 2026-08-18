@@ -63,7 +63,7 @@ private val SettingsTopBarBottomExtension = 6.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsTopBarScaffold(
-	title: String,
+	title: String?,
 	onNavigateUp: (() -> Unit)?,
 	modifier: Modifier = Modifier,
 	searchContent: (@Composable () -> Unit)? = null,
@@ -224,7 +224,7 @@ internal fun SettingsCompactSearchField(
 
 @Composable
 private fun SettingsSeparatedTopAppBar(
-	title: String,
+	title: String?,
 	onNavigateUp: (() -> Unit)?,
 	actions: (@Composable BoxScope.() -> Unit)?,
 ) {
@@ -248,16 +248,18 @@ private fun SettingsSeparatedTopAppBar(
 						}
 					}
 				}
-				Text(
-					text = title,
-					style = MaterialTheme.typography.titleMedium,
-					color = colorScheme.onSurface,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier
-						.align(Alignment.Center)
-						.padding(horizontal = 64.dp),
-				)
+				if (title != null) {
+					Text(
+						text = title,
+						style = MaterialTheme.typography.titleMedium,
+						color = colorScheme.onSurface,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier
+							.align(Alignment.Center)
+							.padding(horizontal = 64.dp),
+					)
+				}
 				if (actions != null) {
 					Box(
 						modifier = Modifier.align(Alignment.CenterEnd),
@@ -283,14 +285,18 @@ private fun SettingsSeparatedTopAppBar(
 						)
 					}
 				}
-				Text(
-					text = title,
-					style = MaterialTheme.typography.titleLarge,
-					color = colorScheme.onSurface,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier.weight(1f),
-				)
+				if (title != null) {
+					Text(
+						text = title,
+						style = MaterialTheme.typography.titleLarge,
+						color = colorScheme.onSurface,
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+						modifier = Modifier.weight(1f),
+					)
+				} else {
+					Spacer(modifier = Modifier.weight(1f))
+				}
 				if (actions != null) {
 					Box(
 						contentAlignment = Alignment.CenterEnd,
