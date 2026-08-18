@@ -96,6 +96,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
+import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
 import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
@@ -124,7 +125,7 @@ private const val UNIFIED_SOURCES_TAB_SOURCES = 0
 private const val UNIFIED_SOURCES_TAB_REPOSITORIES = 1
 private const val UNIFIED_SOURCES_TAB_PACKAGES = 2
 private const val UNIFIED_SOURCES_TAB_COUNT = 3
-private val unifiedCardListPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 40.dp, bottom = 8.dp)
+private val unifiedCardListPadding = PaddingValues(start = SettingsContentHorizontalPadding, top = 8.dp, end = SettingsContentHorizontalPadding, bottom = 8.dp)
 private val unifiedCardContentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 private val unifiedCardSpacing = 8.dp
 
@@ -1815,7 +1816,7 @@ private fun UnifiedSourceList(
 			contentPadding = PaddingValues(
 				start = horizontalPadding,
 				top = 4.dp,
-				end = 32.dp,
+				end = SettingsContentHorizontalPadding,
 				bottom = 4.dp,
 			),
 		) {
