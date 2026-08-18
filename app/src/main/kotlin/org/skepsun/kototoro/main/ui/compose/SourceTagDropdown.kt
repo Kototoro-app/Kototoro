@@ -73,7 +73,9 @@ fun SourceTagDropdown(
         IconButton(
             onClick = {
                 if (!onButtonClickIntercept(null)) {
-                    expanded = true
+                    // Toggle: with anchorTapThrough below, the tap that closes
+                    // the menu lands here too, keeping the pill's press gloss.
+                    expanded = !expanded
                 }
             },
             modifier = Modifier.fillMaxSize(),
@@ -91,6 +93,8 @@ fun SourceTagDropdown(
             offset = DpOffset(x = 0.dp, y = 4.dp),
             style = GlassDefaults.subtleStyle(),
             useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            // Keep the pill's press gloss when this button dismisses the menu.
+            anchorTapThrough = true,
             anchorBounds = anchorBounds,
         ) {
             CompactDropdownMenuItem(

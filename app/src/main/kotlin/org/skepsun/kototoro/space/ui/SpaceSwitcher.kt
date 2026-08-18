@@ -236,7 +236,8 @@ internal fun BoxScope.SpaceSidekickHandle(
 				borderAlpha = 0.28f,
 			),
 			shape = shape,
-			componentRole = GlassComponentRole.TopBar,
+			// Floating dock handle — pill chrome, not a bar panel.
+			componentRole = GlassComponentRole.PillControl,
 		) {
 			Box(
 				modifier = Modifier
@@ -308,7 +309,8 @@ private fun SpaceSidekickPanel(
 			borderAlpha = 0.22f,
 		),
 		shape = shape,
-		componentRole = GlassComponentRole.TopBar,
+		// Floating workbench panel — pill chrome, not an edge-to-edge bar.
+		componentRole = GlassComponentRole.PillControl,
 	) {
 		Column(
 			modifier = Modifier
@@ -603,7 +605,8 @@ fun SpaceSwitcherFab(
 			borderAlpha = 0.24f,
 		),
 		shape = fabShape,
-		componentRole = GlassComponentRole.TopBar,
+		// Floating FAB — pill chrome, not a bar panel.
+		componentRole = GlassComponentRole.PillControl,
 		content = content,
 	)
 }

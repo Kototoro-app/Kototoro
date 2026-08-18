@@ -45,7 +45,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Slider
@@ -723,17 +722,28 @@ internal fun ComposeReaderActivityScaffold(
 		)
 
 		if (state.autoScroll.active && state.autoScroll.fabVisible && !state.controlsVisible && !state.autoScroll.visible) {
-			SmallFloatingActionButton(
-				onClick = callbacks.autoScroll.onOpen,
+			// Auto-scroll affordance: a floating glass pill (like the reader's
+			// other pill chrome) — uniform hairline + press gloss, no resting
+			// highlight.
+			GlassSurface(
 				modifier = Modifier
 					.align(Alignment.BottomEnd)
 					.navigationBarsPadding()
-					.padding(end = 16.dp, bottom = 16.dp),
+					.padding(end = 16.dp, bottom = 16.dp)
+					.size(48.dp),
+				shape = CircleShape,
+				style = GlassDefaults.topBarChromeStyle(),
+				componentRole = GlassComponentRole.PillControl,
 			) {
-				Icon(
-					painter = painterResource(R.drawable.ic_timer_run),
-					contentDescription = stringResource(R.string.automatic_scroll),
-				)
+				IconButton(
+					onClick = callbacks.autoScroll.onOpen,
+					modifier = Modifier.fillMaxSize(),
+				) {
+					Icon(
+						painter = painterResource(R.drawable.ic_timer_run),
+						contentDescription = stringResource(R.string.automatic_scroll),
+					)
+				}
 			}
 		}
 
@@ -1185,7 +1195,9 @@ private fun ReaderTopControlSurface(
 			containerAlpha = 0.84f,
 			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 		),
-		componentRole = GlassComponentRole.TopBar,
+		// Reader top control surfaces are floating pill controls (capsules),
+		// not edge-to-edge bar panels.
+		componentRole = GlassComponentRole.PillControl,
 	) {
 		Box(
 			contentAlignment = Alignment.Center,

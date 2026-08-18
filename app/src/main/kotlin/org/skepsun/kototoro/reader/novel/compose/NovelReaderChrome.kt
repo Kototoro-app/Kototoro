@@ -472,7 +472,8 @@ private fun NovelTopControlSurface(
 			containerAlpha = 0.84f,
 			shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 		),
-		componentRole = GlassComponentRole.TopBar,
+		// Novel reader top controls are floating pill chrome, not a bar panel.
+		componentRole = GlassComponentRole.PillControl,
 	) {
 		Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().then(contentModifier)) {
 			content()

@@ -92,6 +92,7 @@ enum class GlassComponentRole {
     ContentOverlay,
     TopBar,
     BottomBar,
+    PillControl,
     BottomPanel,
     Menu,
     Dialog,
@@ -102,6 +103,7 @@ internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
     this == GlassComponentRole.ContentOverlay ||
         this == GlassComponentRole.TopBar ||
         this == GlassComponentRole.BottomBar ||
+        this == GlassComponentRole.PillControl ||
         this == GlassComponentRole.BottomPanel
 
 object GlassDefaults {
@@ -178,8 +180,6 @@ fun GlassSurface(
 
     val colors = MaterialTheme.colorScheme
     val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-    val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
-        componentRole == GlassComponentRole.BottomBar
     val fallbackColor = if (dialogSurface && isArtworkBackground) {
         colors.surfaceContainer.copy(alpha = 1f)
     } else if (!isIosStyle && isArtworkBackground) {
@@ -189,7 +189,12 @@ fun GlassSurface(
     } else {
         colors.surfaceContainer
     }
-    val fallbackBorder = if (!dialogSurface && !isNavigationChrome && style.borderAlpha > 0f) {
+    // Hairline is the standard edge cue for floating chrome — pill controls
+    // and the floating bottom bar — while full-width top bars stay borderless;
+    // the fallback mirrors the liquid path.
+    val fallbackBorder = if (
+        !dialogSurface && componentRole != GlassComponentRole.TopBar && style.borderAlpha > 0f
+    ) {
         BorderStroke(1.dp, colors.outlineVariant.copy(alpha = style.borderAlpha))
     } else {
         null
@@ -237,6 +242,17 @@ fun LiquidGlassSurface(
     val isDark = colors.isDarkTheme()
     val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
         componentRole == GlassComponentRole.BottomBar
+    // Floating pill controls (search button, filter group, tab rails) are
+    // objects rather than bars: they share the chrome look but are bucketed
+    // separately so their edge/highlight treatment can evolve independently
+    // from real bars (bottom nav, reader toolbars, settings top bar).
+    val isPillControl = componentRole == GlassComponentRole.PillControl
+    val isFloatingChrome = isNavigationChrome || isPillControl
+    // Large glass panels (the details bottom pane) also drop the always-on
+    // specular highlight — like pills they prefer a uniform hairline — but keep
+    // their own shadow, alpha and depth treatment.
+    val suppressPersistentHighlight =
+        isFloatingChrome || componentRole == GlassComponentRole.BottomPanel
     val surfaceAlpha = style.backdropSurfaceAlpha(
         componentRole = componentRole,
         amoledCanvas = amoledCanvas,
@@ -244,6 +260,7 @@ fun LiquidGlassSurface(
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
+        GlassComponentRole.PillControl,
         -> colors.surfaceContainerHigh.copy(alpha = surfaceAlpha)
         else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
@@ -251,18 +268,24 @@ fun LiquidGlassSurface(
     // Persistent glass follows the upstream Control Center pattern: an
     // always-on specular highlight whose angle tracks the device gravity (the
     // sensor mirrors iOS "specular highlight responding to device motion");
-    // a touch additionally boosts exposure. Navigation chrome (top/bottom bars)
-    // deliberately renders without the edge highlight. Callers may opt out of
-    // the idle highlight (highlightOnIdle = false) so large static info panels
-    // render clean while idle and only brighten while pressed.
-    val uiSensor = if (isNavigationChrome || !highlightOnIdle) null else UiSensor.remember()
+    // a touch additionally boosts exposure. Navigation chrome (bars), top pill
+    // controls and large glass panels deliberately render without the
+    // persistent edge highlight: bars keep the bar treatment, pills and panels
+    // favor a uniform hairline over the uneven specular rim. Callers may opt
+    // out of the idle highlight (highlightOnIdle = false) so large static info
+    // panels render clean while idle and only brighten while pressed.
+    val uiSensor = if (suppressPersistentHighlight || !highlightOnIdle) null else UiSensor.remember()
     val pressProgress = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
+    // Pure observer: never consumes, so nested controls keep their own
+    // gestures; any touch landing on the glass boosts its exposure. Bars
+    // (bottom nav, reader control shells) opt out of press tracking entirely —
+    // a whole-bar brighten reads odd next to the discrete controls they host —
+    // while pill controls and content glass track press so they glow while
+    // touched.
     val pressTracking = if (isNavigationChrome) {
         Modifier
     } else {
-        // Pure observer: never consumes, so nested controls keep their own
-        // gestures; any touch landing on the glass boosts its exposure.
         Modifier.pointerInput(Unit) {
             awaitEachGesture {
                 awaitFirstDown(requireUnconsumed = false)
@@ -295,22 +318,32 @@ fun LiquidGlassSurface(
                             lens(
                                 refractionHeight = 16.dp.toPx(),
                                 refractionAmount = 24.dp.toPx(),
-                                depthEffect = !isNavigationChrome,
+                                depthEffect = !isFloatingChrome,
                                 chromaticAberration = false,
                             )
                         }
                     },
                     highlight = {
-                        // iOS navigation chrome (top bar + bottom bar) stays
-                        // without the edge highlight. Content glass defaults to
-                        // the upstream Control Center always-on specular highlight
-                        // that follows device gravity; surfaces with
+                        // iOS navigation chrome (bars), floating pill controls
+                        // and large glass panels stay without the persistent
+                        // edge highlight. Content glass defaults to the upstream
+                        // Control Center always-on specular highlight that
+                        // follows device gravity; surfaces with
                         // highlightOnIdle = false (large static info panels)
                         // render without an idle edge and brighten only while
                         // pressed, mirroring the library's own controls.
-                        if (isNavigationChrome) {
+                        if (isNavigationChrome || componentRole == GlassComponentRole.BottomPanel) {
+                            // Bars and large passive panels stay flat even while
+                            // pressed: a whole-bar or whole-panel brighten reads
+                            // odd compared to the discrete controls they host.
                             null
-                        } else if (!highlightOnIdle) {
+                        } else if (componentRole == GlassComponentRole.PillControl ||
+                            !highlightOnIdle
+                        ) {
+                            // Interaction-only gloss, mirroring the library's
+                            // own LiquidButton: no resting highlight, but the
+                            // glass responds to touch by brightening while
+                            // pressed (pill controls and opt-out info panels).
                             if (pressProgress.value == 0f) null
                             else {
                                 Highlight(
@@ -341,7 +374,7 @@ fun LiquidGlassSurface(
                                 radius = 4.dp,
                                 offset = DpOffset(0.dp, 2.dp),
                                 color = Color.Black.copy(
-                                    alpha = if (isNavigationChrome) 0.10f else 0.06f,
+                                    alpha = if (isFloatingChrome) 0.10f else 0.06f,
                                 ),
                             )
                         }
@@ -352,8 +385,15 @@ fun LiquidGlassSurface(
                         drawRect(tint)
                     },
                 )
+                // Hairline is the edge cue for floating chrome — pill controls
+                // and the floating bottom bar. Full-width top bars (settings,
+                // reader) deliberately stay borderless: a hairline around an
+                // edge-to-edge panel reads as an unwanted frame at the screen
+                // edge rather than a crisp control edge. It is a static
+                // separator line (same family as the shadow), not the Liquid
+                // Glass specular highlight, which stays off for all chrome.
                 .then(
-                    if (isNavigationChrome) {
+                    if (componentRole == GlassComponentRole.TopBar) {
                         Modifier
                     } else {
                         Modifier.border(
@@ -380,6 +420,7 @@ internal fun GlassStyle.backdropSurfaceAlpha(
     return when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
+        GlassComponentRole.PillControl,
         -> if (amoledCanvas) {
             (materialDensity * 0.66f).coerceIn(0.52f, 0.60f)
         } else {

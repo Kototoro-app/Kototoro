@@ -60,7 +60,9 @@ fun ReaderToolbarChrome(
 				},
 				shape = if (isIosStyle) RoundedRectangle(25.dp) else RoundedRectangle(0.dp),
 				style = GlassDefaults.topBarChromeStyle(),
-				componentRole = GlassComponentRole.TopBar,
+				// Floating reader top chrome (rounded bar inset from the screen
+				// edges) is pill chrome, not an edge-to-edge bar panel.
+				componentRole = GlassComponentRole.PillControl,
 			) { }
 	}
 }

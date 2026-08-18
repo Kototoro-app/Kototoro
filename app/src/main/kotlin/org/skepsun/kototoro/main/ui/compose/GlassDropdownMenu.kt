@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.MaterialTheme
+import kotlin.math.roundToInt
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -77,6 +79,10 @@ internal data class RootGlassMenuRequest(
     val scrollState: androidx.compose.foundation.ScrollState,
     val onDismissRequest: () -> Unit,
     val content: @Composable ColumnScope.() -> Unit,
+    // When true, the dismiss layer carves a hole over the anchor so a tap
+    // there falls through to the toggle button (keeping its press gloss).
+    // Defaults to false: the menu dismisses on any outside tap, as before.
+    val anchorTapThrough: Boolean = false,
 )
 
 @Composable
@@ -106,14 +112,52 @@ internal fun RootGlassMenuOverlay(
             gapPx = menuGapPx,
             openAboveAnchor = request.openAboveAnchor,
         )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(interactionSource = null, indication = null) {
-                    host.request = null
-                    request.onDismissRequest()
-                },
-        )
+        // Dismiss layer. Most menus use one full-screen surface that dismisses
+        // on any outside tap. With anchorTapThrough we instead carve a "hole"
+        // over the anchor button so a tap there falls through to the toggle
+        // pill below — keeping its press gloss while closing the menu (the
+        // button's onClick toggles the menu shut).
+        val dismissClick: () -> Unit = {
+            host.request = null
+            request.onDismissRequest()
+        }
+        if (request.anchorTapThrough) {
+            val rootSizePx = IntSize(
+                width = with(density) { maxWidth.roundToPx() },
+                height = with(density) { maxHeight.roundToPx() },
+            )
+            val anchor = request.anchorBounds
+            val hitSlackPx = with(density) { 6.dp.roundToPx() }
+            val holeLeft = (anchor.left - hitSlackPx).roundToInt().coerceIn(0, rootSizePx.width)
+            val holeTop = (anchor.top - hitSlackPx).roundToInt().coerceIn(0, rootSizePx.height)
+            val holeRight = (anchor.right + hitSlackPx).roundToInt().coerceIn(holeLeft, rootSizePx.width)
+            val holeBottom = (anchor.bottom + hitSlackPx).roundToInt().coerceIn(holeTop, rootSizePx.height)
+
+            @Composable
+            fun DismissStrip(x: Int, y: Int, w: Int, h: Int) {
+                if (w > 0 && h > 0) {
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(x, y) }
+                            .width(with(density) { w.toDp() })
+                            .height(with(density) { h.toDp() })
+                            .clickable(interactionSource = null, indication = null, onClick = dismissClick),
+                    )
+                }
+            }
+
+            // Top / bottom / left / right bands that dismiss, excluding the anchor hole.
+            DismissStrip(0, 0, rootSizePx.width, holeTop)
+            DismissStrip(0, holeBottom, rootSizePx.width, rootSizePx.height - holeBottom)
+            DismissStrip(0, holeTop, holeLeft, holeBottom - holeTop)
+            DismissStrip(holeRight, holeTop, rootSizePx.width - holeRight, holeBottom - holeTop)
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(interactionSource = null, indication = null, onClick = dismissClick),
+            )
+        }
         Box(
             modifier = Modifier
                 .offset { menuOffset }
@@ -176,6 +220,7 @@ fun GlassDropdownMenu(
     offset: DpOffset = DpOffset(0.dp, 0.dp),
     alignToAnchorEnd: Boolean = false,
     useRootOverlay: Boolean = false,
+    anchorTapThrough: Boolean = false,
     anchorBounds: Rect? = null,
     openAboveAnchor: Boolean = false,
     shape: Shape = RoundedRectangle(20.dp),
@@ -203,6 +248,15 @@ fun GlassDropdownMenu(
             }
         }
     }
+    // A state-only close (menu item tap, toggle-button tap) flips `expanded`
+    // off but does not itself clear the host request; drop the stale request so
+    // the overlay disappears. Guarded by id so we never clear a newer menu's
+    // request (e.g. the language-preset menu that replaces the more menu).
+    LaunchedEffect(expanded, useRootMenu, requestId) {
+        if (!useRootMenu && rootHost?.request?.id == requestId) {
+            rootHost.request = null
+        }
+    }
     if (useRootMenu) {
         SideEffect {
             rootHost?.request = RootGlassMenuRequest(
@@ -214,6 +268,7 @@ fun GlassDropdownMenu(
                 scrollState = scrollState,
                 onDismissRequest = onDismissRequest,
                 content = content,
+                anchorTapThrough = anchorTapThrough,
             )
         }
     } else {

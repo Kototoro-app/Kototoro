@@ -298,7 +298,18 @@ fun KototoroTopBar(
                                     },
                                 ) {
                                     IconButton(
-                                        onClick = { isMoreMenuExpanded = true },
+                                        onClick = {
+                                            // The dismiss layer above leaves a hole
+                                            // over this anchor, so a tap lands here
+                                            // even while a menu is open: close any
+                                            // open menu, otherwise open the more menu.
+                                            if (isMoreMenuExpanded || isLanguagePresetMenuExpanded) {
+                                                isMoreMenuExpanded = false
+                                                isLanguagePresetMenuExpanded = false
+                                            } else {
+                                                isMoreMenuExpanded = true
+                                            }
+                                        },
                                         modifier = Modifier.size(topBarControlHeight),
                                     ) {
                                         Box {
@@ -322,6 +333,9 @@ fun KototoroTopBar(
                                         offset = androidx.compose.ui.unit.DpOffset(x = 0.dp, y = 4.dp),
                                         alignToAnchorEnd = true,
                                         useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                        // Keep the toggle button's press gloss when the
+                                        // menu is dismissed by tapping it again.
+                                        anchorTapThrough = true,
                                         anchorBounds = topBarMenuAnchorBounds,
                                         shape = CompactTopBarPillShape,
                                         style = GlassDefaults.subtleStyle(),
@@ -479,6 +493,9 @@ fun KototoroTopBar(
                                     offset = DpOffset(x = 0.dp, y = 4.dp),
                                     alignToAnchorEnd = true,
                                     useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    // Keep the toggle button's press gloss when the
+                                    // menu is dismissed by tapping it again.
+                                    anchorTapThrough = true,
                                     anchorBounds = topBarMenuAnchorBounds,
                                     shape = CompactTopBarPillShape,
                                     style = GlassDefaults.subtleStyle(),
@@ -641,7 +658,10 @@ internal fun TopBarControlSurface(
             modifier = modifier,
             shape = shape,
             style = style,
-            componentRole = GlassComponentRole.TopBar,
+            // Floating pill buttons are objects (not a bar), so they get the
+            // PillControl role: uniform hairline chrome without the persistent
+            // specular highlight that bars also avoid.
+            componentRole = GlassComponentRole.PillControl,
             content = content,
         )
     } else if (fallbackContainerColor != null) {
@@ -663,7 +683,10 @@ internal fun TopBarControlSurface(
             modifier = modifier,
             shape = shape,
             style = style,
-            componentRole = GlassComponentRole.TopBar,
+            // Floating pill buttons are objects (not a bar), so they get the
+            // PillControl role: uniform hairline chrome without the persistent
+            // specular highlight that bars also avoid.
+            componentRole = GlassComponentRole.PillControl,
             content = content,
         )
     }

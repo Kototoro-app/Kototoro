@@ -219,7 +219,9 @@ fun ReaderControlDock(
 				containerAlpha = 0.86f,
 				shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 			),
-			componentRole = GlassComponentRole.BottomBar,
+			// Reader bottom docks are compact floating control clusters, not a
+			// passive nav bar — pill chrome (hairline + press gloss).
+			componentRole = GlassComponentRole.PillControl,
 		) {
 			ReaderControlDockContent(content)
 		}
@@ -274,7 +276,9 @@ fun ReaderProgressDock(
 				containerAlpha = 0.86f,
 				shadowElevation = ReaderControlTokens.ChromeShadowElevation,
 			),
-			componentRole = GlassComponentRole.BottomBar,
+			// Reader bottom docks are compact floating control clusters, not a
+			// passive nav bar — pill chrome (hairline + press gloss).
+			componentRole = GlassComponentRole.PillControl,
 		) {
 			CompositionLocalProvider(LocalContentColor provides readerControlContentColor()) {
 				content()
