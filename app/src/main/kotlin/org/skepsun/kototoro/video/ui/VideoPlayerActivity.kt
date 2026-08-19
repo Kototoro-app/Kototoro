@@ -1730,8 +1730,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (chapterUrl.startsWith("file://") || chapterUrl.startsWith("content://")) {
             return resolveIndexedLocalVideoUrl(chapterUrl, ReaderState(currentChapter.id, 0, 0)) ?: chapterUrl
         }
-        val file = videoDownloadIndex.getFile(manga.id, currentChapter.id) ?: return null
-        return file.toUri().toString()
+        val uri = videoDownloadIndex.getUri(manga.id, currentChapter.id) ?: return null
+        return uri.toString()
     }
 
     private fun resolveIndexedLocalVideoUrl(url: String, state: ReaderState?): String? {

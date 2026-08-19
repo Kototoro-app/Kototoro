@@ -127,6 +127,7 @@ import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelTranslationProcessor
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
 import org.jsoup.Jsoup
+import com.hippo.unifile.UniFile
 import java.io.File
 import java.net.URLDecoder
 import java.util.UUID
@@ -1602,6 +1603,33 @@ class DownloadWorker @AssistedInject constructor(
 		}
 	}
 
+	private fun UniFile.findOrCreateDirectory(name: String): UniFile =
+		findFile(name) ?: checkNotNull(createDirectory(name)) { "Cannot create directory: $name" }
+
+	private fun UniFile.findOrCreateFile(name: String): UniFile =
+		findFile(name) ?: checkNotNull(createFile(name)) { "Cannot create file: $name" }
+
+	private fun readVideoIndex(mangaDir: UniFile, manga: Content): org.skepsun.kototoro.local.data.ContentIndex {
+		val text = mangaDir.findFile("index.json")?.openInputStream()?.use { input ->
+			input.bufferedReader(Charsets.UTF_8).readText()
+		}
+		val existing = text?.let {
+			runCatching { org.skepsun.kototoro.local.data.ContentIndex(it) }.getOrNull()
+		}
+		return (existing ?: org.skepsun.kototoro.local.data.ContentIndex(null)).apply {
+			if (existing == null && !manga.isLocal) {
+				setContentInfo(manga)
+			}
+		}
+	}
+
+	private fun writeVideoIndex(mangaDir: UniFile, index: org.skepsun.kototoro.local.data.ContentIndex) {
+		val indexFile = mangaDir.findOrCreateFile("index.json")
+		indexFile.openOutputStream().use { output ->
+			output.write(index.toString().toByteArray(Charsets.UTF_8))
+		}
+	}
+
 	private suspend fun downloadVideoImpl(
 		manga: Content,
 		task: DownloadTask,
@@ -1610,20 +1638,16 @@ class DownloadWorker @AssistedInject constructor(
 		val chapters = getChapters(manga, task)
 		val totalChapters = chapters.size
 		var downloaded = 0
-		val videoRoot = localStorageManager.getVideoRoot()
+		val videoRoot = localStorageManager.getVideoStorageRoot()
 		checkNotNull(videoRoot) { applicationContext.getString(R.string.cannot_find_available_storage) }
-		val mangaDir = File(videoRoot, manga.title.toFileNameSafe()).apply { mkdirs() }
+		val mangaDir = videoRoot.file.findOrCreateDirectory(manga.title.toFileNameSafe())
+		android.util.Log.i("DownloadWorker", "downloadVideoImpl: root=${videoRoot.uri} dir=${mangaDir.uri}")
 		val repo = mangaRepositoryFactory.createWithDiagnostics(manga.source).requireAvailableRepository(
 			tag = "DownloadWorker",
 			prefix = "downloadVideoImpl_repository_unavailable",
 		) { "Download source ${manga.source.name} is not available" }
-		
-		val indexFile = File(mangaDir, "index.json")
-		val index = org.skepsun.kototoro.local.data.ContentIndex.read(indexFile) ?: org.skepsun.kototoro.local.data.ContentIndex(null).apply {
-			if (!manga.isLocal) {
-				setContentInfo(manga)
-			}
-		}
+
+		val index = readVideoIndex(mangaDir, manga)
 
 		for ((iterationIndex, chapter) in chapters.withIndex()) {
 			if (chapter.value.id in excludedIds) {
@@ -1647,14 +1671,13 @@ class DownloadWorker @AssistedInject constructor(
 				null
 			}
 			val fileName = buildVideoFileName(chapter, target.extension(torrentStream))
-			val outputFile = File(mangaDir, fileName)
+			val outputFile = mangaDir.findOrCreateFile(fileName)
 			try {
 				if (outputFile.exists() && outputFile.length() > 0L) {
-					videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.absolutePath)
+					videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.uri.toString())
 					downloaded += 1
 					continue
 				}
-				outputFile.parentFile?.mkdirs()
 				val progress: suspend (Int, Int) -> Unit = { cur, total ->
 					publishState(
 						currentState.copy(
@@ -1676,12 +1699,12 @@ class DownloadWorker @AssistedInject constructor(
 				}
 				
 				// Download external tracks (subtitles, audio)
-				val baseName = outputFile.nameWithoutExtension
+				val baseName = fileName.substringBeforeLast('.')
 				target.subtitles.forEach { track ->
 					val rawExt = track.url.substringBefore('?').substringAfterLast('.', "srt").lowercase()
 					val ext = if (rawExt.length <= 5) rawExt else "srt"
 					val langSafe = track.lang.toFileNameSafe().ifEmpty { "Unknown" }
-					val trackFile = File(mangaDir, "${baseName}_sub_${langSafe}.$ext")
+					val trackFile = mangaDir.findOrCreateFile("${baseName}_sub_${langSafe}.$ext")
 					if (!trackFile.exists() || trackFile.length() == 0L) {
 						try {
 							downloadTrackFile(repo.source, track, target.headers, trackFile)
@@ -1695,7 +1718,7 @@ class DownloadWorker @AssistedInject constructor(
 					val rawExt = track.url.substringBefore('?').substringAfterLast('.', "m4a").lowercase()
 					val ext = if (rawExt.length <= 5) rawExt else "m4a"
 					val langSafe = track.lang.toFileNameSafe().ifEmpty { "Unknown" }
-					val trackFile = File(mangaDir, "${baseName}_aud_${langSafe}.$ext")
+					val trackFile = mangaDir.findOrCreateFile("${baseName}_aud_${langSafe}.$ext")
 					if (!trackFile.exists() || trackFile.length() == 0L) {
 						try {
 							downloadTrackFile(repo.source, track, target.headers, trackFile)
@@ -1706,9 +1729,9 @@ class DownloadWorker @AssistedInject constructor(
 					}
 				}
 				
-				videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.absolutePath)
+				videoDownloadIndex.put(manga.id, chapter.value.id, outputFile.uri.toString())
 				index.addChapter(chapter, fileName)
-				indexFile.writeText(index.toString())
+				writeVideoIndex(mangaDir, index)
 				scanDownloadedFile(outputFile)
 				downloaded += 1
 				publishState(currentState.copy(downloadedChapters = downloaded))
@@ -1772,7 +1795,7 @@ class DownloadWorker @AssistedInject constructor(
 		source: ContentSource,
 		url: String,
 		headers: Map<String, String>?,
-		outputFile: File,
+		outputFile: UniFile,
 		onProgress: suspend (Int, Int) -> Unit,
 	) {
 		val request = PageLoader.createPageRequest(url, source, headers)
@@ -1783,7 +1806,7 @@ class DownloadWorker @AssistedInject constructor(
 			val body = resp.body ?: error("Response body is null")
 			val totalBytes = body.contentLength().takeIf { it > 0 } ?: -1L
 			body.use {
-				outputFile.sink(append = false).buffer().use { sink ->
+				outputFile.openOutputStream().sink().buffer().use { sink ->
 					val sourceStream = body.source()
 					val buffer = okio.Buffer()
 					var written = 0L
@@ -1820,7 +1843,7 @@ class DownloadWorker @AssistedInject constructor(
 		source: ContentSource,
 		track: eu.kanade.tachiyomi.animesource.model.Track,
 		headers: Map<String, String>?,
-		outputFile: File,
+		outputFile: UniFile,
 	) {
 		val url = track.url
 		if (url.startsWith("file://") || url.startsWith("content://")) {
@@ -1829,7 +1852,7 @@ class DownloadWorker @AssistedInject constructor(
 				val sourceFile = uri.path?.let { File(it) }
 				if (sourceFile != null && sourceFile.exists() && sourceFile.length() > 0) {
 					sourceFile.inputStream().use { input ->
-						outputFile.outputStream().use { output ->
+						outputFile.openOutputStream().use { output ->
 							input.copyTo(output)
 						}
 					}
@@ -1839,7 +1862,7 @@ class DownloadWorker @AssistedInject constructor(
 			} else {
 				val resolver = applicationContext.contentResolver
 				resolver.openInputStream(uri)?.use { input ->
-					outputFile.outputStream().use { output ->
+					outputFile.openOutputStream().use { output ->
 						input.copyTo(output)
 					}
 					android.util.Log.d("DownloadWorker", "Copied content:// track: ${track.lang}")
@@ -1856,7 +1879,7 @@ class DownloadWorker @AssistedInject constructor(
 		source: ContentSource,
 		url: String,
 		headers: Map<String, String>?,
-		outputFile: File,
+		outputFile: UniFile,
 		onProgress: suspend (Int, Int) -> Unit,
 	) {
 		val masterText = fetchText(source, url, headers)
@@ -1876,10 +1899,10 @@ class DownloadWorker @AssistedInject constructor(
 		segments.firstOrNull()?.let {
 			android.util.Log.d("DownloadWorker", "HLS first segment: url=${it.url} seq=${it.sequence}")
 		}
-		android.util.Log.i("DownloadWorker", "HLS output file: ${outputFile.absolutePath}")
+		android.util.Log.i("DownloadWorker", "HLS output file: ${outputFile.uri}")
 		val keyCache = HashMap<String, ByteArray>()
 		var writtenTotal = 0L
-		outputFile.sink(append = false).buffer().use { sink ->
+		outputFile.openOutputStream().sink().buffer().use { sink ->
 			val total = segments.size.coerceAtLeast(1)
 			segments.forEachIndexed { index, segment ->
 				val req = PageLoader.createPageRequest(segment.url, source, headers)
@@ -2192,16 +2215,17 @@ class DownloadWorker @AssistedInject constructor(
 		)
 	}
 
-	private fun scanDownloadedFile(file: File) {
+	private fun scanDownloadedFile(output: UniFile) {
+		val filePath = output.filePath ?: return
 		runCatching {
 			MediaScannerConnection.scanFile(
 				applicationContext,
-				arrayOf(file.absolutePath),
+				arrayOf(filePath),
 				null,
 				null,
 			)
 		}.onFailure { e ->
-			Log.w("DownloadWorker", "scanDownloadedFile failed: ${file.absolutePath}", e)
+			Log.w("DownloadWorker", "scanDownloadedFile failed: $filePath", e)
 		}
 	}
 

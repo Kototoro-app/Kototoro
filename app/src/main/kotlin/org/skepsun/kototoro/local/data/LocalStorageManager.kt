@@ -430,6 +430,25 @@ class LocalStorageManager @Inject constructor(
 	}
 
 	/**
+	 * 返回视频下载根目录（SAF 感知的本地根）。
+	 * 优先使用「本地内容目录 - 视频」设置的默认目录（含 SAF 树 URI，通过 DocumentsProvider 写入），
+	 * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
+	 */
+	@WorkerThread
+	fun getVideoStorageRoot(): LocalStorageRoot? {
+		settings.videoStorageUri
+			?.let { LocalStorageRoot.fromUri(context, it) }
+			?.takeIf(LocalStorageRoot::isWriteable)
+			?.let { return it }
+		settings.videoStorageDir
+			?.takeIfWriteable()
+			?.let(LocalStorageRoot::fromFile)
+			?.takeIf(LocalStorageRoot::isWriteable)
+			?.let { return it }
+		return getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)
+	}
+
+	/**
 	 * 返回小说下载的优先根目录（遵循「本地内容目录 - 小说」设置），未设置或不可写时返回 null。
 	 * 供 EPUB 存储等场景使用，仅在已配置时返回，不会创建目录。
 	 */
