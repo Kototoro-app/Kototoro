@@ -14,10 +14,11 @@ import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
-import org.skepsun.kototoro.parsers.model.Manga
-import org.skepsun.kototoro.parsers.model.MangaChapter
-import org.skepsun.kototoro.parsers.model.MangaParserSource
-import org.skepsun.kototoro.parsers.model.MangaState
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.parsers.model.ContentType
 import java.io.IOException
 
 /**
@@ -82,21 +83,23 @@ class ProgressPersistenceRoundTripPropertyTest {
         
         // Save progress
         database.getHistoryDao().upsert(
-            HistoryEntity(
-                mangaId = manga.id,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                chapterId = chapterId,
-                page = pageNumber,
-                scroll = scrollPosition.toFloat(),
-                percent = progressPercent,
-                chaptersCount = 10,
-                deletedAt = 0L
+            listOf(
+                HistoryEntity(
+                    mangaId = manga.id,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    chapterId = chapterId,
+                    page = pageNumber,
+                    scroll = scrollPosition.toFloat(),
+                    percent = progressPercent,
+                    chaptersCount = 10,
+                    deletedAt = 0L
+                )
             )
         )
         
         // Restore progress
-        val history = database.getHistoryDao().find(manga.id)
+        val history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == manga.id }
         
         // Verify round-trip
         history shouldNotBe null
@@ -134,21 +137,23 @@ class ProgressPersistenceRoundTripPropertyTest {
         
         // Save progress with internal chapter ID
         database.getHistoryDao().upsert(
-            HistoryEntity(
-                mangaId = manga.id,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                chapterId = internalChapterId,  // Using internal chapter ID, not parent
-                page = pageNumber,
-                scroll = scrollPosition.toFloat(),
-                percent = progressPercent,
-                chaptersCount = 1,
-                deletedAt = 0L
+            listOf(
+                HistoryEntity(
+                    mangaId = manga.id,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    chapterId = internalChapterId,  // Using internal chapter ID, not parent
+                    page = pageNumber,
+                    scroll = scrollPosition.toFloat(),
+                    percent = progressPercent,
+                    chaptersCount = 1,
+                    deletedAt = 0L
+                )
             )
         )
         
         // Restore progress
-        val history = database.getHistoryDao().find(manga.id)
+        val history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == manga.id }
         
         // Verify round-trip - the internal chapter ID should be preserved
         history shouldNotBe null
@@ -177,21 +182,23 @@ class ProgressPersistenceRoundTripPropertyTest {
         val chapterId1 = 200L
         val page1 = 10
         database.getHistoryDao().upsert(
-            HistoryEntity(
-                mangaId = manga.id,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                chapterId = chapterId1,
-                page = page1,
-                scroll = 0f,
-                percent = 0.2f,
-                chaptersCount = 5,
-                deletedAt = 0L
+            listOf(
+                HistoryEntity(
+                    mangaId = manga.id,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    chapterId = chapterId1,
+                    page = page1,
+                    scroll = 0f,
+                    percent = 0.2f,
+                    chaptersCount = 5,
+                    deletedAt = 0L
+                )
             )
         )
         
         // Verify first save
-        var history = database.getHistoryDao().find(manga.id)
+        var history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == manga.id }
         history!!.chapterId shouldBe chapterId1
         history.page shouldBe page1
         
@@ -199,21 +206,23 @@ class ProgressPersistenceRoundTripPropertyTest {
         val chapterId2 = 201L
         val page2 = 25
         database.getHistoryDao().upsert(
-            HistoryEntity(
-                mangaId = manga.id,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                chapterId = chapterId2,
-                page = page2,
-                scroll = 0f,
-                percent = 0.4f,
-                chaptersCount = 5,
-                deletedAt = 0L
+            listOf(
+                HistoryEntity(
+                    mangaId = manga.id,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    chapterId = chapterId2,
+                    page = page2,
+                    scroll = 0f,
+                    percent = 0.4f,
+                    chaptersCount = 5,
+                    deletedAt = 0L
+                )
             )
         )
         
         // Verify second save overwrote first
-        history = database.getHistoryDao().find(manga.id)
+        history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == manga.id }
         history!!.chapterId shouldBe chapterId2
         history.page shouldBe page2
     }
@@ -252,28 +261,36 @@ class ProgressPersistenceRoundTripPropertyTest {
             
             // Save with calculated percent
             database.getHistoryDao().upsert(
-                HistoryEntity(
-                    mangaId = manga.id,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
-                    chapterId = chapterId,
-                    page = currentPage,
-                    scroll = 0f,
-                    percent = calculatedPercent,
-                    chaptersCount = 10,
-                    deletedAt = 0L
+                listOf(
+                    HistoryEntity(
+                        mangaId = manga.id,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        chapterId = chapterId,
+                        page = currentPage,
+                        scroll = 0f,
+                        percent = calculatedPercent,
+                        chaptersCount = 10,
+                        deletedAt = 0L
+                    )
                 )
             )
             
             // Verify round-trip
-            val history = database.getHistoryDao().find(manga.id)
+            val history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == manga.id }
             history!!.percent shouldBe calculatedPercent
         }
     }
     
-    private fun createTestManga(id: Long, title: String, chapterCount: Int): Manga {
+    private val testSource = object : ContentSource {
+        override val name = "TestSource"
+        override val locale = "en"
+        override val contentType = ContentType.NOVEL
+    }
+
+    private fun createTestManga(id: Long, title: String, chapterCount: Int): Content {
         val chapters = (1..chapterCount).map { index ->
-            MangaChapter(
+            ContentChapter(
                 id = id + index,
                 title = "Chapter $index",
                 number = index.toFloat(),
@@ -282,11 +299,11 @@ class ProgressPersistenceRoundTripPropertyTest {
                 scanlator = null,
                 uploadDate = 0L,
                 branch = null,
-                source = MangaParserSource.WENKU8
+                source = testSource
             )
         }
         
-        return Manga(
+        return Content(
             id = id,
             title = title,
             altTitle = null,
@@ -296,12 +313,12 @@ class ProgressPersistenceRoundTripPropertyTest {
             isNsfw = false,
             coverUrl = "",
             tags = emptySet(),
-            state = MangaState.FINISHED,
+            state = ContentState.FINISHED,
             author = "Test Author",
             largeCoverUrl = null,
             description = "Test manga for property testing",
             chapters = chapters,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
     }
 }

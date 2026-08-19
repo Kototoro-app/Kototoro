@@ -12,13 +12,11 @@ import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
-import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
 
 @RunWith(AndroidJUnit4::class)
 class SpaceWorkDaoTest {
 
 	private lateinit var db: MangaDatabase
-	private val policy = DefaultSpaceContentPolicy()
 
 	@Before
 	fun setUp() {
@@ -36,7 +34,10 @@ class SpaceWorkDaoTest {
 
 	@Test
 	fun mangaSpaceExcludesOtherMixedAndUnresolvedWorks() = runTest {
-		val allowed = policy.allowedTypes(BuiltInSpaces.Manga).map { it.name }
+		val allowed = BuiltInSpaces.contexts
+			.first { it.id == BuiltInSpaces.Manga }
+			.allowedContentTypes
+			.map { it.name }
 		val classified = BuiltInSpaces.contexts.flatMap { context ->
 			context.allowedContentTypes.map { it.name }
 		}
@@ -61,8 +62,9 @@ class SpaceWorkDaoTest {
 		)
 		(1L..5L).forEach { entityId ->
 			sql.execSQL(
-				"INSERT INTO entity VALUES (?, 'WORK', ?, ?, ?, NULL, 0, 0, 0)",
-				arrayOf(entityId, "sync-$entityId", "Work $entityId", entityId),
+				"INSERT INTO entity (id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count) " +
+					"VALUES (?, 'WORK', ?, ?, ?, NULL, 0, 0, 0)",
+				arrayOf<Any?>(entityId, "sync-$entityId", "Work $entityId", entityId),
 			)
 			sql.execSQL(
 				"INSERT INTO work_history VALUES (?, ?, 0, ?, 0, 0, 0, 0, 0, 0, NULL)",
@@ -90,7 +92,7 @@ class SpaceWorkDaoTest {
 				cover_url, large_cover_url, state, author, source, description, content_type
 			) VALUES (?, ?, NULL, '', '', 0, 0, NULL, '', NULL, NULL, NULL, 'TEST', NULL, ?)
 			""".trimIndent(),
-			arrayOf(mangaId, "Projection $mangaId", contentType?.name),
+			arrayOf<Any?>(mangaId, "Projection $mangaId", contentType?.name),
 		)
 		sql.execSQL(
 			"""
@@ -99,7 +101,7 @@ class SpaceWorkDaoTest {
 				source_kind, state, created_by, updated_at
 			) VALUES (?, 'local_manga', ?, 1, 1, 'READING_SOURCE', 'CONFIRMED', 'LEGACY', 0)
 			""".trimIndent(),
-			arrayOf(entityId, mangaId.toString()),
+			arrayOf<Any?>(entityId, mangaId.toString()),
 		)
 	}
 }

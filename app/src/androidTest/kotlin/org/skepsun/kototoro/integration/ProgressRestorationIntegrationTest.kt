@@ -19,12 +19,22 @@ import org.skepsun.kototoro.local.epub.ChapterIdGeneratorImpl
 import org.skepsun.kototoro.local.epub.EpubContentCache
 import org.skepsun.kototoro.local.epub.EpubFileManagerImpl
 import org.skepsun.kototoro.local.epub.EpubReaderImpl
-import org.skepsun.kototoro.parsers.model.Manga
-import org.skepsun.kototoro.parsers.model.MangaChapter
-import org.skepsun.kototoro.parsers.model.MangaParserSource
-import org.skepsun.kototoro.parsers.model.MangaState
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.novel.EpubInternalChapterLoader
 import java.io.File
+
+/**
+ * Test [ContentSource] used in place of the removed source enum.
+ */
+private object TestContentSource : ContentSource {
+    override val name: String = "TEST"
+    override val locale: String = "zh-CHS"
+    override val contentType: ContentType = ContentType.NOVEL
+}
 
 /**
  * Integration test for progress restoration flow.
@@ -60,7 +70,7 @@ class ProgressRestorationIntegrationTest {
             context = context,
             epubFileManager = epubFileManager,
             epubChapterMappingDao = database.getEpubChapterMappingDao(),
-            epubContentCache = EpubContentCache()
+            epubContentCache = EpubContentCache.getInstance()
         )
         
         // Create test directory
@@ -94,7 +104,7 @@ class ProgressRestorationIntegrationTest {
         val pageNumber = 42
         val progressPercent = 0.42f
         
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -112,7 +122,7 @@ class ProgressRestorationIntegrationTest {
         // In real app, this would involve closing the activity
         
         // Step 3: Simulate reopen - query history (Requirement 7.5)
-        val history = database.getHistoryDao().find(manga.id)
+        val history = findHistory(manga.id)
         
         // Step 4: Verify restoration (Requirement 7.5)
         history shouldNotBe null
@@ -165,7 +175,7 @@ class ProgressRestorationIntegrationTest {
         val pageNumber = 15
         val progressPercent = 0.3f
         
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -182,7 +192,7 @@ class ProgressRestorationIntegrationTest {
         // Step 2: Simulate exit
         
         // Step 3: Simulate reopen - restore progress (Requirement 7.5)
-        val history = database.getHistoryDao().find(manga.id)
+        val history = findHistory(manga.id)
         
         // Step 4: Verify restoration with internal chapter ID
         history shouldNotBe null
@@ -197,7 +207,7 @@ class ProgressRestorationIntegrationTest {
         mapping.parentChapterId shouldBe parentChapterId
         
         // Verify: Can load chapter content using restored ID
-        val chapter = MangaChapter(
+        val chapter = ContentChapter(
             id = internalChapterId,
             title = mapping.chapterTitle,
             number = chapterIndex.toFloat(),
@@ -206,7 +216,7 @@ class ProgressRestorationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = TestContentSource
         )
         
         val result = epubInternalChapterLoader.loadEpubInternalChapter(chapter)
@@ -230,7 +240,7 @@ class ProgressRestorationIntegrationTest {
         
         // Save progress for a chapter
         val deletedChapterId = 9999L // Chapter that doesn't exist
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -245,7 +255,7 @@ class ProgressRestorationIntegrationTest {
         )
         
         // Simulate reopen
-        val history = database.getHistoryDao().find(manga.id)
+        val history = findHistory(manga.id)
         history shouldNotBe null
         
         // Try to find chapter by saved ID
@@ -290,7 +300,7 @@ class ProgressRestorationIntegrationTest {
             calculatedPercent shouldBe expectedPercent
             
             // Save progress
-            database.getHistoryDao().upsert(
+            upsertHistory(
                 HistoryEntity(
                     mangaId = manga.id,
                     createdAt = System.currentTimeMillis(),
@@ -305,7 +315,7 @@ class ProgressRestorationIntegrationTest {
             )
             
             // Restore and verify
-            val history = database.getHistoryDao().find(manga.id)
+            val history = findHistory(manga.id)
             history shouldNotBe null
             history!!.percent shouldBe expectedPercent
             history.page shouldBe currentPage
@@ -329,7 +339,7 @@ class ProgressRestorationIntegrationTest {
         // Cycle 1: Save initial progress
         val chapter1Id = 5001L
         val page1 = 10
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -344,14 +354,14 @@ class ProgressRestorationIntegrationTest {
         )
         
         // Restore cycle 1
-        var history = database.getHistoryDao().find(manga.id)
+        var history = findHistory(manga.id)
         history!!.chapterId shouldBe chapter1Id
         history.page shouldBe page1
         
         // Cycle 2: Update progress
         val chapter2Id = 5002L
         val page2 = 25
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -366,14 +376,14 @@ class ProgressRestorationIntegrationTest {
         )
         
         // Restore cycle 2
-        history = database.getHistoryDao().find(manga.id)
+        history = findHistory(manga.id)
         history!!.chapterId shouldBe chapter2Id
         history.page shouldBe page2
         
         // Cycle 3: Update progress again
         val chapter3Id = 5003L
         val page3 = 50
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -388,7 +398,7 @@ class ProgressRestorationIntegrationTest {
         )
         
         // Restore cycle 3
-        history = database.getHistoryDao().find(manga.id)
+        history = findHistory(manga.id)
         history!!.chapterId shouldBe chapter3Id
         history.page shouldBe page3
     }
@@ -412,7 +422,7 @@ class ProgressRestorationIntegrationTest {
         val pageNumber = 33
         val progressPercent = 0.33f
         
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -427,7 +437,7 @@ class ProgressRestorationIntegrationTest {
         )
         
         // Verify before "restart"
-        var history = database.getHistoryDao().find(manga.id)
+        var history = findHistory(manga.id)
         history shouldNotBe null
         history!!.chapterId shouldBe chapterId
         
@@ -436,7 +446,7 @@ class ProgressRestorationIntegrationTest {
         // that the data is still accessible
         
         // Verify after "restart"
-        history = database.getHistoryDao().find(manga.id)
+        history = findHistory(manga.id)
         history shouldNotBe null
         history!!.chapterId shouldBe chapterId
         history.page shouldBe pageNumber
@@ -478,7 +488,7 @@ class ProgressRestorationIntegrationTest {
         
         // Save progress
         val internalChapterId = chapterIdGenerator.generateEpubChapterId(parentChapterId, 0)
-        database.getHistoryDao().upsert(
+        upsertHistory(
             HistoryEntity(
                 mangaId = manga.id,
                 createdAt = System.currentTimeMillis(),
@@ -496,14 +506,14 @@ class ProgressRestorationIntegrationTest {
         epubFile.delete()
         
         // Try to restore and load
-        val history = database.getHistoryDao().find(manga.id)
+        val history = findHistory(manga.id)
         history shouldNotBe null
         
         val mapping = dao.getById(history!!.chapterId)
         mapping shouldNotBe null
         
         // Try to load chapter (should fail gracefully)
-        val chapter = MangaChapter(
+        val chapter = ContentChapter(
             id = internalChapterId,
             title = mapping!!.chapterTitle,
             number = 1f,
@@ -512,7 +522,7 @@ class ProgressRestorationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = TestContentSource
         )
         
         val result = epubInternalChapterLoader.loadEpubInternalChapter(chapter)
@@ -522,11 +532,28 @@ class ProgressRestorationIntegrationTest {
     }
     
     /**
+     * Loads the active history row for a manga, mirroring the legacy
+     * HistoryDao#find(mangaId) API.
+     */
+    private suspend fun findHistory(mangaId: Long): HistoryEntity? {
+        return database.getHistoryDao().findAllEntriesIncludingDeleted()
+            .firstOrNull { it.mangaId == mangaId && it.deletedAt == 0L }
+    }
+
+    /**
+     * Persists a single history row through the collection-based
+     * HistoryDao#upsert API.
+     */
+    private suspend fun upsertHistory(entity: HistoryEntity) {
+        database.getHistoryDao().upsert(listOf(entity))
+    }
+
+    /**
      * Creates a test manga with chapters.
      */
-    private fun createTestManga(id: Long, title: String, chapterCount: Int): Manga {
+    private fun createTestManga(id: Long, title: String, chapterCount: Int): Content {
         val chapters = (1..chapterCount).map { index ->
-            MangaChapter(
+            ContentChapter(
                 id = id + index,
                 title = "Chapter $index",
                 number = index.toFloat(),
@@ -535,11 +562,11 @@ class ProgressRestorationIntegrationTest {
                 scanlator = null,
                 uploadDate = 0L,
                 branch = null,
-                source = MangaParserSource.WENKU8
+                source = TestContentSource
             )
         }
         
-        return Manga(
+        return Content(
             id = id,
             title = title,
             altTitle = null,
@@ -549,12 +576,12 @@ class ProgressRestorationIntegrationTest {
             isNsfw = false,
             coverUrl = "",
             tags = emptySet(),
-            state = MangaState.FINISHED,
+            state = ContentState.FINISHED,
             author = "Test Author",
             largeCoverUrl = null,
             description = "Test manga for integration testing",
             chapters = chapters,
-            source = MangaParserSource.WENKU8
+            source = TestContentSource
         )
     }
     

@@ -1,22 +1,23 @@
 package org.skepsun.kototoro.integration
 
 import android.content.Context
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
-import org.skepsun.kototoro.core.db.entity.JsonSourceType
-import org.skepsun.kototoro.core.parser.dynamic.DynamicParserFactory
-import org.skepsun.kototoro.core.parser.rule.DefaultRuleEngine
+import org.skepsun.kototoro.core.prefs.AppSettings
 
 /**
  * End-to-end integration test for JSON source functionality.
@@ -37,28 +38,33 @@ class JsonSourceEndToEndTest {
     @Before
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        database = MangaDatabase.getInstance(context)
-        
-        val ruleEngine = DefaultRuleEngine()
-        val parserFactory = DynamicParserFactory(ruleEngine)
-        
+        // MangaDatabase.getInstance() was removed; other integration tests build an
+        // in-memory Room database directly (see ProgressRestorationIntegrationTest).
+        database = Room.inMemoryDatabaseBuilder(
+            context,
+            MangaDatabase::class.java,
+        ).allowMainThreadQueries().build()
+
+        val appSettings = AppSettings(context)
+        // DynamicParserFactory was removed; JsonSourceManager now only requires the
+        // DAO and AppSettings (optional JS/HTTP collaborators default to null).
         jsonSourceManager = JsonSourceManager(
-            dao = database.jsonSourceDao,
-            parserFactory = parserFactory
+            jsonSourceDao = database.getJsonSourceDao(),
+            appSettings = appSettings,
         )
-        
+
         sourceTypeIdentifier = SourceTypeIdentifier()
-        sourceGroupManager = SourceGroupManager(sourceTypeIdentifier)
-        
-        // Note: We cannot easily instantiate MangaSourcesRepository in tests
-        // as it requires AppSettings and other dependencies
-        // These tests focus on JsonSourceManager functionality
-        
+        sourceGroupManager = SourceGroupManager(
+            sourceTypeIdentifier = sourceTypeIdentifier,
+            jsonSourceManager = jsonSourceManager,
+            json = Json { ignoreUnknownKeys = true; isLenient = true },
+        )
+
         // Clean up any existing test data
         runBlocking {
-            database.jsonSourceDao.observeAll().first().forEach { source ->
+            database.getJsonSourceDao().observeAll().first().forEach { source ->
                 if (source.name.contains("Test")) {
-                    database.jsonSourceDao.deleteById(source.id)
+                    database.getJsonSourceDao().deleteById(source.id)
                 }
             }
         }
@@ -68,12 +74,13 @@ class JsonSourceEndToEndTest {
     fun tearDown() {
         // Clean up test data
         runBlocking {
-            database.jsonSourceDao.observeAll().first().forEach { source ->
+            database.getJsonSourceDao().observeAll().first().forEach { source ->
                 if (source.name.contains("Test")) {
-                    database.jsonSourceDao.deleteById(source.id)
+                    database.getJsonSourceDao().deleteById(source.id)
                 }
             }
         }
+        database.close()
     }
 
     @Test
@@ -114,7 +121,7 @@ class JsonSourceEndToEndTest {
         assertEquals("Should import 1 source", 1, importResult.getOrNull())
 
         // Step 2: Verify source is in database
-        val allSources = database.jsonSourceDao.observeAll().first()
+        val allSources = database.getJsonSourceDao().observeAll().first()
         val testSource = allSources.find { it.name == "Test Novel Source" }
         assertNotNull("Source should be in database", testSource)
         assertEquals("Source type should be LEGADO", JsonSourceType.LEGADO, testSource?.type)
@@ -123,26 +130,26 @@ class JsonSourceEndToEndTest {
         // Step 3: Verify source identifier format
         val sourceId = testSource?.id ?: ""
         assertTrue("Source ID should start with JSON_", sourceId.startsWith("JSON_"))
-        assertTrue("Source type should be identified as JSON", 
+        assertTrue("Source type should be identified as JSON",
             sourceTypeIdentifier.isJsonSource(sourceId))
 
         // Step 4: Test source toggle
         jsonSourceManager.toggleSource(sourceId, false)
-        val disabledSource = database.jsonSourceDao.getById(sourceId)
+        val disabledSource = database.getJsonSourceDao().getById(sourceId)
         assertFalse("Source should be disabled", disabledSource?.enabled == true)
 
         jsonSourceManager.toggleSource(sourceId, true)
-        val enabledSource = database.jsonSourceDao.getById(sourceId)
+        val enabledSource = database.getJsonSourceDao().getById(sourceId)
         assertTrue("Source should be enabled again", enabledSource?.enabled == true)
 
         // Step 5: Verify source appears in enabled sources
-        val enabledSources = database.jsonSourceDao.observeEnabled().first()
+        val enabledSources = database.getJsonSourceDao().observeEnabled().first()
         assertTrue("Enabled sources should contain test source",
             enabledSources.any { it.id == sourceId })
 
         // Step 6: Test source deletion
         jsonSourceManager.deleteSource(sourceId)
-        val deletedSource = database.jsonSourceDao.getById(sourceId)
+        val deletedSource = database.getJsonSourceDao().getById(sourceId)
         assertNull("Source should be deleted", deletedSource)
     }
 
@@ -172,7 +179,7 @@ class JsonSourceEndToEndTest {
         jsonSourceManager.importLegadoJson(mangaJson)
 
         // Get all sources
-        val allSources = database.jsonSourceDao.observeAll().first()
+        val allSources = database.getJsonSourceDao().observeAll().first()
         val novelSource = allSources.find { it.name == "Test Novel Site" }
         val mangaSource = allSources.find { it.name == "Test Manga Site" }
 
@@ -196,19 +203,22 @@ class JsonSourceEndToEndTest {
         assertTrue("Invalid JSON should fail", result1.isFailure)
 
         // Test 2: Missing required fields
+        // The current validator only requires a non-blank bookSourceName, so provide a
+        // source that omits it (bookSourceUrl alone) to keep the "missing fields" intent.
         val missingFieldsJson = """
             [{
-                "bookSourceName": "Incomplete Source"
+                "bookSourceUrl": "https://incomplete.example.com"
             }]
         """.trimIndent()
         val result2 = jsonSourceManager.importLegadoJson(missingFieldsJson)
         assertTrue("Missing fields should fail", result2.isFailure)
 
         // Test 3: Empty JSON array
+        // Current contract: an empty array is rejected as a validation failure
+        // (previously the manager accepted it as "0 imported").
         val emptyJson = "[]"
         val result3 = jsonSourceManager.importLegadoJson(emptyJson)
-        assertTrue("Empty array should succeed but import 0 sources", result3.isSuccess)
-        assertEquals("Should import 0 sources", 0, result3.getOrNull())
+        assertTrue("Empty array should fail", result3.isFailure)
 
         // Test 4: Delete non-existent source (should not crash)
         try {
@@ -242,12 +252,12 @@ class JsonSourceEndToEndTest {
         jsonSourceManager.importLegadoJson(testJson)
 
         // Verify source appears in repository
-        val allSources = database.jsonSourceDao.observeAll().first()
+        val allSources = database.getJsonSourceDao().observeAll().first()
         val testSource = allSources.find { it.name == "Test Browse Source" }
         assertNotNull("Source should be available for browsing", testSource)
 
         // Verify enabled sources include JSON sources
-        val enabledSources = database.jsonSourceDao.observeEnabled().first()
+        val enabledSources = database.getJsonSourceDao().observeEnabled().first()
         assertTrue("Enabled sources should include test source",
             enabledSources.any { it.name == "Test Browse Source" })
     }
@@ -272,7 +282,7 @@ class JsonSourceEndToEndTest {
         assertTrue("Second import should succeed", result2.isSuccess)
 
         // Verify only one source exists
-        val allSources = database.jsonSourceDao.observeAll().first()
+        val allSources = database.getJsonSourceDao().observeAll().first()
         val duplicateSources = allSources.filter { it.name == "Duplicate Test Source" }
         assertEquals("Should have exactly one source", 1, duplicateSources.size)
     }
@@ -291,22 +301,27 @@ class JsonSourceEndToEndTest {
         jsonSourceManager.importLegadoJson(testJson)
 
         // Get source ID
-        val sources = database.jsonSourceDao.observeAll().first()
+        val sources = database.getJsonSourceDao().observeAll().first()
         val testSource = sources.find { it.name == "Persistence Test Source" }
         val sourceId = testSource?.id ?: ""
 
         // Disable the source
         jsonSourceManager.toggleSource(sourceId, false)
 
-        // Simulate restart by creating new manager instance
+        // Simulate restart by creating a new manager instance against the same database
         val newManager = JsonSourceManager(
-            dao = database.jsonSourceDao,
-            parserFactory = DynamicParserFactory(DefaultRuleEngine())
+            jsonSourceDao = database.getJsonSourceDao(),
+            appSettings = AppSettings(context),
         )
 
         // Verify source state persisted
-        val persistedSource = database.jsonSourceDao.getById(sourceId)
+        val persistedSource = database.getJsonSourceDao().getById(sourceId)
         assertNotNull("Source should persist", persistedSource)
         assertFalse("Disabled state should persist", persistedSource?.enabled == true)
+        // The new manager instance observes the same persisted sources
+        assertTrue(
+            "New manager should observe the persisted source",
+            newManager.observeAllJsonSources().first().any { it.id == sourceId },
+        )
     }
 }

@@ -18,8 +18,9 @@ import org.skepsun.kototoro.local.epub.ChapterIdGeneratorImpl
 import org.skepsun.kototoro.local.epub.EpubContentCache
 import org.skepsun.kototoro.local.epub.EpubFileManagerImpl
 import org.skepsun.kototoro.local.epub.EpubReaderImpl
-import org.skepsun.kototoro.parsers.model.MangaChapter
-import org.skepsun.kototoro.parsers.model.MangaParserSource
+import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.novel.EpubInternalChapterLoader
 import java.io.File
 
@@ -41,6 +42,12 @@ class ChapterNavigationIntegrationTest {
     private lateinit var chapterIdGenerator: ChapterIdGeneratorImpl
     private lateinit var epubInternalChapterLoader: EpubInternalChapterLoader
     private lateinit var testDir: File
+
+    private val testSource = object : ContentSource {
+        override val name = "TestSource"
+        override val locale = "en"
+        override val contentType = ContentType.NOVEL
+    }
     
     @Before
     fun setup() {
@@ -57,7 +64,7 @@ class ChapterNavigationIntegrationTest {
             context = context,
             epubFileManager = epubFileManager,
             epubChapterMappingDao = database.getEpubChapterMappingDao(),
-            epubContentCache = EpubContentCache()
+            epubContentCache = EpubContentCache.getInstance()
         )
         
         // Create test directory
@@ -79,7 +86,7 @@ class ChapterNavigationIntegrationTest {
     @Test
     fun chapterNavigation_normalChapter() = runBlocking {
         // Create a NORMAL chapter
-        val normalChapter = MangaChapter(
+        val normalChapter = ContentChapter(
             id = 1000L,
             title = "Chapter 1",
             number = 1f,
@@ -88,7 +95,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         // Determine type (should be NORMAL by default)
@@ -107,7 +114,7 @@ class ChapterNavigationIntegrationTest {
     @Test
     fun chapterNavigation_epubDownloadChapter() = runBlocking {
         // Create an EPUB_DOWNLOAD chapter
-        val downloadChapter = MangaChapter(
+        val downloadChapter = ContentChapter(
             id = 2000L,
             title = "Volume 1 (EPUB)",
             number = 0f,
@@ -116,7 +123,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         // Determine type (EPUB_DOWNLOAD if URL contains .epub)
@@ -157,7 +164,7 @@ class ChapterNavigationIntegrationTest {
         // Create an EPUB_INTERNAL chapter
         val chapterIndex = 1
         val internalChapterId = chapterIdGenerator.generateEpubChapterId(parentChapterId, chapterIndex)
-        val internalChapter = MangaChapter(
+        val internalChapter = ContentChapter(
             id = internalChapterId,
             title = "Chapter 2: The Journey",
             number = 2f,
@@ -166,7 +173,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         // Determine type (EPUB_INTERNAL if URL contains #chapter/)
@@ -180,11 +187,11 @@ class ChapterNavigationIntegrationTest {
         result.isSuccess shouldBe true
         val content = result.getOrNull()
         content shouldNotBe null
-        content!! shouldContain "Chapter 2"
-        content shouldContain "The Journey"
+        content!!.content shouldContain "Chapter 2"
+        content!!.content shouldContain "The Journey"
         
         // Verify: Content is rendered (contains chapter text)
-        content shouldContain "second chapter"
+        content!!.content shouldContain "second chapter"
     }
     
     /**
@@ -223,7 +230,7 @@ class ChapterNavigationIntegrationTest {
         
         for ((url, expectedIndex) in testCases) {
             val internalChapterId = chapterIdGenerator.generateEpubChapterId(parentChapterId, expectedIndex)
-            val chapter = MangaChapter(
+            val chapter = ContentChapter(
                 id = internalChapterId,
                 title = "Test Chapter",
                 number = expectedIndex.toFloat(),
@@ -232,7 +239,7 @@ class ChapterNavigationIntegrationTest {
                 scanlator = null,
                 uploadDate = 0L,
                 branch = null,
-                source = MangaParserSource.WENKU8
+                source = testSource
             )
             
             // Load chapter
@@ -245,7 +252,7 @@ class ChapterNavigationIntegrationTest {
             
             // Verify content matches expected chapter
             val expectedChapter = epubContent.chapters[expectedIndex]
-            content!! shouldContain expectedChapter.title
+            content!!.content shouldContain expectedChapter.title
         }
     }
     
@@ -279,7 +286,7 @@ class ChapterNavigationIntegrationTest {
         // Create chapter with internal ID
         val chapterIndex = 0
         val internalChapterId = chapterIdGenerator.generateEpubChapterId(parentChapterId, chapterIndex)
-        val chapter = MangaChapter(
+        val chapter = ContentChapter(
             id = internalChapterId,
             title = "Test Chapter",
             number = 1f,
@@ -288,7 +295,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         // Load chapter (should use mapping to locate file)
@@ -308,7 +315,7 @@ class ChapterNavigationIntegrationTest {
     fun chapterNavigation_missingFileError() = runBlocking {
         // Create chapter pointing to non-existent file
         val nonExistentFile = File(testDir, "nonexistent.epub")
-        val chapter = MangaChapter(
+        val chapter = ContentChapter(
             id = 999999L,
             title = "Missing Chapter",
             number = 1f,
@@ -317,7 +324,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         // Try to load chapter
@@ -360,7 +367,7 @@ class ChapterNavigationIntegrationTest {
         // Load chapter
         val chapterIndex = 1
         val internalChapterId = chapterIdGenerator.generateEpubChapterId(parentChapterId, chapterIndex)
-        val chapter = MangaChapter(
+        val chapter = ContentChapter(
             id = internalChapterId,
             title = "Test Chapter",
             number = 2f,
@@ -369,7 +376,7 @@ class ChapterNavigationIntegrationTest {
             scanlator = null,
             uploadDate = 0L,
             branch = null,
-            source = MangaParserSource.WENKU8
+            source = testSource
         )
         
         val result = epubInternalChapterLoader.loadEpubInternalChapter(chapter)
@@ -381,21 +388,23 @@ class ChapterNavigationIntegrationTest {
         val progressPercent = 0.25f
         
         database.getHistoryDao().upsert(
-            org.skepsun.kototoro.history.data.HistoryEntity(
-                mangaId = mangaId,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis(),
-                chapterId = internalChapterId, // Using internal chapter ID (Requirement 7.2)
-                page = pageNumber,
-                scroll = 0f,
-                percent = progressPercent,
-                chaptersCount = 3,
-                deletedAt = 0L
+            listOf(
+                org.skepsun.kototoro.history.data.HistoryEntity(
+                    mangaId = mangaId,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                    chapterId = internalChapterId, // Using internal chapter ID (Requirement 7.2)
+                    page = pageNumber,
+                    scroll = 0f,
+                    percent = progressPercent,
+                    chaptersCount = 3,
+                    deletedAt = 0L
+                )
             )
         )
         
         // Verify: Progress saved with internal chapter ID
-        val history = database.getHistoryDao().find(mangaId)
+        val history = database.getHistoryDao().findAllEntriesIncludingDeleted().singleOrNull { it.mangaId == mangaId }
         history shouldNotBe null
         history!!.chapterId shouldBe internalChapterId
         history.page shouldBe pageNumber
@@ -405,7 +414,7 @@ class ChapterNavigationIntegrationTest {
     /**
      * Helper function to determine chapter type based on chapter properties.
      */
-    private fun determineChapterType(chapter: MangaChapter): ChapterType {
+    private fun determineChapterType(chapter: ContentChapter): ChapterType {
         return when {
             chapter.url.contains("#chapter/") -> ChapterType.EPUB_INTERNAL
             chapter.url.contains(".epub") -> ChapterType.EPUB_DOWNLOAD

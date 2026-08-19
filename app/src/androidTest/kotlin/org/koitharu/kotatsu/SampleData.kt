@@ -11,9 +11,9 @@ import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okio.buffer
 import okio.source
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.model.MangaSource
-import org.skepsun.kototoro.parsers.model.Manga
-import org.skepsun.kototoro.parsers.model.MangaSource
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 import java.time.Instant
 import java.util.Date
 import kotlin.reflect.KClass
@@ -23,13 +23,13 @@ object SampleData {
 	private val moshi = Moshi.Builder()
 		.add(DateAdapter())
 		.add(InstantAdapter())
-		.add(MangaSourceAdapter())
+		.add(ContentSource::class.java, ContentSourceAdapter())
 		.add(KotlinJsonAdapterFactory())
 		.build()
 
-	val manga: Manga = loadAsset("manga/header.json", Manga::class)
+	val manga: Content = loadAsset("manga/header.json", Content::class)
 
-	val mangaDetails: Manga = loadAsset("manga/full.json", Manga::class)
+	val mangaDetails: Content = loadAsset("manga/full.json", Content::class)
 
 	val tag = mangaDetails.tags.elementAt(2)
 
@@ -62,18 +62,27 @@ object SampleData {
 		}
 	}
 
-	private class MangaSourceAdapter : JsonAdapter<MangaSource>() {
+	private class ContentSourceAdapter : JsonAdapter<ContentSource>() {
 
 		@FromJson
-		override fun fromJson(reader: JsonReader): MangaSource? {
+		override fun fromJson(reader: JsonReader): ContentSource? {
 			val name = reader.nextString() ?: return null
-			return MangaSource(name)
+			return ParsedContentSource(name)
 		}
 
 		@ToJson
-		override fun toJson(writer: JsonWriter, value: MangaSource?) {
+		override fun toJson(writer: JsonWriter, value: ContentSource?) {
 			writer.value(value?.name)
 		}
+	}
+
+	private class ParsedContentSource(
+		override val name: String,
+	) : ContentSource {
+
+		override val locale: String = "en"
+
+		override val contentType: ContentType = ContentType.MANGA
 	}
 
 	private class InstantAdapter : JsonAdapter<Instant>() {

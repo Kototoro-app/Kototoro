@@ -14,13 +14,17 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.skepsun.kototoro.SampleData
 import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.domain.AppBackupAgent
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.entity.toMangaTags
+import org.skepsun.kototoro.core.db.entity.toContentTags
+import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
+import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentChapter
+import org.skepsun.kototoro.parsers.model.ContentTag
 import java.io.File
 import javax.inject.Inject
 
@@ -43,6 +47,41 @@ class AppBackupAgentTest {
 	@Inject
 	lateinit var database: MangaDatabase
 
+	// Self-contained fixture for the current Content model. The legacy koitharu
+	// Manga sample fixtures (SampleData) were retired with the Manga -> Content
+	// migration, so the test builds its own Content instead.
+	private val tag = ContentTag(title = "Adventure", key = "adventure", source = TestContentSource)
+
+	private val chapter = ContentChapter(
+		id = 1L,
+		title = "Chapter 1",
+		number = 1f,
+		volume = 1,
+		url = "/chapter/1",
+		scanlator = null,
+		uploadDate = 0L,
+		branch = null,
+		source = TestContentSource,
+	)
+
+	private val content = Content(
+		id = 123456789L,
+		title = "Test Content",
+		altTitles = emptySet(),
+		url = "/manga/test",
+		publicUrl = "https://test.example/manga",
+		rating = 0.5f,
+		contentRating = null,
+		coverUrl = null,
+		tags = setOf(tag),
+		state = null,
+		authors = emptySet(),
+		largeCoverUrl = null,
+		description = null,
+		chapters = listOf(chapter),
+		source = TestContentSource,
+	)
+
 	@Before
 	fun setUp() {
 		hiltRule.inject()
@@ -52,21 +91,21 @@ class AppBackupAgentTest {
 	@Test
 	fun backupAndRestore() = runTest {
 		val category = favouritesRepository.createCategory(
-			title = SampleData.favouriteCategory.title,
-			sortOrder = SampleData.favouriteCategory.order,
-			isTrackerEnabled = SampleData.favouriteCategory.isTrackingEnabled,
-			isVisibleOnShelf = SampleData.favouriteCategory.isVisibleInLibrary,
+			title = "Test Category",
+			sortOrder = ListSortOrder.NEWEST,
+			isTrackerEnabled = false,
+			isVisibleOnShelf = true,
 		)
-		favouritesRepository.addToCategory(categoryId = category.id, mangas = listOf(SampleData.manga))
+		favouritesRepository.addToCategory(categoryId = category.id, mangas = listOf(content))
 		historyRepository.addOrUpdate(
-			manga = SampleData.mangaDetails,
-			chapterId = SampleData.mangaDetails.chapters!![2].id,
+			manga = content,
+			chapterId = chapter.id,
 			page = 3,
 			scroll = 40,
 			percent = 0.2f,
 			force = false,
 		)
-		val history = checkNotNull(historyRepository.getOne(SampleData.manga))
+		val history = checkNotNull(historyRepository.getOne(content))
 
 		val agent = AppBackupAgent()
 		val backup = agent.createBackupFile(
@@ -75,7 +114,7 @@ class AppBackupAgentTest {
 		)
 
 		database.clearAllTables()
-		assertTrue(favouritesRepository.getAllManga().isEmpty())
+		assertTrue(favouritesRepository.getAllContent().isEmpty())
 		assertNull(historyRepository.getLastOrNull())
 
 		backup.inputStream().use {
@@ -83,11 +122,11 @@ class AppBackupAgentTest {
 		}
 
 		assertEquals(category, favouritesRepository.getCategory(category.id))
-		assertEquals(history, historyRepository.getOne(SampleData.manga))
-		assertEquals(listOf(SampleData.manga), favouritesRepository.getManga(category.id))
+		assertEquals(history, historyRepository.getOne(content))
+		assertEquals(listOf(content), favouritesRepository.getContent(category.id))
 
-		val allTags = database.getTagsDao().findTags(SampleData.tag.source.name).toMangaTags()
-		assertTrue(SampleData.tag in allTags)
+		val allTags = database.getTagsDao().findTags(TestContentSource.name).toContentTags()
+		assertTrue(tag in allTags)
 	}
 
 	@Test
@@ -95,7 +134,7 @@ class AppBackupAgentTest {
 		val agent = AppBackupAgent()
 		val backup = File.createTempFile("backup_", ".tmp")
 		InstrumentationRegistry.getInstrumentation().context.assets
-			.open("kototoro_test.bak", AssetManager.ACCESS_STREAMING)
+			.open("kotatsu_test.bak", AssetManager.ACCESS_STREAMING)
 			.use { input ->
 				backup.outputStream().use { output ->
 					input.copyTo(output)
@@ -107,7 +146,7 @@ class AppBackupAgentTest {
 		runTest {
 			assertEquals(6, historyRepository.observeAll().first().size)
 			assertEquals(2, favouritesRepository.observeCategories().first().size)
-			assertEquals(15, favouritesRepository.getAllManga().size)
+			assertEquals(15, favouritesRepository.getAllContent().size)
 		}
 	}
 }

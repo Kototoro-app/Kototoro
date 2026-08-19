@@ -128,7 +128,7 @@ class TracksDaoTest {
 				id, type, sync_id, primary_name, name_hash, aliases, created_at, last_accessed, access_count
 			) VALUES (?, 'WORK', ?, 'Title', ?, NULL, 0, 0, 0)
 			""".trimIndent(),
-			arrayOf(entityId, "test-$entityId", entityId),
+			arrayOf<Any?>(entityId, "test-$entityId", entityId),
 		)
 	}
 
@@ -140,7 +140,7 @@ class TracksDaoTest {
 				state, created_by, updated_at
 			) VALUES (?, 'local_manga', ?, 1, 1, 'LOCAL', 'CONFIRMED', 'MIGRATION', 0)
 			""".trimIndent(),
-			arrayOf(entityId, mangaId.toString()),
+			arrayOf<Any?>(entityId, mangaId.toString()),
 		)
 	}
 
@@ -158,7 +158,7 @@ class TracksDaoTest {
 				last_check_time, last_chapter_date, last_result, last_error
 			) VALUES (?, ?, ?, 0, ?, ?, 0, 0, NULL)
 			""".trimIndent(),
-			arrayOf(ownerId, mangaId, entityId, newChapters, checkedAt),
+			arrayOf<Any?>(ownerId, mangaId, entityId, newChapters, checkedAt),
 		)
 	}
 
