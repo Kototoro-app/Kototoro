@@ -1688,6 +1688,7 @@ internal fun UpdatedTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>("updated")
+    val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     var updatedContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
 
     SideEffect {
@@ -1740,6 +1741,7 @@ internal fun UpdatedTopLevelRouteContent(
                 }
             },
             showQuickFilterInline = true,
+            quickFilterOverride = headerQuickFilter,
         )
     }
 }
