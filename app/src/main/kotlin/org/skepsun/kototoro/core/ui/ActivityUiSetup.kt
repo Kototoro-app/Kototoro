@@ -10,35 +10,47 @@ import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 
+/**
+ * Applies the Kototoro theme to an activity.
+ *
+ * The activity always starts from the Material 3 base theme (R.style.Theme_Kototoro) so the
+ * AppCompat/Material identity (e.g. colorPrimary) is preserved - Material components such as
+ * Snackbar require a Theme.AppCompat (or descendant) theme. Each user-selected theme overlay
+ * (color scheme, amoled, loading spinner style, popup radius, ...) is then layered on top with
+ * Resources.Theme.applyStyle instead of replacing the whole theme, since the overlays are bare
+ * styles that only redefine a subset of attributes and do not inherit a proper base themselves.
+ */
 internal fun AppCompatActivity.applyKototoroActivityTheme(settings: AppSettings) {
-	setTheme(settings.colorScheme.styleResId)
+	setTheme(R.style.Theme_Kototoro)
+	val theme = theme
+	theme.applyStyle(settings.colorScheme.styleResId, true)
 	if (settings.isAmoledTheme) {
-		setTheme(R.style.ThemeOverlay_Kototoro_Amoled)
+		theme.applyStyle(R.style.ThemeOverlay_Kototoro_Amoled, true)
 	}
 	if (settings.interfaceStyle == InterfaceStyle.IOS && settings.colorScheme == ColorScheme.IOS) {
-		setTheme(R.style.ThemeOverlay_Kototoro_IosPalette)
+		theme.applyStyle(R.style.ThemeOverlay_Kototoro_IosPalette, true)
 	}
 	if (settings.interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE) {
-		setTheme(R.style.ThemeOverlay_Kototoro_ExpressiveComponents)
+		theme.applyStyle(R.style.ThemeOverlay_Kototoro_ExpressiveComponents, true)
 	}
 	when (settings.loadingCircleStyle) {
 		AppSettings.LoadingCircleStyle.THICK_STRAIGHT ->
-			setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickStraight)
+			theme.applyStyle(R.style.ThemeOverlay_Kototoro_Loading_ThickStraight, true)
 
 		AppSettings.LoadingCircleStyle.THICK_WAVY ->
-			setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThickWavy)
+			theme.applyStyle(R.style.ThemeOverlay_Kototoro_Loading_ThickWavy, true)
 
 		AppSettings.LoadingCircleStyle.THIN_STRAIGHT ->
-			setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThinStraight)
+			theme.applyStyle(R.style.ThemeOverlay_Kototoro_Loading_ThinStraight, true)
 
 		AppSettings.LoadingCircleStyle.THIN_WAVY ->
-			setTheme(R.style.ThemeOverlay_Kototoro_Loading_ThinWavy)
+			theme.applyStyle(R.style.ThemeOverlay_Kototoro_Loading_ThinWavy, true)
 	}
 	when (settings.popupRadius) {
-		12 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_12)
-		16 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_16)
-		20 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_20)
-		24 -> setTheme(R.style.ThemeOverlay_Kototoro_PopupRadius_24)
+		12 -> theme.applyStyle(R.style.ThemeOverlay_Kototoro_PopupRadius_12, true)
+		16 -> theme.applyStyle(R.style.ThemeOverlay_Kototoro_PopupRadius_16, true)
+		20 -> theme.applyStyle(R.style.ThemeOverlay_Kototoro_PopupRadius_20, true)
+		24 -> theme.applyStyle(R.style.ThemeOverlay_Kototoro_PopupRadius_24, true)
 	}
 }
 
