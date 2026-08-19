@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.core.ui.util
 
 import android.view.View
+import android.widget.Toast
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.R
@@ -14,7 +15,12 @@ class ReversibleActionObserver(
 	override suspend fun emit(value: ReversibleAction) {
 		val handle = value.handle
 		val length = if (handle == null) Snackbar.LENGTH_SHORT else Snackbar.LENGTH_LONG
-		val snackbar = Snackbar.make(snackbarHost, value.stringResId, length)
+		val snackbar = try {
+			Snackbar.make(snackbarHost, value.stringResId, length)
+		} catch (_: RuntimeException) {
+			Toast.makeText(snackbarHost.context, value.stringResId, Toast.LENGTH_SHORT).show()
+			return
+		}
 		when (val activity = snackbarHost.context.findActivity()) {
 			is BottomSheetOwner -> snackbar.anchorView = activity.bottomSheet
 		}

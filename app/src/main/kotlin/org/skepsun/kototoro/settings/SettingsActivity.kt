@@ -1595,7 +1595,15 @@ class SettingsActivity :
 				FileSize.BYTES.format(this, result.second),
 			)
 		}
-		Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
+		showContentSnackbar(text)
+	}
+
+	private fun showContentSnackbar(text: CharSequence) {
+		try {
+			Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
+		} catch (_: RuntimeException) {
+			Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+		}
 	}
 
 	private fun confirmClearSearchHistory() {
@@ -1641,7 +1649,7 @@ class SettingsActivity :
 				FileSize.BYTES.format(this, result.bytesFreed),
 			)
 		}
-		Snackbar.make(contentRoot, text, Snackbar.LENGTH_SHORT).show()
+		showContentSnackbar(text)
 	}
 
 	private fun confirmClearLocalManga() {
