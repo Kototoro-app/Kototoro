@@ -47,6 +47,10 @@ abstract class MangaDao {
 	@Query("SELECT * FROM manga WHERE source = :source")
 	abstract suspend fun findAllBySource(source: String): List<MangaWithTags>
 
+	@Transaction
+	@Query("SELECT * FROM manga WHERE source IN (:sources)")
+	abstract suspend fun findAllBySources(sources: Collection<String>): List<MangaWithTags>
+
 	@Query("SELECT * FROM manga WHERE manga_id IN (:ids)")
 	protected abstract suspend fun findEntitiesByIdsImpl(ids: Collection<Long>): List<MangaEntity>
 

@@ -10,10 +10,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.toCollection
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
+import org.skepsun.kototoro.core.model.LocalNovelSource
+import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.getContentType
@@ -56,9 +59,18 @@ private const val MAX_PARALLELISM = 4
 private const val FILENAME_SKIP = ".notamanga"
 private const val BACKUP_SUFFIX = ".bk"
 
+private val LOCAL_SOURCE_NAMES = listOf(
+	LocalMangaSource.name,
+	LocalNovelSource.name,
+	LocalVideoSource.name,
+)
+
+private const val LOCAL_PAGE_SIZE = 128
+
 @Singleton
 class LocalMangaRepository @Inject constructor(
 	private val storageManager: LocalStorageManager,
+	private val db: MangaDatabase,
 	private val localContentIndex: LocalContentIndex,
 	@LocalStorageChanges private val localStorageChanges: MutableSharedFlow<LocalContent?>,
 	private val settings: AppSettings,
@@ -102,10 +114,30 @@ class LocalMangaRepository @Inject constructor(
 	)
 
 	override suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content> {
-		if (offset > 0) {
+		val list = getFilteredAndSortedList(order, filter)
+		if (!filter?.query.isNullOrBlank()) {
+			// 搜索/实体匹配需要完整结果集（与远程源一致），不分页。
+			return list.unwrap()
+		}
+		val from = offset.coerceAtLeast(0)
+		if (from >= list.size) {
 			return emptyList()
 		}
-		val list = getRawList()
+		val until = minOf(from + LOCAL_PAGE_SIZE, list.size)
+		return list.subList(from, until).unwrap()
+	}
+
+	/**
+	 * 完整本地列表（分页之外的批量消费方：删除、清空已读章节等）。
+	 * 与 [getList] 一样从数据库读取，不触发文件系统扫描（仅索引过期时修复）。
+	 */
+	suspend fun getAll(order: SortOrder? = null, filter: ContentListFilter? = null): List<Content> {
+		return getFilteredAndSortedList(order, filter).unwrap()
+	}
+
+	private suspend fun getFilteredAndSortedList(order: SortOrder?, filter: ContentListFilter?): ArrayList<LocalContent> {
+		localContentIndex.updateIfRequired()
+		val list = getIndexedList()
 		if (settings.isNsfwContentDisabled) {
 			list.removeAll { it.manga.isNsfw() }
 		}
@@ -139,7 +171,7 @@ class LocalMangaRepository @Inject constructor(
 
 			else -> Unit
 		}
-		return list.unwrap()
+		return list
 	}
 
 	override suspend fun getDetails(manga: Content): Content = when {
@@ -346,7 +378,26 @@ class LocalMangaRepository @Inject constructor(
 		}
 	}
 
-	private suspend fun getRawList(): ArrayList<LocalContent> = getRawListAsFlow().toCollection(ArrayList())
+	/**
+	 * 从数据库读取本地内容清单（local_index 为主路径）。
+	 * 只读 manga/local_index 表，不解析文件系统；索引过期时由
+	 * [LocalContentIndex.updateIfRequired] 触发一次全量扫描修复。
+	 * 结果以 local_index 中存在的记录为准，避免把已删除的本地文件继续展示。
+	 */
+	private suspend fun getIndexedList(): ArrayList<LocalContent> {
+		val dao = db.getMangaDao()
+		val all = dao.findAllBySources(LOCAL_SOURCE_NAMES)
+		if (all.isEmpty()) {
+			return ArrayList()
+		}
+		val indexed = db.getLocalContentIndexDao()
+			.findExistingIds(all.mapTo(ArrayList(all.size)) { it.manga.id })
+			.toHashSet()
+		return all.asSequence()
+			.filter { it.manga.id in indexed }
+			.map { LocalContent(it.toContent()) }
+			.toCollection(ArrayList())
+	}
 
 	private suspend fun getAllStorageFiles(): List<UniFile> = storageManager.getAllReadableRoots()
 		.flatMap { root ->
