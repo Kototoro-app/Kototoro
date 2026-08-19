@@ -396,18 +396,45 @@ class LocalStorageManager @Inject constructor(
 	 * 返回视频下载根目录（files/video）
 	 */
 	suspend fun getDefaultVideoWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
-		val preferredDir = settings.videoStorageDir?.takeIfWriteable()
+		val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
 		preferredDir ?: getFallbackVideoStorageDir()?.takeIfWriteable()
 	}
 
+	/**
+	 * 返回视频下载根目录。
+	 * 优先使用「本地内容目录 - 视频」中设置的默认目录（SAF URI 解析为真实路径），
+	 * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
+	 */
 	@WorkerThread
 	fun getVideoRoot(): File? {
-		val preferredDir = settings.videoStorageDir
-		if (preferredDir != null && preferredDir.isWriteable()) return preferredDir
-		return context.getExternalFilesDir(DIR_NAME_VIDEO) ?: File(context.filesDir, DIR_NAME_VIDEO).takeIf {
-			it.exists() || it.mkdirs()
-		}
+		val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
+		return preferredDir ?: getFallbackVideoStorageDir()
 	}
+
+	/**
+	 * 将存储设置解析为可写的真实目录。
+	 * 优先解析 SAF/文件 URI（file:// 直接取路径，content:// 树 URI 通过系统存储卷转换为绝对路径），
+	 * 再回退到遗留的 File 路径偏好；均不可写时返回 null。
+	 */
+	@WorkerThread
+	private fun resolveStorageUriToFile(uri: Uri?, legacyDir: File?): File? {
+		uri?.let {
+			val file = if (it.isFileUri()) {
+				it.toFile()
+			} else {
+				it.resolveFile(context)
+			}
+			file?.takeIfWriteable()?.let { resolved -> return resolved }
+		}
+		return legacyDir?.takeIfWriteable()
+	}
+
+	/**
+	 * 返回小说下载的优先根目录（遵循「本地内容目录 - 小说」设置），未设置或不可写时返回 null。
+	 * 供 EPUB 存储等场景使用，仅在已配置时返回，不会创建目录。
+	 */
+	@WorkerThread
+	fun getPreferredNovelDownloadDir(): File? = resolveStorageUriToFile(settings.novelStorageUri, settings.novelStorageDir)
 
 	@WorkerThread
 	private fun getFallbackNovelStorageDir(): File? {

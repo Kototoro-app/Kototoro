@@ -1,9 +1,11 @@
 package org.skepsun.kototoro.local.epub
 
 import android.content.Context
+import androidx.annotation.WorkerThread
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.local.data.LocalStorageManager
 import java.io.File
 import java.io.InputStream
 import javax.inject.Inject
@@ -21,15 +23,27 @@ import javax.inject.Singleton
 @Singleton
 class EpubStorageManager @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val localStorageManager: LocalStorageManager,
 ) {
-    
-    private val epubRootDir: File by lazy {
-        File(context.getExternalFilesDir(null), "epub").also {
-            if (!it.exists()) {
-                it.mkdirs()
-                android.util.Log.d("EpubStorageManager", "Created EPUB root directory: ${it.absolutePath}")
-            }
+
+    /**
+     * EPUB 根目录。
+     * 优先使用「本地内容目录 - 小说」设置的默认目录下的 epub 子目录，
+     * 未设置或不可写时回退到应用外部私有目录 files/epub。
+     */
+    @WorkerThread
+    private fun resolveEpubRootDir(): File {
+        val base = localStorageManager.getPreferredNovelDownloadDir()
+        val root = if (base != null) {
+            File(base, "epub")
+        } else {
+            File(context.getExternalFilesDir(null), "epub")
         }
+        if (!root.exists()) {
+            root.mkdirs()
+            android.util.Log.d("EpubStorageManager", "Created EPUB root directory: ${root.absolutePath}")
+        }
+        return root
     }
     
     /**
@@ -37,7 +51,7 @@ class EpubStorageManager @Inject constructor(
      * @param create 是否在目录不存在时创建它
      */
     fun getEpubDir(mangaId: Long, create: Boolean = false): File {
-        return File(epubRootDir, mangaId.toString()).also {
+        return File(resolveEpubRootDir(), mangaId.toString()).also {
             if (create && !it.exists()) {
                 it.mkdirs()
                 android.util.Log.d("EpubStorageManager", "Created EPUB directory for manga $mangaId: ${it.absolutePath}")
@@ -50,7 +64,7 @@ class EpubStorageManager @Inject constructor(
      * 如果文件不存在，返回null
      */
     fun getEpubFile(mangaId: Long): File? {
-        val epubDir = File(epubRootDir, mangaId.toString())
+        val epubDir = File(resolveEpubRootDir(), mangaId.toString())
         if (!epubDir.exists()) {
             return null
         }
@@ -128,7 +142,7 @@ class EpubStorageManager @Inject constructor(
      * 删除EPUB文件
      */
     suspend fun deleteEpubFile(mangaId: Long): Boolean = withContext(Dispatchers.IO) {
-        val epubDir = File(epubRootDir, mangaId.toString())
+        val epubDir = File(resolveEpubRootDir(), mangaId.toString())
         if (!epubDir.exists()) {
             android.util.Log.d("EpubStorageManager", "EPUB directory does not exist for manga $mangaId")
             return@withContext false
@@ -167,11 +181,12 @@ class EpubStorageManager @Inject constructor(
      * 列出所有有EPUB文件的manga ID
      */
     fun listAllEpubContentIds(): List<Long> {
-        if (!epubRootDir.exists()) {
+        val epubRoot = resolveEpubRootDir()
+        if (!epubRoot.exists()) {
             return emptyList()
         }
         
-        return epubRootDir.listFiles()
+        return epubRoot.listFiles()
             ?.filter { it.isDirectory }
             ?.mapNotNull { dir ->
                 try {
