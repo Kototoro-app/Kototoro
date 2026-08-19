@@ -185,6 +185,7 @@ private data class ReaderPagerReportState(
 	val settledPage: Int,
 	val targetPage: Int,
 	val isRestoringAnchor: Boolean,
+	val isProgrammaticRequestPending: Boolean,
 )
 
 private data class WebtoonListAnchor(
@@ -322,7 +323,7 @@ fun ComposePagedReader(
 			}
 		}
 	}
-	LaunchedEffect(pagerState, displayedPages, isRestoringPageAnchor) {
+	LaunchedEffect(pagerState, displayedPages, isRestoringPageAnchor, requestedPage) {
 		snapshotFlow {
 			ReaderPagerReportState(
 				isDragged = isPagerDragged,
@@ -330,6 +331,7 @@ fun ComposePagedReader(
 				settledPage = pagerState.settledPage,
 				targetPage = pagerState.targetPage,
 				isRestoringAnchor = isRestoringPageAnchor,
+				isProgrammaticRequestPending = requestedPage != null,
 			)
 		}
 			.mapNotNull { state ->
@@ -339,6 +341,7 @@ fun ComposePagedReader(
 					settledPage = state.settledPage,
 					targetPage = state.targetPage,
 					isRestoringAnchor = state.isRestoringAnchor,
+					isProgrammaticRequestPending = state.isProgrammaticRequestPending,
 				)
 			}
 			.distinctUntilChanged()
@@ -1448,7 +1451,7 @@ fun ComposeDoublePageReader(
 			}
 		}
 	}
-	LaunchedEffect(pagerState, spreads, isRestoringAnchor) {
+	LaunchedEffect(pagerState, spreads, isRestoringAnchor, requestedPage) {
 		snapshotFlow {
 			ReaderPagerReportState(
 				isDragged = isPagerDragged,
@@ -1456,6 +1459,7 @@ fun ComposeDoublePageReader(
 				settledPage = pagerState.settledPage,
 				targetPage = pagerState.targetPage,
 				isRestoringAnchor = isRestoringAnchor,
+				isProgrammaticRequestPending = requestedPage != null,
 			)
 		}
 			.mapNotNull { state ->
@@ -1465,6 +1469,7 @@ fun ComposeDoublePageReader(
 					settledPage = state.settledPage,
 					targetPage = state.targetPage,
 					isRestoringAnchor = state.isRestoringAnchor,
+					isProgrammaticRequestPending = state.isProgrammaticRequestPending,
 				)
 			}
 			.distinctUntilChanged()
@@ -2894,8 +2899,10 @@ internal fun resolveReaderPageToReport(
 	settledPage: Int,
 	targetPage: Int,
 	isRestoringAnchor: Boolean,
+	isProgrammaticRequestPending: Boolean = false,
 ): Int? = when {
 	isRestoringAnchor || isDragged -> null
+	isScrollInProgress && isProgrammaticRequestPending -> null
 	isScrollInProgress -> targetPage
 	else -> settledPage
 }

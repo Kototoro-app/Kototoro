@@ -23,6 +23,7 @@ import org.skepsun.kototoro.reader.ui.resolveReaderCurrentPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.details.ui.compose.DETAILS_TAB_CHAPTERS
 import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUiState
+import kotlin.math.sign
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
 internal class ComposeReaderController(
@@ -149,7 +150,7 @@ internal class ComposeReaderController(
 									"pending=$pendingPosition currentKey=$currentPageKey state=${viewModel.getCurrentState()} " +
 									"pages=${viewModel.content.value.pages.size}",
 							)
-							if (!shouldAcceptReaderPosition(position, pendingPosition)) {
+							if (!shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)) {
 								Log.d(
 									READER_DEBUG_TAG,
 									"Ignore transitional page callback position=$position pending=$pendingPosition",
@@ -158,7 +159,10 @@ internal class ComposeReaderController(
 							}
 							currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
 							currentInternalScroll = internalScroll
-							if (pendingPosition != null && kotlin.math.abs(position - pendingPosition) <= 1) {
+							if (
+								pendingPosition != null &&
+								shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)
+							) {
 								requestedPageKey = null
 							}
 							},
@@ -166,7 +170,7 @@ internal class ComposeReaderController(
 								currentPageKey = pageKey
 								currentInternalScroll = internalScroll
 								val pendingPageKey = requestedPageKey
-								if (pendingPageKey != null && areReaderPageKeysAdjacent(pageKey, pendingPageKey)) {
+								if (pageKey == pendingPageKey) {
 									requestedPageKey = null
 								}
 							},
@@ -512,6 +516,11 @@ internal class ComposeReaderController(
 		} else {
 			resolvePageNavigationTarget(basePosition, delta, pageStep = 1)
 		}
+		if (targetPosition !in pages.indices) {
+			requestedPageKey = null
+			viewModel.switchChapterBy(delta.sign, openLastPage = delta < 0)
+			return
+		}
 		switchPageTo(
 			position = targetPosition,
 			smooth = true,
@@ -567,14 +576,6 @@ internal class ComposeReaderController(
 		)
 	}
 
-	private fun areReaderPageKeysAdjacent(firstPageKey: Long, secondPageKey: Long): Boolean {
-		val pageKeys = viewModel.content.value.pages.map { it.readerKey }
-		val firstPosition = pageKeys.indexOf(firstPageKey)
-		val secondPosition = pageKeys.indexOf(secondPageKey)
-		return firstPosition >= 0 && secondPosition >= 0 &&
-			kotlin.math.abs(firstPosition - secondPosition) <= 1
-	}
-
 	private fun resolveRequestedPosition(): Int? {
 		return resolvePageKeyPosition(
 			pageKeys = viewModel.content.value.pages.map { it.readerKey },
@@ -606,12 +607,17 @@ internal class ComposeReaderController(
 	}
 }
 
-internal fun shouldAcceptReaderPosition(position: Int, requestedPosition: Int?): Boolean {
+internal fun shouldAcceptReaderPosition(
+	position: Int,
+	requestedPosition: Int?,
+	allowAdjacent: Boolean = false,
+): Boolean {
 	// A double-page settled callback reports the selected page in the spread,
 	// which can be the neighbour of the requested anchor (usually the lower
 	// page). Accept that callback so the transition request cannot remain
 	// pending forever and block all later page callbacks.
-	return requestedPosition == null || kotlin.math.abs(position - requestedPosition) <= 1
+	return requestedPosition == null || position == requestedPosition ||
+		(allowAdjacent && kotlin.math.abs(position - requestedPosition) == 1)
 }
 
 internal fun shouldAcceptReaderPageKey(
@@ -624,8 +630,7 @@ internal fun shouldAcceptReaderPageKey(
 	val position = pageKeys.indexOf(pageKey)
 	if (position < 0) return false
 	if (requestedPageKey != null) {
-		val requestedPosition = pageKeys.indexOf(requestedPageKey)
-		return requestedPosition >= 0 && kotlin.math.abs(position - requestedPosition) <= 1
+		return pageKey == requestedPageKey
 	}
 	return currentPageKey != null || pageKey == initialPageKey
 }

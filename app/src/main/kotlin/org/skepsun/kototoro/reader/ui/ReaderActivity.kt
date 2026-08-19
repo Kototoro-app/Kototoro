@@ -868,6 +868,27 @@ class ReaderActivity :
         }
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            settings.isReaderVolumeButtonsEnabled &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            return when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    val delta = when (event.keyCode) {
+                        KeyEvent.KEYCODE_VOLUME_UP -> if (settings.isReaderNavigationInverted) 1 else -1
+                        else -> if (settings.isReaderNavigationInverted) -1 else 1
+                    }
+                    switchPageBy(delta)
+                    true
+                }
+                KeyEvent.ACTION_UP -> true
+                else -> true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         return controlDelegate.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
     }

@@ -652,7 +652,7 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    fun switchChapterBy(delta: Int) {
+    fun switchChapterBy(delta: Int, openLastPage: Boolean = false) {
         val prevJob = loadingJob
         loadingJob = launchLoadingJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
@@ -682,13 +682,18 @@ class ReaderViewModel @Inject constructor(
             content.value = ReaderContent(emptyList(), null)
             readerWindowGeneration++
             chaptersLoader.loadSingleChapter(newChapterId)
+            val pages = getSplitPagesSnapshot(newChapterId)
             val newState = ReaderState(
                 chapterId = newChapterId,
-                page = if (delta == 0) prevState.page else 0,
+                page = when {
+                    delta == 0 -> prevState.page
+                    openLastPage -> pages.lastOrNull { it.chapterId == newChapterId }?.index ?: 0
+                    else -> 0
+                },
                 scroll = if (delta == 0) prevState.scroll else 0,
             )
             skipBoundaryLoadOnce.set(true)
-            content.value = ReaderContent(getSplitPagesSnapshot(newChapterId), newState)
+            content.value = ReaderContent(pages, newState)
             Log.d(
                 LOG_TAG,
                 "switchChapterBy: applied newState=$newState, pages=${content.value.pages.size}",

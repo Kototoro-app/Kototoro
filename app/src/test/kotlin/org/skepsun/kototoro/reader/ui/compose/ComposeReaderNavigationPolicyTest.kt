@@ -34,6 +34,35 @@ class ComposeReaderNavigationPolicyTest {
 	}
 
 	@Test
+	fun `programmatic page request waits until pager settles`() {
+		assertNull(
+			resolveReaderPageToReport(
+				isDragged = false,
+				isScrollInProgress = true,
+				settledPage = 2,
+				targetPage = 3,
+				isRestoringAnchor = false,
+				isProgrammaticRequestPending = true,
+			),
+		)
+	}
+
+	@Test
+	fun `settled programmatic page request reports target`() {
+		assertEquals(
+			3,
+			resolveReaderPageToReport(
+				isDragged = false,
+				isScrollInProgress = false,
+				settledPage = 3,
+				targetPage = 3,
+				isRestoringAnchor = false,
+				isProgrammaticRequestPending = true,
+			),
+		)
+	}
+
+	@Test
 	fun `settled page is reported when pager is idle`() {
 		assertEquals(
 			3,

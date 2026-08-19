@@ -19,8 +19,14 @@ class ComposeReaderControllerPolicyTest {
 
 	@Test
 	fun `neighbour page callback completes a double-page transition request`() {
-		assertTrue(shouldAcceptReaderPosition(position = 11, requestedPosition = 12))
+		assertTrue(shouldAcceptReaderPosition(position = 11, requestedPosition = 12, allowAdjacent = true))
 	}
+
+	@Test
+	fun `old single-page callback cannot consume adjacent navigation request`() {
+		assertFalse(shouldAcceptReaderPosition(position = 11, requestedPosition = 12))
+	}
+
 	@Test
 	fun `normal paging accepts every settled position`() {
 		assertTrue(shouldAcceptReaderPosition(position = 13, requestedPosition = null))
@@ -58,6 +64,19 @@ class ComposeReaderControllerPolicyTest {
 				pageKeys = pagesAfterPrepend,
 				pageKey = 101L,
 				requestedPageKey = 103L,
+				currentPageKey = 101L,
+				initialPageKey = 101L,
+			),
+		)
+	}
+
+	@Test
+	fun `old webtoon key cannot consume adjacent navigation request`() {
+		assertFalse(
+			shouldAcceptReaderPageKey(
+				pageKeys = listOf(101L, 102L, 103L),
+				pageKey = 101L,
+				requestedPageKey = 102L,
 				currentPageKey = 101L,
 				initialPageKey = 101L,
 			),
