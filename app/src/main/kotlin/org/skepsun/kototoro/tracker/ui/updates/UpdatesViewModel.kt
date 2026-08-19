@@ -113,9 +113,11 @@ class UpdatesViewModel @Inject constructor(
 	private val loadParams = combine(quickFilter.appliedOptions, refreshTrigger) { fo, _ -> fo }
 
 	override val content = combine(
-		loadParams.flatMapLatest { filterOptions ->
+		combine(limit, loadParams) { requestedLimit, filterOptions ->
+			requestedLimit to filterOptions
+		}.flatMapLatest { (requestedLimit, filterOptions) ->
 			repository.observeUpdatedContent(
-				limit = 200,
+				limit = requestedLimit,
 				filterOptions = filterOptions,
 			)
 		},
@@ -309,9 +311,8 @@ class UpdatesViewModel @Inject constructor(
 	}
 
 	private suspend fun resolvePreferredLocalIdsByEntity(entityIds: Collection<Long>): Map<Long, Long?> {
-		return entityIds.associateWith { entityId ->
-			workResolver.resolveByEntityId(entityId)?.preferredMangaId
-		}
+		return workResolver.resolveManyByEntityIds(entityIds)
+			.mapValues { (_, identity) -> identity.preferredMangaId }
 	}
 
 	private fun List<ContentTracking>.toUpdateGroup(

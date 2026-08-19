@@ -2,6 +2,11 @@ package org.skepsun.kototoro.history.ui
 
 import android.content.Context
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.insertSeparators
+import androidx.paging.insertHeaderItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +21,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -55,7 +61,6 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.parsers.model.Content
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
@@ -65,6 +70,8 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
+import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
+import org.skepsun.kototoro.core.paging.LargeLibraryPagingConfig
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -74,6 +81,8 @@ import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.work.domain.WorkAggregate
+import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
@@ -94,6 +103,26 @@ private data class HistoryUiParams(
 	val spaceId: SpaceId?,
 )
 
+internal fun PagingData<ListModel>.applyHistoryPagingPresentation(
+	grouped: Boolean,
+	headerItem: InfoModel?,
+	headerFor: (ListModel) -> ListHeader?,
+): PagingData<ListModel> {
+	var result = if (grouped) {
+		insertSeparators { before: ListModel?, after: ListModel? ->
+			val beforeHeader = before?.let(headerFor)
+			val afterHeader = after?.let(headerFor)
+			afterHeader?.takeIf { before == null || beforeHeader != afterHeader }
+		}
+	} else {
+		this
+	}
+	if (headerItem != null) {
+		result = result.insertHeaderItem(item = headerItem)
+	}
+	return result
+}
+
 @HiltViewModel
 class HistoryListViewModel @Inject constructor(
 	@ApplicationContext private val appContext: Context,
@@ -111,7 +140,8 @@ class HistoryListViewModel @Inject constructor(
 	private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
 	private val entityGraphRepository: EntityGraphRepository,
 	private val historyPreviewCache: HistoryPreviewCache,
-	private val workResolver: WorkResolver,
+		private val workResolver: WorkResolver,
+		private val workAggregateRepository: WorkAggregateRepository,
 	spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener, SpaceBindableViewModel {
 	private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
@@ -129,6 +159,7 @@ class HistoryListViewModel @Inject constructor(
 	override val isFilterBarVisible = MutableStateFlow(true)
 	private val refreshTrigger = MutableStateFlow(Any())
 	private val activeSpaceScope = spaceBinding.spaceId
+	private val pagingHeaders = java.util.concurrent.ConcurrentHashMap<Long, ListHeader>()
 
 
 	override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
@@ -166,7 +197,6 @@ class HistoryListViewModel @Inject constructor(
 	}
 
 	private val limit = MutableStateFlow(PAGE_SIZE)
-	private val isPaginationReady = AtomicBoolean(false)
 
 	val isStatsEnabled = settings.observeAsStateFlow(
 		scope = viewModelScope + Dispatchers.Default,
@@ -242,51 +272,36 @@ class HistoryListViewModel @Inject constructor(
 		)
 	}.distinctUntilChanged()
 
-	override val content = uiParams.flatMapLatest { params ->
-		flow {
-			isPaginationReady.set(false)
-			buildPreviewStateOrNull(params)?.let { emit(it) } ?: emit(listOf(LoadingState))
-			emitAll(
-				combine(
-					observeHistory(params.order, params.effectiveFilters, params.spaceId).onEach {
-						isPaginationReady.set(true)
-					},
-					mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
-				) { list, _ ->
-					mapList(
-						list = list,
-						grouped = params.grouped,
-						mode = params.mode,
-						filters = params.filters,
-						isIncognito = params.incognito,
-						groupTab = params.groupTab,
-						sourceTags = params.sourceTags,
-						preset = params.preset,
+	override val content = flowOf(listOf<ListModel>(LoadingState))
+		.stateIn(viewModelScope, SharingStarted.Eagerly, listOf(LoadingState))
+
+	override val pagingContent = uiParams.flatMapLatest { params ->
+		pagingHeaders.clear()
+		Pager<Int, ListModel>(
+			config = LargeLibraryPagingConfig,
+			pagingSourceFactory = {
+				BatchMappingPagingSource(
+					delegate = workAggregateRepository.createHistoryPagingSource(params.order, params.spaceId),
+					diagnosticLabel = "history-ui",
+				) { aggregates -> mapHistoryPage(aggregates, params) }
+			},
+		).flow.map { pagingData ->
+			pagingData.applyHistoryPagingPresentation(
+				grouped = params.grouped,
+				headerItem = if (params.incognito) {
+					InfoModel(
+						key = AppSettings.KEY_INCOGNITO_MODE,
+						title = R.string.incognito_mode,
+						text = R.string.incognito_mode_hint,
+						icon = R.drawable.ic_incognito,
 					)
+				} else {
+					null
 				},
+				headerFor = { model -> (model as? ContentListModel)?.id?.let(pagingHeaders::get) },
 			)
 		}
-	}.distinctUntilChanged().catch { e ->
-		emit(listOf(e.toErrorState(canRetry = false)))
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.Eagerly,
-		buildInitialPreviewStateOrNull(
-			HistoryUiParams(
-				order = sortOrder.value,
-				filters = quickFilter.appliedOptions.value,
-				effectiveFilters = if (settings.isNsfwContentDisabled) quickFilter.appliedOptions.value + ListFilterOption.SFW
-				else quickFilter.appliedOptions.value,
-				grouped = settings.isHistoryGroupingEnabled && sortOrder.value.isGroupingSupported(),
-				mode = listMode.value,
-				incognito = settings.isIncognitoModeEnabled,
-				groupTab = currentGroupTab.value,
-				sourceTags = currentSourceTags.value,
-				preset = historyPreviewCache.observe().value?.preset,
-				spaceId = activeSpaceScope.value,
-			),
-		) ?: listOf(LoadingState),
-	)
+	}.cachedIn(viewModelScope)
 
 	override fun onRefresh() {
 		refreshTrigger.value = Any()
@@ -343,8 +358,61 @@ class HistoryListViewModel @Inject constructor(
 	}
 
 	fun requestMoreItems() {
-		if (isPaginationReady.compareAndSet(true, false)) {
-			limit.value += PAGE_SIZE
+			// Paging prefetches from LazyPagingItems access.
+		}
+
+	private suspend fun mapHistoryPage(
+		aggregates: List<WorkAggregate>,
+		params: HistoryUiParams,
+	): List<ListModel> {
+		val historyItems = repository.mapPagingAggregates(aggregates, params.effectiveFilters)
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val visibleItems = historyItems.filter { item ->
+			val source = item.manga.source
+			if (params.preset != null && source.name !in params.preset.sources) return@filter false
+			val contentGroup = sourceGroupManager.getContentGroup(source)
+			val originGroup = sourceGroupManager.getOriginGroup(source)
+			val sourceVisible = params.groupTab.matchesContentGroup(contentGroup) &&
+				params.groupTab.matchesOriginGroup(originGroup) &&
+				(params.sourceTags.isEmpty() || params.sourceTags.any { it.matches(contentGroup, originGroup) })
+			sourceVisible &&
+				(!settings.isHistoryExcludeNsfw || !item.manga.isNsfw()) &&
+				item.manga !in globalTagBlacklist
+		}
+		if (visibleItems.isEmpty()) return emptyList()
+		val groups = visibleItems.foldAdjacentByEntity()
+		val pinnedIds = favouritesRepository.getPinnedIds(groups.map { it.representative.manga.id })
+		val entityIdsByMangaId = groups.associate { group ->
+			group.representative.manga.id to requireNotNull(group.entityId)
+		}
+		val metadataByEntity = dataRepository.getEntityMetadataSourceSelections(entityIdsByMangaId.values)
+		val overridesByMangaId = dataRepository.getOverridesForWorkItems(entityIdsByMangaId)
+		val models = ArrayList<ContentListModel>(groups.size)
+		mangaListMapper.toRequestedListModelList(
+			destination = models,
+			requests = groups.map { group ->
+				val manga = group.representative.manga
+				val entityId = requireNotNull(group.entityId)
+				ContentListMapper.ListModelRequest(
+					manga = manga,
+					metadataSelectionOverride = metadataByEntity[entityId],
+					useMetadataSelectionOverride = true,
+					manualOverride = overridesByMangaId[manga.id],
+					useManualOverride = true,
+				)
+			},
+			mode = params.mode,
+			pinnedIds = pinnedIds,
+		)
+		groupedHistoryIds = groupedHistoryIds + groups.associate { it.uiId to it.mangaIds }
+		groupedEntityIds = groupedEntityIds + groups.mapNotNull { group -> group.entityId?.let { group.uiId to it } }.toMap()
+		groupedPreferredLocalIds = groupedPreferredLocalIds + groups.mapNotNull { group ->
+			group.preferredLocalMangaId?.let { group.uiId to it }
+		}.toMap()
+		return groups.mapIndexed { index, group ->
+			val model = models[index].toGroupedListModel(group) as ContentListModel
+			group.representative.history.header(params.order)?.let { pagingHeaders[model.id] = it }
+			model
 		}
 	}
 

@@ -210,6 +210,27 @@ class HistoryRepository @Inject constructor(
 		}
 	}
 
+	fun observeRecentWithHistory(limit: Int): Flow<List<ContentWithHistory>> {
+		require(limit > 0)
+		return db.invalidationTracker.createFlow(
+			tables = arrayOf(
+				TABLE_WORK_HISTORY,
+				TABLE_WORK_FAVOURITES,
+				TABLE_ENTITY_GRAPH_BINDING,
+				TABLE_ENTITY_PREFERENCES,
+				TABLE_MANGA,
+				TABLE_TAGS,
+				TABLE_MANGA_TAGS,
+			),
+			emitInitialState = true,
+		).mapLatest {
+			mapPagingAggregates(
+				aggregates = workAggregateRepository.findRecentHistoryAggregates(limit),
+				filterOptions = emptySet(),
+			)
+		}.distinctUntilChanged()
+	}
+
 	fun observeOne(id: Long): Flow<ContentHistory?> {
 		return db.invalidationTracker.createFlow(
 			tables = arrayOf(
@@ -295,9 +316,22 @@ class HistoryRepository @Inject constructor(
 
 	suspend fun getProgress(mangaIds: Collection<Long>, mode: ProgressIndicatorMode): Map<Long, ReadingProgress> {
 		if (mangaIds.isEmpty()) return emptyMap()
+		val distinctMangaIds = mangaIds.distinct()
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(distinctMangaIds)
+		val entityIdsByMangaId = identitiesByMangaId.mapValues { (_, identity) -> identity.entityId }
+		val historyByEntityId = db.getWorkHistoryDao()
+			.findByEntityIds(entityIdsByMangaId.values.filterNotNull().distinct())
+			.associateBy(WorkHistoryEntity::entityId)
 		return buildMap {
-			mangaIds.distinct().forEach { mangaId ->
-				val progress = getProgress(mangaId, mode) ?: return@forEach
+			distinctMangaIds.forEach { mangaId ->
+				val entityId = entityIdsByMangaId[mangaId] ?: return@forEach
+				val history = historyByEntityId[entityId] ?: return@forEach
+				val fixedPercent = if (ReadingProgress.isCompleted(history.percent)) 1f else history.percent
+				val progress = ReadingProgress(
+					percent = fixedPercent,
+					totalChapters = history.chaptersCount,
+					mode = mode,
+				).takeIf { it.isValid() } ?: return@forEach
 				put(mangaId, progress)
 			}
 		}
@@ -550,6 +584,33 @@ class HistoryRepository @Inject constructor(
 		)
 			.map { it.content }
 			.let { if (limit > 0) it.take(limit) else it }
+	}
+
+	suspend fun mapPagingAggregates(
+		aggregates: List<WorkAggregate>,
+		filterOptions: Set<ListFilterOption>,
+	): List<ContentWithHistory> {
+		val trackCache = HashMap<Long, TrackAggregate>()
+		return aggregates.mapNotNull { aggregate ->
+			val content = aggregate.displayProjection ?: return@mapNotNull null
+			val history = aggregate.history ?: return@mapNotNull null
+			HistoryAggregateItem(
+				aggregate = aggregate,
+				content = ContentWithHistory(
+					manga = content,
+					history = history.toLegacyHistoryEntity().toContentHistory(),
+					entityId = aggregate.identity.entityId,
+					preferredLocalMangaId = aggregate.identity.preferredMangaId ?: content.id,
+				),
+			)
+		}.filter { item ->
+			matchesHistoryFilters(
+				item = item.content,
+				filterOptions = filterOptions,
+				favouriteCategoryIds = item.favouriteCategoryIds,
+				trackCache = trackCache,
+			)
+		}.map(HistoryAggregateItem::content)
 	}
 
 	private suspend fun matchesHistoryFilters(

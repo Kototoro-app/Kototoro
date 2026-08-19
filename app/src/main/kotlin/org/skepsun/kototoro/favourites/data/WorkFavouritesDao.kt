@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
+import androidx.paging.PagingSource
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -11,6 +12,101 @@ import kotlinx.coroutines.isActive
 
 @Dao
 abstract class WorkFavouritesDao {
+
+	@Query(
+		"""
+		SELECT
+			m.manga_id AS manga_id,
+			wf.category_id AS category_id,
+			m.source AS source,
+			m.nsfw AS nsfw
+		FROM work_favourites wf
+		INNER JOIN manga m ON m.manga_id = wf.anchor_manga_id
+		WHERE wf.anchor_manga_id IS NOT NULL
+			AND wf.deleted_at = 0
+		""",
+	)
+	abstract fun observeCategoryCountEntries(): Flow<List<FavouriteCategoryCountEntry>>
+
+	@Query(
+		"""
+		WITH selected AS (
+			SELECT wf.*
+			FROM work_favourites wf
+			WHERE wf.anchor_manga_id IS NOT NULL
+				AND wf.deleted_at = 0
+				AND (:categoryId = -1 OR wf.category_id = :categoryId)
+				AND wf.category_id = (
+					SELECT wf2.category_id
+					FROM work_favourites wf2
+					WHERE wf2.entity_id = wf.entity_id
+						AND wf2.anchor_manga_id IS NOT NULL
+						AND wf2.deleted_at = 0
+						AND (:categoryId = -1 OR wf2.category_id = :categoryId)
+					ORDER BY wf2.pinned DESC, wf2.created_at DESC, wf2.updated_at DESC, wf2.category_id ASC
+					LIMIT 1
+				)
+		)
+		SELECT selected.*
+		FROM selected
+		LEFT JOIN entity_preferences ep ON ep.entity_id = selected.entity_id
+		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, selected.anchor_manga_id)
+		LEFT JOIN work_history wh ON wh.entity_id = selected.entity_id AND wh.deleted_at = 0
+		LEFT JOIN (
+			SELECT entity_id, SUM(chapters_new) AS new_chapters, MAX(last_chapter_date) AS last_chapter_date
+			FROM tracks
+			WHERE entity_id IS NOT NULL
+			GROUP BY entity_id
+		) tracking ON tracking.entity_id = selected.entity_id
+		WHERE (:applySpaceFilter = 0 OR (
+			EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = selected.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND sm.content_type IN (:allowedTypes)
+					AND (:applySourceFilter = 0 OR sm.source IN (:allowedSources))
+			)
+			AND NOT EXISTS (
+				SELECT 1 FROM entity_binding eb
+				INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+				WHERE eb.entity_id = selected.entity_id
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND sm.content_type IN (:classifiedTypes)
+					AND sm.content_type NOT IN (:allowedTypes)
+			)
+		))
+		ORDER BY
+			selected.pinned DESC,
+			CASE WHEN :orderName = 'RATING' THEN m.rating END DESC,
+			CASE WHEN :orderName = 'NEWEST' THEN selected.created_at END DESC,
+			CASE WHEN :orderName = 'OLDEST' THEN selected.created_at END ASC,
+			CASE WHEN :orderName = 'PROGRESS' THEN wh.percent END DESC,
+			CASE WHEN :orderName = 'UNREAD' THEN wh.percent END ASC,
+			CASE WHEN :orderName = 'LAST_READ' THEN wh.updated_at END DESC,
+			CASE WHEN :orderName = 'LONG_AGO_READ' THEN wh.updated_at END ASC,
+			CASE WHEN :orderName = 'NEW_CHAPTERS' THEN tracking.new_chapters END DESC,
+			CASE WHEN :orderName IN ('NEW_CHAPTERS', 'UPDATED') THEN tracking.last_chapter_date END DESC,
+			CASE WHEN :orderName = 'ALPHABETIC' THEN m.title END COLLATE NOCASE ASC,
+			CASE WHEN :orderName = 'ALPHABETIC_REVERSE' THEN m.title END COLLATE NOCASE DESC,
+			CASE WHEN :orderName NOT IN (
+				'RATING', 'NEWEST', 'OLDEST', 'PROGRESS', 'UNREAD', 'LAST_READ', 'LONG_AGO_READ',
+				'NEW_CHAPTERS', 'UPDATED', 'ALPHABETIC', 'ALPHABETIC_REVERSE'
+			) THEN selected.updated_at END DESC,
+			selected.entity_id ASC
+		""",
+	)
+	abstract fun pagingSource(
+		categoryId: Long,
+		orderName: String,
+		applySpaceFilter: Boolean,
+		allowedTypes: Collection<String>,
+		classifiedTypes: Collection<String>,
+		applySourceFilter: Boolean,
+		allowedSources: Collection<String>,
+	): PagingSource<Int, WorkFavouriteEntity>
 
 	@Query(
 		"""

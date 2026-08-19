@@ -67,7 +67,7 @@ import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 
 private const val PAGE_SIZE = 20
-private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 2000
+private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 200
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
@@ -492,9 +492,8 @@ class FeedViewModel @Inject constructor(
 	}
 
 	private suspend fun resolvePreferredLocalIdsByEntity(entityIds: Collection<Long>): Map<Long, Long?> {
-		return entityIds.associateWith { entityId ->
-			workResolver.resolveByEntityId(entityId)?.preferredMangaId
-		}
+		return workResolver.resolveManyByEntityIds(entityIds)
+			.mapValues { (_, identity) -> identity.preferredMangaId }
 	}
 
 	private fun Long.toFeedGroupKey(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())

@@ -53,6 +53,7 @@ okhttp = "5.4.0"
 okio = "3.17.0"
 
 preference = "1.2.1"
+paging = "3.5.1"
 recyclerview = "1.4.0"
 room = "2.8.4"
 serialization = "1.11.0"
@@ -140,8 +141,12 @@ androidx-preference = { module = "androidx.preference:preference-ktx", version.r
 androidx-recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "recyclerview" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 androidx-room-testing = { module = "androidx.room:room-testing", version.ref = "room" }
+androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
+androidx-paging-runtime = { module = "androidx.paging:paging-runtime", version.ref = "paging" }
+androidx-paging-testing = { module = "androidx.paging:paging-testing", version.ref = "paging" }
 androidx-rules = { module = "androidx.test:rules", version.ref = "testRules" }
 androidx-runner = { module = "androidx.test:runner", version.ref = "testRunner" }
 androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }

@@ -223,6 +223,26 @@ class ContentDataRepository @Inject constructor(
 		return map
 	}
 
+	suspend fun getOverridesForWorkItems(
+		entityIdsByMangaId: Map<Long, Long>,
+	): LongObjectMap<ContentOverride> {
+		if (entityIdsByMangaId.isEmpty()) return MutableLongObjectMap(0)
+		val result = MutableLongObjectMap<ContentOverride>(entityIdsByMangaId.size)
+		val overridesByEntityId = db.getEntityGraphDao()
+			.findEntityPrefsByIds(entityIdsByMangaId.values.distinct())
+			.mapNotNull { prefs -> prefs.getOverrideOrNull()?.let { prefs.entityId to it } }
+			.toMap()
+		entityIdsByMangaId.forEach { (mangaId, entityId) ->
+			overridesByEntityId[entityId]?.let { result[mangaId] = it }
+		}
+		db.getPreferencesDao().findByIds(entityIdsByMangaId.keys).forEach { prefs ->
+			if (!result.containsKey(prefs.mangaId)) {
+				prefs.getOverrideOrNull()?.let { result[prefs.mangaId] = it }
+			}
+		}
+		return result
+	}
+
 	suspend fun getReadingStatus(mangaId: Long): ScrobblingStatus? {
 		return findEntityPrefsForMangaId(mangaId)?.readingStatus
 			?.let(ScrobblingStatus::valueOf)

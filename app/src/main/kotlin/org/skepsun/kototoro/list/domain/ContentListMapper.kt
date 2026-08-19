@@ -54,6 +54,8 @@ class ContentListMapper @Inject constructor(
 		val manga: Content,
 		val metadataSelectionOverride: ContentDataRepository.MetadataSourceSelection? = null,
 		val useMetadataSelectionOverride: Boolean = false,
+		val manualOverride: ContentOverride? = null,
+		val useManualOverride: Boolean = false,
 	)
 
 	private val dict by lazy { readTagsDict(context) }
@@ -141,7 +143,11 @@ class ContentListMapper @Inject constructor(
 			.map { it.manga.id }
 			.distinct()
 			.toList()
-		val manualOverrides = dataRepository.getOverrides()
+		val manualOverrides = if (requests.all(ListModelRequest::useManualOverride)) {
+			MutableLongObjectMap<ContentOverride>(0)
+		} else {
+			dataRepository.getOverrides()
+		}
 		val metadataSelections = if (metadataIds.isEmpty()) {
 			MutableLongObjectMap<ContentDataRepository.MetadataSourceSelection>(0)
 		} else {
@@ -166,7 +172,11 @@ class ContentListMapper @Inject constructor(
 				metadataTrackingService = getMetadataTrackingService(metadataSelection),
 				override = resolveDisplayOverride(
 					manga = request.manga,
-					manualOverride = manualOverrides[request.manga.id],
+					manualOverride = if (request.useManualOverride) {
+						request.manualOverride
+					} else {
+						manualOverrides[request.manga.id]
+					},
 					metadataSelection = metadataSelection,
 					trackingDetailsCache = trackingDetailsCache,
 				),

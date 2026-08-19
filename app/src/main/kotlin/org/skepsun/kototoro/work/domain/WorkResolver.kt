@@ -9,6 +9,8 @@ interface WorkResolver {
 
 	suspend fun resolveByEntityId(entityId: Long): WorkIdentity?
 
+	suspend fun resolveManyByEntityIds(entityIds: Collection<Long>): Map<Long, WorkIdentity>
+
 	suspend fun resolveBindingsByEntityId(entityId: Long): List<EntityBinding>
 
 	suspend fun resolveManyByMangaIds(mangaIds: Collection<Long>): Map<Long, WorkIdentity>

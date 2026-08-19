@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.list.ui
 
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +41,7 @@ abstract class ContentListViewModel(
 ) : BaseViewModel() {
 
 	abstract val content: StateFlow<List<ListModel>>
+	open val pagingContent: Flow<PagingData<ListModel>>? = null
 	open val hasMoreItems: StateFlow<Boolean> = flowOf(true)
 		.stateIn(viewModelScope, SharingStarted.Eagerly, true)
 	open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }

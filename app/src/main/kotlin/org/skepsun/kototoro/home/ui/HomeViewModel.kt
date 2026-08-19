@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
@@ -247,13 +248,11 @@ class HomeViewModel @Inject constructor(
                 "presetId=${preset?.id ?: -1L} sourceCount=${preset?.sources?.size ?: 0}",
             )
         }
-    private val recentHistoryWithMetadataFlow = historyRepository.observeAllWithHistory(
-        order = ListSortOrder.LAST_READ,
-        filterOptions = emptySet(),
-        limit = 64,
-    )
+    private val recentHistoryWithMetadataFlow = historyRepository.observeRecentWithHistory(limit = 64)
         .onStart { emit(emptyList()) }
         .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .shareIn(viewModelScope, SharingStarted.Eagerly, replay = 1)
     private val recentHistoryFlow = recentHistoryWithMetadataFlow
         .map { items -> items.map(ContentWithHistory::manga) }
         .distinctUntilChanged()

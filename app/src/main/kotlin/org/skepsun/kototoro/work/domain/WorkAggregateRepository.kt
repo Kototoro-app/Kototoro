@@ -1,8 +1,10 @@
 package org.skepsun.kototoro.work.domain
 
+import androidx.paging.PagingSource
 import dagger.Reusable
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
@@ -31,6 +33,48 @@ class WorkAggregateRepository @Inject constructor(
 	private val spaceContentPolicy: SpaceContentPolicy,
 	private val contentSourcesRepository: ContentSourcesRepository,
 ) {
+
+	fun createFavouritePagingSource(
+		categoryId: Long,
+		order: ListSortOrder,
+		filterOptions: Set<ListFilterOption>,
+		spaceId: SpaceId?,
+	): PagingSource<Int, WorkAggregate> {
+		val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
+		val delegate = db.getWorkFavouritesDao().pagingSource(
+			categoryId = categoryId,
+			orderName = order.name,
+			applySpaceFilter = spaceId != null,
+			allowedTypes = spaceId?.let(::allowedTypeNames).orEmpty(),
+			classifiedTypes = classifiedTypeNames,
+			applySourceFilter = allowedSources != null,
+			allowedSources = allowedSources.orEmpty(),
+		)
+		return BatchMappingPagingSource(delegate, diagnosticLabel = "favourites-aggregate") { entries ->
+			filterFavouriteAggregates(
+				aggregates = buildFavouriteAggregates(entries, spaceId),
+				filterOptions = filterOptions,
+			)
+		}
+	}
+
+	fun createHistoryPagingSource(
+		order: ListSortOrder,
+		spaceId: SpaceId?,
+	): PagingSource<Int, WorkAggregate> {
+		val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
+		val delegate = db.getWorkHistoryDao().pagingSource(
+			orderName = order.name,
+			applySpaceFilter = spaceId != null,
+			allowedTypes = spaceId?.let(::allowedTypeNames).orEmpty(),
+			classifiedTypes = classifiedTypeNames,
+			applySourceFilter = allowedSources != null,
+			allowedSources = allowedSources.orEmpty(),
+		)
+		return BatchMappingPagingSource(delegate, diagnosticLabel = "history-aggregate") { histories ->
+			buildHistoryAggregates(histories, spaceId)
+		}
+	}
 
 	suspend fun findFavouriteAggregates(
 		categoryId: Long = FavouriteCategory.NO_ID,
@@ -183,7 +227,7 @@ class WorkAggregateRepository @Inject constructor(
 		return buildHistoryAggregates(histories, spaceId)
 	}
 
-	private suspend fun buildHistoryAggregates(
+	suspend fun buildHistoryAggregates(
 		histories: List<WorkHistoryEntity>,
 		spaceId: SpaceId?,
 	): List<WorkAggregate> {
@@ -274,6 +318,16 @@ class WorkAggregateRepository @Inject constructor(
 			return emptyList()
 		}
 		val aggregates = buildFavouriteAggregates(entries, spaceId)
+		return filterFavouriteAggregates(aggregates, filterOptions)
+			.sortedWith(favouriteAggregateComparator(order))
+			.distinctBy { it.identity.entityId ?: it.displayProjection?.id }
+			.take(limit)
+	}
+
+	private suspend fun filterFavouriteAggregates(
+		aggregates: List<WorkAggregate>,
+		filterOptions: Set<ListFilterOption>,
+	): List<WorkAggregate> {
 		val downloadedIds = if (ListFilterOption.Downloaded in filterOptions) {
 			db.getLocalContentIndexDao().findExistingIds(
 				aggregates.mapNotNull { it.displayProjection?.id }.distinct(),
@@ -312,9 +366,7 @@ class WorkAggregateRepository @Inject constructor(
 					readingStatus = aggregate.identity.entityId?.let(readingStatuses::get),
 				)
 			}
-			.sortedWith(favouriteAggregateComparator(order))
 			.distinctBy { it.identity.entityId ?: it.displayProjection?.id }
-			.take(limit)
 	}
 
 	private suspend fun findEffectiveReadingStatuses(
@@ -356,7 +408,7 @@ class WorkAggregateRepository @Inject constructor(
 			anchorIds = entries.mapNotNull(WorkFavouriteEntity::anchorMangaId),
 		)
 		val entityIds = entries.map(WorkFavouriteEntity::entityId)
-		val categoriesById = findCategoriesById(entries.map { it.categoryId })
+		val categoriesByEntityId = findCategoriesByEntityId(entityIds)
 		val historyByEntityId = findHistoryByEntityId(entityIds)
 		val statsByEntityId = findStatsByEntityId(entityIds)
 		val trackingByEntityId = findTrackingByEntityId(entityIds)
@@ -373,12 +425,11 @@ class WorkAggregateRepository @Inject constructor(
 				allowedContentTypes = allowedTypes,
 			)
 				?: return@mapNotNull null
-			val categories: Set<FavouriteCategory> = categoriesById[entry.categoryId]?.let { setOf(it) } ?: emptySet()
-			WorkAggregate(
+				WorkAggregate(
 				identity = identity,
 				displayProjection = displayProjection,
 				projections = projectionSet.projectionsFor(identity, entry.anchorMangaId, allowedTypes),
-				categories = categories,
+					categories = categoriesByEntityId[entry.entityId].orEmpty(),
 				favourite = entry,
 				history = historyByEntityId[entry.entityId],
 				stats = statsByEntityId[entry.entityId],
@@ -539,9 +590,7 @@ class WorkAggregateRepository @Inject constructor(
 		entityIds: Collection<Long>,
 		anchorIds: Collection<Long>,
 	): WorkProjectionSet {
-		val identitiesByEntityId = entityIds
-			.distinct()
-			.associateWith { entityId -> workResolver.resolveByEntityId(entityId) }
+		val identitiesByEntityId = workResolver.resolveManyByEntityIds(entityIds)
 		val projectionIds = LinkedHashSet<Long>()
 		projectionIds += anchorIds
 		identitiesByEntityId.values.filterNotNull().forEach { identity ->

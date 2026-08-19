@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.BackHandler
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
@@ -112,7 +114,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     quickFilterOverride: QuickFilter? = null,
     enableItemAnimations: Boolean = true,
 ) {
-    val sourceItems by viewModel.content.collectAsStateWithLifecycle()
+    val pagingFlow = viewModel.pagingContent
+    val lazyPagingItems = pagingFlow?.collectAsLazyPagingItems()
+    val sourceItems by if (pagingFlow == null) {
+        viewModel.content.collectAsStateWithLifecycle()
+    } else {
+        remember { mutableStateOf(emptyList()) }
+    }
     val items = remember(sourceItems, quickFilterOverride) {
         if (quickFilterOverride == null) {
             sourceItems
@@ -138,6 +146,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isLoading.collectAsStateWithLifecycle()
+    val pagingIsRefreshing = lazyPagingItems?.loadState?.refresh is LoadState.Loading
     val hasMoreItems by viewModel.hasMoreItems.collectAsStateWithLifecycle()
 
     var composeSelectionIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
@@ -163,8 +172,9 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         is BaseComposeActivity -> activity.exceptionResolver
         else -> null
     }
-    val selectionModels = remember(items, composeSelectionIds) {
-        prepareContentSelectionModels(items, composeSelectionIds)
+    val loadedPagingItems = lazyPagingItems?.itemSnapshotList?.items.orEmpty()
+    val selectionModels = remember(items, loadedPagingItems, composeSelectionIds) {
+        prepareContentSelectionModels(if (lazyPagingItems == null) items else loadedPagingItems, composeSelectionIds)
     }
     val selectedModels = selectionModels.selectedModels
     val quickFilter = remember(items) { items.firstOrNull { it is QuickFilter } as? QuickFilter }
@@ -501,13 +511,20 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     KototoroContentListScreen(
         contentPadding = contentPadding,
         items = items,
+        pagingItems = lazyPagingItems,
         listMode = listMode,
-        isRefreshing = isRefreshing,
+        isRefreshing = isRefreshing || pagingIsRefreshing,
         pullRefreshEnabled = pullRefreshEnabled,
         showRemoveOption = showRemoveOption,
         sharedTransitionEnabled = sharedTransitionEnabled,
         sharedElementInstanceKey = sharedElementInstanceKey,
-        onRefresh = { viewModel.onRefresh() },
+        onRefresh = {
+            if (lazyPagingItems == null) {
+                viewModel.onRefresh()
+            } else {
+                lazyPagingItems.refresh()
+            }
+        },
         onLoadMore = onLoadMore,
         hasMoreItems = hasMoreItems,
         loadMoreVisibleThreshold = loadMoreVisibleThreshold,
@@ -570,8 +587,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             when (action) {
                 SelectionAction.SELECT_ALL -> {
                     hapticFeedback.performSelectionHapticFeedback()
-                    val allIds = viewModel.content.value.mapNotNull { (it as? org.skepsun.kototoro.list.ui.model.ContentListModel)?.id }.toSet()
-                    composeSelectionIds = allIds
+                    composeSelectionIds = selectionModels.allContentIds
                 }
                 SelectionAction.REMOVE -> {
                     onRemoveSelection?.invoke(composeSelectionIds)
@@ -599,7 +615,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 }
             }
         },
-        onRetry = ::resolveCloudflareAndRetry,
+        onRetry = {
+            if (lazyPagingItems == null) {
+                resolveCloudflareAndRetry()
+            } else {
+                lazyPagingItems.retry()
+            }
+        },
         onSecondaryAction = { error ->
             error.getCauseUrl()?.let { url ->
                 appRouter.openBrowser(url, null, null)

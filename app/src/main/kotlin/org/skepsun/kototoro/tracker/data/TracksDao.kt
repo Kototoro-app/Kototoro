@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Upsert
+import androidx.paging.PagingSource
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 import org.skepsun.kototoro.core.db.MangaQueryBuilder
@@ -86,6 +87,15 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 			.orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC")
 			.build(),
 	)
+
+	fun pagingUpdatedContent(filterOptions: Set<ListFilterOption>): PagingSource<Int, TrackEntity> =
+		pagingContentImpl(
+			MangaQueryBuilder("tracks", this)
+				.where("chapters_new > 0")
+				.filters(filterOptions)
+				.orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC, tracks.entity_id ASC, tracks.manga_id ASC")
+				.build(),
+		)
 
 	@Query("DELETE FROM tracks")
 	abstract suspend fun clear()
@@ -227,6 +237,9 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
 	@RawQuery(observedEntities = [TrackEntity::class])
 	protected abstract fun observeContentImpl(query: SupportSQLiteQuery): Flow<List<TrackEntity>>
+
+	@RawQuery(observedEntities = [TrackEntity::class])
+	protected abstract fun pagingContentImpl(query: SupportSQLiteQuery): PagingSource<Int, TrackEntity>
 
 	override fun getCondition(option: ListFilterOption): String? = when (option) {
 		ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("tracks.manga_id")

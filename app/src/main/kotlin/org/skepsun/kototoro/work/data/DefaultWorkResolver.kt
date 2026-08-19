@@ -34,18 +34,41 @@ class DefaultWorkResolver @Inject constructor(
 	}
 
 	override suspend fun resolveByEntityId(entityId: Long): WorkIdentity? = withContext(Dispatchers.IO) {
-		val dao = db.getEntityGraphDao()
-		val entity = dao.findEntity(entityId)
-		if (entity?.type != EntityType.WORK.name) {
-			return@withContext null
-		}
-		buildIdentity(
-			entityId = entityId,
-			requestedMangaId = null,
-			bindings = dao.findActiveLocalBindingsByEntity(entityId),
-			prefs = dao.findEntityPrefs(entityId),
-		)
+		resolveManyByEntityIds(listOf(entityId))[entityId]
 	}
+
+	override suspend fun resolveManyByEntityIds(entityIds: Collection<Long>): Map<Long, WorkIdentity> =
+		withContext(Dispatchers.IO) {
+			val distinctEntityIds = entityIds.distinct()
+			if (distinctEntityIds.isEmpty()) {
+				return@withContext emptyMap()
+			}
+			val dao = db.getEntityGraphDao()
+			val workEntityIds = distinctEntityIds
+				.chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
+				.flatMap { chunk -> dao.findEntitiesByIds(chunk) }
+				.filter { it.type == EntityType.WORK.name }
+				.mapTo(LinkedHashSet()) { it.id }
+			if (workEntityIds.isEmpty()) {
+				return@withContext emptyMap()
+			}
+			val bindingsByEntityId = workEntityIds
+				.chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
+				.flatMap { chunk -> dao.findActiveLocalBindingsByEntities(chunk) }
+				.groupBy { it.entityId }
+			val prefsByEntityId = workEntityIds
+				.chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
+				.flatMap { chunk -> dao.findEntityPrefsByIds(chunk) }
+				.associateBy { it.entityId }
+			workEntityIds.associateWithTo(LinkedHashMap()) { entityId ->
+				buildIdentity(
+					entityId = entityId,
+					requestedMangaId = null,
+					bindings = bindingsByEntityId[entityId].orEmpty(),
+					prefs = prefsByEntityId[entityId],
+				)
+			}
+		}
 
 	override suspend fun resolveBindingsByEntityId(entityId: Long) = withContext(Dispatchers.IO) {
 		if (resolveByEntityId(entityId) == null) {

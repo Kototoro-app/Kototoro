@@ -34,6 +34,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.paging.compose.LazyPagingItems
 
 private const val MainRouteFlickerLogTag = "MainRouteFlicker"
 
@@ -46,6 +47,7 @@ private fun List<ListModel>.contentAtVisibleIndex(index: Int): String {
 fun HistoryScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     items: List<ListModel>,
+    pagingItems: LazyPagingItems<ListModel>? = null,
     headerQuickFilter: QuickFilter? = null,
     listMode: ListMode,
     isRefreshing: Boolean,
@@ -121,6 +123,7 @@ fun HistoryScreen(
         modifier = modifier,
         contentPadding = contentPadding,
         items = contentItems,
+        pagingItems = pagingItems,
         listMode = listMode,
         isRefreshing = isRefreshing,
         pullRefreshEnabled = pullRefreshEnabled,

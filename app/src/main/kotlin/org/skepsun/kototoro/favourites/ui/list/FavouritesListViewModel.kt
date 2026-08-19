@@ -2,6 +2,8 @@ package org.skepsun.kototoro.favourites.ui.list
 
 import android.content.Context
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.cachedIn
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -38,6 +40,8 @@ import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.flattenLatest
+import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
+import org.skepsun.kototoro.core.paging.FavouriteLibraryPagingConfig
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.FavoritesListQuickFilter
@@ -68,7 +72,6 @@ import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
-import java.util.concurrent.atomic.AtomicBoolean
 
 private const val PAGE_SIZE = 32
 
@@ -99,10 +102,20 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     private val quickFilter = quickFilterFactory.create(categoryId)
     private val refreshTrigger = MutableStateFlow(Any())
-    private val limit = MutableStateFlow(if (categoryId == NO_ID) 1000 else 200)
-    private val isPaginationReady = AtomicBoolean(false)
+    private val limit = MutableStateFlow(PAGE_SIZE)
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     private val activeSpaceScope = spaceBinding.spaceId
+
+	private data class PagingParams(
+		val order: ListSortOrder,
+		val filters: Set<ListFilterOption>,
+		val mode: ListMode,
+		val groupTab: BrowseGroupTab,
+		val sourceTags: Set<SourceTag>,
+		val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+		val categoryIds: Set<Long>,
+		val spaceId: SpaceId?,
+	)
 
     @Volatile
     private var groupedFavoriteIds: Map<Long, Set<Long>> = emptyMap()
@@ -160,15 +173,7 @@ class FavouritesListViewModel @AssistedInject constructor(
         }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    private val preparedGroups = combine(
-        observeFavorites(),
-        selectedCategoryIds,
-        activeSourcePreset,
-    ) { list, categoryIds, preset ->
-        Triple(list, categoryIds, preset)
-    }.mapLatest { (list, categoryIds, preset) ->
-        preparedGroupsReady(prepareGroups(list, categoryIds, preset))
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, PreparedGroupsState.Loading)
+    private val preparedGroups = flowOf(PreparedGroupsState.Loading)
 
     private val listContext = combine(
         preparedGroups,
@@ -199,29 +204,48 @@ class FavouritesListViewModel @AssistedInject constructor(
         )
     }
 
-    override val content = combine(
-        listParams,
-        mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
-    ) { params, _ ->
-        when (val groups = params.groups) {
-            PreparedGroupsState.Loading -> listOf(LoadingState)
-            is PreparedGroupsState.Ready -> mapList(
-                groups = groups.groups,
-                filters = params.filters,
-                mode = params.mode,
-                groupTab = params.groupTab,
-                sourceTags = params.sourceTags,
-            )
-        }
-    }.onEach {
-        isPaginationReady.set(true)
-    }.distinctUntilChanged().catch {
-        emit(listOf(it.toErrorState(canRetry = false)))
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+    override val content = flowOf(listOf<ListModel>(LoadingState))
+        .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(LoadingState))
 
-    override val hasMoreItems: StateFlow<Boolean> = limit
-        .map { categoryId != NO_ID }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, categoryId != NO_ID)
+	override val pagingContent = combine(
+		sortOrder.filterNotNull(),
+		quickFilter.appliedOptions,
+		listMode,
+		currentGroupTab,
+		currentSourceTags,
+		activeSourcePreset,
+		selectedCategoryIds,
+		activeSpaceScope,
+	) { values: Array<Any?> ->
+		@Suppress("UNCHECKED_CAST")
+		PagingParams(
+			order = values[0] as ListSortOrder,
+			filters = values[1] as Set<ListFilterOption>,
+			mode = values[2] as ListMode,
+			groupTab = values[3] as BrowseGroupTab,
+			sourceTags = values[4] as Set<SourceTag>,
+			preset = values[5] as? org.skepsun.kototoro.explore.data.SourcePreset,
+			categoryIds = values[6] as Set<Long>,
+			spaceId = values[7] as? SpaceId,
+		)
+	}.flatMapLatest { params ->
+		Pager(
+			config = FavouriteLibraryPagingConfig,
+			pagingSourceFactory = {
+				val aggregateSource = workAggregateRepository.createFavouritePagingSource(
+					categoryId = categoryId,
+					order = params.order,
+					filterOptions = params.filters,
+					spaceId = params.spaceId,
+				)
+				BatchMappingPagingSource(aggregateSource, diagnosticLabel = "favourites-ui") { aggregates ->
+					mapFavouritePage(aggregates, params)
+				}
+			},
+		).flow
+	}.cachedIn(viewModelScope)
+
+    override val hasMoreItems = MutableStateFlow(false)
 
     override fun onRefresh() {
         refreshTrigger.value = Any()
@@ -302,10 +326,81 @@ class FavouritesListViewModel @AssistedInject constructor(
     }
 
     fun requestMoreItems() {
-        if (isPaginationReady.compareAndSet(true, false)) {
-            limit.value += PAGE_SIZE
-        }
+        // Paging prefetches from LazyPagingItems access.
     }
+
+	private suspend fun mapFavouritePage(
+		aggregates: List<WorkAggregate>,
+		params: PagingParams,
+	): List<ListModel> {
+		val hideAdult = settings.isFavouritesExcludeNsfw
+		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val groups = aggregates.mapNotNull { aggregate ->
+			val representative = aggregate.displayProjection ?: return@mapNotNull null
+			if (params.preset != null && representative.source.name !in params.preset.sources) return@mapNotNull null
+			if (params.categoryIds.isNotEmpty() && aggregate.categories.none { it.id in params.categoryIds }) {
+				return@mapNotNull null
+			}
+			val contentGroup = sourceGroupManager.getContentGroup(representative.source)
+			val originGroup = sourceGroupManager.getOriginGroup(representative.source)
+			if (!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) {
+				return@mapNotNull null
+			}
+			if (params.sourceTags.isNotEmpty() && params.sourceTags.none { it.matches(contentGroup, originGroup) }) {
+				return@mapNotNull null
+			}
+			if ((hideAdult && representative.isNsfw()) || representative in globalTagBlacklist) return@mapNotNull null
+			val entityId = aggregate.identity.entityId ?: return@mapNotNull null
+			VisibleFavouriteGroup(
+				uiId = entityId.toUiGroupId(representative.source.contentType.ordinal),
+				entityId = entityId,
+				preferredLocalMangaId = aggregate.identity.preferredMangaId ?: representative.id,
+				metadataSourceSelection = null,
+				representative = representative,
+				mangaIds = aggregate.projections.mapTo(LinkedHashSet()) { it.id }.ifEmpty { setOf(representative.id) },
+				projectionCount = aggregate.projections.size.coerceAtLeast(1),
+			)
+		}
+		if (groups.isEmpty()) return emptyList()
+		val metadataByEntity = dataRepository.getEntityMetadataSourceSelections(groups.mapNotNull { it.entityId })
+		val overridesByMangaId = dataRepository.getOverridesForWorkItems(
+			groups.associate { group -> group.representative.id to requireNotNull(group.entityId) },
+		)
+		val requests = groups.map { group ->
+			val selection = group.entityId?.let(metadataByEntity::get)
+			ContentListMapper.ListModelRequest(
+				manga = group.representative,
+				metadataSelectionOverride = selection,
+				useMetadataSelectionOverride = true,
+				manualOverride = overridesByMangaId[group.representative.id],
+				useManualOverride = true,
+			)
+		}
+		val models = mangaListMapper.toRequestedListModelList(
+			requests = requests,
+			mode = params.mode,
+			flags = ContentListMapper.NO_FAVORITE,
+			pinnedIds = groups.filter { group ->
+				aggregates.firstOrNull { it.identity.entityId == group.entityId }?.favourite?.isPinned == true
+			}.mapTo(LinkedHashSet()) { it.preferredLocalMangaId ?: it.representative.id },
+		)
+		val entityIds = groups.associate { it.uiId to requireNotNull(it.entityId) }
+		val preferredIds = groups.associate { it.uiId to (it.preferredLocalMangaId ?: it.representative.id) }
+		val favouriteIds = groups.associate { it.uiId to it.mangaIds }
+		groupedEntityIds = groupedEntityIds + entityIds
+		groupedPreferredLocalIds = groupedPreferredLocalIds + preferredIds
+		groupedFavoriteIds = groupedFavoriteIds + favouriteIds
+		return groups.mapIndexed { index, group ->
+			val aggregate = aggregates.first { it.identity.entityId == group.entityId }
+			val progress = aggregate.toReadingProgress() ?: models[index].progressOrNull()
+			models[index].toGroupedListModel(
+				group = group,
+				isPinned = aggregate.favourite?.isPinned == true,
+				progress = progress,
+				counter = if (progress?.isCompleted() == true) 0 else aggregate.tracking?.newChapters ?: models[index].counter,
+			)
+		}
+	}
 
     private suspend fun prepareGroups(
         list: List<Content>,
@@ -674,7 +769,6 @@ class FavouritesListViewModel @AssistedInject constructor(
             limit,
             activeSpaceScope,
         ) { order, filters, limit, spaceId ->
-            isPaginationReady.set(false)
             repository.observeAllProjectionContents(order, filters, limit, spaceId)
         }.flattenLatest()
     } else {
@@ -683,7 +777,6 @@ class FavouritesListViewModel @AssistedInject constructor(
             limit,
             activeSpaceScope,
         ) { filters, limit, spaceId ->
-            isPaginationReady.set(false)
             repository.observeAllProjectionContents(categoryId, filters, limit, spaceId)
         }.flattenLatest()
     }

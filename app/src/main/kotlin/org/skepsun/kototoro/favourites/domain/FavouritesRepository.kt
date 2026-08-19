@@ -161,15 +161,7 @@ class FavouritesRepository @Inject constructor(
 	}
 
 	fun observeCategoryCountEntries(): Flow<List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>> {
-		return db.invalidationTracker.createFlow(
-			TABLE_WORK_FAVOURITES,
-			TABLE_FAVOURITE_CATEGORIES,
-			TABLE_ENTITY_PREFERENCES,
-			TABLE_MANGA,
-			emitInitialState = true,
-		).mapLatest {
-			buildWorkFavouriteCategoryCountEntries()
-		}.distinctUntilChanged()
+		return db.getWorkFavouritesDao().observeCategoryCountEntries().distinctUntilChanged()
 	}
 
 	suspend fun getContent(categoryId: Long): List<Content> {
@@ -656,19 +648,6 @@ class FavouritesRepository @Inject constructor(
 					mangaId = content.id,
 					url = content.coverUrl,
 					source = content.source.name,
-				)
-			}
-	}
-
-	private suspend fun buildWorkFavouriteCategoryCountEntries(): List<FavouriteCategoryCountEntry> {
-		return db.getWorkFavouritesDao().findActive()
-			.mapNotNull { entry ->
-				val content = resolveWorkFavouriteContent(entry) ?: return@mapNotNull null
-				FavouriteCategoryCountEntry(
-					mangaId = content.id,
-					categoryId = entry.categoryId,
-					source = content.source.name,
-					isNsfw = content.isNsfw(),
 				)
 			}
 	}

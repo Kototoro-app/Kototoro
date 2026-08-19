@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -40,6 +42,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
@@ -87,8 +91,10 @@ import org.skepsun.kototoro.list.ui.model.InfoModel
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.ui.model.QuickFilterGroup
+import kotlinx.coroutines.flow.first
 
 private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
@@ -100,6 +106,22 @@ private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
     val cardUiPrefs: ContentCardUiPrefs,
 )
+
+private suspend fun scrollToTopAfterPagingSettles(
+    pagingItems: LazyPagingItems<ListModel>?,
+    scrollToTop: suspend () -> Unit,
+) {
+    scrollToTop()
+    if (pagingItems == null) return
+    snapshotFlow {
+        val loadState = pagingItems.loadState
+        loadState.refresh !is LoadState.Loading &&
+            loadState.append !is LoadState.Loading &&
+            loadState.prepend !is LoadState.Loading
+    }.first { isIdle -> isIdle }
+    withFrameNanos { }
+    scrollToTop()
+}
 
 @Composable
 private fun LoadMoreOnNearEndEffect(
@@ -161,6 +183,7 @@ private fun LoadMoreOnNearEndEffect(
 @Composable
 fun KototoroContentListScreen(
     items: List<ListModel>,
+    pagingItems: LazyPagingItems<ListModel>? = null,
     listMode: ListMode,
     isRefreshing: Boolean,
     pullRefreshEnabled: Boolean = true,
@@ -192,8 +215,22 @@ fun KototoroContentListScreen(
     listState: LazyListState? = null,
     detailedListState: LazyListState? = null,
 ) {
-    val canLoadMore = remember(items, hasMoreItems) {
-        hasMoreItems && items.any { it is ContentListModel }
+    val itemCount = pagingItems?.itemCount ?: items.size
+    val pagingRefreshState = pagingItems?.loadState?.refresh
+    fun peekItem(index: Int): ListModel? = if (pagingItems == null) {
+        items.getOrNull(index)
+    } else {
+        runCatching { pagingItems.peek(index) }.getOrNull()
+    }
+    fun getItem(index: Int): ListModel? = if (pagingItems == null) {
+        items.getOrNull(index)
+    } else {
+        runCatching { pagingItems[index] }.getOrNull()
+    }
+    fun itemKey(index: Int): Any = peekItem(index)?.let { listModelComposeKey(it, index) }
+        ?: "paging_placeholder:$index"
+    val canLoadMore = remember(items, pagingItems?.itemCount, hasMoreItems) {
+        pagingItems == null && hasMoreItems && items.any { it is ContentListModel }
     }
     val context = LocalContext.current
     val defaultSecondaryAction: (Throwable) -> Unit = remember(context) {
@@ -245,7 +282,19 @@ fun KototoroContentListScreen(
             enabled = pullRefreshEnabled,
             indicatorTopInset = innerPadding,
         ) {
-            if (items.isEmpty() && !isRefreshing) {
+            if (itemCount == 0 && pagingRefreshState is LoadState.Loading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    KototoroLoadingIndicator()
+                }
+            } else if (itemCount == 0 && pagingRefreshState is LoadState.Error) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ErrorStateCard(
+                        item = pagingRefreshState.error.toErrorState(),
+                        onRetry = onRetry,
+                        onSecondaryAction = secondaryAction,
+                    )
+                }
+            } else if (itemCount == 0 && !isRefreshing) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
                             text = stringResource(R.string.nothing_found),
@@ -259,7 +308,9 @@ fun KototoroContentListScreen(
                         val posterStyle = compactPosterCardStyle(gridScale)
                         val actualGridState = gridState ?: rememberLazyGridState()
                         ScrollToTopEffect {
-                            actualGridState.scrollToItem(0)
+                            scrollToTopAfterPagingSettles(pagingItems) {
+                                actualGridState.scrollToItem(0)
+                            }
                         }
                         LoadMoreOnNearEndEffect(
                             state = actualGridState,
@@ -316,10 +367,10 @@ fun KototoroContentListScreen(
                                 }
 
                                 items(
-                                    count = items.size,
-                                    key = { index -> listModelComposeKey(items[index], index) },
+                                    count = itemCount,
+                                    key = ::itemKey,
                                     span = { index ->
-                                        val listModel = items[index]
+                                        val listModel = peekItem(index)
                                         if (listModel is ContentGridModel) {
                                             GridItemSpan(1)
                                         } else {
@@ -327,10 +378,10 @@ fun KototoroContentListScreen(
                                         }
                                     },
                                     contentType = { index ->
-                                        if (items[index] is ContentGridModel) "grid_card" else "supplementary"
+                                        if (peekItem(index) is ContentGridModel) "grid_card" else "supplementary"
                                     },
                                 ) { index ->
-                                    val listModel = items[index]
+                                    val listModel = getItem(index) ?: return@items
                                     if (listModel is ContentGridModel) {
                                         Box(
                                             modifier = Modifier.fillMaxWidth(),
@@ -376,7 +427,9 @@ fun KototoroContentListScreen(
                     ListMode.LIST -> {
                         val actualListState = listState ?: rememberLazyListState()
                         ScrollToTopEffect {
-                            actualListState.scrollToItem(0)
+                            scrollToTopAfterPagingSettles(pagingItems) {
+                                actualListState.scrollToItem(0)
+                            }
                         }
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
@@ -395,13 +448,13 @@ fun KototoroContentListScreen(
                                 }
                             }
                             items(
-                                count = items.size,
-                                key = { index -> listModelComposeKey(items[index], index) },
+                                count = itemCount,
+                                key = ::itemKey,
                                 contentType = { index ->
-                                    if (items[index] is ContentCompactListModel) "list_card" else "supplementary"
+                                    if (peekItem(index) is ContentCompactListModel) "list_card" else "supplementary"
                                 },
                             ) { index ->
-                                val listModel = items[index]
+                                val listModel = getItem(index) ?: return@items
                                 VerticalRailAnimatedVisibility(
                                     animationKey = listModelComposeKey(listModel, index),
                                     index = index,
@@ -443,7 +496,9 @@ fun KototoroContentListScreen(
                     ListMode.DETAILED_LIST -> {
                         val actualListState = detailedListState ?: rememberLazyListState()
                         ScrollToTopEffect {
-                            actualListState.scrollToItem(0)
+                            scrollToTopAfterPagingSettles(pagingItems) {
+                                actualListState.scrollToItem(0)
+                            }
                         }
                         LoadMoreOnNearEndEffect(
                             state = actualListState,
@@ -462,13 +517,13 @@ fun KototoroContentListScreen(
                                 }
                             }
                             items(
-                                count = items.size,
-                                key = { index -> listModelComposeKey(items[index], index) },
+                                count = itemCount,
+                                key = ::itemKey,
                                 contentType = { index ->
-                                    if (items[index] is ContentDetailedListModel) "detailed_card" else "supplementary"
+                                    if (peekItem(index) is ContentDetailedListModel) "detailed_card" else "supplementary"
                                 },
                             ) { index ->
-                                val listModel = items[index]
+                                val listModel = getItem(index) ?: return@items
                                 VerticalRailAnimatedVisibility(
                                     animationKey = listModelComposeKey(listModel, index),
                                     index = index,
@@ -518,7 +573,9 @@ fun KototoroContentListScreen(
             exit = slideOutVertically(targetOffsetY = { -it }),
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
-            val selectedModels = items.mapNotNull { it as? ContentListModel }.filter { it.id in selectedItemsIds }
+            val selectedModels = (pagingItems?.itemSnapshotList?.items ?: items)
+                .mapNotNull { it as? ContentListModel }
+                .filter { it.id in selectedItemsIds }
             val isAllNonLocal = selectedModels.none { it.manga.isLocal }
 
             KototoroSelectionTopBar(
@@ -1172,10 +1229,9 @@ private fun listModelComposeKey(
                 .ifBlank { listModel.title },
         )
         append(':')
-        append(index)
     }
-    is ListHeader -> "header:${listModel.hashCode()}:$index"
-    is QuickFilter -> "quick_filter:$index"
+    is ListHeader -> "header:${listModel.hashCode()}"
+    is QuickFilter -> "quick_filter"
     is InfoModel -> "info:${listModel.hashCode()}:$index"
     is EmptyState -> "empty_state:${listModel.hashCode()}:$index"
     is ErrorState -> "error_state:${listModel.hashCode()}:$index"

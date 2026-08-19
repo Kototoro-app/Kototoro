@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.paging.PagingSource
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -12,6 +13,66 @@ import kotlinx.coroutines.isActive
 
 @Dao
 abstract class WorkHistoryDao {
+
+	@Query(
+		"""
+		SELECT wh.*
+		FROM work_history wh
+		LEFT JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
+		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, wh.anchor_manga_id)
+		LEFT JOIN (
+			SELECT entity_id, SUM(chapters_new) AS new_chapters, MAX(last_chapter_date) AS last_chapter_date
+			FROM tracks
+			WHERE entity_id IS NOT NULL
+			GROUP BY entity_id
+		) tracking ON tracking.entity_id = wh.entity_id
+		WHERE wh.deleted_at = 0
+			AND (:applySpaceFilter = 0 OR (
+				EXISTS (
+					SELECT 1 FROM entity_binding eb
+					INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+					WHERE eb.entity_id = wh.entity_id
+						AND eb.source IN ('local_manga', '0')
+						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+						AND sm.content_type IN (:allowedTypes)
+						AND (:applySourceFilter = 0 OR sm.source IN (:allowedSources))
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM entity_binding eb
+					INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+					WHERE eb.entity_id = wh.entity_id
+						AND eb.source IN ('local_manga', '0')
+						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+						AND sm.content_type IN (:classifiedTypes)
+						AND sm.content_type NOT IN (:allowedTypes)
+				)
+			))
+		ORDER BY
+			CASE WHEN :orderName = 'LAST_READ' THEN wh.updated_at END DESC,
+			CASE WHEN :orderName = 'LONG_AGO_READ' THEN wh.updated_at END ASC,
+			CASE WHEN :orderName = 'NEWEST' THEN wh.created_at END DESC,
+			CASE WHEN :orderName = 'OLDEST' THEN wh.created_at END ASC,
+			CASE WHEN :orderName = 'PROGRESS' THEN wh.percent END DESC,
+			CASE WHEN :orderName = 'UNREAD' THEN wh.percent END ASC,
+			CASE WHEN :orderName = 'NEW_CHAPTERS' THEN tracking.new_chapters END DESC,
+			CASE WHEN :orderName IN ('NEW_CHAPTERS', 'UPDATED') THEN tracking.last_chapter_date END DESC,
+			CASE WHEN :orderName = 'ALPHABETIC' THEN m.title END COLLATE NOCASE ASC,
+			CASE WHEN :orderName = 'ALPHABETIC_REVERSE' THEN m.title END COLLATE NOCASE DESC,
+			CASE WHEN :orderName NOT IN (
+				'LAST_READ', 'LONG_AGO_READ', 'NEWEST', 'OLDEST', 'PROGRESS', 'UNREAD',
+				'NEW_CHAPTERS', 'UPDATED', 'ALPHABETIC', 'ALPHABETIC_REVERSE'
+			) THEN wh.updated_at END DESC,
+			wh.entity_id ASC
+		""",
+	)
+	abstract fun pagingSource(
+		orderName: String,
+		applySpaceFilter: Boolean,
+		allowedTypes: Collection<String>,
+		classifiedTypes: Collection<String>,
+		applySourceFilter: Boolean,
+		allowedSources: Collection<String>,
+	): PagingSource<Int, WorkHistoryEntity>
 
 	@Query(
 		"""

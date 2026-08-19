@@ -2,6 +2,7 @@ package org.skepsun.kototoro.tracker.domain
 
 import androidx.annotation.VisibleForTesting
 import androidx.room.withTransaction
+import androidx.paging.PagingSource
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -24,6 +25,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.mapItems
+import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.list.domain.ListFilterOption
@@ -67,13 +69,16 @@ class TrackingRepository @Inject constructor(
 
 	suspend fun getNewChaptersCounts(mangaIds: Collection<Long>): Map<Long, Int> {
 		if (mangaIds.isEmpty()) return emptyMap()
-		val anchorByRequestedId = mangaIds.distinct().associateWith { mangaId ->
-			resolvePersistableTrackAnchorMangaId(mangaId)
+		val distinctMangaIds = mangaIds.distinct()
+		val identitiesByMangaId = workResolver.resolveManyByMangaIds(distinctMangaIds)
+		val anchorByRequestedId = distinctMangaIds.associateWith { mangaId ->
+			val identity = identitiesByMangaId[mangaId]
+			identity?.preferredMangaId ?: identity?.localMangaIds?.firstOrNull() ?: mangaId
 		}
-		val countsByAnchorId = db.getTracksDao().findNewChapters(anchorByRequestedId.values.filterNotNull().distinct())
+		val countsByAnchorId = db.getTracksDao().findNewChapters(anchorByRequestedId.values.distinct())
 			.associate { it.mangaId to it.count }
 		return anchorByRequestedId.mapValues { (_, anchorId) ->
-			anchorId?.let(countsByAnchorId::get) ?: 0
+			countsByAnchorId[anchorId] ?: 0
 		}
 	}
 
@@ -114,6 +119,16 @@ class TrackingRepository @Inject constructor(
 					.mapNotNull { aggregate -> aggregate.toContentTracking() }
 			}.distinctUntilChanged()
 			.onStart { gcIfNotCalled() }
+	}
+
+	fun createUpdatedPagingSource(filterOptions: Set<ListFilterOption>): PagingSource<Int, ContentTracking> {
+		return BatchMappingPagingSource(
+			delegate = db.getTracksDao().pagingUpdatedContent(filterOptions),
+			diagnosticLabel = "updates-aggregate",
+		) { tracks ->
+			workAggregateRepository.buildTrackingAggregates(tracks)
+				.mapNotNull { aggregate -> aggregate.toContentTracking() }
+		}
 	}
 
 	fun observeAllTracks(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<ContentTracking>> {

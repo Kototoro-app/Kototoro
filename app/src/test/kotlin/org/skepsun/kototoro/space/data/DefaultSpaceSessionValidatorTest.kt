@@ -99,6 +99,11 @@ private class FakeWorkResolver(
 		)
 	}
 
+	override suspend fun resolveManyByEntityIds(entityIds: Collection<Long>): Map<Long, WorkIdentity> =
+		entityIds.mapNotNull { entityId ->
+			resolveByEntityId(entityId)?.let { entityId to it }
+		}.toMap()
+
 	override suspend fun resolveManyByMangaIds(mangaIds: Collection<Long>): Map<Long, WorkIdentity> = error("Not used")
 
 	override suspend fun resolveBindingsByEntityId(entityId: Long): List<EntityBinding> = error("Not used")

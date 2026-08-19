@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.lifecycle.ViewModel
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
@@ -1769,7 +1770,8 @@ internal fun HistoryTopLevelRouteContent(
             )
         }.getOrNull()
     }
-    val items by viewModel.content.collectAsStateWithLifecycle()
+    val historyPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
+    val items = historyPagingItems.itemSnapshotList.items
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
@@ -1931,6 +1933,7 @@ internal fun HistoryTopLevelRouteContent(
         org.skepsun.kototoro.history.ui.compose.HistoryScreen(
             contentPadding = contentPadding,
             items = items,
+            pagingItems = historyPagingItems,
             headerQuickFilter = headerQuickFilter,
             listMode = listMode,
             isRefreshing = false,
