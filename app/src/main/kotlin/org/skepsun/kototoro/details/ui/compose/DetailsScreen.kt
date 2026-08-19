@@ -5414,9 +5414,10 @@ private fun DetailsRelatedContentSection(
             contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
         ) {
             items(
-                items = items,
-                key = { "${it.source.name}:${it.id}:${it.manga.url}" },
-            ) { item ->
+                count = items.size,
+                key = { index -> "${items[index].source.name}:${items[index].id}:${items[index].manga.url}:$index" },
+            ) { index ->
+                val item = items[index]
                 KototoroContentCard(
                     model = item,
                     sharedTransitionEnabled = false,

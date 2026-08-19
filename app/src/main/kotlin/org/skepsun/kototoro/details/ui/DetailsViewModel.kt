@@ -3394,8 +3394,10 @@ class DetailsViewModel @Inject constructor(
 			?.let { db.getMangaDao().find(it)?.toContent() }
 			?: details?.toContent()?.takeUnless { it.isSyntheticEntityGraphContent() }
 		if (seed != null && settings.isRelatedContentEnabled) {
+			val related = relatedContentUseCase(seed).orEmpty()
+				.distinctBy { "${it.source.name}:${it.id}:${it.url}" }
 			mangaListMapper.toListModelList(
-				manga = relatedContentUseCase(seed).orEmpty(),
+				manga = related,
 				mode = ListMode.GRID,
 			)
 		} else {
