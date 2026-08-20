@@ -107,7 +107,7 @@ class DeleteReadChaptersUseCaseTest {
 			percent = 1f,
 			chaptersCount = 3
 		)
-		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+		coEvery { localContentRepository.getAll() } returns listOf(manga)
 
 		// Act
 		val deletedCount = useCase.invoke()
@@ -137,7 +137,7 @@ class DeleteReadChaptersUseCaseTest {
 			percent = 1f,
 			chaptersCount = 3
 		)
-		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+		coEvery { localContentRepository.getAll() } returns listOf(manga)
 
 		// Act
 		val deletedCount = useCase.invoke()
@@ -188,7 +188,7 @@ class DeleteReadChaptersUseCaseTest {
 			chaptersCount = 3
 		)
 		coEvery { db.getChaptersDao().findAll(100L) } returns dbChapters
-		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+		coEvery { localContentRepository.getAll() } returns listOf(manga)
 
 		// Act
 		val deletedCount = useCase.invoke()
@@ -257,7 +257,7 @@ class DeleteReadChaptersUseCaseTest {
 			percent = 1f,
 			chaptersCount = 2
 		)
-		coEvery { localContentRepository.getList(0, null, null) } returns listOf(manga)
+		coEvery { localContentRepository.getAll() } returns listOf(manga)
 		coEvery { localContentRepository.findSavedContent(manga) } returns localContent
 
 		// Act
