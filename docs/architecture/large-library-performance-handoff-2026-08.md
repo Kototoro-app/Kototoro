@@ -1,8 +1,8 @@
 # 大数据列表性能优化交接文档
 
-> 状态：Phase 1 已完成并验证；Phase 2 暂缓。  
-> 最后更新：2026-08-19  
-> 工作树：`/Users/sunchuxiong/kotatsu_demo/Kototoro`  
+> 状态：Phase 1 已完成并验证；收藏“冲刷”缺陷已修复（2026-08-20）；Phase 2 部分项已提前落地（见第 6 节标注）。
+> 最后更新：2026-08-20
+> 工作树：`/Users/sunchuxiong/kotatsu_demo/Kototoro`
 > 文档编写时：尚未执行 `git commit`、`git push` 或分支操作；没有卸载应用或清理用户数据。之后的提交须以用户明确授权为前提。
 
 ## 1. 背景与目标
@@ -138,21 +138,145 @@ Illegal attempt to access index 64 in ItemSnapshotList of size 64
 - 更新页普通查询的手写 limit 已不再固定为 200，扩容参数可以真正传入查询。
 - Feed 和更新页部分 preferred projection resolve 已改为批量 `resolveManyByEntityIds`。
 
+### 2.5 修复：失效刷新把已加载收藏“冲刷”掉（2026-08-20）
+
+#### 现象
+
+大量收藏（5000+）且任一页内有行被过滤时（离线自动生效的 Downloaded 快速筛选、SFW/NSFW 隐藏、黑名单、group/source tag、分类、preset 均会触发），即使停止滚动，当前已加载/可见的收藏也可能被“其他收藏”替换。
+
+#### 根因
+
+- 分页链路是 `Room LIMIT/OFFSET 位置源 -> BatchMappingPagingSource(逐页批量映射 + 过滤) -> ViewModel Pager`。
+- Room 生成的位置源工作在 **raw 行空间**；`transform` 过滤/扩展后，输出页是 **映射后（可见）空间**，两者不再 1:1。
+- 旧实现 `getRefreshKey(state) = anchorPosition` 把“可见位置”直接当作 raw offset 交给新源。
+- 设备实测 `entity_preferences` 会周期性被后台写入（2026-08-20 02:50 有写入；生成代码 `WorkFavouritesDao_Impl` 确认 `pagingSource` 监听 `work_favourites / entity_preferences / manga / work_history / tracks / entity_binding` 六表失效）。用户静止时也会发生 Room 失效 ➜ Paging 重建源并按错误 key 发起 `Refresh` ➜ 重新加载到**另一个 raw 区间**，可见收藏被完全不同的行替换。
+- 复现（JVM 集成测试）：过滤掉一半行的 9800 行库，anchor 在输出 3000；刷新后同一行从输出 3000 跳到 1500（恰为筛选密度偏差），即“冲刷”。修复后重载窗口起点落在 anchor 的 raw 邻域。
+
+#### 修复
+
+`core/paging/BatchMappingPagingSource.kt` 的 `getRefreshKey` 不再返回裸 `anchorPosition`：
+
+```kotlin
+override fun getRefreshKey(state: PagingState<Int, Output>): Int? {
+	val anchorPosition = state.anchorPosition ?: return null
+	val anchorPage = state.closestPageToPosition(anchorPosition)
+	return anchorPage?.prevKey
+}
+```
+
+- `PagingState.closestPageToPosition()` 在“映射后”空间按各页 `data.size` 累加，定位 anchor 所在页；该页 `prevKey/nextKey` 本就是 delegate 的 raw offset，可直接交给 Room 源重载正确的 raw 窗口。
+- anchor 落在第一页时 `prevKey=null`，退化为从顶部重载，语义正确。
+- 无过滤（1:1）与过滤（非 1:1）两种情况都由该实现覆盖，不依赖额外状态或扫描。
+
+#### 验证
+
+- 新增 JVM 测试（走真实 `Pager` + `paging-testing` 的 `asSnapshot` / `scrollTo` / `refresh`）：
+  - `refresh after background invalidation keeps the visible rows instead of washing them out`：过滤一半的 9800 行库，滚到 3000 后 `refresh()`，断言 anchor 行仍在且重载窗口起点位于 anchor 邻域（`>= anchorRaw - 512`）。修复前红（窗口从 raw 3000 起，整段错位）。
+  - `unfiltered paging keeps its exact position after a background refresh`：1:1 场景不回归（窗口从 anchor 所在页边界起）。
+  - 既有顺序/唯一性/预取窗口测试保持绿。
+- 命令：
+
+```bash
+./gradlew :app:testDebugUnitTest --tests "org.skepsun.kototoro.core.paging.*" --no-daemon
+./gradlew :app:compileDebugKotlin --no-daemon
+```
+
+### 2.6 修复：读路径写库引发的持续失效/刷新风暴（2026-08-20，冲刷的第二根源）
+
+2.5 只修了“失效后按错误 key 重载到别的窗口”。同一天设备日志（`LibraryPaging` 12:37/12:46 采样）显示**用户静止时仍在连续刷新**：18 秒内 52 个事件（aggregate + ui 双层各 Append/Refresh），aggregate 层每 ~200~700ms 一次 Refresh；同时 `entity_preferences` 表持续被写入（12:39 拉取 423 行 -> 12:46 457 行 -> 12:53 596 行，每 1~10ms 一条、全是收藏且 `preferred_local_manga_id=NULL` 的新行，主键严格递增）。
+
+根因是 `core/parser/ContentDataRepository.kt` 的读取助手 `findEntityPrefsForMangaId()` 带写副作用：
+
+```kotlin
+// before
+dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))  // READ 路径里写库！
+return dao.findEntityPrefs(entityId)
+```
+
+`getOverride / getMetadataSourceSelection / getReadingStatus / findPreferredLocalContentById` 等**读取**路径只要遇到没有 preferences 行的 entity 就 `INSERT OR IGNORE` 一行。而生成的收藏分页源监听 `entity_preferences` 失效，于是形成自激循环：
+
+> 读 -> 缺行则 INSERT -> Room 失效收藏分页源 -> Refresh 重映射 -> 又遇到新缺行的 entity -> 再 INSERT -> 再失效……
+
+虽然 `insertEntityPrefsIgnore` 是 `ON CONFLICT IGNORE`（对已有行是 no-op），但“刷新走到新窗口/新 entity”会让缺行集合不断变动，风暴持续数小时不收敛，直接表现为已加载的收藏被反复“冲刷”。
+
+修复：让读取路径纯读，行由显式写路径（`setReadingStatus / setOverride / setMetadataSourceSelection`）在真正需要时创建：
+
+```kotlin
+// after
+return dao.findEntityPrefs(entityId)
+```
+
+安全性：所有读取方在返回 `null` 时都已有 legacy `preferences` 回退（`getOverride`、`getMetadataSourceSelection`、`getReadingStatus`、`findPreferredLocalContentById`），写路径也都有 `entityPrefs == null` 的 else 分支，因此移除背填不改变语义；同时 `observeReadingStatus` 的 `createFlow(entity_preferences,...)` 也不再被读路径反复触发。
+
+#### 验证（设备）
+
+- 重装修复版后 `entity_preferences` 完全停止增长：主库+WAL 完整快照 count=596 且最新 `updated_at`=12:53:46 CST（早于 12:56 重装）；此前是数小时每分钟 +10~24 行。
+- 静止 40 秒 `LibraryPaging` 事件 **0 条**（修复前同窗口 52 条）。
+- 单元测试保持全绿（含 2.5 的新增用例）。
+
+### 2.7 冲刷修复的最终判定与复测建议
+
+- 2.5（正确 raw 刷新 key）+ 2.6（读取不再写库）共同构成完整修复；缺任一都会复发。
+- 设备复测（人工，锁屏状态下由用户完成）：
+  - 前提必须带**过滤**（如断网触发 Downloaded 快速筛选，或开 SFW/NSFW、黑名单等），且停在列表**中部**（如第 3000 项附近）静止 1~2 分钟——只测“到底部”或 1:1 无过滤场景无法暴露旧病。
+  - 判定：已加载的收藏保持不动；`adb logcat -s LibraryPaging:D '*:S'` 在静止时应几乎无 Refresh 事件；`entity_preferences` 行数不再增长。
+
+### 2.8 修复：恢复 Kototoro 备份后分组全部丢失（2026-08-20）
+
+#### 现象
+
+从 Kototoro 自己的备份恢复（SNAPSHOT_REPLACE）后，收藏都回来了，但所有自定义分组消失，只剩「全部收藏」。
+
+#### 根因
+
+§6.6 的「逐节先清后写」恢复重构后，`clearRestoreTargets(sections, actOn)` 中 `FAVOURITES`（旧收藏）节的清表逻辑错误地连带删除了分组表：
+
+```kotlin
+// before
+if (BackupSection.FAVOURITES in actOn) {
+    database.getFavouritesDao().clear()
+    database.getFavouriteCategoriesDao().deleteAll()   // 误删所有分组
+}
+```
+
+Kototoro 备份的恢复顺序：`CATEGORIES` 是主循环节（先恢复，日志 `CATEGORIES processed=25 failures=0`），`FAVOURITES` 是延迟节（Kototoro 格式该节 payload 为空 `count=0`）。延迟循环轮到 `FAVOURITES` 时仍对 `actOn={FAVOURITES}` 调用 `clearRestoreTargets`，把刚恢复的 25 个分组 `deleteAll` 清光，随后 `WORK_FAVOURITES` 恢复的 339 条收藏引用 1–25 但分组行已不存在 → 只剩默认「全部收藏」。
+
+#### 修复
+
+分组表只归 `CATEGORIES` 节自己清理，`FAVOURITES` 只清旧 favorites 表：
+
+```kotlin
+// after
+if (BackupSection.CATEGORIES in actOn) {
+    database.getFavouriteCategoriesDao().deleteAll()
+}
+if (BackupSection.FAVOURITES in actOn) {
+    database.getFavouritesDao().clear()
+}
+```
+
+#### 验证
+
+- 新增 androidTest 回归 `snapshotReplaceRestoreKeepsFavouriteCategories`（`RestoreCheckpointTest`）：seed 分组+收藏 → 导出 → SNAPSHOT_REPLACE 恢复 → 断言分组存在且收藏引用恢复后的分组 id。修复前必红（分组表被 FAVOURITES 节清空）。
+- 代码路径证据：`CATEGORIES processed=25 failures=0` 后、`WORK_FAVOURITES processed=339` 前的三秒间隙里，正是一次 `deferred FAVOURITES` 的 `clearRestoreTargets`（日志 13:26:58.371）执行了 `deleteAll`；恢复后 DB 快照 `favourite_categories` 0 行、`work_favourites` 全引用 1–25。
+
 ## 3. 当前工作树的真实状态
 
-当前工作树包含本任务的未提交改动，另有新建的 Paging 测试目录。不要使用 `git reset --hard`、`git checkout --` 或批量清理来“整理”工作树；已有修改均属于本任务上下文，必须先阅读再继续。
+交接时的工作树改动已全部提交并推送至 `devel`。之后的提交（时间序）：
+
+- `c141c9a00 perf: optimize large library paging` —— 本交接对应的主体改动（`BatchMappingPagingSource`、收藏/历史 Paging DAO、两个 ViewModel 与本文档）。
+- `4e172b3a5 feat(updates): wire real entity-level Paging with date separators and merged groups` —— 更新页真正 Paging 落地（第 6.1 条完成）。
+- `3dad48ec4 test(paging): add large-library benchmarks and repair legacy androidTest suite` —— 新增 `WorkPagingDaoTest` 等大规模夹具基准。
+- `4b9e2cedf perf(local): read local library from database with offset paging` —— 本地页部分落地（第 6.5 条完成大半）。
+- `eb30f7f60 + 37ad97a33 feat(backup): resumable restore via per-section chunk checkpoint` —— 恢复分块断点续传（第 6.6 条完成）。
+- `b0f05361b fix appbackupagenttest` —— 当前 HEAD，修复 `AppBackupAgentTest`。
+
+仍不要使用 `git reset --hard`、`git checkout --` 或批量清理来“整理”工作树。
 
 本轮最后新增的收藏预取改动：
 
-- `core/paging/BatchMappingPagingSource.kt`：新增 `FavouriteLibraryPagingConfig`，`prefetchDistance=128`。
+- `core/paging/BatchMappingPagingSource.kt`：新增 `FavouriteLibraryPagingConfig`（`prefetchDistance=128`）；随后又修复了失效刷新把已加载收藏“冲刷”掉的问题（见 2.5）。
 - `favourites/ui/list/FavouritesListViewModel.kt`：收藏 Pager 使用该配置。
-
-更新页 Paging 目前处于“基础设施已写入、ViewModel 尚未接通”的中间状态：
-
-- `TracksDao` 已新增动态 raw-query `PagingSource<Int, TrackEntity>` 入口 `pagingUpdatedContent(...)`。
-- `TrackingRepository` 已新增 `createUpdatedPagingSource(...)`，按页批量构建 `ContentTracking`。
-- `UpdatesViewModel` 仍主要使用旧的 `Flow<List<ContentTracking>> + limit` UI 路径，尚未把上述 source 接入 `Pager<PagingData<ListModel>>`。
-- 因此不能在交接时宣称“更新页 Paging 已完成”。继续开发前先补 ViewModel、日期 separator、空状态和映射缓存测试。
 
 ## 4. 设备与日志证据
 
@@ -230,7 +354,9 @@ Komikku 类应用可能采用的是另一种策略：一次读取轻量、扁平
 
 ### 6.1 更新页真正 Paging
 
-建议继续顺序：
+> ✅ 已落地（2026-08-19，commit `4e172b3a5`）：`UpdatesViewModel` 已接入 `Pager(PagingData<ListModel>)`，日期 separator（`insertSeparators` 方式）与 merged groups 已实现，配套 `UpdatesPagingTest` 覆盖首批/append 唯一 entity 与跨页 separator。以下为当初的建议顺序，供回顾：
+
+建议继续顺序（历史记录）：
 
 1. 在 `UpdatesViewModel` 建立包含 filter、group tab、source tags、grouping、list mode、Space 的稳定参数对象。
 2. 使用 `Pager(config = LargeLibraryPagingConfig)` 和 `repository.createUpdatedPagingSource(...)`。
@@ -279,6 +405,8 @@ Feed 日志规模约 120 条，当前保持普通有界 Flow 是合理的。只�
 
 ### 6.5 本地页
 
+> 🟡 部分落地（2026-08-20，commit `4b9e2cedf`）：本地库改为从数据库按 offset 分页读取（`perf(local): read local library from database with offset paging`）。文件系统扫描是否只作为索引缺失时的后台修复路径仍未最终确认。
+
 原始计划要求让 `local_index` 成为读取主路径，避免每次扫描文件系统。本轮没有扩散处理本地页。后续应先确认：
 
 - local_index 的写入、失效和恢复时机；
@@ -287,7 +415,7 @@ Feed 日志规模约 120 条，当前保持普通有界 Flow 是合理的。只�
 
 ### 6.6 恢复分块进度
 
-恢复任务的分块进度、断点续传和大备份事务边界仍未处理。不要把备份恢复改动与列表 Paging 混在同一轮中；需要单独设计可恢复 checkpoint、幂等写入和进度 UI。
+> ✅ 已落地（2026-08-20，commit `eb30f7f60` + `37ad97a33`）：按 section 分块的断点续传 checkpoint、幂等写入与进度 UI 已实现，并有 `restore` 相关测试覆盖。
 
 ## 7. 测试与验证记录
 
@@ -299,17 +427,27 @@ Feed 日志规模约 120 条，当前保持普通有界 Flow 是合理的。只�
   --tests "org.skepsun.kototoro.history.ui.HistoryListViewModelPagingTest" \
   --tests "org.skepsun.kototoro.work.domain.WorkAggregateSpaceQueryTest"
 
+./gradlew :app:testDebugUnitTest --no-daemon \
+  --tests "org.skepsun.kototoro.core.paging.*" \
+  --tests "org.skepsun.kototoro.history.ui.HistoryListViewModelPagingTest" \
+  --tests "org.skepsun.kototoro.tracker.ui.updates.UpdatesPagingTest"
+
 ./gradlew :app:compileDebugKotlin --no-daemon
 ./gradlew :app:assembleDebug --no-daemon
 git diff --check
 ```
 
-最近一次结果：
+最近一次结果（2026-08-20）：
+
+- `:app:compileDebugKotlin`：`BUILD SUCCESSFUL`。
+- `core.paging.*` + 历史/更新页 Paging 聚焦测试：`BUILD SUCCESSFUL`（`BatchMappingPagingSourceTest` 新增两条失效刷新回归测试后 10/10 通过）。
+- `git diff --check`：通过。
+
+历史结果（交接当天）：
 
 - `:app:compileDebugKotlin`：`BUILD SUCCESSFUL`。
 - 聚焦单元测试：`BUILD SUCCESSFUL`。
 - `:app:assembleDebug`：`BUILD SUCCESSFUL`。
-- `git diff --check`：通过。
 - APK：`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`。
 - 安装：`adb -s ecd4369c install -r "app/build/outputs/apk/debug/app-arm64-v8a-debug.apk"`，成功。
 
@@ -321,11 +459,8 @@ git diff --check
 
 仍缺少的覆盖：
 
-- 收藏 `FavouriteLibraryPagingConfig` 的预取行为测试；
-- 更新页 Paging 首批/append 唯一 entity 测试；
-- 更新日期 separator 跨页不重复测试；
 - 过滤后页为空时的 UI 状态测试；
-- 真实 6500 收藏/3200 历史生成夹具下的首屏耗时和滚动基准。
+- 真实设备上“后台失效刷新不再冲刷已加载收藏”的人工复测（锁屏设备暂无法注入滑动，见 2.5）。
 
 ## 8. 接手者操作顺序
 
