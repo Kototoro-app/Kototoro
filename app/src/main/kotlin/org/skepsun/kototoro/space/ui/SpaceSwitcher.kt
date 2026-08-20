@@ -78,6 +78,7 @@ import java.text.BreakIterator
 import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
+import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -539,6 +540,7 @@ private fun rememberSidekickCoverRequest(resumeItem: SpaceResumeItem?): ImageReq
 				.apply { mangaExtra(it) }
 				.diskCachePolicy(CachePolicy.READ_ONLY)
 				.networkCachePolicy(CachePolicy.DISABLED)
+				.crossfade(true)
 				.build()
 		}
 	}

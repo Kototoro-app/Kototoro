@@ -212,11 +212,14 @@ class SpaceSwitcherDelegate @Inject constructor(
 			if (!transitionState.isVisible) pendingRevealTarget = null
 		}
 		Box(modifier = modifier.fillMaxSize()) {
+			// Keep the resume catalog warm while the switcher is hidden: the panel
+			// closes during a space switch, and restarting the flow on every reopen
+			// blanked every card cover for a frame before AsyncImage decoded.
+			val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
+			val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
 			if (switcherVisible) {
 				val activity = activity ?: return@Box
 				val switchState by coordinator.state.collectAsState()
-				val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
-				val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
 				SpaceSidekick(
 					state = SpaceUiState(
 						activeSpaceId = activeSpaceId,
