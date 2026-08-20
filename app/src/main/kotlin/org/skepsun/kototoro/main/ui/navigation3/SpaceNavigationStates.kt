@@ -6,14 +6,11 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 
 @Stable
 class SpaceNavigationState internal constructor(
-	val navController: NavHostController,
 	val mainNavState: MainNavState,
 )
 
@@ -65,10 +62,8 @@ private fun rememberSpaceNavigationState(
 	initialTopLevel: TopLevelNavKey,
 ): SpaceNavigationState {
 	val mainNavState = rememberMainNavState(initialTopLevel)
-	val navController = rememberNavController()
-	return remember(navController, mainNavState) {
+	return remember(mainNavState) {
 		SpaceNavigationState(
-			navController = navController,
 			mainNavState = mainNavState,
 		)
 	}

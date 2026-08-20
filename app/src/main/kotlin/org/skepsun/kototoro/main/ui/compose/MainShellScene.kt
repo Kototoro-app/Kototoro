@@ -18,11 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.toRoute
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -42,31 +37,20 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
-import org.skepsun.kototoro.favourites.ui.migration.compose.EntityOrganizeScreen
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
+import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.core.nav.router
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Rect
 import androidx.fragment.app.FragmentActivity
-import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavDestination
-import androidx.navigation.NavDestination.Companion.hasRoute
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.compose.SearchResultsRoute
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -108,7 +92,7 @@ import org.skepsun.kototoro.main.ui.navigation3.MainNavigator
 import org.skepsun.kototoro.main.ui.navigation3.MainNavKey
 import org.skepsun.kototoro.main.ui.navigation3.MainNavState
 import org.skepsun.kototoro.main.ui.navigation3.MainTopLevelNavDisplay
-import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.MainStateNavigator
 import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
 import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
 import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
@@ -151,34 +135,6 @@ private inline fun <reified VM> spaceBoundHiltViewModel(owner: String): VM
     return viewModel
 }
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.isMainRouteTransition(): Boolean {
-    return initialState.destination.isMainRoute() && targetState.destination.isMainRoute()
-}
-
-private fun NavDestination.isImmersiveRoute(): Boolean {
-    return hasRoute<DetailsRoute>() || hasRoute<ContentListRoute>()
-}
-
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
-    if (initialState.destination.isImmersiveRoute() && targetState.destination.isMainRoute()) {
-        return slideIntoContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Right,
-            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-        ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
-    }
-    return EnterTransition.None
-}
-
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeOut(): ExitTransition {
-    if (initialState.destination.isMainRoute() && targetState.destination.isImmersiveRoute()) {
-        return slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Left,
-            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-        ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
-    }
-    return ExitTransition.None
-}
-
 @Composable
 private fun MainRouteScene(
     landscapeStartPadding: androidx.compose.ui.unit.Dp,
@@ -200,29 +156,6 @@ private fun MainRouteScene(
     }
 }
 
-internal interface FavoritesEntityOrganizeResultSource {
-    val refreshSignals: kotlinx.coroutines.flow.StateFlow<Boolean>
-    val messageSignals: kotlinx.coroutines.flow.StateFlow<String?>
-
-    fun consumeRefresh(): Boolean
-
-    fun consumeMessage(): String?
-}
-
-internal class SavedStateHandleFavoritesEntityOrganizeResultSource(
-    private val savedStateHandle: androidx.lifecycle.SavedStateHandle,
-) : FavoritesEntityOrganizeResultSource {
-    override val refreshSignals: kotlinx.coroutines.flow.StateFlow<Boolean> =
-        savedStateHandle.getStateFlow(ENTITY_ORGANIZE_RESULT_REFRESH_KEY, false)
-
-    override val messageSignals: kotlinx.coroutines.flow.StateFlow<String?> =
-        savedStateHandle.getStateFlow(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY, null)
-
-    override fun consumeRefresh(): Boolean = consumeEntityOrganizeRefreshResult(savedStateHandle)
-
-    override fun consumeMessage(): String? = consumeEntityOrganizeMessageResult(savedStateHandle)
-}
-
 private const val TOP_BAR_OWNER_DISCOVER = "discover"
 private const val TOP_BAR_OWNER_HISTORY = "history"
 private const val TOP_BAR_OWNER_FAVORITES = "favorites"
@@ -231,49 +164,39 @@ private const val TOP_BAR_OWNER_FEED = "feed"
 private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
-private fun NavDestination.isMainRoute(): Boolean =
-    hasRoute<MainShellRoute>()
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavGraph(
-    navController: NavHostController,
-    startDestination: Any = MainShellRoute,
+fun MainShellScene(
+    mainNavState: MainNavState,
+    shellBackdropOwnerKey: String,
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(0.dp),
     bottomBarOffsetPx: Float = 0f,
     bottomBarHeightPx: Int = 0,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper? = null,
     modifier: Modifier = Modifier,
     mainShellChrome: @Composable BoxScope.() -> Unit = {},
-    routeFab: @Composable BoxScope.() -> Unit = {},
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit = {},
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit = {},
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
     onDetailsTransitionRequested: () -> Unit = {},
-    onDetailsReturnTransitionRequested: () -> Unit = {},
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     isLandscapeNavigation: Boolean = false,
-    mainNavState: MainNavState? = null,
-    suppressNavigationTransitions: Boolean = false,
     detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
 ) {
     val activity = LocalContext.current as FragmentActivity
     val appRouter = activity.router
     val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
-    val currentBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = currentBackStackEntry?.destination
-    val isMainShellRouteVisible = currentDestination?.hasRoute<MainShellRoute>() == true &&
-        mainNavState?.currentStack()?.lastOrNull() is org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
+    val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey
     val density = LocalDensity.current
     val landscapeStartPadding = if (isLandscapeNavigation) {
         with(density) { bottomBarHeightPx.toDp() }
     } else {
         0.dp
     }
-    val mainNavigator: MainNavigator = remember(navController, mainActivity, mainNavState, onDetailsTransitionRequested) {
-        NavControllerMainNavigator(
-            navController = navController,
+    val mainNavigator: MainNavigator = remember(mainActivity, mainNavState, onDetailsTransitionRequested) {
+        MainStateNavigator(
             mainActivity = mainActivity,
             mainNavState = mainNavState,
             onDetailsTransitionRequested = onDetailsTransitionRequested,
@@ -290,106 +213,11 @@ fun AppNavGraph(
         }
     }
 
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        modifier = modifier,
-        enterTransition = { if (suppressNavigationTransitions) EnterTransition.None else mainRouteFadeIn() },
-        exitTransition = { if (suppressNavigationTransitions) ExitTransition.None else mainRouteFadeOut() },
-        popEnterTransition = { if (suppressNavigationTransitions) EnterTransition.None else mainRouteFadeIn() },
-        popExitTransition = { if (suppressNavigationTransitions) ExitTransition.None else mainRouteFadeOut() },
-    ) {
-        composable<MainShellRoute> { backStackEntry ->
-            MainShellRouteContent(
-                animatedVisibilityScope = this@composable,
-                backStackEntry = backStackEntry,
-                navController = navController,
-                activity = activity,
-                mainActivity = mainActivity,
-                appRouter = appRouter,
-                rootView = rootView,
-                contentPadding = contentPadding,
-                landscapeStartPadding = landscapeStartPadding,
-                bottomBarOffsetPx = bottomBarOffsetPx,
-                bottomBarHeightPx = bottomBarHeightPx,
-                pageSaveHelper = pageSaveHelper,
-                isLandscapeNavigation = isLandscapeNavigation,
-                mainNavigator = mainNavigator,
-                mainNavState = checkNotNull(mainNavState) {
-                    "MainShellRoute requires MainNavState"
-                },
-                detailsTransitionStyle = detailsTransitionStyle,
-                isRouteVisible = isMainShellRouteVisible,
-                onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
-                onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                onOpenSearch = onOpenSearch,
-                navigateToDetailsWithContent = navigateToDetailsWithContent,
-                navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                mainShellChrome = mainShellChrome,
-                routeFab = routeFab,
-            )
-        }
-        composable<EntityOrganizeRoute> { backStackEntry ->
-            val route = backStackEntry.toRoute<EntityOrganizeRoute>()
-            val initialSelectedIds = remember(route.selectedContentIds) {
-                parseEntityOrganizeSelection(route.selectedContentIds)
-            }
-            EntityOrganizeScreen(
-                initialSelectedContentIds = initialSelectedIds,
-                onBack = { shouldRefreshFavorites, message ->
-                    navController.previousBackStackEntry?.savedStateHandle?.set(
-                        ENTITY_ORGANIZE_RESULT_REFRESH_KEY,
-                        shouldRefreshFavorites,
-                    )
-                    navController.previousBackStackEntry?.savedStateHandle?.set(
-                        ENTITY_ORGANIZE_RESULT_MESSAGE_KEY,
-                        message,
-                    )
-                    navController.navigateUp()
-                },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun MainShellRouteContent(
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    backStackEntry: NavBackStackEntry,
-    navController: NavHostController,
-    activity: FragmentActivity,
-    mainActivity: MainActivity?,
-    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
-    rootView: android.view.View,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues,
-    landscapeStartPadding: androidx.compose.ui.unit.Dp,
-    bottomBarOffsetPx: Float,
-    bottomBarHeightPx: Int,
-    pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper?,
-    isLandscapeNavigation: Boolean,
-    mainNavigator: MainNavigator,
-    mainNavState: MainNavState,
-    detailsTransitionStyle: ListToDetailsTransition,
-    isRouteVisible: Boolean,
-    onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit,
-    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
-    onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
-    onOpenSearch: (SearchNavigationRequest) -> Unit,
-    navigateToDetailsWithContent: (Content, String?) -> Unit,
-    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
-    routeFab: @Composable BoxScope.() -> Unit,
-    mainShellChrome: @Composable BoxScope.() -> Unit,
-) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
-        SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
-    }
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = modifier) {
         val useLiquidGlass = LocalInterfaceStyle.current == InterfaceStyle.IOS
         RouteLiquidGlassBackdrop(
-            ownerKey = backStackEntry.id,
-            active = isRouteVisible,
+            ownerKey = shellBackdropOwnerKey,
+            active = isMainShellRouteVisible,
         ) { layerBackdrop ->
             Box(modifier = Modifier.fillMaxSize()) {
                 MainRouteScene(
@@ -406,7 +234,7 @@ internal fun MainShellRouteContent(
                     MainTopLevelNavDisplay(
                         navState = mainNavState,
                         modifier = Modifier.fillMaxSize(),
-                        sharedTransitionScope = sharedTransitionScope,
+                        sharedTransitionScope = LocalSharedTransitionScope.current,
                         detailsTransitionStyle = detailsTransitionStyle,
                     ) { key ->
                         CompositionLocalProvider(
@@ -414,29 +242,26 @@ internal fun MainShellRouteContent(
                             LocalLiquidGlassLayerBackdrop provides null,
                         ) {
                             MainShellTopLevelEntryContent(
-                            key = key,
-                            mainNavState = mainNavState,
-                            navController = navController,
-                            activity = activity,
-                            mainActivity = mainActivity,
-                            appRouter = appRouter,
-                            rootView = rootView,
-                            contentPadding = contentPadding,
-                            bottomBarOffsetPx = bottomBarOffsetPx,
-                            bottomBarHeightPx = bottomBarHeightPx,
-                            pageSaveHelper = pageSaveHelper,
-                            isLandscapeNavigation = isLandscapeNavigation,
-                            mainNavigator = mainNavigator,
-                            isRouteVisible = isRouteVisible &&
-                                mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
-                            entityOrganizeResultSource = entityOrganizeResultSource,
-                            onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
-                            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                            onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                            onOpenSearch = onOpenSearch,
-                            navigateToDetailsWithContent = navigateToDetailsWithContent,
-                            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                            routeFab = routeFab,
+                                key = key,
+                                mainNavState = mainNavState,
+                                activity = activity,
+                                mainActivity = mainActivity,
+                                appRouter = appRouter,
+                                rootView = rootView,
+                                contentPadding = contentPadding,
+                                bottomBarOffsetPx = bottomBarOffsetPx,
+                                bottomBarHeightPx = bottomBarHeightPx,
+                                pageSaveHelper = pageSaveHelper,
+                                isLandscapeNavigation = isLandscapeNavigation,
+                                mainNavigator = mainNavigator,
+                                isRouteVisible = isMainShellRouteVisible &&
+                                    mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
+                                onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
+                                onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
+                                onContextualMenuActionsChanged = onContextualMenuActionsChanged,
+                                onOpenSearch = onOpenSearch,
+                                navigateToDetailsWithContent = navigateToDetailsWithContent,
+                                navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                             )
                         }
                     }
@@ -446,9 +271,7 @@ internal fun MainShellRouteContent(
                     LocalLiquidGlassBackdrop provides layerBackdrop,
                     LocalLiquidGlassLayerBackdrop provides layerBackdrop,
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        routeFab()
-                    }
+                    Box(modifier = Modifier.fillMaxSize()) {}
                 }
             }
         }
@@ -459,7 +282,6 @@ internal fun MainShellRouteContent(
 private fun MainShellTopLevelEntryContent(
     key: MainNavKey,
     mainNavState: MainNavState,
-    navController: NavHostController,
     activity: FragmentActivity,
     mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
@@ -471,14 +293,12 @@ private fun MainShellTopLevelEntryContent(
     isLandscapeNavigation: Boolean,
     mainNavigator: MainNavigator,
     isRouteVisible: Boolean,
-    entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
-    routeFab: @Composable BoxScope.() -> Unit,
 ) {
     val animatedVisibilityScope = checkNotNull(LocalNavAnimatedVisibilityScope.current) {
         "MainShellTopLevelEntryContent requires LocalNavAnimatedVisibilityScope"
@@ -486,7 +306,6 @@ private fun MainShellTopLevelEntryContent(
     when (key) {
         org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            navController = navController,
             activity = activity,
             mainActivity = mainActivity,
             appRouter = appRouter,
@@ -525,7 +344,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey -> FavoritesTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            entityOrganizeResultSource = entityOrganizeResultSource,
             mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
@@ -638,7 +456,6 @@ private fun MainShellTopLevelEntryContent(
                             KototoroLoadingIndicator()
                         }
                     }
-                    routeFab()
                 }
             }
         }
@@ -713,7 +530,6 @@ private fun MainShellTopLevelEntryContent(
                             },
                         )
                     }
-                    routeFab()
                 }
             }
         }
@@ -798,7 +614,6 @@ private fun MainShellTopLevelEntryContent(
                             isPickMode = false,
                         )
                     }
-                    routeFab()
                 }
             }
         }
@@ -808,7 +623,6 @@ private fun MainShellTopLevelEntryContent(
 @Composable
 internal fun HomeTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    navController: NavHostController,
     activity: FragmentActivity,
     mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
@@ -841,14 +655,14 @@ internal fun HomeTopLevelRouteContent(
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity.window.decorView.rootView
         val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, resolver, null)
         viewModel.onError.collect { event ->
             event?.consume(observer)
         }
     }
 
     DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
                 org.skepsun.kototoro.home.ui.HomeContentTab.MANGA -> BrowseGroupTab.Content
                 org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL -> BrowseGroupTab.Novel
@@ -1041,7 +855,7 @@ internal fun BrowseTopLevelRouteContent(
     }
 
     DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
             override fun onContentTypeSelected(tab: BrowseGroupTab) {
@@ -1108,7 +922,7 @@ internal fun FeedTopLevelRouteContent(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
             override fun onContentTypeSelected(tab: BrowseGroupTab) {
@@ -1148,7 +962,7 @@ internal fun FeedTopLevelRouteContent(
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
         val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver) {
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, resolver) {
             resolved -> if (resolved) viewModel.update()
         }
         viewModel.onError.collect { event: org.skepsun.kototoro.core.util.Event<Throwable>? ->
@@ -1452,7 +1266,7 @@ internal fun BookmarksTopLevelRouteContent(
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
             override fun onContentTypeSelected(tab: BrowseGroupTab) {
@@ -1707,14 +1521,14 @@ internal fun HistoryTopLevelRouteContent(
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity.window.decorView.rootView
         val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
+        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, resolver, null)
         viewModel.onError.collect { event ->
             event?.consume(observer)
         }
     }
 
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
             override fun onContentTypeSelected(tab: BrowseGroupTab) {
@@ -1883,7 +1697,6 @@ internal fun HistoryTopLevelRouteContent(
 @Composable
 internal fun FavoritesTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
     mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
@@ -1897,7 +1710,6 @@ internal fun FavoritesTopLevelRouteContent(
     )
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
-    var entityOrganizeRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
     var nextFavoritesDialogId by remember { mutableLongStateOf(0L) }
     var pendingFavoritesDialog by remember { mutableStateOf<PendingFavoritesDialog?>(null) }
@@ -1940,25 +1752,6 @@ internal fun FavoritesTopLevelRouteContent(
             candidates = candidates,
             selectedIndices = candidates.indices.toSet(),
         )
-    }
-
-    LaunchedEffect(entityOrganizeResultSource) {
-        entityOrganizeResultSource.refreshSignals.collect {
-            if (!entityOrganizeResultSource.consumeRefresh()) {
-                return@collect
-            }
-            entityOrganizeRefreshGeneration += 1
-        }
-    }
-
-    LaunchedEffect(entityOrganizeResultSource) {
-        entityOrganizeResultSource.messageSignals.collect {
-            val message = entityOrganizeResultSource.consumeMessage()
-            if (message == null) {
-                return@collect
-            }
-            viewModel.notifyEntityOrganizeResult(message)
-        }
     }
 
     fun showSyncDialog() {
@@ -2142,7 +1935,7 @@ internal fun FavoritesTopLevelRouteContent(
     }
 
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
-        val callback = object : SearchBarFilterViewController.Callback {
+        val callback = object : SearchBarFilterCallback {
             override fun isSourceTagFilterVisible(): Boolean = true
 
             override fun getSourceTagEntries(): List<org.skepsun.kototoro.explore.ui.model.SourceTag> =
@@ -2179,7 +1972,7 @@ internal fun FavoritesTopLevelRouteContent(
         KototoroFavoritesHostRoute(
             appRouter = appRouter,
             contentPadding = contentPadding,
-            refreshGeneration = entityOrganizeRefreshGeneration,
+            refreshGeneration = 0,
             consumeOrganizeMessages = false,
             onOpenEntityOrganize = { selectedIds ->
                 appRouter.openEntityOrganizeSettings(selectedIds)

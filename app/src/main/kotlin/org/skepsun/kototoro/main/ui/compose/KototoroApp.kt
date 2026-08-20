@@ -122,11 +122,6 @@ import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.FoldableUtils
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.NavDestination.Companion.hasRoute
-import androidx.navigation.NavHostController
-import androidx.lifecycle.Lifecycle
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
@@ -170,7 +165,6 @@ import org.skepsun.kototoro.core.ui.compose.heroTransitionTimestampMs
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
@@ -187,7 +181,8 @@ import org.skepsun.kototoro.main.ui.navigation3.HomeNavKey
 import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
 import org.skepsun.kototoro.main.ui.navigation3.SearchNavKey
 import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
-import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.MainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.MainStateNavigator
 import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
 import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
@@ -198,6 +193,8 @@ import org.skepsun.kototoro.main.ui.navigation3.toSpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceKind
+import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
+import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
@@ -264,13 +261,6 @@ private fun rememberMainResumeCoverRequest(content: Content?): ImageRequest? {
                 .mangaExtra(content)
                 .build()
         }
-    }
-}
-
-private suspend fun NavHostController.awaitCurrentEntryResumed() {
-    val entry = currentBackStackEntryFlow.first()
-    entry.lifecycle.currentStateFlow.first { state ->
-        state.isAtLeast(Lifecycle.State.RESUMED)
     }
 }
 
@@ -601,7 +591,6 @@ fun KototoroApp(
     )
     val activeNavigationState = spaceNavigationStates[navigationSpaceId]
     val mainNavState = activeNavigationState.mainNavState
-    val navController = activeNavigationState.navController
     val chromeScrollStates = remember { mutableMapOf<SpaceId, SpaceChromeScrollState>() }
     val scrollToTopEventsBySpace = remember { mutableMapOf<SpaceId, MutableSharedFlow<Unit>>() }
     val chromeScrollState = chromeScrollStates.getOrPut(navigationSpaceId, ::SpaceChromeScrollState)
@@ -805,32 +794,16 @@ fun KototoroApp(
             }
         }
     }
-    val topLevelNavigator = remember(navController, mainNavState) {
-        NavControllerMainNavigator(
-            navController = navController,
+    val topLevelNavigator: MainNavigator = remember(mainNavState) {
+        MainStateNavigator(
             mainActivity = null,
             mainNavState = mainNavState,
         )
     }
-    fun navigateToBottomNavItem(
-        itemId: Int,
-        restoreState: Boolean = true,
-    ) {
+    fun navigateToBottomNavItem(itemId: Int) {
         val topLevelKey = topLevelKeyForBottomNavItem(itemId)
         if (mainNavState.selectedTopLevel != topLevelKey) {
-            if (restoreState) {
-                topLevelNavigator.openTopLevel(topLevelKey)
-            } else {
-                mainNavState.navigateTopLevel(topLevelKey)
-                navController.navigate(routeForTopLevelKey(topLevelKey)) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        inclusive = false
-                        saveState = false
-                    }
-                    launchSingleTop = true
-                    this.restoreState = false
-                }
-            }
+            topLevelNavigator.openTopLevel(topLevelKey)
         }
     }
     val currentBottomNavNavigationState = rememberUpdatedState(activeNavigationState)
@@ -840,8 +813,7 @@ fun KototoroApp(
             val navigationState = currentBottomNavNavigationState.value
             val topLevelKey = topLevelKeyForBottomNavItem(itemId)
             if (navigationState.mainNavState.selectedTopLevel != topLevelKey) {
-                NavControllerMainNavigator(
-                    navController = navigationState.navController,
+                MainStateNavigator(
                     mainActivity = null,
                     mainNavState = navigationState.mainNavState,
                 ).openTopLevel(topLevelKey)
@@ -854,17 +826,25 @@ fun KototoroApp(
             Unit
         }
     }
-    val startDestination = remember(initialTopLevel) {
-        routeForTopLevelKey(initialTopLevel)
+    val currentNavTopEntry: org.skepsun.kototoro.main.ui.navigation3.MainNavKey? =
+        mainNavState.currentStack().lastOrNull()
+    val currentDestinationRoute = when (currentNavTopEntry) {
+        is ContentListNavKey -> "content_list"
+        is DetailsNavKey -> "details"
+        is SearchNavKey -> "search"
+        else -> AppRouteNames.MAIN_SHELL
     }
-    val navBackStackEntry = key(navController) {
-        val entry by navController.currentBackStackEntryAsState()
-        entry
+    val isSearchRoute = currentNavTopEntry is SearchNavKey
+    val isDetailsRoute = currentNavTopEntry is DetailsNavKey
+    val isContentListRoute = currentNavTopEntry is ContentListNavKey
+    val isImmersiveRoute = isDetailsRoute || isContentListRoute
+    val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
+
+    val mainShellBackdropOwnerKey = remember(navigationSpaceId) {
+        "$MAIN_SHELL_BACKDROP_OWNER_PREFIX:${navigationSpaceId.value}"
     }
-    val currentDestination = navBackStackEntry?.destination
 
     LaunchedEffect(
-        navController,
         navigationSpaceId,
         isActiveSpaceRestored,
         isActiveDatabaseSessionApplied,
@@ -880,45 +860,22 @@ fun KototoroApp(
             rootRestoredSpaceIds[navigationSpaceId] = true
             return@LaunchedEffect
         }
-        navController.awaitCurrentEntryResumed()
-        if (navController.previousBackStackEntry == null) {
-            val selectedTopLevel = topLevelKeyForRouteOwnerKey(session.selectedTopLevel) ?: HomeNavKey
-            if (navController.currentDestination?.hasRoute<MainShellRoute>() != true) {
-                navController.navigate(routeForTopLevelKey(selectedTopLevel)) {
-                    launchSingleTop = true
-                }
-                navController.awaitCurrentEntryResumed()
-            }
-            // The v3 stacks were already populated by restoreFromSpaceSession; the inner
-            // NavDisplay renders their immersive entries directly. Only seed the pending
-            // details origin so the restored DetailsNavKey has its content on first composition.
-            session.stacks[session.selectedTopLevel].orEmpty().forEach { route ->
-                if (route is SpaceRouteSnapshot.WorkDetails) {
-                    org.skepsun.kototoro.core.nav.PendingDetailsNavigation.set(
-                        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                            entityId = route.entityId,
-                            preferredLocalMangaId = route.requestedProjectionId,
-                            initialProjectionLocalMangaId = route.requestedProjectionId,
-                        ),
-                    )
-                }
+        // The v3 back stacks were already populated by restoreFromSpaceSession; the inner
+        // NavDisplay renders their immersive entries directly. Only seed the pending
+        // details origin so the restored DetailsNavKey has its content on first composition.
+        session.stacks[session.selectedTopLevel].orEmpty().forEach { route ->
+            if (route is SpaceRouteSnapshot.WorkDetails) {
+                PendingDetailsNavigation.set(
+                    DetailsOrigin.EntityGraph(
+                        entityId = route.entityId,
+                        preferredLocalMangaId = route.requestedProjectionId,
+                        initialProjectionLocalMangaId = route.requestedProjectionId,
+                    ),
+                )
             }
         }
         rootRestoredSpaceIds[navigationSpaceId] = true
     }
-    val currentNavTopEntry: org.skepsun.kototoro.main.ui.navigation3.MainNavKey? =
-        mainNavState.currentStack().lastOrNull()
-    val currentDestinationRoute = when (currentNavTopEntry) {
-        is ContentListNavKey -> "content_list"
-        is DetailsNavKey -> "details"
-        is SearchNavKey -> "search"
-        else -> currentDestination?.route
-    }
-    val isSearchRoute = currentNavTopEntry is SearchNavKey
-    val isDetailsRoute = currentNavTopEntry is DetailsNavKey
-    val isContentListRoute = currentNavTopEntry is ContentListNavKey
-    val isImmersiveRoute = isDetailsRoute || isContentListRoute
-    val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
     LaunchedEffect(currentDestinationRoute) {
         if (isDetailsRoute) {
             detailsBottomPanelExpansion = 0f
@@ -1026,10 +983,7 @@ fun KototoroApp(
         isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
     val shouldDelayChromeRestoreFromDetails =
         pendingChromeRestoreFromDetails && shouldShowChrome && !isImmersiveRoute
-    LaunchedEffect(currentDestination, shouldShowChrome, isImmersiveRoute, isDetailsChromeTransitionPending) {
-        if (currentDestination == null) {
-            return@LaunchedEffect
-        }
+    LaunchedEffect(shouldShowChrome, isImmersiveRoute, isDetailsChromeTransitionPending) {
         fun clearChromeTransitionFlags(clearPendingRestore: Boolean = true) {
             if (clearPendingRestore) {
                 pendingChromeRestoreFromDetails = false
@@ -1260,7 +1214,7 @@ fun KototoroApp(
         contentBottomInsetPx,
     ) {
         traceSpaceChrome {
-            "state space=${navigationSpaceId.value} nav=${System.identityHashCode(navController)} " +
+            "state space=${navigationSpaceId.value} nav=${System.identityHashCode(mainNavState)} " +
                 "route=$currentDestinationRoute owner=$currentTopBarOwnerKey restored=$isActiveSpaceRestored " +
                 "offsetRoute=$offsetDestinationRoute offsetOwner=$offsetDestinationOwnerKey " +
                 "topOffset=${topAppBarState.heightOffset} effectiveTop=$effectiveTopBarOffset " +
@@ -1293,9 +1247,7 @@ fun KototoroApp(
     KototoroTheme(cornerRadius = cornerRadius) {
         val liquidGlassBackdropHost = remember { LiquidGlassBackdropHost() }
         val rootGlassMenuHost = remember { RootGlassMenuHost() }
-        val expectedLiquidGlassOwnerKey = navBackStackEntry?.id?.let { entryId ->
-            entryId
-        }
+        val expectedLiquidGlassOwnerKey = mainShellBackdropOwnerKey
         val activeLiquidGlassBackdrop = liquidGlassBackdropHost.backdropFor(expectedLiquidGlassOwnerKey)
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
@@ -1593,21 +1545,6 @@ fun KototoroApp(
                     ) {
                         val renderSpaceNavigation: @Composable (SpaceId) -> Unit = { renderedSpaceId ->
                             val renderedNavigationState = spaceNavigationStates[renderedSpaceId]
-                            val renderedNavController = renderedNavigationState.navController
-                            DisposableEffect(renderedSpaceId, renderedNavController) {
-                                traceSpaceChrome {
-                                    "navigation mounted space=${renderedSpaceId.value} " +
-                                        "nav=${System.identityHashCode(renderedNavController)} " +
-                                        "route=${renderedNavController.currentDestination?.route}"
-                                }
-                                onDispose {
-                                    traceSpaceChrome {
-                                        "navigation disposed space=${renderedSpaceId.value} " +
-                                            "nav=${System.identityHashCode(renderedNavController)} " +
-                                            "route=${renderedNavController.currentDestination?.route}"
-                                    }
-                                }
-                            }
                             spaceSaveableStateHolder.SaveableStateProvider(renderedSpaceId.value) {
                                 CompositionLocalProvider(
                                     LocalBrowseSpaceId provides renderedSpaceId.takeIf {
@@ -1617,13 +1554,11 @@ fun KototoroApp(
                                         MutableSharedFlow(extraBufferCapacity = 1)
                                     },
                                 ) {
-                                    AppNavGraph(
-                                        navController = renderedNavController,
+                                    MainShellScene(
                                         mainNavState = renderedNavigationState.mainNavState,
-                                        suppressNavigationTransitions = suppressSpaceContentMotion,
+                                        shellBackdropOwnerKey = "$MAIN_SHELL_BACKDROP_OWNER_PREFIX:${renderedSpaceId.value}",
                                         detailsTransitionStyle = detailsTransitionStyle,
                                         isLandscapeNavigation = isLandscapeNavigation,
-                                        startDestination = startDestination,
                                         contentPadding = contentPadding,
                                         bottomBarOffsetPx = effectiveBottomNavOffset,
                                         bottomBarHeightPx = bottomNavHeightPx,
@@ -1632,13 +1567,6 @@ fun KototoroApp(
                                             isDetailsChromeTransitionPending = true
                                             heroTransitionPhase = HeroTransitionPhase.EnteringDetails
                                             lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                        },
-                                        onDetailsReturnTransitionRequested = {
-                                            if (effectiveSharedElementTransitionsEnabled) {
-                                                isDetailsChromeTransitionPending = true
-                                                heroTransitionPhase = HeroTransitionPhase.ReturningFromDetails
-                                                lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
-                                            }
                                         },
                                         onDetailsBottomPanelStateChanged = { expansion, obstruction ->
                                             if (renderedSpaceId == navigationSpaceId) {

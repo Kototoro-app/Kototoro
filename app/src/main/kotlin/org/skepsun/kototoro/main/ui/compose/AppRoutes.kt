@@ -1,9 +1,6 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.annotation.IdRes
-import androidx.lifecycle.SavedStateHandle
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
 import org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey
@@ -19,41 +16,15 @@ import org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey
 
 object AppRouteNames {
     const val MAIN_SHELL = "main_shell"
-    const val ENTITY_ORGANIZE = "entity_organize"
-    const val SEARCH = "search"
-    const val CONTENT_LIST = "content_list"
-    const val DETAILS = "details"
 }
 
-internal const val ENTITY_ORGANIZE_RESULT_REFRESH_KEY = "entity_organize_result_refresh"
-internal const val ENTITY_ORGANIZE_RESULT_MESSAGE_KEY = "entity_organize_result_message"
-
-internal fun consumeEntityOrganizeRefreshResult(savedStateHandle: SavedStateHandle): Boolean {
-    val shouldRefresh = savedStateHandle.get<Boolean>(ENTITY_ORGANIZE_RESULT_REFRESH_KEY) == true
-    if (shouldRefresh) {
-        savedStateHandle[ENTITY_ORGANIZE_RESULT_REFRESH_KEY] = false
-    }
-    return shouldRefresh
-}
-
-internal fun consumeEntityOrganizeMessageResult(savedStateHandle: SavedStateHandle): String? {
-    val message = savedStateHandle.get<String>(ENTITY_ORGANIZE_RESULT_MESSAGE_KEY)
-        ?.takeIf { it.isNotBlank() }
-    if (message != null) {
-        savedStateHandle[ENTITY_ORGANIZE_RESULT_MESSAGE_KEY] = null
-    }
-    return message
-}
-
-@Serializable
-@SerialName(AppRouteNames.MAIN_SHELL)
-data object MainShellRoute
-
-@Serializable
-@SerialName(AppRouteNames.ENTITY_ORGANIZE)
-data class EntityOrganizeRoute(
-    val selectedContentIds: String = "",
-)
+/**
+ * Prefix for the per-space liquid-glass / shell owner key shared between the
+ * [MainShellScene] backdrop registration and the [KototoroApp] root backdrop
+ * lookup. After the Navigation 3 cutover the shell is the only root scene per
+ * space, so the owner key no longer derives from a Navigation 2 entry id.
+ */
+internal const val MAIN_SHELL_BACKDROP_OWNER_PREFIX = "main_shell"
 
 fun encodeEntityOrganizeSelection(ids: Set<Long>): String {
     return ids.sorted().joinToString(separator = ",")
@@ -69,16 +40,6 @@ fun parseEntityOrganizeSelection(value: String): Set<Long> {
         .toSet()
 }
 
-@Serializable
-@SerialName(AppRouteNames.CONTENT_LIST)
-data class ContentListRoute(
-    val sourceName: String,
-)
-
-@Serializable
-@SerialName(AppRouteNames.DETAILS)
-data object DetailsRoute
-
 fun topLevelKeyForBottomNavItem(@IdRes itemId: Int): TopLevelNavKey = when (itemId) {
     R.id.nav_home -> HomeNavKey
     R.id.nav_history -> HistoryNavKey
@@ -91,20 +52,6 @@ fun topLevelKeyForBottomNavItem(@IdRes itemId: Int): TopLevelNavKey = when (item
     R.id.nav_bookmarks -> BookmarksNavKey
     R.id.nav_updated -> UpdatedNavKey
     else -> HomeNavKey
-}
-
-fun routeForTopLevelKey(key: TopLevelNavKey): Any = when (key) {
-    HomeNavKey,
-    HistoryNavKey,
-    FavoritesNavKey,
-    ExploreNavKey,
-    DiscoverNavKey,
-    FeedNavKey,
-    LocalNavKey,
-    SuggestionsNavKey,
-    BookmarksNavKey,
-    UpdatedNavKey,
-    -> MainShellRoute
 }
 
 fun bottomNavItemIdForTopLevelKey(key: TopLevelNavKey): Int = when (key) {

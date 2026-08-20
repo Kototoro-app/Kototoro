@@ -1,14 +1,9 @@
 package org.skepsun.kototoro.main.ui.navigation3
 
-import androidx.navigation.NavHostController
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavDestination.Companion.hasRoute
 import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.main.ui.compose.MainShellRoute
-import org.skepsun.kototoro.main.ui.compose.routeForTopLevelKey
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -16,36 +11,23 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 
 /**
- * Drives navigation for the main UI.
+ * [MainNavigator] implementation that operates directly on the Navigation 3
+ * [MainNavState] back stacks.
  *
- * After the Navigation 3 cutover the full-screen destinations (content list,
- * details, search) live on the per-top-level v3 back stacks and are rendered
- * by the inner [MainTopLevelNavDisplay]. The only remaining v2-backed shell
- * destination is [MainShellRoute] (plus the transitional EntityOrganize
- * route), so [openContentList], [openDetails] and [openSearch] mutate
- * [mainNavState] exclusively; the v2 [navController] only keeps the shell
- * route and the EntityOrganize pop transitions in sync.
+ * Content list / details / search are pushed onto the selected top-level's v3
+ * stack, where [MainTopLevelNavDisplay] renders them as immersive destinations.
+ * There is no Navigation 2 [androidx.navigation.NavHostController] involved:
+ * top-level switching only mutates the selected-top-level state, and [pop]
+ * just removes the current stack's top entry.
  */
-class NavControllerMainNavigator(
-    private val navController: NavHostController,
+class MainStateNavigator(
     private val mainActivity: MainActivity?,
-    private val mainNavState: MainNavState? = null,
+    private val mainNavState: MainNavState,
     private val onDetailsTransitionRequested: () -> Unit = {},
 ) : MainNavigator {
 
     override fun openTopLevel(key: TopLevelNavKey) {
-        mainNavState?.navigateTopLevel(key)
-        if (navController.currentDestination?.hasRoute<MainShellRoute>() == true) {
-            return
-        }
-        navController.navigate(routeForTopLevelKey(key)) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                inclusive = false
-                saveState = true
-            }
-            launchSingleTop = true
-            restoreState = true
-        }
+        mainNavState.navigateTopLevel(key)
     }
 
     override fun openContentList(
@@ -54,7 +36,7 @@ class NavControllerMainNavigator(
         sortOrder: SortOrder?,
     ) {
         onDetailsTransitionRequested()
-        mainNavState?.push(ContentListNavKey(sourceName = source.name))
+        mainNavState.push(ContentListNavKey(sourceName = source.name))
         PendingContentListNavigation.set(filter = filter, sortOrder = sortOrder)
     }
 
@@ -64,10 +46,10 @@ class NavControllerMainNavigator(
     ) {
         onDetailsTransitionRequested()
         mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-            mainNavState?.push(origin.toDetailsNavKey())
+            mainNavState.push(origin.toDetailsNavKey())
             PendingDetailsNavigation.set(origin, sharedElementKey)
         } ?: run {
-            mainNavState?.push(DetailsNavKey(requestedProjectionId = content.id))
+            mainNavState.push(DetailsNavKey(requestedProjectionId = content.id))
             PendingDetailsNavigation.set(content, sharedElementKey)
         }
     }
@@ -77,12 +59,12 @@ class NavControllerMainNavigator(
         sharedElementKey: String?,
     ) {
         onDetailsTransitionRequested()
-        mainNavState?.push(origin.toDetailsNavKey())
+        mainNavState.push(origin.toDetailsNavKey())
         PendingDetailsNavigation.set(origin, sharedElementKey)
     }
 
     override fun openSearch(request: SearchNavigationRequest) {
-        mainNavState?.pushOrReplaceCurrentTopSearch(
+        mainNavState.pushOrReplaceCurrentTopSearch(
             SearchNavKey(
                 query = request.query,
                 kind = request.kind.name,
@@ -97,13 +79,7 @@ class NavControllerMainNavigator(
         )
     }
 
-    override fun pop(): Boolean {
-        val popped = navController.popBackStack()
-        if (popped) {
-            mainNavState?.pop()
-        }
-        return popped
-    }
+    override fun pop(): Boolean = mainNavState.pop()
 }
 
 private fun DetailsOrigin.toDetailsNavKey(): DetailsNavKey = when (this) {
