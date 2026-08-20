@@ -453,15 +453,15 @@ class DetailsLoadUseCase @Inject constructor(
 	private suspend fun String.parseAsHtml(withImages: Boolean): CharSequence? = if (withImages) {
 		runInterruptible(Dispatchers.IO) {
 			parseAsHtml(imageGetter = imageGetter)
-		}.filterSpans()
+		}?.filterSpans()
 	} else {
 		runInterruptible(Dispatchers.Default) {
 			parseAsHtml()
-		}.filterSpans().sanitize()
-	}.trim().nullIfEmpty()
+		}?.filterSpans()?.sanitize()
+	}?.trim()?.nullIfEmpty()
 
-	private fun Spanned.filterSpans(): Spanned {
-		val spannable = SpannableString.valueOf(this)
+	private fun Spanned?.filterSpans(): Spanned? {
+		val spannable = SpannableString.valueOf(this ?: return null)
 		val spans = spannable.getSpans<ForegroundColorSpan>()
 		for (span in spans) {
 			spannable.removeSpan(span)
