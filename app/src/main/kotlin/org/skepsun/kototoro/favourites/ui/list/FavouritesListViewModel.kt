@@ -343,7 +343,10 @@ class FavouritesListViewModel @AssistedInject constructor(
 			}
 			val contentGroup = sourceGroupManager.getContentGroup(representative.source)
 			val originGroup = sourceGroupManager.getOriginGroup(representative.source)
-			if (!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) {
+			// The persisted content type is authoritative; the source-group heuristic
+			// can mislabel local/anonymous projections, so accept the aggregate type too.
+			val typeMatches = aggregate.contentType?.let(params.groupTab::matchesContentType) == true
+			if ((!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) && !typeMatches) {
 				return@mapNotNull null
 			}
 			if (params.sourceTags.isNotEmpty() && params.sourceTags.none { it.matches(contentGroup, originGroup) }) {

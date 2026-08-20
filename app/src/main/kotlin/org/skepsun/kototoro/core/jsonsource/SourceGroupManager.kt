@@ -38,11 +38,7 @@ class SourceGroupManager @Inject constructor(
 		// Priority 1: Check native and plugin ContentSource content type
 		val type = sourceTypeIdentifier.getSourceType(source.name)
 		if (type == SourceType.NATIVE || source is org.skepsun.kototoro.core.extensions.PluginContentSource || source is org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource) {
-			return when (source.getContentType()) {
-				ContentType.NOVEL, ContentType.HENTAI_NOVEL -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
-				ContentType.VIDEO, ContentType.HENTAI_VIDEO -> if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
-				else -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
-			}
+			return groupForType(source.getContentType(), isNsfw)
 		}
 		
 		// Priority 2: Check for known source wrappers
@@ -80,7 +76,10 @@ class SourceGroupManager @Inject constructor(
 						if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
 					}
 					org.skepsun.kototoro.core.db.entity.JsonSourceType.JS -> {
-						if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
+						// A JS source may declare a non-manga content type (novel/video
+						// JSON rules run through the JS runtime); honor the declared
+						// type instead of hardcoding manga.
+						groupForType(source.getContentType(), isNsfw)
 					}
 					org.skepsun.kototoro.core.db.entity.JsonSourceType.LNREADER -> {
 						if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
@@ -102,8 +101,20 @@ class SourceGroupManager @Inject constructor(
 			name.startsWith("JSON_LEGADO_M_") -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
 			name.startsWith("JSON_LEGADO_") -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
 			name.startsWith("JSON_LNREADER_") -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
-			else -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
+			else -> {
+				// Anonymous sources that don't match a known prefix (e.g. named
+				// novel/video JSON rules like BIQUGE/SHENCOU/PINSE91): fall back to
+				// the source's own declared content type instead of assuming manga,
+				// otherwise Novel/Video chips silently drop them.
+				groupForType(source.getContentType(), isNsfw)
+			}
 		}
+	}
+
+	private fun groupForType(type: ContentType, isNsfw: Boolean): ContentGroup = when {
+		type == ContentType.NOVEL || type == ContentType.HENTAI_NOVEL -> if (isNsfw) ContentGroup.HENTAI_NOVEL else ContentGroup.NOVEL
+		type == ContentType.VIDEO || type == ContentType.HENTAI_VIDEO -> if (isNsfw) ContentGroup.HENTAI_VIDEO else ContentGroup.VIDEO
+		else -> if (isNsfw) ContentGroup.HENTAI_MANGA else ContentGroup.MANGA
 	}
 	
 	/**

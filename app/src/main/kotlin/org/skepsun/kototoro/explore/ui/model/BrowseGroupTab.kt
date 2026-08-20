@@ -100,6 +100,29 @@ sealed class BrowseGroupTab(
 		Novel -> type == ContentType.NOVEL || type == ContentType.HENTAI_NOVEL
 		Video -> type == ContentType.VIDEO || type == ContentType.HENTAI_VIDEO
 	}
+
+	/**
+	 * The persisted content types this tab should show, or null for [All].
+	 * Used to push the tab filter down into the history paging query so that
+	 * switching to Novel/Video doesn't page through thousands of other rows.
+	 */
+	fun allowedContentTypes(): Set<ContentType>? = when (this) {
+		All -> null
+		Content -> setOf(
+			ContentType.MANGA,
+			ContentType.MANHWA,
+			ContentType.MANHUA,
+			ContentType.COMICS,
+			ContentType.ONE_SHOT,
+			ContentType.DOUJINSHI,
+			ContentType.IMAGE_SET,
+			ContentType.ARTIST_CG,
+			ContentType.GAME_CG,
+			ContentType.HENTAI_MANGA,
+		)
+		Novel -> setOf(ContentType.NOVEL, ContentType.HENTAI_NOVEL)
+		Video -> setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO)
+	}
 	
 	/**
 	 * Check if this tab matches an origin group

@@ -248,7 +248,17 @@ class HomeViewModel @Inject constructor(
                 "presetId=${preset?.id ?: -1L} sourceCount=${preset?.sources?.size ?: 0}",
             )
         }
-    private val recentHistoryWithMetadataFlow = historyRepository.observeRecentWithHistory(limit = 64)
+    /** The content types of the currently selected home tab, or null for All. */
+    private val homeTabTypesFlow = selectedTabFlow
+        .map { tab -> tab.toBrowseGroupTab().allowedContentTypes() }
+        .distinctUntilChanged()
+    private val recentHistoryWithMetadataFlow = homeTabTypesFlow
+        .flatMapLatest { tabTypes ->
+            // Push the selected type chip into SQL: the home rail is capped at
+            // `limit` rows, so filtering types in memory could never surface
+            // novels/videos when the recent global history is manga-heavy.
+            historyRepository.observeRecentWithHistory(limit = 64, tabTypes = tabTypes)
+        }
         .onStart { emit(emptyList()) }
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
@@ -270,8 +280,12 @@ class HomeViewModel @Inject constructor(
         isHistoryNsfwDisabledFlow,
     ) { history, selectedTab, selectedSourceTags, preset, isHistoryNsfwDisabled ->
         history.firstOrNull { item ->
+            // The history flow is already restricted to the selected content
+            // type in SQL (see recentHistoryWithMetadataFlow), so the per-item
+            // SOURCE-based type check is skipped here — it mislabels anonymous /
+            // legacy novel & video sources as OTHER and would drop valid rows.
             item.matchesHomeFilters(
-                tab = selectedTab,
+                tab = null,
                 sourceTags = selectedSourceTags,
                 sourceGroupManager = sourceGroupManager,
                 preset = preset,
@@ -339,16 +353,27 @@ class HomeViewModel @Inject constructor(
     private val recommendationsCountFlow = suggestionRepository.observeCount()
         .onStart { emit(0) }
         .distinctUntilChanged()
-    private val recentUpdatesFlow = trackingRepository.observeUpdatedContent(
-        limit = HOME_UPDATES_LIMIT,
-        filterOptions = emptySet(),
-    )
+    private val recentUpdatesFlow = homeTabTypesFlow.flatMapLatest { tabTypes ->
+        // Same capped-window problem as history: type-filter in SQL so the rail
+        // can surface novels/videos even when the latest updates are manga-heavy.
+        trackingRepository.observeUpdatedContent(
+            limit = HOME_UPDATES_LIMIT,
+            filterOptions = emptySet(),
+            contentTypes = tabTypes?.map(ContentType::name),
+        )
+    }
         .distinctUntilChanged { old, new -> old.isSameForHomeUpdates(new) }
         .onEach { items ->
             logHomeDiag("recentUpdatesFlow", "items=${items.homeUpdateSignature()}")
         }
         .onStart { emit(emptyList()) }
-    private val recommendationsFlow = suggestionRepository.observeAll(HOME_RECOMMENDATIONS_LIMIT, emptySet())
+    private val recommendationsFlow = homeTabTypesFlow.flatMapLatest { tabTypes ->
+        suggestionRepository.observeAll(
+            HOME_RECOMMENDATIONS_LIMIT,
+            emptySet(),
+            contentTypes = tabTypes?.map(ContentType::name),
+        )
+    }
         .distinctUntilChanged()
         .onEach { items ->
             logHomeDiag("recommendationsFlow", "items=${items.homeContentSignature()}")
@@ -915,14 +940,18 @@ private fun BrowseGroupTab.toHomeContentTab(): HomeContentTab? = when (this) {
 }
 
 private fun List<HomeRecentItem>.selectHomeHistoryByTab(
-    tab: HomeContentTab?,
+    @Suppress("UNUSED_PARAMETER") tab: HomeContentTab?,
     sourceTags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag>,
     sourceGroupManager: org.skepsun.kototoro.core.jsonsource.SourceGroupManager,
     preset: org.skepsun.kototoro.explore.data.SourcePreset?,
 ): List<HomeRecentItem> {
+    // The history query already restricted rows to the selected content type in
+    // SQL (observeRecentWithHistory tabTypes), so the per-item SOURCE-based type
+    // check is skipped here — it mislabels anonymous/legacy novel & video
+    // sources as OTHER and would drop the very rows SQL surfaced.
     return filter { item ->
         item.content.matchesHomeFilters(
-            tab = tab,
+            tab = null,
             sourceTags = sourceTags,
             sourceGroupManager = sourceGroupManager,
             preset = preset,
@@ -931,14 +960,16 @@ private fun List<HomeRecentItem>.selectHomeHistoryByTab(
 }
 
 private fun List<HomeUpdateItem>.selectHomeUpdatesByTab(
-    tab: HomeContentTab?,
+    @Suppress("UNUSED_PARAMETER") tab: HomeContentTab?,
     sourceTags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag>,
     sourceGroupManager: org.skepsun.kototoro.core.jsonsource.SourceGroupManager,
     preset: org.skepsun.kototoro.explore.data.SourcePreset?,
 ): List<HomeUpdateItem> {
+    // The updates query already filtered rows to the selected content type in
+    // SQL (observeUpdatedContent contentTypes), so the per-item check is skipped.
     return filter { item ->
         item.content.matchesHomeFilters(
-            tab = tab,
+            tab = null,
             sourceTags = sourceTags,
             sourceGroupManager = sourceGroupManager,
             preset = preset,
@@ -947,14 +978,16 @@ private fun List<HomeUpdateItem>.selectHomeUpdatesByTab(
 }
 
 private fun List<HomeRecommendationItem>.selectHomeRecommendationsByTab(
-    tab: HomeContentTab?,
+    @Suppress("UNUSED_PARAMETER") tab: HomeContentTab?,
     sourceTags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag>,
     sourceGroupManager: org.skepsun.kototoro.core.jsonsource.SourceGroupManager,
     preset: org.skepsun.kototoro.explore.data.SourcePreset?,
 ): List<HomeRecommendationItem> {
+    // The recommendations query already filtered rows to the selected content
+    // type in SQL (observeAll contentTypes), so the per-item check is skipped.
     return filter { item ->
         item.content.matchesHomeFilters(
-            tab = tab,
+            tab = null,
             sourceTags = sourceTags,
             sourceGroupManager = sourceGroupManager,
             preset = preset,

@@ -27,8 +27,12 @@ class SuggestionRepository @Inject constructor(
 		}
 	}
 
-	fun observeAll(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<Content>> {
-		return db.getSuggestionDao().observeAll(limit, filterOptions).mapItems {
+	fun observeAll(
+		limit: Int,
+		filterOptions: Set<ListFilterOption>,
+		contentTypes: Collection<String>? = null,
+	): Flow<List<Content>> {
+		return db.getSuggestionDao().observeAll(limit, filterOptions, contentTypes).mapItems {
 			it.toContent()
 		}
 	}

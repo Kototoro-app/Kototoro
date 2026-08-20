@@ -11,6 +11,7 @@ import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.core.db.entity.JsonSourceSummary
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentType
 
 class SourceGroupManagerTest {
 
@@ -70,5 +71,44 @@ class SourceGroupManagerTest {
 		val result = sourceGroupManager.getContentGroup(source)
 
 		assertEquals(ContentGroup.VIDEO, result)
+	}
+
+	@Test
+	fun `anonymous named novel source is classified as novel group`() {
+		val source = mockk<org.skepsun.kototoro.parsers.model.ContentSource> {
+			every { name } returns "BIQUGE"
+			every { locale } returns "zh"
+			every { contentType } returns ContentType.NOVEL
+		}
+
+		val result = sourceGroupManager.getContentGroup(source)
+
+		assertEquals(ContentGroup.NOVEL, result)
+	}
+
+	@Test
+	fun `anonymous named video source is classified as video group`() {
+		val source = mockk<org.skepsun.kototoro.parsers.model.ContentSource> {
+			every { name } returns "PINSE91"
+			every { locale } returns "zh"
+			every { contentType } returns ContentType.VIDEO
+		}
+
+		val result = sourceGroupManager.getContentGroup(source)
+
+		assertEquals(ContentGroup.VIDEO, result)
+	}
+
+	@Test
+	fun `anonymous named source without declared type stays manga`() {
+		val source = mockk<org.skepsun.kototoro.parsers.model.ContentSource> {
+			every { name } returns "SOME_ANONYMOUS"
+			every { locale } returns "en"
+			every { contentType } returns ContentType.MANGA
+		}
+
+		val result = sourceGroupManager.getContentGroup(source)
+
+		assertEquals(ContentGroup.MANGA, result)
 	}
 }

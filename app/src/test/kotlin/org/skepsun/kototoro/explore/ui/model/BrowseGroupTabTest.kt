@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.explore.ui.model
 
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -40,5 +41,23 @@ class BrowseGroupTabTest {
 		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.NOVEL))
 		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.VIDEO))
 		assertTrue(BrowseGroupTab.All.matchesContentType(ContentType.OTHER))
+	}
+
+	@Test
+	fun `allowedContentTypes mirrors matchesContentType`() {
+		assertNull(BrowseGroupTab.All.allowedContentTypes())
+		val novelTypes = requireNotNull(BrowseGroupTab.Novel.allowedContentTypes())
+		assertTrue(ContentType.NOVEL in novelTypes)
+		assertTrue(ContentType.HENTAI_NOVEL in novelTypes)
+		assertFalse(ContentType.MANGA in novelTypes)
+		val videoTypes = requireNotNull(BrowseGroupTab.Video.allowedContentTypes())
+		assertTrue(ContentType.VIDEO in videoTypes)
+		assertTrue(ContentType.HENTAI_VIDEO in videoTypes)
+		assertFalse(ContentType.NOVEL in videoTypes)
+		val contentTypes = requireNotNull(BrowseGroupTab.Content.allowedContentTypes())
+		assertTrue(ContentType.MANGA in contentTypes)
+		assertTrue(ContentType.MANHWA in contentTypes)
+		assertFalse(ContentType.NOVEL in contentTypes)
+		assertFalse(ContentType.VIDEO in contentTypes)
 	}
 }

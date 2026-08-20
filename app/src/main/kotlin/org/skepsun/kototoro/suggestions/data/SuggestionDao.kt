@@ -24,10 +24,22 @@ abstract class SuggestionDao : MangaQueryBuilder.ConditionCallback {
 
 	fun observeAll(
 		limit: Int,
-		filterOptions: Collection<ListFilterOption>
+		filterOptions: Collection<ListFilterOption>,
+		contentTypes: Collection<String>? = null,
 	): Flow<List<SuggestionWithContent>> = observeAllImpl(
 		MangaQueryBuilder("suggestions", this)
 			.filters(filterOptions)
+			.let { builder ->
+				if (contentTypes.isNullOrEmpty()) {
+					builder
+				} else {
+					builder.where(
+						"(SELECT content_type FROM manga WHERE manga.manga_id = suggestions.manga_id) IN (${
+							contentTypes.joinToString(",") { "'${it}'" }
+						})",
+					)
+				}
+			}
 			.orderBy("relevance DESC")
 			.limit(limit)
 			.build(),

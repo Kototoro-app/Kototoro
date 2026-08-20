@@ -281,7 +281,11 @@ class HistoryListViewModel @Inject constructor(
 			config = LargeLibraryPagingConfig,
 			pagingSourceFactory = {
 				BatchMappingPagingSource(
-					delegate = workAggregateRepository.createHistoryPagingSource(params.order, params.spaceId),
+					delegate = workAggregateRepository.createHistoryPagingSource(
+						order = params.order,
+						spaceId = params.spaceId,
+						groupTab = params.groupTab,
+					),
 					diagnosticLabel = "history-ui",
 				) { aggregates -> mapHistoryPage(aggregates, params) }
 			},

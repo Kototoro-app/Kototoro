@@ -38,6 +38,7 @@ import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.findById
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
@@ -210,7 +211,10 @@ class HistoryRepository @Inject constructor(
 		}
 	}
 
-	fun observeRecentWithHistory(limit: Int): Flow<List<ContentWithHistory>> {
+	fun observeRecentWithHistory(
+		limit: Int,
+		tabTypes: Set<ContentType>? = null,
+	): Flow<List<ContentWithHistory>> {
 		require(limit > 0)
 		return db.invalidationTracker.createFlow(
 			tables = arrayOf(
@@ -225,7 +229,11 @@ class HistoryRepository @Inject constructor(
 			emitInitialState = true,
 		).mapLatest {
 			mapPagingAggregates(
-				aggregates = workAggregateRepository.findRecentHistoryAggregates(limit),
+				aggregates = if (tabTypes == null) {
+					workAggregateRepository.findRecentHistoryAggregates(limit)
+				} else {
+					workAggregateRepository.findRecentHistoryAggregatesByTypes(limit, tabTypes)
+				},
 				filterOptions = emptySet(),
 			)
 		}.distinctUntilChanged()

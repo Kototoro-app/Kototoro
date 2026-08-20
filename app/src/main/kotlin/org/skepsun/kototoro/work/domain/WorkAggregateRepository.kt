@@ -18,6 +18,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.stats.data.WorkStatsSummaryRow
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
@@ -61,8 +62,16 @@ class WorkAggregateRepository @Inject constructor(
 	fun createHistoryPagingSource(
 		order: ListSortOrder,
 		spaceId: SpaceId?,
+		groupTab: BrowseGroupTab? = null,
 	): PagingSource<Int, WorkAggregate> {
 		val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
+		// When not bound to a space, push the selected type chip down into SQL so
+		// switching to Novel/Video doesn't page through the whole history table.
+		val tabAllowedTypes = if (spaceId == null) {
+			groupTab?.allowedContentTypes()?.map(ContentType::name)
+		} else {
+			null
+		}
 		val delegate = db.getWorkHistoryDao().pagingSource(
 			orderName = order.name,
 			applySpaceFilter = spaceId != null,
@@ -70,6 +79,8 @@ class WorkAggregateRepository @Inject constructor(
 			classifiedTypes = classifiedTypeNames,
 			applySourceFilter = allowedSources != null,
 			allowedSources = allowedSources.orEmpty(),
+			applyTabFilter = tabAllowedTypes != null,
+			tabAllowedTypes = tabAllowedTypes.orEmpty(),
 		)
 		return BatchMappingPagingSource(delegate, diagnosticLabel = "history-aggregate") { histories ->
 			buildHistoryAggregates(histories, spaceId)
@@ -216,6 +227,26 @@ class WorkAggregateRepository @Inject constructor(
 		return buildHistoryAggregates(histories, spaceId)
 	}
 
+	/**
+	 * Recent history restricted to the given content types (the equivalent of a
+	 * content-type chip, without a space binding). Used by the home rail so its
+	 * type filter is applied in SQL instead of over a fixed in-memory window.
+	 */
+	suspend fun findRecentHistoryAggregatesByTypes(
+		limit: Int,
+		allowedTypes: Set<ContentType>,
+	): List<WorkAggregate> {
+		if (limit <= 0 || allowedTypes.isEmpty()) {
+			return emptyList()
+		}
+		val histories = db.getWorkHistoryDao().findRecentForSpace(
+			allowedTypes = allowedTypes.map(ContentType::name),
+			classifiedTypes = classifiedTypeNames,
+			limit = limit,
+		)
+		return buildHistoryAggregates(histories, spaceId = null, allowedContentTypes = allowedTypes)
+	}
+
 	suspend fun findHistoryAggregates(
 		limit: Int = Int.MAX_VALUE,
 		spaceId: SpaceId? = null,
@@ -230,6 +261,7 @@ class WorkAggregateRepository @Inject constructor(
 	suspend fun buildHistoryAggregates(
 		histories: List<WorkHistoryEntity>,
 		spaceId: SpaceId?,
+		allowedContentTypes: Set<ContentType>? = null,
 	): List<WorkAggregate> {
 		if (histories.isEmpty()) {
 			return emptyList()
@@ -242,7 +274,7 @@ class WorkAggregateRepository @Inject constructor(
 		val categoriesByEntityId = findCategoriesByEntityId(entityIds)
 		val statsByEntityId = findStatsByEntityId(entityIds)
 		val trackingByEntityId = findTrackingByEntityId(entityIds)
-		val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
+		val allowedTypes = allowedContentTypes ?: spaceId?.let(spaceContentPolicy::allowedTypes)
 		return histories.mapNotNull { history ->
 			val identity = projectionSet.identitiesByEntityId[history.entityId] ?: return@mapNotNull null
 			val displayProjection = resolveDisplayProjection(

@@ -68,10 +68,22 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 	fun observeUpdatedContent(
 		limit: Int,
 		filterOptions: Set<ListFilterOption>,
+		contentTypes: Collection<String>? = null,
 	): Flow<List<TrackEntity>> = observeContentImpl(
 		MangaQueryBuilder("tracks", this)
 			.where("chapters_new > 0")
 			.filters(filterOptions)
+			.let { builder ->
+				if (contentTypes.isNullOrEmpty()) {
+					builder
+				} else {
+					builder.where(
+						"(SELECT content_type FROM manga WHERE manga.manga_id = tracks.manga_id) IN (${
+							contentTypes.joinToString(",") { "'${it}'" }
+						})",
+					)
+				}
+			}
 			.limit(limit)
 			.orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC")
 			.build(),

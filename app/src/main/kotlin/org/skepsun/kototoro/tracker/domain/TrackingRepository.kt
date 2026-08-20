@@ -112,8 +112,12 @@ class TrackingRepository @Inject constructor(
 		return db.getTracksDao().observeUnreadWorkCount()
 	}
 
-	fun observeUpdatedContent(limit: Int, filterOptions: Set<ListFilterOption>): Flow<List<ContentTracking>> {
-		return db.getTracksDao().observeUpdatedContent(limit, filterOptions)
+	fun observeUpdatedContent(
+		limit: Int,
+		filterOptions: Set<ListFilterOption>,
+		contentTypes: Collection<String>? = null,
+	): Flow<List<ContentTracking>> {
+		return db.getTracksDao().observeUpdatedContent(limit, filterOptions, contentTypes)
 			.mapLatest { tracks ->
 				workAggregateRepository.buildTrackingAggregates(tracks)
 					.mapNotNull { aggregate -> aggregate.toContentTracking() }

@@ -48,6 +48,25 @@ abstract class WorkHistoryDao {
 						AND COALESCE(sm.content_type, e.content_type) NOT IN (:allowedTypes)
 				)
 			))
+			AND (:applyTabFilter = 0 OR (
+				EXISTS (
+					SELECT 1 FROM entity_binding eb
+					INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+					WHERE eb.entity_id = wh.entity_id
+						AND eb.source IN ('local_manga', '0')
+						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+						AND COALESCE(sm.content_type, e.content_type) IN (:tabAllowedTypes)
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM entity_binding eb
+					INNER JOIN manga sm ON sm.manga_id = CAST(eb.external_id AS INTEGER)
+					WHERE eb.entity_id = wh.entity_id
+						AND eb.source IN ('local_manga', '0')
+						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+						AND COALESCE(sm.content_type, e.content_type) IN (:classifiedTypes)
+						AND COALESCE(sm.content_type, e.content_type) NOT IN (:tabAllowedTypes)
+				)
+			))
 		ORDER BY
 			CASE WHEN :orderName = 'LAST_READ' THEN wh.updated_at END DESC,
 			CASE WHEN :orderName = 'LONG_AGO_READ' THEN wh.updated_at END ASC,
@@ -73,6 +92,8 @@ abstract class WorkHistoryDao {
 		classifiedTypes: Collection<String>,
 		applySourceFilter: Boolean,
 		allowedSources: Collection<String>,
+		applyTabFilter: Boolean,
+		tabAllowedTypes: Collection<String>,
 	): PagingSource<Int, WorkHistoryEntity>
 
 	@Query(
