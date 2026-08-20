@@ -1,25 +1,17 @@
 package org.skepsun.kototoro.main.ui.compose
 
+
 import android.app.Activity
 import android.util.Log
-import android.view.MotionEvent
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import kotlin.math.roundToInt
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -31,7 +23,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -61,9 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.ImmersiveBottomGradientStops
@@ -72,16 +60,12 @@ import org.skepsun.kototoro.core.ui.compose.ImmersiveTopGradientStops
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.resolveTopImmersiveAlpha
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
-import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -89,16 +73,10 @@ import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
-import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
-import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
 import org.skepsun.kototoro.core.ui.glass.LocalGlassPrefs
-import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefs
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
@@ -108,7 +86,6 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdropHost
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.explore.data.SourcePreset
-import org.skepsun.kototoro.explore.ui.compose.ExploreSelectionTopBar
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.parsers.model.Content
@@ -133,11 +110,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationRailDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarState
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.mutableLongStateOf
@@ -145,17 +118,12 @@ import org.skepsun.kototoro.core.ui.compose.LocalRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroReturnTransitionInProgress
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
-import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
@@ -165,9 +133,7 @@ import org.skepsun.kototoro.core.ui.compose.heroTransitionTimestampMs
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
-import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
-import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.RouteScopedTopBarOverrideState
 import org.skepsun.kototoro.main.ui.navigation3.ContentListNavKey
@@ -190,7 +156,6 @@ import org.skepsun.kototoro.main.ui.navigation3.rememberSpaceNavigationStates
 import org.skepsun.kototoro.main.ui.navigation3.resolveNavigationSpaceId
 import org.skepsun.kototoro.main.ui.navigation3.restoreFromSpaceSession
 import org.skepsun.kototoro.main.ui.navigation3.toSpaceSessionSnapshot
-import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceKind
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
@@ -378,7 +343,7 @@ private suspend fun restoreChromeAfterDetailsDelay(
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
-private fun Modifier.renderChromeInSharedTransitionOverlay(
+internal fun Modifier.renderChromeInSharedTransitionOverlay(
     sharedTransitionScope: SharedTransitionScope?,
     zIndexInOverlay: Float,
     renderInOverlay: () -> Boolean,
@@ -1802,457 +1767,3 @@ fun KototoroApp(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-private fun BoxScope.MainTopChrome(
-    effectiveTopBarOverrideState: TopBarOverrideState?,
-    isLandscapeNavigation: Boolean,
-    isLayeredSurface: Boolean,
-    chromeSharedTransitionScope: SharedTransitionScope?,
-    heroTransitionInProgress: Boolean,
-    isDetailsChromeTransitionPending: Boolean,
-    visibleStartInsetDp: androidx.compose.ui.unit.Dp,
-    effectiveTopBarOffset: Float,
-    chromeAlpha: Float,
-    onTopBarHeightMeasured: (Int) -> Unit,
-    query: String,
-    titleRes: Int?,
-    onSearchClick: () -> Unit,
-    onOpenListOptions: () -> Unit,
-    onSettingsClick: () -> Unit,
-    onHelpClick: () -> Unit,
-    onSourceSettingsClick: () -> Unit,
-    onManageSourcesClick: () -> Unit,
-    onTrackingAccountsClick: () -> Unit,
-    isAppUpdateAvailable: Boolean,
-    onAppUpdateClick: () -> Unit,
-    isIncognitoModeEnabled: Boolean,
-    onIncognitoToggle: () -> Unit,
-    isLanguagePresetFilterVisible: Boolean,
-    languagePresetEntries: List<SourcePreset>,
-    activeLanguagePresetId: Long,
-    onLanguagePresetSelected: (Long) -> Unit,
-    onManageLanguagePresets: () -> Unit,
-    topTabsOverrideState: CompactTabsTopBarOverrideState?,
-    topFilterRailOverrideState: CompactFilterRailOverrideState?,
-    selectedContentType: ContentType?,
-    enabledContentTypes: Set<ContentType>,
-    isContentTypeFilterVisible: Boolean,
-    onContentTypeSelected: (ContentType?) -> Unit,
-    selectedSourceTags: Set<SourceTag>,
-    sourceTagEntries: List<SourceTag>,
-    enabledSourceTags: Set<SourceTag>,
-    isSourceTagFilterVisible: Boolean,
-    onSourceTagFilterClick: (android.view.View?) -> Boolean,
-    onSourceTagSelected: (SourceTag?) -> Unit,
-    supportsDisplayModeMenu: Boolean,
-    currentListMode: ListMode,
-    onListModeSelected: (ListMode) -> Unit,
-    supportsGridSizeSlider: Boolean,
-    gridSize: Int,
-    onGridSizeChange: (Int) -> Unit,
-    isBrowseTrackingRecommendationsEnabled: Boolean?,
-    onBrowseTrackingRecommendationsChange: ((Boolean) -> Unit)?,
-    isBrowseMoreTrackingRecommendationsEnabled: Boolean?,
-    onBrowseMoreTrackingRecommendationsChange: ((Boolean) -> Unit)?,
-    showSourceSettingsEntry: Boolean,
-    contextualMenuActions: List<KototoroTopBarMenuAction>,
-    forceCompactTabsExpanded: Boolean,
-    effectiveCompactTabsTopBarOffset: Float,
-    sortOrders: List<org.skepsun.kototoro.list.domain.ListSortOrder> = emptyList(),
-    selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
-    onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
-    displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
-) {
-    val topChromeModifier = Modifier
-        .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
-        .then(if (isLandscapeNavigation) Modifier.fillMaxWidth() else Modifier)
-        .renderChromeInSharedTransitionOverlay(
-            sharedTransitionScope = chromeSharedTransitionScope,
-            zIndexInOverlay = 2f,
-            renderInOverlay = {
-                heroTransitionInProgress || isDetailsChromeTransitionPending
-            },
-        )
-        .padding(start = visibleStartInsetDp)
-        .offset { androidx.compose.ui.unit.IntOffset(0, effectiveTopBarOffset.toInt()) }
-        .graphicsLayer { alpha = chromeAlpha }
-        .onGloballyPositioned { coords -> onTopBarHeightMeasured(coords.size.height) }
-
-    if (effectiveTopBarOverrideState != null && effectiveTopBarOverrideState !is CompactTabsTopBarOverrideState) {
-        MainSelectionTopChrome(
-            effectiveTopBarOverrideState = effectiveTopBarOverrideState,
-            modifier = topChromeModifier,
-        )
-    } else {
-        val compactTabsOffsetModifier = Modifier.offset {
-            androidx.compose.ui.unit.IntOffset(
-                0,
-                (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt(),
-            )
-        }
-        val topContent: @Composable () -> Unit = {
-            KototoroTopBar(
-                query = query,
-                titleRes = titleRes,
-                onSearchClick = onSearchClick,
-                onOpenListOptions = onOpenListOptions,
-                onSettingsClick = onSettingsClick,
-                onHelpClick = onHelpClick,
-                onSourceSettingsClick = onSourceSettingsClick,
-                onManageSourcesClick = onManageSourcesClick,
-                onTrackingAccountsClick = onTrackingAccountsClick,
-                isAppUpdateAvailable = isAppUpdateAvailable,
-                onAppUpdateClick = onAppUpdateClick,
-                isIncognitoModeEnabled = isIncognitoModeEnabled,
-                onIncognitoToggle = onIncognitoToggle,
-                isLanguagePresetFilterVisible = isLanguagePresetFilterVisible,
-                languagePresetEntries = languagePresetEntries,
-                activeLanguagePresetId = activeLanguagePresetId,
-                onLanguagePresetSelected = onLanguagePresetSelected,
-                onManageLanguagePresets = onManageLanguagePresets,
-                compactTabsState = topTabsOverrideState,
-                filterRailState = topFilterRailOverrideState,
-                selectedContentType = selectedContentType,
-                enabledContentTypes = enabledContentTypes,
-                isContentTypeFilterVisible = isContentTypeFilterVisible,
-                onContentTypeSelected = onContentTypeSelected,
-                selectedSourceTags = selectedSourceTags,
-                sourceTagEntries = sourceTagEntries,
-                enabledSourceTags = enabledSourceTags,
-                isSourceTagFilterVisible = isSourceTagFilterVisible,
-                onSourceTagFilterClick = onSourceTagFilterClick,
-                onSourceTagSelected = onSourceTagSelected,
-                supportsDisplayModeMenu = supportsDisplayModeMenu,
-                currentListMode = currentListMode,
-                onListModeSelected = onListModeSelected,
-                supportsGridSizeSlider = supportsGridSizeSlider,
-                gridSize = gridSize,
-                onGridSizeChange = onGridSizeChange,
-                isBrowseTrackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,
-                onBrowseTrackingRecommendationsChange = onBrowseTrackingRecommendationsChange,
-                isBrowseMoreTrackingRecommendationsEnabled = isBrowseMoreTrackingRecommendationsEnabled,
-                onBrowseMoreTrackingRecommendationsChange = onBrowseMoreTrackingRecommendationsChange,
-                showSourceSettingsEntry = showSourceSettingsEntry,
-                contextualMenuActions = contextualMenuActions,
-                forceCompactTabsExpanded = forceCompactTabsExpanded,
-                sortOrders = sortOrders,
-                selectedSortOrder = selectedSortOrder,
-                onSortOrderSelected = onSortOrderSelected,
-                displayOptionsExtraContent = displayOptionsExtraContent,
-                modifier = if (isLayeredSurface) {
-                    compactTabsOffsetModifier
-                } else {
-                    topChromeModifier.then(compactTabsOffsetModifier)
-                },
-            )
-        }
-        if (isLayeredSurface) {
-            Surface(
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 4.dp,
-                modifier = topChromeModifier,
-            ) {
-                topContent()
-            }
-        } else {
-            topContent()
-        }
-    }
-}
-
-@Composable
-private fun FeedDisplayOptionsContent(
-    showAllUpdates: Boolean,
-    onShowAllUpdatesChanged: (Boolean) -> Unit,
-    feedLimit: Int,
-    onFeedLimitChanged: (Int) -> Unit,
-    onFeedRefresh: () -> Unit,
-) {
-    val jumps = remember { listOf(50, 100, 200, 500, 1000, 2000) }
-    val limitIndex = remember(feedLimit) { jumps.indexOf(feedLimit).coerceAtLeast(0) }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = stringResource(R.string.show_all_updates),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = showAllUpdates,
-                onCheckedChange = onShowAllUpdatesChanged,
-            )
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.feed_visible_entries),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = feedLimit.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            KototoroSlider(
-                value = limitIndex.toFloat(),
-                onValueChange = { index ->
-                    onFeedLimitChanged(jumps[index.roundToInt()])
-                },
-                valueRange = 0f..(jumps.size - 1).toFloat(),
-                steps = jumps.size - 2,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        AnimatedVisibility(visible = showAllUpdates) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.feed_behavior_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(
-                    onClick = onFeedRefresh,
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text(text = stringResource(R.string.trigger_update_now))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MainSelectionTopChrome(
-    effectiveTopBarOverrideState: TopBarOverrideState,
-    modifier: Modifier = Modifier,
-) {
-    when (effectiveTopBarOverrideState) {
-        is ExploreSourceSelectionTopBarState -> {
-            ExploreSelectionTopBar(
-                selectedCount = effectiveTopBarOverrideState.selectedCount,
-                isSingleSelection = effectiveTopBarOverrideState.isSingleSelection,
-                canPin = effectiveTopBarOverrideState.canPin,
-                canUnpin = effectiveTopBarOverrideState.canUnpin,
-                canDisable = effectiveTopBarOverrideState.canDisable,
-                canDelete = effectiveTopBarOverrideState.canDelete,
-                markEmptyTitleRes = effectiveTopBarOverrideState.markEmptyTitleRes,
-                onClearSelection = effectiveTopBarOverrideState.onClearSelection,
-                onSettings = effectiveTopBarOverrideState.onSettings,
-                onDisable = effectiveTopBarOverrideState.onDisable,
-                onDelete = effectiveTopBarOverrideState.onDelete,
-                onShortcut = effectiveTopBarOverrideState.onShortcut,
-                onPin = effectiveTopBarOverrideState.onPin,
-                onUnpin = effectiveTopBarOverrideState.onUnpin,
-                onToggleEmptyAvailability = effectiveTopBarOverrideState.onToggleEmptyAvailability,
-                modifier = modifier,
-            )
-        }
-
-        is ContentSelectionTopBarOverrideState -> {
-            org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar(
-                selectedCount = effectiveTopBarOverrideState.selectedCount,
-                isAllNonLocal = effectiveTopBarOverrideState.isAllNonLocal,
-                isSingleSelection = effectiveTopBarOverrideState.isSingleSelection,
-                showRemoveOption = effectiveTopBarOverrideState.showRemoveOption,
-                supportedActions = effectiveTopBarOverrideState.supportedActions,
-                allPinned = effectiveTopBarOverrideState.allPinned,
-                preferredInlineActions = effectiveTopBarOverrideState.preferredInlineActions,
-                removeActionIconRes = effectiveTopBarOverrideState.removeActionIconRes,
-                removeActionTitleRes = effectiveTopBarOverrideState.removeActionTitleRes,
-                fixActionTitleRes = effectiveTopBarOverrideState.fixActionTitleRes,
-                onClearSelection = effectiveTopBarOverrideState.onClearSelection,
-                onActionClick = effectiveTopBarOverrideState.onActionClick,
-                modifier = modifier,
-            )
-        }
-
-        is CompactTabsTopBarOverrideState -> Unit
-        is LayeredTopBarOverrideState -> Unit
-    }
-}
-
-@Composable
-private fun ContinueReadingFab(
-    onClick: () -> Unit,
-    action: MainResumeAction,
-    coverModel: Any?,
-    modifier: Modifier = Modifier,
-) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val hasCover = coverModel != null
-    if (isIosStyle) {
-        GlassSurface(
-            modifier = modifier.size(56.dp),
-            shape = CircleShape,
-            style = GlassDefaults.regularStyle(),
-            componentRole = GlassComponentRole.Surface,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(onClick = onClick),
-                contentAlignment = Alignment.Center,
-            ) {
-                ResumeActionArtwork(
-                    action = action,
-                    coverModel = coverModel,
-                    fallbackIconTint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-    } else {
-        Surface(
-            onClick = onClick,
-            modifier = modifier.size(56.dp),
-            shape = CircleShape,
-            color = if (hasCover) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            shadowElevation = 6.dp,
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                ResumeActionArtwork(
-                    action = action,
-                    coverModel = coverModel,
-                    fallbackIconTint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun BoxScope.ResumeActionArtwork(
-    action: MainResumeAction,
-    coverModel: Any?,
-    fallbackIconTint: Color,
-) {
-    val hasCover = coverModel != null
-    if (hasCover) {
-        Image(
-            painter = rememberAsyncImagePainter(coverModel),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize(),
-        )
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color.Black.copy(alpha = 0.38f)),
-        )
-    }
-    Icon(
-        painter = painterResource(action.iconRes),
-        contentDescription = stringResource(action.contentDescriptionRes),
-        tint = if (hasCover) Color.White else fallbackIconTint,
-        modifier = Modifier.align(Alignment.Center),
-    )
-}
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-private fun BoxScope.MainBottomChrome(
-    isLandscapeNavigation: Boolean,
-    isLayeredSurface: Boolean,
-    chromeSharedTransitionScope: SharedTransitionScope?,
-    heroTransitionInProgress: Boolean,
-    isDetailsChromeTransitionPending: Boolean,
-    effectiveBottomNavOffset: Float,
-    onLandscapeRailInteractingChange: (Boolean) -> Unit,
-    onBottomNavHeightMeasured: (Int) -> Unit,
-    navStateFlow: StateFlow<BottomNavState>,
-    onItemSelected: (Int) -> Unit,
-    onItemReselected: (Int) -> Unit,
-    isResumeEnabled: Boolean,
-    onResumeClick: () -> Unit,
-    resumeAction: MainResumeAction,
-    resumeCoverModel: Any?,
-    railHeaderContent: (@Composable () -> Unit)?,
-    adjacentAction: (@Composable () -> Unit)?,
-) {
-    Box(
-        modifier = Modifier
-            .align(if (isLandscapeNavigation) Alignment.CenterStart else Alignment.BottomCenter)
-            .renderChromeInSharedTransitionOverlay(
-                sharedTransitionScope = chromeSharedTransitionScope,
-                zIndexInOverlay = 1f,
-                renderInOverlay = {
-                    heroTransitionInProgress || isDetailsChromeTransitionPending
-                },
-            )
-            .then(
-                if (isLandscapeNavigation) {
-                    Modifier.pointerInteropFilter { event ->
-                        when (event.actionMasked) {
-                            MotionEvent.ACTION_DOWN -> onLandscapeRailInteractingChange(true)
-                            MotionEvent.ACTION_UP,
-                            MotionEvent.ACTION_CANCEL -> onLandscapeRailInteractingChange(false)
-                        }
-                        false
-                    }
-                } else {
-                    Modifier
-                }
-            )
-            .offset {
-                if (isLandscapeNavigation) {
-                    androidx.compose.ui.unit.IntOffset((-effectiveBottomNavOffset).toInt(), 0)
-                } else {
-                    androidx.compose.ui.unit.IntOffset(0, effectiveBottomNavOffset.toInt())
-                }
-            }
-            .onGloballyPositioned { coords ->
-                val newHeight = if (isLandscapeNavigation) coords.size.width else coords.size.height
-                onBottomNavHeightMeasured(newHeight)
-            },
-    ) {
-        val bottomNavContent: @Composable () -> Unit = {
-            KototoroBottomNav(
-                state = navStateFlow,
-                onItemSelected = onItemSelected,
-                onItemReselected = onItemReselected,
-                railHeaderContent = railHeaderContent,
-                adjacentAction = adjacentAction,
-                showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
-                onContinueReadingClick = onResumeClick,
-                continueReadingIconRes = resumeAction.iconRes,
-                continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
-                continueReadingCoverModel = resumeCoverModel,
-            )
-        }
-        if (isLayeredSurface && !isLandscapeNavigation) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 6.dp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                bottomNavContent()
-            }
-        } else {
-            bottomNavContent()
-        }
-    }
-}
