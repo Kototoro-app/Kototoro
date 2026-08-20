@@ -19,7 +19,6 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withResumed
-import com.google.android.material.navigation.NavigationBarView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -243,7 +242,7 @@ class MainActivity : BaseComposeActivity() {
         searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
         applyConfiguredLanguagePreset()
 
-        composeNavBarDelegator = ComposeAppNavBarDelegator(this, navStateFlow)
+        composeNavBarDelegator = ComposeAppNavBarDelegator(navStateFlow)
 
         lifecycleScope.launch {
             settings.observeAsFlow(AppSettings.KEY_NAV_MAIN) { mainNavItems }
@@ -254,11 +253,7 @@ class MainActivity : BaseComposeActivity() {
         lifecycleScope.launch {
             settings.observeAsFlow(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }
                 .collect { isVisible ->
-                    composeNavBarDelegator.labelVisibilityMode = if (isVisible) {
-                        NavigationBarView.LABEL_VISIBILITY_SELECTED
-                    } else {
-                        NavigationBarView.LABEL_VISIBILITY_UNLABELED
-                    }
+                    composeNavBarDelegator.showLabels = isVisible
                 }
         }
 

@@ -48,7 +48,6 @@ import androidx.compose.ui.geometry.Offset
 import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.google.android.material.navigation.NavigationBarView
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -84,7 +83,7 @@ data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
 data class BottomNavState(
     val items: List<NavItem> = emptyList(),
     val selectedItemId: Int = 0,
-    val labelVisibilityMode: Int = NavigationBarView.LABEL_VISIBILITY_AUTO,
+    val showLabels: Boolean = true,
     val badges: Map<Int, BadgeInfo> = emptyMap(),
     val itemVisibility: Map<Int, Boolean> = emptyMap(),
 )
@@ -143,7 +142,7 @@ fun KototoroBottomNav(
     val activeItems = navState.items
         .filter { navState.itemVisibility[it.id] != false }
         .limitMainNavigationItems()
-    val showSelectedLabels = navState.labelVisibilityMode != NavigationBarView.LABEL_VISIBILITY_UNLABELED
+    val showSelectedLabels = navState.showLabels
     val useNavigationRail = remember(configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
