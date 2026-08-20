@@ -367,29 +367,30 @@ class HistoryListViewModel @Inject constructor(
 	): List<ListModel> {
 		val historyItems = repository.mapPagingAggregates(aggregates, params.effectiveFilters)
 		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+		val contentTypeByEntityId = aggregates.associate { it.identity.entityId to it.contentType }
 		val visibleItems = historyItems.filter { item ->
 			val source = item.manga.source
 			if (params.preset != null && source.name !in params.preset.sources) return@filter false
 			val contentGroup = sourceGroupManager.getContentGroup(source)
 			val originGroup = sourceGroupManager.getOriginGroup(source)
-			// When the list is bound to a space the DAO already restricted the
-			// results to the space's allowed content types. Re-filtering by the
-			// source-group heuristic on top drops space-valid items (local /
-			// anonymous projections mislabel novels/videos as MANGA/OTHER), so
-			// the history tab ends up empty while the continue-reading FAB (which
-			// uses the entity content type) still finds the same work. Skip the
-			// group-tab content/origin matching for space-bound history; optional
-			// user filters (preset / source tags / NSFW / blacklist) still apply.
-			val spaceBound = params.spaceId != null
-			val sourceVisible = if (spaceBound) {
-				params.sourceTags.isEmpty() ||
-					params.sourceTags.any { it.matches(contentGroup, originGroup) }
+			// The persisted content type (entity / projection) is authoritative for
+			// what this work really is; the source-group heuristic mislabels novels
+			// and videos from anonymous/legacy sources as MANGA/OTHER, which made
+			// Novel/Video chips (and space-bound history) come up empty while the
+			// continue-reading FAB (entity-type based) still found the same work.
+			val typeMatches = item.entityId?.let(contentTypeByEntityId::get)
+				?.let(params.groupTab::matchesContentType) == true
+			val sourceTagMatch = params.sourceTags.isEmpty() ||
+				params.sourceTags.any { it.matches(contentGroup, originGroup) }
+			val sourceVisible = if (params.spaceId != null) {
+				// The space query already constrained results to allowed types;
+				// the (space-scoped) type chip narrows by the real content type.
+				typeMatches || params.groupTab == BrowseGroupTab.All
 			} else {
-				params.groupTab.matchesContentGroup(contentGroup) &&
-					params.groupTab.matchesOriginGroup(originGroup) &&
-					(params.sourceTags.isEmpty() || params.sourceTags.any { it.matches(contentGroup, originGroup) })
+				(params.groupTab.matchesContentGroup(contentGroup) || typeMatches) &&
+					params.groupTab.matchesOriginGroup(originGroup)
 			}
-			sourceVisible &&
+			sourceVisible && sourceTagMatch &&
 				(!settings.isHistoryExcludeNsfw || !item.manga.isNsfw()) &&
 				item.manga !in globalTagBlacklist
 		}

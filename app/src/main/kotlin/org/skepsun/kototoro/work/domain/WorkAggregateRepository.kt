@@ -262,6 +262,8 @@ class WorkAggregateRepository @Inject constructor(
 				history = history,
 				stats = statsByEntityId[history.entityId],
 				tracking = trackingByEntityId[history.entityId],
+				contentType = projectionSet.contentTypesById[history.anchorMangaId]
+					?: projectionSet.contentTypesByEntityId[history.entityId],
 			)
 		}
 	}

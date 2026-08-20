@@ -6,6 +6,7 @@ import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 data class WorkStatsSummary(
@@ -31,6 +32,7 @@ data class WorkAggregate(
 	val favourite: WorkFavouriteEntity? = null,
 	val stats: WorkStatsSummary? = null,
 	val tracking: WorkTrackingSummary? = null,
+	val contentType: ContentType? = null,
 )
 
 internal fun WorkAggregate.matchesFavouriteMacroFilter(

@@ -5,6 +5,7 @@ import androidx.annotation.DrawableRes
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.ContentGroup
 import org.skepsun.kototoro.core.jsonsource.OriginGroup
+import org.skepsun.kototoro.parsers.model.ContentType
 
 /**
  * Represents a tab in the browse page for filtering sources by group.
@@ -74,6 +75,30 @@ sealed class BrowseGroupTab(
 		Content -> group == ContentGroup.MANGA || group == ContentGroup.HENTAI_MANGA
 		Novel -> group == ContentGroup.NOVEL || group == ContentGroup.HENTAI_NOVEL
 		Video -> group == ContentGroup.VIDEO || group == ContentGroup.HENTAI_VIDEO
+	}
+
+	/**
+	 * Check if a work matches this tab based on its persisted content type.
+	 * Unlike [matchesContentGroup], which classifies by the *source*, this
+	 * matches the type recorded on the entity / projection — so novels and
+	 * videos whose sources the source-group heuristic labels as MANGA/OTHER
+	 * (e.g. anonymous or legacy JSON sources restored from backups) still
+	 * appear under the Novel/Video chips.
+	 */
+	fun matchesContentType(type: ContentType): Boolean = when (this) {
+		All -> true
+		Content -> type == ContentType.MANGA ||
+			type == ContentType.MANHWA ||
+			type == ContentType.MANHUA ||
+			type == ContentType.COMICS ||
+			type == ContentType.ONE_SHOT ||
+			type == ContentType.DOUJINSHI ||
+			type == ContentType.IMAGE_SET ||
+			type == ContentType.ARTIST_CG ||
+			type == ContentType.GAME_CG ||
+			type == ContentType.HENTAI_MANGA
+		Novel -> type == ContentType.NOVEL || type == ContentType.HENTAI_NOVEL
+		Video -> type == ContentType.VIDEO || type == ContentType.HENTAI_VIDEO
 	}
 	
 	/**

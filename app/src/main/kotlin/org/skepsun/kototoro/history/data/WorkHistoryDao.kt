@@ -18,6 +18,7 @@ abstract class WorkHistoryDao {
 		"""
 		SELECT wh.*
 		FROM work_history wh
+		LEFT JOIN entity e ON e.id = wh.entity_id
 		LEFT JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
 		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, wh.anchor_manga_id)
 		LEFT JOIN (
@@ -34,7 +35,7 @@ abstract class WorkHistoryDao {
 					WHERE eb.entity_id = wh.entity_id
 						AND eb.source IN ('local_manga', '0')
 						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-						AND sm.content_type IN (:allowedTypes)
+						AND COALESCE(sm.content_type, e.content_type) IN (:allowedTypes)
 						AND (:applySourceFilter = 0 OR sm.source IN (:allowedSources))
 				)
 				AND NOT EXISTS (
@@ -43,8 +44,8 @@ abstract class WorkHistoryDao {
 					WHERE eb.entity_id = wh.entity_id
 						AND eb.source IN ('local_manga', '0')
 						AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-						AND sm.content_type IN (:classifiedTypes)
-						AND sm.content_type NOT IN (:allowedTypes)
+						AND COALESCE(sm.content_type, e.content_type) IN (:classifiedTypes)
+						AND COALESCE(sm.content_type, e.content_type) NOT IN (:allowedTypes)
 				)
 			))
 		ORDER BY
