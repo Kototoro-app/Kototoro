@@ -158,21 +158,6 @@ private fun NavDestination.isImmersiveRoute(): Boolean {
     return hasRoute<DetailsRoute>() || hasRoute<ContentListRoute>()
 }
 
-private fun NavDestination.mainRouteOrder(): Int = when {
-    hasRoute<MainShellRoute>() -> 0
-    hasRoute<HomeRoute>() -> 0
-    hasRoute<HistoryRoute>() -> 1
-    hasRoute<FavoritesRoute>() -> 2
-    hasRoute<ExploreRoute>() -> 3
-    hasRoute<DiscoverRoute>() -> 4
-    hasRoute<FeedRoute>() -> 5
-    hasRoute<LocalRoute>() -> 6
-    hasRoute<SuggestionsRoute>() -> 7
-    hasRoute<BookmarksRoute>() -> 8
-    hasRoute<UpdatedRoute>() -> 9
-    else -> Int.MAX_VALUE
-}
-
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.mainRouteFadeIn(): EnterTransition {
     if (initialState.destination.isImmersiveRoute() && targetState.destination.isMainRoute()) {
         return slideIntoContainer(
@@ -246,23 +231,13 @@ private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
 private fun NavDestination.isMainRoute(): Boolean =
-    hasRoute<MainShellRoute>() ||
-        hasRoute<HomeRoute>() ||
-        hasRoute<DiscoverRoute>() ||
-        hasRoute<HistoryRoute>() ||
-        hasRoute<FavoritesRoute>() ||
-        hasRoute<ExploreRoute>() ||
-        hasRoute<FeedRoute>() ||
-        hasRoute<LocalRoute>() ||
-        hasRoute<SuggestionsRoute>() ||
-        hasRoute<BookmarksRoute>() ||
-        hasRoute<UpdatedRoute>()
+    hasRoute<MainShellRoute>()
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
-    startDestination: Any = HomeRoute,
+    startDestination: Any = MainShellRoute,
     contentPadding: androidx.compose.foundation.layout.PaddingValues = androidx.compose.foundation.layout.PaddingValues(0.dp),
     bottomBarOffsetPx: Float = 0f,
     bottomBarHeightPx: Int = 0,
@@ -350,74 +325,6 @@ fun AppNavGraph(
                 routeFab = routeFab,
             )
         }
-        composable<HomeRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                HomeTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    navController = navController,
-                    activity = activity,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    rootView = rootView,
-                    contentPadding = contentPadding,
-                    mainNavigator = mainNavigator,
-                    onOpenSearch = onOpenSearch,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                )
-            }
-        }
-        composable<DiscoverRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                BrowseTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    mainNavigator = mainNavigator,
-                    ownerRoute = TOP_BAR_OWNER_DISCOVER,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
-            }
-        }
-        composable<HistoryRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                HistoryTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    activity = activity,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    rootView = rootView,
-                    contentPadding = contentPadding,
-                    bottomBarOffsetPx = bottomBarOffsetPx,
-                    bottomBarHeightPx = bottomBarHeightPx,
-                    isLandscapeNavigation = isLandscapeNavigation,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
-            }
-        }
-        composable<FavoritesRoute> { backStackEntry ->
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                val entityOrganizeResultSource = remember(backStackEntry.savedStateHandle) {
-                    SavedStateHandleFavoritesEntityOrganizeResultSource(backStackEntry.savedStateHandle)
-                }
-                FavoritesTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    entityOrganizeResultSource = entityOrganizeResultSource,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
-            }
-        }
         composable<EntityOrganizeRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<EntityOrganizeRoute>()
             val initialSelectedIds = remember(route.selectedContentIds) {
@@ -437,82 +344,6 @@ fun AppNavGraph(
                     navController.navigateUp()
                 },
             )
-        }
-        composable<ExploreRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                BrowseTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    mainNavigator = mainNavigator,
-                    ownerRoute = TOP_BAR_OWNER_EXPLORE,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
-            }
-        }
-        composable<FeedRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                FeedTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    mainNavigator = mainNavigator,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
-            }
-        }
-        composable<LocalRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                LocalTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    onContextualMenuActionsChanged = onContextualMenuActionsChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                )
-            }
-        }
-        composable<SuggestionsRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                SuggestionsTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                )
-            }
-        }
-        composable<BookmarksRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                BookmarksTopLevelRouteContent(
-                    mainActivity = mainActivity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    pageSaveHelper = requireNotNull(pageSaveHelper) {
-                        "BookmarksRoute requires a pre-registered PageSaveHelper"
-                    },
-                )
-            }
-        }
-        composable<UpdatedRoute> {
-            MainRouteScene(landscapeStartPadding = landscapeStartPadding) {
-                UpdatedTopLevelRouteContent(
-                    animatedVisibilityScope = this@composable,
-                    activity = activity,
-                    appRouter = appRouter,
-                    contentPadding = contentPadding,
-                    onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
-                    navigateToDetailsWithContent = navigateToDetailsWithContent,
-                )
-            }
         }
         composable<SearchRoute> { backStackEntry ->
             val viewModel = hiltViewModel<org.skepsun.kototoro.search.ui.multi.SearchViewModel>()

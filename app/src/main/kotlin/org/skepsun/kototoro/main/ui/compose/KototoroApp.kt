@@ -874,10 +874,7 @@ fun KototoroApp(
         navController.awaitCurrentEntryResumed()
         if (navController.previousBackStackEntry == null) {
             val selectedTopLevel = topLevelKeyForRouteOwnerKey(session.selectedTopLevel) ?: HomeNavKey
-            if (
-                navController.currentDestination?.hasRoute<MainShellRoute>() != true &&
-                topLevelKeyForDestination(navController.currentDestination) != selectedTopLevel
-            ) {
+            if (navController.currentDestination?.hasRoute<MainShellRoute>() != true) {
                 navController.navigate(routeForTopLevelKey(selectedTopLevel)) {
                     launchSingleTop = true
                 }
@@ -993,12 +990,8 @@ fun KototoroApp(
             mainSpaceSwitcherFabBounds = candidate.second
         }
     }
-    val currentTopLevelKey = topLevelKeyForDestination(currentDestination)
-        ?: if (shouldShowChrome) mainNavState.selectedTopLevel else null
+    val currentTopLevelKey = if (shouldShowChrome) mainNavState.selectedTopLevel else null
     val currentTopBarOwnerKey = routeOwnerKeyForTopLevelKey(currentTopLevelKey)
-    LaunchedEffect(currentDestination) {
-        topLevelKeyForDestination(currentDestination)?.let(mainNavState::navigateTopLevel)
-    }
     var lastChromeTopBarOwnerKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(currentTopBarOwnerKey) {
         if (currentTopBarOwnerKey != null) {
