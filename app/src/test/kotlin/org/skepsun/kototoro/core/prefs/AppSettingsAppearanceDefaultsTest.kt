@@ -31,6 +31,7 @@ class AppSettingsAppearanceDefaultsTest {
 		every { preferences.getBoolean(any(), any()) } answers { secondArg() }
 		every { preferences.getInt(any(), any()) } answers { secondArg() }
 		every { preferences.getString(any(), any()) } answers { secondArg() }
+		every { preferences.getStringSet(any(), any()) } answers { (secondArg<Set<String>?>() ?: emptySet()).toMutableSet() }
 	}
 
 	@AfterEach

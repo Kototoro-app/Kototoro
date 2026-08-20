@@ -30,6 +30,7 @@ class AppSettingsSpaceFeatureDefaultsTest {
 		every { preferences.contains(any()) } returns false
 		every { preferences.getBoolean(any(), any()) } answers { secondArg() }
 		every { preferences.getString(any(), any()) } answers { secondArg() }
+		every { preferences.getStringSet(any(), any()) } answers { (secondArg<Set<String>?>() ?: emptySet()).toMutableSet() }
 	}
 
 	@AfterEach

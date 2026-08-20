@@ -36,7 +36,7 @@ class AppSettingsBackupRestoreCompatTest {
 		every { preferences.getLong(any(), any()) } answers { secondArg() }
 		every { preferences.getFloat(any(), any()) } answers { secondArg() }
 		every { preferences.getString(any(), any()) } answers { secondArg() }
-		every { preferences.getStringSet(any(), any()) } answers { secondArg() }
+		every { preferences.getStringSet(any(), any()) } answers { (secondArg<Set<String>?>() ?: emptySet()).toMutableSet() }
 	}
 
 	@AfterEach
