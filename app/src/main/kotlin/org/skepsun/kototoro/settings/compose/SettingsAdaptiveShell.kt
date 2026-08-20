@@ -1,6 +1,12 @@
 package org.skepsun.kototoro.settings.compose
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -17,8 +23,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.settings.SettingsDestination
 
 private val SettingsListPaneWidth = 360.dp
@@ -57,21 +61,21 @@ private fun SettingsSinglePaneShell(
 	destinationContent: @Composable (SettingsDestination) -> Unit,
 ) {
 	val saveableStateHolder = rememberSaveableStateHolder()
-	if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-		destination?.let { targetDestination ->
-			SettingsSinglePaneContent(
-				destination = targetDestination,
-				destinationKey = destinationKey,
-				modifier = modifier,
-				saveableStateHolder = saveableStateHolder,
-				destinationContent = destinationContent,
-			)
-		}
-		return
-	}
 	AnimatedContent(
 		targetState = destination,
 		modifier = modifier,
+		transitionSpec = {
+			// Settings pages are parent-child surfaces: a light FadeThrough so
+			// sub-page open/close never snaps (matches the app motion system).
+			(fadeIn(animationSpec = tween(220)) + scaleIn(
+				initialScale = 0.99f,
+				animationSpec = tween(280),
+			)) togetherWith
+				(fadeOut(animationSpec = tween(180)) + scaleOut(
+					targetScale = 0.985f,
+					animationSpec = tween(240),
+				))
+		},
 		label = "settings_page",
 	) { targetDestination ->
 		if (targetDestination != null) {
