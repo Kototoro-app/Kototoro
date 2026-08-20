@@ -372,9 +372,23 @@ class HistoryListViewModel @Inject constructor(
 			if (params.preset != null && source.name !in params.preset.sources) return@filter false
 			val contentGroup = sourceGroupManager.getContentGroup(source)
 			val originGroup = sourceGroupManager.getOriginGroup(source)
-			val sourceVisible = params.groupTab.matchesContentGroup(contentGroup) &&
-				params.groupTab.matchesOriginGroup(originGroup) &&
-				(params.sourceTags.isEmpty() || params.sourceTags.any { it.matches(contentGroup, originGroup) })
+			// When the list is bound to a space the DAO already restricted the
+			// results to the space's allowed content types. Re-filtering by the
+			// source-group heuristic on top drops space-valid items (local /
+			// anonymous projections mislabel novels/videos as MANGA/OTHER), so
+			// the history tab ends up empty while the continue-reading FAB (which
+			// uses the entity content type) still finds the same work. Skip the
+			// group-tab content/origin matching for space-bound history; optional
+			// user filters (preset / source tags / NSFW / blacklist) still apply.
+			val spaceBound = params.spaceId != null
+			val sourceVisible = if (spaceBound) {
+				params.sourceTags.isEmpty() ||
+					params.sourceTags.any { it.matches(contentGroup, originGroup) }
+			} else {
+				params.groupTab.matchesContentGroup(contentGroup) &&
+					params.groupTab.matchesOriginGroup(originGroup) &&
+					(params.sourceTags.isEmpty() || params.sourceTags.any { it.matches(contentGroup, originGroup) })
+			}
 			sourceVisible &&
 				(!settings.isHistoryExcludeNsfw || !item.manga.isNsfw()) &&
 				item.manga !in globalTagBlacklist
