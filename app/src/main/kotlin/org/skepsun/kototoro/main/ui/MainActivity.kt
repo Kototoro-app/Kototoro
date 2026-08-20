@@ -158,8 +158,8 @@ class MainActivity : BaseComposeActivity() {
     private var searchNavigationRequest by mutableStateOf<SearchNavigationRequest?>(null)
     private var nextSearchRequestId = 0L
     private var searchQuery by mutableStateOf("")
-    private val activeFilterCallbacks = LinkedHashSet<SearchBarFilterViewController.Callback>()
-    private var currentFilterCallback: SearchBarFilterViewController.Callback? = null
+    private val activeFilterCallbacks = LinkedHashSet<SearchBarFilterCallback>()
+    private var currentFilterCallback: SearchBarFilterCallback? = null
     private var activeFilterContentType by mutableStateOf<ContentType?>(null)
     private var activeFilterSourceTags by mutableStateOf<Set<SourceTag>>(emptySet())
     private var isLanguagePresetFilterVisible by mutableStateOf(false)
@@ -170,14 +170,14 @@ class MainActivity : BaseComposeActivity() {
     private var enabledContentTypes by mutableStateOf(allTopBarContentTypes())
 
 
-    fun setActiveFilterCallback(callback: SearchBarFilterViewController.Callback) {
+    fun setActiveFilterCallback(callback: SearchBarFilterCallback) {
         activeFilterCallbacks.remove(callback)
         activeFilterCallbacks.add(callback)
         currentFilterCallback = callback
         refreshFilters()
     }
 
-    fun clearActiveFilterCallback(callback: SearchBarFilterViewController.Callback) {
+    fun clearActiveFilterCallback(callback: SearchBarFilterCallback) {
         activeFilterCallbacks.remove(callback)
         currentFilterCallback = activeFilterCallbacks.lastOrNull()
         if (currentFilterCallback != null) {

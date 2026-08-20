@@ -29,15 +29,10 @@ import android.webkit.WebView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.CheckResult
 import androidx.annotation.IntegerRes
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.appcompat.app.AppCompatDialog
 import androidx.core.app.ActivityOptionsCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.os.LocaleListCompat
-import androidx.fragment.app.DialogFragment
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
 import androidx.webkit.WebViewCompat
@@ -169,13 +164,6 @@ fun Context.findActivity(): Activity? = when (this) {
 	is Activity -> this
 	is ContextWrapper -> baseContext.findActivity()
 	else -> null
-}
-
-fun Fragment.findAppCompatDelegate(): AppCompatDelegate? {
-	((this as? DialogFragment)?.dialog as? AppCompatDialog)?.run {
-		return delegate
-	}
-	return parentFragment?.findAppCompatDelegate() ?: (activity as? AppCompatActivity)?.delegate
 }
 
 fun Context.checkNotificationPermission(channelId: String?): Boolean {

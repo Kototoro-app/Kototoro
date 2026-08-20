@@ -67,9 +67,6 @@
 		<item name="preferenceTheme">@style/PreferenceThemeOverlay.Kototoro</item>
 		<!-- Fix crash in A15 + compact spacing for SearchBar filter icons -->
 		<item name="actionButtonStyle">@style/Widget.Kototoro.ActionButton.Compact</item>
-
-		<!-- Custom views -->
-		<item name="coverImageViewStyle">@style/Widget.Kototoro.ImageView.Cover</item>
 	</style>
 
 	<!--== Default Theme ==-->

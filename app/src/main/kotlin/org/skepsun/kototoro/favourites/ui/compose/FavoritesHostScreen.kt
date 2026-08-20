@@ -58,7 +58,7 @@ import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
+import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
@@ -96,7 +96,7 @@ fun KototoroFavoritesHostRoute(
         if (!registerFilterCallback) {
             onDispose { }
         } else {
-            val callback = object : SearchBarFilterViewController.Callback {
+            val callback = object : SearchBarFilterCallback {
                 override fun isSourceTagFilterVisible() = true
 
                 override fun getSourceTagEntries() = SourceTag.quickFilterEntries

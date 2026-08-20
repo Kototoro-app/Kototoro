@@ -190,14 +190,6 @@
 		<item name="android:textColor">?colorOnBackground</item>
 	</style>
 
-	<style name="Widget.Kototoro.ImageView.Cover" parent="Widget.MaterialComponents.ShapeableImageView">
-		<item name="aspectRationHeight">18</item>
-		<item name="aspectRationWidth">13</item>
-		<item name="android:scaleType">centerCrop</item>
-		<item name="allowRgb565">true</item>
-		<item name="trimImage">true</item>
-	</style>
-
 	<style name="ThemeOverlay.Kototoro.MainToolbar" parent="">
 		<item name="colorControlHighlight">@color/selector_overlay</item>
 		<item name="actionButtonStyle">@style/Widget.AppCompat.ActionButton</item>
@@ -279,16 +271,6 @@
 	</style>
 
 	<!-- Drawable -->
-
-	<style name="ProgressDrawable">
-		<item name="android:fillAlpha">1</item>
-		<item name="android:fillColor">?attr/colorPrimary</item>
-		<item name="android:strokeColor">?attr/colorSurfaceVariant</item>
-		<item name="android:textColor">?attr/colorOnPrimary</item>
-		<item name="strokeWidth">4dp</item>
-		<item name="android:textSize">9sp</item>
-		<item name="autoFitTextSize">true</item>
-	</style>
 
 	<style name="FaviconDrawable">
 		<item name="backgroundColor">?colorBackgroundFloating</item>

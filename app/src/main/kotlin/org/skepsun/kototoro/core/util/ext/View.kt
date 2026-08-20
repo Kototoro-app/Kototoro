@@ -15,14 +15,8 @@ import androidx.appcompat.widget.ActionMenuView
 import androidx.appcompat.widget.Toolbar
 import androidx.appcompat.widget.TooltipCompat
 import androidx.core.view.children
-import androidx.core.view.descendants
 import androidx.core.view.isVisible
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentManager
-import androidx.recyclerview.widget.RecyclerView
-import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import androidx.swiperefreshlayout.widget.CircularProgressDrawable
-import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.chip.Chip
 import com.google.android.material.progressindicator.BaseProgressIndicator
@@ -83,30 +77,6 @@ fun View.measureWidth(): Int {
 	} else vw
 }
 
-inline fun ViewPager2.doOnPageChanged(crossinline callback: (Int) -> Unit) {
-	registerOnPageChangeCallback(
-		object : ViewPager2.OnPageChangeCallback() {
-
-			override fun onPageSelected(position: Int) {
-				super.onPageSelected(position)
-				callback(position)
-			}
-		},
-	)
-}
-
-val ViewPager2.recyclerView: RecyclerView?
-	get() = children.firstNotNullOfOrNull { it as? RecyclerView }
-
-fun ViewPager2.findCurrentViewHolder(): ViewHolder? {
-	return recyclerView?.findViewHolderForAdapterPosition(currentItem)
-}
-
-fun FragmentManager.findCurrentPagerFragment(pager: ViewPager2): Fragment? {
-	val currentId = pager.adapter?.getItemId(pager.currentItem) ?: pager.currentItem
-	return findFragmentByTag("f$currentId")
-}
-
 fun View.resetTransformations() {
 	alpha = 1f
 	translationX = 0f
@@ -137,12 +107,6 @@ fun RangeSlider.setValuesRounded(vararg newValues: Float) {
 		} else {
 			(newValue / step).roundToInt() * step
 		}.coerceIn(valueFrom, valueTo)
-	}
-}
-
-fun RecyclerView.invalidateNestedItemDecorations() {
-	descendants.filterIsInstance<RecyclerView>().forEach {
-		it.invalidateItemDecorations()
 	}
 }
 

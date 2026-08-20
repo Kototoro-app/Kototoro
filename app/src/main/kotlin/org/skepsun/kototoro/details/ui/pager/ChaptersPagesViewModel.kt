@@ -1,8 +1,5 @@
 package org.skepsun.kototoro.details.ui.pager
 
-import android.app.Activity
-import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -488,36 +485,6 @@ abstract class ChaptersPagesViewModel(
 		}
 	}
 
-	class ActivityVMLazy(
-		private val fragment: Fragment,
-	) : Lazy<ChaptersPagesViewModel> {
-		private var cached: ChaptersPagesViewModel? = null
-
-		override val value: ChaptersPagesViewModel
-			get() {
-				val viewModel = cached
-				return if (viewModel == null) {
-					val activity = fragment.requireActivity()
-					val vmClass = getViewModelClass(activity)
-					ViewModelProvider.create(
-						store = activity.viewModelStore,
-						factory = activity.defaultViewModelProviderFactory,
-						extras = activity.defaultViewModelCreationExtras,
-					)[vmClass].also { cached = it }
-				} else {
-					viewModel
-				}
-			}
-
-		override fun isInitialized(): Boolean = cached != null
-
-		private fun getViewModelClass(activity: Activity) = when (activity) {
-			is ReaderActivity -> ReaderViewModel::class.java
-			is DetailsActivity -> DetailsViewModel::class.java
-			is VideoPlayerActivity -> VideoChaptersViewModel::class.java
-			else -> error("Wrong activity ${activity.javaClass.simpleName} for ${ChaptersPagesViewModel::class.java.simpleName}")
-		}
-	}
 }
 
 internal fun List<ChapterListItem>.mergeRepeated(): List<ChapterListItem> {

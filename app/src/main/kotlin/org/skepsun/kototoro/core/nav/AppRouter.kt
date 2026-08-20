@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.core.nav
 
-import android.accounts.Account
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -19,11 +18,7 @@ import androidx.annotation.CheckResult
 import androidx.annotation.UiContext
 import androidx.core.app.ShareCompat
 import androidx.core.content.FileProvider
-import androidx.fragment.app.DialogFragment
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import androidx.fragment.app.FragmentManager
-import androidx.fragment.app.findFragment
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.foundation.layout.Column
@@ -182,14 +177,9 @@ private fun AppRouterChoiceDialog(
     )
 }
 
-class AppRouter private constructor(
+class AppRouter(
     private val activity: FragmentActivity?,
-    private val fragment: Fragment?,
 ) {
-
-    constructor(activity: FragmentActivity) : this(activity, null)
-
-    constructor(fragment: Fragment) : this(null, fragment)
 
     private val settings: AppSettings by lazy {
         EntryPointAccessors.fromApplication<AppRouterEntryPoint>(checkNotNull(contextOrNull())).settings
@@ -452,7 +442,7 @@ class AppRouter private constructor(
 			return
 		}
 
-		val lifecycleOwner = (activity as? LifecycleOwner) ?: (fragment as? LifecycleOwner)
+		val lifecycleOwner = activity as? LifecycleOwner
 		if (lifecycleOwner == null) {
 			openVideo(target.url, manga, anchor, target.state)
 			return
@@ -858,11 +848,8 @@ class AppRouter private constructor(
     }
 
     @CheckResult
-    fun openSystemSyncSettings(account: Account): Boolean {
-        val args = Bundle(1)
-        args.putParcelable(ACCOUNT_KEY, account)
+    fun openSystemSyncSettings(): Boolean {
         val intent = Intent(ACTION_ACCOUNT_SYNC_SETTINGS)
-        intent.putExtra(EXTRA_SHOW_FRAGMENT_ARGUMENTS, args)
         return startActivitySafe(intent)
     }
 
@@ -1109,7 +1096,7 @@ class AppRouter private constructor(
 		fileUri: Uri,
 		restoreFormat: BackupRestoreFormat = BackupRestoreFormat.KOTOTORO_CURRENT,
 	) {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
 			RestoreDialogRoute(
 				uri = fileUri,
@@ -1216,7 +1203,7 @@ class AppRouter private constructor(
     }
 
     fun showWelcomeSheet() {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
         composeActivity.showComposeModal(key = WELCOME_MODAL_KEY) {
             WelcomeRoute(
@@ -1237,7 +1224,7 @@ class AppRouter private constructor(
     }
 
     fun showScrobblingSelectorSheet(manga: Content, scrobblerService: ScrobblerService?) {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             ScrobblingSelectorSheetRoute(
                 manga = manga,
@@ -1248,7 +1235,7 @@ class AppRouter private constructor(
     }
 
     fun showScrobblingInfoSheet(scrobblerService: ScrobblerService) {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             ScrobblingInfoSheetRoute(
                 scrobblerServiceId = scrobblerService.id,
@@ -1258,7 +1245,7 @@ class AppRouter private constructor(
     }
 
     fun showTrackerCategoriesConfigSheet() {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return
+        val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             TrackerCategoriesConfigRoute(
                 onDismissRequest = composeActivity::dismissComposeModal,
@@ -1307,14 +1294,10 @@ class AppRouter private constructor(
 
     /** Public utils **/
 
-    fun isFilterSupported(): Boolean = when {
-        fragment != null -> FilterCoordinator.find(fragment) != null
-        activity != null -> activity is FilterCoordinator.Owner
-        else -> false
-    }
+    fun isFilterSupported(): Boolean = activity is FilterCoordinator.Owner
 
     fun closeWelcomeSheet(): Boolean {
-        val composeActivity = (activity ?: fragment?.activity) as? BaseComposeActivity ?: return false
+        val composeActivity = activity as? BaseComposeActivity ?: return false
         composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
         return true
     }
@@ -1342,11 +1325,7 @@ class AppRouter private constructor(
     /** Private utils **/
 
     private fun startActivity(intent: Intent, options: Bundle? = null) {
-        fragment?.also {
-            if (it.isAdded) {
-                it.startActivity(intent, options)
-            }
-        } ?: activity?.startActivity(intent, options)
+        activity?.startActivity(intent, options)
     }
 
     private fun startActivitySafe(intent: Intent): Boolean = try {
@@ -1359,12 +1338,6 @@ class AppRouter private constructor(
     private fun startActivity(activityClass: Class<out Activity>) {
         startActivity(Intent(contextOrNull() ?: return, activityClass))
     }
-
-    private fun getFragmentManager(): FragmentManager? = runCatching {
-        fragment?.childFragmentManager ?: activity?.supportFragmentManager
-    }.onFailure { exception ->
-        exception.printStackTraceDebug()
-    }.getOrNull()
 
     fun shareLink(link: String, title: String) {
         val context = contextOrNull() ?: return
@@ -1386,48 +1359,16 @@ class AppRouter private constructor(
     }
 
     @UiContext
-    private fun contextOrNull(): Context? = activity ?: fragment?.context
+    private fun contextOrNull(): Context? = activity
 
-    private fun getLifecycleOwner(): LifecycleOwner? = activity ?: fragment?.viewLifecycleOwner
-
-    private fun DialogFragment.showDistinct(): Boolean {
-        val fm = this@AppRouter.getFragmentManager() ?: return false
-        val tag = javaClass.fragmentTag()
-        val existing = fm.findFragmentByTag(tag) as? DialogFragment?
-        if (existing != null && existing.isVisible && existing.arguments == this.arguments) {
-            return false
-        }
-        show(fm, tag)
-        return true
-    }
-
-    private fun DialogFragment.show() {
-        show(
-            this@AppRouter.getFragmentManager() ?: return,
-            javaClass.fragmentTag(),
-        )
-    }
-
-    private fun Fragment.findFragmentByTagRecursive(fragmentTag: String): Fragment? {
-        childFragmentManager.findFragmentByTag(fragmentTag)?.let {
-            return it
-        }
-        val parent = parentFragment
-        return if (parent != null) {
-            parent.findFragmentByTagRecursive(fragmentTag)
-        } else {
-            parentFragmentManager.findFragmentByTag(fragmentTag)
-        }
-    }
+    private fun getLifecycleOwner(): LifecycleOwner? = activity
 
     companion object {
         private const val WELCOME_MODAL_KEY = "welcome-sheet-modal"
         private const val FILTER_SHEET_MODAL_KEY = "filter-sheet-modal"
 
-        fun from(view: View): AppRouter? = runCatching {
-            AppRouter(view.findFragment())
-        }.getOrElse {
-            (view.context.findActivity() as? FragmentActivity)?.let(::AppRouter)
+        fun from(view: View): AppRouter? {
+            return (view.context.findActivity() as? FragmentActivity)?.let(::AppRouter)
         }
 
         fun detailsIntent(context: Context, origin: DetailsOrigin) = Intent(context, DetailsActivity::class.java)
@@ -1682,9 +1623,7 @@ class AppRouter private constructor(
         val ACTION_PERIODIC_BACKUP = "${BuildConfig.APPLICATION_ID}.action.MANAGE_PERIODIC_BACKUP"
         val ACTION_ABOUT = "${BuildConfig.APPLICATION_ID}.action.ABOUT"
 
-        private const val ACCOUNT_KEY = "account"
         private const val ACTION_ACCOUNT_SYNC_SETTINGS = "android.settings.ACCOUNT_SYNC_SETTINGS"
-        private const val EXTRA_SHOW_FRAGMENT_ARGUMENTS = ":settings:show_fragment_args"
 
         private const val TYPE_TEXT = "text/plain"
         private const val TYPE_IMAGE = "image/*"
@@ -1698,10 +1637,6 @@ class AppRouter private constructor(
                 append(groupTitle.orEmpty())
             }
         }
-
-        private fun Class<out Fragment>.fragmentTag() = name // TODO
-
-        private inline fun <reified F : Fragment> fragmentTag() = F::class.java.fragmentTag()
     }
 }
 

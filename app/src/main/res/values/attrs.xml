@@ -3,41 +3,6 @@
 
 	<attr name="expandCollapseIndicator" format="reference" />
 
-	<attr name="coverImageViewStyle" />
-
-	<declare-styleable name="CoilImageView">
-		<attr name="allowRgb565" format="boolean" />
-		<attr name="useExistingDrawable" format="boolean" />
-		<attr name="decodeRegion" format="boolean" />
-		<attr name="placeholderDrawable" format="reference" />
-		<attr name="errorDrawable" format="reference" />
-		<attr name="fallbackDrawable" format="reference" />
-		<attr name="crossfadeEnabled" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="CoverImageView">
-		<attr name="aspectRationHeight" format="integer" />
-		<attr name="aspectRationWidth" format="integer" />
-		<attr name="trimImage" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="ProgressDrawable">
-		<attr name="strokeWidth" />
-		<attr name="android:strokeColor" />
-		<attr name="android:textSize" />
-		<attr name="android:textColor" />
-		<attr name="android:fillColor" />
-		<attr name="android:fillAlpha" />
-		<attr name="android:width" />
-		<attr name="android:height" />
-		<attr name="outlineColor" format="color" />
-		<attr name="autoFitTextSize" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="ReadingProgressView">
-		<attr name="progressStyle" format="reference" />
-	</declare-styleable>
-
 	<declare-styleable name="FaviconFallbackDrawable">
 		<attr name="backgroundColor" />
 		<attr name="strokeColor" />

@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.main.ui.SearchBarFilterViewController
+import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
@@ -437,7 +437,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
         DisposableEffect(mainActivity, viewModel) {
-            val callback = object : SearchBarFilterViewController.Callback {
+            val callback = object : SearchBarFilterCallback {
                 override fun isContentTypeFilterVisible(): Boolean = isContentTypeFilterVisible
                 override fun isSourceTagFilterVisible(): Boolean = isSourceTagFilterVisible
 
