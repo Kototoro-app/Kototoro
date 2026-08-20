@@ -85,5 +85,24 @@ class BatchMappingPagingSource<Input : Any, Output : Any>(
 		}
 	}
 
-	override fun getRefreshKey(state: PagingState<Int, Output>): Int? = state.anchorPosition
+	override fun getRefreshKey(state: PagingState<Int, Output>): Int? {
+		val anchorPosition = state.anchorPosition ?: return null
+		// The delegate is a Room LIMIT/OFFSET positional source over RAW rows,
+		// while `transform` may filter or expand rows (quick filters, NSFW /
+		// blacklist, group tabs, separators). A bare anchorPosition is a position
+		// in the MAPPED space and does not match the RAW offset the delegate
+		// expects: passing it straight through made an invalidation-driven reload
+		// start at a raw offset unrelated to the rows the user was looking at, so
+		// the already-loaded favourites got replaced by other ones.
+		//
+		// PagingState.closestPageToPosition() locates the page holding the anchor
+		// in the mapped space (it accumulates page data sizes). That page's
+		// prevKey/nextKey are RAW offsets into the delegate which the Room source
+		// can reload directly, so the refreshed window stays on the same rows.
+		val anchorPage = state.closestPageToPosition(anchorPosition)
+		// prevKey is the raw offset of the page before the one holding the
+		// anchor; every page except the first one carries a raw prevKey, and an
+		// anchor inside the first page correctly gets null (reload from the top).
+		return anchorPage?.prevKey
+	}
 }

@@ -756,7 +756,18 @@ class ContentDataRepository @Inject constructor(
 		if (dao.findEntity(entityId) == null) {
 			return null
 		}
-		dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
+		// NOTE: this is a READ path and must stay read-only. Previously it
+		// backfilled a new entity_preferences row via insertEntityPrefsIgnore()
+		// on every read. Because the generated favourites/history paging sources
+		// observe entity_preferences for invalidation, each background read that
+		// touched an entity without a row inserted one -> Room invalidated the
+		// paging source -> refresh -> read again -> insert again: a continuous
+		// write/invalidate/refresh storm that made already-loaded favourites get
+		// washed out by other rows even while the user was idle. All callers
+		// already fall back to legacy projection preferences when this returns
+		// null (getOverride, getMetadataSourceSelection, getReadingStatus,
+		// findPreferredLocalContentById), and the write paths create the row
+		// explicitly (setReadingStatus / setOverride / setMetadataSourceSelection).
 		return dao.findEntityPrefs(entityId)
 	}
 
