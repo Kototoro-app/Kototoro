@@ -58,6 +58,8 @@ reasonix.toml
 /.vscode
 .pi-weave
 /models/
+# pnpm lockfile not used (docs site installs via npm)
+pnpm-lock.yaml
 
 # Codex developer-local configuration
 /.agents/

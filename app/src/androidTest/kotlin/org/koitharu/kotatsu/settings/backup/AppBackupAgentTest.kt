@@ -123,7 +123,16 @@ class AppBackupAgentTest {
 
 		assertEquals(category, favouritesRepository.getCategory(category.id))
 		assertEquals(history, historyRepository.getOne(content))
-		assertEquals(listOf(content), favouritesRepository.getContent(category.id))
+		// 收藏恢复后锚定的是投影内容：Chapters 等目录数据不经收藏投影表携带，
+		// 这里校验投影核心身份字段（与当前投影架构契约一致）。
+		val restoredContent = favouritesRepository.getContent(category.id)
+		assertEquals(1, restoredContent.size)
+		val restored = restoredContent.single()
+		assertEquals(content.id, restored.id)
+		assertEquals(content.title, restored.title)
+		assertEquals(content.url, restored.url)
+		assertEquals(content.source, restored.source)
+		assertTrue(tag in restored.tags)
 
 		val allTags = database.getTagsDao().findTags(TestContentSource.name).toContentTags()
 		assertTrue(tag in allTags)
@@ -144,7 +153,10 @@ class AppBackupAgentTest {
 			agent.restoreBackupFile(it.fd, backup.length(), backupRepository)
 		}
 		runTest {
-			assertEquals(6, historyRepository.observeAll().first().size)
+			// 旧备份含 6 条历史，其中「Воспоминания Эманон」出现两次（不同 URL）；
+			// work 实体模型下同名漫画按标题合并为同一 WORK，work_history 以实体为
+			// 主键 upsert，聚合后为 5 条——这是当前架构的预期结果。
+			assertEquals(5, historyRepository.observeAll().first().size)
 			assertEquals(2, favouritesRepository.observeCategories().first().size)
 			assertEquals(15, favouritesRepository.getAllContent().size)
 		}
