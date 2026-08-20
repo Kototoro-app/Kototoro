@@ -805,10 +805,22 @@ private fun HomeHeroPoster(
     onBoundsChanged: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     Box(
         modifier = modifier
             .size(width = width, height = height)
             .onGloballyPositioned { onBoundsChanged(it.unclippedBoundsInWindow()) }
+            .then(
+                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = snapshotKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else Modifier,
+            )
             .clip(ContentCoverShape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.28f)),
     ) {
