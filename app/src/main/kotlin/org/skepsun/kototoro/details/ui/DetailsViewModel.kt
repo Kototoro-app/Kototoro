@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.details.ui
 
+
 import android.content.Context
 import android.net.Uri
 import android.os.SystemClock
@@ -43,14 +44,11 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
-import androidx.room.withTransaction
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.favourites.domain.AttachReadingSourceToEntityUseCase
 import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
-import org.skepsun.kototoro.details.ui.model.toListItem
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.bookmarks.domain.BookmarksRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
@@ -94,7 +92,6 @@ import org.skepsun.kototoro.details.ui.model.DetailsChapterSourceTab
 import org.skepsun.kototoro.details.ui.model.ChapterListItem.Companion.FLAG_DOWNLOADED
 import org.skepsun.kototoro.details.ui.model.findChapterByHistory
 import org.skepsun.kototoro.details.ui.pager.ChaptersPagesViewModel
-import org.skepsun.kototoro.details.ui.pager.EmptyContentReason
 import org.skepsun.kototoro.discover.ui.details.LocalSearchState
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
@@ -115,7 +112,6 @@ import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.favourites.domain.MergeBackAndAddFavouriteUseCase
 import org.skepsun.kototoro.favourites.ui.categories.select.FavoriteDuplicatePrompt
 import org.skepsun.kototoro.core.model.FavouriteCategory
-import org.skepsun.kototoro.core.model.ids
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.parsers.model.ContentListFilter
@@ -143,7 +139,6 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository.MetadataSourceSele
 import javax.inject.Inject
 import kotlin.experimental.or
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.entitygraph.data.findWorkEntityIdByLocalMangaId
 import org.skepsun.kototoro.entitygraph.data.observeLinksByWorkOrMangaCandidates
 import org.skepsun.kototoro.entitygraph.domain.Entity
 import org.skepsun.kototoro.entitygraph.domain.EntityBinding
@@ -170,8 +165,10 @@ import org.skepsun.kototoro.work.domain.WorkDuplicateCandidateRepository
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.space.domain.SpaceId
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.plus
 import java.io.File
 import java.util.Locale
+
 
 private const val SYNTHETIC_ENTITY_GRAPH_SOURCE = "Entity Graph"
 private const val DETAILS_TRACE_TAG = "DetailsTrace"
@@ -286,141 +283,6 @@ private data class CurrentWorkProjectionSnapshot(
 	val currentReadingProjectionMangaId: Long?,
 )
 
-data class DetailsSupplementUiState(
-	val metadataProperties: List<Pair<String, String>> = emptyList(),
-	val sections: List<EntityRelationSection> = emptyList(),
-	val actions: List<DetailsSupplementAction> = emptyList(),
-	val commentThreads: List<TrackingSiteItemDetails.CommentThread> = emptyList(),
-	val commentsUrl: String? = null,
-	val reviews: List<TrackingSiteItemDetails.ReviewEntry> = emptyList(),
-	val reviewsUrl: String? = null,
-)
-
-data class MetadataSearchUiState(
-	val services: List<ScrobblerService> = emptyList(),
-	val authorizedServices: Set<ScrobblerService> = emptySet(),
-	val selectedService: ScrobblerService = ScrobblerService.ANILIST,
-	val query: String = "",
-	val results: List<TrackingSiteItem> = emptyList(),
-	val sections: List<MetadataSearchSectionUiState> = emptyList(),
-	val isLoading: Boolean = false,
-	val hasSearched: Boolean = false,
-	val errorMessage: String? = null,
-)
-
-data class ReadingSearchUiState(
-	val sources: List<ContentSourceInfo> = emptyList(),
-	val selectedSource: String? = null,
-	val query: String = "",
-	val sections: List<ReadingSearchSectionUiState> = emptyList(),
-	val isLoading: Boolean = false,
-	val hasSearched: Boolean = false,
-	val state: LocalSearchState? = null,
-	val filterUiState: ReadingSearchFilterUiState = ReadingSearchFilterUiState(),
-	val scopeFilterUiState: ReadingSearchScopeFilterUiState = ReadingSearchScopeFilterUiState(),
-)
-
-data class MetadataSearchSectionUiState(
-	val service: ScrobblerService,
-	val items: List<TrackingSiteItem> = emptyList(),
-	val isLoading: Boolean = false,
-	val errorMessage: String? = null,
-)
-
-data class ReadingSearchSectionUiState(
-	val source: ContentSourceInfo,
-	val items: List<Content> = emptyList(),
-	val isPending: Boolean = false,
-	val isLoading: Boolean = false,
-	val errorMessage: String? = null,
-)
-
-data class ReadingSearchFilterUiState(
-	val hasSelectedSource: Boolean = false,
-	val isLoading: Boolean = false,
-	val errorMessage: String? = null,
-	val sortOrders: List<SortOrder> = emptyList(),
-	val selectedSortOrder: SortOrder? = null,
-	val tagGroups: List<UiTagGroup> = emptyList(),
-	val excludedTagGroups: List<UiTagGroup> = emptyList(),
-	val contentTypes: List<ContentType> = emptyList(),
-	val selectedContentTypes: Set<ContentType> = emptySet(),
-	val states: List<ContentState> = emptyList(),
-	val selectedStates: Set<ContentState> = emptySet(),
-	val locales: List<Locale?> = emptyList(),
-	val selectedLocale: Locale? = null,
-	val author: String? = null,
-	val canSearchByAuthor: Boolean = false,
-	val supportsTagExclusion: Boolean = false,
-	val appliedFilterCount: Int = 0,
-)
-
-data class ReadingSearchScopeFilterUiState(
-	val sourceTypes: Set<SourceType> = ALL_SOURCE_TYPES,
-	val contentKinds: Set<SearchContentKind> = ALL_SEARCH_CONTENT_KINDS,
-	val pinnedOnly: Boolean = false,
-	val hideEmpty: Boolean = false,
-) {
-	val appliedFilterCount: Int
-		get() {
-			var count = 0
-			if (sourceTypes != ALL_SOURCE_TYPES) count++
-			if (contentKinds != ALL_SEARCH_CONTENT_KINDS) count++
-			if (pinnedOnly) count++
-			if (hideEmpty) count++
-			return count
-		}
-}
-
-data class SourceBindingUiState(
-	val activeLocalSourceOptions: List<ActiveLocalSourceOption> = emptyList(),
-	val entityChapterSourceInfo: EntityChapterSourceInfo? = null,
-	val metadataSourceOptions: List<DetailsSourceOption> = emptyList(),
-	val readingSourceOptions: List<DetailsSourceOption> = emptyList(),
-	val metadataChapterTabs: List<DetailsChapterSourceTab> = emptyList(),
-	val readingChapterTabs: List<DetailsChapterSourceTab> = emptyList(),
-	val resolvedMetadataContentType: ContentType? = null,
-	val resolvedMetadataLanguage: String? = null,
-	val resolvedReadingLanguage: String? = null,
-)
-
-data class TranslationUiState(
-	val translatedTitle: String? = null,
-	val translatedDescription: String? = null,
-	val isShowingTranslation: Boolean = false,
-	val hasTranslationCache: Boolean = false,
-	val isTranslating: Boolean = false,
-	val showTranslateAction: Boolean = false,
-)
-
-data class DetailsPrimaryUiState(
-	val mangaDetails: ContentDetails? = null,
-	val remoteContent: Content? = null,
-	val relatedContent: List<ContentListModel> = emptyList(),
-	val favouriteCategories: Set<FavouriteCategory> = emptySet(),
-	val historyInfo: HistoryInfo = HistoryInfo(null, null, null, false, null),
-	val branches: List<ContentBranch> = emptyList(),
-	val isStatsAvailable: Boolean = false,
-	val trackingSuggestion: TrackingSiteMatchResult? = null,
-	val linkedTrackingItems: List<LinkedTrackingItemUiModel> = emptyList(),
-	val readingStatus: ScrobblingStatus = ScrobblingStatus.PLANNED,
-	val unifiedRating: Float = 0f,
-	val canEditUnifiedRating: Boolean = false,
-	val isLoading: Boolean = false,
-	val entityRelationSections: List<EntityRelationSection> = emptyList(),
-	val activeLocalBrowserContent: Content? = null,
-	val isWorkDetails: Boolean = true,
-)
-
-data class ChaptersPaneControlsUiState(
-	val isChaptersReversed: Boolean = false,
-	val isChaptersInGridView: Boolean = false,
-	val isHideReadChapters: Boolean = false,
-	val isMergeRepeatedChapters: Boolean = false,
-	val showMergeRepeatedChapters: Boolean = false,
-	val isDownloadedOnly: Boolean = false,
-	val emptyReason: EmptyContentReason? = null,
-)
 
 private data class DetailsDiscussionUiState(
 	val commentThreads: List<TrackingSiteItemDetails.CommentThread> = emptyList(),
@@ -5939,3 +5801,4 @@ class DetailsViewModel @Inject constructor(
 		return settings.readerTranslationTargetLanguage.ifBlank { "zh" }
 	}
 }
+
