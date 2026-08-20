@@ -541,8 +541,14 @@ fun KototoroApp(
     }
     val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
         spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
-    val effectiveSharedElementTransitionsEnabled =
-        !isReducedVisualEffectsEnabled && !suppressSpaceContentMotion
+    // Keep the shared transition scope STABLE across a space switch: the
+    // space curtain handshake (COVERED/REVEALING) used to null the scope,
+    // which tore the shared-element registration out of every cover at the
+    // moment the curtain faded, so all card covers blinked out and re-set up.
+    // No transition runs during the curtain (the v2 shell suppresses its own
+    // enter/exit via suppressNavigationTransitions), so there is nothing to
+    // double-animate -- only reduced-visual-effects should disable heroes.
+    val effectiveSharedElementTransitionsEnabled = !isReducedVisualEffectsEnabled
     val spaceMotionMode = if (suppressSpaceContentMotion) {
         SpaceMotionMode.DISABLED
     } else {
