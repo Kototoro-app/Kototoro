@@ -3,11 +3,6 @@
 
 	<attr name="expandCollapseIndicator" format="reference" />
 
-	<attr name="listItemTextViewStyle" />
-	<attr name="tipViewStyle" />
-	<attr name="progressButtonStyle" />
-	<attr name="dotIndicatorStyle" />
-	<attr name="badgeViewStyle" />
 	<attr name="coverImageViewStyle" />
 
 	<declare-styleable name="CoilImageView">
@@ -24,22 +19,6 @@
 		<attr name="aspectRationHeight" format="integer" />
 		<attr name="aspectRationWidth" format="integer" />
 		<attr name="trimImage" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="FaviconView">
-		<attr name="iconStyle" format="reference" />
-	</declare-styleable>
-
-	<declare-styleable name="ListItemTextView">
-		<attr name="shapeAppearance" />
-		<attr name="shapeAppearanceOverlay" />
-		<attr name="backgroundFillColor" format="color" />
-		<attr name="checkedDrawableStart" format="reference" />
-		<attr name="checkedDrawableEnd" format="reference" />
-		<attr name="android:insetTop" />
-		<attr name="android:insetBottom" />
-		<attr name="android:insetLeft" />
-		<attr name="android:insetRight" />
 	</declare-styleable>
 
 	<declare-styleable name="ProgressDrawable">
@@ -59,22 +38,6 @@
 		<attr name="progressStyle" format="reference" />
 	</declare-styleable>
 
-	<declare-styleable name="BottomSheetHeaderBar">
-		<attr name="title" />
-		<attr name="menu" />
-		<attr name="fitStatusBar" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="ShapeView">
-		<attr name="strokeWidth" />
-		<attr name="strokeColor" />
-		<attr name="cornerSize" />
-		<attr name="cornerSizeTopLeft" />
-		<attr name="cornerSizeTopRight" />
-		<attr name="cornerSizeBottomLeft" />
-		<attr name="cornerSizeBottomRight" />
-	</declare-styleable>
-
 	<declare-styleable name="FaviconFallbackDrawable">
 		<attr name="backgroundColor" />
 		<attr name="strokeColor" />
@@ -82,55 +45,6 @@
 		<attr name="cornerSize" />
 		<attr name="drawableSize" />
 		<attr name="centerText" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="NestedRecyclerView">
-		<attr name="maxHeight" />
-	</declare-styleable>
-
-	<declare-styleable name="ChipsView">
-		<attr name="chipStyle" />
-		<attr name="chipIconVisible" />
-	</declare-styleable>
-
-	<declare-styleable name="ProgressButton">
-		<attr name="titleTextAppearance" />
-		<attr name="subtitleTextAppearance" />
-		<attr name="title" />
-		<attr name="subtitle" />
-		<attr name="android:textColor" />
-		<attr name="android:max" />
-		<attr name="android:progress" />
-		<attr name="baseColor" format="color" />
-		<attr name="progressColor" format="color" />
-	</declare-styleable>
-
-	<declare-styleable name="NonFilteringAutoCompleteTextView">
-		<attr name="readOnly" format="boolean" />
-	</declare-styleable>
-
-	<declare-styleable name="DotsIndicator">
-		<attr name="dotSize" format="dimension">
-			<enum name="fit" value="-1" />
-		</attr>
-		<attr name="dotScale" format="float" />
-		<attr name="dotAlpha" format="float" />
-		<attr name="dotColor" format="color" />
-		<attr name="dotSpacing" format="dimension" />
-		<attr name="android:max" />
-		<attr name="android:progress" />
-	</declare-styleable>
-
-	<declare-styleable name="IconsView">
-		<attr name="iconSize" />
-		<attr name="iconSpacing" format="dimension" />
-	</declare-styleable>
-
-	<declare-styleable name="BadgeView">
-		<attr name="shapeAppearance" />
-		<attr name="backgroundColor" />
-		<attr name="maxCharacterCount" />
-		<attr name="number" />
 	</declare-styleable>
 
 </resources>

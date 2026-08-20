@@ -58,7 +58,6 @@
 		<item name="alertDialogTheme">@style/ThemeOverlay.Kototoro.AlertDialog</item>
 		<item name="bottomSheetDialogTheme">@style/ThemeOverlay.Kototoro.BottomSheetDialog</item>
 		<item name="sideSheetDialogTheme">@style/ThemeOverlay.Kototoro.SideSheetDialog</item>
-		<item name="recyclerViewStyle">@style/Widget.Kototoro.RecyclerView</item>
 		<item name="android:dropDownSpinnerStyle">@style/Widget.Kototoro.Spinner.DropDown</item>
 		<item name="switchPreferenceCompatStyle">@style/Preference.SwitchPreferenceCompat.M3</item>
 		<item name="circularProgressIndicatorStyle">@style/Widget.Kototoro.CircularProgressIndicator.ThickStraight</item>
@@ -70,9 +69,6 @@
 		<item name="actionButtonStyle">@style/Widget.Kototoro.ActionButton.Compact</item>
 
 		<!-- Custom views -->
-		<item name="listItemTextViewStyle">@style/Widget.Kototoro.ListItemTextView</item>
-		<item name="dotIndicatorStyle">@style/Widget.Kototoro.DotIndicator</item>
-		<item name="badgeViewStyle">@style/Widget.Kototoro.BadgeView</item>
 		<item name="coverImageViewStyle">@style/Widget.Kototoro.ImageView.Cover</item>
 	</style>
 
