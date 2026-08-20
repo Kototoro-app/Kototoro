@@ -173,12 +173,6 @@ import org.skepsun.kototoro.parsers.model.ContentType
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private fun Color.withDetailsMinAlpha(minAlpha: Float): Color {
-    return copy(alpha = alpha.coerceAtLeast(minAlpha))
-}
-
-private fun Color.detailsPanelContainerColor(): Color = withDetailsMinAlpha(0.70f)
-
 private fun Color.detailsButtonContainerColor(): Color = withDetailsMinAlpha(0.80f)
 
 
