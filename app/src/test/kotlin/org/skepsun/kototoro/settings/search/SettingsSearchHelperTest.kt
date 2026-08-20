@@ -31,6 +31,8 @@ class SettingsSearchHelperTest {
 			"grid_size" to R.string.grid_size,
 			"rail_animation_intensity" to R.string.pref_rail_animation_intensity,
 			"quick_filter" to R.string.show_quick_filters,
+			"tablet_list_preview" to R.string.pref_tablet_list_preview,
+			"tablet_list_filter_panel" to R.string.pref_tablet_list_filter_panel,
 			"progress_indicators" to R.string.show_reading_indicators,
 			"badges_top_left" to R.string.badge_top_left,
 			"badges_top_right" to R.string.badge_top_right,
