@@ -50,6 +50,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -528,7 +529,7 @@ private fun rememberSidekickCoverRequest(resumeItem: SpaceResumeItem?): ImageReq
 	val localContext = LocalContext.current
 	val content = resumeItem?.content
 	val coverUrl = content?.coverUrl?.takeIf { it.isNotBlank() }
-	return remember(localContext, content?.id, coverUrl) {
+	val activeRequest = remember(localContext, content?.id, coverUrl) {
 		content?.takeIf { coverUrl != null }?.let {
 			val cacheKey = contentCoverCacheKey(it, coverUrl)
 			ImageRequest.Builder(localContext)
@@ -541,6 +542,14 @@ private fun rememberSidekickCoverRequest(resumeItem: SpaceResumeItem?): ImageReq
 				.build()
 		}
 	}
+	// Keep the last rendered cover while the resume item transiently reloads
+	// (e.g. during a space switch the resume flows restart and briefly emit
+	// null), so cards never blank out and re-fetch visibly.
+	val lastNonBlankRequest = remember(localContext) { mutableStateOf<ImageRequest?>(null) }
+	if (activeRequest != null) {
+		lastNonBlankRequest.value = activeRequest
+	}
+	return activeRequest ?: lastNonBlankRequest.value
 }
 
 @Composable
