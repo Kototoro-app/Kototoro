@@ -22,7 +22,7 @@ class FavouriteCategoriesActivity :
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, null, exceptionResolver, null))
+		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, exceptionResolver, null))
 		setComposeContent {
 			FavouriteCategoriesScreen(
 				items = viewModel.content.collectAsStateWithLifecycle().value,

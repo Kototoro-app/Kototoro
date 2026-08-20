@@ -33,7 +33,7 @@ class ContentDirectoriesActivity : BaseComposeActivity() {
 		super.onCreate(savedInstanceState)
 		viewModel.onError.observeEvent(
 			this,
-			SnackbarErrorObserver(window.decorView, null, exceptionResolver) {
+			SnackbarErrorObserver(window.decorView, exceptionResolver) {
 				if (it) viewModel.updateList()
 			},
 		)

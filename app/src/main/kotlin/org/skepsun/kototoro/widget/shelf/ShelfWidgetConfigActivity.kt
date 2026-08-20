@@ -33,7 +33,7 @@ class ShelfWidgetConfigActivity : BaseComposeActivity() {
 
 		config = AppWidgetConfig(this, ShelfWidgetProvider::class.java, appWidgetId)
 		viewModel.checkedId = config.categoryId
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, null))
+		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView))
 
 		setComposeContent {
 			val categories = viewModel.content.collectAsStateWithLifecycle().value

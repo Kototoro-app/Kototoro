@@ -3,7 +3,6 @@ package org.skepsun.kototoro.core.exceptions.resolve
 import android.content.DialogInterface
 import android.view.View
 import androidx.core.util.Consumer
-import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -12,15 +11,13 @@ import org.skepsun.kototoro.parsers.exception.ParseException
 
 class DialogErrorObserver(
 	host: View,
-	fragment: Fragment?,
 	resolver: ExceptionResolver?,
 	private val onResolved: Consumer<Boolean>?,
-) : ErrorObserver(host, fragment, resolver, onResolved) {
+) : ErrorObserver(host, resolver, onResolved) {
 
 	constructor(
 		host: View,
-		fragment: Fragment?,
-	) : this(host, fragment, null, null)
+	) : this(host, null, null)
 
 	override suspend fun emit(value: Throwable) {
 		val listener = DialogListener(value)

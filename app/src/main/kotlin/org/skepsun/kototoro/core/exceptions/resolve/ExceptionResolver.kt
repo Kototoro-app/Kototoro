@@ -5,9 +5,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResultCaller
 import androidx.annotation.StringRes
 import androidx.collection.MutableScatterMap
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -218,14 +216,6 @@ class ExceptionResolver private constructor(
         private val captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator,
     ) {
 
-        fun create(fragment: Fragment) = ExceptionResolver(
-            host = Host.FragmentHost(fragment),
-            settings = settings,
-            mangaRepositoryFactory = mangaRepositoryFactory,
-            scrobblerAuthHelperProvider = scrobblerAuthHelperProvider,
-            captchaAutoResolveCoordinator = captchaAutoResolveCoordinator,
-        )
-
         fun create(activity: FragmentActivity) = ExceptionResolver(
             host = Host.ActivityHost(activity),
             settings = settings,
@@ -241,8 +231,6 @@ class ExceptionResolver private constructor(
 
         val router: AppRouter
 
-        val fragmentManager: FragmentManager
-
         inline fun withContext(block: Context.() -> Unit) {
             context?.apply(block)
         }
@@ -256,25 +244,6 @@ class ExceptionResolver private constructor(
 
             override val router: AppRouter
                 get() = activity.router
-
-            override val fragmentManager: FragmentManager
-                get() = activity.supportFragmentManager
-        }
-
-        class FragmentHost(val fragment: Fragment) : Host,
-            ActivityResultCaller by fragment {
-
-            override val context: Context?
-                get() = fragment.context
-
-            override val router: AppRouter
-                get() = fragment.router
-
-            override val fragmentManager: FragmentManager
-                get() = fragment.childFragmentManager
-
-            override val lifecycle: Lifecycle
-                get() = fragment.viewLifecycleOwner.lifecycle
         }
     }
 

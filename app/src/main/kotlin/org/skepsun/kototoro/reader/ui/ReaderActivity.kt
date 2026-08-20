@@ -609,7 +609,6 @@ class ReaderActivity :
 		}
         val errorSnackbar = SnackbarErrorObserver(
             host = window.decorView,
-            fragment = null,
             resolver = exceptionResolver,
             onResolved = null,
         )

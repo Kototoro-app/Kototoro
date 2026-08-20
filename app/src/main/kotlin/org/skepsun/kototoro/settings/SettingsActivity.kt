@@ -1576,7 +1576,7 @@ class SettingsActivity :
 	private fun bindDataCleanupObservers() {
 		if (isDataCleanupObserversBound) return
 		isDataCleanupObserversBound = true
-		dataCleanupSettingsViewModel.onError.observeEvent(this, SnackbarErrorObserver(contentRoot, null))
+		dataCleanupSettingsViewModel.onError.observeEvent(this, SnackbarErrorObserver(contentRoot))
 		dataCleanupSettingsViewModel.onActionDone.observeEvent(this, ReversibleActionObserver(contentRoot))
 		dataCleanupSettingsViewModel.onChaptersCleanedUp.observeEvent(this, ::onDataCleanupChaptersCleanedUp)
 		dataCleanupSettingsViewModel.onStorageChanged.observeEvent(this) {

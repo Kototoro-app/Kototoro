@@ -146,7 +146,7 @@ fun SourceSettingsRoute(
 
     LaunchedEffect(viewModel.onError) {
         val resolver = (context as? BaseComposeActivity)?.exceptionResolver
-        val observer = SnackbarErrorObserver(rootView, null, resolver) { viewModel.onResume() }
+        val observer = SnackbarErrorObserver(rootView, resolver) { viewModel.onResume() }
         viewModel.onError.collect { event -> event?.consume(observer) }
     }
     LaunchedEffect(viewModel.onActionDone) {

@@ -63,7 +63,7 @@ class ImageActivity : BaseComposeActivity(), ImageRequest.Listener {
 			),
 		)
 		viewModel.isLoading.observe(this) { isSaving = it }
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, null))
+		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView))
 		viewModel.onImageSaved.observeEvent(this, ::onImageSaved)
 
 		setComposeContent {

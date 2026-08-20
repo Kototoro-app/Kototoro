@@ -19,7 +19,7 @@ class DetailsErrorObserver(
 	private val viewModel: DetailsViewModel,
 	resolver: ExceptionResolver?,
 ) : ErrorObserver(
-	activity.contentRoot, null, resolver,
+	activity.contentRoot, resolver,
 	{ isResolved ->
 		if (isResolved) {
 			viewModel.reload()

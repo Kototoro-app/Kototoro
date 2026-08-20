@@ -1,11 +1,8 @@
 package org.skepsun.kototoro.core.exceptions.resolve
 
 import android.view.View
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.util.Consumer
-import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.coroutineScope
@@ -14,11 +11,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.util.ext.findActivity
-import org.skepsun.kototoro.core.util.ext.viewLifecycleScope
 
 abstract class ErrorObserver(
 	protected val host: View,
-	protected val fragment: Fragment?,
 	protected val resolver: ExceptionResolver?,
 	private val onResolved: Consumer<Boolean>?,
 ) : FlowCollector<Throwable> {
@@ -30,23 +25,16 @@ abstract class ErrorObserver(
 	protected open val activity = host.context.findActivity()
 
 	private val lifecycleScope: LifecycleCoroutineScope
-		get() = checkNotNull(fragment?.viewLifecycleScope ?: (activity as? LifecycleOwner)?.lifecycle?.coroutineScope)
-
-	protected val fragmentManager: FragmentManager?
-		get() = fragment?.childFragmentManager ?: (activity as? AppCompatActivity)?.supportFragmentManager
+		get() = checkNotNull((activity as? LifecycleOwner)?.lifecycle?.coroutineScope)
 
 	protected fun canResolve(error: Throwable): Boolean {
 		return resolver != null && ExceptionResolver.canResolve(error)
 	}
 
-	protected fun router() = fragment?.router ?: (activity as? FragmentActivity)?.router
+	protected fun router() = (activity as? FragmentActivity)?.router
 
 	private fun isAlive(): Boolean {
-		return when {
-			fragment != null -> fragment.view != null
-			activity != null -> activity?.isDestroyed == false
-			else -> true
-		}
+		return activity?.isDestroyed == false
 	}
 
 	protected fun resolve(error: Throwable) {

@@ -638,7 +638,7 @@ private fun DetailsScreenContent(
         }
     }
     DisposableEffect(lifecycleOwner, rootView, viewModel) {
-        viewModel.onError.observeEvent(lifecycleOwner, SnackbarErrorObserver(rootView, null))
+        viewModel.onError.observeEvent(lifecycleOwner, SnackbarErrorObserver(rootView))
         viewModel.onActionDone.observeEvent(lifecycleOwner, ReversibleActionObserver(rootView))
         viewModel.onDownloadStarted.observeEvent(lifecycleOwner, DownloadStartedObserver(rootView))
         val sourceBindingsObserver = LifecycleEventObserver { _, event ->
