@@ -65,8 +65,11 @@ fun MainTopLevelNavDisplay(
             backStack = backStack,
             entryDecorators = entryDecorators,
             entryProvider = { entryKey ->
+                // The navigation relation is (previous top of stack, new top of stack).
+                val prev = backStack.takeWhile { it != entryKey }.lastOrNull()
                 navEntry(
                     key = entryKey,
+                    prev = prev,
                     renderEntry = { key -> currentRenderEntry.value(key) },
                 )
             },
@@ -75,6 +78,9 @@ fun MainTopLevelNavDisplay(
     val sceneStrategies: List<SceneStrategy<MainNavKey>> = listOf(
         remember { SinglePaneSceneStrategy<MainNavKey>() },
     )
+    // Global default: sibling / space switches cross-fade. Immersive destinations
+    // override it through per-entry metadata below.
+    val fadeThrough = remember { KototoroMotionCatalog.preset(KototoroMotion.FadeThrough) }
     NavDisplay(
         entries = decoratedEntriesByTopLevel.getValue(navState.selectedTopLevel),
         modifier = modifier,
@@ -82,17 +88,21 @@ fun MainTopLevelNavDisplay(
         sceneStrategies = sceneStrategies,
         sceneDecoratorStrategies = emptyList<SceneDecoratorStrategy<MainNavKey>>(),
         sharedTransitionScope = sharedTransitionScope,
+        transitionSpec = { fadeThrough.enter(this) },
+        popTransitionSpec = { fadeThrough.pop(this) },
+        predictivePopTransitionSpec = { progress -> fadeThrough.predictivePop(this, progress) },
         onBack = { navState.pop() },
     )
 }
 
 private fun navEntry(
     key: MainNavKey,
+    prev: MainNavKey?,
     renderEntry: @Composable (MainNavKey) -> Unit = {},
 ): NavEntry<MainNavKey> {
     return NavEntry(
         key = key,
-        metadata = transitionMetadata(key),
+        metadata = transitionMetadata(key, prev),
     ) { entryKey ->
         CompositionLocalProvider(
             LocalNavAnimatedVisibilityScope provides LocalNavAnimatedContentScope.current,
@@ -103,15 +113,13 @@ private fun navEntry(
 }
 
 /**
- * Per-entry motion metadata: the immersive destinations (content list / details)
- * ride the phase-C horizontal slide, search and top-level entries keep the
- * default fade. The semantic mapping lands in the next step.
+ * Navigation-relation -> scene metadata. Top-level / sibling entries fade through
+ * (also the NavDisplay default); source lists and search ride their semantic
+ * presets; details use HeroExpand (cover hero + backdrop + floats inside the
+ * content, light Z/depth on the scene itself, no full page turn).
  */
-private fun transitionMetadata(key: MainNavKey): Map<String, Any> {
-    if (key !is ContentListNavKey && key !is DetailsNavKey) {
-        return emptyMap()
-    }
-    val preset = KototoroMotionCatalog.fullSlide
+private fun transitionMetadata(key: MainNavKey, prev: MainNavKey?): Map<String, Any> {
+    val preset = KototoroMotionCatalog.preset(KototoroMotionCatalog.forRelation(prev, key))
     return metadata {
         put(NavDisplay.TransitionKey, preset.enter)
         put(NavDisplay.PopTransitionKey, preset.pop)

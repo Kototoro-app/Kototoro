@@ -10,7 +10,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
-import androidx.navigation3.scene.Scene
 import org.skepsun.kototoro.main.ui.compose.MainNavigationMotion
 
 /**
@@ -33,9 +32,9 @@ internal enum class KototoroMotion {
 }
 
 internal class KototoroMotionPreset(
-    val enter: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform,
-    val pop: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform,
-    val predictivePop: (AnimatedContentTransitionScope<Scene<*>>, Int) -> ContentTransform,
+    val enter: (AnimatedContentTransitionScope<*>) -> ContentTransform,
+    val pop: (AnimatedContentTransitionScope<*>) -> ContentTransform,
+    val predictivePop: (AnimatedContentTransitionScope<*>, Int) -> ContentTransform,
 )
 
 internal object KototoroMotionCatalog {
@@ -59,39 +58,10 @@ internal object KototoroMotionCatalog {
         KototoroMotion.ImmersiveFade -> immersiveFade
     }
 
-    /**
-     * Phase C behavior, kept verbatim while the module is extracted; replaced by
-     * the semantic presets once the mapping is applied.
-     */
-    val fullSlide: KototoroMotionPreset = preset(
-        enter = { scope ->
-            scope.slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-            ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing)) togetherWith (
-                scope.slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
-                )
-        },
-        pop = { scope ->
-            scope.slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                animationSpec = tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing),
-            ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing)) togetherWith (
-                scope.slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
-                )
-        },
-    )
-
     private fun preset(
-        enter: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform,
-        pop: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform,
-        predictivePop: (AnimatedContentTransitionScope<Scene<*>>, Int) -> ContentTransform = { scope, _ -> pop(scope) },
+        enter: (AnimatedContentTransitionScope<*>) -> ContentTransform,
+        pop: (AnimatedContentTransitionScope<*>) -> ContentTransform,
+        predictivePop: (AnimatedContentTransitionScope<*>, Int) -> ContentTransform = { scope, _ -> pop(scope) },
     ) = KototoroMotionPreset(enter = enter, pop = pop, predictivePop = predictivePop)
 
     private val fade: FiniteAnimationSpec<Float> = tween(MainNavigationMotion.FadeMillis, easing = LinearEasing)
