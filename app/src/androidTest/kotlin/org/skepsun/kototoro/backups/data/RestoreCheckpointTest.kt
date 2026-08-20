@@ -311,4 +311,32 @@ class RestoreCheckpointTest {
 		assertEquals(0, second.resumedSections)
 		assertTrue(database.getRestoreCheckpointDao().findById(CHECKPOINT_ID) == null)
 	}
+
+	@Test
+	fun snapshotReplaceRestoreKeepsFavouriteCategories() = runTest {
+		// Regression: §6.6 “逐节先清后写” 重构后，FAVOURITES（延迟节）在清表时
+		// 误删了 favourite_categories —— CATEGORIES 节先恢复的分组被随后（payload
+		// 为空的）FAVOURITES 节 deleteAll 清光，导致恢复后只剩「全部收藏」。
+		// 分组表必须只由 CATEGORIES 节自己负责清理；这里断言恢复后分组及引用都在。
+		val (_, categoryTitle) = seedBackupData()
+		val agent = AppBackupAgent()
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		val backup = agent.createBackupFile(context, backupRepository)
+		database.clearAllTables()
+		database.getRestoreCheckpointDao().clearAll()
+
+		runRestore(backup, restoreSections(), BackupRepository.RestoreMode.SNAPSHOT_REPLACE, CHECKPOINT_ID)
+
+		val categories = database.getFavouriteCategoriesDao().findAll()
+		assertTrue(
+			"restored categories must survive (got " + categories.map { it.title } + ")",
+			categories.any { it.title == categoryTitle },
+		)
+		val restoredCategoryId = categories.first { it.title == categoryTitle }.categoryId.toLong()
+		val favs = database.getWorkFavouritesDao().findActive()
+		assertTrue(
+			"restored favourites must reference the restored category (got " + favs.map { it.categoryId } + ")",
+			favs.isNotEmpty() && favs.all { it.categoryId == restoredCategoryId },
+		)
+	}
 }

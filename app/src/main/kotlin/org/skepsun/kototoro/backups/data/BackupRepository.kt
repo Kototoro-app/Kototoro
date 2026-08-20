@@ -1148,9 +1148,11 @@ class BackupRepository @Inject constructor(
             if (BackupSection.WORK_HISTORY in actOn) {
                 database.getWorkHistoryDao().clear()
             }
+            if (BackupSection.CATEGORIES in actOn) {
+                database.getFavouriteCategoriesDao().deleteAll()
+            }
             if (BackupSection.FAVOURITES in actOn) {
                 database.getFavouritesDao().clear()
-                database.getFavouriteCategoriesDao().deleteAll()
             }
             if (BackupSection.WORK_FAVOURITES in actOn) {
                 database.getWorkFavouritesDao().deleteAll()
