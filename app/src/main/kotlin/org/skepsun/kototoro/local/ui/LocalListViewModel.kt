@@ -14,7 +14,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.toFileOrNull
@@ -205,7 +205,7 @@ class LocalListViewModel @Inject constructor(
 		if (appliedTags.isEmpty() && availableTags.isEmpty()) {
 			return null
 		}
-		val result = ArrayList<ChipsView.ChipModel>(appliedTags.size + availableTags.size)
+		val result = ArrayList<ChipModel>(appliedTags.size + availableTags.size)
 		appliedTags.mapTo(result) { tag ->
 			ListFilterOption.Tag(tag).toChipModel(isChecked = true)
 		}

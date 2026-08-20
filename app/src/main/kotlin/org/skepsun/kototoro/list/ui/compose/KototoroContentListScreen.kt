@@ -63,7 +63,7 @@ import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.list.domain.ListFilterOption
@@ -711,7 +711,7 @@ fun QuickFilterSection(
         quickFilter.items.sortedBy { chip -> !chip.isChecked }
     }
     val hasSelectedFilter = remember(quickFilter.groups, orderedChips) {
-        quickFilter.groups.any { group -> group.items.any(ChipsView.ChipModel::isChecked) } ||
+        quickFilter.groups.any { group -> group.items.any(ChipModel::isChecked) } ||
             orderedChips.firstOrNull()?.isChecked == true
     }
     LaunchedEffect(hasSelectedFilter) {
@@ -819,7 +819,7 @@ private fun QuickFilterGroupChip(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
     var expanded by remember(group.key) { mutableStateOf(false) }
-    val selectedItems = group.items.filter(ChipsView.ChipModel::isChecked)
+    val selectedItems = group.items.filter(ChipModel::isChecked)
     val isSelected = selectedItems.isNotEmpty()
     val contentColor = when {
         isIosStyle && isSelected -> MaterialTheme.colorScheme.inverseOnSurface
@@ -1179,7 +1179,7 @@ private fun SkeletonBlock(
 }
 
 @Composable
-private fun chipIcon(chip: ChipsView.ChipModel): (@Composable () -> Unit)? {
+private fun chipIcon(chip: ChipModel): (@Composable () -> Unit)? {
     if (chip.isChecked) {
         return {
             Icon(
@@ -1242,7 +1242,7 @@ private fun listModelComposeKey(
 @Composable
 private fun buildChipLabel(
     context: android.content.Context,
-    chip: ChipsView.ChipModel,
+    chip: ChipModel,
     entryPoint: BaseApp.BaseAppEntryPoint?,
 ): String {
     val title = when {
@@ -1258,7 +1258,7 @@ private fun buildChipLabel(
 
 private fun resolveFilterChipTitle(
     context: android.content.Context,
-    chip: ChipsView.ChipModel,
+    chip: ChipModel,
     entryPoint: BaseApp.BaseAppEntryPoint?,
 ): String {
     val sourceOption = chip.data as? ListFilterOption.Source

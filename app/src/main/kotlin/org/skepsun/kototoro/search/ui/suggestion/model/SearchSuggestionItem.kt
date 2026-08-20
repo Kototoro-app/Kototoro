@@ -2,7 +2,7 @@ package org.skepsun.kototoro.search.ui.suggestion.model
 
 import androidx.annotation.StringRes
 import org.skepsun.kototoro.core.model.isNsfw
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
@@ -113,7 +113,7 @@ sealed interface SearchSuggestionItem : ListModel {
 	}
 
 	data class Tags(
-		val tags: List<ChipsView.ChipModel>,
+		val tags: List<ChipModel>,
 	) : SearchSuggestionItem {
 
 		override fun areItemsTheSame(other: ListModel): Boolean {

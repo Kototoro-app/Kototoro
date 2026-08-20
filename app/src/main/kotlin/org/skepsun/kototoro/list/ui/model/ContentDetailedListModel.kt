@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.list.ui.model
 
 import org.skepsun.kototoro.core.ui.model.ContentOverride
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback.Companion.PAYLOAD_ANYTHING_CHANGED
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback.Companion.PAYLOAD_PROGRESS_CHANGED
@@ -19,7 +19,7 @@ data class ContentDetailedListModel(
 	val progress: ReadingProgress?,
 	val isFavorite: Boolean,
 	val isSaved: Boolean,
-	val tags: List<ChipsView.ChipModel>,
+	val tags: List<ChipModel>,
 	override val isPinned: Boolean = false,
 	override val metadataTrackingService: ScrobblerService? = null,
 	override val scoreText: String? = null,

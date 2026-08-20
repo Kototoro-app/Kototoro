@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.filter.data.PersistableFilter
 import org.skepsun.kototoro.filter.ui.model.FilterHeaderModel
 import org.skepsun.kototoro.filter.ui.model.FilterProperty
@@ -50,8 +50,8 @@ class FilterHeaderProducer @Inject constructor(
         tagsProperty: FilterProperty<UiTagGroup>,
         snapshot: ContentListFilter,
         limit: Int,
-    ): List<ChipsView.ChipModel> {
-        val result = ArrayDeque<ChipsView.ChipModel>(savedFilters.availableItems.size + limit + 3)
+    ): List<ChipModel> {
+        val result = ArrayDeque<ChipModel>(savedFilters.availableItems.size + limit + 3)
         if (snapshot.query.isNullOrEmpty() || capabilities.isSearchWithFiltersSupported) {
             val selectedTags = snapshot.tags.toMutableSet()
             // 扁平化选中分组
@@ -69,7 +69,7 @@ class FilterHeaderProducer @Inject constructor(
                 return emptyList()
             }
             for (saved in savedFilters.availableItems) {
-                val model = ChipsView.ChipModel(
+                val model = ChipModel(
                     title = saved.name,
                     isChecked = saved in savedFilters.selectedItems,
                     data = saved,
@@ -82,7 +82,7 @@ class FilterHeaderProducer @Inject constructor(
                 }
             }
             for (tag in tags) {
-                val model = ChipsView.ChipModel(
+                val model = ChipModel(
                     title = tag.title,
                     isChecked = selectedTags.remove(tag),
                     data = tag,
@@ -94,7 +94,7 @@ class FilterHeaderProducer @Inject constructor(
                 }
             }
             for (tag in selectedTags) {
-                val model = ChipsView.ChipModel(
+                val model = ChipModel(
                     title = tag.title,
                     isChecked = true,
                     data = tag,
@@ -104,7 +104,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         snapshot.locale?.let {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     title = it.getDisplayName(it).toTitleCase(it),
                     icon = R.drawable.ic_language,
                     isCloseable = true,
@@ -114,7 +114,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         snapshot.types.forEach {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     titleResId = it.titleResId,
                     isCloseable = true,
                     data = it,
@@ -123,7 +123,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         snapshot.demographics.forEach {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     titleResId = it.titleResId,
                     isCloseable = true,
                     data = it,
@@ -132,7 +132,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         snapshot.contentRating.forEach {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     titleResId = it.titleResId,
                     isCloseable = true,
                     data = it,
@@ -141,7 +141,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         snapshot.states.forEach {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     titleResId = it.titleResId,
                     isCloseable = true,
                     data = it,
@@ -150,7 +150,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         if (!snapshot.query.isNullOrEmpty()) {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     title = snapshot.query,
                     icon = appcompatR.drawable.abc_ic_search_api_material,
                     isCloseable = true,
@@ -160,7 +160,7 @@ class FilterHeaderProducer @Inject constructor(
         }
         if (!snapshot.author.isNullOrEmpty()) {
             result.addFirst(
-                ChipsView.ChipModel(
+                ChipModel(
                     title = snapshot.author,
                     icon = R.drawable.ic_user,
                     isCloseable = true,
@@ -175,7 +175,7 @@ class FilterHeaderProducer @Inject constructor(
         return result
     }
 
-    private fun moreTagsChip() = ChipsView.ChipModel(
+    private fun moreTagsChip() = ChipModel(
         titleResId = R.string.genres,
         icon = R.drawable.ic_drawer_menu_open,
     )

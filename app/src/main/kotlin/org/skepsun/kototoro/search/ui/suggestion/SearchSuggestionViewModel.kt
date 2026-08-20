@@ -20,7 +20,7 @@ import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
@@ -399,8 +399,8 @@ class SearchSuggestionViewModel @Inject constructor(
 		emptyList()
 	}
 
-	private fun mapTags(tags: List<ContentTag>): List<ChipsView.ChipModel> = tags.map { tag ->
-		ChipsView.ChipModel(
+	private fun mapTags(tags: List<ContentTag>): List<ChipModel> = tags.map { tag ->
+		ChipModel(
 			title = tag.title,
 			data = tag,
 		)

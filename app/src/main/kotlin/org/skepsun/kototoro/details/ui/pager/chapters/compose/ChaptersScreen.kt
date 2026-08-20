@@ -42,7 +42,7 @@ import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
-import org.skepsun.kototoro.core.ui.widgets.ChipsView.ChipModel
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.details.ui.model.chapterFastScrollLabelAt
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
 import org.skepsun.kototoro.list.ui.model.CollapsibleListHeader

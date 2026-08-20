@@ -1,15 +1,15 @@
 package org.skepsun.kototoro.favourites.domain
 
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.ui.model.QuickFilterGroup
 
-internal fun buildFavoritesQuickFilter(chips: List<ChipsView.ChipModel>): QuickFilter {
-	val groupedChips = LinkedHashMap<FavoritesMetaFilterGroup, MutableList<ChipsView.ChipModel>>()
+internal fun buildFavoritesQuickFilter(chips: List<ChipModel>): QuickFilter {
+	val groupedChips = LinkedHashMap<FavoritesMetaFilterGroup, MutableList<ChipModel>>()
 	FavoritesMetaFilterGroup.entries.forEach { groupedChips[it] = mutableListOf() }
-	val autoFilters = ArrayList<ChipsView.ChipModel>()
+	val autoFilters = ArrayList<ChipModel>()
 	chips.forEach { chip ->
 		val group = (chip.data as? ListFilterOption)?.favoritesMetaFilterGroup()
 		if (group == null) {

@@ -18,7 +18,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.model.ContentOverride
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
@@ -258,7 +258,7 @@ class ContentListMapper @Inject constructor(
 	}
 
 	fun mapTags(tags: Collection<ContentTag>) = tags.map {
-		ChipsView.ChipModel(
+		ChipModel(
 			tint = getTagTint(it),
 			title = it.title,
 			data = it,

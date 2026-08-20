@@ -2,11 +2,11 @@ package org.skepsun.kototoro.list.ui.model
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
-import org.skepsun.kototoro.core.ui.widgets.ChipsView
+import org.skepsun.kototoro.core.ui.widgets.ChipModel
 import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 
 data class QuickFilter(
-	val items: List<ChipsView.ChipModel>,
+	val items: List<ChipModel>,
 	val groups: List<QuickFilterGroup> = emptyList(),
 ) : ListModel {
 
@@ -19,5 +19,5 @@ data class QuickFilterGroup(
 	val key: String,
 	@StringRes val titleResId: Int,
 	@DrawableRes val iconResId: Int,
-	val items: List<ChipsView.ChipModel>,
+	val items: List<ChipModel>,
 )

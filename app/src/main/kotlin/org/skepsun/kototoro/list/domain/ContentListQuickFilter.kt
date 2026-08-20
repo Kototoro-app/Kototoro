@@ -68,7 +68,7 @@ abstract class ContentListQuickFilter(
 		}
 	}
 
-	protected open fun createFilterModel(chips: List<org.skepsun.kototoro.core.ui.widgets.ChipsView.ChipModel>) =
+	protected open fun createFilterModel(chips: List<org.skepsun.kototoro.core.ui.widgets.ChipModel>) =
 		QuickFilter(chips)
 
 	protected abstract suspend fun getAvailableFilterOptions(): List<ListFilterOption>
