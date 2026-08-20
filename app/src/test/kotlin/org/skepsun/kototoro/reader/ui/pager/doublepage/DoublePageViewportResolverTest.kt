@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.reader.ui.pager.doublepage
 
-import androidx.recyclerview.widget.RecyclerView
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -21,7 +20,7 @@ class DoublePageViewportResolverTest {
 	@Test
 	fun `falls back to first visible item when rotation leaves no fully visible page`() {
 		val viewport = resolveCurrentDoublePageViewport(
-			firstCompletelyVisibleItemPosition = RecyclerView.NO_POSITION,
+			firstCompletelyVisibleItemPosition = -1,
 			firstVisibleItemPosition = 5,
 			itemCount = 10,
 		)
@@ -32,7 +31,7 @@ class DoublePageViewportResolverTest {
 	@Test
 	fun `clamps upper bound to current chapter spread instead of trailing preloaded items`() {
 		val viewport = resolveCurrentDoublePageViewport(
-			firstCompletelyVisibleItemPosition = RecyclerView.NO_POSITION,
+			firstCompletelyVisibleItemPosition = -1,
 			firstVisibleItemPosition = 8,
 			itemCount = 11,
 		)
@@ -54,8 +53,8 @@ class DoublePageViewportResolverTest {
 	@Test
 	fun `returns null when nothing is visible`() {
 		val viewport = resolveCurrentDoublePageViewport(
-			firstCompletelyVisibleItemPosition = RecyclerView.NO_POSITION,
-			firstVisibleItemPosition = RecyclerView.NO_POSITION,
+			firstCompletelyVisibleItemPosition = -1,
+			firstVisibleItemPosition = -1,
 			itemCount = 10,
 		)
 

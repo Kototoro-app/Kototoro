@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.reader.ui.pager.doublepage
 
 import android.util.Log
-import androidx.recyclerview.widget.RecyclerView
 
 internal data class DoublePageViewport(
 	val lowerPos: Int,
@@ -19,8 +18,8 @@ internal fun resolveCurrentDoublePageViewport(
 	}
 	val lastIndex = itemCount - 1
 	val anchor = when {
-		firstCompletelyVisibleItemPosition != RecyclerView.NO_POSITION -> firstCompletelyVisibleItemPosition
-		firstVisibleItemPosition != RecyclerView.NO_POSITION -> firstVisibleItemPosition
+		firstCompletelyVisibleItemPosition != -1 -> firstCompletelyVisibleItemPosition
+		firstVisibleItemPosition != -1 -> firstVisibleItemPosition
 		else -> return null
 	}.coerceIn(0, lastIndex)
 	val lowerPos = anchor and 1.inv()
