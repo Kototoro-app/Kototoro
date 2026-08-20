@@ -244,6 +244,9 @@ class DefaultWorkResolverTest {
 			val id = firstArg<Long>()
 			if (id in localIds) entity(id) else null
 		}
+		coEvery { dao.findEntitiesByIds(any()) } answers {
+			firstArg<List<Long>>().mapNotNull { id -> if (id in localIds) entity(id) else null }
+		}
 		coEvery { dao.findActiveBindingsBySources(any(), any()) } answers {
 			secondArg<List<String>>().mapNotNull { externalId ->
 				val mangaId = externalId.toLong()
