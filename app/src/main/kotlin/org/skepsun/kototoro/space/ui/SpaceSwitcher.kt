@@ -300,8 +300,14 @@ private fun SpaceSidekickPanel(
 					onDragEnd = {
 						if (kotlin.math.abs(horizontalDragOffset) >= dismissThreshold) {
 							onDismiss()
+							// Keep the dragged offset: the drawer is still composed
+							// during its slide-out exit, and this box's graphicsLayer
+							// translation is what the exit animates from. Resetting to 0
+							// here snaps the drawer back to its origin for one frame
+							// before it exits ("flash back then slide away").
+						} else {
+							horizontalDragOffset = 0f
 						}
-						horizontalDragOffset = 0f
 					},
 					onDragCancel = { horizontalDragOffset = 0f },
 				)

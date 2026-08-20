@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -253,6 +254,11 @@ class SpaceSwitcherDelegate @Inject constructor(
 				SpaceTransitionCurtain(
 					state = transitionState,
 					spaces = spaces,
+					// Above the SpaceSidekick panel (zIndex 20) so the switch
+					// curtain covers the drawer covers while the panel slides away.
+					modifier = Modifier
+						.fillMaxSize()
+						.zIndex(30f),
 					isTargetHost = transitionState.targetSpaceId == sessionSpaceId,
 					allowReveal = isSpaceCurtainRevealHost(
 						targetSpaceId = transitionState.targetSpaceId,

@@ -59,6 +59,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -1815,7 +1816,13 @@ fun KototoroApp(
                 SpaceTransitionCurtain(
                     state = spaceTransitionState,
                     spaces = spaceUiState.spaces,
-                    modifier = Modifier.fillMaxSize(),
+                    // Above the SpaceSidekick panel (zIndex 20) so the switch
+                    // curtain actually covers the drawer covers while the panel
+                    // slides away -- otherwise the panel stays visible on top of
+                    // the opaque curtain and every cover hiccup reads as a flicker.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(30f),
                     isTargetHost = spaceTransitionState.targetSpaceId == navigationSpaceId,
                     allowReveal = isSpaceCurtainRevealHost(
                         targetSpaceId = spaceTransitionState.targetSpaceId,
