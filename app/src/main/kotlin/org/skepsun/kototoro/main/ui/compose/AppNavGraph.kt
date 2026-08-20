@@ -1032,7 +1032,7 @@ internal fun HomeTopLevelRouteContent(
 
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity.window.decorView.rootView
-        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
         val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
         viewModel.onError.collect { event ->
             event?.consume(observer)
@@ -1339,7 +1339,7 @@ internal fun FeedTopLevelRouteContent(
 
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
-        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
         val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver) {
             resolved -> if (resolved) viewModel.update()
         }
@@ -1898,7 +1898,7 @@ internal fun HistoryTopLevelRouteContent(
 
     LaunchedEffect(viewModel.onError, activity) {
         val host = activity.window.decorView.rootView
-        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
         val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, null, resolver, null)
         viewModel.onError.collect { event ->
             event?.consume(observer)

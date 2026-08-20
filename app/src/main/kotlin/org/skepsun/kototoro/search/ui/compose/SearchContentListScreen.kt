@@ -417,7 +417,6 @@ fun AppSearchContentListRoute(
     val contentListItems = preparedItems.contentListItems
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     val exceptionResolver = (context as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-        ?: (context as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
     val openDetailsHandler = remember(appRouter, mainActivity, onOpenDetails) {
         onOpenDetails ?: { content: Content, sharedKey: String? ->
             mainActivity?.resolveDetailsOriginForContent(content) { origin ->

@@ -54,7 +54,6 @@ import org.skepsun.kototoro.core.parser.tvbox.TVBoxRepository
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxSupportStatusClassifier
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.SourceSettings
-import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -147,7 +146,6 @@ fun SourceSettingsRoute(
 
     LaunchedEffect(viewModel.onError) {
         val resolver = (context as? BaseComposeActivity)?.exceptionResolver
-            ?: (context as? BaseActivity<*>)?.exceptionResolver
         val observer = SnackbarErrorObserver(rootView, null, resolver) { viewModel.onResume() }
         viewModel.onError.collect { event -> event?.consume(observer) }
     }

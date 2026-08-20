@@ -25,7 +25,6 @@ import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import androidx.compose.runtime.saveable.rememberSaveable
-import org.skepsun.kototoro.core.ui.BaseActivity
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.alternatives.ui.AutoFixService
 import org.skepsun.kototoro.core.util.ShareHelper
@@ -167,11 +166,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         }.getOrNull()
     }
     val coroutineScope = rememberCoroutineScope()
-    val exceptionResolver = when (activity) {
-        is BaseActivity<*> -> activity.exceptionResolver
-        is BaseComposeActivity -> activity.exceptionResolver
-        else -> null
-    }
+    val exceptionResolver = (activity as? BaseComposeActivity)?.exceptionResolver
     val loadedPagingItems = lazyPagingItems?.itemSnapshotList?.items.orEmpty()
     val selectionModels = remember(items, loadedPagingItems, composeSelectionIds) {
         prepareContentSelectionModels(if (lazyPagingItems == null) items else loadedPagingItems, composeSelectionIds)
@@ -387,11 +382,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         viewModel.onError.collect { event ->
             event?.consume(eventCollector { error ->
                 Toast.makeText(context, error.getDisplayMessage(context.resources), Toast.LENGTH_SHORT).show()
-                val resolver = when (activity) {
-                    is BaseActivity<*> -> activity.exceptionResolver
-                    is BaseComposeActivity -> activity.exceptionResolver
-                    else -> null
-                }
+                val resolver = (activity as? BaseComposeActivity)?.exceptionResolver
                 if (resolver != null && org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver.canResolve(error)) {
                     coroutineScope.launch {
                         if (resolver.resolve(error)) {

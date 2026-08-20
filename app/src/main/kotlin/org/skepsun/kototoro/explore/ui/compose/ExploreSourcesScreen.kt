@@ -60,7 +60,7 @@ fun KototoroExploreSourcesScreen(
     
     LaunchedEffect(viewModel.onError) {
         val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
-        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseActivity<*>)?.exceptionResolver
+        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
         val observer = SnackbarErrorObserver(host, null, resolver) { resolved ->
             if (resolved) { }
         }
