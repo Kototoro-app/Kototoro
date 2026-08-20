@@ -347,6 +347,9 @@ fun AppNavGraph(
         }
         composable<SearchRoute> { backStackEntry ->
             val viewModel = hiltViewModel<org.skepsun.kototoro.search.ui.multi.SearchViewModel>()
+            BackHandler {
+                mainNavigator.pop()
+            }
             RouteLiquidGlassBackdrop(
                 ownerKey = backStackEntry.id,
                 active = currentBackStackEntry?.id == backStackEntry.id,
@@ -367,7 +370,7 @@ fun AppNavGraph(
                     ) {
                         SearchResultsRoute(
                             viewModel = viewModel,
-                            onBackClick = { navController.navigateUp() },
+                            onBackClick = { mainNavigator.pop() },
                             onOpenContent = { content, sharedElementKey ->
                                 navigateToDetailsWithContent(content, sharedElementKey)
                             },

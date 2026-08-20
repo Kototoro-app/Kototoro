@@ -17,6 +17,17 @@ class SpaceRouteCodecTest {
 			SpaceRouteSnapshot.TopLevel("history"),
 			SpaceRouteSnapshot.WorkDetails(entityId = 42L, requestedProjectionId = 7L),
 			SpaceRouteSnapshot.ContentList(sourceName = "TEST_SOURCE"),
+			SpaceRouteSnapshot.Search(
+				query = "one piece",
+				kind = "SIMPLE",
+				sourceTypes = "MANGA",
+				contentKinds = "ONGOING",
+				advancedTitle = "t",
+				advancedTags = "tags",
+				advancedAuthor = "a",
+				pinnedOnly = true,
+				hideEmpty = false,
+			),
 		)
 
 		routes.forEach { route ->

@@ -29,6 +29,10 @@ class SpaceRouteCodec @Inject constructor(
 			kind = KIND_CONTENT_LIST,
 			payload = json.encodeToString(SpaceRouteSnapshot.ContentList.serializer(), route),
 		)
+		is SpaceRouteSnapshot.Search -> EncodedSpaceRoute(
+			kind = KIND_SEARCH,
+			payload = json.encodeToString(SpaceRouteSnapshot.Search.serializer(), route),
+		)
 	}
 
 	internal fun decode(
@@ -42,6 +46,7 @@ class SpaceRouteCodec @Inject constructor(
 				KIND_TOP_LEVEL -> json.decodeFromString(SpaceRouteSnapshot.TopLevel.serializer(), payload)
 				KIND_WORK_DETAILS -> json.decodeFromString(SpaceRouteSnapshot.WorkDetails.serializer(), payload)
 				KIND_CONTENT_LIST -> json.decodeFromString(SpaceRouteSnapshot.ContentList.serializer(), payload)
+				KIND_SEARCH -> json.decodeFromString(SpaceRouteSnapshot.Search.serializer(), payload)
 				else -> null
 			}
 		}.getOrNull()
@@ -52,5 +57,6 @@ class SpaceRouteCodec @Inject constructor(
 		const val KIND_TOP_LEVEL = "TOP_LEVEL"
 		const val KIND_WORK_DETAILS = "WORK_DETAILS"
 		const val KIND_CONTENT_LIST = "CONTENT_LIST"
+		const val KIND_SEARCH = "SEARCH"
 	}
 }

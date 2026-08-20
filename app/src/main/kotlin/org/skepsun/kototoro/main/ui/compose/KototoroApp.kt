@@ -130,7 +130,6 @@ import org.skepsun.kototoro.search.domain.SearchContentKind
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
-import org.skepsun.kototoro.search.ui.compose.SearchNavigation
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.compose.SearchRoute
 import androidx.activity.compose.BackHandler
@@ -883,6 +882,7 @@ fun KototoroApp(
             session.stacks[session.selectedTopLevel].orEmpty().drop(1).forEach { route ->
                 when (route) {
                     is SpaceRouteSnapshot.TopLevel -> Unit
+                    is SpaceRouteSnapshot.Search -> Unit
                     is SpaceRouteSnapshot.ContentList -> {
                         navController.awaitCurrentEntryResumed()
                         navController.navigate(ContentListRoute(route.sourceName))
@@ -1664,17 +1664,7 @@ fun KototoroApp(
                                             }
                                         },
                                         onOpenSearch = { request ->
-                                            val route = SearchNavigation.createRoute(request)
-                                            if (renderedNavController.currentDestination?.hasRoute<SearchRoute>() == true) {
-                                                renderedNavController.navigate(route) {
-                                                    popUpTo<SearchRoute> { inclusive = true }
-                                                    launchSingleTop = true
-                                                }
-                                            } else {
-                                                renderedNavController.navigate(route) {
-                                                    launchSingleTop = true
-                                                }
-                                            }
+                                            topLevelNavigator.openSearch(request)
                                         },
                                         mainShellChrome = {
                                             if (renderedSpaceId == navigationSpaceId) {
@@ -1832,17 +1822,7 @@ fun KototoroApp(
 
     LaunchedEffect(pendingSearchNavigation?.requestId) {
         val request = pendingSearchNavigation ?: return@LaunchedEffect
-        val route = SearchNavigation.createRoute(request)
-        if (isSearchRoute) {
-            navController.navigate(route) {
-                popUpTo<SearchRoute> { inclusive = true }
-                launchSingleTop = true
-            }
-        } else {
-            navController.navigate(route) {
-                launchSingleTop = true
-            }
-        }
+        topLevelNavigator.openSearch(request)
         onSearchNavigationHandled()
     }
 

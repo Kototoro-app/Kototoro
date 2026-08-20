@@ -15,6 +15,9 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.search.ui.compose.SearchNavigation
+import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
+import org.skepsun.kototoro.search.ui.compose.SearchRoute
 
 class NavControllerMainNavigator(
     private val navController: NavHostController,
@@ -75,6 +78,33 @@ class NavControllerMainNavigator(
         mainNavState?.push(origin.toDetailsNavKey())
         PendingDetailsNavigation.set(origin, sharedElementKey)
         navController.navigate(DetailsRoute)
+    }
+
+    override fun openSearch(request: SearchNavigationRequest) {
+        mainNavState?.pushOrReplaceCurrentTopSearch(
+            SearchNavKey(
+                query = request.query,
+                kind = request.kind.name,
+                sourceTypes = request.sourceTypes.joinToString(",") { it.name },
+                contentKinds = request.contentKinds.joinToString(",") { it.name },
+                advancedTitle = request.advancedQuery?.title.orEmpty(),
+                advancedTags = request.advancedQuery?.tags.orEmpty(),
+                advancedAuthor = request.advancedQuery?.author.orEmpty(),
+                pinnedOnly = request.pinnedOnly,
+                hideEmpty = request.hideEmpty,
+            ),
+        )
+        val route = SearchNavigation.createRoute(request)
+        if (navController.currentDestination?.hasRoute<SearchRoute>() == true) {
+            navController.navigate(route) {
+                popUpTo<SearchRoute> { inclusive = true }
+                launchSingleTop = true
+            }
+        } else {
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+        }
     }
 
     override fun pop(): Boolean {

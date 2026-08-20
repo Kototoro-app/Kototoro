@@ -21,6 +21,19 @@ data class DetailsNavKey(
 ) : MainNavKey
 
 @Serializable
+data class SearchNavKey(
+    val query: String = "",
+    val kind: String = "",
+    val sourceTypes: String = "",
+    val contentKinds: String = "",
+    val advancedTitle: String = "",
+    val advancedTags: String = "",
+    val advancedAuthor: String = "",
+    val pinnedOnly: Boolean = false,
+    val hideEmpty: Boolean = false,
+) : MainNavKey
+
+@Serializable
 data object HomeNavKey : TopLevelNavKey
 
 @Serializable

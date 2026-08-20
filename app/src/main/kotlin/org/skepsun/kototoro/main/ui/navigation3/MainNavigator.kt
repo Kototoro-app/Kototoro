@@ -5,6 +5,7 @@ import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.SortOrder
+import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 
 interface MainNavigator {
     fun openTopLevel(key: TopLevelNavKey)
@@ -24,6 +25,8 @@ interface MainNavigator {
         origin: DetailsOrigin,
         sharedElementKey: String? = null,
     )
+
+    fun openSearch(request: SearchNavigationRequest)
 
     fun pop(): Boolean
 }

@@ -50,6 +50,8 @@ class DefaultSpaceSessionValidator @Inject constructor(
 		// Runtime source registries are transiently empty during cold start. Route restoration must not
 		// destructively discard a valid saved destination before extension discovery finishes.
 		is SpaceRouteSnapshot.ContentList -> this
+		// Search queries and their display filters are plain data; keep them as saved.
+		is SpaceRouteSnapshot.Search -> this
 	}
 
 	private companion object {

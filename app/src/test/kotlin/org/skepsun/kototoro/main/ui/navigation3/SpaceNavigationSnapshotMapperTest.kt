@@ -64,6 +64,82 @@ class SpaceNavigationSnapshotMapperTest {
 		snapshot.stacks.getValue("home") shouldBe listOf(SpaceRouteSnapshot.TopLevel("home"))
 	}
 
+	@Test
+	fun `search route round trips through snapshot`() {
+		val state = mainNavState()
+		state.pushOrReplaceCurrentTopSearch(
+			SearchNavKey(
+				query = "test",
+				kind = "SIMPLE",
+				sourceTypes = "MANGA",
+				contentKinds = "ONGOING",
+				advancedTitle = "t",
+				advancedTags = "tags",
+				advancedAuthor = "a",
+				pinnedOnly = true,
+				hideEmpty = false,
+			),
+		)
+
+		val snapshot = state.toSpaceSessionSnapshot(BuiltInSpaces.Manga, timestamp = 100L)
+
+		snapshot.stacks.getValue("home") shouldBe listOf(
+			SpaceRouteSnapshot.TopLevel("home"),
+			SpaceRouteSnapshot.Search(
+				query = "test",
+				kind = "SIMPLE",
+				sourceTypes = "MANGA",
+				contentKinds = "ONGOING",
+				advancedTitle = "t",
+				advancedTags = "tags",
+				advancedAuthor = "a",
+				pinnedOnly = true,
+				hideEmpty = false,
+			),
+		)
+		snapshot.resumeRoute shouldBe SpaceRouteSnapshot.Search(
+			query = "test",
+			kind = "SIMPLE",
+			sourceTypes = "MANGA",
+			contentKinds = "ONGOING",
+			advancedTitle = "t",
+			advancedTags = "tags",
+			advancedAuthor = "a",
+			pinnedOnly = true,
+			hideEmpty = false,
+		)
+
+		val restored = mainNavState()
+		restored.restoreFromSpaceSession(snapshot)
+
+		restored.currentStack().toList() shouldBe listOf(
+			HomeNavKey,
+			SearchNavKey(
+				query = "test",
+				kind = "SIMPLE",
+				sourceTypes = "MANGA",
+				contentKinds = "ONGOING",
+				advancedTitle = "t",
+				advancedTags = "tags",
+				advancedAuthor = "a",
+				pinnedOnly = true,
+				hideEmpty = false,
+			),
+		)
+	}
+
+	@Test
+	fun `pushOrReplaceCurrentTopSearch replaces the last search entry`() {
+		val state = mainNavState()
+		state.pushOrReplaceCurrentTopSearch(SearchNavKey(query = "first"))
+		state.pushOrReplaceCurrentTopSearch(SearchNavKey(query = "second"))
+
+		state.currentStack().toList() shouldBe listOf(
+			HomeNavKey,
+			SearchNavKey(query = "second"),
+		)
+	}
+
 	private fun mainNavState(): MainNavState {
 		var selected: TopLevelNavKey = HomeNavKey
 		val stacks = allTopLevelNavKeys.associateWith { key -> NavBackStack<MainNavKey>(key) }

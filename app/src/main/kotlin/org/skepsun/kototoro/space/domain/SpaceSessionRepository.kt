@@ -19,6 +19,19 @@ sealed interface SpaceRouteSnapshot {
 
 	@Serializable
 	data class ContentList(val sourceName: String) : SpaceRouteSnapshot
+
+	@Serializable
+	data class Search(
+		val query: String,
+		val kind: String,
+		val sourceTypes: String,
+		val contentKinds: String,
+		val advancedTitle: String,
+		val advancedTags: String,
+		val advancedAuthor: String,
+		val pinnedOnly: Boolean,
+		val hideEmpty: Boolean,
+	) : SpaceRouteSnapshot
 }
 
 data class SpaceSessionSnapshot(

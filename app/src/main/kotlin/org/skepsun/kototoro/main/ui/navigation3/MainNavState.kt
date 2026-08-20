@@ -57,6 +57,23 @@ class MainNavState internal constructor(
         return true
     }
 
+    /**
+     * Mirrors the single-instance search destination: replaces the last
+     * [SearchNavKey] on the current stack if present, otherwise appends it.
+     */
+    fun pushOrReplaceCurrentTopSearch(key: SearchNavKey) {
+        val stack = currentStack()
+        val current = stack.toMutableList()
+        val lastSearchIndex = current.indexOfLast { it is SearchNavKey }
+        if (lastSearchIndex >= 0) {
+            current[lastSearchIndex] = key
+        } else {
+            current.add(key)
+        }
+        stack.clear()
+        stack.addAll(current)
+    }
+
     fun stackFor(key: TopLevelNavKey): NavBackStack<MainNavKey> = stacks.getValue(key)
 
     fun currentStack(): NavBackStack<MainNavKey> = stacks.getValue(selectedTopLevel)
