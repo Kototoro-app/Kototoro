@@ -20,6 +20,7 @@ import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.scene.SinglePaneSceneStrategy
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 
 /**
@@ -47,6 +48,7 @@ fun MainTopLevelNavDisplay(
     navState: MainNavState,
     modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
+    detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
     renderEntry: @Composable (MainNavKey) -> Unit,
 ) {
     val viewModelStoreOwner = checkNotNull(LocalViewModelStoreOwner.current) {
@@ -70,6 +72,7 @@ fun MainTopLevelNavDisplay(
                 navEntry(
                     key = entryKey,
                     prev = prev,
+                    detailsTransitionStyle = detailsTransitionStyle,
                     renderEntry = { key -> currentRenderEntry.value(key) },
                 )
             },
@@ -98,11 +101,12 @@ fun MainTopLevelNavDisplay(
 private fun navEntry(
     key: MainNavKey,
     prev: MainNavKey?,
+    detailsTransitionStyle: ListToDetailsTransition,
     renderEntry: @Composable (MainNavKey) -> Unit = {},
 ): NavEntry<MainNavKey> {
     return NavEntry(
         key = key,
-        metadata = transitionMetadata(key, prev),
+        metadata = transitionMetadata(key, prev, detailsTransitionStyle),
     ) { entryKey ->
         CompositionLocalProvider(
             LocalNavAnimatedVisibilityScope provides LocalNavAnimatedContentScope.current,
@@ -114,12 +118,20 @@ private fun navEntry(
 
 /**
  * Navigation-relation -> scene metadata. Top-level / sibling entries fade through
- * (also the NavDisplay default); source lists and search ride their semantic
- * presets; details use HeroExpand (cover hero + backdrop + floats inside the
- * content, light Z/depth on the scene itself, no full page turn).
+ * (also the NavDisplay default); source lists use Hierarchical; search uses the
+ * Z-axis workspace; details use HeroExpand by default, or the selectable legacy
+ * full-width page turn when the user opts into it.
  */
-private fun transitionMetadata(key: MainNavKey, prev: MainNavKey?): Map<String, Any> {
-    val preset = KototoroMotionCatalog.preset(KototoroMotionCatalog.forRelation(prev, key))
+private fun transitionMetadata(
+    key: MainNavKey,
+    prev: MainNavKey?,
+    detailsTransitionStyle: ListToDetailsTransition,
+): Map<String, Any> {
+    val preset = if (key is DetailsNavKey && detailsTransitionStyle == ListToDetailsTransition.LEGACY_SLIDE) {
+        KototoroMotionCatalog.legacySlide
+    } else {
+        KototoroMotionCatalog.preset(KototoroMotionCatalog.forRelation(prev, key))
+    }
     return metadata {
         put(NavDisplay.TransitionKey, preset.enter)
         put(NavDisplay.PopTransitionKey, preset.pop)

@@ -23,6 +23,7 @@ import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
 import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 import org.skepsun.kototoro.core.prefs.HomeHeroMode
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
@@ -68,8 +69,8 @@ data class AppearanceSettingsUiState(
     val isModernDetailsDockEnabled: Boolean,
     val defaultDetailsTab: Int,
     val searchSuggestionTypes: Set<SearchSuggestionType>,
-    val isSharedElementTransitionsEnabled: Boolean,
-    val isSharedElementTransitionsSettingsEnabled: Boolean,
+    val listToDetailsTransition: ListToDetailsTransition,
+    val isListToDetailsTransitionSettingsEnabled: Boolean,
     val isShowLanguagePresetFilter: Boolean,
     val hiddenLanguagePreset: String,
     val isShowContentTypeFilter: Boolean,
@@ -111,6 +112,7 @@ data class AppearanceSettingsOptions(
     val mangaListBadges: List<SettingsChoiceOption<String>>,
     val detailsTabs: List<SettingsChoiceOption<Int>>,
     val searchSuggestionTypes: List<SettingsChoiceOption<SearchSuggestionType>>,
+    val listToDetailsTransitionOptions: List<SettingsChoiceOption<ListToDetailsTransition>>,
     val languagePresets: List<SettingsChoiceOption<String>>,
     val contentTypes: List<SettingsChoiceOption<String>>,
     val sourceTags: List<SettingsChoiceOption<String>>,
@@ -165,7 +167,7 @@ fun AppearanceSettingsScreen(
     onDefaultDetailsTabChange: (Int) -> Unit,
     onSearchSuggestionTypesChange: (Set<SearchSuggestionType>) -> Unit,
     onNavConfigClick: () -> Unit,
-    onSharedElementTransitionsChange: (Boolean) -> Unit,
+    onListToDetailsTransitionChange: (ListToDetailsTransition) -> Unit,
     onShowLanguagePresetFilterChange: (Boolean) -> Unit,
     onHiddenLanguagePresetChange: (String) -> Unit,
     onShowContentTypeFilterChange: (Boolean) -> Unit,
@@ -671,13 +673,14 @@ fun AppearanceSettingsScreen(
                 title = stringResource(R.string.appearance_behavior_section),
             ) {
                 item {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.shared_element_transitions),
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_list_to_details_transition),
                         iconRes = R.drawable.ic_move_horizontal,
-                        checked = state.isSharedElementTransitionsEnabled,
-                        summary = stringResource(R.string.shared_element_transitions_summary),
-                        enabled = state.isSharedElementTransitionsSettingsEnabled,
-                        onCheckedChange = onSharedElementTransitionsChange,
+                        value = state.listToDetailsTransition,
+                        options = options.listToDetailsTransitionOptions,
+                        summary = stringResource(R.string.pref_list_to_details_transition_summary),
+                        enabled = state.isListToDetailsTransitionSettingsEnabled,
+                        onValueChange = onListToDetailsTransitionChange,
                     )
                 }
                 item {

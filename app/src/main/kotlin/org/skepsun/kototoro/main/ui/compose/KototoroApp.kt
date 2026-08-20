@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -523,10 +524,10 @@ fun KototoroApp(
             isSourceTagFilterVisible = isShowSourceTagFilter,
         )
     }
-    val isSharedElementTransitionsEnabled by appSettings.observeAsState(
-        AppSettings.KEY_SHARED_ELEMENT_TRANSITIONS,
+    val detailsTransitionStyle by appSettings.observeAsState(
+        AppSettings.KEY_LIST_TO_DETAILS_TRANSITION,
     ) {
-        isSharedElementTransitionsEnabled
+        listToDetailsTransition
     }
     val isReducedVisualEffectsEnabled by appSettings.observeAsState(
         AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
@@ -541,7 +542,7 @@ fun KototoroApp(
     val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
         spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
     val effectiveSharedElementTransitionsEnabled =
-        isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled && !suppressSpaceContentMotion
+        !isReducedVisualEffectsEnabled && !suppressSpaceContentMotion
     val spaceMotionMode = if (suppressSpaceContentMotion) {
         SpaceMotionMode.DISABLED
     } else {
@@ -1613,6 +1614,7 @@ fun KototoroApp(
                                         navController = renderedNavController,
                                         mainNavState = renderedNavigationState.mainNavState,
                                         suppressNavigationTransitions = suppressSpaceContentMotion,
+                                        detailsTransitionStyle = detailsTransitionStyle,
                                         isLandscapeNavigation = isLandscapeNavigation,
                                         startDestination = startDestination,
                                         contentPadding = contentPadding,

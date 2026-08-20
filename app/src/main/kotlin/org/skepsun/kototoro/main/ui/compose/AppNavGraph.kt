@@ -85,6 +85,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.RouteLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
@@ -254,6 +255,7 @@ fun AppNavGraph(
     isLandscapeNavigation: Boolean = false,
     mainNavState: MainNavState? = null,
     suppressNavigationTransitions: Boolean = false,
+    detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
 ) {
     val activity = LocalContext.current as FragmentActivity
     val appRouter = activity.router
@@ -316,6 +318,7 @@ fun AppNavGraph(
                 mainNavState = checkNotNull(mainNavState) {
                     "MainShellRoute requires MainNavState"
                 },
+                detailsTransitionStyle = detailsTransitionStyle,
                 isRouteVisible = isMainShellRouteVisible,
                 onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
                 onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
@@ -367,6 +370,7 @@ internal fun MainShellRouteContent(
     isLandscapeNavigation: Boolean,
     mainNavigator: MainNavigator,
     mainNavState: MainNavState,
+    detailsTransitionStyle: ListToDetailsTransition,
     isRouteVisible: Boolean,
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
@@ -403,6 +407,7 @@ internal fun MainShellRouteContent(
                         navState = mainNavState,
                         modifier = Modifier.fillMaxSize(),
                         sharedTransitionScope = sharedTransitionScope,
+                        detailsTransitionStyle = detailsTransitionStyle,
                     ) { key ->
                         CompositionLocalProvider(
                             LocalLiquidGlassBackdrop provides null,
@@ -594,9 +599,6 @@ private fun MainShellTopLevelEntryContent(
             val sourceGateViewModel =
                 hiltViewModel<ContentListSourceGateViewModel>(key = contentListKey)
             val isSourceResolutionReady by sourceGateViewModel.isResolutionReady.collectAsStateWithLifecycle()
-            BackHandler {
-                mainNavState.pop()
-            }
             RouteLiquidGlassBackdrop(
                 ownerKey = "content_list:${key.sourceName}",
                 active = true,
@@ -680,9 +682,6 @@ private fun MainShellTopLevelEntryContent(
                                 }
                             }
                         }
-                        BackHandler {
-                            mainNavState.pop()
-                        }
                         DetailsScreen(
                             viewModel = detailsViewModel,
                             pagesViewModel = pagesViewModel,
@@ -734,9 +733,6 @@ private fun MainShellTopLevelEntryContent(
                     sourceTypeNames = key.sourceTypes.split(",").filter { it.isNotBlank() },
                     contentKindNames = key.contentKinds.split(",").filter { it.isNotBlank() },
                 )
-            }
-            BackHandler {
-                mainNavState.pop()
             }
             RouteLiquidGlassBackdrop(
                 ownerKey = "search:${key.query}",

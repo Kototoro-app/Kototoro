@@ -157,6 +157,17 @@ enum class HomeHeroContentLayout {
 	DETAILS,
 }
 
+/**
+ * Which scene motion the details destination uses when it is pushed over a
+ * content list. HERO_EXPAND is the nav3 motion-system default (cover hero +
+ * backdrop + Z/depth); LEGACY_SLIDE keeps the pre-motion-system full-width
+ * horizontal page turn (the cover hero still rides along).
+ */
+enum class ListToDetailsTransition {
+	HERO_EXPAND,
+	LEGACY_SLIDE,
+}
+
 private fun HomeHeroStyle.legacyMode(): HomeHeroMode = when (this) {
 	HomeHeroStyle.AUTO -> HomeHeroMode.AUTO
 	HomeHeroStyle.MIXED -> HomeHeroMode.MIXED
@@ -1368,6 +1379,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		get() = prefs.getBoolean(KEY_SHARED_ELEMENT_TRANSITIONS, false)
 		set(value) {
 			prefs.edit { putBoolean(KEY_SHARED_ELEMENT_TRANSITIONS, value) }
+		}
+
+	var listToDetailsTransition: ListToDetailsTransition
+		get() = prefs.getEnumValue(KEY_LIST_TO_DETAILS_TRANSITION, ListToDetailsTransition.HERO_EXPAND)
+		set(value) {
+			prefs.edit { putEnumValue(KEY_LIST_TO_DETAILS_TRANSITION, value) }
 		}
 
 	var isReducedVisualEffectsEnabled: Boolean
@@ -2812,6 +2829,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 		const val KEY_SOURCES_GRID = "sources_grid"
 		const val KEY_SHOW_SOURCE_ON_CARDS = "show_source_on_cards"
 		const val KEY_SHARED_ELEMENT_TRANSITIONS = "shared_element_transitions"
+		const val KEY_LIST_TO_DETAILS_TRANSITION = "list_to_details_transition"
 		const val KEY_UPDATES_UNSTABLE = "updates_unstable"
 		const val KEY_TIPS_CLOSED = "tips_closed"
 		const val KEY_SSL_BYPASS = "ssl_bypass"

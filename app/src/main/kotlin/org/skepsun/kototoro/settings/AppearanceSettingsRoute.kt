@@ -28,6 +28,7 @@ import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -154,8 +155,8 @@ fun AppearanceSettingsRoute(
     val searchSuggestionTypes =
         settings.observeAsState(AppSettings.KEY_SEARCH_SUGGESTION_TYPES) { searchSuggestionTypes }.value
     val mainNavItems = settings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }.value
-    val isSharedElementTransitionsEnabled =
-        settings.observeAsState(AppSettings.KEY_SHARED_ELEMENT_TRANSITIONS) { isSharedElementTransitionsEnabled }.value
+    val listToDetailsTransition =
+        settings.observeAsState(AppSettings.KEY_LIST_TO_DETAILS_TRANSITION) { listToDetailsTransition }.value
     val isShowLanguagePresetFilter =
         settings.observeAsState(AppSettings.KEY_SHOW_LANGUAGE_PRESET_FILTER) { isShowLanguagePresetFilter }.value
     val hiddenLanguagePreset =
@@ -233,8 +234,16 @@ fun AppearanceSettingsRoute(
     } else {
         context.getString(R.string.panorama_settings_disabled)
     }
-    val effectiveSharedElementTransitionsEnabled =
-        isSharedElementTransitionsEnabled && !isReducedVisualEffectsEnabled
+    val listToDetailsTransitionOptions = listOf(
+        SettingsChoiceOption(
+            value = ListToDetailsTransition.HERO_EXPAND,
+            label = context.getString(R.string.pref_list_to_details_transition_hero),
+        ),
+        SettingsChoiceOption(
+            value = ListToDetailsTransition.LEGACY_SLIDE,
+            label = context.getString(R.string.pref_list_to_details_transition_legacy),
+        ),
+    )
 
     val backgroundStyleOptions = coordinator.buildBackgroundStyleOptions()
     val effectiveBackgroundStyle = backgroundStyle.takeIf { selected ->
@@ -260,6 +269,7 @@ fun AppearanceSettingsRoute(
         mangaListBadges = coordinator.buildMangaListBadgeOptions(),
         detailsTabs = coordinator.buildDetailsTabOptions(),
         searchSuggestionTypes = coordinator.buildSearchSuggestionTypeOptions(),
+        listToDetailsTransitionOptions = listToDetailsTransitionOptions,
         languagePresets = languagePresetOptions,
         contentTypes = coordinator.buildContentTypeOptions(),
         sourceTags = coordinator.buildSourceTagOptions(),
@@ -303,8 +313,8 @@ fun AppearanceSettingsRoute(
         isModernDetailsDockEnabled = isModernDetailsDockEnabled,
         defaultDetailsTab = defaultDetailsTab,
         searchSuggestionTypes = searchSuggestionTypes,
-        isSharedElementTransitionsEnabled = effectiveSharedElementTransitionsEnabled,
-        isSharedElementTransitionsSettingsEnabled = !isReducedVisualEffectsEnabled,
+        listToDetailsTransition = listToDetailsTransition,
+        isListToDetailsTransitionSettingsEnabled = !isReducedVisualEffectsEnabled,
         isShowLanguagePresetFilter = isShowLanguagePresetFilter,
         hiddenLanguagePreset = hiddenLanguagePreset,
         isShowContentTypeFilter = isShowContentTypeFilter,
@@ -373,7 +383,7 @@ fun AppearanceSettingsRoute(
         onDefaultDetailsTabChange = { settings.defaultDetailsTab = it },
         onSearchSuggestionTypesChange = { settings.searchSuggestionTypes = it },
         onNavConfigClick = onOpenNavConfig,
-        onSharedElementTransitionsChange = { settings.isSharedElementTransitionsEnabled = it },
+        onListToDetailsTransitionChange = { settings.listToDetailsTransition = it },
         onShowLanguagePresetFilterChange = { settings.isShowLanguagePresetFilter = it },
         onHiddenLanguagePresetChange = { settings.hiddenLanguagePreset = it },
         onShowContentTypeFilterChange = { settings.isShowContentTypeFilter = it },

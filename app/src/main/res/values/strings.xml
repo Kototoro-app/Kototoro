@@ -3403,6 +3403,10 @@
     <string name="mark_as_nsfw">Mark as NSFW</string>
     <string name="shared_element_transitions">Smooth cover transitions</string>
     <string name="shared_element_transitions_summary">Enables fluid \"Hero\" animation when navigating from content lists to the details page, morphing the list cover image into the detail cover image.</string>
+    <string name="pref_list_to_details_transition">List-to-details transition</string>
+    <string name="pref_list_to_details_transition_summary">Choose how the cover morphs when you open a work from a list.</string>
+    <string name="pref_list_to_details_transition_hero">Hero expand (default)</string>
+    <string name="pref_list_to_details_transition_legacy">Legacy page slide</string>
     <string name="jar_plugins_updates_available">JAR Plugins have updates available!</string>
     <string name="jar_plugins_update_all">Update All</string>
     <string name="jar_plugins_updating">Updating JAR Plugins...</string>

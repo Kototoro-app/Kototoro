@@ -64,6 +64,36 @@ internal object KototoroMotionCatalog {
         predictivePop: (AnimatedContentTransitionScope<*>, Int) -> ContentTransform = { scope, _ -> pop(scope) },
     ) = KototoroMotionPreset(enter = enter, pop = pop, predictivePop = predictivePop)
 
+    /**
+     * The pre-motion-system details animation: full-width horizontal page turn
+     * with the cover hero riding along. Selectable through the appearance
+     * setting "list-to-details transition".
+     */
+    val legacySlide: KototoroMotionPreset = preset(
+        enter = { scope ->
+            scope.slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+            ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing)) togetherWith (
+                scope.slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
+                )
+        },
+        pop = { scope ->
+            scope.slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing),
+            ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing)) togetherWith (
+                scope.slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
+                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
+                )
+        },
+    )
+
     private val fade: FiniteAnimationSpec<Float> = tween(MainNavigationMotion.FadeMillis, easing = LinearEasing)
 
     // Sibling / space switches: crossfade with a barely visible depth hint.
