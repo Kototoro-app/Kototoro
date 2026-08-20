@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.home.ui.compose
+package org.skepsun.kototoro.home.ui.compose.hero
 
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
 import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout

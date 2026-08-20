@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.annotation.StringRes
 import androidx.collection.LongObjectMap
-import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -76,102 +75,6 @@ import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
-
-@Immutable
-data class HomeRecentItem(
-    val content: Content,
-    val groupKey: Long = content.id,
-    val counter: Int = 0,
-    val progress: ReadingProgress? = null,
-) {
-    val title: String
-        get() = content.title
-
-    @get:StringRes
-    val typeLabelResId: Int?
-        get() = content.source.getContentType().toHomeTab()?.titleResId
-}
-
-@Immutable
-data class HomeUpdateItem(
-    val content: Content,
-    val newChapters: Int,
-    val groupKey: Long = content.id,
-    val counter: Int = newChapters,
-    val progress: ReadingProgress? = null,
-) {
-    val title: String
-        get() = content.title
-}
-
-@Immutable
-data class HomeRecommendationItem(
-    val content: Content,
-    val groupKey: Long = content.id,
-    val counter: Int = 0,
-    val progress: ReadingProgress? = null,
-) {
-    val title: String
-        get() = content.title
-}
-
-@Immutable
-data class HomeRecentSearchItem(
-    val query: String,
-)
-
-@Immutable
-data class HomeResumeState(
-    val content: Content? = null,
-    val progressPercent: Int? = null,
-    val entityId: Long? = null,
-    val preferredLocalMangaId: Long? = null,
-    val groupKey: Long? = content?.id,
-) {
-    val isAvailable: Boolean
-        get() = content != null
-}
-
-enum class HomeContentTab(@StringRes val titleResId: Int) {
-    MANGA(R.string.manga),
-    NOVEL(R.string.novel),
-    VIDEO(R.string.video),
-}
-
-enum class HomeSourceOrigin {
-    BUILT_IN,
-    MIHON,
-    ANIYOMI,
-    LEGADO,
-    TVBOX,
-    EXTERNAL,
-    IREADER,
-}
-
-@Immutable
-data class HomeSourceBreakdown(
-    val origin: HomeSourceOrigin,
-    val count: Int,
-)
-
-@Immutable
-data class HomeSummaryState(
-    val selectedTab: HomeContentTab? = null,
-    val recentHistoryCount: Int = 0,
-    val recentHistoryItems: List<HomeRecentItem> = emptyList(),
-    val resumeState: HomeResumeState = HomeResumeState(),
-    val favoritesCount: Int = 0,
-    val favoriteCategoriesCount: Int = 0,
-    val unreadUpdatesCount: Int = 0,
-    val recentUpdates: List<HomeUpdateItem> = emptyList(),
-    val recommendationsCount: Int = 0,
-    val recommendations: List<HomeRecommendationItem> = emptyList(),
-    val recentSearches: List<HomeRecentSearchItem> = emptyList(),
-    val enabledSourcesCount: Int = 0,
-    val sourceBreakdown: List<HomeSourceBreakdown> = emptyList(),
-    val selectedSourceTags: Set<org.skepsun.kototoro.explore.ui.model.SourceTag> = emptySet(),
-    val isInitialized: Boolean = false,
-)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -1312,26 +1215,6 @@ private suspend fun resolveDisplayOverride(
 }
 
 private fun Long.toHomeGroupKey(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
-
-private fun ContentType.toHomeTab(): HomeContentTab? = when (this) {
-    ContentType.NOVEL,
-    ContentType.HENTAI_NOVEL -> HomeContentTab.NOVEL
-
-    ContentType.VIDEO,
-    ContentType.HENTAI_VIDEO -> HomeContentTab.VIDEO
-
-    ContentType.MANGA,
-    ContentType.HENTAI_MANGA,
-    ContentType.COMICS,
-    ContentType.MANHWA,
-    ContentType.MANHUA,
-    ContentType.ONE_SHOT,
-    ContentType.DOUJINSHI,
-    ContentType.IMAGE_SET,
-    ContentType.ARTIST_CG,
-    ContentType.GAME_CG,
-    ContentType.OTHER -> HomeContentTab.MANGA
-}
 
 private fun org.skepsun.kototoro.core.model.ContentHistory?.toProgressPercent(): Int? {
     val percent = this?.percent ?: return null

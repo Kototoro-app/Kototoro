@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.home.ui.compose
+package org.skepsun.kototoro.home.ui.compose.hero
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test

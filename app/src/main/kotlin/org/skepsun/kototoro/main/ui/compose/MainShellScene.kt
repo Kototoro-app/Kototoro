@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
+import org.skepsun.kototoro.home.ui.HomeRoute
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.skepsun.kototoro.home.ui.HomeViewModel
 import androidx.compose.runtime.getValue
@@ -32,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.lifecycle.ViewModel
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -105,9 +105,7 @@ import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.remotelist.ui.ContentListSourceGateViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
 import org.skepsun.kototoro.main.ui.compose.selectedFirst
-import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
-import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
-import org.skepsun.kototoro.space.ui.spaceViewModelKey
+import org.skepsun.kototoro.space.ui.spaceBoundHiltViewModel
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
@@ -123,18 +121,6 @@ private data class FavoritesSelectionDialogState(
     val candidates: List<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel.ImportSource>,
     val selectedIndices: Set<Int>,
 )
-
-@Composable
-private inline fun <reified VM> spaceBoundHiltViewModel(owner: String): VM
-    where VM : ViewModel, VM : SpaceBindableViewModel {
-    val spaceId = LocalBrowseSpaceId.current
-    val viewModel = hiltViewModel<VM>(key = spaceViewModelKey(owner, spaceId))
-    LaunchedEffect(viewModel, spaceId) {
-        viewModel.bindSpace(spaceId)
-    }
-    return viewModel
-}
-
 @Composable
 private fun MainRouteScene(
     landscapeStartPadding: androidx.compose.ui.unit.Dp,
@@ -304,7 +290,7 @@ private fun MainShellTopLevelEntryContent(
         "MainShellTopLevelEntryContent requires LocalNavAnimatedVisibilityScope"
     }
     when (key) {
-        org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeTopLevelRouteContent(
+        org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeRoute(
             animatedVisibilityScope = animatedVisibilityScope,
             activity = activity,
             mainActivity = mainActivity,
@@ -617,189 +603,6 @@ private fun MainShellTopLevelEntryContent(
                 }
             }
         }
-    }
-}
-
-@Composable
-internal fun HomeTopLevelRouteContent(
-    animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    activity: FragmentActivity,
-    mainActivity: MainActivity?,
-    appRouter: org.skepsun.kototoro.core.nav.AppRouter,
-    rootView: android.view.View,
-    contentPadding: androidx.compose.foundation.layout.PaddingValues,
-    mainNavigator: MainNavigator,
-    onOpenSearch: (SearchNavigationRequest) -> Unit,
-    navigateToDetailsWithContent: (Content, String?) -> Unit,
-    isRouteVisible: Boolean = true,
-) {
-    val viewModel = spaceBoundHiltViewModel<HomeViewModel>("home")
-    val state by viewModel.summaryState.collectAsStateWithLifecycle()
-    val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
-
-    LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
-        viewModel.onOpenContent.collect { event ->
-            event?.consume { contentEvent ->
-                navigateToDetailsWithContent(contentEvent.content, null)
-            }
-        }
-    }
-
-    LaunchedEffect(viewModel.onActionDone) {
-        val observer = org.skepsun.kototoro.core.ui.util.ReversibleActionObserver(rootView)
-        viewModel.onActionDone.collect { event ->
-            event?.consume(observer)
-        }
-    }
-
-    LaunchedEffect(viewModel.onError, activity) {
-        val host = activity.window.decorView.rootView
-        val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
-        val observer = org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver(host, resolver, null)
-        viewModel.onError.collect { event ->
-            event?.consume(observer)
-        }
-    }
-
-    DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
-        val callback = object : SearchBarFilterCallback {
-            override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
-                org.skepsun.kototoro.home.ui.HomeContentTab.MANGA -> BrowseGroupTab.Content
-                org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL -> BrowseGroupTab.Novel
-                org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO -> BrowseGroupTab.Video
-                null -> BrowseGroupTab.All
-            }
-
-            override fun onContentTypeSelected(tab: BrowseGroupTab) {
-                viewModel.setSelectedTab(
-                    when (if (getSelectedContentType() == tab) BrowseGroupTab.All else tab) {
-                        BrowseGroupTab.Content -> org.skepsun.kototoro.home.ui.HomeContentTab.MANGA
-                        BrowseGroupTab.Novel -> org.skepsun.kototoro.home.ui.HomeContentTab.NOVEL
-                        BrowseGroupTab.Video -> org.skepsun.kototoro.home.ui.HomeContentTab.VIDEO
-                        else -> null
-                    },
-                )
-            }
-
-            override fun getSelectedSourceTags(): Set<org.skepsun.kototoro.explore.ui.model.SourceTag> =
-                state.selectedSourceTags
-
-            override fun onSourceTagSelected(tag: org.skepsun.kototoro.explore.ui.model.SourceTag?) {
-                val current = state.selectedSourceTags
-                viewModel.setSelectedSourceTags(
-                    when {
-                        tag == null -> emptySet()
-                        tag in current -> current - tag
-                        else -> current + tag
-                    },
-                )
-            }
-        }
-        mainActivity?.setActiveFilterCallback(callback)
-        onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
-        }
-    }
-
-    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
-        val onHomeContentClick = remember(navigateToDetailsWithContent) {
-            { content: Content, _: Rect?, sharedElementKey: String? ->
-                navigateToDetailsWithContent(content, sharedElementKey)
-            }
-        }
-        val onHomeSettingsClick = remember(appRouter) { { appRouter.openSettings() } }
-        val onHomeReaderSettingsClick = remember(appRouter) { { appRouter.openReaderSettings() } }
-        val onHomeViewAllRecentClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(HistoryNavKey)
-            }
-        }
-        val onHomeViewAllUpdatesClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(UpdatedNavKey)
-            }
-        }
-        val onHomeViewAllRecommendationsClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(SuggestionsNavKey)
-            }
-        }
-        val onHomeRecentSearchClick = remember(onOpenSearch) {
-            { query: String ->
-                onOpenSearch(
-                    SearchNavigationRequest(
-                        query = query,
-                        kind = org.skepsun.kototoro.search.domain.SearchKind.SIMPLE,
-                        sourceTypes = org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES,
-                        contentKinds = org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS,
-                        advancedQuery = null,
-                        pinnedOnly = false,
-                        hideEmpty = false,
-                        requestId = System.nanoTime(),
-                    ),
-                )
-            }
-	        }
-	        val onHomeSetupWizardClick = remember(appRouter) { { appRouter.showWelcomeSheet() } }
-	        val onHomeManageSourcesClick = remember(appRouter) { { appRouter.openManageSources() } }
-        val onHomeLibraryOpenClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(FavoritesNavKey)
-            }
-        }
-        val onHomeBookmarksClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(BookmarksNavKey)
-            }
-        }
-        val onHomeLocalClick = remember(mainNavigator) {
-            {
-                mainNavigator.openTopLevel(LocalNavKey)
-            }
-        }
-        val onHomeDownloadsClick = remember(appRouter) { { appRouter.openDownloads() } }
-        val onHomeRandomClick = remember(viewModel) { { viewModel.openRandom() } }
-        val onHomeAutoTranslateClick = remember(appRouter) { { appRouter.openTranslationSettings() } }
-        val homeActions = remember(
-            onHomeSettingsClick,
-            onHomeReaderSettingsClick,
-            onHomeViewAllRecentClick,
-            onHomeViewAllUpdatesClick,
-	            onHomeViewAllRecommendationsClick,
-	            onHomeRecentSearchClick,
-	            onHomeSetupWizardClick,
-	            onHomeManageSourcesClick,
-            onHomeLibraryOpenClick,
-            onHomeBookmarksClick,
-            onHomeLocalClick,
-            onHomeDownloadsClick,
-            onHomeRandomClick,
-            onHomeAutoTranslateClick,
-        ) {
-            HomeScreenActions(
-                onSettingsClick = onHomeSettingsClick,
-                onReaderSettingsClick = onHomeReaderSettingsClick,
-                onViewAllRecentClick = onHomeViewAllRecentClick,
-	                onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
-	                onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
-	                onRecentSearchClick = onHomeRecentSearchClick,
-	                onSetupWizardClick = onHomeSetupWizardClick,
-	                onManageSourcesClick = onHomeManageSourcesClick,
-                onLibraryOpenClick = onHomeLibraryOpenClick,
-                onBookmarksClick = onHomeBookmarksClick,
-                onLocalClick = onHomeLocalClick,
-                onDownloadsClick = onHomeDownloadsClick,
-                onRandomClick = onHomeRandomClick,
-                onAutoTranslateClick = onHomeAutoTranslateClick,
-            )
-        }
-        HomeScreen(
-            contentPadding = contentPadding,
-            state = state,
-            onContentClick = onHomeContentClick,
-            actions = homeActions,
-            isRandomLoading = isRandomLoading,
-        )
     }
 }
 
