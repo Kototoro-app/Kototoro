@@ -131,7 +131,6 @@ import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.domain.AdvancedSearchParams
 import org.skepsun.kototoro.search.ui.suggestion.model.TrackingEntity
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
-import org.skepsun.kototoro.search.ui.compose.SearchRoute
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -175,6 +174,8 @@ import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarFilterRail
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.RouteScopedTopBarOverrideState
+import org.skepsun.kototoro.main.ui.navigation3.ContentListNavKey
+import org.skepsun.kototoro.main.ui.navigation3.DetailsNavKey
 import org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey
 import org.skepsun.kototoro.main.ui.navigation3.ExploreNavKey
 import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
@@ -182,6 +183,7 @@ import org.skepsun.kototoro.main.ui.navigation3.FeedNavKey
 import org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey
 import org.skepsun.kototoro.main.ui.navigation3.HomeNavKey
 import org.skepsun.kototoro.main.ui.navigation3.LocalNavKey
+import org.skepsun.kototoro.main.ui.navigation3.SearchNavKey
 import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
 import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
 import org.skepsun.kototoro.main.ui.navigation3.SuggestionsNavKey
@@ -879,34 +881,34 @@ fun KototoroApp(
                 }
                 navController.awaitCurrentEntryResumed()
             }
-            session.stacks[session.selectedTopLevel].orEmpty().drop(1).forEach { route ->
-                when (route) {
-                    is SpaceRouteSnapshot.TopLevel -> Unit
-                    is SpaceRouteSnapshot.Search -> Unit
-                    is SpaceRouteSnapshot.ContentList -> {
-                        navController.awaitCurrentEntryResumed()
-                        navController.navigate(ContentListRoute(route.sourceName))
-                    }
-                    is SpaceRouteSnapshot.WorkDetails -> {
-                        navController.awaitCurrentEntryResumed()
-                        org.skepsun.kototoro.core.nav.PendingDetailsNavigation.set(
-                            org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                entityId = route.entityId,
-                                preferredLocalMangaId = route.requestedProjectionId,
-                                initialProjectionLocalMangaId = route.requestedProjectionId,
-                            ),
-                        )
-                        navController.navigate(DetailsRoute)
-                    }
+            // The v3 stacks were already populated by restoreFromSpaceSession; the inner
+            // NavDisplay renders their immersive entries directly. Only seed the pending
+            // details origin so the restored DetailsNavKey has its content on first composition.
+            session.stacks[session.selectedTopLevel].orEmpty().forEach { route ->
+                if (route is SpaceRouteSnapshot.WorkDetails) {
+                    org.skepsun.kototoro.core.nav.PendingDetailsNavigation.set(
+                        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+                            entityId = route.entityId,
+                            preferredLocalMangaId = route.requestedProjectionId,
+                            initialProjectionLocalMangaId = route.requestedProjectionId,
+                        ),
+                    )
                 }
             }
         }
         rootRestoredSpaceIds[navigationSpaceId] = true
     }
-    val currentDestinationRoute = currentDestination?.route
-    val isSearchRoute = currentDestination?.hasRoute<SearchRoute>() == true
-    val isDetailsRoute = currentDestination?.hasRoute<DetailsRoute>() == true
-    val isContentListRoute = currentDestination?.hasRoute<ContentListRoute>() == true
+    val currentNavTopEntry: org.skepsun.kototoro.main.ui.navigation3.MainNavKey? =
+        mainNavState.currentStack().lastOrNull()
+    val currentDestinationRoute = when (currentNavTopEntry) {
+        is ContentListNavKey -> "content_list"
+        is DetailsNavKey -> "details"
+        is SearchNavKey -> "search"
+        else -> currentDestination?.route
+    }
+    val isSearchRoute = currentNavTopEntry is SearchNavKey
+    val isDetailsRoute = currentNavTopEntry is DetailsNavKey
+    val isContentListRoute = currentNavTopEntry is ContentListNavKey
     val isImmersiveRoute = isDetailsRoute || isContentListRoute
     val shouldShowChrome = !isSearchRoute && !isImmersiveRoute
     LaunchedEffect(currentDestinationRoute) {

@@ -1,12 +1,13 @@
 package org.skepsun.kototoro.search.ui.multi
 
-import android.net.Uri
 import android.util.Log
 import androidx.collection.ArraySet
 import androidx.collection.LongSet
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -28,7 +29,6 @@ import org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.UnknownContentSource
 import org.skepsun.kototoro.core.model.getLocale
-import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
@@ -63,14 +63,21 @@ import org.skepsun.kototoro.search.domain.searchContentKindsFromNames
 import org.skepsun.kototoro.search.domain.sourceTypesFromNames
 import org.skepsun.kototoro.search.domain.sourceTypesFromTags
 import java.util.Locale
-import javax.inject.Inject
 
 private const val MAX_PARALLELISM = 4
 private const val TAG = "SearchViewModel"
 
-@HiltViewModel
-class SearchViewModel @Inject constructor(
-	savedStateHandle: SavedStateHandle,
+@HiltViewModel(assistedFactory = SearchViewModel.Factory::class)
+class SearchViewModel @AssistedInject constructor(
+	@Assisted("query") query: String,
+	@Assisted("kind") kind: SearchKind,
+	@Assisted("advancedTitle") advancedTitle: String,
+	@Assisted("advancedTags") advancedTags: String,
+	@Assisted("advancedAuthor") advancedAuthor: String,
+	@Assisted("pinnedOnly") initialPinnedOnly: Boolean,
+	@Assisted("hideEmpty") initialHideEmpty: Boolean,
+	@Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
+	@Assisted("contentKindNames") contentKindNames: Collection<String>?,
 	private val mangaListMapper: ContentListMapper,
 	private val searchHelperFactory: SearchV2Helper.Factory,
 	private val sourcesRepository: ContentSourcesRepository,
@@ -82,27 +89,42 @@ class SearchViewModel @Inject constructor(
 	private val favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
-	val query = savedStateHandle.getStringArg(AppRouter.KEY_QUERY).orEmpty()
-	val kind = savedStateHandle.getSearchKindArg(AppRouter.KEY_KIND) ?: SearchKind.SIMPLE
-	
+	@AssistedFactory
+	interface Factory {
+		fun create(
+			@Assisted("query") query: String,
+			@Assisted("kind") kind: SearchKind,
+			@Assisted("advancedTitle") advancedTitle: String,
+			@Assisted("advancedTags") advancedTags: String,
+			@Assisted("advancedAuthor") advancedAuthor: String,
+			@Assisted("pinnedOnly") pinnedOnly: Boolean,
+			@Assisted("hideEmpty") hideEmpty: Boolean,
+			@Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
+			@Assisted("contentKindNames") contentKindNames: Collection<String>?,
+		): SearchViewModel
+	}
+
+	val query = query
+	val kind = kind
+
 	val advancedQuery = if (kind == SearchKind.ADVANCED) {
 		AdvancedSearchParams(
 			query = query,
-			title = savedStateHandle.get<String>(AppRouter.KEY_ADVANCED_TITLE).orEmpty(),
-			tags = savedStateHandle.get<String>(AppRouter.KEY_ADVANCED_TAGS).orEmpty(),
-			author = savedStateHandle.get<String>(AppRouter.KEY_ADVANCED_AUTHOR).orEmpty(),
+			title = advancedTitle,
+			tags = advancedTags,
+			author = advancedAuthor,
     	)
 	} else null
 
 	private var includeDisabledSources = MutableStateFlow(false)
-	private var pinnedOnly = MutableStateFlow(savedStateHandle.getBooleanArg(AppRouter.KEY_PINNED_ONLY) == true)
-	private var hideEmpty = MutableStateFlow(savedStateHandle.getBooleanArg(AppRouter.KEY_HIDE_EMPTY) == true)
+	private var pinnedOnly = MutableStateFlow(initialPinnedOnly)
+	private var hideEmpty = MutableStateFlow(initialHideEmpty)
 	private var sourceTypes = MutableStateFlow(
-		sourceTypesFromNames(savedStateHandle.getStringList(AppRouter.KEY_SOURCE_TYPES))
+		sourceTypesFromNames(sourceTypeNames)
 			?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
 	)
 	private var contentKinds = MutableStateFlow(
-		searchContentKindsFromNames(savedStateHandle.getStringList(AppRouter.KEY_CONTENT_KINDS))
+		searchContentKindsFromNames(contentKindNames)
 			?: ALL_SEARCH_CONTENT_KINDS,
 	)
 	val languagePresets: StateFlow<List<SourcePreset>> = sourcePresetsRepository.observeAll()
@@ -520,41 +542,4 @@ class SearchViewModel @Inject constructor(
 		return res
 	}
 
-}
-
-private fun SavedStateHandle.getStringList(key: String): ArrayList<String>? {
-	return when (val raw = get<Any?>(key)) {
-		is ArrayList<*> -> ArrayList(raw.filterIsInstance<String>().map { it.trim() }.filter { it.isNotEmpty() })
-			.takeIf { it.isNotEmpty() }
-		is Collection<*> -> ArrayList(raw.filterIsInstance<String>().map { it.trim() }.filter { it.isNotEmpty() })
-			.takeIf { it.isNotEmpty() }
-		is String -> Uri.decode(raw)
-			.takeIf { it.isNotBlank() }
-			?.split(',')
-			?.map { it.trim() }
-			?.filter { it.isNotEmpty() }
-			?.let(::ArrayList)
-		else -> null
-	}
-}
-
-private fun SavedStateHandle.getStringArg(key: String): String? = when (val raw = get<Any?>(key)) {
-	is String -> Uri.decode(raw)
-	is CharSequence -> raw.toString()
-	is Enum<*> -> raw.name
-	else -> null
-}
-
-private fun SavedStateHandle.getBooleanArg(key: String): Boolean? = when (val raw = get<Any?>(key)) {
-	is Boolean -> raw
-	is String -> Uri.decode(raw).toBooleanStrictOrNull()
-	is Number -> raw.toInt() != 0
-	else -> null
-}
-
-private fun SavedStateHandle.getSearchKindArg(key: String): SearchKind? = when (val raw = get<Any?>(key)) {
-	is SearchKind -> raw
-	is String -> runCatching { SearchKind.valueOf(Uri.decode(raw)) }.getOrNull()
-	is Enum<*> -> runCatching { SearchKind.valueOf(raw.name) }.getOrNull()
-	else -> null
 }

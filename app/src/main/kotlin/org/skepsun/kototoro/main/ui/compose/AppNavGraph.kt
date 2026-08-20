@@ -58,7 +58,6 @@ import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
 import org.skepsun.kototoro.search.ui.compose.SearchResultsRoute
-import org.skepsun.kototoro.search.ui.compose.SearchRoute
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
@@ -105,6 +104,7 @@ import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.navigation3.MainNavigator
+import org.skepsun.kototoro.main.ui.navigation3.MainNavKey
 import org.skepsun.kototoro.main.ui.navigation3.MainNavState
 import org.skepsun.kototoro.main.ui.navigation3.MainTopLevelNavDisplay
 import org.skepsun.kototoro.main.ui.navigation3.NavControllerMainNavigator
@@ -261,7 +261,8 @@ fun AppNavGraph(
     val rootView = LocalView.current
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = currentBackStackEntry?.destination
-    val isMainShellRouteVisible = currentDestination?.hasRoute<MainShellRoute>() == true
+    val isMainShellRouteVisible = currentDestination?.hasRoute<MainShellRoute>() == true &&
+        mainNavState?.currentStack()?.lastOrNull() is org.skepsun.kototoro.main.ui.navigation3.TopLevelNavKey
     val density = LocalDensity.current
     val landscapeStartPadding = if (isLandscapeNavigation) {
         with(density) { bottomBarHeightPx.toDp() }
@@ -316,6 +317,7 @@ fun AppNavGraph(
                     "MainShellRoute requires MainNavState"
                 },
                 isRouteVisible = isMainShellRouteVisible,
+                onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
                 onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                 onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                 onOpenSearch = onOpenSearch,
@@ -345,261 +347,6 @@ fun AppNavGraph(
                 },
             )
         }
-        composable<SearchRoute> { backStackEntry ->
-            val viewModel = hiltViewModel<org.skepsun.kototoro.search.ui.multi.SearchViewModel>()
-            BackHandler {
-                mainNavigator.pop()
-            }
-            RouteLiquidGlassBackdrop(
-                ownerKey = backStackEntry.id,
-                active = currentBackStackEntry?.id == backStackEntry.id,
-            ) { routeBackdrop ->
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-                                    routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                    ) {
-                        SearchResultsRoute(
-                            viewModel = viewModel,
-                            onBackClick = { mainNavigator.pop() },
-                            onOpenContent = { content, sharedElementKey ->
-                                navigateToDetailsWithContent(content, sharedElementKey)
-                            },
-                            onPickContent = { },
-                            onOpenSourceResults = { item ->
-                                if (item.listFilter == null) {
-                                    mainNavigator.openContentList(
-                                        source = item.source,
-                                        filter = ContentListFilter(query = viewModel.query),
-                                        sortOrder = null,
-                                    )
-                                } else {
-                                    mainNavigator.openContentList(item.source, item.listFilter, item.sortOrder)
-                                }
-                            },
-                            onManageLanguagePresets = appRouter::openSourcePresets,
-                            onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
-                            onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
-                                onOpenSearch(
-                                    SearchNavigationRequest(
-                                        query = query,
-                                        kind = kind,
-                                        sourceTypes = sourceTypes,
-                                        contentKinds = contentKinds,
-                                        advancedQuery = advancedQuery,
-                                        pinnedOnly = pinnedOnly,
-                                        hideEmpty = hideEmpty,
-                                        requestId = System.nanoTime(),
-                                    ),
-                                )
-                            },
-                            onShareSelection = { items ->
-                                ShareHelper(activity).shareContentLinks(items)
-                            },
-                            onSaveSelection = { items ->
-                                appRouter.showDownloadDialog(items, rootView)
-                            },
-                            onFavouriteSelection = { items ->
-                                appRouter.showFavoriteDialog(items)
-                            },
-                            isPickMode = false,
-                        )
-                    }
-                    routeFab()
-                }
-            }
-        }
-
-        composable<ContentListRoute>(
-            enterTransition = {
-                slideIntoContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing))
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
-            },
-            popEnterTransition = {
-                slideIntoContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
-            },
-            popExitTransition = {
-                slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
-            },
-        ) { backStackEntry ->
-            val route = backStackEntry.toRoute<ContentListRoute>()
-            val pendingFilter = remember(route.sourceName) { PendingContentListNavigation.consumeFilter() }
-            val pendingSortOrder = remember(route.sourceName) { PendingContentListNavigation.consumeSortOrder() }
-            val sourceGateViewModel = hiltViewModel<ContentListSourceGateViewModel>()
-            val isSourceResolutionReady by sourceGateViewModel.isResolutionReady.collectAsStateWithLifecycle()
-            BackHandler {
-                mainNavigator.pop()
-            }
-            RouteLiquidGlassBackdrop(
-                ownerKey = backStackEntry.id,
-                active = currentBackStackEntry?.id == backStackEntry.id,
-            ) { routeBackdrop ->
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (isSourceResolutionReady) {
-                    val viewModel = hiltViewModel<RemoteListViewModel>()
-                    LaunchedEffect(viewModel, pendingFilter, pendingSortOrder) {
-                        pendingSortOrder?.let(viewModel.filterCoordinator::setSortOrder)
-                        pendingFilter?.let(viewModel.filterCoordinator::setAdjusted)
-                    }
-                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        AppSearchContentListRoute(
-                            appRouter = appRouter,
-                            onBackClick = { mainNavigator.pop() },
-                            activeSpaceId = null,
-                            onSpaceSwitcherClick = {},
-                            onOpenDetails = { content, sharedElementKey ->
-                                navigateToDetailsWithContent(content, sharedElementKey)
-                            },
-                            viewModel = viewModel,
-                        )
-                    }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .then(
-                                    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
-                                        routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            KototoroLoadingIndicator()
-                        }
-                    }
-                    routeFab()
-                }
-            }
-        }
-
-        composable<DetailsRoute>(
-            enterTransition = {
-                slideIntoContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing))
-            },
-            exitTransition = {
-                slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Left,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
-            },
-            popEnterTransition = {
-                slideIntoContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing))
-            },
-            popExitTransition = {
-                slideOutOfContainer(
-                    towards = AnimatedContentTransitionScope.SlideDirection.Right,
-                    animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-                ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
-            },
-        ) { backStackEntry ->
-            val detailsViewModel = hiltViewModel<DetailsViewModel>()
-            val pagesViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel>()
-            val bookmarksViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel>()
-            val detailsCoroutineScope = rememberCoroutineScope()
-
-            val entryPoint = remember(activity) {
-                dagger.hilt.android.EntryPointAccessors.fromActivity(
-                    activity,
-                    DetailsRouteEntryPoint::class.java,
-                )
-            }
-            val effectivePageSaveHelper = pageSaveHelper ?: remember(activity) {
-                entryPoint.pageSaveHelperFactory().create(activity)
-            }
-            val overrideEditLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
-            ) { result ->
-                if (result.resultCode == android.app.Activity.RESULT_OK) {
-                    detailsViewModel.reload()
-                }
-            }
-
-            RouteLiquidGlassBackdrop(
-                ownerKey = backStackEntry.id,
-                active = currentBackStackEntry?.id == backStackEntry.id,
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                    val pendingContent = remember { PendingDetailsNavigation.lastContent() }
-                    val pendingSharedKey = remember { PendingDetailsNavigation.lastSharedElementKey() }
-                    val mangaDetails by detailsViewModel.mangaDetails.collectAsStateWithLifecycle()
-                    val sharedKey = remember(pendingSharedKey, mangaDetails, pendingContent) {
-                        pendingSharedKey ?: run {
-                            val content = mangaDetails?.toContent() ?: pendingContent
-                            content?.let { c ->
-                                contentCoverSharedKey(c.source.name, c.coverUrl.orEmpty())
-                            }
-                        }
-                    }
-                    BackHandler {
-                        mainNavigator.pop()
-                    }
-                    DetailsScreen(
-                        viewModel = detailsViewModel,
-                        pagesViewModel = pagesViewModel,
-                        bookmarksViewModel = bookmarksViewModel,
-                        settings = entryPoint.settings(),
-                        appRouter = appRouter,
-                        pageSaveHelper = effectivePageSaveHelper,
-                        onBackClick = {
-                            mainNavigator.pop()
-                        },
-                        activeSpaceId = null,
-                        onSpaceSwitcherClick = {},
-                        onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
-                        sharedElementKey = sharedKey,
-                        onActionClick = { action ->
-                            handleDetailsAction(
-                                action = action,
-                                appRouter = appRouter,
-                                viewModel = detailsViewModel,
-                                appShortcutManager = entryPoint.appShortcutManager(),
-                                coroutineScope = detailsCoroutineScope,
-                                snackbarHost = rootView,
-                                overrideEditLauncher = overrideEditLauncher,
-                                onOpenSourceList = { source, filter, sortOrder ->
-                                    mainNavigator.openContentList(source, filter, sortOrder)
-                                },
-                                onFinish = { mainNavigator.pop() },
-                            )
-                        },
-                    )
-                    }
-                    routeFab()
-                }
-            }
-        }
     }
 }
 
@@ -621,6 +368,7 @@ internal fun MainShellRouteContent(
     mainNavigator: MainNavigator,
     mainNavState: MainNavState,
     isRouteVisible: Boolean,
+    onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
@@ -655,7 +403,6 @@ internal fun MainShellRouteContent(
                         navState = mainNavState,
                         modifier = Modifier.fillMaxSize(),
                         sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScopeOverride = animatedVisibilityScope,
                     ) { key ->
                         CompositionLocalProvider(
                             LocalLiquidGlassBackdrop provides null,
@@ -663,6 +410,7 @@ internal fun MainShellRouteContent(
                         ) {
                             MainShellTopLevelEntryContent(
                             key = key,
+                            mainNavState = mainNavState,
                             navController = navController,
                             activity = activity,
                             mainActivity = mainActivity,
@@ -677,11 +425,13 @@ internal fun MainShellRouteContent(
                             isRouteVisible = isRouteVisible &&
                                 mainNavState.selectedTopLevel == org.skepsun.kototoro.main.ui.navigation3.HomeNavKey,
                             entityOrganizeResultSource = entityOrganizeResultSource,
+                            onDetailsBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
                             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                             onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                             onOpenSearch = onOpenSearch,
                             navigateToDetailsWithContent = navigateToDetailsWithContent,
                             navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                            routeFab = routeFab,
                             )
                         }
                     }
@@ -702,7 +452,8 @@ internal fun MainShellRouteContent(
 
 @Composable
 private fun MainShellTopLevelEntryContent(
-    key: TopLevelNavKey,
+    key: MainNavKey,
+    mainNavState: MainNavState,
     navController: NavHostController,
     activity: FragmentActivity,
     mainActivity: MainActivity?,
@@ -716,11 +467,13 @@ private fun MainShellTopLevelEntryContent(
     mainNavigator: MainNavigator,
     isRouteVisible: Boolean,
     entityOrganizeResultSource: FavoritesEntityOrganizeResultSource,
+    onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+    routeFab: @Composable BoxScope.() -> Unit,
 ) {
     val animatedVisibilityScope = checkNotNull(LocalNavAnimatedVisibilityScope.current) {
         "MainShellTopLevelEntryContent requires LocalNavAnimatedVisibilityScope"
@@ -828,6 +581,231 @@ private fun MainShellTopLevelEntryContent(
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
             navigateToDetailsWithContent = navigateToDetailsWithContent,
         )
+        is org.skepsun.kototoro.main.ui.navigation3.ContentListNavKey -> {
+            val pendingFilter = remember(key.sourceName) { PendingContentListNavigation.consumeFilter() }
+            val pendingSortOrder = remember(key.sourceName) { PendingContentListNavigation.consumeSortOrder() }
+            // Navigation 3 entries do not map route data into SavedStateHandle; hand the source
+            // name over explicitly before the list ViewModels are created.
+            val pendingSource = remember(key.sourceName) {
+                PendingContentListNavigation.setSource(key.sourceName)
+                key.sourceName
+            }
+            val contentListKey = "content_list:${key.sourceName}"
+            val sourceGateViewModel =
+                hiltViewModel<ContentListSourceGateViewModel>(key = contentListKey)
+            val isSourceResolutionReady by sourceGateViewModel.isResolutionReady.collectAsStateWithLifecycle()
+            BackHandler {
+                mainNavState.pop()
+            }
+            RouteLiquidGlassBackdrop(
+                ownerKey = "content_list:${key.sourceName}",
+                active = true,
+            ) { routeBackdrop ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (isSourceResolutionReady) {
+                        val viewModel = hiltViewModel<RemoteListViewModel>(key = "$contentListKey:list")
+                        LaunchedEffect(viewModel, pendingFilter, pendingSortOrder) {
+                            pendingSortOrder?.let(viewModel.filterCoordinator::setSortOrder)
+                            pendingFilter?.let(viewModel.filterCoordinator::setAdjusted)
+                        }
+                        CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+                            AppSearchContentListRoute(
+                                appRouter = appRouter,
+                                onBackClick = { mainNavState.pop() },
+                                activeSpaceId = null,
+                                onSpaceSwitcherClick = {},
+                                onOpenDetails = { content, sharedElementKey ->
+                                    navigateToDetailsWithContent(content, sharedElementKey)
+                                },
+                                viewModel = viewModel,
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                        routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            KototoroLoadingIndicator()
+                        }
+                    }
+                    routeFab()
+                }
+            }
+        }
+        is org.skepsun.kototoro.main.ui.navigation3.DetailsNavKey -> {
+            val detailsViewModel = hiltViewModel<DetailsViewModel>()
+            val pagesViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel>()
+            val bookmarksViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel>()
+            val detailsCoroutineScope = rememberCoroutineScope()
+
+            val entryPoint = remember(activity) {
+                dagger.hilt.android.EntryPointAccessors.fromActivity(
+                    activity,
+                    DetailsRouteEntryPoint::class.java,
+                )
+            }
+            val effectivePageSaveHelper = pageSaveHelper ?: remember(activity) {
+                entryPoint.pageSaveHelperFactory().create(activity)
+            }
+            val overrideEditLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            ) { result ->
+                if (result.resultCode == android.app.Activity.RESULT_OK) {
+                    detailsViewModel.reload()
+                }
+            }
+
+            RouteLiquidGlassBackdrop(
+                ownerKey = "details:${key.entityId}:${key.requestedProjectionId}",
+                active = true,
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+                        val pendingContent = remember { PendingDetailsNavigation.lastContent() }
+                        val pendingSharedKey = remember { PendingDetailsNavigation.lastSharedElementKey() }
+                        val mangaDetails by detailsViewModel.mangaDetails.collectAsStateWithLifecycle()
+                        val sharedKey = remember(pendingSharedKey, mangaDetails, pendingContent) {
+                            pendingSharedKey ?: run {
+                                val content = mangaDetails?.toContent() ?: pendingContent
+                                content?.let { c ->
+                                    contentCoverSharedKey(c.source.name, c.coverUrl.orEmpty())
+                                }
+                            }
+                        }
+                        BackHandler {
+                            mainNavState.pop()
+                        }
+                        DetailsScreen(
+                            viewModel = detailsViewModel,
+                            pagesViewModel = pagesViewModel,
+                            bookmarksViewModel = bookmarksViewModel,
+                            settings = entryPoint.settings(),
+                            appRouter = appRouter,
+                            pageSaveHelper = effectivePageSaveHelper,
+                            onBackClick = {
+                                mainNavState.pop()
+                            },
+                            activeSpaceId = null,
+                            onSpaceSwitcherClick = {},
+                            onBottomPanelStateChanged = onDetailsBottomPanelStateChanged,
+                            sharedElementKey = sharedKey,
+                            onActionClick = { action ->
+                                handleDetailsAction(
+                                    action = action,
+                                    appRouter = appRouter,
+                                    viewModel = detailsViewModel,
+                                    appShortcutManager = entryPoint.appShortcutManager(),
+                                    coroutineScope = detailsCoroutineScope,
+                                    snackbarHost = rootView,
+                                    overrideEditLauncher = overrideEditLauncher,
+                                    onOpenSourceList = { source, filter, sortOrder ->
+                                        mainNavigator.openContentList(source, filter, sortOrder)
+                                    },
+                                    onFinish = { mainNavState.pop() },
+                                )
+                            },
+                        )
+                    }
+                    routeFab()
+                }
+            }
+        }
+        is org.skepsun.kototoro.main.ui.navigation3.SearchNavKey -> {
+            val viewModel = hiltViewModel<org.skepsun.kototoro.search.ui.multi.SearchViewModel, org.skepsun.kototoro.search.ui.multi.SearchViewModel.Factory>(
+                key = "search:${key.query}",
+            ) { factory ->
+                factory.create(
+                    query = key.query,
+                    kind = runCatching { org.skepsun.kototoro.search.domain.SearchKind.valueOf(key.kind) }
+                        .getOrDefault(org.skepsun.kototoro.search.domain.SearchKind.SIMPLE),
+                    advancedTitle = key.advancedTitle,
+                    advancedTags = key.advancedTags,
+                    advancedAuthor = key.advancedAuthor,
+                    pinnedOnly = key.pinnedOnly,
+                    hideEmpty = key.hideEmpty,
+                    sourceTypeNames = key.sourceTypes.split(",").filter { it.isNotBlank() },
+                    contentKindNames = key.contentKinds.split(",").filter { it.isNotBlank() },
+                )
+            }
+            BackHandler {
+                mainNavState.pop()
+            }
+            RouteLiquidGlassBackdrop(
+                ownerKey = "search:${key.query}",
+                active = true,
+            ) { routeBackdrop ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                                    routeBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                    ) {
+                        SearchResultsRoute(
+                            viewModel = viewModel,
+                            onBackClick = { mainNavState.pop() },
+                            onOpenContent = { content, sharedElementKey ->
+                                navigateToDetailsWithContent(content, sharedElementKey)
+                            },
+                            onPickContent = { },
+                            onOpenSourceResults = { item ->
+                                if (item.listFilter == null) {
+                                    mainNavigator.openContentList(
+                                        source = item.source,
+                                        filter = ContentListFilter(query = viewModel.query),
+                                        sortOrder = null,
+                                    )
+                                } else {
+                                    mainNavigator.openContentList(item.source, item.listFilter, item.sortOrder)
+                                }
+                            },
+                            onManageLanguagePresets = appRouter::openSourcePresets,
+                            onOpenGlobalTagBlacklist = appRouter::openGlobalTagBlacklist,
+                            onSubmitSearch = { query, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
+                                onOpenSearch(
+                                    SearchNavigationRequest(
+                                        query = query,
+                                        kind = kind,
+                                        sourceTypes = sourceTypes,
+                                        contentKinds = contentKinds,
+                                        advancedQuery = advancedQuery,
+                                        pinnedOnly = pinnedOnly,
+                                        hideEmpty = hideEmpty,
+                                        requestId = System.nanoTime(),
+                                    ),
+                                )
+                            },
+                            onShareSelection = { items ->
+                                ShareHelper(activity).shareContentLinks(items)
+                            },
+                            onSaveSelection = { items ->
+                                appRouter.showDownloadDialog(items, rootView)
+                            },
+                            onFavouriteSelection = { items ->
+                                appRouter.showFavoriteDialog(items)
+                            },
+                            isPickMode = false,
+                        )
+                    }
+                    routeFab()
+                }
+            }
+        }
     }
 }
 

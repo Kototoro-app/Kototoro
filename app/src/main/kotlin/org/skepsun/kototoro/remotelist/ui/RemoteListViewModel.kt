@@ -24,6 +24,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.parsers.model.ContentSource as ParserContentSource
 import org.skepsun.kototoro.core.model.distinctById
@@ -358,6 +359,7 @@ open class RemoteListViewModel @Inject constructor(
 	protected open fun resolveInitialSource(savedStateHandle: SavedStateHandle): ParserContentSource {
 		val sourceName = savedStateHandle.get<String>(org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE)
 			?: savedStateHandle.get<String>("sourceName")
+			?: PendingContentListNavigation.consumeSourceName()
 		return ContentSource(sourceName)
 	}
 

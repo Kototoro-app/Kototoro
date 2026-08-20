@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withTimeoutOrNull
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 
 private const val SourceResolutionTimeoutMillis = 5_000L
@@ -25,6 +26,7 @@ class ContentListSourceGateViewModel @Inject constructor(
 ) : ViewModel() {
 	private val sourceName = savedStateHandle.get<String>(AppRouter.KEY_SOURCE)
 		?: savedStateHandle.get<String>("sourceName")
+		?: PendingContentListNavigation.peekSourceName()
 
 	val isResolutionReady: StateFlow<Boolean> = flow {
 		if (sourceName.isNullOrBlank() || sourcesRepository.isSourceAvailable(sourceName)) {
