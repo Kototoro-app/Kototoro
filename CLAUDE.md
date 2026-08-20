@@ -5,10 +5,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 项目概述
 
 Kototoro 是一个开源的 Android 应用，将漫画、小说和视频整合到一个阅读器中。核心特性包括：
-- 本地 OCR + 机器翻译
-- 视频超分辨率（Anime4K）
+- 本地 OCR + 机器翻译（ML Kit / PaddleOCR / Onnx 气泡检测 + 翻译 API 目录与 Gemini 端到端）
+- 视频增强与播放（Anime4K / NCNN（RealCUGAN、Real-ESRGAN）超分、DLNA 投屏、弹幕、字幕/音轨）
 - 多平台进度追踪（MAL、Kitsu、AniList、Bangumi 等）
-- 广泛的图源支持：Mihon、Aniyomi、IReader、Legado、TVBox 扩展
+- 广泛的图源支持：Mihon、Aniyomi、IReader、Legado、TVBox、Cloudstream3、Tsuki 扩展 + 动态解析器
+- 自定义媒体空间（Spaces）：内置漫画/小说/动漫空间，支持按内容类型、语言与来源自定义浏览范围
+- 实体体系与实体整理（entity graph / work 迁移账本）
 - 动态 UI 插件系统（通过外部 classloader）
 - 纯 Kotlin 实现的 OTA 增量更新（bspatch）
 - WebDAV 多设备同步
@@ -120,7 +122,7 @@ npm run docs:build
 
 ## 技术栈
 
-- **Kotlin** 2.4.0 / **AGP** 9.3.1 / **Gradle** 9.5.0（使用 `gradle/libs.versions.toml` 版本目录）
+- **Kotlin** 2.4.0 / **AGP** 9.3.1 / **Gradle** 9.7.0（使用 `gradle/libs.versions.toml` 版本目录）
 - **compileSdk** 37 / **minSdk** 26 / **targetSdk** 37
 - **JVM 目标**: Java 11（开启 desugaring 以使用现代 API）
 - **UI**: Jetpack Compose（BOM 2026.08.00，ui 1.12.0）+ Material3（1.5.0-alpha26 覆盖 BOM 的 1.4.0）+ ViewBinding（混合过渡期）
@@ -128,10 +130,10 @@ npm run docs:build
 - **DI**: Hilt/Dagger（dagger 2.60.1，androidx.hilt 1.3.0）
 - **网络**: OkHttp 5.4.0
 - **原生代码**: `app/src/main/cpp/CMakeLists.txt`（CMake 3.22.1，4 种 ABI）
-- **序列化**: kotlinx.serialization
+- **序列化**: kotlinx.serialization 1.11.0（json / protobuf / json-okio 同版本）
 - **测试**: JUnit5 + Kotest + MockK + MockWebServer
 
-注意：`app/build.gradle` 使用 Groovy DSL（非 Kotlin DSL），顶层脚本用 Gradle 9.0。
+注意：`app/build.gradle` 使用 Groovy DSL（非 Kotlin DSL），Gradle wrapper 为 9.7.0。
 
 ## 项目架构
 
@@ -147,7 +149,7 @@ npm run docs:build
 - `core/` - 核心基础设施（数据库、网络、缓存、异常处理、模型）
   - `core/db/` - Room 数据库、DAO、实体、迁移
   - `core/network/` - OkHttp 拦截器、代理、Cookie 管理、WebView 集成
-  - `core/parser/` - 解析规则引擎
+  - `core/parser/` - 解析层：多生态解析器（Mihon、Aniyomi、IReader、Legado、TVBox、Kotatsu、Tsuki、JS 规则）与解析规则引擎
   - `core/model/` - 核心数据模型
 - `main/` - 主入口 Activity
 
@@ -155,6 +157,7 @@ npm run docs:build
 - `mihon/` - Mihon/Tachiyomi 扩展集成（动态 ClassLoader、依赖注入桥接）
 - `aniyomi/` - Aniyomi 扩展集成
 - `ireader/` - IReader 源集成
+- `cloudstream/` - Cloudstream3 视频源运行时集成（外部 jar 消毒 + WebView 解析器/Cloudflare 拦截器桥接）
 - `extensions/` - 扩展管理框架
 - `local/` - 本地文件导入（CBZ、EPUB 等）
 - `alternatives/` - 替代源/镜像站管理
@@ -174,12 +177,15 @@ npm run docs:build
 - `filter/` - 内容筛选
 - `list/` - 列表视图
 - `entitygraph/` - 实体关系图谱（统一管理漫画/小说/视频之间的关联）
+- `space/` - 自定义媒体空间（内置 Manga/Novel/Anime + 用户自定义空间，含会话、路由、目录与内容策略）
+- `work/` - Work→实体迁移账本与解析器（WorkMigrationLedger）
 - `stats/` - 阅读统计
+- `readingrecord/` - 阅读记录与阅读时长（ReadingRecord / 阅读跳转点）
 
 **阅读体验**：
-- `reader/` - 漫画/小说阅读器
-- `video/` - 视频播放器（超分辨率、DLNA）
-- `image/` - 图片处理和 OCR + 翻译
+- `reader/` - 漫画/小说阅读器（含 `translate/` 的 OCR + 翻译、`novel/` 小说阅读/TTS、`ui/` Compose 页面）
+- `video/` - 视频播放器（media3 播放、Anime4K/NCNN 超分、DLNA 投屏、弹幕、字幕/音轨）
+- `image/` - 图片查看器（OCR/翻译实际位于 `reader/translate/`，勿混淆）
 
 **同步和备份**：
 - `sync/` - WebDAV 同步
@@ -209,8 +215,9 @@ npm run docs:build
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`），DATABASE_VERSION = 40，schema 位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`
-- 迁移文件 `core/db/migrations/Migration1To2.kt` 到 `Migration39To40.kt`
+- Room 数据库（`MangaDatabase`），DATABASE_VERSION = 77，schema 位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`
+- 迁移文件 `core/db/migrations/Migration1To2.kt` 到 `Migration76To77.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `MangaDatabase` 的迁移列表中）
+- 实体含实体/绑定/关系表、WorkMigrationLedger、ReadingRecord/ReadingJumpPoint、RestoreCheckpoint、Space*（会话/导航/路由偏好/空间定义）等
 - 使用 KSP 生成 Kotlin 代码
 
 **依赖注入**：
@@ -239,9 +246,11 @@ RELEASE_KEY_PASSWORD=***
 - `dandanplay.appId` / `dandanplay.appSecret` - 弹弹 Play API 凭证
 
 ### 版本管理
+当前版本：`versionName 1.9.9` / `versionCode 1212`（`app/build.gradle`）。
 在 `app/build.gradle` 中更新：
 - `versionCode` - 每次发布递增
 - `versionName` - 语义化版本号（如 "1.0.0.prev"）
+- nightly 变体由 `androidComponents.onVariants` 按日期自动生成（versionCode=yyMMdd，versionName=N+yyyyMMdd），无需手动设置
 
 ### 代码风格
 - 遵循 `.editorconfig`：UTF-8、LF、4 空格缩进、120 字符行宽
@@ -278,6 +287,13 @@ RELEASE_KEY_PASSWORD=***
 - `docs/architecture/incremental-updates.md` - 增量更新机制
 - `docs/architecture/dynamic_plugin_system.md` - 动态 UI 插件系统
 - `docs/architecture/entity-graph-implementation-plan.md` - 实体关系图谱实现计划
+- `docs/architecture/custom-spaces.md` - 自定义媒体空间架构
+- `docs/architecture/entity-space-implementation-plan-2026-07.md` - 实体空间实现计划
+- `docs/architecture/work-migration-status-audit-2026-06.md` - work 迁移状态审计（及相关 work-* 文档）
+- `docs/architecture/large-library-performance-handoff-2026-08.md` - 大型本地库分页性能交接
+- `docs/architecture/cloudflare-resolver-improvement-plan.md` - Cloudflare 解析器改进计划
+- `docs/architecture/media3-video-player-migration-plan-2026-08.md` - media3 视频播放器迁移计划
+- `docs/architecture/toolchain-upgrade-plan-2026-08.md` - 工具链升级计划
 - `docs/architecture/ncnn-super-resolution.md` - 超分辨率实现
 - `docs/unified_source_management.md` - 源管理 UI 重构方案（草案）
 - `.github/RELEASE_GUIDE.md` - 发布指南
@@ -297,8 +313,8 @@ RELEASE_KEY_PASSWORD=***
 
 ### 修改阅读器功能
 1. 核心逻辑在 `reader/` 模块
-2. 图片处理在 `image/` 模块
-3. 视频播放在 `video/` 模块
+2. OCR + 翻译管线在 `reader/translate/`；纯图片查看在 `image/` 模块
+3. 视频播放在 `video/` 模块（超分、DLNA、弹幕分别在 `video/performance`、`video/dlna`、`video/danmaku`）
 4. 测试时验证不同内容类型（漫画、小说、视频）
 
 ### 调试网络问题

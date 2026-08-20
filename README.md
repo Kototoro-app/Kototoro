@@ -29,10 +29,12 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
   *(视频超分加载、DLNA 投屏播放、外挂字幕与音轨选择)*
 - Tracking discovery across MAL, Kitsu, AniList, Bangumi, Shikimori, and MangaUpdates 
   *(支持 Bangumi 等多平台进度追踪与发现)*
-- Broad source support: Mihon, Aniyomi, IReader, Legado, TVBox extensions + dynamic parsers 
-  *(广泛的图源/插件支持：包含 Mihon、阅读、TVBox 等集成)*
+- Broad source support: Mihon, Aniyomi, IReader, Legado, TVBox, Cloudstream3 extensions + dynamic parsers 
+  *(广泛的图源/插件支持：包含 Mihon、阅读、TVBox、Cloudstream3 等集成)*
 - Entity system and organize tools — keep favorites, history, tracking, and source projections under stable work identities
   *(实体体系与实体整理：用稳定作品身份统一收藏、历史、追踪与来源投影)*
+- Custom media Spaces — built-in Manga, Novel, and Anime spaces, plus user-defined scopes filtered by content type, language, and source
+  *(自定义媒体空间：内置漫画/小说/动漫空间，并支持按内容类型、语言与来源自定义浏览范围)*
 - Local file import: CBZ, EPUB, TXT, MKV, MP4 and more 
   *(本地文件导入，支持 CBZ、EPUB、TXT、MKV 等格式)*
 - Dynamic zero-overhead UI plugins via external classloaders
@@ -78,6 +80,10 @@ Kototoro supports several important external source ecosystems. These repositori
 ### Common Legado source repository
 
 - [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
+
+### Common Cloudstream source repository
+
+- [recloudstream/extensions](https://github.com/recloudstream/extensions)
 
 For setup details, see [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations).
 

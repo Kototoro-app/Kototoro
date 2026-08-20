@@ -5,7 +5,7 @@ See `CLAUDE.md` for comprehensive project architecture, dependency details, and 
 ## Build, Test, and Development Commands
 Use the bundled wrappers and keep commands scoped:
 
-- `./gradlew :app:assembleDebug` builds a debug APK (ABI-split: arm64-v8a, armeabi-v7a, x86_64, x86 + universal).
+- `./gradlew :app:assembleDebug` builds a debug APK. Debug-only task sets compile a single ABI (`arm64-v8a`); release and nightly builds ABI-split across `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` plus a universal APK (`activeAbiFilters` in `app/build.gradle`).
 - `./gradlew :app:compileDebugKotlin` is the fastest compile-only validation for Kotlin changes.
 - `./gradlew :app:testDebugUnitTest --no-daemon` runs JVM unit tests.
 - `./gradlew :app:testDebugUnitTest --tests "org.skepsun.kototoro.ClassName.methodName" --no-daemon` runs a single test.
@@ -36,13 +36,15 @@ The official Agent workflow consists of three related pieces:
 
 - **JDK 17 is required** for Gradle, even though `compileOptions` target Java 11. CI uses `temurin-17`.
 - **`app/build.gradle` uses Groovy DSL**, not Kotlin DSL — do not write `.kts` syntax in it.
-- **Nightly variant** auto-generates `versionCode`/`versionName` from date in `applicationVariants.configureEach` — do not manually set those for nightly.
+- **Nightly variant** auto-generates `versionCode`/`versionName` from the date via the AGP Variant API (`androidComponents.onVariants` in `app/build.gradle`; AGP 9 removed the legacy `applicationVariants` API). `versionCode` = `yyMMdd`, `versionName` = `N` + `yyyyMMdd`. Do not manually set those for nightly.
 - **Hilt `enableAggregatingTask = true`** is set; removing it can break release builds with generic assisted factory validation errors.
-- **Cloudstream runtime jar** is sanitized by a custom `prepareCloudstreamRuntimeJar` task that strips duplicate classes (Coil, AndroidX, Material, etc.) from a pre-built jar. If you touch `cloudstream-runtime/` or the exclude list, verify the sanitization task still passes.
-- **`kotlinx.serialization-json-okio` is pinned to 1.7.3**, while the main `kotlinx-serialization` is 1.9.0 — the versions intentionally diverge.
+- **Cloudstream runtime jar** (`libs/cloudstream3-library-jvm-1.0.1.jar`) is sanitized by the `prepareCloudstreamRuntimeJar` task: it strips duplicate classes (Coil3, AndroidX, Material, coroutines, the JVM-only `Youtube*` extractors and no-op `WebViewResolver`, etc.) and verifies the input jar against a pinned SHA-256 before generating the runtime jar. If you touch the jar, the exclude list, or the expected checksum, verify the sanitization task still passes.
+- **Tsuki runtime jar** is likewise sanitized by `prepareTsukiRuntimeJar` (drops the duplicate `CSSBackground*` classes owned by `parser-api` and asserts `tsuki/MangaParser.class` remains).
+- **kotlinx.serialization** (json, protobuf, and json-okio) is unified at a single `1.11.0` version via the `serialization` key in `gradle/libs.versions.toml` — the old json/json-okio version divergence is gone.
 - **`decoroutinator` plugin is commented out** in root `build.gradle` and `app/build.gradle`. Do not uncomment unless you have a specific reason.
 - **CMake 3.22.1** builds native code from `app/src/main/cpp/CMakeLists.txt` for 4 ABIs. Native changes require CMake + NDK toolchain.
-- **DJL tokenizers** ship a local AAR (`libs/tokenizer-native-0.33.0.aar`) and exclude desktop native binaries in `packagingOptions`.
+- **DJL tokenizers** ship a local AAR (`libs/tokenizer-native-0.33.0.aar`) and exclude desktop native binaries in `packagingOptions`. `app/libs/` also holds the Cloudstream runtime jars, plus bundled `jlibtorrent` (torrent download, per-ABI runtime jars) and `fuzzywuzzy` helper jars.
+- **`app/src/tvboxHost/`** holds a dormant `TVBoxHostApp.kt` entry that is **not** wired into `app/build.gradle` source sets — it is not part of any build variant. Do not assume it compiles or ships.
 - **`generateLocaleConfig = false`** is set — workaround for Google issuetracker 408030127. Do not enable without verifying the issue is resolved.
 
 ## Project Structure & Module Organization
