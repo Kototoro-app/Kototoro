@@ -611,6 +611,31 @@ fun ComposeWebtoonReader(
 					"offset=${stableViewportAnchor.offsetPx} windowSize=${pageKeys.size}",
 			)
 			listState.requestScrollToItem(shiftedAnchorPosition, stableViewportAnchor.offsetPx)
+		} else if (
+			hasAppliedInitialPosition &&
+			hasAppliedInitialScroll &&
+			viewportWidthPx > 0 &&
+			viewportHeightPx > 0 &&
+			requiresWebtoonWindowReplacement(
+				appliedPageKeys,
+				pageKeys,
+				stableViewportAnchor.pageKey,
+			) && initialPosition in pageKeys.indices
+		) {
+			// The window no longer contains the anchored page: a chapter switch replaced it
+			// (as opposed to expanding it in place). Without this reset the LazyColumn keeps
+			// its previous scroll index, which maps to an arbitrary page in the new chapter
+			// and corrupts the persisted progress. Jump to the authoritative target page
+			// carried by ReaderState instead.
+			Log.d(
+				READER_WINDOW_LOG_TAG,
+				"replace window anchor=${stableViewportAnchor.pageKey} " +
+					"target=${pageKeys[initialPosition]} position=$initialPosition " +
+					"previousWindowSize=${appliedPageKeys.size} windowSize=${pageKeys.size}",
+			)
+			stableViewportAnchor.pageKey = pageKeys[initialPosition]
+			stableViewportAnchor.offsetPx = 0
+			listState.requestScrollToItem(initialPosition, 0)
 		}
 		if (!isPageWindowAnchorShifted || canRequestShiftedAnchor) appliedPageKeys = pageKeys
 	}

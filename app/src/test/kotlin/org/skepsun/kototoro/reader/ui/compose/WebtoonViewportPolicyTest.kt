@@ -16,6 +16,78 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
+	fun `replacing the window with another chapter requires a target jump`() {
+		val previousWindow = (300L..330L).toList()
+		val anchorPageKey = 314L
+		val replacedWindow = (200L..230L).toList()
+
+		assertTrue(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = previousWindow,
+				pageKeys = replacedWindow,
+				anchorPageKey = anchorPageKey,
+			),
+		)
+	}
+
+	@Test
+	fun `appending pages keeps the window, no replacement jump`() {
+		val previousWindow = (200L..230L).toList()
+		val anchorPageKey = 214L
+		val expandedWindow = previousWindow + (231L..260L)
+
+		assertFalse(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = previousWindow,
+				pageKeys = expandedWindow,
+				anchorPageKey = anchorPageKey,
+			),
+		)
+	}
+
+	@Test
+	fun `prepending pages keeps the window, no replacement jump`() {
+		val previousWindow = (200L..230L).toList()
+		val anchorPageKey = 214L
+		val prependedWindow = (100L..199L) + previousWindow
+
+		assertFalse(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = previousWindow,
+				pageKeys = prependedWindow,
+				anchorPageKey = anchorPageKey,
+			),
+		)
+	}
+
+	@Test
+	fun `unchanged window never requires a replacement jump`() {
+		val previousWindow = (200L..230L).toList()
+
+		assertFalse(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = previousWindow,
+				pageKeys = previousWindow,
+				anchorPageKey = 214L,
+			),
+		)
+		assertFalse(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = emptyList(),
+				pageKeys = previousWindow,
+				anchorPageKey = 214L,
+			),
+		)
+		assertFalse(
+			requiresWebtoonWindowReplacement(
+				previousPageKeys = previousWindow,
+				pageKeys = previousWindow,
+				anchorPageKey = 1L,
+			),
+		)
+	}
+
+	@Test
 	fun `expanding promoted chapter requires stable anchor restoration`() {
 		val previousChapterEnd = 105L
 		val promotedChapterStart = 201L

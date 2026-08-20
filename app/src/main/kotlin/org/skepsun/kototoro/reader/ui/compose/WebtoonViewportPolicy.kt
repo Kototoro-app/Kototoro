@@ -34,6 +34,24 @@ internal fun requiresWebtoonAnchorRestore(
 	return previousPosition >= 0 && position >= 0 && previousPosition != position
 }
 
+/**
+ * True when the page window was replaced by a different chapter: the anchored page existed in the
+ * previous window but is absent from the new one. In that case the LazyColumn otherwise keeps its
+ * previous scroll index, which maps to a wrong page (and therefore a wrong recorded progress) in
+ * the new chapter. The viewport must jump to the authoritative target carried by [ReaderState]
+ * instead of restoring the old anchor.
+ */
+internal fun requiresWebtoonWindowReplacement(
+	previousPageKeys: List<Long>,
+	pageKeys: List<Long>,
+	anchorPageKey: Long,
+): Boolean {
+	val previousPosition = previousPageKeys.indexOf(anchorPageKey)
+	return previousPageKeys.isNotEmpty() &&
+		previousPosition >= 0 &&
+		pageKeys.indexOf(anchorPageKey) < 0
+}
+
 internal fun resolveWebtoonVisiblePageRange(
 	pageKeys: List<Long>,
 	lowerPageKey: Long,

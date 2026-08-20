@@ -83,7 +83,10 @@ fun ComposeReaderScreenRoot(
 	val readerImageColorFilter = remember(readerSettings.colorFilter) {
 		readerSettings.colorFilter.toComposeColorFilter()
 	}
-	val restoredState = viewModel.getCurrentState() ?: content.state
+	// content.state is published atomically with the page window and always carries the target of
+	// the latest manual chapter switch, so prefer it over the (possibly asynchronous) readingState
+	// when both are available.
+	val restoredState = content.state ?: viewModel.getCurrentState()
 	val initialPosition = resolveReaderInitialPagePosition(content.pages, restoredState)
 	val requestedPage = resolvePageKeyPosition(content.pages.map { it.readerKey }, requestedPageKey)
 	val readerModifier = modifier.readerTapGestures(
