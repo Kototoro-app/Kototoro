@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.DecodeSequenceMode
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeToSequence
@@ -48,6 +51,8 @@ import org.skepsun.kototoro.backups.data.model.WorkStatisticBackup
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.RestoreCheckpointDao
+import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.db.entity.MangaPrefsEntity
 import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
@@ -142,6 +147,16 @@ private val WORK_STATE_RESTORE_SECTIONS = setOf(
     BackupSection.TRACKS,
     BackupSection.TRACK_LOGS,
 )
+
+/**
+ * 恢复时会产生跨节映射快照的节：这些节完成时，把映射一并持久化进 checkpoint，
+ * 保证「标记 done 的映射相关节必有对应快照」（done 与 mapping 在同一 UPDATE 里提交）。
+ */
+private val MAPPING_SNAPSHOT_SECTIONS = setOf(
+    BackupSection.ENTITY_GRAPH_ENTITIES,
+    BackupSection.ENTITY_GRAPH_BINDINGS,
+    BackupSection.CATEGORIES,
+)
 private val BackupSection.requiresDeferredRestore: Boolean
     get() = this in DEFERRED_RESTORE_ORDER
 
@@ -165,6 +180,131 @@ private data class RestoredProjectionResolution(
     val nextRestoredProjectionId: Long,
     val created: Boolean,
 )
+
+@Serializable
+private data class RestoredBindingDto(
+    val remoteMangaId: Long,
+    val remoteEntityId: Long,
+)
+
+@Serializable
+private data class RestoreMappingSnapshotDto(
+    val entityIdMapping: Map<String, Long>,
+    val legacyCategoryIdMapping: Map<String, Long>,
+    val remoteLocalBindings: List<RestoredBindingDto>,
+)
+
+/**
+ * 恢复会话 checkpoint 跟踪器：在同一行里持久化「已完成节」与「跨节映射快照」，
+ * 使被打断的恢复（进程被杀 / 崩溃 / 取消）能以相同的 restore_id 断点续传。
+ */
+private class RestoreCheckpointSession(
+    private val dao: RestoreCheckpointDao,
+    private val id: String,
+    private val mode: BackupRepository.RestoreMode,
+    private val sections: Set<BackupSection>,
+    private val json: Json,
+    entityIdMapping: MutableMap<Long, Long>,
+    legacyCategoryIdMapping: MutableMap<Long, Long>,
+    remoteLocalBindings: MutableList<RestoredLocalBindingEvidence>,
+) {
+
+    private val scopeEntityIdMapping = entityIdMapping
+    private val scopeLegacyCategoryIdMapping = legacyCategoryIdMapping
+    private val scopeRemoteLocalBindings = remoteLocalBindings
+
+    /** 已完成并落盘的节（处理顺序）。 */
+    val done = LinkedHashSet<BackupSection>()
+
+    /** checkpoint 里已有的已完成节数量（用于 resume 后的起始进度）。 */
+    var startedDoneCount = 0
+        private set
+
+    val isResuming: Boolean
+        get() = startedDoneCount > 0
+
+    private fun encodeDone(): String {
+        return json.encodeToString(done.toList().map { it.name })
+    }
+
+    private fun encodeMapping(): String {
+        return json.encodeToString(
+            RestoreMappingSnapshotDto(
+                entityIdMapping = scopeEntityIdMapping.entries
+                    .associate { (k, v) -> k.toString() to v },
+                legacyCategoryIdMapping = scopeLegacyCategoryIdMapping.entries
+                    .associate { (k, v) -> k.toString() to v },
+                remoteLocalBindings = scopeRemoteLocalBindings.map {
+                    RestoredBindingDto(
+                        remoteMangaId = it.remoteMangaId,
+                        remoteEntityId = it.remoteEntityId,
+                    )
+                },
+            ),
+        )
+    }
+
+    /** 载入既有 checkpoint；不匹配（mode/节的集合不一致）时视为无 checkpoint 并返回 false。 */
+    suspend fun load(): Boolean {
+        val row = dao.findById(id) ?: return false
+        if (row.mode != mode.name) return false
+        val storedSections = runCatching {
+            json.decodeFromString<List<String>>(row.sectionsJson).mapNotNullTo(linkedSetOf()) {
+                runCatching { BackupSection.valueOf(it) }.getOrNull()
+            }
+        }.getOrDefault(emptySet())
+        if (storedSections != sections) return false
+        val storedDone = runCatching {
+            json.decodeFromString<List<String>>(row.doneJson).mapNotNullTo(linkedSetOf()) {
+                runCatching { BackupSection.valueOf(it) }.getOrNull()
+            }
+        }.getOrDefault(emptySet())
+        done += storedDone.filterTo(linkedSetOf()) { it in sections }
+        startedDoneCount = done.size
+        row.mappingJson?.let { raw ->
+            runCatching {
+                json.decodeFromString<RestoreMappingSnapshotDto>(raw)
+            }.onSuccess { snapshot ->
+                snapshot.entityIdMapping.forEach { (k, v) ->
+                    scopeEntityIdMapping[k.toLongOrNull() ?: return@forEach] = v
+                }
+                snapshot.legacyCategoryIdMapping.forEach { (k, v) ->
+                    scopeLegacyCategoryIdMapping[k.toLongOrNull() ?: return@forEach] = v
+                }
+                snapshot.remoteLocalBindings.forEach {
+                    scopeRemoteLocalBindings += RestoredLocalBindingEvidence(
+                        remoteMangaId = it.remoteMangaId,
+                        remoteEntityId = it.remoteEntityId,
+                    )
+                }
+            }
+        }
+        return true
+    }
+
+    /** 一节恢复成功后调用：追加 done 并落盘。 */
+    suspend fun advance(section: BackupSection, mappingChanged: Boolean = false) {
+        done += section
+        // 只要任一映射相关节已完成，之后每次 advance 都携带当前完整映射快照
+        // （含延迟节 reconcile 的映射改写），保证 resume 时 pending 节的映射完整。
+        val hasMappingSource = mappingChanged || MAPPING_SNAPSHOT_SECTIONS.any { it in done }
+        dao.upsert(
+            RestoreCheckpointEntity(
+                id = id,
+                mode = mode.name,
+                sectionsJson = json.encodeToString(sections.map { it.name }),
+                doneJson = encodeDone(),
+                mappingJson = if (hasMappingSource) encodeMapping() else null,
+                updatedAt = System.currentTimeMillis(),
+            ),
+        )
+    }
+
+    /** 恢复整体成功后清理 checkpoint。 */
+    suspend fun complete() {
+        dao.deleteById(id)
+    }
+}
 
 @Reusable
 class BackupRepository @Inject constructor(
@@ -203,6 +343,7 @@ class BackupRepository @Inject constructor(
         val result: CompositeResult,
         val legacyJarReposImported: Boolean,
         val backupIndex: BackupIndex?,
+        val resumedSections: Int = 0,
     )
 
     data class RestoreSemanticContext(
@@ -620,12 +761,12 @@ class BackupRepository @Inject constructor(
         sections: Set<BackupSection>,
         progress: FlowCollector<Progress>?,
         restoreMode: RestoreMode = RestoreMode.MERGE,
+        checkpointId: String? = null,
     ): RestoreBackupResult {
         val restoreStartedAt = SystemClock.elapsedRealtime()
         val effectiveSections = sections.withImplicitRestoreSections()
         Log.d(TAG, "restoreBackup: start mode=$restoreMode sections=${effectiveSections.joinToString()}")
         progress?.emit(Progress.INDETERMINATE)
-        var commonProgress = Progress(0, effectiveSections.size)
         var entry = input.nextEntry
         var result = CompositeResult.EMPTY
         val archiveSections = linkedSetOf<BackupSection>()
@@ -638,11 +779,32 @@ class BackupRepository @Inject constructor(
         var projectionAnchorsReconciled = false
         var backupIndex: BackupIndex? = null
         var restoreContext = resolveRestoreSemanticContext(null)
-        if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
-            val clearStartedAt = SystemClock.elapsedRealtime()
-            clearRestoreTargets(effectiveSections)
-            Log.d(TAG, "restoreBackup: clearRestoreTargets elapsedMs=${SystemClock.elapsedRealtime() - clearStartedAt}")
+        val checkpoint = checkpointId?.takeIf { it.isNotBlank() }?.let { id ->
+            RestoreCheckpointSession(
+                dao = database.getRestoreCheckpointDao(),
+                id = id,
+                mode = restoreMode,
+                sections = effectiveSections,
+                json = json,
+                entityIdMapping = entityIdMapping,
+                legacyCategoryIdMapping = legacyCategoryIdMapping,
+                remoteLocalBindings = remoteLocalBindings,
+            ).also { it.load() }
         }
+        // SNAPSHOT_REPLACE 不再整体先清库，改为逐节「先清后写」（见顺序/延迟遍历）：
+        // 崩溃只波及正在处理的一节，已完成节与 checkpoint 一并保留，可断点续传。
+        if (checkpoint?.isResuming == true) {
+            Log.i(
+                TAG,
+                "restoreBackup: RESUMING from " +
+                    checkpoint.startedDoneCount + "/" + effectiveSections.size + " sections",
+            )
+        }
+        var commonProgress = Progress(
+            checkpoint?.startedDoneCount?.coerceIn(0, effectiveSections.size) ?: 0,
+            effectiveSections.size,
+        )
+        progress?.emit(commonProgress)
         database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
         try {
         suspend fun restoreSection(section: BackupSection?, sectionInput: InputStream): CompositeResult {
@@ -788,20 +950,30 @@ class BackupRepository @Inject constructor(
             return sectionResult
         }
 
+        val initiallyDone = checkpoint?.done?.toSet() ?: emptySet()
         while (entry != null) {
             val section = BackupSection.of(entry)
             if (section != null) {
                 archiveSections.add(section)
             }
             if (section in effectiveSections) {
-                if (section != null && section.requiresDeferredRestore) {
+                if (section != null && section in initiallyDone) {
+                    // 已完成（断点续传跳过）：消费字节推进 zip，不写库。
+                    input.drain()
+                    restoredSections.add(section)
+                    Log.d(TAG, "restoreBackup: skip done section=" + section)
+                } else if (section != null && section.requiresDeferredRestore) {
                     val bytes = input.readBytes()
                     if (deferredEntries.put(section, bytes) != null) {
                         Log.w(TAG, "restoreBackup: duplicate deferred section=$section; using last entry")
                     }
                     Log.d(TAG, "restoreBackup: defer section=$section bytes=${bytes.size}")
                 } else {
+                    if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
+                        section?.let { clearRestoreTargets(effectiveSections, actOn = setOf(it)) }
+                    }
                     result += restoreSection(section, input)
+                    section?.let { checkpoint?.advance(it) }
                     progress?.emit(commonProgress)
                     commonProgress++
                 }
@@ -811,14 +983,24 @@ class BackupRepository @Inject constructor(
         }
         for (section in DEFERRED_RESTORE_ORDER) {
             val bytes = deferredEntries[section] ?: continue
+            if (section in initiallyDone) {
+                restoredSections.add(section)
+                Log.d(TAG, "restoreBackup: skip done deferred section=" + section)
+                continue
+            }
             if (!projectionAnchorsReconciled && section in WORK_STATE_RESTORE_SECTIONS) {
                 projectionAnchorMapping += database.reconcileRestoredProjectionAnchors(remoteLocalBindings, entityIdMapping)
                 projectionAnchorsReconciled = true
             }
+            if (restoreMode == RestoreMode.SNAPSHOT_REPLACE) {
+                clearRestoreTargets(effectiveSections, actOn = setOf(section))
+            }
             result += restoreSection(section, ByteArrayInputStream(bytes))
+            checkpoint?.advance(section)
             progress?.emit(commonProgress)
             commonProgress++
         }
+        checkpoint?.complete()
         val legacyRepoStartedAt = SystemClock.elapsedRealtime()
         Log.d(
             TAG,
@@ -853,6 +1035,7 @@ class BackupRepository @Inject constructor(
             result = result,
             legacyJarReposImported = legacyJarReposImported,
             backupIndex = backupIndex,
+            resumedSections = checkpoint?.startedDoneCount ?: 0,
         )
         } finally {
             database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
@@ -927,7 +1110,10 @@ class BackupRepository @Inject constructor(
             }
     }
 
-    private suspend fun clearRestoreTargets(sections: Set<BackupSection>) {
+    private suspend fun clearRestoreTargets(
+        sections: Set<BackupSection>,
+        actOn: Set<BackupSection> = sections,
+    ) {
         val startedAt = SystemClock.elapsedRealtime()
         val beforeWorkHistoryActive = if (BackupSection.WORK_HISTORY in sections) {
             database.getWorkHistoryDao().countActive()
@@ -949,50 +1135,58 @@ class BackupRepository @Inject constructor(
             "clearRestoreTargets: before workHistoryActive=$beforeWorkHistoryActive " +
                 "workFavouritesActive=$beforeWorkFavouritesActive workFavouriteWorks=$beforeWorkFavouriteWorks",
         )
+        if (actOn.isEmpty()) {
+            return
+        }
+        // 逐表清空（actOn 精确到节）：SNAPSHOT_REPLACE 逐节「先清后写」，
+        // 断点续传时已完成节保持原状，只有未完节被清空重建。
+        // 交叉依赖（WORK_* 延迟节）由各自所属节负责清理，顺序由恢复顺序保证。
         database.withTransaction {
-            if (BackupSection.HISTORY in sections) {
-                if (BackupSection.WORK_HISTORY in sections) {
-                    database.getWorkHistoryDao().clear()
-                }
+            if (BackupSection.HISTORY in actOn) {
                 database.getHistoryDao().clear()
             }
-            if (BackupSection.FAVOURITES in sections) {
-                if (BackupSection.WORK_FAVOURITES in sections) {
-                    database.getWorkFavouritesDao().deleteAll()
-                }
+            if (BackupSection.WORK_HISTORY in actOn) {
+                database.getWorkHistoryDao().clear()
+            }
+            if (BackupSection.FAVOURITES in actOn) {
                 database.getFavouritesDao().clear()
                 database.getFavouriteCategoriesDao().deleteAll()
             }
-            if (BackupSection.BOOKMARKS in sections) {
+            if (BackupSection.WORK_FAVOURITES in actOn) {
+                database.getWorkFavouritesDao().deleteAll()
+            }
+            if (BackupSection.BOOKMARKS in actOn) {
                 database.getBookmarksDao().deleteAll()
             }
-            if (BackupSection.SCROBBLING in sections) {
+            if (BackupSection.SCROBBLING in actOn) {
                 database.getScrobblingDao().deleteAll()
             }
-            if (BackupSection.TRACKS in sections) {
+            if (BackupSection.TRACKS in actOn) {
                 database.getTracksDao().clear()
             }
-            if (BackupSection.TRACK_LOGS in sections) {
+            if (BackupSection.TRACK_LOGS in actOn) {
                 database.getTrackLogsDao().clear()
             }
-            if (BackupSection.STATS in sections) {
-                if (BackupSection.WORK_STATS in sections) {
-                    database.getWorkStatsDao().clear()
-                }
+            if (BackupSection.STATS in actOn) {
                 database.getStatsDao().clear()
             }
-            if (BackupSection.EXTENSION_REPOS in sections) {
+            if (BackupSection.WORK_STATS in actOn) {
+                database.getWorkStatsDao().clear()
+            }
+            if (BackupSection.EXTENSION_REPOS in actOn) {
                 database.getExternalExtensionRepoDao().deleteAll()
             }
-            if (BackupSection.ENTITY_GRAPH_ENTITIES in sections ||
-                BackupSection.ENTITY_GRAPH_BINDINGS in sections ||
-                BackupSection.ENTITY_GRAPH_RELATIONS in sections ||
-                BackupSection.ENTITY_GRAPH_PREFS in sections
-            ) {
-                database.getEntityGraphDao().deleteAllBindings()
-                database.getEntityGraphDao().deleteAllRelations()
-                database.getEntityGraphDao().deleteAllPrefs()
+            if (BackupSection.ENTITY_GRAPH_ENTITIES in actOn) {
                 database.getEntityGraphDao().deleteAllEntities()
+            }
+            if (BackupSection.ENTITY_GRAPH_BINDINGS in actOn) {
+                database.getEntityGraphDao().deleteAllBindings()
+            }
+            if (BackupSection.ENTITY_GRAPH_RELATIONS in actOn) {
+                database.getEntityGraphDao().deleteAllRelations()
+            }
+            if (BackupSection.ENTITY_GRAPH_PREFS in actOn) {
+                database.getEntityGraphDao().deleteAllPrefs()
             }
         }
         val afterWorkHistoryActive = if (BackupSection.WORK_HISTORY in sections) {
@@ -1138,6 +1332,11 @@ class BackupRepository @Inject constructor(
     private fun OutputStream.write(str: String) = write(str.toByteArray())
 
     private fun InputStream.readString(): String = readBytes().decodeToString()
+
+    /** 消费剩余字节（推进 zip 流），用于断点续传时跳过已完成节。 */
+    private fun InputStream.drain() {
+        copyTo(OutputStream.nullOutputStream())
+    }
 
     private suspend fun MangaDatabase.restoreEntity(
         backup: WorkHistoryBackup,

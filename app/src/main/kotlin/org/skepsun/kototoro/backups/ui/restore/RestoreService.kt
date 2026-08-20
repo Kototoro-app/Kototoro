@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.annotation.CheckResult
 import androidx.core.app.NotificationCompat
@@ -35,6 +36,7 @@ import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileInputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -100,12 +102,19 @@ class RestoreService : BaseBackupRestoreService() {
 							BackupRestoreFormat.KOTOTORO_CURRENT -> BackupRepository.RestoreMode.SNAPSHOT_REPLACE
 							BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO -> BackupRepository.RestoreMode.MERGE
 						},
+						checkpointId = restoreCheckpointId(source, restoreFormat, sections),
 					)
 				}
 			} finally {
 				if (tempFile.exists()) tempFile.delete()
 				if (wasGoogleDriveSyncEnabled) {
 					disableWebDavSync()
+				}
+			}
+			if (restoreResult.resumedSections > 0) {
+				Log.i(TAG, "restore resumed from " + restoreResult.resumedSections + " already-restored sections")
+				withContext(Dispatchers.Main) {
+					Toast.makeText(this@RestoreService, R.string.restore_resumed_hint, Toast.LENGTH_LONG).show()
 				}
 			}
 			val restoreContext = repository.resolveRestoreSemanticContext(restoreResult.backupIndex)
@@ -126,6 +135,19 @@ class RestoreService : BaseBackupRestoreService() {
 				}
 			}
 		}
+	}
+
+	/**
+	 * 由来源 + 格式 + 节集合派生的稳定恢复会话 id：同一备份重试可断点续传。
+	 */
+	private fun restoreCheckpointId(
+		uri: Uri,
+		format: BackupRestoreFormat,
+		sections: Set<BackupSection>,
+	): String {
+		val raw = uri.toString() + "|" + format.name + "|" + sections.sortedBy { it.ordinal }.joinToString(",")
+		val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
+		return "restore:" + digest.joinToString("") { "%02x".format(it) }
 	}
 
 	private fun disableWebDavSync() {

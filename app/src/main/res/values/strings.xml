@@ -2319,6 +2319,7 @@
     <string name="backup_restored_background">The backup will be restored in the background</string>
     <string name="restoring_backup">Restoring backup</string>
     <string name="restore_auth_restart_hint">Login credentials restored. Please restart the app to apply.</string>
+    <string name="restore_resumed_hint">Restore continued from where it was interrupted; already-restored sections were kept.</string>
     <string name="reader_controls_in_bottom_bar">Reader controls in bottom bar</string>
     <string name="reader_floating_controls">Reader floating buttons</string>
     <string name="reader_floating_controls_summary">Select up to %1$d floating buttons</string>
