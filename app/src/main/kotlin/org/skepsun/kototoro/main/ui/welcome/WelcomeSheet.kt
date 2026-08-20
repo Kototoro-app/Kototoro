@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -145,7 +146,7 @@ private fun WelcomeContent(
 	val types by viewModel.types.collectAsStateWithLifecycle()
 	val spacesEnabled by viewModel.spacesEnabled.collectAsStateWithLifecycle()
 	val interfaceStyle by viewModel.interfaceStyle.collectAsStateWithLifecycle()
-	val heroTransitionsEnabled by viewModel.heroTransitionsEnabled.collectAsStateWithLifecycle()
+	val listToDetailsTransition by viewModel.listToDetailsTransition.collectAsStateWithLifecycle()
 	val panoramaAnimationEnabled by viewModel.panoramaAnimationEnabled.collectAsStateWithLifecycle()
 	val spaceSwitcherPosition by viewModel.spaceSwitcherPosition.collectAsStateWithLifecycle()
 	val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
@@ -200,10 +201,10 @@ private fun WelcomeContent(
 
 					2 -> WelcomeAppearanceStep(
 						interfaceStyle = interfaceStyle,
-						heroTransitionsEnabled = heroTransitionsEnabled,
+						listToDetailsTransition = listToDetailsTransition,
 						panoramaAnimationEnabled = panoramaAnimationEnabled,
 						onInterfaceStyleChange = viewModel::setInterfaceStyle,
-						onHeroTransitionsChange = viewModel::setHeroTransitionsEnabled,
+						onListToDetailsTransitionChange = viewModel::setListToDetailsTransition,
 						onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
 					)
 
@@ -476,10 +477,10 @@ private fun WelcomeSpacesStep(
 @Composable
 private fun WelcomeAppearanceStep(
 	interfaceStyle: InterfaceStyle,
-	heroTransitionsEnabled: Boolean,
+	listToDetailsTransition: ListToDetailsTransition,
 	panoramaAnimationEnabled: Boolean,
 	onInterfaceStyleChange: (InterfaceStyle) -> Unit,
-	onHeroTransitionsChange: (Boolean) -> Unit,
+	onListToDetailsTransitionChange: (ListToDetailsTransition) -> Unit,
 	onPanoramaAnimationChange: (Boolean) -> Unit,
 ) {
 	SectionHeader(
@@ -500,12 +501,27 @@ private fun WelcomeAppearanceStep(
 			)
 		}
 	}
-	WelcomeSwitchRow(
-		title = stringResource(R.string.shared_element_transitions),
-		summary = stringResource(R.string.shared_element_transitions_summary),
-		checked = heroTransitionsEnabled,
-		onCheckedChange = onHeroTransitionsChange,
-	)
+	Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+		Text(
+			text = stringResource(R.string.pref_list_to_details_transition),
+			style = MaterialTheme.typography.titleMedium,
+			fontWeight = FontWeight.SemiBold,
+		)
+		Text(
+			text = stringResource(R.string.pref_list_to_details_transition_summary),
+			style = MaterialTheme.typography.bodyMedium,
+			color = MaterialTheme.colorScheme.onSurfaceVariant,
+		)
+		FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+			ListToDetailsTransition.entries.forEach { option ->
+				FilterChip(
+					selected = option == listToDetailsTransition,
+					onClick = { onListToDetailsTransitionChange(option) },
+					label = { Text(stringResource(option.labelRes())) },
+				)
+			}
+		}
+	}
 	WelcomeSwitchRow(
 		title = stringResource(R.string.pref_panorama_animation),
 		summary = stringResource(R.string.pref_panorama_animation_summary),
@@ -576,6 +592,11 @@ private fun SpaceSwitcherPosition.labelResId(): Int = when (this) {
 	SpaceSwitcherPosition.CENTER_RIGHT -> R.string.space_switcher_position_center_right
 	SpaceSwitcherPosition.TOP_LEFT -> R.string.space_switcher_position_top_left
 	SpaceSwitcherPosition.CENTER_LEFT -> R.string.space_switcher_position_center_left
+}
+
+private fun ListToDetailsTransition.labelRes(): Int = when (this) {
+	ListToDetailsTransition.HERO_EXPAND -> R.string.pref_list_to_details_transition_hero
+	ListToDetailsTransition.LEGACY_SLIDE -> R.string.pref_list_to_details_transition_legacy
 }
 
 @Composable

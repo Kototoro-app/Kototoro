@@ -11,6 +11,7 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.util.ext.mapSortedByCount
 import org.skepsun.kototoro.core.util.ext.sortedWithSafe
@@ -51,8 +52,8 @@ class WelcomeViewModel @Inject constructor(
 	val spacesEnabled = _spacesEnabled.asStateFlow()
 	private val _interfaceStyle = MutableStateFlow(settings.interfaceStyle)
 	val interfaceStyle = _interfaceStyle.asStateFlow()
-	private val _heroTransitionsEnabled = MutableStateFlow(settings.isSharedElementTransitionsEnabled)
-	val heroTransitionsEnabled = _heroTransitionsEnabled.asStateFlow()
+	private val _listToDetailsTransition = MutableStateFlow(settings.listToDetailsTransition)
+	val listToDetailsTransition = _listToDetailsTransition.asStateFlow()
 	private val _panoramaAnimationEnabled = MutableStateFlow(settings.isPanoramaCoverAnimationEnabled)
 	val panoramaAnimationEnabled = _panoramaAnimationEnabled.asStateFlow()
 	private val _spaceSwitcherPosition = MutableStateFlow(settings.spaceSwitcherPosition)
@@ -248,9 +249,9 @@ class WelcomeViewModel @Inject constructor(
 		settings.interfaceStyle = value
 	}
 
-	fun setHeroTransitionsEnabled(enabled: Boolean) {
-		_heroTransitionsEnabled.value = enabled
-		settings.isSharedElementTransitionsEnabled = enabled
+	fun setListToDetailsTransition(value: ListToDetailsTransition) {
+		_listToDetailsTransition.value = value
+		settings.listToDetailsTransition = value
 	}
 
 	fun setPanoramaAnimationEnabled(enabled: Boolean) {
