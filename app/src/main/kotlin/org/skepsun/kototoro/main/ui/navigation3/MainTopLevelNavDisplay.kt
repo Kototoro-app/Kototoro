@@ -1,14 +1,7 @@
 package org.skepsun.kototoro.main.ui.navigation3
 
-import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
@@ -22,14 +15,12 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.metadata
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
-import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneDecoratorStrategy
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.scene.SinglePaneSceneStrategy
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
-import org.skepsun.kototoro.main.ui.compose.MainNavigationMotion
 
 /**
  * Renders the selected top-level tab's full back stack with a single [NavDisplay].
@@ -45,9 +36,10 @@ import org.skepsun.kototoro.main.ui.compose.MainNavigationMotion
  * leaving list scene and the entering details scene register their shared bounds
  * against the same active scene transition and the cover hero animates.
  *
- * The immersive destinations (content list / details) keep the original v2
- * horizontal-slide motion through per-entry transition metadata; search keeps
- * the default cross-fade.
+ * Scene motion is owned by [KototoroMotionCatalog]: the global [NavDisplay]
+ * defaults (FadeThrough for tab / space switches) and the per-entry
+ * [NavDisplay.TransitionKey] metadata overrides (content list / details /
+ * search). See docs/architecture/navigation3-motion-system.md.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -100,7 +92,7 @@ private fun navEntry(
 ): NavEntry<MainNavKey> {
     return NavEntry(
         key = key,
-        metadata = immersiveTransitionMetadata(key),
+        metadata = transitionMetadata(key),
     ) { entryKey ->
         CompositionLocalProvider(
             LocalNavAnimatedVisibilityScope provides LocalNavAnimatedContentScope.current,
@@ -111,45 +103,18 @@ private fun navEntry(
 }
 
 /**
- * Restores the v2 horizontal-slide motion for the immersive destinations
- * (content list, details); search and top-level entries keep the default fade.
+ * Per-entry motion metadata: the immersive destinations (content list / details)
+ * ride the phase-C horizontal slide, search and top-level entries keep the
+ * default fade. The semantic mapping lands in the next step.
  */
-private fun immersiveTransitionMetadata(key: MainNavKey): Map<String, Any> {
+private fun transitionMetadata(key: MainNavKey): Map<String, Any> {
     if (key !is ContentListNavKey && key !is DetailsNavKey) {
         return emptyMap()
     }
+    val preset = KototoroMotionCatalog.fullSlide
     return metadata {
-        put(NavDisplay.TransitionKey, immersiveEnterTransform)
-        put(NavDisplay.PopTransitionKey, immersivePopTransform)
-        put(NavDisplay.PredictivePopTransitionKey, predictivePopTransform)
+        put(NavDisplay.TransitionKey, preset.enter)
+        put(NavDisplay.PopTransitionKey, preset.pop)
+        put(NavDisplay.PredictivePopTransitionKey, preset.predictivePop)
     }
-}
-
-private val immersiveEnterTransform: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform = { scope ->
-    scope.slideIntoContainer(
-        towards = AnimatedContentTransitionScope.SlideDirection.Left,
-        animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-    ) + fadeIn(tween(MainNavigationMotion.DetailsEnterFadeInMillis, easing = LinearEasing)) togetherWith (
-        scope.slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Left,
-            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-        ) + fadeOut(tween(MainNavigationMotion.DetailsExitFadeOutMillis, easing = LinearEasing))
-        )
-}
-
-private val immersivePopTransform: (AnimatedContentTransitionScope<Scene<*>>) -> ContentTransform = { scope ->
-    scope.slideIntoContainer(
-        towards = AnimatedContentTransitionScope.SlideDirection.Right,
-        animationSpec = tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing),
-    ) + fadeIn(tween(MainNavigationMotion.DetailsPopEnterFadeInMillis, easing = LinearEasing)) togetherWith (
-        scope.slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Right,
-            animationSpec = tween(MainNavigationMotion.DetailsRouteSlideMillis, easing = LinearEasing),
-        ) + fadeOut(tween(MainNavigationMotion.DetailsPopExitFadeOutMillis, easing = LinearEasing))
-        )
-}
-
-private val predictivePopTransform:
-    (AnimatedContentTransitionScope<Scene<*>>, Int) -> ContentTransform = { scope, _ ->
-    immersivePopTransform(scope)
 }
