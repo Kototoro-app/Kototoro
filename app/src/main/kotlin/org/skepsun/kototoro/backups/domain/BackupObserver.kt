@@ -12,18 +12,18 @@ import javax.inject.Singleton
 
 @Singleton
 class BackupObserver @Inject constructor(
-	@ApplicationContext context: Context,
+    @ApplicationContext context: Context,
 ) : InvalidationTracker.Observer(
-	arrayOf(
-		TABLE_WORK_HISTORY,
-		TABLE_WORK_FAVOURITES,
-		TABLE_FAVOURITE_CATEGORIES,
-	),
+    arrayOf(
+        TABLE_WORK_HISTORY,
+        TABLE_WORK_FAVOURITES,
+        TABLE_FAVOURITE_CATEGORIES,
+    ),
 ) {
 
-	private val backupManager = BackupManager(context)
+    private val backupManager = BackupManager(context)
 
-	override fun onInvalidated(tables: Set<String>) {
-		backupManager.dataChanged()
-	}
+    override fun onInvalidated(tables: Set<String>) {
+        backupManager.dataChanged()
+    }
 }
