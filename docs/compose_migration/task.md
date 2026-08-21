@@ -122,13 +122,13 @@
 
 - [x] 将 `MainActivity` 从 `ActivityMainBinding` + `setContentViewWebViewSafe` 迁到直接 Compose host（BaseComposeActivity + setComposeContent）
 - [x] 收敛 Activity 里的顶栏、过滤器、insets 等 `mutableStateOf` 状态（MainChromeController）
-- [ ] 视需要为主壳引入更清晰的 app state/controller 边界，减少 `KototoroApp(...)` 参数面继续膨胀
+- [x] 视需要为主壳引入更清晰的 app state/controller 边界（已落地：`MainAppState` 参数聚合 + `MainChromeController` 状态持有器 + `LocalMainChromeController` CompositionLocal 注入）
 
 **Critical files**
 - `app/src/main/kotlin/org/skepsun/kototoro/main/ui/MainActivity.kt`
 - `app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/KototoroApp.kt`
-- `app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/AppNavGraph.kt`
-- `app/src/main/kotlin/org/skepsun/kototoro/main/ui/SearchBarFilterViewController.kt`
+- `app/src/main/kotlin/org/skepsun/kototoro/main/ui/compose/MainChromeController.kt`（顶栏/过滤器/insets 状态 + `LocalMainChromeController`）
+- `app/src/main/kotlin/org/skepsun/kototoro/main/ui/navigation3/`（导航已从旧 `AppNavGraph.kt`/`SearchBarFilterViewController.kt` 重构至此 + MainShellScene 按 key 分发）
 
 ---
 
@@ -142,9 +142,9 @@
 - [x] `ChaptersScreen` 章节标签中文化（5/1：`fastScrollLabels` 生成"第N章"格式标签）
 - [ ] 抽 `ContentHeroBackdropCarousel` 通用组件（Home/Explore/Discover 共用，~300 行清理）
 - [x] `KototoroApp` 参数聚合为 `MainAppState` data class（30+ 参数坏味）
-- [ ] `AppNavGraph` 内联路由拆为独立 `AppXxxRoute` 文件
+- [x] `AppNavGraph` 内联路由拆为独立 `AppXxxRoute` 文件（**已过时**：`AppNavGraph.kt` 已随导航3重构废除，路由在 `navigation3/` + `MainShellScene.kt` 内 8 个独立 `TopLevelRouteContent` 函数按 key 分发，非 NavHost 内联）
 - [x] `as? MainActivity` 静默 no-op → 改用 `LocalMainChromeController` CompositionLocal（MainActivity 壳根注入；Home/List/Stats/MainShell 过滤器回调改读 Local，MainActivity 旧包装删除）
-- [ ] `ReadButtonDelegate`（ViewBinding）与 Compose `ReadDock` 双按钮去重
+- [x] `ReadButtonDelegate`（ViewBinding）与 Compose `ReadDock` 双按钮去重（**已过时**：全仓已无 `ReadButtonDelegate`/详情页 ViewBinding 残留，单一 Compose `ReadDock`（DetailsDock.kt:1199，含 modernStyle/compact 变体）承载读按钮）
 - [ ] `GlassSurface` 接入 `dev.chrisbanes.haze` 真实后端
 
 ---
