@@ -132,7 +132,6 @@ fun ChaptersPagesTabsContent(
         }
     }
 
-    val context = LocalContext.current
     val router = appRouter
     val viewForSnackbar = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -210,7 +209,6 @@ fun ChaptersPagesTabsContent(
                     DETAILS_TAB_CHAPTERS -> DetailsChapterPanels(
                         viewModel = viewModel,
                         router = router,
-                        context = context,
                         viewForSnackbar = viewForSnackbar,
                         lifecycleOwner = lifecycleOwner,
                         metadataChapterTabs = metadataChapterTabs,
@@ -227,7 +225,6 @@ fun ChaptersPagesTabsContent(
                     DETAILS_TAB_PAGES -> PagesScreenRoot(
                         activityViewModel = viewModel,
                         router = router,
-                        context = context,
                         pageSaveHelper = pageSaveHelper,
                         viewForSnackbar = viewForSnackbar,
                         lifecycleOwner = lifecycleOwner,
@@ -238,7 +235,6 @@ fun ChaptersPagesTabsContent(
                     DETAILS_TAB_BOOKMARKS -> BookmarksScreenRoot(
                         activityViewModel = viewModel,
                         router = router,
-                        context = context,
                         viewModel = bookmarksViewModel,
                         detailsPaneState = detailsPaneState,
                     )
@@ -257,7 +253,6 @@ private enum class ChapterPanelMode {
 private fun DetailsChapterPanels(
     viewModel: ChaptersPagesViewModel,
     router: AppRouter,
-    context: android.content.Context,
     viewForSnackbar: android.view.View,
     lifecycleOwner: androidx.lifecycle.LifecycleOwner,
     metadataChapterTabs: List<DetailsChapterSourceTab>,
@@ -326,7 +321,6 @@ private fun DetailsChapterPanels(
                 ChaptersScreenRoot(
                     viewModel = viewModel,
                     router = router,
-                    context = context,
                     viewForSnackbar = viewForSnackbar,
                     lifecycleOwner = lifecycleOwner,
                     isScrollEnabled = isScrollEnabled,

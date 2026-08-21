@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.details.ui.pager.pages.compose
 
-import android.content.Context
 import android.view.View
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -27,7 +27,6 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 fun PagesScreenRoot(
     activityViewModel: ChaptersPagesViewModel,
     router: AppRouter,
-    context: Context,
     pageSaveHelper: PageSaveHelper,
     viewForSnackbar: View,
     lifecycleOwner: LifecycleOwner,
@@ -35,6 +34,7 @@ fun PagesScreenRoot(
     detailsPaneState: DetailsPaneState? = null,
     thumbnailAspectRatio: Float = 0.7f,
 ) {
+    val context = LocalContext.current
     val thumbnails by viewModel.thumbnails.collectAsStateWithLifecycle(initialValue = emptyList())
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)

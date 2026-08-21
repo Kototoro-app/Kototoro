@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
-import android.content.Context
 import android.view.View
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -18,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -48,7 +48,6 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 fun ChaptersScreenRoot(
     viewModel: ChaptersPagesViewModel,
     router: AppRouter,
-    context: Context,
     viewForSnackbar: View,
     lifecycleOwner: LifecycleOwner,
     isScrollEnabled: Boolean = true,
@@ -56,6 +55,7 @@ fun ChaptersScreenRoot(
     handleSelectionBackPressInternally: Boolean = true,
     onSelectionStateChange: (ChapterSelectionUiState?) -> Unit = {},
 ) {
+    val context = LocalContext.current
     val isGridView by viewModel.isChaptersInGridView.collectAsStateWithLifecycle(initialValue = false)
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
     val quickFilter by viewModel.quickFilter.collectAsStateWithLifecycle(initialValue = emptyList())

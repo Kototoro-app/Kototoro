@@ -1,11 +1,11 @@
 package org.skepsun.kototoro.details.ui.pager.bookmarks.compose
 
-import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
@@ -23,10 +23,10 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 fun BookmarksScreenRoot(
     activityViewModel: ChaptersPagesViewModel,
     router: AppRouter,
-    context: Context,
     viewModel: BookmarksViewModel,
     detailsPaneState: DetailsPaneState? = null,
 ) {
+    val context = LocalContext.current
     val contentItems by viewModel.content.collectAsStateWithLifecycle(initialValue = emptyList())
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)
     val selectedItemIds = remember { mutableStateListOf<Long>() }
