@@ -11,23 +11,23 @@ import javax.inject.Singleton
 @Singleton
 class ActivityRecreationHandle @Inject constructor() : DefaultActivityLifecycleCallbacks {
 
-	private val activities = WeakHashMap<Activity, Unit>()
+    private val activities = WeakHashMap<Activity, Unit>()
 
-	override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-		activities[activity] = Unit
-	}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        activities[activity] = Unit
+    }
 
-	override fun onActivityDestroyed(activity: Activity) {
-		activities.remove(activity)
-	}
+    override fun onActivityDestroyed(activity: Activity) {
+        activities.remove(activity)
+    }
 
-	fun recreateAll() {
-		val snapshot = activities.keys.toList()
-		snapshot.forEach { ActivityCompat.recreate(it) }
-	}
+    fun recreateAll() {
+        val snapshot = activities.keys.toList()
+        snapshot.forEach { ActivityCompat.recreate(it) }
+    }
 
-	fun recreate(cls: Class<out Activity>) {
-		val activity = activities.keys.find { x -> x.javaClass == cls } ?: return
-		ActivityCompat.recreate(activity)
-	}
+    fun recreate(cls: Class<out Activity>) {
+        val activity = activities.keys.find { x -> x.javaClass == cls } ?: return
+        ActivityCompat.recreate(activity)
+    }
 }

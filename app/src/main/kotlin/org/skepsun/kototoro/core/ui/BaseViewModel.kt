@@ -28,81 +28,81 @@ import kotlin.coroutines.EmptyCoroutineContext
 
 abstract class BaseViewModel : ViewModel() {
 
-	@JvmField
-	protected val loadingCounter = MutableStateFlow(0)
+    @JvmField
+    protected val loadingCounter = MutableStateFlow(0)
 
-	@JvmField
-	protected val errorEvent = MutableEventFlow<Throwable>()
+    @JvmField
+    protected val errorEvent = MutableEventFlow<Throwable>()
 
-	val onError: EventFlow<Throwable>
-		get() = errorEvent
+    val onError: EventFlow<Throwable>
+        get() = errorEvent
 
-	val isLoading: StateFlow<Boolean> = loadingCounter.map { it > 0 }
-		.stateIn(viewModelScope, SharingStarted.Lazily, loadingCounter.value > 0)
+    val isLoading: StateFlow<Boolean> = loadingCounter.map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.Lazily, loadingCounter.value > 0)
 
-	protected fun launchJob(
-		context: CoroutineContext = EmptyCoroutineContext,
-		start: CoroutineStart = CoroutineStart.DEFAULT,
-		block: suspend CoroutineScope.() -> Unit
-	): Job = viewModelScope.launch(context.withDefaultExceptionHandler(), start, block)
+    protected fun launchJob(
+        context: CoroutineContext = EmptyCoroutineContext,
+        start: CoroutineStart = CoroutineStart.DEFAULT,
+        block: suspend CoroutineScope.() -> Unit
+    ): Job = viewModelScope.launch(context.withDefaultExceptionHandler(), start, block)
 
-	protected fun launchLoadingJob(
-		context: CoroutineContext = EmptyCoroutineContext,
-		start: CoroutineStart = CoroutineStart.DEFAULT,
-		block: suspend CoroutineScope.() -> Unit
-	): Job = viewModelScope.launch(context.withDefaultExceptionHandler(), start) {
-		loadingCounter.increment()
-		try {
-			block()
-		} finally {
-			loadingCounter.decrement()
-		}
-	}
+    protected fun launchLoadingJob(
+        context: CoroutineContext = EmptyCoroutineContext,
+        start: CoroutineStart = CoroutineStart.DEFAULT,
+        block: suspend CoroutineScope.() -> Unit
+    ): Job = viewModelScope.launch(context.withDefaultExceptionHandler(), start) {
+        loadingCounter.increment()
+        try {
+            block()
+        } finally {
+            loadingCounter.decrement()
+        }
+    }
 
-	protected fun <T> Flow<T>.withLoading() = onStart {
-		loadingCounter.increment()
-	}.onCompletion {
-		loadingCounter.decrement()
-	}
+    protected fun <T> Flow<T>.withLoading() = onStart {
+        loadingCounter.increment()
+    }.onCompletion {
+        loadingCounter.decrement()
+    }
 
-	protected fun <T> Flow<T>.withErrorHandling() = catch { error ->
-		error.printStackTraceDebug()
-		errorEvent.call(error)
-	}
+    protected fun <T> Flow<T>.withErrorHandling() = catch { error ->
+        error.printStackTraceDebug()
+        errorEvent.call(error)
+    }
 
-	protected inline fun <T> withLoading(block: () -> T): T = try {
-		loadingCounter.increment()
-		block()
-	} finally {
-		loadingCounter.decrement()
-	}
+    protected inline fun <T> withLoading(block: () -> T): T = try {
+        loadingCounter.increment()
+        block()
+    } finally {
+        loadingCounter.decrement()
+    }
 
-	protected fun MutableStateFlow<Int>.increment() = update { it + 1 }
+    protected fun MutableStateFlow<Int>.increment() = update { it + 1 }
 
-	protected fun MutableStateFlow<Int>.decrement() = update { it - 1 }
+    protected fun MutableStateFlow<Int>.decrement() = update { it - 1 }
 
-	private fun CoroutineContext.withDefaultExceptionHandler() =
-		if (this[CoroutineExceptionHandler.Key] is EventExceptionHandler) {
-			this
-		} else {
-			this + EventExceptionHandler(errorEvent)
-		}
+    private fun CoroutineContext.withDefaultExceptionHandler() =
+        if (this[CoroutineExceptionHandler.Key] is EventExceptionHandler) {
+            this
+        } else {
+            this + EventExceptionHandler(errorEvent)
+        }
 
-	protected object SkipErrors : AbstractCoroutineContextElement(Key) {
+    protected object SkipErrors : AbstractCoroutineContextElement(Key) {
 
-		private object Key : CoroutineContext.Key<SkipErrors>
-	}
+        private object Key : CoroutineContext.Key<SkipErrors>
+    }
 
-	protected class EventExceptionHandler(
-		private val event: MutableEventFlow<Throwable>,
-	) : AbstractCoroutineContextElement(CoroutineExceptionHandler),
-		CoroutineExceptionHandler {
+    protected class EventExceptionHandler(
+        private val event: MutableEventFlow<Throwable>,
+    ) : AbstractCoroutineContextElement(CoroutineExceptionHandler),
+        CoroutineExceptionHandler {
 
-		override fun handleException(context: CoroutineContext, exception: Throwable) {
-			exception.printStackTraceDebug()
-			if (context[SkipErrors.key] == null && exception !is CancellationException) {
-				event.call(exception)
-			}
-		}
-	}
+        override fun handleException(context: CoroutineContext, exception: Throwable) {
+            exception.printStackTraceDebug()
+            if (context[SkipErrors.key] == null && exception !is CancellationException) {
+                event.call(exception)
+            }
+        }
+    }
 }

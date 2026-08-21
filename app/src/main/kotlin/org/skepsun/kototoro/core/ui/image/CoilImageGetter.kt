@@ -13,19 +13,19 @@ import org.skepsun.kototoro.core.util.ext.drawable
 import javax.inject.Inject
 
 class CoilImageGetter @Inject constructor(
-	@ApplicationContext private val context: Context,
-	private val coil: ImageLoader,
+    @ApplicationContext private val context: Context,
+    private val coil: ImageLoader,
 ) : Html.ImageGetter {
 
-	@WorkerThread
-	override fun getDrawable(source: String?): Drawable? {
-		return coil.executeBlocking(
-			ImageRequest.Builder(context)
-				.data(source)
-				.allowHardware(false)
-				.build(),
-		).drawable?.apply {
-			setBounds(0, 0, intrinsicHeight, intrinsicHeight)
-		}
-	}
+    @WorkerThread
+    override fun getDrawable(source: String?): Drawable? {
+        return coil.executeBlocking(
+            ImageRequest.Builder(context)
+                .data(source)
+                .allowHardware(false)
+                .build(),
+        ).drawable?.apply {
+            setBounds(0, 0, intrinsicHeight, intrinsicHeight)
+        }
+    }
 }

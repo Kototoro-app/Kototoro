@@ -29,235 +29,235 @@ import javax.inject.Provider
 import javax.inject.Singleton
 
 sealed interface OnlineFontDownloadStatus {
-	data object Idle : OnlineFontDownloadStatus
-	data class Downloading(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
-	data class Ready(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
-	data class Failed(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
+    data object Idle : OnlineFontDownloadStatus
+    data class Downloading(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
+    data class Ready(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
+    data class Failed(val preset: OnlineFontPreset) : OnlineFontDownloadStatus
 }
 
 enum class OnlineFontPreset(
-	val displayName: String,
-	val cacheName: String,
-	val url: String,
-	val sha256: String,
-	val extension: String,
-	val isVariableWeight: Boolean = false,
+    val displayName: String,
+    val cacheName: String,
+    val url: String,
+    val sha256: String,
+    val extension: String,
+    val isVariableWeight: Boolean = false,
 ) {
-	ALIMAMA_FANG_YUAN_TI_VF(
-		displayName = "Alimama FangYuanTi VF",
-		cacheName = "alimama-fang-yuan-ti-vf",
-		url = "https://unpkg.com/@fontpkg/alimama-fang-yuan-ti-vf@1.0.5/AlimamaFangYuanTiVF-Thin.ttf",
-		sha256 = "b0b8c4c057af7dbc6ccb52a3ad00138fed41d1ad37d4f4a666b6cd431c913d94",
-		extension = "ttf",
-		isVariableWeight = true,
-	),
-	SARASA_GOTHIC(
-		displayName = "Sarasa UI Gothic",
-		cacheName = "sarasa-gothic-sc",
-		url = "https://unpkg.com/@fontpkg/sarasa-ui-sc@0.36.0/sarasa-ui-sc-regular.ttf",
-		sha256 = "f99998c75b440fa71c926c0565805c162ddab615dc82a380a53f0b68ac71d19e",
-		extension = "ttf",
-	),
-	LXGW_WENKAI(
-		displayName = "LXGW WenKai",
-		cacheName = "lxgw-wen-kai",
-		url = "https://unpkg.com/@fontpkg/lxgw-wen-kai@1.520.0/LXGWWenKai-Regular.ttf",
-		sha256 = "8d6ba638ac9553413354cfaab97637c1cd778444e259441ea1e5f8fb2c697fba",
-		extension = "ttf",
-	),
-	NOTO_SANS_CJK_SC(
-		displayName = "Noto Sans CJK SC",
-		cacheName = "noto-sans-cjk-sc",
-		url = "https://unpkg.com/@fontpkg/noto-sans-cjk-sc@2.4.0/NotoSansCJKsc-Regular.otf",
-		sha256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
-		extension = "otf",
-	),
-	SOURCE_HAN_SERIF_SC(
-		displayName = "Source Han Serif SC",
-		cacheName = "source-han-serif-sc",
-		url = "https://unpkg.com/@fontpkg/source-han-serif-sc@2.3.2/SourceHanSerifSC-Regular.otf",
-		sha256 = "0bf165efa014db063f2d62a12cec1c237038dfad3d67fb2c77818a540f016180",
-		extension = "otf",
-	),
-	GEN_RYU_MIN_TW_S2T(
-		displayName = "GenRyuMin TW (S2T)",
-		cacheName = "gen-ryu-min-tw-medium-s2t",
-		url = "https://here.vixual.net/files/fonts/choice/GenRyuMinTW-Medium-Simp2Trad.ttf",
-		sha256 = "8631dcfd12b03de5d9b1af6d7e11811fe85db0ab2fad12847d8803c8c192a356",
-		extension = "ttf",
-	),
-	KAI_GEN_GOTHIC_TW_S2T(
-		displayName = "KaiGen Gothic TW (S2T)",
-		cacheName = "kai-gen-gothic-tw-medium-s2t",
-		url = "https://here.vixual.net/files/fonts/choice/KaiGenGothicTW-Medium-Simp2Trad.ttf",
-		sha256 = "f59aa7f2680b5065deb080c7bd8f3083a1ee76654f65a1327d62b40e697cd0e7",
-		extension = "ttf",
-	),
+    ALIMAMA_FANG_YUAN_TI_VF(
+        displayName = "Alimama FangYuanTi VF",
+        cacheName = "alimama-fang-yuan-ti-vf",
+        url = "https://unpkg.com/@fontpkg/alimama-fang-yuan-ti-vf@1.0.5/AlimamaFangYuanTiVF-Thin.ttf",
+        sha256 = "b0b8c4c057af7dbc6ccb52a3ad00138fed41d1ad37d4f4a666b6cd431c913d94",
+        extension = "ttf",
+        isVariableWeight = true,
+    ),
+    SARASA_GOTHIC(
+        displayName = "Sarasa UI Gothic",
+        cacheName = "sarasa-gothic-sc",
+        url = "https://unpkg.com/@fontpkg/sarasa-ui-sc@0.36.0/sarasa-ui-sc-regular.ttf",
+        sha256 = "f99998c75b440fa71c926c0565805c162ddab615dc82a380a53f0b68ac71d19e",
+        extension = "ttf",
+    ),
+    LXGW_WENKAI(
+        displayName = "LXGW WenKai",
+        cacheName = "lxgw-wen-kai",
+        url = "https://unpkg.com/@fontpkg/lxgw-wen-kai@1.520.0/LXGWWenKai-Regular.ttf",
+        sha256 = "8d6ba638ac9553413354cfaab97637c1cd778444e259441ea1e5f8fb2c697fba",
+        extension = "ttf",
+    ),
+    NOTO_SANS_CJK_SC(
+        displayName = "Noto Sans CJK SC",
+        cacheName = "noto-sans-cjk-sc",
+        url = "https://unpkg.com/@fontpkg/noto-sans-cjk-sc@2.4.0/NotoSansCJKsc-Regular.otf",
+        sha256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+        extension = "otf",
+    ),
+    SOURCE_HAN_SERIF_SC(
+        displayName = "Source Han Serif SC",
+        cacheName = "source-han-serif-sc",
+        url = "https://unpkg.com/@fontpkg/source-han-serif-sc@2.3.2/SourceHanSerifSC-Regular.otf",
+        sha256 = "0bf165efa014db063f2d62a12cec1c237038dfad3d67fb2c77818a540f016180",
+        extension = "otf",
+    ),
+    GEN_RYU_MIN_TW_S2T(
+        displayName = "GenRyuMin TW (S2T)",
+        cacheName = "gen-ryu-min-tw-medium-s2t",
+        url = "https://here.vixual.net/files/fonts/choice/GenRyuMinTW-Medium-Simp2Trad.ttf",
+        sha256 = "8631dcfd12b03de5d9b1af6d7e11811fe85db0ab2fad12847d8803c8c192a356",
+        extension = "ttf",
+    ),
+    KAI_GEN_GOTHIC_TW_S2T(
+        displayName = "KaiGen Gothic TW (S2T)",
+        cacheName = "kai-gen-gothic-tw-medium-s2t",
+        url = "https://here.vixual.net/files/fonts/choice/KaiGenGothicTW-Medium-Simp2Trad.ttf",
+        sha256 = "f59aa7f2680b5065deb080c7bd8f3083a1ee76654f65a1327d62b40e697cd0e7",
+        extension = "ttf",
+    ),
 }
 
 @Singleton
 class OnlineFontLoader @Inject constructor(
-	@ApplicationContext context: Context,
-	@ContentHttpClient private val httpClientProvider: Provider<OkHttpClient>,
+    @ApplicationContext context: Context,
+    @ContentHttpClient private val httpClientProvider: Provider<OkHttpClient>,
 ) {
-	private val cacheDirectory = File(context.filesDir, "fonts")
-	private val downloadLocks = OnlineFontPreset.entries.associateWith { Mutex() }
-	private val applicationContext = context.applicationContext
-	private val mainHandler = Handler(Looper.getMainLooper())
-	private val notificationManager = NotificationManagerCompat.from(applicationContext)
-	private val _downloadStatus = kotlinx.coroutines.flow.MutableStateFlow<OnlineFontDownloadStatus>(
-		OnlineFontDownloadStatus.Idle,
-	)
-	val downloadStatus: kotlinx.coroutines.flow.StateFlow<OnlineFontDownloadStatus> = _downloadStatus
+    private val cacheDirectory = File(context.filesDir, "fonts")
+    private val downloadLocks = OnlineFontPreset.entries.associateWith { Mutex() }
+    private val applicationContext = context.applicationContext
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val notificationManager = NotificationManagerCompat.from(applicationContext)
+    private val _downloadStatus = kotlinx.coroutines.flow.MutableStateFlow<OnlineFontDownloadStatus>(
+        OnlineFontDownloadStatus.Idle,
+    )
+    val downloadStatus: kotlinx.coroutines.flow.StateFlow<OnlineFontDownloadStatus> = _downloadStatus
 
-	suspend fun load(preset: OnlineFontPreset): FontFamily? = downloadLocks.getValue(preset).withLock {
-		withContext(Dispatchers.IO) {
-			val fontFile = getOrDownload(preset) ?: return@withContext null
-			if (preset.isVariableWeight) {
-				buildVariableWeightFontFamily(fontFile)
-			} else {
-				FontFamily(Font(fontFile))
-			}
-		}
-	}
+    suspend fun load(preset: OnlineFontPreset): FontFamily? = downloadLocks.getValue(preset).withLock {
+        withContext(Dispatchers.IO) {
+            val fontFile = getOrDownload(preset) ?: return@withContext null
+            if (preset.isVariableWeight) {
+                buildVariableWeightFontFamily(fontFile)
+            } else {
+                FontFamily(Font(fontFile))
+            }
+        }
+    }
 
-	/**
-	 * Builds a [FontFamily] from a variable-weight font file by pinning each requested
-	 * [FontWeight] to its [androidx.compose.ui.text.font.FontVariation] wght axis value.
-	 * Without this, a VF loaded as a single [Font] renders its default instance (which for
-	 * Alimama FangYuanTi is wght=700), making every text style bold.
-	 */
-	private fun buildVariableWeightFontFamily(fontFile: File): FontFamily = FontFamily(
-		listOf(
-			FontWeight.Normal to 400,
-			FontWeight.Medium to 500,
-			FontWeight.SemiBold to 600,
-			FontWeight.Bold to 700,
-		).map { (weight, wght) ->
-			Font(
-				fontFile,
-				weight = weight,
-				variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
-					androidx.compose.ui.text.font.FontVariation.weight(wght),
-				),
-			)
-		},
-	)
+    /**
+     * Builds a [FontFamily] from a variable-weight font file by pinning each requested
+     * [FontWeight] to its [androidx.compose.ui.text.font.FontVariation] wght axis value.
+     * Without this, a VF loaded as a single [Font] renders its default instance (which for
+     * Alimama FangYuanTi is wght=700), making every text style bold.
+     */
+    private fun buildVariableWeightFontFamily(fontFile: File): FontFamily = FontFamily(
+        listOf(
+            FontWeight.Normal to 400,
+            FontWeight.Medium to 500,
+            FontWeight.SemiBold to 600,
+            FontWeight.Bold to 700,
+        ).map { (weight, wght) ->
+            Font(
+                fontFile,
+                weight = weight,
+                variationSettings = androidx.compose.ui.text.font.FontVariation.Settings(
+                    androidx.compose.ui.text.font.FontVariation.weight(wght),
+                ),
+            )
+        },
+    )
 
-	private fun getOrDownload(preset: OnlineFontPreset): File? {
-		cacheDirectory.mkdirs()
-		val target = File(cacheDirectory, "${preset.cacheName}.${preset.extension}")
-		if (target.isValidFont(preset)) {
-			android.util.Log.i(TAG, "Font cache hit: ${preset.name} (${target.length()} bytes)")
-			return target
-		}
-		android.util.Log.i(TAG, "Font download started: ${preset.name} from ${preset.url}")
-		target.delete()
-		announceDownloadStatus(OnlineFontDownloadStatus.Downloading(preset))
+    private fun getOrDownload(preset: OnlineFontPreset): File? {
+        cacheDirectory.mkdirs()
+        val target = File(cacheDirectory, "${preset.cacheName}.${preset.extension}")
+        if (target.isValidFont(preset)) {
+            android.util.Log.i(TAG, "Font cache hit: ${preset.name} (${target.length()} bytes)")
+            return target
+        }
+        android.util.Log.i(TAG, "Font download started: ${preset.name} from ${preset.url}")
+        target.delete()
+        announceDownloadStatus(OnlineFontDownloadStatus.Downloading(preset))
 
-		val temporary = File(cacheDirectory, "${target.name}.download")
-		temporary.delete()
-		return try {
-			val request = Request.Builder().url(preset.url).get().build()
-			httpClientProvider.get().newCall(request).execute().use { response ->
-				check(response.isSuccessful) { "Font request failed: HTTP ${response.code}" }
-				val body = checkNotNull(response.body) { "Font response has no body" }
-				check(body.contentLength() <= MAX_FONT_SIZE) { "Font response is too large" }
-				body.byteStream().use { input ->
-					temporary.outputStream().use { output -> input.copyTo(output) }
-				}
-			}
-			check(temporary.length() in MIN_FONT_SIZE..MAX_FONT_SIZE) { "Invalid font size" }
-			check(temporary.sha256() == preset.sha256) { "Font checksum mismatch" }
-			check(temporary.renameTo(target)) { "Cannot move downloaded font into cache" }
-			announceDownloadStatus(OnlineFontDownloadStatus.Ready(preset))
-			target
-		} catch (error: Throwable) {
-			temporary.delete()
-			if (error is CancellationException) throw error
-			android.util.Log.e(TAG, "Font download failed: ${preset.name}", error)
-			announceDownloadStatus(OnlineFontDownloadStatus.Failed(preset))
-			null
-		}
-	}
+        val temporary = File(cacheDirectory, "${target.name}.download")
+        temporary.delete()
+        return try {
+            val request = Request.Builder().url(preset.url).get().build()
+            httpClientProvider.get().newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Font request failed: HTTP ${response.code}" }
+                val body = checkNotNull(response.body) { "Font response has no body" }
+                check(body.contentLength() <= MAX_FONT_SIZE) { "Font response is too large" }
+                body.byteStream().use { input ->
+                    temporary.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            check(temporary.length() in MIN_FONT_SIZE..MAX_FONT_SIZE) { "Invalid font size" }
+            check(temporary.sha256() == preset.sha256) { "Font checksum mismatch" }
+            check(temporary.renameTo(target)) { "Cannot move downloaded font into cache" }
+            announceDownloadStatus(OnlineFontDownloadStatus.Ready(preset))
+            target
+        } catch (error: Throwable) {
+            temporary.delete()
+            if (error is CancellationException) throw error
+            android.util.Log.e(TAG, "Font download failed: ${preset.name}", error)
+            announceDownloadStatus(OnlineFontDownloadStatus.Failed(preset))
+            null
+        }
+    }
 
-	@SuppressLint("MissingPermission")
-	private fun announceDownloadStatus(status: OnlineFontDownloadStatus) {
-		_downloadStatus.value = status
-		val message = when (status) {
-			is OnlineFontDownloadStatus.Downloading ->
-				applicationContext.getString(R.string.font_downloading, status.preset.displayName)
-			is OnlineFontDownloadStatus.Ready ->
-				applicationContext.getString(R.string.font_download_ready, status.preset.displayName)
-			is OnlineFontDownloadStatus.Failed ->
-				applicationContext.getString(R.string.font_download_failed, status.preset.displayName)
-			OnlineFontDownloadStatus.Idle -> return
-		}
-		val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
-			.setContentTitle(applicationContext.getString(R.string.font_downloads))
-			.setContentText(message)
-			.setSmallIcon(R.drawable.ic_notification)
-			.setCategory(NotificationCompat.CATEGORY_PROGRESS)
-			.setOnlyAlertOnce(true)
-			.setAutoCancel(status !is OnlineFontDownloadStatus.Downloading)
-			.setOngoing(status is OnlineFontDownloadStatus.Downloading)
-			.apply {
-				if (status is OnlineFontDownloadStatus.Downloading) {
-					setProgress(0, 0, true)
-				}
-			}
-			.build()
-		try {
-			notificationManager.createNotificationChannel(
-				NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-					.setName(applicationContext.getString(R.string.font_downloads))
-					.setShowBadge(false)
-					.setVibrationEnabled(false)
-					.setLightsEnabled(false)
-					.setSound(null, null)
-					.build(),
-			)
-			if (applicationContext.checkNotificationPermission(CHANNEL_ID)) {
-				notificationManager.notify(TAG, NOTIFICATION_ID, notification)
-				return
-			}
-			android.util.Log.w(TAG, "Font notification permission is disabled")
-		} catch (error: SecurityException) {
-			android.util.Log.w(TAG, "Cannot show font notification", error)
-		}
-		mainHandler.post {
-			Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
-		}
-	}
+    @SuppressLint("MissingPermission")
+    private fun announceDownloadStatus(status: OnlineFontDownloadStatus) {
+        _downloadStatus.value = status
+        val message = when (status) {
+            is OnlineFontDownloadStatus.Downloading ->
+                applicationContext.getString(R.string.font_downloading, status.preset.displayName)
+            is OnlineFontDownloadStatus.Ready ->
+                applicationContext.getString(R.string.font_download_ready, status.preset.displayName)
+            is OnlineFontDownloadStatus.Failed ->
+                applicationContext.getString(R.string.font_download_failed, status.preset.displayName)
+            OnlineFontDownloadStatus.Idle -> return
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setContentTitle(applicationContext.getString(R.string.font_downloads))
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(status !is OnlineFontDownloadStatus.Downloading)
+            .setOngoing(status is OnlineFontDownloadStatus.Downloading)
+            .apply {
+                if (status is OnlineFontDownloadStatus.Downloading) {
+                    setProgress(0, 0, true)
+                }
+            }
+            .build()
+        try {
+            notificationManager.createNotificationChannel(
+                NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
+                    .setName(applicationContext.getString(R.string.font_downloads))
+                    .setShowBadge(false)
+                    .setVibrationEnabled(false)
+                    .setLightsEnabled(false)
+                    .setSound(null, null)
+                    .build(),
+            )
+            if (applicationContext.checkNotificationPermission(CHANNEL_ID)) {
+                notificationManager.notify(TAG, NOTIFICATION_ID, notification)
+                return
+            }
+            android.util.Log.w(TAG, "Font notification permission is disabled")
+        } catch (error: SecurityException) {
+            android.util.Log.w(TAG, "Cannot show font notification", error)
+        }
+        mainHandler.post {
+            Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
-	private fun File.isValidFont(preset: OnlineFontPreset): Boolean {
-		return isFile && length() in MIN_FONT_SIZE..MAX_FONT_SIZE && sha256() == preset.sha256
-	}
+    private fun File.isValidFont(preset: OnlineFontPreset): Boolean {
+        return isFile && length() in MIN_FONT_SIZE..MAX_FONT_SIZE && sha256() == preset.sha256
+    }
 
-	private fun File.sha256(): String {
-		val digest = MessageDigest.getInstance("SHA-256")
-		inputStream().use { input ->
-			val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-			while (true) {
-				val count = input.read(buffer)
-				if (count < 0) break
-				digest.update(buffer, 0, count)
-			}
-		}
-		return digest.digest().joinToString("") { "%02x".format(it) }
-	}
+    private fun File.sha256(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        inputStream().use { input ->
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
 
-	fun clearDownloadStatus(status: OnlineFontDownloadStatus) {
-		if (_downloadStatus.value == status) {
-			_downloadStatus.value = OnlineFontDownloadStatus.Idle
-		}
-	}
+    fun clearDownloadStatus(status: OnlineFontDownloadStatus) {
+        if (_downloadStatus.value == status) {
+            _downloadStatus.value = OnlineFontDownloadStatus.Idle
+        }
+    }
 
-	private companion object {
-		const val TAG = "OnlineFontLoader"
-		const val CHANNEL_ID = "font_downloads"
-		const val NOTIFICATION_ID = 18041
-		const val MIN_FONT_SIZE = 64L * 1024L
-		const val MAX_FONT_SIZE = 32L * 1024L * 1024L
-	}
+    private companion object {
+        const val TAG = "OnlineFontLoader"
+        const val CHANNEL_ID = "font_downloads"
+        const val NOTIFICATION_ID = 18041
+        const val MIN_FONT_SIZE = 64L * 1024L
+        const val MAX_FONT_SIZE = 32L * 1024L * 1024L
+    }
 }

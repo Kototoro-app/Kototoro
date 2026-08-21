@@ -9,15 +9,15 @@ import androidx.annotation.StringRes
  * View so Compose screens can reuse the same chip descriptors across list sources.
  */
 data class ChipModel(
-	val title: CharSequence? = null,
-	@StringRes val titleResId: Int = 0,
-	@DrawableRes val icon: Int = 0,
-	val iconData: Any? = null,
-	@ColorRes val tint: Int = 0,
-	val counter: Int = 0,
-	val isChecked: Boolean = false,
-	val isLoading: Boolean = false,
-	val isDropdown: Boolean = false,
-	val isCloseable: Boolean = false,
-	val data: Any? = null,
+    val title: CharSequence? = null,
+    @StringRes val titleResId: Int = 0,
+    @DrawableRes val icon: Int = 0,
+    val iconData: Any? = null,
+    @ColorRes val tint: Int = 0,
+    val counter: Int = 0,
+    val isChecked: Boolean = false,
+    val isLoading: Boolean = false,
+    val isDropdown: Boolean = false,
+    val isCloseable: Boolean = false,
+    val data: Any? = null,
 )

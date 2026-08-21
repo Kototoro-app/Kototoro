@@ -11,15 +11,15 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 
 fun interface ReversibleHandle {
 
-	suspend fun reverse()
+    suspend fun reverse()
 }
 
 fun ReversibleHandle.reverseAsync() = processLifecycleScope.launch(Dispatchers.Default, CoroutineStart.ATOMIC) {
-	runCatchingCancellable {
-		withContext(NonCancellable) {
-			reverse()
-		}
-	}.onFailure {
-		it.printStackTraceDebug()
-	}
+    runCatchingCancellable {
+        withContext(NonCancellable) {
+            reverse()
+        }
+    }.onFailure {
+        it.printStackTraceDebug()
+    }
 }

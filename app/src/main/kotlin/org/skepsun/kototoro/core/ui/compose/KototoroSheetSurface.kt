@@ -18,16 +18,16 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
  */
 @Composable
 fun KototoroSheetSurface(
-	modifier: Modifier = Modifier,
-	style: GlassStyle = GlassDefaults.prominentStyle(),
-	content: @Composable BoxScope.() -> Unit,
+    modifier: Modifier = Modifier,
+    style: GlassStyle = GlassDefaults.prominentStyle(),
+    content: @Composable BoxScope.() -> Unit,
 ) {
-	GlassSurface(
-		modifier = modifier,
-		shape = RoundedRectangle(28.dp),
-		style = style,
-		dialogSurface = true,
-		componentRole = GlassComponentRole.Sheet,
-		content = content,
-	)
+    GlassSurface(
+        modifier = modifier,
+        shape = RoundedRectangle(28.dp),
+        style = style,
+        dialogSurface = true,
+        componentRole = GlassComponentRole.Sheet,
+        content = content,
+    )
 }

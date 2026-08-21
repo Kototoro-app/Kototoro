@@ -19,59 +19,59 @@ import org.skepsun.kototoro.core.ui.util.SystemUiController
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
 abstract class BaseComposeFullscreenActivity :
-	AppCompatActivity(),
-	ScreenshotPolicyHelper.ContentContainer {
+    AppCompatActivity(),
+    ScreenshotPolicyHelper.ContentContainer {
 
-	protected lateinit var systemUiController: SystemUiController
-		private set
+    protected lateinit var systemUiController: SystemUiController
+        private set
 
-	protected lateinit var exceptionResolver: ExceptionResolver
-		private set
+    protected lateinit var exceptionResolver: ExceptionResolver
+        private set
 
-	private lateinit var entryPoint: BaseActivityEntryPoint
+    private lateinit var entryPoint: BaseActivityEntryPoint
 
-	override fun attachBaseContext(newBase: Context) {
-		entryPoint = EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(newBase.applicationContext)
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-			AppCompatDelegate.setApplicationLocales(entryPoint.settings.appLocales)
-		}
-		super.attachBaseContext(newBase)
-	}
+    override fun attachBaseContext(newBase: Context) {
+        entryPoint = EntryPointAccessors.fromApplication<BaseActivityEntryPoint>(newBase.applicationContext)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            AppCompatDelegate.setApplicationLocales(entryPoint.settings.appLocales)
+        }
+        super.attachBaseContext(newBase)
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		applyKototoroActivityTheme(entryPoint.settings)
-		putDataToExtras(intent)
-		exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
-		super.onCreate(savedInstanceState)
-		observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
-		configureKototoroEdgeToEdge()
-		with(window) {
-			systemUiController = SystemUiController(this)
-			statusBarColor = Color.TRANSPARENT
-			navigationBarColor = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
-				ContextCompat.getColor(this@BaseComposeFullscreenActivity, R.color.dim)
-			} else {
-				Color.TRANSPARENT
-			}
-			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-				attributes.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-					WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-				} else {
-					WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-				}
-			}
-		}
-		systemUiController.setSystemUiVisible(true)
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        applyKototoroActivityTheme(entryPoint.settings)
+        putDataToExtras(intent)
+        exceptionResolver = entryPoint.exceptionResolverFactory.create(this)
+        super.onCreate(savedInstanceState)
+        observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
+        configureKototoroEdgeToEdge()
+        with(window) {
+            systemUiController = SystemUiController(this)
+            statusBarColor = Color.TRANSPARENT
+            navigationBarColor = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+                ContextCompat.getColor(this@BaseComposeFullscreenActivity, R.color.dim)
+            } else {
+                Color.TRANSPARENT
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                attributes.layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                } else {
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
+        }
+        systemUiController.setSystemUiVisible(true)
+    }
 
-	override fun onNewIntent(intent: Intent) {
-		putDataToExtras(intent)
-		super.onNewIntent(intent)
-	}
+    override fun onNewIntent(intent: Intent) {
+        putDataToExtras(intent)
+        super.onNewIntent(intent)
+    }
 
-	override fun isNsfwContent(): Flow<Boolean> = flowOf(false)
+    override fun isNsfwContent(): Flow<Boolean> = flowOf(false)
 
-	private fun putDataToExtras(intent: Intent?) {
-		intent?.putExtra(AppRouter.KEY_DATA, intent.data)
-	}
+    private fun putDataToExtras(intent: Intent?) {
+        intent?.putExtra(AppRouter.KEY_DATA, intent.data)
+    }
 }

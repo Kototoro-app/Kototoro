@@ -4,13 +4,13 @@ import android.widget.CompoundButton
 import android.widget.CompoundButton.OnCheckedChangeListener
 
 class RememberCheckListener(
-	initialValue: Boolean,
+    initialValue: Boolean,
 ) : OnCheckedChangeListener {
 
-	var isChecked: Boolean = initialValue
-		private set
+    var isChecked: Boolean = initialValue
+        private set
 
-	override fun onCheckedChanged(buttonView: CompoundButton, isChecked: Boolean) {
-		this.isChecked = isChecked
-	}
+    override fun onCheckedChanged(buttonView: CompoundButton, isChecked: Boolean) {
+        this.isChecked = isChecked
+    }
 }

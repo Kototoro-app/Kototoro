@@ -74,7 +74,7 @@ abstract class BaseComposeActivity :
         WindowCompat.setDecorFitsSystemWindows(window, false)
         configureSafeAreaWindow()
 
-		observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
+        observeBrowserInteractiveChallenges(entryPoint.webViewExecutor)
     }
 
     override fun onNewIntent(intent: Intent) {

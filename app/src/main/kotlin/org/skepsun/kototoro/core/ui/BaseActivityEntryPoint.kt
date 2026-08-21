@@ -12,11 +12,11 @@ import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 @InstallIn(SingletonComponent::class)
 interface BaseActivityEntryPoint {
 
-	val settings: AppSettings
+    val settings: AppSettings
 
-	val exceptionResolverFactory: ExceptionResolver.Factory
+    val exceptionResolverFactory: ExceptionResolver.Factory
 
-	val onlineFontLoader: OnlineFontLoader
+    val onlineFontLoader: OnlineFontLoader
 
-	val webViewExecutor: WebViewExecutor
+    val webViewExecutor: WebViewExecutor
 }

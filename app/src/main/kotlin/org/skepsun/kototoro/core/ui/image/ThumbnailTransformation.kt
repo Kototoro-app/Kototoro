@@ -8,13 +8,13 @@ import coil3.transform.Transformation
 
 class ThumbnailTransformation : Transformation() {
 
-	override val cacheKey: String = javaClass.name
+    override val cacheKey: String = javaClass.name
 
-	override suspend fun transform(input: Bitmap, size: Size): Bitmap {
-		return ThumbnailUtils.extractThumbnail(
-			input,
-			size.width.pxOrElse { input.width },
-			size.height.pxOrElse { input.height },
-		)
-	}
+    override suspend fun transform(input: Bitmap, size: Size): Bitmap {
+        return ThumbnailUtils.extractThumbnail(
+            input,
+            size.width.pxOrElse { input.width },
+            size.height.pxOrElse { input.height },
+        )
+    }
 }
