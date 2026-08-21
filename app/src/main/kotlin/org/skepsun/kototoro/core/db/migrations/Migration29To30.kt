@@ -15,8 +15,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * - parent_chapter_id: NULL或等于chapter_id
  */
 class Migration29To30 : Migration(29, 30) {
-	override fun migrate(db: SupportSQLiteDatabase) {
-		// 添加parent_chapter_id列，默认为NULL
-		db.execSQL("ALTER TABLE history ADD COLUMN parent_chapter_id INTEGER DEFAULT NULL")
-	}
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // 添加parent_chapter_id列，默认为NULL
+        db.execSQL("ALTER TABLE history ADD COLUMN parent_chapter_id INTEGER DEFAULT NULL")
+    }
 }

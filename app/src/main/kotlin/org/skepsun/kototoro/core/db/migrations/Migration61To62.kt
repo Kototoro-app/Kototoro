@@ -6,10 +6,10 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
 
 class Migration61To62 : Migration(61, 62) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL("ALTER TABLE `tracks` ADD COLUMN `entity_id` INTEGER")
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `tracks` ADD COLUMN `entity_id` INTEGER")
+        db.execSQL(
+            """
 			UPDATE `tracks`
 			SET `entity_id` = (
 				SELECT b.entity_id
@@ -28,18 +28,18 @@ class Migration61To62 : Migration(61, 62) {
 				LIMIT 1
 			)
 			WHERE `entity_id` IS NULL
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `index_tracks_entity_id`
 			ON `tracks` (`entity_id`)
-			""".trimIndent(),
-		)
+            """.trimIndent(),
+        )
 
-		db.execSQL("ALTER TABLE `track_logs` ADD COLUMN `entity_id` INTEGER")
-		db.execSQL(
-			"""
+        db.execSQL("ALTER TABLE `track_logs` ADD COLUMN `entity_id` INTEGER")
+        db.execSQL(
+            """
 			UPDATE `track_logs`
 			SET `entity_id` = (
 				SELECT b.entity_id
@@ -58,13 +58,13 @@ class Migration61To62 : Migration(61, 62) {
 				LIMIT 1
 			)
 			WHERE `entity_id` IS NULL
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `index_track_logs_entity_id`
 			ON `track_logs` (`entity_id`)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

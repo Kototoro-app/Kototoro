@@ -6,9 +6,9 @@ import org.skepsun.kototoro.core.db.TABLE_SOURCE_PRESETS
 
 class Migration35To36 : Migration(35, 36) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `$TABLE_SOURCE_PRESETS` (
 				`preset_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 				`title` TEXT NOT NULL,
@@ -18,7 +18,7 @@ class Migration35To36 : Migration(35, 36) {
 				`sort_key` INTEGER NOT NULL,
 				`deleted_at` INTEGER NOT NULL
 			)
-			""".trimIndent()
-		)
-	}
+            """.trimIndent()
+        )
+    }
 }

@@ -5,9 +5,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Migration40To41 : Migration(40, 41) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `scrobblings_new` (
 				`scrobbler` INTEGER NOT NULL,
 				`id` INTEGER NOT NULL,
@@ -20,10 +20,10 @@ class Migration40To41 : Migration(40, 41) {
 				`media_type` TEXT NOT NULL DEFAULT '',
 				PRIMARY KEY(`scrobbler`, `id`, `manga_id`, `media_type`)
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			INSERT INTO `scrobblings_new` (
 				`scrobbler`,
 				`id`,
@@ -46,9 +46,9 @@ class Migration40To41 : Migration(40, 41) {
 				`rating`,
 				''
 			FROM `scrobblings`
-			""".trimIndent(),
-		)
-		db.execSQL("DROP TABLE `scrobblings`")
-		db.execSQL("ALTER TABLE `scrobblings_new` RENAME TO `scrobblings`")
-	}
+            """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE `scrobblings`")
+        db.execSQL("ALTER TABLE `scrobblings_new` RENAME TO `scrobblings`")
+    }
 }

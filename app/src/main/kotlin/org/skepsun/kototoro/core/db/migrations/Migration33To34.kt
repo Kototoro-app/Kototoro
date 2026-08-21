@@ -4,9 +4,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Migration33To34 : Migration(33, 34) {
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS tracking_site_items (
 				service INTEGER NOT NULL,
 				remote_id INTEGER NOT NULL,
@@ -26,16 +26,16 @@ class Migration33To34 : Migration(33, 34) {
 				updated_at INTEGER NOT NULL,
 				PRIMARY KEY(service, remote_id)
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS index_tracking_site_items_service_updated_at
 			ON tracking_site_items(service, updated_at DESC)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS tracking_site_links (
 				service INTEGER NOT NULL,
 				remote_id INTEGER NOT NULL,
@@ -47,19 +47,19 @@ class Migration33To34 : Migration(33, 34) {
 				updated_at INTEGER NOT NULL,
 				PRIMARY KEY(service, remote_id, manga_id)
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS index_tracking_site_links_manga_id
 			ON tracking_site_links(manga_id)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS index_tracking_site_links_service_remote_id
 			ON tracking_site_links(service, remote_id)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

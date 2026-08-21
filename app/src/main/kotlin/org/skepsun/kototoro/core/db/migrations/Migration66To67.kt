@@ -8,10 +8,10 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 
 class Migration66To67 : Migration(66, 67) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL("ALTER TABLE `$TABLE_WORK_FAVOURITES` ADD COLUMN `anchor_manga_id` INTEGER")
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `$TABLE_WORK_FAVOURITES` ADD COLUMN `anchor_manga_id` INTEGER")
+        db.execSQL(
+            """
 			UPDATE `$TABLE_WORK_FAVOURITES`
 			SET `anchor_manga_id` = (
 				SELECT f.manga_id
@@ -27,10 +27,10 @@ class Migration66To67 : Migration(66, 67) {
 				LIMIT 1
 			)
 			WHERE `anchor_manga_id` IS NULL
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			UPDATE `$TABLE_WORK_FAVOURITES`
 			SET `anchor_manga_id` = (
 				SELECT f.manga_id
@@ -47,13 +47,13 @@ class Migration66To67 : Migration(66, 67) {
 			)
 			WHERE `anchor_manga_id` IS NULL
 				AND `deleted_at` = 0
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_favourites_anchor_manga`
 			ON `$TABLE_WORK_FAVOURITES` (`anchor_manga_id`)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

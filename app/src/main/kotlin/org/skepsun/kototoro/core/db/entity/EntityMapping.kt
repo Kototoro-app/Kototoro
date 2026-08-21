@@ -22,9 +22,9 @@ private const val VALUES_DIVIDER = '\n'
 // Entity to model
 
 fun TagEntity.toContentTag() = ContentTag(
-	key = this.key,
-	title = this.title.toTitleCase(),
-	source = ContentSource(this.source),
+    key = this.key,
+    title = this.title.toTitleCase(),
+    source = ContentSource(this.source),
 )
 
 fun Collection<TagEntity>.toContentTags() = mapToSet(TagEntity::toContentTag)
@@ -62,88 +62,88 @@ fun MangaEntity.toContent(tags: Set<ContentTag>, chapters: List<ChapterEntity>?)
             } else {
                 chapter
             }
-		},
-		description = this.description,
-		sourceData = this.sourceData,
-	)
+        },
+        description = this.description,
+        sourceData = this.sourceData,
+    )
 }
 fun MangaWithTags.toContent(chapters: List<ChapterEntity>? = null) = manga.toContent(tags.toContentTags(), chapters)
 
 fun Collection<MangaWithTags>.toContentList() = map { it.toContent() }
 
 fun ChapterEntity.toContentChapter() = ContentChapter(
-	id = chapterId,
-	title = title.nullIfEmpty(),
-	number = number,
-	volume = volume,
-	url = url,
-	scanlator = scanlator,
-	uploadDate = uploadDate,
-	branch = branch,
-		source = ContentSource(source),
-		sourceData = sourceData,
-	)
+    id = chapterId,
+    title = title.nullIfEmpty(),
+    number = number,
+    volume = volume,
+    url = url,
+    scanlator = scanlator,
+    uploadDate = uploadDate,
+    branch = branch,
+        source = ContentSource(source),
+        sourceData = sourceData,
+    )
 
 fun Collection<ChapterEntity>.toContentChapters() = map { it.toContentChapter() }
 
 // Model to entity
 
 fun Content.toEntity() = MangaEntity(
-	id = id,
-	url = url,
-	publicUrl = publicUrl,
-	source = source.name,
-	largeCoverUrl = largeCoverUrl,
-	coverUrl = coverUrl.orEmpty(),
-	altTitles = altTitles.joinToString(VALUES_DIVIDER.toString()),
-	rating = rating,
-	isNsfw = isNsfw(),
-	contentRating = contentRating?.name,
-	state = state?.name,
-	title = title,
-	authors = authors.joinToString(VALUES_DIVIDER.toString()),
-	description = description,
-	contentType = source.resolvedContentTypeForSnapshot()?.name,
-	sourceData = sourceData,
+    id = id,
+    url = url,
+    publicUrl = publicUrl,
+    source = source.name,
+    largeCoverUrl = largeCoverUrl,
+    coverUrl = coverUrl.orEmpty(),
+    altTitles = altTitles.joinToString(VALUES_DIVIDER.toString()),
+    rating = rating,
+    isNsfw = isNsfw(),
+    contentRating = contentRating?.name,
+    state = state?.name,
+    title = title,
+    authors = authors.joinToString(VALUES_DIVIDER.toString()),
+    description = description,
+    contentType = source.resolvedContentTypeForSnapshot()?.name,
+    sourceData = sourceData,
 )
 
 fun ContentTag.toEntity() = TagEntity(
-	title = title,
-	key = key,
-	source = source.name,
-	id = "${key}_${source.name}".longHashCode(),
-	isPinned = false, // for future use
+    title = title,
+    key = key,
+    source = source.name,
+    id = "${key}_${source.name}".longHashCode(),
+    isPinned = false, // for future use
 )
 
 fun Collection<ContentTag>.toEntities() = map(ContentTag::toEntity)
 
 fun Iterable<IndexedValue<ContentChapter>>.toEntities(mangaId: Long) = map { (index, chapter) ->
-	ChapterEntity(
-		chapterId = chapter.id,
-		mangaId = mangaId,
-		title = chapter.title.orEmpty(),
-		number = chapter.number,
-		volume = chapter.volume,
-		url = chapter.url,
-		scanlator = chapter.scanlator,
-		uploadDate = chapter.uploadDate,
-			branch = chapter.branch,
-			source = chapter.source.name,
-			index = index,
-			sourceData = chapter.sourceData,
-		)
+    ChapterEntity(
+        chapterId = chapter.id,
+        mangaId = mangaId,
+        title = chapter.title.orEmpty(),
+        number = chapter.number,
+        volume = chapter.volume,
+        url = chapter.url,
+        scanlator = chapter.scanlator,
+        uploadDate = chapter.uploadDate,
+            branch = chapter.branch,
+            source = chapter.source.name,
+            index = index,
+            sourceData = chapter.sourceData,
+        )
 }
 
 // Other
 
 fun SortOrder(name: String, fallback: SortOrder): SortOrder = runCatching {
-	SortOrder.valueOf(name)
+    SortOrder.valueOf(name)
 }.getOrDefault(fallback)
 
 fun ContentState(name: String): ContentState? = runCatching {
-	ContentState.valueOf(name)
+    ContentState.valueOf(name)
 }.getOrNull()
 
 fun ContentRating(name: String?): ContentRating? = runCatching {
-	ContentRating.valueOf(name ?: return@runCatching null)
+    ContentRating.valueOf(name ?: return@runCatching null)
 }.getOrNull()

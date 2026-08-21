@@ -13,10 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  */
 class Migration74To75 : Migration(74, 75) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL("ALTER TABLE `entity` ADD COLUMN `content_type` TEXT")
-		db.execSQL(
-		"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `entity` ADD COLUMN `content_type` TEXT")
+        db.execSQL(
+        """
 		UPDATE `entity`
 		SET `content_type` = (
 			SELECT CASE
@@ -34,12 +34,12 @@ class Migration74To75 : Migration(74, 75) {
 				AND binding.`state` IN ('MANUAL', 'CONFIRMED', 'LEGACY')
 				AND manga.`content_type` IS NOT NULL
 		)
-		""".trimIndent(),
-		)
-		db.execSQL("DROP INDEX IF EXISTS `idx_entity_name_hash`")
-		db.execSQL(
-		"CREATE UNIQUE INDEX IF NOT EXISTS `idx_entity_name_hash` " +
-			"ON `entity` (`type`, `name_hash`, `content_type`)",
-		)
-	}
+        """.trimIndent(),
+        )
+        db.execSQL("DROP INDEX IF EXISTS `idx_entity_name_hash`")
+        db.execSQL(
+        "CREATE UNIQUE INDEX IF NOT EXISTS `idx_entity_name_hash` " +
+            "ON `entity` (`type`, `name_hash`, `content_type`)",
+        )
+    }
 }

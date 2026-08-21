@@ -7,27 +7,27 @@ import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 
 class Migration55To56 : Migration(55, 56) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `title_override` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `cover_override` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `content_rating_override` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			UPDATE `$TABLE_ENTITY_PREFERENCES`
 			SET
 				`title_override` = (
@@ -76,7 +76,7 @@ class Migration55To56 : Migration(55, 56) {
 						OR p.`content_rating_override` IS NOT NULL
 					)
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

@@ -5,9 +5,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Migration46To47 : Migration(46, 47) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			UPDATE chapters
 			SET source = 'LOCAL_VIDEO'
 			WHERE source = 'LOCAL'
@@ -23,11 +23,11 @@ class Migration46To47 : Migration(46, 47) {
 			    OR lower(url) LIKE '%.wmv%'
 			    OR lower(url) LIKE '%/video/%'
 			  )
-			""".trimIndent(),
-		)
+            """.trimIndent(),
+        )
 
-		db.execSQL(
-			"""
+        db.execSQL(
+            """
 			UPDATE manga
 			SET source = 'LOCAL_VIDEO'
 			WHERE source = 'LOCAL'
@@ -59,7 +59,7 @@ class Migration46To47 : Migration(46, 47) {
 			        AND chapters.source = 'LOCAL_VIDEO'
 			    )
 			  )
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

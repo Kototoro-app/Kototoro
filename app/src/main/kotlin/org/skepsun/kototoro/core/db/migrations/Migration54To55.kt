@@ -6,21 +6,21 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 
 class Migration54To55 : Migration(54, 55) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `metadata_binding_source` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `metadata_binding_external_id` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			UPDATE `$TABLE_ENTITY_PREFERENCES`
 			SET `metadata_binding_source` = CAST(`metadata_source_service` AS TEXT),
 				`metadata_binding_external_id` = CAST(`metadata_source_remote_id` AS TEXT)
@@ -28,7 +28,7 @@ class Migration54To55 : Migration(54, 55) {
 				AND `metadata_source_service` IS NOT NULL
 				AND `metadata_source_remote_id` IS NOT NULL
 				AND (`metadata_binding_source` IS NULL OR `metadata_binding_external_id` IS NULL)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

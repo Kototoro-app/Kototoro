@@ -13,40 +13,40 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_RELATION
  */
 class Migration53To54 : Migration(53, 54) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_GRAPH_RELATION`
 			ADD COLUMN `source_binding_source` TEXT NOT NULL DEFAULT ''
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_GRAPH_RELATION`
 			ADD COLUMN `source_binding_external_id` TEXT NOT NULL DEFAULT ''
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_GRAPH_RELATION`
 			ADD COLUMN `origin` TEXT NOT NULL DEFAULT 'LEGACY'
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_GRAPH_RELATION`
 			ADD COLUMN `state` TEXT NOT NULL DEFAULT 'LEGACY'
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_GRAPH_RELATION`
 			ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0
-			""".trimIndent(),
-		)
-		db.execSQL("DROP INDEX IF EXISTS `idx_relation_unique`")
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL("DROP INDEX IF EXISTS `idx_relation_unique`")
+        db.execSQL(
+            """
 			CREATE UNIQUE INDEX `idx_relation_unique`
 			ON `$TABLE_ENTITY_GRAPH_RELATION` (
 				`from_entity_id`,
@@ -56,7 +56,7 @@ class Migration53To54 : Migration(53, 54) {
 				`source_binding_external_id`,
 				`origin`
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

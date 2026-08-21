@@ -12,12 +12,12 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
  */
 class Migration51To52 : Migration(51, 52) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_entity_type_access`
 			ON `$TABLE_ENTITY_GRAPH_ENTITY` (`type`, `access_count`, `last_accessed`, `id`)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

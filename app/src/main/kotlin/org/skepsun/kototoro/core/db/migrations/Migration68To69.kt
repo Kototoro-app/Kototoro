@@ -7,9 +7,9 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_ENTITY
 
 class Migration68To69 : Migration(68, 69) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			UPDATE `$TABLE_ENTITY_GRAPH_ENTITY`
 			SET `sync_id` = (
 				SELECT
@@ -32,7 +32,7 @@ class Migration68To69 : Migration(68, 69) {
 					AND b.source NOT IN ('local_manga', '0')
 					AND b.source_kind != 'TRACKING_SOURCE'
 			) = 1
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

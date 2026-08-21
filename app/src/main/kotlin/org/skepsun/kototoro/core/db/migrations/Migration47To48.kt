@@ -8,9 +8,9 @@ import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 
 class Migration47To48 : Migration(47, 48) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `$TABLE_ENTITY_PREFERENCES` (
 				`entity_id` INTEGER NOT NULL,
 				`preferred_local_manga_id` INTEGER,
@@ -20,11 +20,11 @@ class Migration47To48 : Migration(47, 48) {
 				PRIMARY KEY(`entity_id`),
 				FOREIGN KEY(`entity_id`) REFERENCES `$TABLE_ENTITY_GRAPH_ENTITY`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
+            """.trimIndent(),
+        )
 
-		db.execSQL(
-			"""
+        db.execSQL(
+            """
 			INSERT INTO `$TABLE_ENTITY_PREFERENCES` (
 				`entity_id`,
 				`preferred_local_manga_id`,
@@ -61,11 +61,11 @@ class Migration47To48 : Migration(47, 48) {
 				metadata_source_kind = excluded.metadata_source_kind,
 				metadata_source_service = excluded.metadata_source_service,
 				metadata_source_remote_id = excluded.metadata_source_remote_id
-			""".trimIndent(),
-		)
+            """.trimIndent(),
+        )
 
-		db.execSQL(
-			"""
+        db.execSQL(
+            """
 			INSERT OR IGNORE INTO `$TABLE_ENTITY_PREFERENCES` (`entity_id`, `preferred_local_manga_id`)
 			SELECT
 				b.entity_id,
@@ -73,7 +73,7 @@ class Migration47To48 : Migration(47, 48) {
 			FROM entity_binding b
 			WHERE b.source IN ('local_manga', '0')
 			GROUP BY b.entity_id
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

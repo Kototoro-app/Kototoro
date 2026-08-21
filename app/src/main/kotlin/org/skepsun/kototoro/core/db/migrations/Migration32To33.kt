@@ -4,9 +4,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Migration32To33 : Migration(32, 33) {
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS extension_repos (
 				type TEXT NOT NULL,
 				base_url TEXT NOT NULL,
@@ -20,19 +20,19 @@ class Migration32To33 : Migration(32, 33) {
 				last_error TEXT,
 				PRIMARY KEY(type, base_url)
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS index_extension_repos_type
 			ON extension_repos(type)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE UNIQUE INDEX IF NOT EXISTS index_extension_repos_type_signing_key_fingerprint
 			ON extension_repos(type, signing_key_fingerprint)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

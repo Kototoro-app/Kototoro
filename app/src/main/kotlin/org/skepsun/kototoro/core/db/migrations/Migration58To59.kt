@@ -8,9 +8,9 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 
 class Migration58To59 : Migration(58, 59) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `$TABLE_WORK_FAVOURITES` (
 				`entity_id` INTEGER NOT NULL,
 				`category_id` INTEGER NOT NULL,
@@ -23,22 +23,22 @@ class Migration58To59 : Migration(58, 59) {
 				FOREIGN KEY(`entity_id`) REFERENCES `entity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
 				FOREIGN KEY(`category_id`) REFERENCES `favourite_categories`(`category_id`) ON UPDATE NO ACTION ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_favourites_entity`
 			ON `$TABLE_WORK_FAVOURITES` (`entity_id`)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_favourites_category`
 			ON `$TABLE_WORK_FAVOURITES` (`category_id`)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			INSERT OR REPLACE INTO `$TABLE_WORK_FAVOURITES` (
 				`entity_id`,
 				`category_id`,
@@ -75,7 +75,7 @@ class Migration58To59 : Migration(58, 59) {
 						OR (f2.updated_at = f.updated_at AND f2.manga_id > f.manga_id)
 					)
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

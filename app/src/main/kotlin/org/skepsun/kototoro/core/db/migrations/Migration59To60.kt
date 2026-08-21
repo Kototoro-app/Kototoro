@@ -8,9 +8,9 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_STATS
 
 class Migration59To60 : Migration(59, 60) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `$TABLE_WORK_STATS` (
 				`entity_id` INTEGER NOT NULL,
 				`anchor_manga_id` INTEGER NOT NULL,
@@ -20,16 +20,16 @@ class Migration59To60 : Migration(59, 60) {
 				PRIMARY KEY(`entity_id`, `started_at`),
 				FOREIGN KEY(`entity_id`) REFERENCES `entity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_stats_entity`
 			ON `$TABLE_WORK_STATS` (`entity_id`)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			INSERT OR REPLACE INTO `$TABLE_WORK_STATS` (
 				`entity_id`,
 				`anchor_manga_id`,
@@ -50,7 +50,7 @@ class Migration59To60 : Migration(59, 60) {
 				AND b.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
 			LEFT JOIN `$TABLE_ENTITY_PREFERENCES` p
 				ON p.entity_id = b.entity_id
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

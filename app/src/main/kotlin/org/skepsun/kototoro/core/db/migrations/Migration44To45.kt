@@ -5,9 +5,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 class Migration44To45 : Migration(44, 45) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS reading_sessions (
 				id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 				manga_id INTEGER NOT NULL,
@@ -23,13 +23,13 @@ class Migration44To45 : Migration(44, 45) {
 				end_percent REAL NOT NULL,
 				FOREIGN KEY(manga_id) REFERENCES manga(manga_id) ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
-		db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_manga_id_start_at ON reading_sessions(manga_id, start_at)")
-		db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_manga_id_end_at ON reading_sessions(manga_id, end_at)")
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_manga_id_start_at ON reading_sessions(manga_id, start_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_manga_id_end_at ON reading_sessions(manga_id, end_at)")
 
-		db.execSQL(
-			"""
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS reading_jump_points (
 				id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 				manga_id INTEGER NOT NULL,
@@ -45,8 +45,8 @@ class Migration44To45 : Migration(44, 45) {
 				source TEXT NOT NULL,
 				FOREIGN KEY(manga_id) REFERENCES manga(manga_id) ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
-		db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_jump_points_manga_id_created_at ON reading_jump_points(manga_id, created_at)")
-	}
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_jump_points_manga_id_created_at ON reading_jump_points(manga_id, created_at)")
+    }
 }

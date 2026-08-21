@@ -20,27 +20,27 @@ import androidx.room.Upsert
  */
 @Entity(tableName = "restore_checkpoint")
 class RestoreCheckpointEntity(
-	@PrimaryKey
-	@ColumnInfo(name = "id") val id: String,
-	@ColumnInfo(name = "mode") val mode: String,
-	@ColumnInfo(name = "sections_json") val sectionsJson: String,
-	@ColumnInfo(name = "done_json") val doneJson: String,
-	@ColumnInfo(name = "mapping_json") val mappingJson: String?,
-	@ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @PrimaryKey
+    @ColumnInfo(name = "id") val id: String,
+    @ColumnInfo(name = "mode") val mode: String,
+    @ColumnInfo(name = "sections_json") val sectionsJson: String,
+    @ColumnInfo(name = "done_json") val doneJson: String,
+    @ColumnInfo(name = "mapping_json") val mappingJson: String?,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )
 
 @Dao
 interface RestoreCheckpointDao {
 
-	@Query("SELECT * FROM restore_checkpoint WHERE id = :id")
-	suspend fun findById(id: String): RestoreCheckpointEntity?
+    @Query("SELECT * FROM restore_checkpoint WHERE id = :id")
+    suspend fun findById(id: String): RestoreCheckpointEntity?
 
-	@Upsert
-	suspend fun upsert(entity: RestoreCheckpointEntity)
+    @Upsert
+    suspend fun upsert(entity: RestoreCheckpointEntity)
 
-	@Query("DELETE FROM restore_checkpoint WHERE id = :id")
-	suspend fun deleteById(id: String)
+    @Query("DELETE FROM restore_checkpoint WHERE id = :id")
+    suspend fun deleteById(id: String)
 
-	@Query("DELETE FROM restore_checkpoint")
-	suspend fun clearAll()
+    @Query("DELETE FROM restore_checkpoint")
+    suspend fun clearAll()
 }

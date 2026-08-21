@@ -7,15 +7,15 @@ import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 
 class Migration56To57 : Migration(56, 57) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `reading_status` TEXT
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			UPDATE `$TABLE_ENTITY_PREFERENCES`
 			SET `reading_status` = (
 				SELECT p.`reading_status`
@@ -37,7 +37,7 @@ class Migration56To57 : Migration(56, 57) {
 				WHERE b.entity_id = `$TABLE_ENTITY_PREFERENCES`.`entity_id`
 					AND p.`reading_status` IS NOT NULL
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

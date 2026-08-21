@@ -9,9 +9,9 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 
 class Migration57To58 : Migration(57, 58) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			CREATE TABLE IF NOT EXISTS `$TABLE_WORK_HISTORY` (
 				`entity_id` INTEGER NOT NULL,
 				`anchor_manga_id` INTEGER NOT NULL,
@@ -27,22 +27,22 @@ class Migration57To58 : Migration(57, 58) {
 				PRIMARY KEY(`entity_id`),
 				FOREIGN KEY(`entity_id`) REFERENCES `entity`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 			)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_history_anchor_manga`
 			ON `$TABLE_WORK_HISTORY` (`anchor_manga_id`)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			CREATE INDEX IF NOT EXISTS `idx_work_history_updated_at`
 			ON `$TABLE_WORK_HISTORY` (`updated_at`)
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			INSERT OR REPLACE INTO `$TABLE_WORK_HISTORY` (
 				`entity_id`,
 				`anchor_manga_id`,
@@ -88,7 +88,7 @@ class Migration57To58 : Migration(57, 58) {
 						OR (h2.updated_at = h.updated_at AND h2.manga_id > h.manga_id)
 					)
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

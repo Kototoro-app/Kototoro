@@ -7,15 +7,15 @@ import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 
 class Migration48To49 : Migration(48, 49) {
 
-	override fun migrate(db: SupportSQLiteDatabase) {
-		db.execSQL(
-			"""
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
 			ALTER TABLE `$TABLE_ENTITY_PREFERENCES`
 			ADD COLUMN `updated_at` INTEGER NOT NULL DEFAULT 0
-			""".trimIndent(),
-		)
-		db.execSQL(
-			"""
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
 			UPDATE `$TABLE_ENTITY_PREFERENCES`
 			SET `updated_at` = COALESCE(
 				(
@@ -25,7 +25,7 @@ class Migration48To49 : Migration(48, 49) {
 				),
 				0
 			)
-			""".trimIndent(),
-		)
-	}
+            """.trimIndent(),
+        )
+    }
 }

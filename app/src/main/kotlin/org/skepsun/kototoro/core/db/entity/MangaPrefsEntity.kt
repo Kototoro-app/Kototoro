@@ -7,33 +7,33 @@ import androidx.room.PrimaryKey
 import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 
 @Entity(
-	tableName = TABLE_PREFERENCES,
-	foreignKeys = [
-		ForeignKey(
-			entity = MangaEntity::class,
-			parentColumns = ["manga_id"],
-			childColumns = ["manga_id"],
-			onDelete = ForeignKey.CASCADE,
-		),
-	],
+    tableName = TABLE_PREFERENCES,
+    foreignKeys = [
+        ForeignKey(
+            entity = MangaEntity::class,
+            parentColumns = ["manga_id"],
+            childColumns = ["manga_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
 )
 data class MangaPrefsEntity(
-	@PrimaryKey(autoGenerate = false)
-	@ColumnInfo(name = "manga_id")
-	val mangaId: Long,
-	@ColumnInfo(name = "mode") val mode: Int,
-	@ColumnInfo(name = "cf_brightness") val cfBrightness: Float,
-	@ColumnInfo(name = "cf_contrast") val cfContrast: Float,
-	@ColumnInfo(name = "cf_invert") val cfInvert: Boolean,
-	@ColumnInfo(name = "cf_grayscale") val cfGrayscale: Boolean,
-	@ColumnInfo(name = "cf_book") val cfBookEffect: Boolean,
-	@ColumnInfo(name = "title_override") val titleOverride: String?,
-	@ColumnInfo(name = "cover_override") val coverUrlOverride: String?,
-	@ColumnInfo(name = "content_rating_override") val contentRatingOverride: String?,
-	@ColumnInfo(name = "metadata_source_kind") val metadataSourceKind: String?,
-	@ColumnInfo(name = "metadata_source_service") val metadataSourceService: Int?,
-	@ColumnInfo(name = "metadata_source_remote_id") val metadataSourceRemoteId: Long?,
-	@ColumnInfo(name = "reading_status") val readingStatus: String?,
-	@ColumnInfo(name = "ignored_tracking_suggestion_service") val ignoredTrackingSuggestionService: Int?,
-	@ColumnInfo(name = "ignored_tracking_suggestion_remote_id") val ignoredTrackingSuggestionRemoteId: Long?,
+    @PrimaryKey(autoGenerate = false)
+    @ColumnInfo(name = "manga_id")
+    val mangaId: Long,
+    @ColumnInfo(name = "mode") val mode: Int,
+    @ColumnInfo(name = "cf_brightness") val cfBrightness: Float,
+    @ColumnInfo(name = "cf_contrast") val cfContrast: Float,
+    @ColumnInfo(name = "cf_invert") val cfInvert: Boolean,
+    @ColumnInfo(name = "cf_grayscale") val cfGrayscale: Boolean,
+    @ColumnInfo(name = "cf_book") val cfBookEffect: Boolean,
+    @ColumnInfo(name = "title_override") val titleOverride: String?,
+    @ColumnInfo(name = "cover_override") val coverUrlOverride: String?,
+    @ColumnInfo(name = "content_rating_override") val contentRatingOverride: String?,
+    @ColumnInfo(name = "metadata_source_kind") val metadataSourceKind: String?,
+    @ColumnInfo(name = "metadata_source_service") val metadataSourceService: Int?,
+    @ColumnInfo(name = "metadata_source_remote_id") val metadataSourceRemoteId: Long?,
+    @ColumnInfo(name = "reading_status") val readingStatus: String?,
+    @ColumnInfo(name = "ignored_tracking_suggestion_service") val ignoredTrackingSuggestionService: Int?,
+    @ColumnInfo(name = "ignored_tracking_suggestion_remote_id") val ignoredTrackingSuggestionRemoteId: Long?,
 )
