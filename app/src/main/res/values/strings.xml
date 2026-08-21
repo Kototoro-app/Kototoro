@@ -2903,6 +2903,7 @@
     <string name="installed_version_pattern">Installed: %s</string>
     <string name="extension_source_count">%d source(s)</string>
     <string name="unified_sources_package_effective_count">%1$d/%2$d active</string>
+    <string name="unified_sources_package_group_count">%1$d sources</string>
     <string name="unified_sources_shadowed_count">%1$d shadowed</string>
     <string name="unified_sources_shadowed_notice">Only currently active source implementations are shown here. %1$d same-name implementation(s) are hidden because a higher-priority package overrides them.</string>
     <string name="installed_section">Installed</string>

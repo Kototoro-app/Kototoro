@@ -2844,6 +2844,7 @@ SHA-256 指纹:
     <string name="unified_sources_native_no_repository">内置源不使用仓库</string>
     <string name="unified_sources_package_installed">扩展包已安装</string>
     <string name="unified_sources_package_effective_count">%1$d/%2$d 有效</string>
+    <string name="unified_sources_package_group_count">%1$d 个源</string>
     <string name="unified_sources_shadowed_count">%1$d 个被覆盖</string>
     <string name="unified_sources_shadowed_notice">此处仅显示当前生效的源实现。%1$d 个同名实现已被隐藏，因为更高优先级的扩展包覆盖了它们。</string>
     <string name="unified_sources_repository_added">仓库已添加</string>

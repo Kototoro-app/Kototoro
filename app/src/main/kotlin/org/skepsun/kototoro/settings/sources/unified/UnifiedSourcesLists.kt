@@ -41,6 +41,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -73,6 +75,10 @@ internal fun UnifiedSourceList(
 ) {
 	val expressive = LocalMaterialExpressiveComponentsEnabled.current
 	val horizontalPadding = if (expressive) 8.dp else 0.dp
+	var collapsedPackageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+	val displayRows = remember(sources, collapsedPackageIds) {
+		buildGroupedUnifiedSourceRows(sources, collapsedPackageIds)
+	}
 	Box(modifier = modifier) {
 		LazyColumn(
 			state = listState,
@@ -107,24 +113,65 @@ internal fun UnifiedSourceList(
 					}
 				}
 			}
-			items(sources, key = { it.id }) { item ->
-				val isSelected = item.id in selectedSourceIds
-				UnifiedSourceRow(
-					item = item,
-					isSelectionMode = selectedSourceIds.isNotEmpty(),
-					isSelected = isSelected,
-					onSelectionToggle = {
-						onSourceSelectionChange(selectedSourceIds.toggle(item.id))
-					},
-					onBrowseSource = onBrowseSource,
-					onOpenSourceSettings = onOpenSourceSettings,
-					onSourceEnabledChange = onSourceEnabledChange,
-					onSourcePinnedChange = onSourcePinnedChange,
-				)
-				if (expressive) {
-					Spacer(modifier = Modifier.height(3.dp))
-				} else {
-					HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
+			items(displayRows, key = { it.key }) { row ->
+				when (row) {
+					is UnifiedSourceDisplayRow.SourceItem -> {
+						val item = row.item
+						val isSelected = item.id in selectedSourceIds
+						UnifiedSourceRow(
+							item = item,
+							isSelectionMode = selectedSourceIds.isNotEmpty(),
+							isSelected = isSelected,
+							onSelectionToggle = {
+								onSourceSelectionChange(selectedSourceIds.toggle(item.id))
+							},
+							onBrowseSource = onBrowseSource,
+							onOpenSourceSettings = onOpenSourceSettings,
+							onSourceEnabledChange = onSourceEnabledChange,
+							onSourcePinnedChange = onSourcePinnedChange,
+						)
+						if (expressive) {
+							Spacer(modifier = Modifier.height(3.dp))
+						} else {
+							HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
+						}
+					}
+					is UnifiedSourceDisplayRow.PackageHeader -> {
+						val memberIds = row.members.mapTo(HashSet()) { it.id }
+						val allMembersSelected = memberIds.isNotEmpty() && memberIds.all { it in selectedSourceIds }
+						UnifiedSourcePackageHeader(
+							packageName = row.packageName,
+							kind = row.kind,
+							sourceCount = row.sourceCount,
+							collapsed = row.collapsed,
+							isSelectionMode = selectedSourceIds.isNotEmpty(),
+							isChecked = allMembersSelected,
+							onClick = {
+								if (selectedSourceIds.isNotEmpty()) {
+									val updated = selectedSourceIds.toMutableSet().apply {
+										if (allMembersSelected) removeAll(memberIds) else addAll(memberIds)
+									}
+									onSourceSelectionChange(updated)
+								} else {
+									collapsedPackageIds = togglePackageCollapsed(collapsedPackageIds, row.packageId)
+								}
+							},
+							onLongClick = {
+								// Long-press selects every currently-visible member of this package group.
+								// `row.members` is built from the already-filtered `sources`, so this only
+								// picks the sources actually shown under the current filter.
+								onSourceSelectionChange(selectedSourceIds + memberIds)
+							},
+							onToggleCollapse = {
+								collapsedPackageIds = togglePackageCollapsed(collapsedPackageIds, row.packageId)
+							},
+						)
+						if (expressive) {
+							Spacer(modifier = Modifier.height(3.dp))
+						} else {
+							HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
+						}
+					}
 				}
 			}
 		}
@@ -146,6 +193,173 @@ private fun UnifiedSourceIcon(
 		modifier = modifier,
 		contentDescription = item.title,
 	)
+}
+
+/**
+ * A display-level row for the unified sources list.
+ *
+ * Packages that expose more than one source (e.g. one multilingual Mihon/Aniyomi APK
+ * shipping the same site per language) are collapsed into a single [PackageHeader] so the
+ * sources tab does not explode into one row per language. Everything else stays a plain
+ * [SourceItem].
+ */
+internal sealed interface UnifiedSourceDisplayRow {
+	val key: String
+
+	data class PackageHeader(
+		val packageId: String,
+		val packageName: String,
+		val kind: UnifiedSourceKind,
+		val sourceCount: Int,
+		val collapsed: Boolean,
+		val members: List<UnifiedSourceItem>,
+	) : UnifiedSourceDisplayRow {
+		override val key: String get() = "pkg:$packageId"
+	}
+
+	data class SourceItem(val item: UnifiedSourceItem) : UnifiedSourceDisplayRow {
+		override val key: String get() = item.id
+	}
+}
+
+/**
+ * Builds the display rows for the sources tab, grouping multi-source packages into a single
+ * expandable header at the position of their first source while preserving the overall order.
+ * Single-source packages and package-less sources keep their existing flat rows.
+ */
+internal fun buildGroupedUnifiedSourceRows(
+	sources: List<UnifiedSourceItem>,
+	collapsedPackageIds: Set<String>,
+): List<UnifiedSourceDisplayRow> {
+	val byPackage = LinkedHashMap<String, MutableList<UnifiedSourceItem>>()
+	sources.forEach { source ->
+		source.packageId?.let { packageId ->
+			byPackage.getOrPut(packageId) { mutableListOf() }.add(source)
+		}
+	}
+	val multiSourcePackages = byPackage.filterValues { it.size > 1 }
+	if (multiSourcePackages.isEmpty()) {
+		return sources.map(UnifiedSourceDisplayRow::SourceItem)
+	}
+	val groupable = multiSourcePackages.keys
+	val placedPackages = HashSet<String>()
+	return buildList {
+		for (source in sources) {
+			val packageId = source.packageId
+			if (packageId != null && packageId in groupable) {
+				if (placedPackages.add(packageId)) {
+					val members = multiSourcePackages.getValue(packageId)
+					add(
+						UnifiedSourceDisplayRow.PackageHeader(
+							packageId = packageId,
+							packageName = members.first().packageName?.takeIf { it.isNotBlank() } ?: packageId,
+							kind = members.first().kind,
+							sourceCount = members.size,
+							collapsed = packageId in collapsedPackageIds,
+							members = members,
+						),
+					)
+					if (packageId !in collapsedPackageIds) {
+						members.forEach { add(UnifiedSourceDisplayRow.SourceItem(it)) }
+					}
+				}
+			} else {
+				add(UnifiedSourceDisplayRow.SourceItem(source))
+			}
+		}
+	}
+}
+
+private fun togglePackageCollapsed(current: Set<String>, packageId: String): Set<String> =
+	if (packageId in current) current - packageId else current + packageId
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun UnifiedSourcePackageHeader(
+	packageName: String,
+	kind: UnifiedSourceKind,
+	sourceCount: Int,
+	collapsed: Boolean,
+	isSelectionMode: Boolean,
+	isChecked: Boolean,
+	onClick: () -> Unit,
+	onLongClick: () -> Unit,
+	onToggleCollapse: () -> Unit,
+) {
+	val style = rememberUnifiedSourcesVisualStyle()
+	val containerColor = if (collapsed) {
+		MaterialTheme.colorScheme.surfaceContainerHigh
+	} else {
+		MaterialTheme.colorScheme.surfaceContainer
+	}
+	Row(
+		modifier = Modifier
+			.fillMaxWidth()
+			.padding(horizontal = style.rowHorizontalPadding, vertical = 2.dp)
+			.clip(style.rowShape)
+			.background(containerColor, style.rowShape)
+			.combinedClickable(
+				onClick = onClick,
+				onLongClick = onLongClick,
+			)
+			.padding(horizontal = 12.dp, vertical = 8.dp),
+		verticalAlignment = Alignment.CenterVertically,
+	) {
+		Box(
+			modifier = Modifier
+				.size(34.dp)
+				.background(MaterialTheme.colorScheme.tertiaryContainer, style.iconShape),
+			contentAlignment = Alignment.Center,
+		) {
+			Icon(
+				painter = rememberSafePainter(kind.packageIconRes()),
+				contentDescription = null,
+				modifier = Modifier.size(18.dp),
+				tint = MaterialTheme.colorScheme.onTertiaryContainer,
+			)
+		}
+		Spacer(modifier = Modifier.width(12.dp))
+		Column(
+			modifier = Modifier.weight(1f),
+			verticalArrangement = Arrangement.spacedBy(2.dp),
+		) {
+			Text(
+				text = packageName,
+				style = MaterialTheme.typography.titleSmall,
+				maxLines = 1,
+				overflow = TextOverflow.Ellipsis,
+			)
+			Row(
+				verticalAlignment = Alignment.CenterVertically,
+				horizontalArrangement = Arrangement.spacedBy(6.dp),
+			) {
+				CompactTag(text = kind.displayLabel())
+				CompactTag(text = stringResource(R.string.unified_sources_package_group_count, sourceCount))
+			}
+		}
+		if (isSelectionMode) {
+			Checkbox(
+				checked = isChecked,
+				onCheckedChange = { onClick() },
+				modifier = Modifier.size(32.dp),
+			)
+		}
+		// Collapse/expand arrow stays available in selection mode too, so the user can
+		// still fold the group while batch-selecting. The IconButton consumes the tap,
+		// so it does not double as a group toggle.
+		IconButton(
+			onClick = onToggleCollapse,
+			modifier = Modifier.size(34.dp),
+		) {
+			Icon(
+				painter = painterResource(R.drawable.ic_expand_more),
+				contentDescription = stringResource(if (collapsed) R.string.expand else R.string.collapse),
+				modifier = Modifier
+					.size(20.dp)
+					.rotate(if (collapsed) -90f else 0f),
+			)
+		}
+	}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
