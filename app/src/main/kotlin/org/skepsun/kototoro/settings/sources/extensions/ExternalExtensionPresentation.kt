@@ -85,7 +85,7 @@ internal fun observeInstalledExtensionInfoMap(
             libVersionOf = { it.libVersion },
             versionNameOf = { it.versionName },
         )
-        
+
         ExternalExtensionType.JAR,
         ExternalExtensionType.CLOUDSTREAM -> kotlinx.coroutines.flow.flowOf(emptyMap()) // Unused by non-APK ecosystems right now
     }

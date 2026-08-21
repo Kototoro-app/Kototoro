@@ -31,7 +31,7 @@ object BookContent {
         val content: String,
         val nextPageUrls: List<String>,
     )
-    
+
     fun parse(
         content: String,
         baseUrl: String,
@@ -143,7 +143,7 @@ object BookContent {
             TAG,
             "[BookContent] Rule length=${ruleContent.length}, HTML length=${content.length}, Type=${config.bookSourceType}"
         )
-        
+
         val titleFromContent = rule.title
             ?.takeIf { it.isNotBlank() }
             ?.let { analyzeRule.getString(it) }
@@ -192,7 +192,7 @@ object BookContent {
             val fullContent = processedContent.joinToString("\n")
             val doc = org.jsoup.Jsoup.parse(fullContent)
             val imgs = doc.select("img")
-            
+
             if (imgs.isNotEmpty()) {
                 imgs.forEach { img ->
                     val urlRaw = img.attr("data-original").takeIf { it.isNotBlank() }
@@ -245,7 +245,7 @@ object BookContent {
             processedContent.forEach { raw ->
                 val refined = refineContent(raw, config)
                 if (refined.isBlank()) return@forEach
-                
+
                 val isUrl = isLikelyUrl(refined)
                 val absoluteUrl = if (isUrl) {
                     resolveUrl(baseUrl, refined)
@@ -267,7 +267,7 @@ object BookContent {
                 ))
             }
         }
-        
+
             if (pages.isNotEmpty()) {
                 android.util.Log.d(TAG, "[Content] Page[0] URL: ${pages[0].url}")
             } else if (isContent) {
@@ -280,7 +280,7 @@ object BookContent {
             ?.let { analyzeRule.getStringList(it, isUrl = true) }
             ?.mapNotNull { it.takeIf { url -> url.isNotBlank() } }
             ?: emptyList()
-        
+
         if (nextPageUrls.isNotEmpty()) {
             android.util.Log.d(TAG, "[Content] nextPageUrls found: ${nextPageUrls.take(3)}")
         }
@@ -453,9 +453,9 @@ object BookContent {
         val trimmed = s.trim()
         if (trimmed.length > 2048) return false // Too long for a URL
         val lower = trimmed.lowercase()
-        return lower.startsWith("http://") || 
-               lower.startsWith("https://") || 
-               lower.startsWith("data:") || 
+        return lower.startsWith("http://") ||
+               lower.startsWith("https://") ||
+               lower.startsWith("data:") ||
                lower.startsWith("file://") ||
                lower.startsWith("ftp://") ||
                (trimmed.contains(".") && !trimmed.contains(" ") && !trimmed.contains("\n"))

@@ -58,7 +58,7 @@ fun KototoroExploreSourcesScreen(
     val isGrid by viewModel.isGrid.collectAsStateWithLifecycle()
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
-    
+
     LaunchedEffect(viewModel.onError) {
         val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
         val resolver = (activity as? org.skepsun.kototoro.core.ui.BaseComposeActivity)?.exceptionResolver
@@ -212,9 +212,9 @@ fun KototoroExploreSourcesScreen(
             val isSingleSelection = selectedSources.size == 1
             val canPin = selectedSources.all { !it.isPinned }
             val canUnpin = selectedSources.all { it.isPinned }
-            val canDisable = !viewModel.isAllSourcesEnabled.value && selectedSources.all { 
+            val canDisable = !viewModel.isAllSourcesEnabled.value && selectedSources.all {
                 val unwrapped = it.mangaSource.unwrap()
-                !unwrapped.isLocal && unwrapped !is ExternalContentSource 
+                !unwrapped.isLocal && unwrapped !is ExternalContentSource
             }
             val canDelete = selectedSources.all { it.mangaSource is ExternalContentSource }
             val markEmptyTitleRes = if (selectedSources.all { it.availability == ContentSourceAvailability.EMPTY }) {
@@ -244,7 +244,7 @@ fun KototoroExploreSourcesScreen(
                     selectedSources.forEach { item ->
                         (item.mangaSource as? ExternalContentSource)?.let { source ->
                             val intent = android.content.Intent(
-                                android.content.Intent.ACTION_DELETE, 
+                                android.content.Intent.ACTION_DELETE,
                                 android.net.Uri.parse("package:${source.packageName}")
                             )
                             activity?.startActivity(intent)

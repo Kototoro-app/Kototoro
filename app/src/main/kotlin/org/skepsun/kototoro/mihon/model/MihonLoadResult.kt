@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.source.Source
  * Result of loading a Mihon extension.
  */
 sealed class MihonLoadResult {
-    
+
     /**
      * Successfully loaded extension.
      */
@@ -22,14 +22,14 @@ sealed class MihonLoadResult {
         val sources: List<Source>,
         val isManagedLocal: Boolean = false,
     ) : MihonLoadResult() {
-        
+
         /**
          * Get only CatalogueSource instances (sources that support browsing).
          */
         val catalogueSources: List<CatalogueSource>
             get() = sources.filterIsInstance<CatalogueSource>()
     }
-    
+
     /**
      * Failed to load extension.
      */
@@ -38,7 +38,7 @@ sealed class MihonLoadResult {
         val message: String,
         val exception: Throwable? = null,
     ) : MihonLoadResult()
-    
+
     /**
      * Extension is untrusted (signature not verified).
      */

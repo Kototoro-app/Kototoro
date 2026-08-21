@@ -65,7 +65,7 @@ data class ParcelableContent(
             val state = parcel.readSerializableCompat<org.skepsun.kototoro.parsers.model.ContentState>()
             val authors = parcel.readStringSet()
             val sourceName = requireNotNull(parcel.readString())
-            
+
             // Read chapters if present
             val chaptersSize = parcel.readInt()
             val chapters = if (chaptersSize >= 0) {
@@ -85,7 +85,7 @@ data class ParcelableContent(
             } else {
                 null
             }
-            
+
             return ParcelableContent(
                 Content(
                     id = id,

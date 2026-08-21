@@ -196,9 +196,9 @@ class LocalMangaRepository @Inject constructor(
             android.util.Log.d("LocalMangaRepository", "Delegating getPages to original source: ${chapter.source.name}")
             return repositoryFactory.get().create(chapter.source).getPages(chapter, nextChapterUrl)
         }
-        
+
         android.util.Log.d("LocalMangaRepository", "getPages: chapter.url=${chapter.url}, title=${chapter.title}")
-        
+
         // EPUB chapters from every persisted format are handled by NovelContentLoader.
         if (chapter.url.startsWith("epub://") ||
             org.skepsun.kototoro.local.epub.parseEpubChapterReference(chapter.url) != null
@@ -214,7 +214,7 @@ class LocalMangaRepository @Inject constructor(
                 )
             )
         }
-        
+
         // 普通章节，使用LocalContentParser
         android.util.Log.d("LocalMangaRepository", "Using LocalContentParser for regular chapter")
         return LocalContentParser(chapter.url.toUri()).getPages(chapter)
@@ -325,17 +325,17 @@ class LocalMangaRepository @Inject constructor(
             isNovel -> storageManager.getDefaultNovelWriteableRoot()
             else -> storageManager.getDefaultWriteableRoot()
         }
-        
+
         if (defaultDir != null && LocalContentOutput.get(defaultDir, manga, App.getInstance().cacheDir) != null) {
             return defaultDir
         }
-        
+
         val writeableDirs = when {
             isVideo -> storageManager.getVideoWriteableRoots()
             isNovel -> storageManager.getNovelWriteableRoots()
             else -> storageManager.getWriteableRoots()
         }
-        
+
         return writeableDirs
             .firstOrNull {
                 LocalContentOutput.get(it, manga, App.getInstance().cacheDir) != null

@@ -83,16 +83,16 @@ class ConcurrentRateLimiter(private val sourceKey: String, private val concurren
                 val parts = rateStr.split("/")
                 val limit = parts[0].toIntOrNull() ?: return 0L
                 val period = parts[1].toLongOrNull() ?: return 0L
-                
+
                 val now = System.currentTimeMillis()
                 val nextTime = record.lastTime + period
-                
+
                 if (now >= nextTime) {
                     record.lastTime = now
                     record.frequency = 1
                     return 0L
                 }
-                
+
                 if (record.frequency >= limit) {
                     return nextTime - now
                 } else {

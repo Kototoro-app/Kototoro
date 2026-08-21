@@ -12,7 +12,7 @@ import javax.inject.Singleton
 /**
  * Rate limit interceptor for JSON sources
  * Proactively limits request frequency to avoid hitting server rate limits
- * 
+ *
  * Features:
  * - Per-domain rate limiting
  * - Configurable minimum delay between requests

@@ -32,7 +32,7 @@ class HttpTTSEngine(
     override suspend fun synthesize(token: Token): Result<AudioData> = withContext(Dispatchers.IO) {
         // Safe synthesize with Exponential Backoff
         var lastException: Exception? = null
-        
+
         repeat(3) { attempt ->
             try {
                 Log.d(TAG, "Starting HTTP TTS synthesis, attempt ${attempt + 1}/3 for token: ${token.id}")
@@ -60,7 +60,7 @@ class HttpTTSEngine(
                 delay(backoffMs)
             }
         }
-        
+
         Log.e(TAG, "All 3 attempts failed for token ${token.id}")
         Result.failure(lastException ?: Exception("HTTP TTS synthesize failed after 3 attempts"))
     }
@@ -70,7 +70,7 @@ class HttpTTSEngine(
         val text = token.text
         val encodedOnce = URLEncoder.encode(text, "UTF-8")
         val encodedTwice = URLEncoder.encode(encodedOnce, "UTF-8")
-        
+
         var parsed = template
             .replace("{{text}}", text.replace("\"", "\\\""))
             .replace("{{speakText}}", text)
@@ -78,7 +78,7 @@ class HttpTTSEngine(
             .replace("{{java.encodeURI(java.encodeURI(speakText))}}", encodedTwice)
             .replace("{{voice}}", voice)
             .replace("{{speed}}", config.speed.toString())
-            
+
         // Provide blanket regex fallback for other URI encodes
         if (parsed.contains("encodeURI")) {
             val urlEncodeRegex = Regex("\\{\\{java\\.encodeURI\\((.*?)\\)\\}\\}")

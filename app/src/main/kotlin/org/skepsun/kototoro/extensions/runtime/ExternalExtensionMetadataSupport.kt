@@ -49,19 +49,19 @@ object ExternalExtensionMetadataSupport {
             sourceClassKey = sourceClassKey,
             sourceFactoryKey = sourceFactoryKey,
         ) ?: return null
-        
+
         val contentWarningVal = if (metaData.containsKey(contentWarningKey)) {
             metaData.getInt(contentWarningKey)
         } else {
             null
         }
-        
+
         val isNsfw = if (contentWarningVal != null) {
             contentWarningVal == 2
         } else {
             metaData.getInt(nsfwKey, 0) == 1
         }
-        
+
         val libVersionOverride = if (metaData.containsKey(libVersionKey)) {
             try {
                 val rawVal = metaData.get(libVersionKey)
@@ -76,7 +76,7 @@ object ExternalExtensionMetadataSupport {
         } else {
             null
         }
-        
+
         return DeclaredSourceMetadata(
             sourceClassName = sourceClassName,
             isNsfw = isNsfw,

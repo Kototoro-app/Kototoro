@@ -48,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Main repository implementation for Legado JSON sources.
  * Orchestrates modular components for search, details, TOC, and content parsing.
- * 
+ *
  * Target size: ~200 lines (Refactored from 1875 lines)
  */
 class LegadoRepository(
@@ -216,7 +216,7 @@ class LegadoRepository(
      * Using Windows Chrome desktop UA like legado does for better source compatibility
      * Many sources return different HTML for mobile vs desktop
      */
-    private val defaultUserAgent: String = 
+    private val defaultUserAgent: String =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
     /**
@@ -248,11 +248,11 @@ class LegadoRepository(
     private fun parseExploreKinds(): List<ExploreKind> {
         val exploreUrl = config.exploreUrl
         if (exploreUrl.isNullOrBlank()) return emptyList()
-        
+
         val trimmed = exploreUrl.trim()
         val effectiveText = resolveExploreUrlText(trimmed).trim()
         if (effectiveText.isEmpty()) return emptyList()
-        
+
         return try {
             if (effectiveText.startsWith("[")) {
                 // JSON array format
@@ -375,7 +375,7 @@ class LegadoRepository(
                 isSearch = isSearch,
             )
         }
-        
+
         fun buildRequest(key: String?): LegadoRequestPlan {
             return AnalyzeUrl(
                 ruleUrl = ruleUrl,
@@ -639,21 +639,21 @@ class LegadoRepository(
         }
 
         val request = AnalyzeUrl(
-            manga.url, 
+            manga.url,
             baseUrl = effectiveBaseUrlForRequest(manga.url),
             sandbox = sandbox,
             enabledCookieJarDefault = config.enabledCookieJar != false,
             useWebViewDefault = config.ruleBookInfo?.webView == true,
         ).build()
         val result = executeRequestWithLoginCheck(request)
-        
+
         if (result == null) {
             return manga
         }
         val (content, finalUrl) = result
-        
+
         val infoResult = BookInfo.parse(manga, content, finalUrl, config, sandbox)
-        
+
         // TOC parsing - often combined or needed for chapters
         // 对聚合源/POST JSON 目录：必须保留 options（body/method），否则无法翻页（表现为永远 20 章）。
         // `finalUrl` 是请求的 urlPart（AnalyzeUrl.build 后不含 ",{...}"），更适合作为解析基址而非“目录请求串”。
@@ -661,23 +661,23 @@ class LegadoRepository(
             ?.takeIf { it.isNotBlank() }
             ?: manga.url.takeIf { it.contains(",{") || it.contains(", {") }
             ?: finalUrl
-        
+
         val chapters = if (tocUrl == manga.url) {
             // 复用首包响应，避免重复请求目录第一页
             getChaptersHelper(infoResult.manga, tocUrl, initialContent = content, initialFinalUrl = finalUrl)
         } else {
             getChaptersHelper(infoResult.manga, tocUrl)
         }
-        
+
         val finalContent = infoResult.manga.copy(chapters = chapters)
-        
+
         android.util.Log.d(TAG, "Memory cache FILL (getDetails) for book: ${manga.title}")
         memoryCache?.putDetails(
-            source, 
-            normalizedContentUrl, 
+            source,
+            normalizedContentUrl,
             SafeDeferred(processLifecycleScope.async(Dispatchers.Default) { Result.success(finalContent) })
         )
-        
+
         return finalContent
     }
 
@@ -782,7 +782,7 @@ class LegadoRepository(
         while (queue.isNotEmpty()) {
             val url = queue.removeFirst()
             if (!visited.add(url)) continue
-            
+
             // 安全检查：如果这个 URL 是下一章的 URL，或者是已经处理过的下一章 URL，停止加载
             // 注意：Legado URL 可能带有 ",{'webView': true}" 这种后缀，需要剥离后再对比
             val normalizedUrl = url.substringBefore(",")
@@ -795,7 +795,7 @@ class LegadoRepository(
 
             val contentRule = config.ruleContent
             val request = AnalyzeUrl(
-                url, 
+                url,
                 baseUrl = effectiveBaseUrlForRequest(url),
                 sandbox = sandbox,
                 enabledCookieJarDefault = config.enabledCookieJar != false,
@@ -849,7 +849,7 @@ class LegadoRepository(
                 val pageId = (source.name.hashCode().toLong() shl 32) + startIndex + index
                 pages.add(page.copy(id = pageId))
             }
-            
+
             // Emit current progress
             this.send(pages.toList())
             pageCount++
@@ -864,7 +864,7 @@ class LegadoRepository(
                 val normalizedNext = next.substringBefore(",")
                 val normalizedNextChapter = nextChapterUrl?.substringBefore(",")
                 android.util.Log.d("LegadoRepository", "[NextPageFilter] next=$normalizedNext, nextChapter=$normalizedNextChapter, match=${normalizedNext == normalizedNextChapter}")
-                
+
                 if (!visited.contains(next)) {
                     // 再次检查 next URL
                     if (normalizedNextChapter != null && normalizedNext == normalizedNextChapter) {
@@ -876,12 +876,12 @@ class LegadoRepository(
                 }
             }
         }
-        
+
         if (pages.isNotEmpty()) {
             android.util.Log.d(TAG, "Memory cache FILL for chapter: ${chapter.title}, pages: ${pages.size}")
             memoryCache?.putPages(
-                source, 
-                normalizedUrl, 
+                source,
+                normalizedUrl,
                 SafeDeferred(processLifecycleScope.async(Dispatchers.Default) { Result.success(pages.toList()) })
             )
         }
@@ -1365,17 +1365,17 @@ class LegadoRepository(
 
     override suspend fun getFilterOptions(): ContentListFilterOptions {
         val kinds = parseExploreKinds()
-        
+
         // Convert ExploreKind to ContentTag for the filter system
         val categoryTags = kinds.mapNotNull { kind ->
             if (kind.url.isNullOrBlank()) null
             else ContentTag(kind.title, "category:${kind.url}", source)
         }.toSet()
-        
+
         if (categoryTags.isEmpty()) {
             return ContentListFilterOptions()
         }
-        
+
         return ContentListFilterOptions(
             availableTags = categoryTags,
             tagGroups = listOf(ContentTagGroup("分类", categoryTags))
@@ -1452,16 +1452,16 @@ class LegadoRepository(
         val queue: ArrayDeque<String> = ArrayDeque()
         queue.add(effectiveTocUrl)
         var usedInitial = false
-        
+
         var pageCount = 0
 
         while (queue.isNotEmpty()) {
             val url = queue.removeFirst()
-            
+
             if (!visited.add(url)) {
                 continue
             }
-            
+
             pageCount++
 
             val (content, finalUrl) = if (!usedInitial && url == effectiveTocUrl && initialContent != null && initialFinalUrl != null) {
@@ -1480,10 +1480,10 @@ class LegadoRepository(
             }
 
             val parseResult = BookChapterList.parse(content, finalUrl, source, config, sandbox)
-            
+
             shouldReverse = shouldReverse || parseResult.shouldReverse
             chapters.addAll(parseResult.chapters)
-            
+
             android.util.Log.d(TAG, "TOC page $pageCount: loaded ${parseResult.chapters.size} chapters, total: ${chapters.size}, nextPages: ${parseResult.nextPageUrls.size}")
 
             parseResult.nextPageUrls.forEach { next ->
@@ -1505,13 +1505,13 @@ class LegadoRepository(
                 )
             }
         }
-        
+
         val deduped = linkedMapOf<String, ContentChapter>()
         chapters.forEach { chapter ->
             deduped.putIfAbsent(chapter.url, chapter)
         }
         val ordered = deduped.values.toMutableList()
-        
+
         // 默认保持源返回顺序；只有规则显式以 '-' 标记时才反转。
         if (shouldReverse) ordered.reverse()
 
@@ -2021,13 +2021,13 @@ class LegadoRepository(
         runtimeContext: StandaloneLegadoRuleRuntimeContext? = null,
     ): Map<String, String> {
         if (headerStr.isNullOrBlank()) return emptyMap()
-        
+
         var jsonStr = headerStr.trim()
-        
+
         // Check if header is JavaScript code that needs execution
-        if (jsonStr.startsWith("<js>", ignoreCase = true) || 
+        if (jsonStr.startsWith("<js>", ignoreCase = true) ||
             jsonStr.startsWith("@js:", ignoreCase = true)) {
-            
+
             // Extract and execute JavaScript
             val jsCode = when {
                 jsonStr.startsWith("<js>", ignoreCase = true) -> {
@@ -2038,7 +2038,7 @@ class LegadoRepository(
                 }
                 else -> jsonStr
             }
-            
+
             try {
                 val result = runtimeContext?.let {
                     standaloneListRuntime.eval(
@@ -2055,7 +2055,7 @@ class LegadoRepository(
                 return emptyMap()
             }
         }
-        
+
         return try {
             val headers = mutableMapOf<String, String>()
             val normalized = jsonStr.replace("'", "\"")
@@ -2083,7 +2083,7 @@ class LegadoRepository(
         if (ruleValue == null) return false
         if (ruleValue == "true" || ruleValue == "1") return true
         if (ruleValue == "false" || ruleValue == "0") return false
-        
+
         // Evaluate as JS if it looks like a script
         if (ruleValue.startsWith("<js>") || ruleValue.startsWith("@js:")) {
             return try {
@@ -2104,7 +2104,7 @@ class LegadoRepository(
                 false
             }
         }
-        
+
         return false
     }
 }

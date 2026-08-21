@@ -138,14 +138,14 @@ class SourcesSettingsViewModel @Inject constructor(
                 val fileName = documentFile.name ?: "plugin_${System.currentTimeMillis()}.jar"
                 val pluginsDir = File(context.filesDir, "plugins")
                 if (!pluginsDir.exists()) pluginsDir.mkdirs()
-                
+
                 val destinationFile = File(pluginsDir, fileName)
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     destinationFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 } ?: throw Exception("Cannot open input stream")
-                
+
                 // Re-initialize manager
                 GlobalExtensionManager.initialize(context)
                 launch(Dispatchers.Main) {

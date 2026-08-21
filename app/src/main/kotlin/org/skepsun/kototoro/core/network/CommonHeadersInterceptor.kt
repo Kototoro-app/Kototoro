@@ -73,14 +73,14 @@ class CommonHeadersInterceptor @Inject constructor(
                 headersBuilder["sec-ch-ua-platform"] = "\"${clientHints.platform}\""
             }
         }
-        
+
         // Add Referer header upfront if not already set (like Kotatsu does)
         if (headersBuilder[CommonHeaders.REFERER] == null && repository != null) {
             val domain = when (repository) {
                 is ParserContentRepository -> repository.domain
                 is org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserRepository -> {
                     // Get domain from the underlying Kotatsu parser
-                    runCatching { 
+                    runCatching {
                         (repository as? okhttp3.Interceptor)?.let { _ ->
                             // The KotatsuParserRepository wraps a KTMangaParser which has domain
                             val parserField = repository.javaClass.getDeclaredField("parser")
@@ -97,9 +97,9 @@ class CommonHeadersInterceptor @Inject constructor(
                 headersBuilder.trySet(CommonHeaders.REFERER, "https://$idn/")
             }
         }
-        
+
         val finalSource = repository?.source ?: source
-        
+
         var workingUrl = request.url
         if (workingUrl.scheme == "https" && workingUrl.host.contains('_')) {
             val safeHost = workingUrl.host.replace('_', '-')

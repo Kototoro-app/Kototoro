@@ -14,7 +14,7 @@ class SettingsSearchHelper @Inject constructor(
 
     fun inflatePreferences(): List<SettingsItem> {
         val result = ArrayList<SettingsItem>()
-        
+
         val appearanceBreadcrumbs = listOf(context.getString(R.string.appearance))
         val appearanceKeys = listOf(
             "interface_style" to R.string.interface_style,

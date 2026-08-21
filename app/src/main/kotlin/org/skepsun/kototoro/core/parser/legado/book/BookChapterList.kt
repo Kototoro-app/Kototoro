@@ -76,18 +76,18 @@ object BookChapterList {
         val parseStart = SystemClock.elapsedRealtime()
         android.util.Log.d(TAG, "===== BookChapterList.parse START =====")
         android.util.Log.d(TAG, "baseUrl=$baseUrl")
-        
+
         val rule = config.ruleToc
         if (rule == null) {
             android.util.Log.w(TAG, "ruleToc is null!")
             return ParseResult(emptyList(), emptyList(), shouldReverse = false)
         }
-        
+
         android.util.Log.d(TAG, "ruleToc.chapterList=${rule.chapterList}")
         android.util.Log.d(TAG, "ruleToc.chapterName=${rule.chapterName}")
         android.util.Log.d(TAG, "ruleToc.chapterUrl=${rule.chapterUrl}")
         android.util.Log.d(TAG, "ruleToc.nextTocUrl=${rule.nextTocUrl}")
-        
+
         if (rule.chapterList.isNullOrBlank()) {
             android.util.Log.w(TAG, "chapterList rule is blank!")
             return ParseResult(emptyList(), emptyList(), shouldReverse = false)
@@ -110,10 +110,10 @@ object BookChapterList {
         val listCost = SystemClock.elapsedRealtime() - listStart
         android.util.Log.d(TAG, "Found ${items.size} elements with listRule")
         android.util.Log.d(TAG, "listRule parsing took ${listCost}ms")
-        
+
         val nextPageStart = SystemClock.elapsedRealtime()
         val nextPageUrls = rule.nextTocUrl
-            ?.let { 
+            ?.let {
                 android.util.Log.d(TAG, "Evaluating nextTocUrl rule: $it")
                 analyzeRule.getStringList(it, isUrl = true)
             }
@@ -171,15 +171,15 @@ object BookChapterList {
             if (index < 5) {
                 android.util.Log.d(TAG, "[TOC] Chapter[$index] name=\"$name\", url=\"$url\" -> resolved=\"$absoluteUrl\"")
             }
-            
+
             if (name.isBlank() || url.isBlank()) {
                 android.util.Log.d(TAG, "Skipping chapter due to blank name or url: name=\"$name\", url=\"$url\"")
                 return@mapIndexedNotNull null
             }
-            
+
             val normalizedUrl = AnalyzeUrl.normalizeUrl(absoluteUrl)
             val stableId = (source.name.hashCode().toLong() shl 32) + (normalizedUrl.hashCode().toLong() and 0xFFFFFFFFL)
-            
+
             if (index < 5) {
                 android.util.Log.d(TAG, "[TOC] Chapter[$index] name=\"$name\", stableId=$stableId, sourceName=${source.name}(hash=${source.name.hashCode()}), url=\"$absoluteUrl\", normalized=\"$normalizedUrl\"(hash=${normalizedUrl.hashCode()})")
             }
@@ -190,7 +190,7 @@ object BookChapterList {
                     "[TOC] Progress ${index + 1}/${items.size}, elapsed=${elapsed}ms, avg=${elapsed / (index + 1)}ms/item",
                 )
             }
-            
+
             val finalUrl = absoluteUrl
             val vipMark = rule.isVip
                 ?.let { itemAnalyzer.getString(it) }
@@ -230,7 +230,7 @@ object BookChapterList {
             )
         }
         val chapterMapCost = SystemClock.elapsedRealtime() - chapterMapStart
-        
+
         android.util.Log.d(TAG, "Parsed ${chapters.size} chapters")
         android.util.Log.d(TAG, "chapter materialization took ${chapterMapCost}ms")
         android.util.Log.d(TAG, "===== BookChapterList.parse END (${SystemClock.elapsedRealtime() - parseStart}ms) =====")

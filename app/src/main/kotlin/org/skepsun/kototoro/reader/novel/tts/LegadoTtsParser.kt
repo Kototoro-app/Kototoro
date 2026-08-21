@@ -39,7 +39,7 @@ object LegadoTtsParser {
 
             val url = json.getString("url")
             val method = json.optString("method", "GET").uppercase()
-            
+
             val emptyHeadersMap = mutableMapOf<String, String>()
             val headersMap = try {
                 if (json.has("header") && json.getString("header").isNotBlank()) {
@@ -57,11 +57,11 @@ object LegadoTtsParser {
             // A Legado source might store body template in "body" or just use GET params in URL
             val bodyTemplate = json.optString("body", "")
 
-            // Since it's a generic JSON config, default speeds/voices are usually required 
+            // Since it's a generic JSON config, default speeds/voices are usually required
             // inside the engine but can be omitted in the raw JSON layout if {{voice}} acts as proxy.
             val name = json.optString("name", "Unknown Source")
             Log.d(TAG, "Successfully parsed Legado config: $name")
-            
+
             TtsHttpConfig(
                 name = name,
                 url = url,

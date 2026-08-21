@@ -15,21 +15,21 @@ class ExoPlayerController(context: Context) {
 
     private val _currentItemIndex = MutableStateFlow<Int?>(null)
     val currentItemIndex = _currentItemIndex.asStateFlow()
-    
+
     private val _playbackCompleted = MutableStateFlow(false)
     val playbackCompleted = _playbackCompleted.asStateFlow()
 
     private val player = ExoPlayer.Builder(context).build().apply {
         // 允许在锁屏和后台持续播放，防止休眠
         setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
-        
+
         // 设置音频属性，以便系统识别为媒体播放并自动处理音频焦点
         val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
             .setUsage(androidx.media3.common.C.USAGE_MEDIA)
             .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_SPEECH)
             .build()
         setAudioAttributes(audioAttributes, true)
-        
+
         // 当耳机拔出时自动暂停播放
         setHandleAudioBecomingNoisy(true)
 
@@ -44,7 +44,7 @@ class ExoPlayerController(context: Context) {
                     _currentItemIndex.value = null
                 }
             }
-            
+
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
                     _playbackCompleted.value = true
@@ -98,25 +98,25 @@ class ExoPlayerController(context: Context) {
         player.clearMediaItems()
         _playbackCompleted.value = false
     }
-    
+
     fun resetCompletion() {
         _playbackCompleted.value = false
     }
-    
+
     fun pause() {
         player.pause()
     }
-    
+
     fun resume() {
         player.play()
     }
-    
+
     fun seekNext() {
         if (player.hasNextMediaItem()) {
             player.seekToNextMediaItem()
         }
     }
-    
+
     fun seekPrev() {
         if (player.hasPreviousMediaItem()) {
             player.seekToPreviousMediaItem()
@@ -124,7 +124,7 @@ class ExoPlayerController(context: Context) {
             player.seekTo(0)
         }
     }
-    
+
     fun release() {
         player.release()
     }

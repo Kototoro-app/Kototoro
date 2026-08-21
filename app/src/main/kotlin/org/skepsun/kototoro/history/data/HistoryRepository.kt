@@ -253,11 +253,11 @@ class HistoryRepository @Inject constructor(
     }
 
     suspend fun addOrUpdate(
-        manga: Content, 
-        chapterId: Long, 
-        page: Int, 
-        scroll: Int, 
-        percent: Float, 
+        manga: Content,
+        chapterId: Long,
+        page: Int,
+        scroll: Int,
+        percent: Float,
         force: Boolean,
         parentChapterId: Long? = null  // EPUB父章节ID，用于支持内部章节
     ) {
@@ -266,7 +266,7 @@ class HistoryRepository @Inject constructor(
             android.util.Log.w("HistoryRepository", "WARNING: chapterId == parentChapterId! This might be incorrect.")
             android.util.Log.w("HistoryRepository", "Stack trace:", Exception("Stack trace"))
         }
-        
+
         if (!force && shouldSkip(manga)) {
             return
         }
@@ -811,7 +811,7 @@ class HistoryRepository @Inject constructor(
         if (manga.isLocal || chapters.isNullOrEmpty() || chapters.findById(chapterId) != null) {
             return this
         }
-        
+
         // 对于EPUB内部章节，不要尝试恢复
         // parentChapterId != null && parentChapterId != chapterId 表示这是EPUB内部章节
         // 详情页显示的是父章节列表，所以内部章节ID在列表中找不到是正常的
@@ -819,7 +819,7 @@ class HistoryRepository @Inject constructor(
             android.util.Log.d("HistoryRepository", "Skipping recovery for EPUB internal chapter: $chapterId (parent: $parentChapterId)")
             return this
         }
-        
+
         android.util.Log.w("HistoryRepository", "recoverIfNeeded: Chapter $chapterId not found in ${chapters.size} chapters, attempting recovery")
         android.util.Log.w("HistoryRepository", "First 3 chapter IDs: ${chapters.take(3).map { it.id }}")
         val newChapterId = chapters.getOrNull(

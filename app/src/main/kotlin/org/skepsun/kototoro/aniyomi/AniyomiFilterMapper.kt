@@ -62,11 +62,11 @@ object AniyomiFilterMapper {
                 }
             }
         }
-        
+
         val mergedGroups = tagGroups.groupBy { it.title }.map { (title, groups) ->
             ContentTagGroup(title, groups.flatMap { it.tags }.toSet())
         }
-        
+
         return ContentListFilterOptions(
             availableTags = mergedGroups.flatMap { it.tags }.toSet(),
             tagGroups = mergedGroups
@@ -74,12 +74,12 @@ object AniyomiFilterMapper {
     }
 
     private fun mapFilterToTags(
-        filter: AnimeFilter<*>, 
-        parentName: String?, 
+        filter: AnimeFilter<*>,
+        parentName: String?,
         source: org.skepsun.kototoro.parsers.model.ContentSource,
     ): List<ContentTag> {
         val prefix = if (parentName != null) "$parentName/" else PREFIX_TOP
-        
+
         return when (filter) {
             is AnimeFilter.CheckBox -> {
                 listOf(ContentTag(filter.name, "$prefix${filter.name}", source))
@@ -118,7 +118,7 @@ object AniyomiFilterMapper {
     fun updateAniyomiFilters(aniyomiFilters: AnimeFilterList, kotoFilter: ContentListFilter) {
         val selectedTags = kotoFilter.tags.mapToSet { it.key }
         val excludedTags = kotoFilter.tagsExclude.mapToSet { it.key }
-        
+
         aniyomiFilters.forEach { filter ->
             when (filter) {
                 is AnimeFilter.Group<*> -> {

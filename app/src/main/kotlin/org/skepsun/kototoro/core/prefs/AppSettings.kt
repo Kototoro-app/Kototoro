@@ -1581,7 +1581,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = DEFAULT_READER_TRANSLATION_OCR_RECOGNITION_BATCH_SIZE
 
     val readerTranslationPaddleModelUrl: String
-        get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_URL, null) 
+        get() = prefs.getString(KEY_READER_TRANSLATION_PADDLE_MODEL_URL, null)
             ?: context.getString(R.string.reader_translation_paddle_model_url_default)
 
     val readerTranslationPaddleModelVersion: String
@@ -2411,28 +2411,28 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             }
         }
     }
-    
+
     /**
      * Get the selected browse group tab ID
      */
     fun getSelectedGroupTab(): String? {
         return prefs.getString(KEY_SELECTED_GROUP_TAB, null)
     }
-    
+
     /**
      * Set the selected browse group tab ID
      */
     fun setSelectedGroupTab(tabId: String) {
         prefs.edit { putString(KEY_SELECTED_GROUP_TAB, tabId) }
     }
-    
+
     /**
      * Get the selected source filter ID
      */
     fun getSelectedSourceFilter(): String? {
         return prefs.getString(KEY_SELECTED_SOURCE_FILTER, null)
     }
-    
+
     /**
      * Set the selected source filter ID
      */
@@ -2455,14 +2455,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         val value = tags.joinToString(separator = ",")
         prefs.edit { putString(KEY_SELECTED_SOURCE_TAGS, value) }
     }
-    
+
     /**
      * Get the selected adult filter ID for browse page
      */
     fun getSelectedAdultFilter(): String? {
         return prefs.getString(KEY_SELECTED_ADULT_FILTER, null)
     }
-    
+
     /**
      * Set the selected adult filter ID for browse page
      */
@@ -2918,7 +2918,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_BROWSE_PANORAMA_BLEND_HEIGHT = "browse_panorama_blend_height"
         const val KEY_PANORAMA_DOWNSAMPLE = "panorama_downsample"
         const val KEY_DETAILS_PANORAMA_LIMIT_TO_INFO_CARD_MIDPOINT = "details_panorama_limit_to_info_card_midpoint"
-    
+
         const val KEY_BACKUP_TG_ENABLED = "backup_periodic_tg_enabled"
         const val KEY_BACKUP_TG_CHAT = "backup_periodic_tg_chat_id"
         // WebDAV backup keys
@@ -3006,7 +3006,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         // values
         private const val READER_CROP_PAGED = 1
         private const val READER_CROP_WEBTOON = 2
-        
+
         const val KEY_FILTER_PILL_DEFAULT = "filter_pill_default"
         const val KEY_FILTER_PILL_LEFT = "filter_pill_left"
         const val KEY_FILTER_PILL_RIGHT = "filter_pill_right"

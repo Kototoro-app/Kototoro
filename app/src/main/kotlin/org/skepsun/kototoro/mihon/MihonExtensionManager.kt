@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 /**
  * Manager for Mihon extensions.
- * 
+ *
  * Handles loading, caching, and providing access to Mihon extension sources.
  */
 @Singleton
@@ -27,7 +27,7 @@ class MihonExtensionManager @Inject constructor(
     companion object {
         private const val TAG = "MihonExtensionManager"
     }
-    
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val facade = ExternalExtensionManagerFacade<
@@ -70,75 +70,75 @@ class MihonExtensionManager @Inject constructor(
     val failedExtensions: StateFlow<List<MihonLoadResult.Error>> = facade.failedExtensions
     val isLoading: StateFlow<Boolean> = facade.isLoading
     val changes: StateFlow<Int> = facade.changes
-    
+
     /**
      * Initialize the extension manager and load all extensions.
      */
     fun initialize() {
         facade.initialize()
     }
-    
+
     /**
      * Reload all extensions.
      */
     suspend fun loadExtensions() {
         facade.loadExtensions()
     }
-    
+
     /**
      * Get all available CatalogueSource instances.
      */
     fun getCatalogueSources(): List<CatalogueSource> {
         return facade.getCatalogueSources()
     }
-    
+
     /**
      * Get all MihonMangaSource wrappers.
      */
     fun getMihonMangaSources(): List<MihonMangaSource> {
         return facade.getWrappedSources()
     }
-    
+
     /**
      * Get a source by its ID.
      */
     fun getSourceById(sourceId: Long): Source? {
         return facade.getSourceById(sourceId)
     }
-    
+
     /**
      * Get a CatalogueSource by its ID.
      */
     fun getCatalogueSourceById(sourceId: Long): CatalogueSource? {
         return facade.getCatalogueSourceById(sourceId)
     }
-    
+
     /**
      * Get a MihonMangaSource wrapper by source ID.
      */
     fun getMihonMangaSourceById(sourceId: Long): MihonMangaSource? {
         return facade.getWrappedSourceById(sourceId)
     }
-    
+
     /**
      * Get a MihonMangaSource by its name (format: "MIHON_{sourceId}").
      */
     fun getMihonMangaSourceByName(name: String): MihonMangaSource? {
         return facade.getWrappedSourceByName(name)
     }
-    
+
     /**
      * Get sources grouped by language.
      */
     fun getSourcesByLanguage(): Map<String, List<CatalogueSource>> {
         return facade.getSourcesByLanguage()
     }
-    
+
     /**
      * Get the number of loaded sources.
      */
     fun getSourceCount(): Int = facade.getSourceCount()
-    
+
     /**
      * Check if any Mihon extensions are loaded.
      */

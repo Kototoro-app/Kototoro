@@ -22,14 +22,14 @@ class BangumiInterceptor(private val storage: ScrobblerStorage) : Interceptor {
         if (sourceRequest.header(CommonHeaders.ACCEPT) == null) {
             request.header(CommonHeaders.ACCEPT, JSON)
         }
-        
+
         val isAuthRequest = sourceRequest.url.pathSegments.contains("oauth")
         if (!isAuthRequest) {
             storage.accessToken?.let {
                 request.header(CommonHeaders.AUTHORIZATION, "Bearer $it")
             }
         }
-        
+
         val response = chain.proceed(request.build())
         if (!isAuthRequest && response.code == HttpURLConnection.HTTP_UNAUTHORIZED) {
             throw ScrobblerAuthRequiredException(ScrobblerService.BANGUMI)

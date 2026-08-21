@@ -9,12 +9,12 @@ import javax.inject.Singleton
 
 /**
  * 异步 JavaScript 执行器
- * 
+ *
  * 在 IO 线程执行 JavaScript 代码，避免阻塞主线程
  * 使用协程管理异步操作，提供更好的性能和响应性
- * 
+ *
  * 参考 Legado 的异步 JavaScript 执行方式
- * 
+ *
  * 特性：
  * - 异步执行：在 IO 线程执行 JavaScript，不阻塞主线程
  * - 协程支持：使用 Kotlin 协程管理异步操作
@@ -26,12 +26,12 @@ class AsyncJavaScriptExecutor @Inject constructor(
     private val enginePool: JavaScriptEnginePool,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
-    
+
     /**
      * 异步执行 JavaScript 代码
-     * 
+     *
      * 在 IO 线程执行 JavaScript，自动管理引擎的获取和释放
-     * 
+     *
      * @param script JavaScript 代码
      * @param context 执行上下文
      * @return 执行结果，如果执行失败则返回 null
@@ -41,10 +41,10 @@ class AsyncJavaScriptExecutor @Inject constructor(
             executeInternal(script, context)
         }
     }
-    
+
     /**
      * 异步执行 JavaScript 表达式
-     * 
+     *
      * @param expression JavaScript 表达式
      * @param context 执行上下文
      * @return 表达式结果，如果执行失败则返回 null
@@ -54,12 +54,12 @@ class AsyncJavaScriptExecutor @Inject constructor(
             evaluateInternal(expression, context)
         }
     }
-    
+
     /**
      * 批量异步执行 JavaScript 代码
-     * 
+     *
      * 并发执行多个 JavaScript 脚本，提高性能
-     * 
+     *
      * @param scripts JavaScript 代码列表
      * @param contexts 对应的执行上下文列表
      * @return 执行结果列表
@@ -71,24 +71,24 @@ class AsyncJavaScriptExecutor @Inject constructor(
         require(scripts.size == contexts.size) {
             "Scripts and contexts must have the same size"
         }
-        
+
         return withContext(dispatcher) {
             scripts.zip(contexts).map { (script, context) ->
                 executeInternal(script, context)
             }
         }
     }
-    
+
     /**
      * 内部执行方法
-     * 
+     *
      * 从引擎池获取引擎，执行脚本，然后释放引擎
      */
     private fun executeInternal(script: String, context: JavaScriptContext): Any? {
         if (script.isBlank()) {
             return null
         }
-        
+
         return try {
             enginePool.use { engine ->
                 Log.d(TAG, "Executing JavaScript asynchronously: ${script.take(50)}...")
@@ -101,7 +101,7 @@ class AsyncJavaScriptExecutor @Inject constructor(
             null
         }
     }
-    
+
     /**
      * 内部评估方法
      */
@@ -109,7 +109,7 @@ class AsyncJavaScriptExecutor @Inject constructor(
         if (expression.isBlank()) {
             return null
         }
-        
+
         return try {
             enginePool.use { engine ->
                 Log.d(TAG, "Evaluating JavaScript expression asynchronously: ${expression.take(50)}...")
@@ -122,7 +122,7 @@ class AsyncJavaScriptExecutor @Inject constructor(
             null
         }
     }
-    
+
     companion object {
         private const val TAG = "AsyncJavaScriptExecutor"
     }
@@ -130,35 +130,35 @@ class AsyncJavaScriptExecutor @Inject constructor(
 
 /**
  * 异步 JavaScript 规则解析器
- * 
+ *
  * 在 JavaScriptRuleParser 的基础上添加异步执行支持
  */
 class AsyncJavaScriptRuleParser(
     private val syncParser: JavaScriptRuleParser,
     private val asyncExecutor: AsyncJavaScriptExecutor
 ) {
-    
+
     /**
      * 检测规则是否包含 JavaScript
-     * 
+     *
      * 这是一个同步操作，不需要异步
      */
     fun containsJavaScript(rule: String): Boolean {
         return syncParser.containsJavaScript(rule)
     }
-    
+
     /**
      * 提取 JavaScript 代码
-     * 
+     *
      * 这是一个同步操作，不需要异步
      */
     fun extractJavaScript(rule: String): String? {
         return syncParser.extractJavaScript(rule)
     }
-    
+
     /**
      * 异步执行 JavaScript 规则
-     * 
+     *
      * @param rule 规则字符串
      * @param input 输入数据
      * @param context JavaScript 执行上下文
@@ -170,17 +170,17 @@ class AsyncJavaScriptRuleParser(
             Log.w(TAG, "Rule does not contain JavaScript: $rule")
             return null
         }
-        
+
         // 提取 JavaScript 代码
         val jsCode = extractJavaScript(rule)
         if (jsCode.isNullOrBlank()) {
             Log.w(TAG, "Failed to extract JavaScript from rule: $rule")
             return null
         }
-        
+
         // 设置 result 变量
         context.setVariable("result", input)
-        
+
         // 异步执行 JavaScript
         return try {
             val result = asyncExecutor.executeAsync(jsCode, context)
@@ -191,7 +191,7 @@ class AsyncJavaScriptRuleParser(
             null
         }
     }
-    
+
     companion object {
         private const val TAG = "AsyncJavaScriptRuleParser"
     }

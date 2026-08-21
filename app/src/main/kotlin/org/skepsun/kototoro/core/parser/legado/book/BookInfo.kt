@@ -24,7 +24,7 @@ object BookInfo {
         val tocUrl: String?,
         val isWebFile: Boolean = false,
     )
-    
+
     /**
      * Parse book details from HTML/JSON content
      */
@@ -95,11 +95,11 @@ object BookInfo {
             baseUrl = baseUrl,
             fromBookInfo = true,
         )
-        
+
         if (!rule.init.isNullOrBlank()) {
             analyzeRule.setContent(analyzeRule.getElement(rule.init!!))
         }
-        
+
         // Update sandbox context with current book info
         updateBookContext(
             JsBookInfo(
@@ -150,7 +150,7 @@ object BookInfo {
         } else {
             analyzeRule.getString(rule.tocUrl, isUrl = true).takeIf { it.isNotBlank() } ?: baseUrl
         }
-        
+
         val source = manga.source
         val tags = if (kind.isNotBlank()) {
             kind.split(",", " ", "|").map { it.trim() }.filter { it.isNotBlank() }.map { ContentTag(it, it, source) }.toSet()

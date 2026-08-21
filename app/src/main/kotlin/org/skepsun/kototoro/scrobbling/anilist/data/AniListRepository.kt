@@ -807,7 +807,7 @@ class AniListRepository @Inject constructor(
 
         val synced = ArrayList<ScrobblingEntity>()
         val typesToSync = listOf("MANGA", "ANIME")
-        
+
         for (type in typesToSync) {
             var page = 1
             while (true) {

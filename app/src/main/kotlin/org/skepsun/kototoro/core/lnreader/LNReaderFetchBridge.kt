@@ -14,7 +14,7 @@ import java.util.Base64
 /**
  * Native fetch API bridge for LNReader JS plugins.
  * Mirrors IReader's JSFetchApi — registered as __nativeFetch in QuickJS context.
- * 
+ *
  * LNReader plugins call `fetchApi(url)` which resolves to this bridge.
  * Returns a map matching the Fetch Response interface: {ok, status, statusText, url, text, headers}
  */
@@ -28,13 +28,13 @@ class LNReaderFetchBridge(
         private const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     }
-    
+
     var pendingFatalException: Exception? = null
 
     /**
      * Performs an HTTP request matching the Fetch API contract.
      * Called from JavaScript via native bridge.
-     * 
+     *
      * @param url The URL to fetch
      * @param initStr Optional RequestInit JSON string (method, headers, body)
      * @return Response JSON string {ok, status, statusText, url, text, headers}
@@ -42,27 +42,27 @@ class LNReaderFetchBridge(
     fun fetch(url: String, initStr: String? = null): String {
         return try {
             Log.d(TAG, "[$pluginId] Fetching: $url")
-            
+
             // Validate URL
             if (!isValidUrl(url)) {
                 return errorResponse(url, 0, "Security Error", "Invalid URL: $url")
             }
-            
+
             val init = try {
                 if (!initStr.isNullOrEmpty()) org.json.JSONObject(initStr) else null
             } catch (e: Exception) {
                 null
             }
-            
+
             val method = (init?.optString("method"))?.ifEmpty { "GET" }?.uppercase() ?: "GET"
             val headersMap = extractRequestHeaders(init, includeOrigin = method != "GET" && method != "HEAD")
             val body = extractBody(init)
-            
+
             // Build OkHttp request
             val requestBuilder = Request.Builder()
                 .url(url)
             source?.let { requestBuilder.tag(ContentSource::class.java, it) }
-            
+
             // Add headers
             val headerBuilder = Headers.Builder()
             if (!headersMap.containsKey("User-Agent")) {
@@ -72,7 +72,7 @@ class LNReaderFetchBridge(
                 headerBuilder.add(key, value)
             }
             requestBuilder.headers(headerBuilder.build())
-            
+
             // Set method and body
             when (method) {
                 "GET" -> requestBuilder.get()
@@ -89,7 +89,7 @@ class LNReaderFetchBridge(
                 "DELETE" -> requestBuilder.delete()
                 else -> requestBuilder.method(method, null)
             }
-            
+
             // Execute request
             val response = httpClient.newCall(requestBuilder.build()).execute()
             val responseBody = response.body?.string() ?: ""
@@ -97,20 +97,20 @@ class LNReaderFetchBridge(
             response.headers.forEach { (name, value) ->
                 responseHeaders[name] = value
             }
-            
+
             Log.d(TAG, "[$pluginId] Success: ${response.code} (${responseBody.length} bytes)")
-            
+
             val responseJson = org.json.JSONObject()
             responseJson.put("ok", response.isSuccessful)
             responseJson.put("status", response.code)
             responseJson.put("statusText", response.message.ifEmpty { "OK" })
             responseJson.put("url", url)
             responseJson.put("text", responseBody)
-            
+
             val jsHeaders = org.json.JSONObject()
             responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
             responseJson.put("headers", jsHeaders)
-            
+
             responseJson.toString()
         } catch (e: Exception) {
             val interactiveEx = e.findInteractiveException()
@@ -205,7 +205,7 @@ class LNReaderFetchBridge(
                     it.javaClass.name.contains("InteractiveAction")
             } as? Exception
     }
-    
+
     /**
      * Generate the JavaScript wrapper function for injection into QuickJS.
      * Matches IReader's JSFetchApi.toJavaScriptFunction().
@@ -581,7 +581,7 @@ class LNReaderFetchBridge(
 			})();
         """.trimIndent()
     }
-    
+
     private fun extractHeaders(init: org.json.JSONObject?): Map<String, String> {
         if (init == null || !init.has("headers")) return emptyMap()
         val headersObj = init.optJSONObject("headers") ?: return emptyMap()
@@ -636,7 +636,7 @@ class LNReaderFetchBridge(
             else -> body?.toString()
         }
     }
-    
+
     private fun isValidUrl(url: String): Boolean {
         return try {
             val uri = URI(url)
@@ -646,7 +646,7 @@ class LNReaderFetchBridge(
             false
         }
     }
-    
+
     private fun errorResponse(url: String, status: Int, statusText: String, error: String): String {
         val res = org.json.JSONObject()
         res.put("ok", false)

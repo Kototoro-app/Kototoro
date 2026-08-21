@@ -114,7 +114,7 @@ open class RemoteListViewModel @Inject constructor(
         val mode = values[1] as ListMode
         val error = values[2] as Throwable?
         val hasNext = values[3] as Boolean
-        
+
         buildList(list?.size?.plus(2) ?: 2) {
             when {
                 list.isNullOrEmpty() && error != null -> add(

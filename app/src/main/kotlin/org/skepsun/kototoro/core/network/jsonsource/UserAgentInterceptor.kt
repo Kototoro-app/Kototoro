@@ -14,7 +14,7 @@ class UserAgentInterceptor @Inject constructor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
-        
+
         // If User-Agent is already set, don't override it
         if (originalRequest.header("User-Agent") != null) {
             return chain.proceed(originalRequest)

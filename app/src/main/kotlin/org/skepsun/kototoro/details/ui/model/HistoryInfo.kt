@@ -92,7 +92,7 @@ fun HistoryInfo(
     } else {
         false
     }
-    
+
     if (history != null && manga?.isLoaded == true) {
         android.util.Log.d("HistoryInfo", "Checking chapter: history.chapterId=${history.chapterId}")
         android.util.Log.d("HistoryInfo", "Total allChapters: ${manga.allChapters.size}")
@@ -103,7 +103,7 @@ fun HistoryInfo(
         }
         android.util.Log.d("HistoryInfo", "isChapterMissing=$isChapterMissing")
     }
-    
+
     return HistoryInfo(
         totalChapters = chapters?.size ?: -1,
         currentChapter = currentChapter,

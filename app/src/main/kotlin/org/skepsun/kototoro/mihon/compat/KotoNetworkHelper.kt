@@ -35,10 +35,10 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Kototoro's implementation of Mihon's NetworkHelper interface.
- * 
+ *
  * Wraps Kototoro's existing OkHttpClient to provide Mihon extensions with
  * access to the network stack, including shared Cloudflare detection and cookie management.
- * 
+ *
  * Note: We create a new client without GZipInterceptor because Mihon extensions
  * handle their own request encoding. Kototoro's GZipInterceptor incorrectly
  * adds Content-Encoding: gzip header without actually compressing the body,
@@ -56,7 +56,7 @@ class KotoNetworkHelper(
 
     // Dynamically loaded extensions reference this class outside the app's static dex graph.
     private val zstdRuntimeDependency = Zstd
-    
+
     /**
      * The OkHttpClient for Mihon extensions.
      *
@@ -70,12 +70,12 @@ class KotoNetworkHelper(
             networkInterceptors().clear()
             cookieJar(cookieJar)
         }
-        
+
         // Newer Mihon extensions validate these concrete interceptors and their order.
         builder.addInterceptor(UncaughtExceptionInterceptor())
         builder.addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
         builder.addInterceptor(CloudflareInterceptor())
-        
+
         // Mihon extensions handle compression and require Brotli to be absent from the default client.
         baseClient.interceptors.forEach { interceptor ->
             if (isCompatibleInterceptor(interceptor) && !isDefaultMihonInterceptor(interceptor)) {
@@ -84,7 +84,7 @@ class KotoNetworkHelper(
                 android.util.Log.d("KotoNetworkHelper", "Skipping ${interceptor.javaClass.simpleName} for Mihon client")
             }
         }
-        
+
         // Copy compatible network interceptors.
         baseClient.networkInterceptors.forEach { interceptor ->
             if (isCompatibleInterceptor(interceptor)) {
@@ -137,7 +137,7 @@ class KotoNetworkHelper(
                 else -> response
             }
         }
-        
+
         // Add debug logging interceptor for Mihon extensions
         builder.addInterceptor { chain ->
             val request = chain.request()
@@ -153,10 +153,10 @@ class KotoNetworkHelper(
                     "cfClearanceFingerprint=${sensitiveValueFingerprint(cfClearanceCookie)}, cookies=[$cookieNames]",
             )
             android.util.Log.d("MihonNetwork", "Request: ${request.method} ${request.url}")
-            
+
             val response = chain.proceed(request)
             logCloudflareSetCookies(response)
-            
+
             // Log response info
             val responseCode = response.code
             val contentType = response.header("Content-Type")
@@ -164,7 +164,7 @@ class KotoNetworkHelper(
                 "MihonNetwork",
                 "Response: $responseCode, Content-Type: $contentType, cf-ray=${response.header("cf-ray")}, cf-mitigated=${response.header("cf-mitigated")}, server=${response.header("server")}, URL: ${request.url}",
             )
-            
+
             // If response is not successful, log the first 200 chars of body for debugging
             if (!response.isSuccessful) {
                 val source = response.body.source()
@@ -173,10 +173,10 @@ class KotoNetworkHelper(
                 val preview = buffer.readUtf8(minOf(200, buffer.size))
                 android.util.Log.w("MihonNetwork", "Non-successful response ($responseCode) preview: $preview")
             }
-            
+
             response
         }
-        
+
         builder.build()
     }
 
@@ -206,7 +206,7 @@ class KotoNetworkHelper(
     override val cloudflareClient: OkHttpClient = client.newBuilder()
         .addNetworkInterceptor(BrotliInterceptor)
         .build()
-    
+
     /**
      * Returns the default user agent string.
      */

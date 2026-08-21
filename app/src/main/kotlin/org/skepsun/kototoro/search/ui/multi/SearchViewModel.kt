@@ -496,7 +496,7 @@ class SearchViewModel @AssistedInject constructor(
             contentKinds.value.any { it.matches(source) }
     }
 
-    
+
     private fun List<Content>.applyAdvancedFilter(): List<Content> {
         val advanced = advancedQuery ?: return this
         if (kind != SearchKind.ADVANCED) return this

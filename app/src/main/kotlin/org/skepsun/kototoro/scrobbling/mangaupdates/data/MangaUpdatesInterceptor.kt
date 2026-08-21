@@ -22,16 +22,16 @@ class MangaUpdatesInterceptor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val sourceRequest = chain.request()
         val request = sourceRequest.newBuilder()
-        
+
         val isAuthRequest = sourceRequest.url.pathSegments.contains("account") && sourceRequest.url.pathSegments.contains("login")
         if (!isAuthRequest) {
             storage.accessToken?.let {
                 request.header(CommonHeaders.AUTHORIZATION, "Bearer $it")
             }
         }
-        
+
         val response = chain.proceed(request.build())
-        
+
         if (!isAuthRequest && response.code == HttpURLConnection.HTTP_UNAUTHORIZED) {
             storage.accessToken = null
             storage.user = null
@@ -40,7 +40,7 @@ class MangaUpdatesInterceptor(
             response.closeQuietly()
             throw ScrobblerAuthRequiredException(ScrobblerService.MANGAUPDATES)
         }
-        
+
         return response
     }
 }

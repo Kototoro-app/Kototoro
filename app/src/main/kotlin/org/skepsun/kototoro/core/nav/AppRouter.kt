@@ -478,13 +478,13 @@ class AppRouter(
                 // 瀵硅棰戝唴瀹瑰拰EPUB鍐呭锛氫紶?ReaderState锛屼紭鍏堜娇鐢ㄥ巻鍙茶褰曚腑鐨勭姸?
                 val source = manga.source.unwrap()
                 val history = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-                
+
                 val contentType = if (manga.looksLikeLocalVideoContent()) {
                     ContentType.VIDEO
                 } else {
                     getContentType(source)
                 }
-                
+
                 if (contentType == ContentType.NOVEL || contentType == ContentType.HENTAI_NOVEL) {
                     val state = if (history != null) {
                         // 浣跨敤鍘嗗彶璁板綍涓殑鐘舵€侊紙鍖呭惈姝ｇ‘鐨勭珷鑺侷D?

@@ -6,13 +6,13 @@ import javax.inject.Singleton
 
 /**
  * Identifies and categorizes manga sources by their type (native, JSON, external).
- * 
+ *
  * This class provides methods to determine if a source is a JSON source based on its identifier,
  * and to retrieve appropriate type labels for UI display.
  */
 @Singleton
 class SourceTypeIdentifier @Inject constructor() {
-    
+
     companion object {
         private const val JSON_PREFIX = "JSON_"
         private const val LEGADO_PREFIX = "JSON_LEGADO_"
@@ -25,20 +25,20 @@ class SourceTypeIdentifier @Inject constructor() {
         private const val IREADER_PREFIX = "IREADER_"
         private const val CLOUDSTREAM_PREFIX = "CLOUDSTREAM_"
     }
-    
+
     /**
      * Checks if a source is a JSON source based on its identifier.
-     * 
+     *
      * @param sourceId The source identifier to check
      * @return true if the source is a JSON source (starts with JSON_ prefix)
      */
     fun isJsonSource(sourceId: String): Boolean {
         return sourceId.startsWith(JSON_PREFIX)
     }
-    
+
     /**
      * Determines the type of a source based on its identifier.
-     * 
+     *
      * @param sourceId The source identifier to analyze
      * @return The SourceType enum value representing the source's type
      */
@@ -58,10 +58,10 @@ class SourceTypeIdentifier @Inject constructor() {
             else -> SourceType.NATIVE
         }
     }
-    
+
     /**
      * Gets a human-readable label for the source type, suitable for UI display.
-     * 
+     *
      * @param sourceId The source identifier
      * @return A localized string label for the source type
      */
@@ -79,10 +79,10 @@ class SourceTypeIdentifier @Inject constructor() {
             SourceType.CLOUDSTREAM -> "Cloudstream 扩展"
         }
     }
-    
+
     /**
      * Gets the JsonSourceType enum from a source identifier.
-     * 
+     *
      * @param sourceId The source identifier
      * @return The JsonSourceType if it's a JSON source, null otherwise
      */
@@ -105,32 +105,32 @@ enum class SourceType {
      * Native Kotlin sources compiled into the application
      */
     NATIVE,
-    
+
     /**
      * JSON sources using Legado format
      */
     JSON_LEGADO,
-    
+
     /**
      * JSON sources using TVBox format
      */
     JSON_TVBOX,
-    
+
     /**
      * Venera-style JavaScript source
      */
     JSON_JS,
-    
+
     /**
      * LNReader JavaScript plugin source
      */
     JSON_LNREADER,
-    
+
     /**
      * External sources (future use)
      */
     EXTERNAL,
-    
+
     /**
      * Mihon extension sources
      */

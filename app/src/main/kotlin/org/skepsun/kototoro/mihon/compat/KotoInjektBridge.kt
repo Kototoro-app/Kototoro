@@ -30,23 +30,23 @@ class KotoInjektBridge(
     private val settings: AppSettings? = null,
     private val clearanceSolver: WebViewClearanceSolver? = null,
 ) {
-    
+
     private val application: Application
         get() = context.applicationContext as Application
-    
+
     @Volatile
     private var initialized = false
-    
+
     /**
      * Initialize Injekt with Kototoro's dependencies.
      * This must be called before loading any Mihon extensions.
-     * 
+     *
      * Thread-safe - can be called multiple times.
      */
     @Synchronized
     fun initialize() {
         if (initialized) return
-        
+
         try {
             val networkHelper = KotoNetworkHelper(
                 baseClient = httpClient,
@@ -56,18 +56,18 @@ class KotoInjektBridge(
                 settings = settings,
                 clearanceSolver = clearanceSolver,
             )
-            
+
             Injekt.importModule(object : InjektModule {
                 override fun InjektRegistrar.registerInjectables() {
                     // Application and Context
                     addSingleton(application)
                     addSingletonFactory<Context> { context.applicationContext }
-                    
+
                     // Network components
                     addSingletonFactory<NetworkHelper> { networkHelper }
                     addSingletonFactory<OkHttpClient> { httpClient }
                     addSingletonFactory<okhttp3.CookieJar> { cookieJar }
-                    
+
                     // Json - explicitly type it to ensure Injekt matches correctly
                     val json = Json {
                         ignoreUnknownKeys = true
@@ -79,7 +79,7 @@ class KotoInjektBridge(
                     addSingletonFactory<ProtoBuf> { ProtoBuf }
                 }
             })
-            
+
             initialized = true
             android.util.Log.d("KotoInjektBridge", "Injekt initialized with Kototoro dependencies")
         } catch (e: Throwable) {
@@ -87,7 +87,7 @@ class KotoInjektBridge(
             // Do not rethrow, so the app can continue to function without Mihon
         }
     }
-    
+
     /**
      * Check if Injekt has been initialized.
      */

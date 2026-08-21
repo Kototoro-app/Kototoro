@@ -66,17 +66,17 @@ class SearchV2Helper @AssistedInject constructor(
             }.onFailure { e ->
                 e.printStackTraceDebug()
             }.getOrDefault(emptySet())
-            
+
             val queryExcludeTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == '-' }
-            val matchedExcludeTags = queryExcludeTagsStr.mapNotNull { tagQ -> 
+            val matchedExcludeTags = queryExcludeTagsStr.mapNotNull { tagQ ->
                 val newTagQ = tagQ.substring(1)
                 tags.find { x -> x.title.equals(newTagQ, ignoreCase = true) }
             }.toSet()
             val queryTagsStr = query.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] != '-'}
-            val matchedTags = queryTagsStr.mapNotNull { tagQ -> 
+            val matchedTags = queryTagsStr.mapNotNull { tagQ ->
                 tags.find { x -> x.title.equals(tagQ, ignoreCase = true) }
             }.toSet()
-            
+
             if (matchedTags.isNotEmpty() || matchedExcludeTags.isNotEmpty()) {
                 ContentListFilter(tags = matchedTags, tagsExclude = matchedExcludeTags)
             } else {
@@ -91,24 +91,24 @@ class SearchV2Helper @AssistedInject constructor(
             }.onFailure { e ->
                 e.printStackTraceDebug()
             }.getOrDefault(emptySet())
-            
+
             val queryExcludeTagsStr = advanced?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() && it[0] == '-' }.orEmpty()
-            val matchedExcludeTags = queryExcludeTagsStr.mapNotNull { tagQ -> 
+            val matchedExcludeTags = queryExcludeTagsStr.mapNotNull { tagQ ->
                 val newTagQ = tagQ.substring(1)
                 tags.find { x -> x.title.equals(newTagQ, ignoreCase = true) }
             }.toSet()
             val queryTagsStr = advanced?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() && it[0] != '-'}.orEmpty()
-            val matchedTags = queryTagsStr.mapNotNull { tagQ -> 
+            val matchedTags = queryTagsStr.mapNotNull { tagQ ->
                 tags.find { x -> x.title.equals(tagQ, ignoreCase = true) }
             }.toSet()
-            
+
             val titleQuery = if (filterCapabilities.isSearchSupported)
                 advanced?.title?.takeIf { it.isNotEmpty() } ?: advanced?.query?.takeIf { it.isNotEmpty() }
             else null
             val authorQuery = if (filterCapabilities.isAuthorSearchSupported) advanced?.author else null
 
-    
-        
+
+
             if (matchedTags.isNotEmpty() || matchedExcludeTags.isNotEmpty() || titleQuery != null || authorQuery != null) {
                 ContentListFilter(
                     query = titleQuery,
@@ -149,15 +149,15 @@ class SearchV2Helper @AssistedInject constructor(
                     title = m.matches(advanced.title, MATCH_THRESHOLD_DEFAULT)
                 }
                 if (advanced?.author?.isNotEmpty() == true) {
-                    author = m.authors.isEmpty() || m.authors.contains(advanced.author, ignoreCase = true)		
+                    author = m.authors.isEmpty() || m.authors.contains(advanced.author, ignoreCase = true)
                 }
                 if (advanced?.tags?.isNotEmpty() == true) {
                     val queryExcludeTagsStr = advanced.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] == '-' }
                     val queryTagsStr = advanced.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() && it[0] != '-' }
-                    
+
                     val hasAllIncluded = queryTagsStr.all { q -> m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) } }
                     val hasAnyExcluded = queryExcludeTagsStr.any { q -> m.tags.any { tag -> tag.title.equals(q.substring(1), ignoreCase = true) } }
-                    
+
                     tagsMatch = hasAllIncluded && !hasAnyExcluded
                 }
                 title != false && author != false && tagsMatch != false
@@ -182,11 +182,11 @@ class SearchV2Helper @AssistedInject constructor(
                 m.tags.count { tag -> queryTagsStr.any { q -> tag.title.equals(q, ignoreCase = true) } } - m.tags.count { tag -> queryExcludeTagsStr.any { q -> tag.title.equals(q.substring(1), ignoreCase = true) } }
             }
 
-            SearchKind.ADVANCED -> sortByDescending{ m -> 
+            SearchKind.ADVANCED -> sortByDescending{ m ->
                 val queryExcludeTagsStr = advanced?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() && it[0] == '-'}.orEmpty()
                 val queryTagsStr = advanced?.tags?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() && it[0] != '-'}.orEmpty()
                 val tagScore = m.tags.count { tag -> queryTagsStr.any { q -> tag.title.equals(q, ignoreCase = true) } } - m.tags.count { tag -> queryExcludeTagsStr.any { q -> tag.title.equals(q.substring(1), ignoreCase = true) } }
-                
+
                 val authorScore = if (m.authors.contains(advanced?.author ?: "", ignoreCase = true)) 5 else 0
 
                 val queryScore = -(minOf(m.title.levenshteinDistance(advanced?.query ?: ""), m.altTitle?.levenshteinDistance(advanced?.query ?: "") ?: Int.MAX_VALUE))
@@ -202,7 +202,7 @@ class SearchV2Helper @AssistedInject constructor(
             SearchKind.TITLE,
             SearchKind.ADVANCED,
             SearchKind.AUTHOR -> SortOrder.RELEVANCE
-            
+
             SearchKind.TAG -> SortOrder.POPULARITY
         }
         return if (preferred in sortOrders) {

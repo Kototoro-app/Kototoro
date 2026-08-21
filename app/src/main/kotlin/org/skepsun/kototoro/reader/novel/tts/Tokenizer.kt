@@ -16,10 +16,10 @@ object Tokenizer {
         }
         return result
     }
-    
+
     // 自动分配虚拟音色资源池 (实际应用时可注入用户选择的声学模型ID组)
     private val fallbackVoices = listOf("zh-CN-YunxiNeural", "zh-CN-XiaoxiaoNeural", "zh-CN-YunjianNeural")
-    
+
     private class SpeakerResolver {
         private val speakerMap = mutableMapOf<String, Speaker>()
         private var voiceIndex = 0
@@ -50,7 +50,7 @@ object Tokenizer {
         val paragraphs = text.split(Regex("(\\r?\\n)+"))
         for (p in paragraphs) {
             if (p.isBlank()) continue
-            
+
             val pStart = text.indexOf(p, globalSearchOffset)
             val actualPStart = if (pStart >= 0) pStart else globalSearchOffset
             var pSearchOffset = actualPStart
@@ -65,11 +65,11 @@ object Tokenizer {
             for (s in finalSentences) {
                 // 用于提取对话段落后文本中潜在说话人名称正则
                 val speakerRegex = Regex("(\\S{1,4})(说|问|道|喊)")
-                
+
                 val sStart = text.indexOf(s, pSearchOffset)
                 val actualSStart = if (sStart >= 0) sStart else pSearchOffset
                 var sSearchOffset = actualSStart
-                
+
                 // For long sentences, split by comma/semicolon/dunhao
                 val parts = if (s.length > 30) {
                     val partRegex = Regex("([^，、；,;]+[，、；,;]*)")
@@ -87,13 +87,13 @@ object Tokenizer {
 
                     // Parse dialogue
                     val isDialogue = part.contains("“") || part.contains("”")
-                    
+
                     var speaker: Speaker? = null
                     val cleanText: String
-                    
+
                     if (isDialogue) {
                         cleanText = part.removeSurrounding("“", "”").replace("“", "").replace("”", "")
-                        
+
                         // 寻找原文中紧随对话后文的说话人标识，如“你好”张三说。
                         val afterTextIndex = actualPartStart + part.length
                         if (afterTextIndex < text.length) {
@@ -126,7 +126,7 @@ object Tokenizer {
                 type = TokenType.PAUSE,
                 range = IntRange(pauseEnd, pauseEnd),
                 durationHintMs = 500
-            ) 
+            )
         }
 
         return tokens

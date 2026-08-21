@@ -477,7 +477,7 @@ class OnnxBubbleDetectorEngine @Inject constructor(
             sessionResult = runtime.session.run(inputs)
 
             val nmsThreshold = settings.getBubbleDetectorNms(runtime.modelId, isDetr)
-            
+
             if (isDetr) {
                 return decodeRtDetrOutput(
                     sessionResult = sessionResult,
@@ -809,7 +809,7 @@ class OnnxBubbleDetectorEngine @Inject constructor(
             }
 
             val score = if (isLogits) (1f / (1f + kotlin.math.exp(-rawScore))) else rawScore
-            
+
             // DETR predictions are often lower confidence initially but highly accurate spatially.
             if (score < 0.15f) continue
 
@@ -877,7 +877,7 @@ class OnnxBubbleDetectorEngine @Inject constructor(
             scored += ScoredBox(rect = rect, classId = label, score = score)
         }
 
-        // DETR natively produces discrete predictions and does not require NMS. 
+        // DETR natively produces discrete predictions and does not require NMS.
         // Applying aggressive IoU=0.45 NMS destroys naturally connecting bubbles or two-part dialogue balloons!
         // We use the dynamic NMS threshold matching the default of 0.85 (unless configured by user).
         val finalBoxes = applyNms(scored, nmsThreshold)
@@ -919,7 +919,7 @@ class OnnxBubbleDetectorEngine @Inject constructor(
             val width = if (normalized) wRaw * inputWidth else wRaw
             val height = if (normalized) hRaw * inputHeight else hRaw
             if (width <= 1f || height <= 1f) continue
-            
+
             val finalWidth: Float
             val finalHeight: Float
             if (isObb) {

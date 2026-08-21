@@ -184,7 +184,7 @@ class FavouritesContainerViewModel @Inject constructor(
         val filteredList = activeCounts?.let { counts ->
             list.filter { counts.getOrDefault(it.id, 0) > 0 }
         } ?: list
-        
+
         val result = ArrayList<FavouriteTabModel>(if (showAll) filteredList.size + 1 else filteredList.size)
         if (showAll) {
             if (activeCounts == null || activeCounts.getOrDefault(NO_ID, 0) > 0) {
@@ -559,7 +559,7 @@ class FavouritesContainerViewModel @Inject constructor(
                         } catch (e: Exception) {
                             false
                         }
-                        
+
                         val chapterCount = if (isAlive) {
                             val repo = mangaRepositoryFactory.create(manga.source)
                             val detailed = repo.getDetails(manga)
@@ -664,7 +664,7 @@ class FavouritesContainerViewModel @Inject constructor(
                         val item = iterator.next()
                         val clean1 = root.title.trim().lowercase()
                         val clean2 = item.title.trim().lowercase()
-                        
+
                         val similarity = if (clean1 == clean2) {
                             1.0
                         } else {
@@ -727,7 +727,7 @@ class FavouritesContainerViewModel @Inject constructor(
                         } catch (e: Exception) {
                             false
                         }
-                        
+
                         val chapterCount = if (isAlive) {
                             val repo = mangaRepositoryFactory.create(manga.source)
                             val detailed = repo.getDetails(manga)

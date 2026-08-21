@@ -2,7 +2,7 @@ package org.skepsun.kototoro.core.parser.rule
 
 /**
  * Represents a compiled rule that can be efficiently executed
- * 
+ *
  * @property type The type of rule (CSS, REGEX, XPATH, JSON_PATH)
  * @property selector The main selector/pattern string
  * @property attribute Optional attribute to extract (for CSS rules like @text, @href)
@@ -35,13 +35,13 @@ data class CompiledRule(
 sealed class IndexSpec {
     /** Single index: div[0] or div.-1 */
     data class Single(val index: Int) : IndexSpec()
-    
+
     /** Multiple indexes: div[0,2,4] */
     data class Multiple(val indexes: List<Int>) : IndexSpec()
-    
+
     /** Range with optional step: div[0:5] or div[0:10:2] */
     data class Range(val start: Int, val end: Int, val step: Int = 1) : IndexSpec()
-    
+
     /** Exclude indexes: div[!0,1] */
     data class Exclude(val indexes: List<Int>) : IndexSpec()
 }

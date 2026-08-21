@@ -33,10 +33,10 @@ class LNReaderRepoViewModel @Inject constructor(
     private val repository = LNReaderRepository(okHttpClient, jsonSourceManager)
 
     private val _plugins = MutableStateFlow<List<LNReaderPluginInfo>>(emptyList())
-    
+
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-    
+
     private val selectedExtensionLanguages: StateFlow<Set<String>> = appSettings.observeAsFlow(
         AppSettings.KEY_EXTENSION_LANGUAGES,
     ) { extensionLanguages }
@@ -160,12 +160,12 @@ class LNReaderRepoViewModel @Inject constructor(
     fun uninstallPlugin(plugin: LNReaderPluginInfo) {
         viewModelScope.launch(Dispatchers.IO) {
             _installingPluginIds.value = _installingPluginIds.value + plugin.id
-            
+
             val idsToRemove = installedSourceIds.value.filter { id ->
                 id.contains(plugin.site.hashCode().toUInt().toString(16).uppercase()) ||
                 id.contains(plugin.id.hashCode().toUInt().toString(16).uppercase())
             }
-            
+
             idsToRemove.forEach { id ->
                 try {
                     jsonSourceManager.deleteSource(id)
@@ -174,7 +174,7 @@ class LNReaderRepoViewModel @Inject constructor(
                     android.util.Log.e("LNReaderRepoVM", "Failed to delete source $id", e)
                 }
             }
-            
+
             _installingPluginIds.value = _installingPluginIds.value - plugin.id
         }
     }

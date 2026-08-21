@@ -724,7 +724,7 @@ class ReaderActivity :
 
         // Apply initial double-mode considering foldable setting
         applyDoubleModeAuto()
-        
+
         // Listen for layout changes (e.g., entering/exiting split-screen)
         window.decorView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
             applyDoubleModeAuto()

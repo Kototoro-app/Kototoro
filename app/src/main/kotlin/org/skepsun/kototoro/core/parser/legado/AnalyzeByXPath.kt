@@ -10,19 +10,19 @@ import us.codecraft.xsoup.Xsoup
 
 /**
  * XPath analyzer for complex HTML queries.
- * 
+ *
  * Aligned with legado-with-MD3 AnalyzeByXPath pattern.
  * Supports && || %% rule combination.
  * Uses Xsoup for XPath evaluation.
- * 
+ *
  * Syntax: `//meta[@property='og:title']/@content`
  */
 class AnalyzeByXPath(doc: Any) {
-    
+
     companion object {
         private const val TAG = "AnalyzeByXPath"
     }
-    
+
     private var node: Any = parse(doc)
 
     private fun parse(doc: Any): Any {
@@ -35,7 +35,7 @@ class AnalyzeByXPath(doc: Any) {
             else -> strToDocument(doc.toString())
         }
     }
-    
+
     private fun strToDocument(html: String): Document {
         var html1 = html
         if (html1.endsWith("</td>")) {
@@ -51,7 +51,7 @@ class AnalyzeByXPath(doc: Any) {
         }
         return Jsoup.parse(html1)
     }
-    
+
     private fun getResult(xPath: String): List<LegadoXPathNode> {
         return try {
             val currentNode = node
@@ -106,7 +106,7 @@ class AnalyzeByXPath(doc: Any) {
             normalized.startsWith("number(") ||
             normalized.startsWith("count(")
     }
-    
+
     /**
      * Get elements matching XPath with && || %% support
      */
@@ -148,7 +148,7 @@ class AnalyzeByXPath(doc: Any) {
         }
         return elements
     }
-    
+
     /**
      * Get string list from XPath with && || %% support
      */
@@ -189,7 +189,7 @@ class AnalyzeByXPath(doc: Any) {
         }
         return result
     }
-    
+
     /**
      * Get string from XPath with && || support
      */
@@ -213,7 +213,7 @@ class AnalyzeByXPath(doc: Any) {
             return textList.joinToString("\n")
         }
     }
-    
+
     /**
      * Get single string from XPath
      */

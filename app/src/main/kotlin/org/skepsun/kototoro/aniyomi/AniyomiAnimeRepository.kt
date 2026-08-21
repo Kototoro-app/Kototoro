@@ -38,28 +38,28 @@ class AniyomiAnimeRepository(
     override val source: AniyomiAnimeSource,
     cache: MemoryContentCache,
 ) : CachingContentRepository(cache) {
-    
+
     private var lastOffset = -1
     private var currentPage = 1
-    
+
     val aniyomiSource = source.animeCatalogueSource
-    
+
     override val sortOrders: Set<SortOrder> = buildSet {
         add(SortOrder.POPULARITY)
         if (aniyomiSource.supportsLatest) {
             add(SortOrder.UPDATED)
         }
     }
-    
+
     override val filterCapabilities: ContentListFilterCapabilities
         get() = ContentListFilterCapabilities(
             isSearchSupported = true,
             isMultipleTagsSupported = true,
             isSearchWithFiltersSupported = true,
         )
-    
+
     override var defaultSortOrder: SortOrder = SortOrder.POPULARITY
-    
+
     override suspend fun getList(
         offset: Int,
         order: SortOrder?,
@@ -71,14 +71,14 @@ class AniyomiAnimeRepository(
             currentPage++
         }
         lastOffset = offset
-        
+
         val page = currentPage
         val query = filter?.query
-        
-        val hasFilters = filter?.let { 
+
+        val hasFilters = filter?.let {
             it.query?.isNotBlank() == true || it.tags.isNotEmpty() || it.tagsExclude.isNotEmpty()
         } ?: false
-        
+
         val animesPage = when {
             hasFilters -> {
                 aniyomiSource.getSearchAnime(page, query ?: "", filter?.toAniyomiFilterList() ?: AnimeFilterList())
@@ -90,7 +90,7 @@ class AniyomiAnimeRepository(
                 aniyomiSource.getPopularAnime(page)
             }
         }
-        
+
         animesPage.animes.map { sAnime ->
             sAnime.toKotoContent(
                 source = source,
@@ -98,10 +98,10 @@ class AniyomiAnimeRepository(
             )
         }
     }
-    
+
     override suspend fun getDetailsImpl(manga: Content): Content = withContext(Dispatchers.IO) {
         val sAnime = manga.toAniyomiAnime()
-        
+
         val details = try {
             aniyomiSource.getAnimeDetails(sAnime)
         } catch (e: Exception) {
@@ -145,7 +145,7 @@ class AniyomiAnimeRepository(
                 throw e
             }
         }
-        
+
         // Reverse and assign numbers if missing, like in MihonMangaRepository
         val chapters = rawEpisodes.asReversed()
             .mapIndexed { index, sEpisode ->
@@ -157,15 +157,15 @@ class AniyomiAnimeRepository(
                 sEpisode.toKotoChapter(source, episodeNumber)
             }
             .sortedBy { it.number }
-        
+
         details.url = sAnime.url
-        
+
         // Title fallback
         val detailsTitle = try { details.title } catch (e: Exception) { "" }
         if (detailsTitle.isNullOrBlank()) {
             details.title = sAnime.title
         }
-        
+
         // Thumbnail fallback
         val detailsThumb = try { details.thumbnail_url } catch (e: Exception) { null }
         if (detailsThumb.isNullOrBlank() || detailsThumb == details.url) {
@@ -173,21 +173,21 @@ class AniyomiAnimeRepository(
                 details.thumbnail_url = sAnime.thumbnail_url
             }
         }
-        
+
         val publicUrl = (aniyomiSource as? AnimeHttpSource)?.getPublicAnimeUrl(details) ?: ""
-        
+
         details.toKotoContent(
             source = source,
             chapters = chapters,
             publicUrl = publicUrl,
         ).copy(id = manga.id)
     }
-    
+
     override suspend fun getPagesImpl(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> = withContext(Dispatchers.IO) {
         android.util.Log.d("AniyomiRepo", "getPagesImpl called for chapter: ${chapter.title} (${chapter.url})")
         val sEpisode = chapter.toAniyomiEpisode()
         val videos = fetchVideoList(sEpisode)
-        
+
         videos.mapIndexed { index, video ->
             android.util.Log.d("AniyomiRepo", "Video $index: url=${video.videoUrl}, quality=${video.videoTitle}")
             video.toKotoPage(source, sEpisode, index)
@@ -198,7 +198,7 @@ class AniyomiAnimeRepository(
         val sEpisode = chapter.toAniyomiEpisode()
         fetchVideoList(sEpisode)
     }
-    
+
     override suspend fun getRelatedContentImpl(seed: Content): List<Content> {
         return RelatedContentSearchFallback.find(seed) { query ->
             getList(
@@ -208,19 +208,19 @@ class AniyomiAnimeRepository(
             )
         }
     }
-    
+
     override suspend fun getPageUrl(page: ContentPage): String = withContext(Dispatchers.IO) {
         // For video, the URL is already the stream URL
         page.url
     }
-    
+
     override suspend fun getFilterOptions(): ContentListFilterOptions {
         val aniyomiFilters = try {
             aniyomiSource.getFilterList()
         } catch (e: Exception) {
             AnimeFilterList()
         }
-        
+
         return AniyomiFilterMapper.mapOptions(aniyomiFilters, source)
     }
 
@@ -230,11 +230,11 @@ class AniyomiAnimeRepository(
         } catch (e: Exception) {
             return AnimeFilterList()
         }
-        
+
         AniyomiFilterMapper.updateAniyomiFilters(aniyomiFilters, this)
         return aniyomiFilters
     }
-    
+
     override fun getRequestHeaders(): Map<String, String> {
         val httpSource = aniyomiSource as? AnimeHttpSource ?: return emptyMap()
         val headers = httpSource.headers

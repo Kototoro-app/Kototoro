@@ -4,7 +4,7 @@ import java.util.regex.Pattern
 
 /**
  * Regex analyzer for pattern matching.
- * 
+ *
  * Aligned with legado-with-MD3 AnalyzeByRegex pattern.
  */
 object AnalyzeByRegex {
@@ -60,7 +60,7 @@ object AnalyzeByRegex {
             return getElements(result.toString(), regs, ++vIndex)
         }
     }
-    
+
     /**
      * Convenience overload accepting List<String> for patterns
      */

@@ -99,7 +99,7 @@ class ReaderSuperResolutionManager @Inject constructor(
                 BitmapFactory.decodeFile(originalFile.absolutePath, boundsOpts)
 
                 val inputPixels = boundsOpts.outWidth.toLong() * boundsOpts.outHeight.toLong()
-                
+
                 if (!isAnime4k) {
                     val maxPixels = if (isEsrgan) MAX_INPUT_PIXELS_ESRGAN else MAX_INPUT_PIXELS_CUGAN
 
@@ -169,7 +169,7 @@ class ReaderSuperResolutionManager @Inject constructor(
         if (activeModelId == modelId) {
             if (realesrganEngine != null || realcuganEngine != null || anime4kEngine != null) return
         }
-        
+
         releaseEngines()
         consecutiveFailures = 0  // reset counter when switching engines
 

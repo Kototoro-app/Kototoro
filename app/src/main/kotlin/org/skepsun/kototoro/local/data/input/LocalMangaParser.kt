@@ -108,7 +108,7 @@ class LocalContentParser {
                     val index = it.url.substringAfterLast("chapter/").toIntOrNull() ?: 0
                     it.copy(url = "localepub://${rootFile.absolutePath}#chapter/$index")
                 }
-                
+
                     var extractedCoverUrl: String? = null
                     runCatching {
                         okio.FileSystem.SYSTEM.openZip(rootFile.absolutePath.toPath()).use { zipFs ->
@@ -164,7 +164,7 @@ class LocalContentParser {
                     }
                     // 获取隐藏的章节ID列表
                     val hiddenChapterIds = index.getHiddenChapterIds()
-                    
+
                     val resolvedLocalSource = when (mangaInfo.source?.contentType) {
                         org.skepsun.kototoro.parsers.model.ContentType.NOVEL, org.skepsun.kototoro.parsers.model.ContentType.HENTAI_NOVEL -> org.skepsun.kototoro.core.model.LocalNovelSource
                         org.skepsun.kototoro.parsers.model.ContentType.VIDEO, org.skepsun.kototoro.parsers.model.ContentType.HENTAI_VIDEO -> org.skepsun.kototoro.core.model.LocalVideoSource
@@ -188,7 +188,7 @@ class LocalContentParser {
                             if (c.id in hiddenChapterIds) {
                                 return@mapNotNull null
                             }
-                            
+
                             val fileName = index.getChapterFileName(c.id)
                             val path = fileName?.toPath()
                             if (path != null && fileSystem.exists(rootPath / path)) {
@@ -811,7 +811,7 @@ class LocalContentParser {
             val idFileName = "${manga.id}_$fileName"
             for (root in roots) {
                 launch {
-                    val parser = getOrNull(File(root, fileName)) 
+                    val parser = getOrNull(File(root, fileName))
                         ?: getOrNull(File(root, "$fileName.cbz"))
                         ?: getOrNull(File(root, idFileName))
                         ?: getOrNull(File(root, "$idFileName.cbz"))

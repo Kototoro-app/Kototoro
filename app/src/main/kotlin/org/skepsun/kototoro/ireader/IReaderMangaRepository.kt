@@ -63,7 +63,7 @@ class IReaderMangaRepository(
                         break
                     }
                 }
-                
+
                 if (titleFilterIndex != -1) {
                     val filter = filters[titleFilterIndex] as ireader.core.source.model.Filter.Title
                     filter.value = query
@@ -72,7 +72,7 @@ class IReaderMangaRepository(
                     newFilter.value = query
                     filters.add(0, newFilter)
                 }
-                
+
                 catalog.getMangaList(
                     filters = filters,
                     page = page
@@ -132,7 +132,7 @@ class IReaderMangaRepository(
                     )
                     is Text -> {
                         // Encode the full text content as an HTML data URL.
-                        // NovelContentLoader.decodeChapterHtml() already handles data:text/html;base64,... 
+                        // NovelContentLoader.decodeChapterHtml() already handles data:text/html;base64,...
                         val htmlContent = "<p>${page.text}</p>"
                         val encoded = android.util.Base64.encodeToString(
                             htmlContent.toByteArray(Charsets.UTF_8),

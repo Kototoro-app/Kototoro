@@ -85,11 +85,11 @@ class TtsService : LifecycleService() {
         ensureForegroundStarted()
         ttsManager.resume()
     }
-    
+
     fun seekNext() {
         ttsManager.seekNext()
     }
-    
+
     fun seekPrev() {
         ttsManager.seekPrev()
     }
@@ -104,22 +104,22 @@ class TtsService : LifecycleService() {
     }
 
     fun getState(): StateFlow<TtsState> = _serviceState
-    
+
     fun getPlayingTokenIndex() = ttsManager.currentPlayingTokenIndex
-    
+
     fun getToken(index: Int) = ttsManager.getToken(index)
-    
+
     fun getTokens(): List<Token> = ttsManager.getTokens()
-    
+
     fun reloadEngine() {
         val wasPlaying = ttsManager.state.value == TtsState.PLAYING
         val currentIndex = ttsManager.currentPlayingTokenIndex.value ?: 0
         val tokens = ttsManager.getTokens()
-        
+
         ttsManager.release()
         ttsManager = createTtsManager()
         observeManagerState()
-        
+
         // Ensure ExoPlayer is fully re-initialized before attempting to start playback again
         if (wasPlaying && tokens.isNotEmpty()) {
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -129,22 +129,22 @@ class TtsService : LifecycleService() {
             }, 300)
         }
     }
-    
+
     private fun createTtsManager(): TtsManager {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         val engineType = prefs.getString("tts_engine_type", "SYSTEM")
-        
+
         val engine: org.skepsun.kototoro.reader.novel.tts.engine.TTSEngine = if (engineType == "LEGADO") {
             val currentJson = prefs.getString("legado_tts_configs", "[]") ?: "[]"
             val voiceUrl = prefs.getString("tts_legado_voice", "")
-            
+
             val type = object : com.google.gson.reflect.TypeToken<List<org.skepsun.kototoro.reader.novel.tts.model.TtsHttpConfig>>() {}.type
             val configs: List<org.skepsun.kototoro.reader.novel.tts.model.TtsHttpConfig> = try {
                 com.google.gson.Gson().fromJson(currentJson, type) ?: emptyList()
             } catch (e: Exception) { emptyList() }
-            
+
             val matchingConfig = configs.find { it.url == voiceUrl } ?: configs.firstOrNull()
-            
+
             if (matchingConfig != null) {
                 val okHttpClient = okhttp3.OkHttpClient.Builder()
                     .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -159,7 +159,7 @@ class TtsService : LifecycleService() {
             val systemVoice = prefs.getString("tts_system_voice", "default") ?: "default"
             org.skepsun.kototoro.reader.novel.tts.engine.SystemTTSEngine(this)
         }
-        
+
         val cache = org.skepsun.kototoro.reader.novel.tts.TtsCache(this)
         val player = org.skepsun.kototoro.reader.novel.tts.player.ExoPlayerController(this)
         return TtsManager(this, engine, cache, player)

@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 /**
  * Manager for Aniyomi extensions.
- * 
+ *
  * Handles loading, caching, and providing access to Aniyomi extension sources.
  */
 @Singleton
@@ -27,7 +27,7 @@ class AniyomiExtensionManager @Inject constructor(
     companion object {
         private const val TAG = "AniyomiExtensionManager"
     }
-    
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val facade = ExternalExtensionManagerFacade<
@@ -70,75 +70,75 @@ class AniyomiExtensionManager @Inject constructor(
     val failedExtensions: StateFlow<List<AniyomiLoadResult.Error>> = facade.failedExtensions
     val isLoading: StateFlow<Boolean> = facade.isLoading
     val changes: StateFlow<Int> = facade.changes
-    
+
     /**
      * Initialize the extension manager and load all extensions.
      */
     fun initialize() {
         facade.initialize()
     }
-    
+
     /**
      * Reload all extensions.
      */
     suspend fun loadExtensions() {
         facade.loadExtensions()
     }
-    
+
     /**
      * Get all available AnimeCatalogueSource instances.
      */
     fun getCatalogueSources(): List<AnimeCatalogueSource> {
         return facade.getCatalogueSources()
     }
-    
+
     /**
      * Get all AniyomiAnimeSource wrappers.
      */
     fun getAniyomiAnimeSources(): List<AniyomiAnimeSource> {
         return facade.getWrappedSources()
     }
-    
+
     /**
      * Get a source by its ID.
      */
     fun getSourceById(sourceId: Long): AnimeSource? {
         return facade.getSourceById(sourceId)
     }
-    
+
     /**
      * Get an AnimeCatalogueSource by its ID.
      */
     fun getCatalogueSourceById(sourceId: Long): AnimeCatalogueSource? {
         return facade.getCatalogueSourceById(sourceId)
     }
-    
+
     /**
      * Get an AniyomiAnimeSource wrapper by source ID.
      */
     fun getAniyomiAnimeSourceById(sourceId: Long): AniyomiAnimeSource? {
         return facade.getWrappedSourceById(sourceId)
     }
-    
+
     /**
      * Get an AniyomiAnimeSource by its name (format: "ANIYOMI_{sourceId}").
      */
     fun getAniyomiAnimeSourceByName(name: String): AniyomiAnimeSource? {
         return facade.getWrappedSourceByName(name)
     }
-    
+
     /**
      * Get sources grouped by language.
      */
     fun getSourcesByLanguage(): Map<String, List<AnimeCatalogueSource>> {
         return facade.getSourcesByLanguage()
     }
-    
+
     /**
      * Get the number of loaded sources.
      */
     fun getSourceCount(): Int = facade.getSourceCount()
-    
+
     /**
      * Check if any Aniyomi extensions are loaded.
      */

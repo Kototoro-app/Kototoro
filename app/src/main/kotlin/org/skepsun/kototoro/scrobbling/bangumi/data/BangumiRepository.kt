@@ -208,7 +208,7 @@ class BangumiRepository @Inject constructor(
     }
 
     suspend fun getRankings(
-        category: String, 
+        category: String,
         page: Int,
         sortOrder: SortOrder? = null,
         listFilter: ContentListFilter? = null
@@ -248,7 +248,7 @@ class BangumiRepository @Inject constructor(
             if (cleanCover.startsWith("//")) {
                 cleanCover = "https:$cleanCover"
             }
-            
+
             ScrobblerContent(
                 id = id,
                 name = name,
@@ -295,7 +295,7 @@ class BangumiRepository @Inject constructor(
 
         val doc = Jsoup.parse(okHttp.newCall(request).await().body?.string().orEmpty())
         val map = mutableMapOf<Int, List<ScrobblerContent>>()
-        
+
         doc.select("#home_calendar .week").forEach { weekEl ->
             val dayClass = weekEl.classNames().firstOrNull { it in listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") }
             val dayInt = when (dayClass) {
@@ -334,7 +334,7 @@ class BangumiRepository @Inject constructor(
                     isBestMatch = false
                 )
             }.filter { it.id > 0L }.distinctBy { it.id }
-            
+
             map[dayInt] = items
         }
         return map
@@ -807,21 +807,21 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
         val nameNative = doc.selectFirst("#headerSubject .nameSingle > a")?.text().orEmpty()
         val nameCn = doc.selectFirst("#headerSubject .nameSingle > a")?.attr("title").orEmpty()
         val finalName = if (nameCn.isNotBlank()) nameCn else nameNative
-        
+
         val cover = doc.selectFirst("img.cover")?.attr("src")?.normalizeBangumiImageUrl().orEmpty()
 
         val summary = doc.selectFirst("#subject_summary")?.html().orEmpty()
-        
+
         // Real user tags from .subject_tag_section
         val tagList = mutableListOf<String>()
         doc.select(".subject_tag_section .inner a span").forEach { span ->
             val tagName = span.text().trim()
             if (tagName.isNotBlank()) tagList.add(tagName)
         }
-        
+
         // Infobox properties as key-value pairs
         val infoboxProperties = parseBangumiInfoboxProperties(doc)
-        
+
         // Episodes from prg_list
         val episodes = mutableListOf<ScrobblerContentInfo.EpisodeInfo>()
         doc.select("ul.prg_list li a").forEach { a ->
@@ -1387,7 +1387,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
         val existingByTargetId = existingEntities.preferredScrobblingByTargetId()
 
         val synced = ArrayList<ScrobblingEntity>()
-        
+
         val subjectTypesToSync = listOf(1, 2) // 1 = Book, 2 = Anime
         for (subjectType in subjectTypesToSync) {
             var offset = 0

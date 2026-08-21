@@ -325,7 +325,7 @@ class KitsuRepository(
     private fun String.toKitsuStartDate(): LocalDate? {
         return runCatching { LocalDate.parse(this) }.getOrNull()
     }
-    
+
     private suspend fun isAnimeContent(mangaId: Long): Boolean {
         val mangaItem = db.getMangaDao().find(mangaId) ?: return false
         if (mangaItem.manga.url.startsWith("file://") && (mangaItem.manga.url.contains("/video/") || arrayOf(".mp4", ".mkv", ".webm", ".ts", ".avi", ".m3u8").any { mangaItem.manga.url.endsWith(it, ignoreCase = true) })) {

@@ -106,7 +106,7 @@ fun KototoroTheme(
             isAmoledTheme = effectiveAmoledTheme,
         )
     }
-    
+
     val radius = when {
         cornerRadius != -1 -> cornerRadius.dp
         else -> styleTokens.groupCornerRadius

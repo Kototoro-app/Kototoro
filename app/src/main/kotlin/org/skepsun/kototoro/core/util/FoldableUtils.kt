@@ -32,7 +32,7 @@ object FoldableUtils {
         lifecycleOwner: LifecycleOwner
     ): StateFlow<Boolean> {
         val foldableState = MutableStateFlow(false)
-        
+
         WindowInfoTracker.getOrCreate(activity)
             .windowLayoutInfo(activity)
             .onEach { info ->
@@ -44,7 +44,7 @@ object FoldableUtils {
                 foldableState.value = unfolded
             }
             .launchIn(lifecycleOwner.lifecycleScope)
-        
+
         return foldableState
     }
 
@@ -56,7 +56,7 @@ object FoldableUtils {
      * @return 是否应该使用横屏布局
      */
     fun shouldUseLandscapeLayout(activity: Activity, isFoldUnfolded: Boolean): Boolean {
-        val isLandscape = activity.resources.configuration.orientation == 
+        val isLandscape = activity.resources.configuration.orientation ==
             android.content.res.Configuration.ORIENTATION_LANDSCAPE
         return isLandscape || isFoldUnfolded
     }

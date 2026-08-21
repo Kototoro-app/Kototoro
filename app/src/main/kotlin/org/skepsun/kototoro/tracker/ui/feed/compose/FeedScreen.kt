@@ -96,7 +96,7 @@ fun FeedScreen(
             badgesBottomRight = badgesBottomRight,
         )
     }
-    
+
     // Trigger pagination threshold
     val shouldLoadMore by remember {
         derivedStateOf {

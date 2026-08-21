@@ -279,7 +279,7 @@ fun AppDownloadsRoute(
                             onResumeClick = { viewModel.resume(setOf(item.id.mostSignificantBits)) },
                             onCancelClick = { viewModel.cancel(setOf(item.id.mostSignificantBits)) },
                             onSkipClick = { }, // need to handle from Worker? We leave it for now
-                            onSkipAllClick = { } 
+                            onSkipAllClick = { }
                         )
                     }
                 }
@@ -303,7 +303,7 @@ fun DownloadItemRow(
     onSkipAllClick: () -> Unit
 ) {
     val context = LocalContext.current
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -325,9 +325,9 @@ fun DownloadItemRow(
                         .size(64.dp)
                         .clip(CompactContentCoverShape)
                 )
-                
+
                 Spacer(modifier = Modifier.width(16.dp))
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -337,7 +337,7 @@ fun DownloadItemRow(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        
+
                         val chapters = item.chapters.collectAsStateWithLifecycle().value
                         if (!chapters.isNullOrEmpty()) {
                             IconButton(onClick = onExpandClick, modifier = Modifier.size(32.dp)) {
@@ -348,7 +348,7 @@ fun DownloadItemRow(
                             }
                         }
                     }
-                    
+
                     val statusText = when (item.workState) {
                         WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> stringResource(R.string.queued)
                         WorkInfo.State.RUNNING -> stringResource(if (item.isPaused) R.string.paused else item.taskKind.activeStatusResId)
@@ -356,14 +356,14 @@ fun DownloadItemRow(
                         WorkInfo.State.FAILED -> stringResource(R.string.error_occurred)
                         WorkInfo.State.CANCELLED -> stringResource(R.string.canceled)
                     }
-                    
+
                     Text(
                         text = statusText,
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     if (item.workState == WorkInfo.State.RUNNING) {
                         val detailsText = when {
                             item.isPaused -> item.getErrorMessage(context)?.toString() ?: ""
@@ -393,7 +393,7 @@ fun DownloadItemRow(
                         )
                     }
                 }
-                
+
                 if (item.workState == WorkInfo.State.RUNNING && !item.isIndeterminate) {
                     Text(
                         text = "${(item.percent * 100).toInt()}%",
@@ -402,7 +402,7 @@ fun DownloadItemRow(
                     )
                 }
             }
-            
+
             if (item.workState == WorkInfo.State.RUNNING) {
                 if (item.isIndeterminate) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 12.dp, end = 12.dp))
@@ -413,7 +413,7 @@ fun DownloadItemRow(
                     )
                 }
             }
-            
+
             val chapters = item.chapters.collectAsStateWithLifecycle().value
             if (item.isExpanded && !chapters.isNullOrEmpty()) {
                 LazyColumn(
@@ -453,7 +453,7 @@ fun DownloadItemRow(
                     }
                 }
             }
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.End

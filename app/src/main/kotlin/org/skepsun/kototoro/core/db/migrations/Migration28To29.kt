@@ -5,11 +5,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Database migration from version 28 to 29.
- * 
+ *
  * Adds the epub_chapter_mapping table to support EPUB reader improvements.
  * This table stores the relationship between parent EPUB download chapters
  * and their internal chapters extracted from EPUB files.
- * 
+ *
  * Changes:
  * - Creates epub_chapter_mapping table with all required fields
  * - Creates index on parentChapterId for efficient lookup
@@ -31,7 +31,7 @@ class Migration28To29 : Migration(28, 29) {
             )
             """.trimIndent()
         )
-        
+
         // Create index on parentChapterId for efficient queries
         db.execSQL(
             """

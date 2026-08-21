@@ -17,7 +17,7 @@ object Anime4kCompiler {
 
     fun parse(shaderSources: List<String>): List<Anime4kPass> {
         val passes = mutableListOf<Anime4kPass>()
-        
+
         for (source in shaderSources) {
             var currentDesc = ""
             var currentHook = ""
@@ -26,16 +26,16 @@ object Anime4kCompiler {
             var currentWidth: String? = null
             var currentHeight: String? = null
             val currentCode = StringBuilder()
-            
+
             var inHook = false
-            
+
             val lines = source.lines()
             for (line in lines) {
                 val tline = line.trim()
                 if (tline.startsWith("//!DESC ")) {
                     currentDesc = tline.removePrefix("//!DESC ").trim()
                 } else if (tline.startsWith("//!HOOK ")) {
-                    if (inHook && currentCode.isNotEmpty()) {    
+                    if (inHook && currentCode.isNotEmpty()) {
                         passes.add(Anime4kPass(currentDesc, currentHook, currentBinds.toList(), currentSave, currentWidth, currentHeight, currentCode.toString()))
                         currentBinds.clear()
                         currentSave = null
@@ -76,17 +76,17 @@ object Anime4kCompiler {
         sb.appendLine("precision highp float;")
         sb.appendLine("in vec2 vTexCoord;")
         sb.appendLine("out vec4 outColor;")
-        
+
         // Always bind MAIN
         sb.appendLine("uniform sampler2D MAIN;")
         sb.appendLine("uniform vec2 MAIN_size;")
         sb.appendLine("uniform vec2 MAIN_pt;")
-        
+
         // Macros for MAIN
         sb.appendLine("#define MAIN_pos vTexCoord")
         sb.appendLine("#define MAIN_tex(pos) texture(MAIN, pos)")
         sb.appendLine("#define MAIN_texOff(offset) texture(MAIN, vTexCoord + (offset) * MAIN_pt)")
-        
+
         // Bind other textures
         val uniqueBinds = pass.binds.distinct().filter { it != "MAIN" && it != "HOOKED" }.toMutableList()
         if (pass.hook != "MAIN" && !uniqueBinds.contains(pass.hook)) {
@@ -100,7 +100,7 @@ object Anime4kCompiler {
             sb.appendLine("#define ${bind}_tex(pos) texture($bind, pos)")
             sb.appendLine("#define ${bind}_texOff(offset) texture($bind, vTexCoord + (offset) * ${bind}_pt)")
         }
-        
+
         // Always define HOOKED stuff to point to pass.hook (Mpv uses HOOKED as the active texture)
         val hookedTarget = pass.hook
         sb.appendLine("#define HOOKED_pos vTexCoord")
@@ -108,9 +108,9 @@ object Anime4kCompiler {
         sb.appendLine("#define HOOKED_texOff(offset) texture($hookedTarget, vTexCoord + (offset) * ${hookedTarget}_pt)")
         sb.appendLine("#define HOOKED_size ${hookedTarget}_size")
         sb.appendLine("#define HOOKED_pt ${hookedTarget}_pt")
-        
+
         sb.appendLine(pass.fragmentCode)
-        
+
         sb.appendLine("void main() {")
         sb.appendLine("    outColor = hook();")
         sb.appendLine("}")

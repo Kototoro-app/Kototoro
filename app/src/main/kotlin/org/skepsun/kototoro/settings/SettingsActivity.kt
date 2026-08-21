@@ -2191,7 +2191,7 @@ class SettingsActivity :
 
     private fun observeFoldableState() {
         val foldableState = FoldableUtils.observeFoldableState(this, this)
-        
+
         lifecycleScope.launch {
             foldableState.collect { unfolded ->
                 if (unfolded != isFoldUnfolded) {

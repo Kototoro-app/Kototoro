@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 /**
  * Use case for migrating legacy .cbz EPUB files to the new .epub format.
- * 
+ *
  * This handles:
  * - Detection of legacy .cbz files with EPUB content
  * - Conversion from .cbz to .epub format
@@ -23,20 +23,20 @@ class MigrateLegacyEpubUseCase @Inject constructor(
     private val legacyEpubMigration: LegacyEpubMigration,
     private val epubFileManager: EpubFileManager
 ) {
-    
+
     companion object {
         private const val TAG = "MigrateLegacyEpubUseCase"
     }
-    
+
     /**
      * Scans for legacy .cbz files and returns information about them.
-     * 
+     *
      * @return List of legacy files that need migration
      */
     suspend fun scanForLegacyFiles(): List<LegacyEpubFile> = withContext(Dispatchers.IO) {
         try {
             val cbzFiles = legacyEpubMigration.detectLegacyCbzFiles(context)
-            
+
             cbzFiles.map { file ->
                 LegacyEpubFile(
                     file = file,
@@ -49,10 +49,10 @@ class MigrateLegacyEpubUseCase @Inject constructor(
             emptyList()
         }
     }
-    
+
     /**
      * Migrates a single legacy .cbz file to .epub format.
-     * 
+     *
      * @param legacyFile The legacy file to migrate
      * @return True if migration was successful
      */
@@ -65,38 +65,38 @@ class MigrateLegacyEpubUseCase @Inject constructor(
             false
         }
     }
-    
+
     /**
      * Migrates all legacy files found in the system.
-     * 
+     *
      * @return Number of files successfully migrated
      */
     suspend fun migrateAllLegacyFiles(): Int = withContext(Dispatchers.IO) {
         var migratedCount = 0
-        
+
         try {
             val legacyFiles = scanForLegacyFiles()
-            
+
             for (legacyFile in legacyFiles) {
                 if (migrateSingleFile(legacyFile)) {
                     migratedCount++
                 }
             }
-            
+
             // Also migrate history chapter IDs
             val historyMigrated = legacyEpubMigration.migrateHistoryChapterIds(context)
             Log.i(TAG, "Migrated $migratedCount files and $historyMigrated history entries")
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error during bulk migration", e)
         }
-        
+
         migratedCount
     }
-    
+
     /**
      * Checks if there are any legacy files that need migration.
-     * 
+     *
      * @return True if legacy files exist
      */
     suspend fun hasLegacyFiles(): Boolean = withContext(Dispatchers.IO) {

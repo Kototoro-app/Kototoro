@@ -33,9 +33,9 @@ import kotlin.jvm.JvmName
 /**
  * URL builder with placeholder substitution and JavaScript support.
  * Handles Legado URL templates and request configuration.
- * 
+ *
  * Based on legado-with-MD3 AnalyzeUrl pattern.
- * 
+ *
  * Supports:
  * - Template vars: {{key}}, {{page}}, {{baseUrl}}
  * - POST body with method specification
@@ -177,7 +177,7 @@ class AnalyzeUrl(
     val serverID: Long?
         get() = effectivePlan().serverId
 
-    
+
     companion object {
         internal const val TAG = "AnalyzeUrl"
 
@@ -236,12 +236,12 @@ class AnalyzeUrl(
             }.getOrDefault("")
 
             var normalized = urlPart + optionsKeySuffix
-            
+
             // Remove trailing slash
             if (normalized.endsWith("/") && normalized.length > 8) {
                 normalized = normalized.substring(0, normalized.length - 1)
             }
-            
+
             return normalized
         }
 
@@ -504,7 +504,7 @@ class AnalyzeUrl(
             ?: sandbox?.let(::LegadoSandboxRuleRuntimeContext)
             ?: fallbackSource?.let(::SourceOnlyLegadoUrlRuntimeContext)
     }
-    
+
     /**
      * Build the final URL with all substitutions applied
      */

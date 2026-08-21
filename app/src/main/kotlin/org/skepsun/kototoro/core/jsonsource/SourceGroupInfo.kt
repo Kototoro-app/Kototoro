@@ -6,14 +6,14 @@ import org.skepsun.kototoro.core.model.ContentSourceInfo
 
 /**
  * Data class representing information about a source group.
- * 
+ *
  * This class contains:
  * - The group type (content or origin)
  * - A display name for the group
  * - The list of sources in this group
  * - The count of sources
  * - Whether the group is currently collapsed in the UI
- * 
+ *
  * @property group The source group (Content or Origin)
  * @property name The display name for this group
  * @property sources The list of sources in this group
@@ -33,14 +33,14 @@ data class SourceGroupInfo(
     fun toggleCollapsed(): SourceGroupInfo {
         return copy(isCollapsed = !isCollapsed)
     }
-    
+
     /**
      * Creates a copy of this group with a new collapsed state.
      */
     fun withCollapsed(collapsed: Boolean): SourceGroupInfo {
         return copy(isCollapsed = collapsed)
     }
-    
+
     /**
      * Gets a display label for the group type.
      */
@@ -73,10 +73,10 @@ data class SourceGroupInfo(
 
 /**
  * Data class representing a complete list of grouped sources.
- * 
+ *
  * This class organizes sources into multiple groups and provides
  * methods to manipulate the grouping structure.
- * 
+ *
  * @property groups The list of all source groups
  */
 data class GroupedSourceList(
@@ -87,10 +87,10 @@ data class GroupedSourceList(
      */
     val totalCount: Int
         get() = groups.sumOf { it.count }
-    
+
     /**
      * Toggles the collapsed state of a specific group.
-     * 
+     *
      * @param groupIndex The index of the group to toggle
      * @return A new GroupedSourceList with the updated group
      */
@@ -98,16 +98,16 @@ data class GroupedSourceList(
         if (groupIndex !in groups.indices) {
             return this
         }
-        
+
         val updatedGroups = groups.toMutableList()
         updatedGroups[groupIndex] = updatedGroups[groupIndex].toggleCollapsed()
-        
+
         return copy(groups = updatedGroups)
     }
-    
+
     /**
      * Toggles the collapsed state of a group by its SourceGroup.
-     * 
+     *
      * @param group The SourceGroup to toggle
      * @return A new GroupedSourceList with the updated group
      */
@@ -119,43 +119,43 @@ data class GroupedSourceList(
             this
         }
     }
-    
+
     /**
      * Collapses all groups.
-     * 
+     *
      * @return A new GroupedSourceList with all groups collapsed
      */
     fun collapseAll(): GroupedSourceList {
         return copy(groups = groups.map { it.withCollapsed(true) })
     }
-    
+
     /**
      * Expands all groups.
-     * 
+     *
      * @return A new GroupedSourceList with all groups expanded
      */
     fun expandAll(): GroupedSourceList {
         return copy(groups = groups.map { it.withCollapsed(false) })
     }
-    
+
     /**
      * Filters groups to only include those with sources.
-     * 
+     *
      * @return A new GroupedSourceList with only non-empty groups
      */
     fun filterNonEmpty(): GroupedSourceList {
         return copy(groups = groups.filter { it.count > 0 })
     }
-    
+
     /**
      * Gets all sources as a flat list (ignoring grouping).
-     * 
+     *
      * @return List of all ContentSourceInfo across all groups
      */
     fun getAllSources(): List<ContentSourceInfo> {
         return groups.flatMap { it.sources }
     }
-    
+
     companion object {
         /**
          * Creates an empty GroupedSourceList.
@@ -163,10 +163,10 @@ data class GroupedSourceList(
         fun empty(): GroupedSourceList {
             return GroupedSourceList(emptyList())
         }
-        
+
         /**
          * Creates a GroupedSourceList from a list of sources by grouping them.
-         * 
+         *
          * @param sources The list of sources to group
          * @param groupBy The grouping strategy (content or origin)
          * @param sourceGroupManager The manager to use for grouping
@@ -203,7 +203,7 @@ data class GroupedSourceList(
                     }
                 }
             }
-            
+
             return GroupedSourceList(groups)
         }
     }
@@ -217,7 +217,7 @@ enum class GroupingStrategy {
      * Group sources by content type (manga, novel, video)
      */
     BY_CONTENT,
-    
+
     /**
      * Group sources by origin type (native, JSON Legado, JSON TVBox)
      */

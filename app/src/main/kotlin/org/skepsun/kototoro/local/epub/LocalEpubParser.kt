@@ -13,7 +13,7 @@ import java.util.zip.ZipFile
 
 /**
  * 本地EPUB文件解析器
- * 
+ *
  * 功能：
  * 1. 检测CBZ文件是否包含EPUB
  * 2. 解析EPUB并提取章节
@@ -32,13 +32,13 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                 if (hasMimetype) {
                     return@withContext true
                 }
-                
+
                 // 检查是否有META-INF/container.xml（EPUB标准）
                 val hasContainer = zip.getEntry("META-INF/container.xml") != null
                 if (hasContainer) {
                     return@withContext true
                 }
-                
+
                 // 检查是否有.opf文件（EPUB内容文件）
                 val entries = zip.entries()
                 while (entries.hasMoreElements()) {
@@ -47,7 +47,7 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                         return@withContext true
                     }
                 }
-                
+
                 false
             }
         } catch (e: Exception) {
@@ -63,26 +63,26 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
         try {
             android.util.Log.d("LocalEpubParser", "Parsing EPUB file: ${cbzFile.absolutePath}")
             android.util.Log.d("LocalEpubParser", "File exists: ${cbzFile.exists()}, size: ${cbzFile.length()} bytes")
-            
+
             // 使用EpubReader解析EPUB
             val epubReader = EpubReaderImpl(cache)
             val epubContent = epubReader.readEpub(cbzFile)
-            
+
             if (epubContent == null) {
                 android.util.Log.e("LocalEpubParser", "Failed to read EPUB content from file")
                 return@withContext null
             }
-            
+
             android.util.Log.d("LocalEpubParser", "EPUB parsed successfully")
             android.util.Log.d("LocalEpubParser", "Title: ${epubContent.title}")
             android.util.Log.d("LocalEpubParser", "Author: ${epubContent.author}")
             android.util.Log.d("LocalEpubParser", "Chapters: ${epubContent.chapters.size}")
-            
+
             // 生成Content对象
             val mangaId = cbzFile.absolutePath.longHashCode()
             val title = epubContent.title
             val author = epubContent.author
-            
+
             // 生成章节列表
             val chapters = epubContent.chapters.map { epubChapter ->
                 ContentChapter(
@@ -98,9 +98,9 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
                     source = org.skepsun.kototoro.core.model.LocalNovelSource,
                 )
             }
-            
+
             android.util.Log.d("LocalEpubParser", "Generated ${chapters.size} chapters")
-            
+
             Content(
                 id = mangaId,
                 title = title,
@@ -133,7 +133,7 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
 
     /**
      * 获取EPUB章节内容
-     * 
+     *
      * @param chapterIndex 章节索引
      * @return 章节文本内容
      */
@@ -141,7 +141,7 @@ class LocalEpubParser(private val cbzFile: File, private val cache: EpubContentC
         try {
             val epubReader = EpubReaderImpl(cache)
             val epubContent = epubReader.readEpub(cbzFile) ?: return@withContext null
-            
+
             epubContent.chapters.getOrNull(chapterIndex)?.content
         } catch (e: Exception) {
             android.util.Log.e("LocalEpubParser", "Failed to get chapter content", e)

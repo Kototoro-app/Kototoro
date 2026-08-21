@@ -23,7 +23,7 @@ class SystemTTSEngine(
 
     private val mutex = Mutex() // 防止并发冲突的绝对屏障
     private val initDeferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
-    
+
     // 延迟初始化的TTS实例
     private val tts: TextToSpeech by lazy {
         TextToSpeech(context) { status ->
@@ -40,7 +40,7 @@ class SystemTTSEngine(
     override suspend fun synthesize(token: Token): Result<AudioData> {
         // Ensure TTS is requested to initialize
         val myTts = tts
-        
+
         // Wait for initialization to complete
         val isInitialized = initDeferred.await()
         if (!isInitialized) {
@@ -172,7 +172,7 @@ class SystemTTSEngine(
                 putInt(dataSize)
             }
             fos.write(header.array())
-            
+
             // Write short array
             val buffer = ByteBuffer.allocate(dataSize)
             buffer.order(ByteOrder.LITTLE_ENDIAN)

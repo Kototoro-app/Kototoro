@@ -80,13 +80,13 @@ class Anime4kImageEngine(private val context: Context) {
 
         val textures = mutableMapOf<String, Int>()
         val fbos = mutableMapOf<String, Int>()
-        
+
         val allCreatedTextures = mutableListOf<Int>()
         val allCreatedFbos = mutableListOf<Int>()
 
         val freePoolDims = mutableMapOf<Int, Pair<Int, Int>>()
         val freePool = mutableListOf<Int>()
-        
+
         fun acquireTextureAndFbo(w: Int, h: Int): Pair<Int, Int> {
             val texIdx = freePool.indexOfFirst { freePoolDims[it]?.first == w && freePoolDims[it]?.second == h }
             if (texIdx >= 0) {
@@ -186,14 +186,14 @@ class Anime4kImageEngine(private val context: Context) {
                         GLES30.glActiveTexture(GLES30.GL_TEXTURE0 + texUnit)
                         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, textures[bind] ?: textures["MAIN"]!!)
                         GLES30.glUniform1i(location, texUnit)
-                        
+
                         val sizeLoc = GLES30.glGetUniformLocation(prog, "${bind}_size")
                         val hw = textureSizes[bind] ?: textureSizes["MAIN"]!!
                         if (sizeLoc >= 0) GLES30.glUniform2f(sizeLoc, hw.first.toFloat(), hw.second.toFloat())
 
                         val ptLoc = GLES30.glGetUniformLocation(prog, "${bind}_pt")
                         if (ptLoc >= 0) GLES30.glUniform2f(ptLoc, 1.0f / hw.first, 1.0f / hw.second)
-                        
+
                         texUnit++
                     }
                 }
@@ -201,7 +201,7 @@ class Anime4kImageEngine(private val context: Context) {
                 // Draw quad
                 val posLoc = GLES30.glGetAttribLocation(prog, "aPosition")
                 val texLoc = GLES30.glGetAttribLocation(prog, "aTexCoord")
-                
+
                 GLES30.glEnableVertexAttribArray(posLoc)
                 GLES30.glEnableVertexAttribArray(texLoc)
 
@@ -209,12 +209,12 @@ class Anime4kImageEngine(private val context: Context) {
                 GLES30.glVertexAttribPointer(posLoc, 2, GLES30.GL_FLOAT, false, 4 * 4, vboBuffer)
                 vboBuffer.position(2)
                 GLES30.glVertexAttribPointer(texLoc, 2, GLES30.GL_FLOAT, false, 4 * 4, vboBuffer)
-                
+
                 GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
 
                 GLES30.glDisableVertexAttribArray(posLoc)
                 GLES30.glDisableVertexAttribArray(texLoc)
-                
+
                 // Now safely update the texture map and sizes
                 if (saveName != null) {
                     textures[saveName] = outTex
@@ -225,10 +225,10 @@ class Anime4kImageEngine(private val context: Context) {
                     textureSizes["MAIN"] = Pair(passW, passH)
                     fbos["MAIN"] = outFbo
                 }
-                
+
                 // Recycle orphaned FBOs instead of deleting them to prevent VRAM allocation thrashing
                 val activeTex = textures.values.toSet()
-                val orphanedTex = allCreatedTextures.filter { 
+                val orphanedTex = allCreatedTextures.filter {
                     it !in activeTex && it !in freePool && freePoolDims.containsKey(it)
                 }
                 freePool.addAll(orphanedTex)
@@ -238,7 +238,7 @@ class Anime4kImageEngine(private val context: Context) {
             val buffer = ByteBuffer.allocateDirect(currentWidth * currentHeight * 4)
             GLES30.glReadPixels(0, 0, currentWidth, currentHeight, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
             buffer.position(0)
-            
+
             val pixels = IntArray(currentWidth * currentHeight)
             for (j in pixels.indices) {
                 val r = buffer.get().toInt() and 0xFF
@@ -247,7 +247,7 @@ class Anime4kImageEngine(private val context: Context) {
                 buffer.get() // skip alpha
                 pixels[j] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
             }
-            
+
             val outBmp = Bitmap.createBitmap(currentWidth, currentHeight, Bitmap.Config.ARGB_8888)
             outBmp.setPixels(pixels, 0, currentWidth, 0, 0, currentWidth, currentHeight)
 

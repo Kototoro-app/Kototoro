@@ -11,7 +11,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 
 /**
  * Handles search and explore list parsing using ruleSearch / ruleExplore.
- * 
+ *
  * Based on legado-with-MD3 BookList pattern.
  */
 object BookList {
@@ -22,7 +22,7 @@ object BookList {
         val normalized = value.replace("\r", "").replace("\n", "\\n").trim()
         return if (normalized.length <= limit) normalized else normalized.take(limit) + "…"
     }
-    
+
     /**
      * Parse book list from HTML/JSON content
      */
@@ -138,10 +138,10 @@ object BookList {
             if (item == null) return@mapIndexedNotNull null
             // Create a new analyzer for the specific item
             val itemAnalyzer = AnalyzeRule(item, runtimeContext, baseUrl)
-            
+
             val title = itemAnalyzer.getString(rule.name)
             val bookUrl = itemAnalyzer.getString(rule.bookUrl, isUrl = true)
-            
+
             if (index < 3) {
                 Log.d(TAG, "[parseItem $index] rule.name='${rule.name}' -> title='$title'")
                 Log.d(TAG, "[parseItem $index] rule.bookUrl='${rule.bookUrl}' -> bookUrl='$bookUrl'")
@@ -149,9 +149,9 @@ object BookList {
                 val itemStr = item.toString().take(200)
                 Log.d(TAG, "[parseItem $index] item preview: $itemStr")
             }
-            
+
             if (title.isBlank() || bookUrl.isBlank()) return@mapIndexedNotNull null
-            
+
             val absoluteUrl = resolveUrl(baseUrl, bookUrl)
             val author = itemAnalyzer.getString(rule.author)
             val ruleCover = itemAnalyzer.getString(rule.coverUrl, isUrl = true)
@@ -160,7 +160,7 @@ object BookList {
                 ?.let { LegadoUrlSanitizer.sanitizeImageUrl(resolveUrl(baseUrl, it.trim())) }
                 ?.takeIf { it.isNotBlank() }
             val intro = itemAnalyzer.getString(rule.intro)
-            
+
             Content(
                 id = generateContentId(absoluteUrl),
                 title = title,

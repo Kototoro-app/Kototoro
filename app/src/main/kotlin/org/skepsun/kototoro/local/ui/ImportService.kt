@@ -57,7 +57,7 @@ class ImportService : CoroutineIntentService() {
         val importMode = if (importModeOrdinal >= 0) ImportMode.entries.getOrNull(importModeOrdinal) else null
         val importKindOrdinal = intent.getIntExtra(DATA_IMPORT_KIND, -1)
         val importKind = if (importKindOrdinal >= 0) LocalImportKind.entries.getOrNull(importKindOrdinal) else null
-        
+
         startForeground(this)
         powerManager.withPartialWakeLock(TAG) {
             val result = runCatchingCancellable {

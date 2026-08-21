@@ -121,7 +121,7 @@ class FaviconFetcher(
                 isSampled = false,
                 dataSource = DataSource.MEMORY,
             )
-            
+
             // JSON/Legado sources: try to derive favicon from bookSourceUrl in config
             is LegadoRepository -> {
                 val config = (repo.source as? JsonContentSource)?.entity?.config

@@ -3,7 +3,7 @@ package org.skepsun.kototoro.local.data
 import java.io.File
 
 private fun isZipExtension(ext: String?): Boolean {
-    return ext.equals("cbz", ignoreCase = true) || 
+    return ext.equals("cbz", ignoreCase = true) ||
            ext.equals("zip", ignoreCase = true) ||
            ext.equals("epub", ignoreCase = true)
 }

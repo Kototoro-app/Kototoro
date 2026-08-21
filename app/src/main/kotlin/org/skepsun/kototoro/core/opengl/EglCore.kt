@@ -25,12 +25,12 @@ class EglCore {
         }
 
         eglConfig = getConfig()
-        
+
         val attribList = intArrayOf(
             EGL14.EGL_CONTEXT_CLIENT_VERSION, 3,
             EGL14.EGL_NONE
         )
-        
+
         eglContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, attribList, 0)
         checkEglError("eglCreateContext")
         if (eglContext == EGL14.EGL_NO_CONTEXT) {

@@ -49,7 +49,7 @@ class IReaderExtensionLoader @Inject constructor(
             val pkgManager = context.packageManager
             val installedPkgs = ExternalExtensionLoaderSupport.getInstalledPackages(pkgManager)
             val localPkgs = LocalApkExtensionSupport.getLocalArchivePackages(context, pkgManager, ECOSYSTEM_DIR)
-            
+
             val extPkgs = (installedPkgs + localPkgs)
                 .filter { isPackageAnExtension(it) }
                 .distinctBy { it.packageName }
@@ -164,7 +164,7 @@ class IReaderExtensionLoader @Inject constructor(
                 constructor.parameterTypes.size == 1 &&
                     constructor.parameterTypes[0].isAssignableFrom(ireader.core.source.Dependencies::class.java)
             }
-                
+
             if (dependenciesConstructor != null) {
                 val session = IReaderDependenciesProvider.createSession(
                     context = context,

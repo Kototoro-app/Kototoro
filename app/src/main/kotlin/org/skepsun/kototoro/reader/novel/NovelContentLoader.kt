@@ -29,7 +29,7 @@ import javax.inject.Singleton
  * 小说内容加载器
  * 负责加载和缓存小说章节内容
  * 复用漫画阅读器的缓存机制
- * 
+ *
  * 支持：
  * - 在线章节（通过repository加载）
  * - EPUB章节（通过EpubReader加载，使用epub://协议）
@@ -88,11 +88,11 @@ class NovelContentLoader @Inject constructor(
                 return@withContext
             }
 
-            if (chapter.url.startsWith(URI_SCHEME_ZIP, ignoreCase = true) || 
-                chapter.url.startsWith("zip", ignoreCase = true) || 
+            if (chapter.url.startsWith(URI_SCHEME_ZIP, ignoreCase = true) ||
+                chapter.url.startsWith("zip", ignoreCase = true) ||
                 chapter.url.startsWith("file", ignoreCase = true) ||
                 chapter.url.startsWith("cbz", ignoreCase = true)) {
-                
+
                 android.util.Log.d("NovelContentLoader", "Detected local novel chapter, reading directly: ${chapter.url}")
                 val localContent = runCatching {
                     val uri = android.net.Uri.parse(chapter.url)
@@ -156,7 +156,7 @@ class NovelContentLoader @Inject constructor(
                     send(plainText)
                     fullHtml = html
                 }
-                
+
                 // 保存最终结果到缓存
                 val finalText = htmlToPlainText(fullHtml)
                 if (finalText.isNotBlank() && !isErrorContent(finalText)) {
@@ -217,7 +217,7 @@ class NovelContentLoader @Inject constructor(
         forceRefresh: Boolean,
     ): String {
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal START: id=${chapter.id}, prefetched=${prefetchedPages != null}, force=$forceRefresh")
-        
+
         loadLocalEpubChapter(chapter)?.let { return it }
 
         if (org.skepsun.kototoro.local.epub.LocalEpubSource.isEpubUrl(chapter.url)) {
@@ -231,7 +231,7 @@ class NovelContentLoader @Inject constructor(
             android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loaded via local pages logic. Length=${localHtml.length}")
             return localHtml
         }
-        
+
         val cacheKey = generateCacheKey(chapter)
         if (!forceRefresh) {
             // 1. 尝试从缓存读取
@@ -265,21 +265,21 @@ class NovelContentLoader @Inject constructor(
             android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Fetching pages from repository...")
             repository.getPages(chapter)
         }
-        
+
         val firstUrl = pages.firstOrNull()?.url
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: First page URL=${firstUrl?.take(100)}")
-        
+
         val html = if (firstUrl != null) decodeChapterHtml(firstUrl) else ""
         val plainText = htmlToPlainText(html)
-        
+
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Content parsed from network. Length=${plainText.length}")
-        
+
         // 3. 保存到缓存
         if (plainText.isNotBlank() && !isErrorContent(plainText)) {
             saveToCache(cacheKey, plainText)
             android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Saved to cache: $cacheKey")
         }
-        
+
         return plainText
     }
 
@@ -316,15 +316,15 @@ class NovelContentLoader @Inject constructor(
                 "loadLocalHtmlViaPages: id=${chapter.id}, prefetched=${prefetchedPages != null}, pages=${pages.size}",
             )
             if (pages.isEmpty()) return null
-            
+
             // 如果第一页是图片，说明这是插图章节，生成合成HTML显示所有图片
             val firstUrl = pages.first().url
             if (firstUrl.isImageName()) {
                 android.util.Log.d("NovelContentLoader", "Detected image-only chapter, generating synthetic HTML")
-                val syntheticHtml = pages.joinToString("\n") { p -> 
+                val syntheticHtml = pages.joinToString("\n") { p ->
                     // 使用 fragment (entry name) 或者完整 URL
                     val entryName = java.net.URI(p.url).fragment?.removePrefix("/") ?: p.url
-                    "<img src=\"$entryName\">" 
+                    "<img src=\"$entryName\">"
                 }
                 // 即使是合成HTML也经过转换，确保渲染器能正确处理占位符
                 return htmlToPlainText(syntheticHtml)
@@ -359,8 +359,8 @@ class NovelContentLoader @Inject constructor(
                 uri.scheme.equals(URI_SCHEME_ZIP, ignoreCase = true) ||
                     uri.scheme.equals("zip", ignoreCase = true) ||
                     uri.scheme.equals("cbz", ignoreCase = true) -> {
-                    val zipPath = uri.schemeSpecificPart.substringBefore('#').removePrefix("///").let { 
-                        if (it.startsWith("/")) it else "/$it" 
+                    val zipPath = uri.schemeSpecificPart.substringBefore('#').removePrefix("///").let {
+                        if (it.startsWith("/")) it else "/$it"
                     }
                     val entryPath = uri.fragment?.removePrefix("/") ?: return null
                     ZipFile(zipPath).use { zip ->
@@ -522,7 +522,7 @@ class NovelContentLoader @Inject constructor(
         val imagesMap = try {
             val indexContent = File(baseDir, "index.json").takeIf { it.exists() }?.readText()
                 ?: File(baseDir.parentFile, "index.json").takeIf { it.exists() }?.readText()
-            
+
             if (indexContent != null) {
                 val json = org.json.JSONObject(indexContent)
                 val chaptersObj = json.optJSONObject("chapters")
@@ -551,7 +551,7 @@ class NovelContentLoader @Inject constructor(
             doc.select("img").forEach { img ->
                 val src = (img.attr("data-src").ifBlank { img.attr("src") }).trim()
                 if (src.isBlank()) return@forEach
-                
+
                 // 优先使用索引映射
                 val localPath = imagesMap[src]
                 val file = if (localPath != null) {
@@ -559,7 +559,7 @@ class NovelContentLoader @Inject constructor(
                 } else {
                     java.io.File(baseDir, src)
                 }
-                
+
                 if (file.exists()) {
                     val abs = file.toURI().toString()
                     img.attr("src", abs)
@@ -573,13 +573,13 @@ class NovelContentLoader @Inject constructor(
             doc.outerHtml()
         }.getOrDefault(html)
     }
-    
+
     /**
      * Load EPUB chapter content (NEW ARCHITECTURE)
-     * 
+     *
      * Parses epub:// URL and loads content from EPUB file
      * Format: epub://{manga_id}/chapter/{index}
-     * 
+     *
      * Uses EpubChapterMappingDao to find the correct EPUB file path
      * (supports multiple EPUB files per manga, e.g., Z-Library)
      */
@@ -589,40 +589,40 @@ class NovelContentLoader @Inject constructor(
             val regex = Regex("epub://(-?\\d+)/chapter/(\\d+)")
             val match = regex.matchEntire(chapter.url)
                 ?: throw IllegalStateException("Invalid EPUB URL: ${chapter.url}")
-            
+
             val mangaId = match.groupValues[1].toLong()
             val chapterIndex = match.groupValues[2].toInt()
-            
+
             android.util.Log.d("NovelContentLoader", "Loading EPUB: mangaId=$mangaId, chapterIndex=$chapterIndex")
-            
+
             // Query database for EPUB file path using chapter index
             val epubChapterMappingDao = mangaDatabase.getEpubChapterMappingDao()
             val allMappings = epubChapterMappingDao.findByContentId(mangaId)
-            
+
             // Sort mappings by parentChapterId and chapterIndex to match LocalEpubSource ordering
             val sortedMappings = allMappings.sortedWith(compareBy({ it.parentChapterId }, { it.chapterIndex }))
-            
+
             // Find mapping by global index (the index in the URL corresponds to the position in sorted list)
             val mapping = sortedMappings.getOrNull(chapterIndex)
                 ?: throw IllegalStateException("EPUB chapter mapping not found for manga $mangaId, index $chapterIndex (total mappings: ${sortedMappings.size})")
-            
+
             android.util.Log.d("NovelContentLoader", "Found EPUB file: ${mapping.epubFilePath}")
-            
+
             // Get EPUB file from mapping
             val epubFile = resolveEpubFile(appContext, mapping.epubFilePath)
             if (epubFile == null || !epubFile.exists()) {
                 throw IllegalStateException("EPUB file not found: ${mapping.epubFilePath}")
             }
-            
+
             // Load chapter content using EpubReaderImpl
             val reader = org.skepsun.kototoro.local.epub.EpubReaderImpl(epubContentCache)
             val epubContent = reader.readEpub(epubFile)
                 ?: throw IllegalStateException("Failed to parse EPUB file")
-            
+
             // Get chapter by index (use mapping.chapterIndex which is the index within the EPUB file)
             val epubChapter = epubContent.chapters.getOrNull(mapping.chapterIndex)
                 ?: throw IllegalStateException("Chapter index ${mapping.chapterIndex} not found in EPUB")
-            
+
             val content = epubChapter.content
 
             android.util.Log.d("NovelContentLoader", "Loaded EPUB chapter, content length: ${content.length}")

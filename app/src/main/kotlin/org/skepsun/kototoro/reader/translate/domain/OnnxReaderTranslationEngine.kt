@@ -283,7 +283,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
         for (useGpu in listOf(true, false)) {
             val typeLabel = if (useGpu) "GPU(NNAPI)" else "CPU"
             Log.d(LOG_TAG, "Trying $typeLabel initialization for $modelId")
-            
+
             val rt = when {
                 // 1. Check for NLLB specifically
                 modelDir.walkTopDown().any { it.name.equals("NLLB_encoder.onnx", true) } -> {
@@ -301,11 +301,11 @@ class OnnxReaderTranslationEngine @Inject constructor(
                 }
                 // 4. Fallback to Madlad or Generic
                 else -> {
-                    tryCreateMadladLikeRuntime(modelId, modelDir, typeLabel, useGpu) 
+                    tryCreateMadladLikeRuntime(modelId, modelDir, typeLabel, useGpu)
                         ?: tryCreateGenericRuntime(modelId, modelDir, typeLabel, useGpu)
                 }
             }
-            
+
             if (rt != null) {
                 Log.i(LOG_TAG, "Successfully initialized $modelId with $typeLabel")
                 return rt
@@ -734,7 +734,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
     ): String {
         val input = text.trim()
         if (input.isEmpty()) return ""
-        
+
         val prompt = buildPromptForTemplateFamily(
             family = runtime.promptTemplate.family,
             sourceLang = sourceLang,
@@ -744,13 +744,13 @@ class OnnxReaderTranslationEngine @Inject constructor(
 
         val promptIds = tokenizerLock.withLock { runtime.tokenizer.encode(prompt).ids }
         if (promptIds.isEmpty()) return ""
-        
+
         val generated = ArrayList<Long>(MAX_NEW_TOKENS)
         var prevRun: OrtSession.Result? = null
         var nextInputIds = promptIds.map { it.toLong() }.toLongArray()
         var pastSequenceLength = 0
         var step = 0
-        
+
         try {
             while (step < MAX_NEW_TOKENS) {
                 val result = runTranslateGemmaStep(runtime, nextInputIds, pastSequenceLength, prevRun) ?: break
@@ -763,7 +763,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
                 }
                 generated += nextToken
                 nextInputIds = longArrayOf(nextToken)
-                
+
                 if (generated.size >= 6) {
                     val partial = tokenizerLock.withLock { runtime.tokenizer.decode(generated.toLongArray()).trim() }
                     if (partial.contains("<end_of_turn>")) break
@@ -1206,7 +1206,7 @@ class OnnxReaderTranslationEngine @Inject constructor(
                     }
                 }
             }
-            
+
             val decoderRun = runtime.decoderSession.run(decoderInputs)
             val logits = (decoderRun.get("logits").orElse(null) as? OnnxTensor)
                 ?: (runtime.decoderSession.outputNames.firstOrNull()?.let { name ->

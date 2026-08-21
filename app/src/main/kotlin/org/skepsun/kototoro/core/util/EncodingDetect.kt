@@ -65,7 +65,7 @@ object EncodingDetect {
             "UTF-8"
         }
     }
-    
+
     /**
      * Normalize charset name (e.g., "gb2312" -> "GBK")
      */
@@ -77,7 +77,7 @@ object EncodingDetect {
             else -> charset.trim()
         }
     }
-    
+
     /**
      * Find byte array index (helper for head detection)
      */

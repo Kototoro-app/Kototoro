@@ -127,7 +127,7 @@ class MangaUpdatesRepository(
         val request = Request.Builder()
             .put(payload.toString().toRequestBody(CONTENT_TYPE))
             .url("$BASE_API_URL/account/login")
-        
+
         val response = okHttp.newCall(request.build()).await().use { rawResponse ->
             val body = rawResponse.body.string()
             val json = body.toJsonObject("login")
@@ -268,7 +268,7 @@ class MangaUpdatesRepository(
             put("page", (offset / 100) + 1)
             put("perpage", 100)
         }
-        
+
         val request = Request.Builder()
             .post(payload.toString().toRequestBody(CONTENT_TYPE))
             .url("$BASE_API_URL/series/search")
@@ -300,7 +300,7 @@ class MangaUpdatesRepository(
         val request = Request.Builder()
             .get()
             .url("$BASE_API_URL/series/$id")
-        
+
         val response = okHttp.newCall(request.build()).await().parseJson()
         return parseSeriesDetails(response)
     }
@@ -872,7 +872,7 @@ class MangaUpdatesRepository(
             return
         }
         Log.d(TAG, "updateRate(chapter): rateId=$rateId, mangaId=$mangaId, chapter=$chapter, status=${entity.status}")
-            
+
         val payload = JSONArray().apply {
             put(JSONObject().apply {
                 put("series", JSONObject().apply { put("id", rateId) })

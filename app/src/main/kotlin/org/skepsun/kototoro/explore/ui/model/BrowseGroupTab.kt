@@ -19,22 +19,22 @@ sealed class BrowseGroupTab(
      * Show all sources without filtering
      */
     object All : BrowseGroupTab(R.string.all, R.drawable.ic_filter_content_type, "all")
-    
+
     /**
      * Show only manga sources
      */
     object Content : BrowseGroupTab(R.string.manga, R.drawable.ic_content_manga, "manga")
-    
+
     /**
      * Show only novel sources
      */
     object Novel : BrowseGroupTab(R.string.novel, R.drawable.ic_content_novel, "novel")
-    
+
     /**
      * Show only video sources
      */
     object Video : BrowseGroupTab(R.string.video, R.drawable.ic_content_video, "video")
-    
+
     companion object {
         /**
          * Get all available tabs in order
@@ -45,7 +45,7 @@ sealed class BrowseGroupTab(
             Novel,
             Video,
         )
-        
+
         /**
          * Find tab by ID
          */
@@ -66,7 +66,7 @@ sealed class BrowseGroupTab(
             return getAllTabs()
         }
     }
-    
+
     /**
      * Check if this tab matches a content group
      */
@@ -123,7 +123,7 @@ sealed class BrowseGroupTab(
         Novel -> setOf(ContentType.NOVEL, ContentType.HENTAI_NOVEL)
         Video -> setOf(ContentType.VIDEO, ContentType.HENTAI_VIDEO)
     }
-    
+
     /**
      * Check if this tab matches an origin group
      */

@@ -24,7 +24,7 @@ import kotlin.coroutines.CoroutineContext
 
 /**
  * Unified rule executor that delegates to appropriate analyzer based on rule syntax.
- * 
+ *
  * Based on legado-with-MD3 AnalyzeRule pattern.
  * Supports:
  * - JSoup/CSS: Default or @css:

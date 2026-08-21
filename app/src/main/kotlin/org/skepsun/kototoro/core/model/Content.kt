@@ -176,16 +176,16 @@ fun Content.chaptersCount(): Int {
 
 fun Content.isNsfw(): Boolean {
     if (contentRating == org.skepsun.kototoro.parsers.model.ContentRating.SAFE) return false
-    
+
     val safeTags = setOf("safe", "all ages", "non-h", "sfw", "非h", "正常向", "全年龄", "全年龄向")
     val isExplicitlySafe = tags.any { it.title.lowercase() in safeTags }
     if (isExplicitlySafe) return false
-    
+
     if (contentRating == org.skepsun.kototoro.parsers.model.ContentRating.ADULT) return true
-    
+
     val hasAdultTag = tags.any { it.title.isAdultTagKeyword() || it.title.containsAdultTagKeyword() }
     if (hasAdultTag) return true
-    
+
     return source.isNsfw()
 }
 

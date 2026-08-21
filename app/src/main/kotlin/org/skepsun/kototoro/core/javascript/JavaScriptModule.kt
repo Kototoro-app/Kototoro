@@ -14,7 +14,7 @@ import javax.inject.Singleton
 
 /**
  * Dagger module for JavaScript engine dependencies
- * 
+ *
  * Provides:
  * - JavaScriptEngine (RhinoJavaScriptEngine implementation)
  * - JavaScriptRuleParser
@@ -24,10 +24,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object JavaScriptModule {
-    
+
     /**
      * Provides the JavaScript engine implementation
-     * 
+     *
      * Creates RhinoJavaScriptEngine directly to avoid circular dependency
      */
     @Provides
@@ -48,7 +48,7 @@ object JavaScriptModule {
         android.util.Log.i("JavaScriptModule", "RhinoJavaScriptEngine instance created successfully")
         return engine
     }
-    
+
     /**
      * Provides the JavaScript rule parser
      */
@@ -59,7 +59,7 @@ object JavaScriptModule {
     ): JavaScriptRuleParser {
         return JavaScriptRuleParser(engine)
     }
-    
+
     /**
      * Provides the JSON path parser
      */
@@ -68,7 +68,7 @@ object JavaScriptModule {
     fun provideJsonPathParser(): org.skepsun.kototoro.core.parser.rule.JsonPathParser {
         return org.skepsun.kototoro.core.parser.rule.JsonPathParser()
     }
-    
+
     /**
      * Provides the enhanced CSS selector
      */
@@ -77,7 +77,7 @@ object JavaScriptModule {
     fun provideEnhancedCssSelector(): org.skepsun.kototoro.core.parser.rule.EnhancedCssSelector {
         return org.skepsun.kototoro.core.parser.rule.EnhancedCssSelector()
     }
-    
+
     /**
      * Provides the enhanced rule engine with JavaScript support
      */
@@ -107,7 +107,7 @@ object JavaScriptModule {
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class JavaScriptBindingModule {
-    
+
     /**
      * Binds DefaultRuleEngine to RuleEngine interface
      */

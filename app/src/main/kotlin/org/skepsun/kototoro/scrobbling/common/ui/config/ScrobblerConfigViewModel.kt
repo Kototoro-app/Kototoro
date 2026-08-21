@@ -178,7 +178,7 @@ class ScrobblerConfigViewModel @Inject constructor(
                         mangaToSync = details.copy(chapters = details.chapters)
                         mangaToSync = mangaDataRepository.updateProjectionSnapshot(mangaToSync)
                     }
-                    
+
                     val chapters = mangaToSync.chapters ?: emptyList()
                     val targetChapterIndex = (info.chapter - 1).coerceIn(0, chapters.size - 1)
                     android.util.Log.d("ScrobblerConfigVM", "bindContent: syncing progress, chapters.size=${chapters.size}, targetChapterIndex=$targetChapterIndex")
@@ -198,9 +198,9 @@ class ScrobblerConfigViewModel @Inject constructor(
                     android.util.Log.e("ScrobblerConfigVM", "Failed to sync reading progress", e)
                 }
             }
-            
 
-            
+
+
             android.util.Log.d("ScrobblerConfigVM", "bindContent: completed successfully")
             onBindResult.call(boundContent.title)
         }

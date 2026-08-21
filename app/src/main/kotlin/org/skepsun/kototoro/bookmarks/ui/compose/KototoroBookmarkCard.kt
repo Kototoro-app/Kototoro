@@ -143,7 +143,7 @@ fun KototoroBookmarkCardNovel(
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
             )
-            
+
             if (isSelected) {
                 Box(modifier = Modifier.matchParentSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)))
                 Icon(

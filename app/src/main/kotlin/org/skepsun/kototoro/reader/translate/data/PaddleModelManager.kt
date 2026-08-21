@@ -50,8 +50,8 @@ class PaddleModelManager @Inject constructor(
         clsVersion: String
     ): Boolean {
         if (detVersion.isBlank() || recVersion.isBlank()) return false
-        return getModelDir(detVersion).exists() && 
-            getModelDir(recVersion).exists() && 
+        return getModelDir(detVersion).exists() &&
+            getModelDir(recVersion).exists() &&
             (clsVersion.isBlank() || getModelDir(clsVersion).exists())
     }
 
@@ -189,10 +189,10 @@ class PaddleModelManager @Inject constructor(
         Log.d(TAG, "extracting $component model to $componentDir")
         extractToDir(url, archiveFile, componentDir)
         archiveFile.delete()
-        
+
         Log.d(TAG, "normalizing $component model files in $componentDir")
         normalizeComponentFile(componentDir, requiredFilename)
-        
+
         if (!targetFile.isFile) {
             val existingFiles = componentDir.walkTopDown().filter { it.isFile }.map { it.name }.toList()
             Log.e(TAG, "Paddle $component model file missing: $requiredFilename. Available files: $existingFiles")
@@ -261,7 +261,7 @@ class PaddleModelManager @Inject constructor(
     ) = runInterruptible(Dispatchers.IO) {
         val normalizedUrl = downloadUrl.lowercase(Locale.ROOT)
         Log.d(TAG, "extractToDir: url=$downloadUrl filename=${archiveFile.name}")
-        
+
         when {
             normalizedUrl.endsWith(".zip") -> {
                 Log.d(TAG, "extracting ZIP archive")
@@ -278,7 +278,7 @@ class PaddleModelManager @Inject constructor(
                     }
                 }
             }
-            
+
             normalizedUrl.endsWith(".nb") -> {
                 Log.d(TAG, "direct .nb file detected, copying to outputDir")
                 // Some URLs might point directly to a .nb file
@@ -293,7 +293,7 @@ class PaddleModelManager @Inject constructor(
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "TAR extraction failed, maybe not a TAR file? Error: ${e.message}")
-                    // Final fallback: just keep the file as is in the directory, 
+                    // Final fallback: just keep the file as is in the directory,
                     // maybe it's a raw .nb file without extension
                     archiveFile.copyTo(File(outputDir, archiveFile.name), overwrite = true)
                 }
@@ -357,7 +357,7 @@ class PaddleModelManager @Inject constructor(
                    else if (name == "rec.nb") allFiles.firstOrNull { it.name.lowercase().contains("rec") && it.extension == "nb" }
                    else if (name == "cls.nb") allFiles.firstOrNull { it.name.lowercase().contains("cls") && it.extension == "nb" }
                    else null
-            
+
             if (src != null) {
                 val dst = File(modelDir, name)
                 if (src.absolutePath != dst.absolutePath) {

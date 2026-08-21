@@ -76,7 +76,7 @@ class LocalNovelRepository @Inject constructor(
         if (dirByName != null) {
             return parseIndex(dirByName)?.first ?: manga
         }
-        
+
         // For single CBZ files, we need to parse each file to find the matching manga ID
         for (entry in entries) {
             val parsed = parseIndex(entry)
@@ -84,7 +84,7 @@ class LocalNovelRepository @Inject constructor(
                 return parsed.first
             }
         }
-        
+
         return manga
     }
 
@@ -96,7 +96,7 @@ class LocalNovelRepository @Inject constructor(
         if (uri != null && uri.scheme in setOf("content", "file", "zip", "cbz")) {
             return LocalContentParser(uri).getPages(chapter)
         }
-        
+
         return listOf(
             ContentPage(
                 id = chapter.id,
@@ -140,7 +140,7 @@ class LocalNovelRepository @Inject constructor(
         return runCatching {
             val parser = org.skepsun.kototoro.local.data.input.LocalContentParser(dir)
             val localContent = runBlocking { parser.getContent(withDetails = true) }
-            
+
             // Map chapters to ensure they have the correct local source when applicable
             val transformedContent = localContent.manga.withLocalNovelSource()
             val transformedChapters = transformedContent.chapters

@@ -86,9 +86,9 @@ fun DownloadDialog(
     LaunchedEffect(mangaList) {
         viewModel.initialize(mangaList)
     }
-    
+
     val scope = rememberCoroutineScope()
-    
+
     LaunchedEffect(Unit) {
         viewModel.onScheduled.collect { event ->
             event?.consume { isStarted ->
@@ -383,7 +383,7 @@ fun DownloadDialog(
                 ) {
                     Text(text = stringResource(id = R.string.more_options), modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Icon(
-                        imageVector = if (showMoreOptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, 
+                        imageVector = if (showMoreOptions) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = null
                     )
                 }
@@ -442,8 +442,8 @@ fun DownloadDialog(
                             }
                             Switch(
                                 checked = isAlignReader,
-                                onCheckedChange = { 
-                                    isAlignReader = it 
+                                onCheckedChange = {
+                                    isAlignReader = it
                                     viewModel.setDownloadAlignedWithReader(it)
                                 }
                             )
@@ -454,7 +454,7 @@ fun DownloadDialog(
                             Text(text = stringResource(id = R.string.download_auto_retry_summary), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                             Switch(
                                 checked = isAutoRetry,
-                                onCheckedChange = { 
+                                onCheckedChange = {
                                     isAutoRetry = it
                                     viewModel.setDownloadAutoRetryEnabled(it)
                                 }

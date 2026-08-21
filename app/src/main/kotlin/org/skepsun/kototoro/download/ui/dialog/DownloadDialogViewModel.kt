@@ -302,10 +302,10 @@ class DownloadDialogViewModel @Inject constructor(
         val defaultDir = manga.mapToSet {
             localContentRepository.getOutputDir(it, null)
         }.singleOrNull()
-        
+
         val isVideo = manga.firstOrNull()?.source?.getContentType() == ContentType.VIDEO
         val isNovel = manga.firstOrNull()?.source?.getContentType() == ContentType.NOVEL
-        
+
         val dirs = when {
             isVideo -> localStorageManager.getVideoWriteableRoots()
             isNovel -> localStorageManager.getNovelWriteableRoots()
@@ -343,7 +343,7 @@ class DownloadDialogViewModel @Inject constructor(
         val firstManga = mangaDetails.get().firstOrNull() ?: return
         val firstChapter = firstManga.chapters?.firstOrNull() ?: return
         val repo = mangaRepositoryFactory.create(firstManga.source)
-        
+
         runCatchingCancellable {
             val qualities = repo.resolveVideoCandidates(firstChapter)
                 .map { it.title.trim() }

@@ -35,7 +35,7 @@ class MangaUpdatesScrobbler @Inject constructor(
         comment: String?,
     ) {
         val entity = requireScrobblingEntity(mangaId)
-        
+
         repository.updateRate(
             rateId = entity.id,
             mangaId = entity.mangaId,

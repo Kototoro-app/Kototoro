@@ -473,7 +473,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 runOnUiThread {
                     showPlayerMessage(R.string.video_skipping_outro)
                     val dur = videoPlayer?.durationMs ?: return@runOnUiThread
-                    
+
                     if (appSettings.videoAutoNextEnabled) {
                         maybeAutoPlayNext(ignoreRatio = true)
                     }
@@ -631,7 +631,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val pct = if (max > 0) ((curr * 100f) / max).toInt() else 0
         showOverlayRight(getString(R.string.video_volume, pct.toString()), durationMs = null)
     }
-    
+
     @Inject
     lateinit var orientationHelper: ScreenOrientationHelper
 
@@ -1002,7 +1002,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             ) {
                 // Artificial loading delay
                 kotlinx.coroutines.delay((2000..5000).random().toLong())
-                
+
                 // Start a parallel job for random screen flipping
                 launch {
                     while (true) {
@@ -1135,7 +1135,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 ): Boolean {
                     val w = pv.width.takeIf { it > 0 } ?: return false
                     val h = pv.height.takeIf { it > 0 } ?: return false
-                    
+
                     if (isScreenLocked) return false // no-op when locked
                     if (isLongPressSpeeding) return false
 
@@ -1172,15 +1172,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     if (isHorizontalScrubbing) {
                         val duration = videoPlayer?.durationMs ?: return true
                         if (duration <= 0) return true
-                        
+
                         // Proportional Seek: One screen width equals the entire video duration
                         // This makes the dot on the seek bar track the finger 1:1
                         val deltaX = e2.x - initialTouchX
                         val seekOffset = (deltaX / w * duration).toLong()
                         lastScrubPosition = (initialScrubPositionStart + seekOffset).coerceIn(0L, duration)
-                        
+
                         showSeekFeedback(lastScrubPosition, duration, seekOffset)
-                        
+
                         return true
                     }
 
@@ -1210,7 +1210,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             videoPlayer?.setRate(originalSpeed)
                             isLongPressSpeeding = false
                         }
-                        
+
                         // Action final horizontal scrub seek
                         if (isHorizontalScrubbing) {
                             videoPlayer?.seekTo(lastScrubPosition)
@@ -1220,7 +1220,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             // Auto-hide controller after scrubbing ends
                             setUiIsVisible(false)
                         }
-                        
+
                         if (longSeekDirection != 0) {
                             stopLongSeek()
                         }
@@ -1279,7 +1279,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         // Skip the closing window animation so the host screen chrome does not flash during player teardown.
         overridePendingTransition(0, 0)
     }
-    
+
     private fun updateQualityButtonVisibility() {
         syncComposeControlState()
     }
@@ -1854,7 +1854,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             "Resolved playback URL: $playUrl, useProxy=$useProxy " +
                 "aniyomiCompat=${aniyomiPlaylistProxyUrl != null}",
         )
-        
+
         val requestId = "${++playbackRequestGeneration}:${playUrl.hashCode()}"
         val mediaKind = normalized.mediaKind.takeUnless { dynamicCloudstreamPlaylistUrl != null }
             ?: PlaybackMediaKind.HLS
@@ -2778,13 +2778,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val manga = currentMangaContent()
         val state = currentReaderStateOrIntent()
         val fallbackUrl = currentMediaUrl ?: intent.getStringExtra(AppRouter.KEY_URL)
-        
+
         // Extract title: prioritize manga.title, then KEY_TITLE, then URL-derived
         val title = manga?.title
             ?: intent.getStringExtra(AppRouter.KEY_TITLE).takeUnless { it.isNullOrBlank() }
             ?: fallbackUrl?.let { deriveEpisodeTitle(it) }
             ?: ""
-        
+
         // Extract chapter name: prioritize chapter.name from manga.chapters, then URL-derived
         val chapterName = if (manga != null && state != null) {
             val chapter = manga.chapters?.find { it.id == state.chapterId }
@@ -2799,7 +2799,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             fallbackUrl?.let { deriveEpisodeTitle(it) }
                 ?: ""
         }
-        
+
         return Pair(title, chapterName)
     }
 
@@ -4080,20 +4080,20 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         val manga = currentMangaContent() ?: return
         val history = runCatching { historyRepository.getOne(manga) }.getOrNull() ?: return
         android.util.Log.d("VideoPlayer", "Restore history: chapterId=${history.chapterId}, percent=${history.percent}")
-        
+
         // Get current chapter ID from ReaderState or intent
         val currentState = currentReaderStateOrIntent()
         val currentChapterId = currentState?.chapterId
-        
+
         android.util.Log.d("VideoPlayer", "Current chapter ID from intent/state: $currentChapterId")
-        
+
         // Verify chapter ID matches current playing chapter
         if (currentChapterId != null && currentChapterId != history.chapterId) {
             android.util.Log.d("VideoPlayer", "Chapter mismatch: history has ${history.chapterId}, but playing ${currentChapterId}. Not restoring position.")
             // Don't restore position when chapter doesn't match
             return
         }
-        
+
         val overall = history.percent
         if (overall !in 0f..1f) {
             android.util.Log.d("VideoPlayer", "Invalid history percent: $overall")
@@ -4103,22 +4103,22 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             android.util.Log.d("VideoPlayer", "Skip history seek: overall=$overall")
             return
         }
-        
+
         val chapters = manga.chapters ?: run {
             // 无章节信息时无法拆分整体百分比，直接使用整体值（退化为单集?
             android.util.Log.d("VideoPlayer", "No chapters, using overall percent: $overall")
             pendingInitialSeekPercent = overall
             return
         }
-        
+
         val chapter = chapters.find { it.id == history.chapterId } ?: run {
             android.util.Log.d("VideoPlayer", "Chapter not found for id=${history.chapterId}, using overall percent")
             pendingInitialSeekPercent = overall
             return
         }
-        
+
         android.util.Log.d("VideoPlayer", "Found chapter: ${chapter.title} (id=${chapter.id})")
-        
+
         val branchChapters = chapters.filter { it.branch == chapter.branch }
         val count = branchChapters.size
         if (count <= 0) {
@@ -4172,7 +4172,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         // Ensure ReaderState reflects current chapter before saving
         val state = readerState
         android.util.Log.d("VideoPlayer", "ReaderState before save: chapterId=${state?.chapterId}, page=${state?.page}")
-        
+
         if (state == null) {
             android.util.Log.d("VideoPlayer", "ReaderState is null, cannot save accurate chapter progress")
         }
@@ -4218,7 +4218,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             } else {
                 mangaSeed
             }
-            
+
             // 若仍无章节信息（网络/源不可用），避免保存触发断言失败
             if (manga.chapters.isNullOrEmpty()) {
                 android.util.Log.d("VideoPlayer", "Cannot save history: manga has no chapters")
@@ -4232,7 +4232,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 if (!chapterExists) {
                     android.util.Log.e("VideoPlayer", "ReaderState chapter ID ${state.chapterId} does not exist in manga chapters!")
                 }
-                
+
                 // ReaderState 已提供：直接计算整体百分比并保存
                 val overall = computeSeriesPercent(manga, state, episodePercent)
                 android.util.Log.d("VideoPlayer", "Saving history with ReaderState: chapterId=${state.chapterId}, overall=$overall")
@@ -4393,17 +4393,17 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         // Handle chapter selection from the shared chapters/pages Compose content.
         val manga = currentMangaContent()
             ?: return false
-        
+
         android.util.Log.d("VideoPlayer", "Chapter selected: ${chapter.title} (id=${chapter.id})")
         cloudstreamPlaybackInstance++
         cloudstreamLinkJob?.cancel()
         cloudstreamLinkJob = null
-        
+
         // Save current progress before switching
         val previousState = currentVideoRecordState()
         savePlaybackProgress()
         saveHistoryProgressAsync()
-        
+
         // Find the new chapter's video URL asynchronously
         lifecycleScope.launch {
             try {
@@ -4433,14 +4433,14 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     updateTitleAndSubtitle()
                     resolved = true
                 }
-                
+
                 // Try AniyomiAnimeRepository first (most video sources)
                 if (!resolved && repo is AniyomiAnimeRepository) {
                     val videos = runCatching {
                         repo.getVideoListForChapter(chapter)
                             .filter { it.videoUrl.isNotBlank() }
                     }.getOrNull()
-                    
+
                     if (!videos.isNullOrEmpty()) {
                         availableVideos = videos
                         updateQualityButtonVisibility()
@@ -4456,9 +4456,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                             ),
                         )
                         pendingExternalAudio = selected.audioTracks
-                        
+
                         resetChapterState()
-                        
+
                         startPlayback(selected.videoUrl, manga.source, mergedHeaders)
                         updateTitleAndSubtitle()
                         resolved = true
@@ -4474,7 +4474,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     )
                     if (resolved) updateTitleAndSubtitle()
                 }
-                
+
                 // Fallback to getPages for non-Aniyomi sources
                 if (!resolved && repo !is CloudstreamContentRepository) {
                     val pages = repo.getPages(chapter)
@@ -4503,7 +4503,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                     val page = pages.firstOrNull()
                     val streamUrl = if (!resolved) page?.let { repo.getPageUrl(it) } else null
                     val streamHeaders = if (!resolved) page?.let { mergeHeaders(repo.getRequestHeaders(), it.headers) } else null
-                    
+
                     if (streamUrl != null) {
                         Log.d(
                             "VideoPlayerActivity",
@@ -4513,15 +4513,15 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         currentVideoIndex = 0
                         updateQualityButtonVisibility()
                         currentVideoSource = manga.source
-                        
+
                         resetChapterState()
-                        
+
                         prepareAndPlay(streamUrl, manga.source, streamHeaders)
                         updateTitleAndSubtitle()
                         resolved = true
                     }
                 }
-                
+
                 if (!resolved) {
                     android.util.Log.w("VideoPlayer", "Failed to resolve stream URL for chapter ${chapter.id}")
                     showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
@@ -4533,7 +4533,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred)
             }
         }
-        
+
         return true // Indicate we handled the selection
     }
 
@@ -4588,7 +4588,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun showSeekFeedback(posMs: Long, durationMs: Long, seekOffsetMs: Long) {
         val showHours = durationMs >= 3600_000L
         val timeStr = formatTimeMs(posMs, showHours) + " / " + formatTimeMs(durationMs, showHours)
-        
+
         val offsetSec = (kotlin.math.abs(seekOffsetMs) / 1000).toInt()
         val deltaStr = if (seekOffsetMs > 0) {
             getString(org.skepsun.kototoro.R.string.video_fast_forward_time, offsetSec.toString())
@@ -4597,7 +4597,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         } else {
             ""
         }
-        
+
         seekFeedbackState = VideoSeekFeedbackState(
             text = if (deltaStr.isNotEmpty()) "$deltaStr\n$timeStr" else timeStr,
             progress = if (durationMs > 0) posMs.toFloat() / durationMs.toFloat() else 0f,

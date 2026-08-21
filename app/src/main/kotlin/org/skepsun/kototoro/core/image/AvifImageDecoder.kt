@@ -132,7 +132,7 @@ class AvifImageDecoder(
     private companion object {
         private const val DEFAULT_FRAME_DURATION_SEC = 0.042
 
-        
+
         private const val ANIMATED_MEMORY_BUDGET_BYTES = 1000L * 1024 * 1024
     }
 

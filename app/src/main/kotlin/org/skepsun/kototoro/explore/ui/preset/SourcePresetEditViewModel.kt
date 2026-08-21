@@ -36,7 +36,7 @@ class SourcePresetEditViewModel @Inject constructor(
         launchLoadingJob(Dispatchers.Default) {
             val sources = sourcesRepository.getAllAvailableSourcesUnfiltered()
             allSourcesCache.addAll(sources)
-            
+
             allLocales.value = sources.mapNotNullTo(LinkedHashSet()) { it.getLocale()?.language?.takeIf { l -> l.isNotEmpty() } }
 
             preset.value = if (presetId != NO_ID) {

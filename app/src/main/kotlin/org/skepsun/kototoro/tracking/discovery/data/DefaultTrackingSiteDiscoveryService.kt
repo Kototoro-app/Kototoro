@@ -533,16 +533,16 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
         if (catalog.service != ScrobblerService.BANGUMI) {
             return emptyList()
         }
-        
+
         val requestCategory = catalog.category ?: "anime"
 
         if (requestCategory.startsWith("calendar")) {
             // Calendar scrape returns all schedule items at once, so paging is ignored
             if (catalog.page > 0) return emptyList()
-            
+
             val dailyCalendar = bangumiRepository.getDailyCalendar()
             val dayFilter = requestCategory.substringAfter("_", "").toIntOrNull()
-            
+
             val targetDay = dayFilter ?: run {
                 val cal = java.util.Calendar.getInstance()
                 val today = cal.get(java.util.Calendar.DAY_OF_WEEK)
@@ -552,9 +552,9 @@ class DefaultTrackingSiteDiscoveryService @Inject constructor(
             return dailyCalendar[targetDay].orEmpty()
                 .map { item -> item.toTrackingListItem(ScrobblerService.BANGUMI) }
         }
-        
+
         return bangumiRepository.getRankings(
-            category = requestCategory, 
+            category = requestCategory,
             page = catalog.page + 1,
             sortOrder = catalog.trackingSortKey.toBangumiSortOrder() ?: catalog.sortOrder,
             listFilter = catalog.listFilter

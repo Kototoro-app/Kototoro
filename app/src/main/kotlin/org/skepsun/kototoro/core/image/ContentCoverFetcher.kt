@@ -103,15 +103,15 @@ class ContentCoverFetcher(
 
         override fun create(data: String, options: Options, imageLoader: ImageLoader): Fetcher? {
             if (!data.startsWith("http")) return null
-            
+
             val mangaSource = options.extras[mangaSourceKey]?.unwrap() ?: return null
             val repo = mangaRepositoryFactory.createWithDiagnostics(mangaSource).getAvailableRepositoryOrNull(
                 tag = "ContentCoverFetcher",
                 prefix = "repository_unavailable",
             ) ?: return null
-            
+
             val imageClient = repo.getImageClient() ?: return null
-            
+
             return ContentCoverFetcher(
                 imageUrl = data,
                 options = options,

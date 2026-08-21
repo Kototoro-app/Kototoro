@@ -11,7 +11,7 @@ import javax.inject.Singleton
 /**
  * Persistent cookie jar for JSON sources
  * Wraps the app's MutableCookieJar with JSON-source-specific utilities
- * 
+ *
  * Features:
  * - Automatic cookie persistence via Android's CookieManager
  * - Cross-request cookie sharing

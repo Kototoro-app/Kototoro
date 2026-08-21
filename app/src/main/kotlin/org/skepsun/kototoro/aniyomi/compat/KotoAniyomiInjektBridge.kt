@@ -18,14 +18,14 @@ import javax.inject.Singleton
 
 /**
  * Bridge for Aniyomi's Injekt-based dependency injection.
- * 
+ *
  * Reuses the initialization logic from KotoInjektBridge to ensure consistency.
  */
 @Singleton
 class KotoAniyomiInjektBridge @Inject constructor(
     private val mihonInjektBridge: KotoInjektBridge,
 ) {
-    
+
     /**
      * Initialize Injekt with Kototoro's dependencies.
      * Delegates to Mihon's bridge as they share the same Injekt instance.
@@ -33,7 +33,7 @@ class KotoAniyomiInjektBridge @Inject constructor(
     fun initialize() {
         mihonInjektBridge.initialize()
     }
-    
+
     /**
      * Check if Injekt has been initialized.
      */

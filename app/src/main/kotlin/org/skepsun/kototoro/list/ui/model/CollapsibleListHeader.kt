@@ -5,7 +5,7 @@ import androidx.annotation.StringRes
 
 /**
  * A collapsible header for grouping list items
- * 
+ *
  * @param text The header text
  * @param isCollapsible Whether this header can be collapsed/expanded
  * @param isExpanded Current expansion state (only relevant if isCollapsible is true)

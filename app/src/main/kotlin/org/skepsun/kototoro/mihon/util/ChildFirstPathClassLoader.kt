@@ -5,7 +5,7 @@ import java.io.File
 
 /**
  * A ClassLoader that loads classes from its own path before delegating to its parent.
- * 
+ *
  * This is necessary for Mihon extensions because they may bundle different versions
  * of libraries than Kototoro uses, and we need to isolate them.
  */

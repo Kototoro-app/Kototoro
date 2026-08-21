@@ -29,7 +29,7 @@ sealed class LocalContentOutput(
     abstract suspend fun addCover(file: File, type: MimeType?)
 
     abstract suspend fun addPage(chapter: IndexedValue<ContentChapter>, file: File, pageNumber: Int, type: MimeType?)
-    
+
     abstract suspend fun putChapterImages(chapterId: Long, remoteImages: Map<String, String>)
 
     abstract suspend fun flushChapter(chapter: ContentChapter): Boolean

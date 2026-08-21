@@ -23,22 +23,22 @@ class JsonSourceEditViewModel @Inject constructor(
     private val jsonSourceManager: JsonSourceManager,
     private val json: Json,
 ) : ViewModel() {
-    
+
     private var currentSourceId: String? = null
     private var currentEntity: JsonSourceEntity? = null
-    
+
     private val _source = MutableStateFlow<SourceEditData?>(null)
     val source: StateFlow<SourceEditData?> = _source.asStateFlow()
-    
+
     private val _saveResult = MutableStateFlow<SaveResult?>(null)
     val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
-    
+
     fun loadSource(sourceId: String) {
         currentSourceId = sourceId
         viewModelScope.launch(Dispatchers.IO) {
             val entity = jsonSourceManager.getById(sourceId)
             currentEntity = entity
-            
+
             if (entity != null) {
                 try {
                     val legadoSource = json.decodeFromString<LegadoBookSource>(entity.config)
@@ -56,13 +56,13 @@ class JsonSourceEditViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun saveSource(data: SourceEditData) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val timestamp = System.currentTimeMillis()
                 val entity = currentEntity
-                
+
                 if (entity == null) {
                     // New source
                     val sourceId = jsonSourceManager.generateSourceId(data.url, JsonSourceType.LEGADO)
@@ -98,7 +98,7 @@ class JsonSourceEditViewModel @Inject constructor(
                             bookSourceUrl = data.url
                         )
                     }
-                    
+
                     val updatedSource = existingSource.copy(
                         bookSourceName = data.name,
                         bookSourceUrl = data.url,
@@ -107,7 +107,7 @@ class JsonSourceEditViewModel @Inject constructor(
                         exploreUrl = data.exploreUrl,
                         enabled = data.enabled
                     )
-                    
+
                     val updatedConfig = JsonSourceImportMetadata.copyMetadata(
                         fromConfig = entity.config,
                         toConfig = json.encodeToString(updatedSource),
@@ -119,10 +119,10 @@ class JsonSourceEditViewModel @Inject constructor(
                         updatedAt = timestamp,
                         iconUrl = deriveFaviconUrl(data.url),
                     )
-                    
+
                     jsonSourceManager.updateSource(updatedEntity)
                 }
-                
+
                 _saveResult.value = SaveResult.Success
             } catch (e: Exception) {
                 _saveResult.value = SaveResult.Error("Failed to save: ${e.message}")

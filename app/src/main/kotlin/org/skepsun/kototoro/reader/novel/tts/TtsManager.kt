@@ -36,14 +36,14 @@ class TtsManager(
 
     private val _state = MutableStateFlow(TtsState.IDLE)
     val state = _state.asStateFlow()
-    
+
     val currentPlayingTokenIndex = playerController.currentItemIndex
 
     private var currentSession: TtsSession? = null
     private var audioQueue = Channel<Pair<Int, AudioData>>(capacity = 10)
-    
+
     private var tokens: List<Token> = emptyList()
-    
+
     private val scope = CoroutineScope(Dispatchers.Main)
     private var prefetchJob: Job? = null
     private var playbackJob: Job? = null
@@ -74,7 +74,7 @@ class TtsManager(
         Log.d(TAG, "start called with startIndex: $startIndex, tokens count: ${tokens.size}")
         // Cancel old operations
         shutdownCurrentSession()
-        
+
         // Start new session
         val session = TtsSession(
             id = System.currentTimeMillis(),
@@ -82,16 +82,16 @@ class TtsManager(
         )
         currentSession = session
         this.tokens = tokens
-        
+
         _state.value = TtsState.BUFFERING
 
         // Create a new channel for the new session
         audioQueue = Channel(capacity = 10)
-        
+
         // Reset playback completion flag to prevent stale completion signals
         // from the previous session triggering handleTtsPageCompleted() re-entrantly
         playerController.resetCompletion()
-        
+
         Log.d(TAG, "Created new TtsSession with id: ${session.id}")
 
         startPrefetch(session, startIndex)
@@ -116,7 +116,7 @@ class TtsManager(
                     Log.w(TAG, "Session mismatch detected in prefetch, discarding audio chunk for index: $index")
                     return@collect
                 }
-                
+
                 Log.d(TAG, "Prefetch sending chunk to audioQueue for index $index")
                 audioQueue.send(index to audio)
             }
@@ -133,7 +133,7 @@ class TtsManager(
     }
 
     private var completionWatchJob: Job? = null
-    
+
     private fun watchPlaybackCompletion() {
         completionWatchJob?.cancel()
         completionWatchJob = scope.launch {
@@ -154,12 +154,12 @@ class TtsManager(
         _state.value = TtsState.SEEKING
         start(tokens, index)
     }
-    
+
     fun seekNext() {
         Log.d(TAG, "seekNext requested")
         playerController.seekNext()
     }
-    
+
     fun seekPrev() {
         Log.d(TAG, "seekPrev requested")
         playerController.seekPrev()
@@ -176,7 +176,7 @@ class TtsManager(
         playerController.resume()
         _state.value = TtsState.PLAYING
     }
-    
+
     fun getToken(index: Int): Token? {
         return tokens.getOrNull(index)
     }
@@ -202,7 +202,7 @@ class TtsManager(
         runCatching { audioQueue.close() }
         playerController.stop()
     }
-    
+
     fun release() {
         Log.d(TAG, "release requested")
         shutdownCurrentSession()

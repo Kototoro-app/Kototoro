@@ -75,7 +75,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Legado Java API 实现
- * 
+ *
  * 提供 Legado 兼容的 Java API，供 JavaScript 代码调用
  * 参考 Legado 源码: app/src/main/java/io/legado/app/help/http/HttpHelper.kt
  */
@@ -87,17 +87,17 @@ class LegadoJavaAPI(
     private val browserLauncherFactory: (Context, org.skepsun.kototoro.core.network.jsonsource.PersistentCookieJar?) -> BrowserLauncher =
         ::BrowserLauncher,
 ) {
-    
+
     private var currentHtml: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val browserLauncher = browserLauncherFactory(context, cookieJar)
-    
+
     // 存储 JavaScript 变量的 Map
     private val jsVariables = mutableMapOf<String, Any?>()
-    
+
     // JavaScript 上下文引用（由 RhinoJavaScriptEngine 设置）
     var jsContext: JavaScriptContext? = null
-    
+
     companion object {
         private const val TAG = "LegadoJavaAPI"
         private const val ARCHIVE_TEMP_FOLDER_NAME = "ArchiveTemp"
@@ -226,10 +226,10 @@ class LegadoJavaAPI(
     private val jsEvaluator = LegadoJsEvaluator { script, result ->
         evaluateInlineJs(script, result)
     }
-    
+
     /**
      * 执行 HTTP 请求 (GET)
-     * 
+     *
      * @param url 请求 URL
      * @return 响应内容
      */
@@ -282,10 +282,10 @@ class LegadoJavaAPI(
         @Suppress("UNCHECKED_CAST")
         return ajax(url, mapOptions as? Map<String, Any>)
     }
-    
+
     /**
      * 执行 HTTP 请求 (支持 GET/POST)
-     * 
+     *
      * @param url 请求 URL
      * @param options 请求选项（可选）
      *   - method: 请求方法 (GET/POST)
@@ -321,10 +321,10 @@ class LegadoJavaAPI(
             urlPart to null
         }
     }
-    
+
     /**
      * 使用 CSS 选择器解析 HTML
-     * 
+     *
      * @param selector CSS 选择器
      * @return 匹配的元素列表
      */
@@ -349,7 +349,7 @@ class LegadoJavaAPI(
         Log.d(TAG, "getElements called with selector: $selector")
         return getElement(selector)
     }
-    
+
     /**
      * 转换 Legado 选择器到 Jsoup 选择器
      */
@@ -362,19 +362,19 @@ class LegadoJavaAPI(
             else -> selector
         }
     }
-    
+
     /**
      * 设置当前 HTML 内容
-     * 
+     *
      * @param html HTML 字符串
      */
     fun setContent(html: String) {
         currentHtml = html
     }
-    
+
     /**
      * 设置当前 HTML 内容 (支持多种类型)
-     * 
+     *
      * @param content 内容对象 (可以是 String, Element, 或其他对象的 outerHtml/toString)
      */
     fun setContent(content: Any?) {
@@ -394,10 +394,10 @@ class LegadoJavaAPI(
         }
         Log.d(TAG, "setContent: type=${content?.javaClass?.simpleName}, html=${currentHtml?.take(100)}")
     }
-    
+
     /**
      * Base64 编码
-     * 
+     *
      * @param str 要编码的字符串
      * @return Base64 编码后的字符串
      */
@@ -422,10 +422,10 @@ class LegadoJavaAPI(
             runCatching { AndroidBase64.encodeToString(str.toByteArray(), flags) }.getOrNull()
         }
     }
-    
+
     /**
      * Base64 解码
-     * 
+     *
      * @param str Base64 编码的字符串
      * @return 解码后的字符串
      */
@@ -463,10 +463,10 @@ class LegadoJavaAPI(
         if (str.isNullOrBlank()) return null
         return runCatching { base64DecodeBytes(str, flags) }.getOrNull()
     }
-    
+
     /**
      * 十六进制字符串解码为普通字符串
-     * 
+     *
      * @param hex 十六进制字符串
      * @return 解码后的字符串
      */
@@ -752,10 +752,10 @@ class LegadoJavaAPI(
             ).encryptBase64(data)
         }.getOrNull()
     }
-    
+
     /**
      * 时间格式化
-     * 
+     *
      * @param timestamp 时间戳（毫秒）
      * @param format 格式字符串 (如 "yyyy-MM-dd HH:mm:ss")
      * @param timezone 时区 (如 "GMT+8")
@@ -772,10 +772,10 @@ class LegadoJavaAPI(
         }
         return sdf.format(Date(timestamp))
     }
-    
+
     /**
      * UTC 时间格式化
-     * 
+     *
      * @param timestamp 时间戳（毫秒）
      * @param format 格式字符串
      * @param offset UTC 偏移量（小时）
@@ -786,10 +786,10 @@ class LegadoJavaAPI(
         sdf.timeZone = SimpleTimeZone(offset, "UTC")
         return sdf.format(Date(timestamp))
     }
-    
+
     /**
      * 显示 Toast 提示
-     * 
+     *
      * @param message 提示消息
      */
     fun toast(message: Any?) {
@@ -798,10 +798,10 @@ class LegadoJavaAPI(
             Toast.makeText(context, displayMessage, Toast.LENGTH_SHORT).show()
         }
     }
-    
+
     /**
      * 显示长时间 Toast 提示
-     * 
+     *
      * @param message 提示消息
      */
     fun longToast(message: Any?) {
@@ -810,16 +810,16 @@ class LegadoJavaAPI(
             Toast.makeText(context, displayMessage, Toast.LENGTH_LONG).show()
         }
     }
-    
+
     /**
      * 获取设备的 Android ID
-     * 
+     *
      * @return Android ID
      */
     fun androidId(): String {
         return Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: ""
     }
-    
+
     /**
      * 繁体转简体
      */
@@ -1060,10 +1060,10 @@ class LegadoJavaAPI(
         }
     }
 
-    
+
     /**
      * 从当前 HTML 内容中提取字符串
-     * 
+     *
      * @param rule Legado 规则表达式 (如 "tag.a@href", "class.title@text", "#id@src")
      * @return 提取的字符串值
      */
@@ -1144,12 +1144,12 @@ class LegadoJavaAPI(
         if (trimmed.startsWith(".")) return "$$trimmed"
         return "$.$trimmed"
     }
-    
+
     /**
      * 从上下文中获取指定键的值
-     * 
+     *
      * 支持从 JavaScript 变量存储和上下文中获取值
-     * 
+     *
      * @param key 键名
      * @return 值
      */
@@ -1175,12 +1175,12 @@ class LegadoJavaAPI(
         if (contextValue != null) return contextValue
         return jsVariables[key] ?: ""
     }
-    
+
     /**
      * 设置 JavaScript 变量
-     * 
+     *
      * 用于在 JavaScript 代码中存储临时变量，并确保其在当前分析任务中持久化
-     * 
+     *
      * @param key 键名
      * @param value 值
      */
@@ -1205,12 +1205,12 @@ class LegadoJavaAPI(
     fun refreshTocUrl() {
         jsContext?.runtimeContext?.refreshTocUrl()
     }
-    
+
     /**
      * 获取当前源的唯一标识符
-     * 
+     *
      * 用于 Cookie 管理等需要源标识的场景
-     * 
+     *
      * @return 源标识符
      */
     fun getSourceKey(): String {
@@ -1245,7 +1245,7 @@ class LegadoJavaAPI(
         val activeCookieJar = cookieJar ?: return
         LegadoCookieAPI(activeCookieJar).removeCookie(tag)
     }
-    
+
     /**
      * Get host part of a URL
      */
@@ -1258,7 +1258,7 @@ class LegadoJavaAPI(
             ""
         }
     }
-    
+
     /**
      * Get host of current source
      */
@@ -1278,10 +1278,10 @@ class LegadoJavaAPI(
             baseUrl ?: jsContext?.baseUrl,
         )
     }
-    
+
     /**
      * 输出调试日志
-     * 
+     *
      * @param msg 日志消息
      * @return 原始消息（支持链式调用）
      */
@@ -1289,7 +1289,7 @@ class LegadoJavaAPI(
         Log.d(TAG, "[JS Log] ${msg.toString()}")
         return msg
     }
-    
+
     /**
      * 输出对象类型
      */
@@ -1300,10 +1300,10 @@ class LegadoJavaAPI(
             log(any.javaClass.name)
         }
     }
-    
+
     /**
      * URL 编码
-     * 
+     *
      * @param str 需要编码的字符串
      * @return URL 编码后的字符串
      */
@@ -1314,7 +1314,7 @@ class LegadoJavaAPI(
             ""
         }
     }
-    
+
     /**
      * URL 编码（指定编码）
      */
@@ -1325,36 +1325,36 @@ class LegadoJavaAPI(
             ""
         }
     }
-    
+
     /**
      * 生成 UUID
      */
     fun randomUUID(): String {
         return java.util.UUID.randomUUID().toString()
     }
-    
+
     /**
      * 字符串转字节数组
      */
     fun strToBytes(str: String): ByteArray {
         return str.toByteArray(Charsets.UTF_8)
     }
-    
+
     fun strToBytes(str: String, charset: String): ByteArray {
         return str.toByteArray(Charset.forName(charset))
     }
-    
+
     /**
      * 字节数组转字符串
      */
     fun bytesToStr(bytes: ByteArray): String {
         return String(bytes, Charsets.UTF_8)
     }
-    
+
     fun bytesToStr(bytes: ByteArray, charset: String): String {
         return String(bytes, Charset.forName(charset))
     }
-    
+
     /**
      * MD5 编码（16位）
      */
@@ -1368,7 +1368,7 @@ class LegadoJavaAPI(
             ""
         }
     }
-    
+
     /**
      * MD5 编码（32位）
      */
@@ -1431,7 +1431,7 @@ class LegadoJavaAPI(
             java.util.Base64.getEncoder().encodeToString(mac.doFinal(data.toByteArray(Charsets.UTF_8)))
         }.getOrDefault("")
     }
-    
+
     /**
      * 获取 WebView User-Agent
      */
@@ -1442,7 +1442,7 @@ class LegadoJavaAPI(
             "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36"
         }
     }
-    
+
     /**
      * HTML 格式化，保留图片
      */
@@ -1687,7 +1687,7 @@ class LegadoJavaAPI(
             }
         }
     }
-    
+
     /**
      * 打开内置浏览器并等待验证结果返回。
      */
@@ -1708,7 +1708,7 @@ class LegadoJavaAPI(
         html: String?,
     ): StrResponse {
         Log.i(TAG, "startBrowserAwait called: url=$url, title=$title")
-        
+
         try {
             toast("正在启动浏览器进行验证...")
             val result = browserLauncher.launchAndWait(

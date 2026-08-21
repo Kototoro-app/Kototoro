@@ -43,11 +43,11 @@ object JsonSourceNetworkModule {
             setCookiePolicy(CookiePolicy.ACCEPT_ALL)
         }
     }
-    
+
     /**
      * Provide a specialized HTTP client for JSON sources
      * Includes User-Agent rotation, rate limiting, and logging
-     * 
+     *
      * Note: Uses lenient SSL verification to support sources with expired/self-signed certificates
      * This matches Legado's behavior for compatibility with various book sources
      */
@@ -64,7 +64,7 @@ object JsonSourceNetworkModule {
             connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
             writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            
+
             // Add JSON source specific interceptors
             addInterceptor(userAgentInterceptor)
             addInterceptor(rateLimitInterceptor)
@@ -72,15 +72,15 @@ object JsonSourceNetworkModule {
             // Keep JSON sources always fresh: avoid OkHttp HTTP cache returning stale bodies.
             // This mirrors legado-with-MD3 default (no explicit cache configured).
             cache(null)
-            
+
             // Keep the CloudFlareInterceptor inherited from ContentHttpClient so Legado and TVBox
             // report challenges through the same host-level solver as every other source type.
-            
+
             // Add logging in debug builds
             if (BuildConfig.DEBUG) {
                 addInterceptor(loggingInterceptor)
             }
-            
+
             // Use lenient SSL verification for JSON sources
             // This allows accessing sources with expired or self-signed certificates
             // Similar to Legado's approach for maximum compatibility
@@ -88,11 +88,11 @@ object JsonSourceNetworkModule {
         }.build()
     }
 
-    
+
     /**
      * Configure lenient SSL verification
      * This trusts all certificates, including expired and self-signed ones
-     * 
+     *
      * WARNING: This reduces security but is necessary for compatibility with
      * many book sources that have certificate issues
      */
@@ -104,11 +104,11 @@ object JsonSourceNetworkModule {
                 override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
                 override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
             })
-            
+
             // Install the all-trusting trust manager
             val sslContext = SSLContext.getInstance("TLS")
             sslContext.init(null, trustAllCerts, SecureRandom())
-            
+
             sslSocketFactory(SniBypassSSLSocketFactory(sslContext.socketFactory), trustAllCerts[0] as X509TrustManager)
             hostnameVerifier { _, _ -> true }
         } catch (e: Exception) {

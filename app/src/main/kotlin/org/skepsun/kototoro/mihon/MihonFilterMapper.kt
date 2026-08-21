@@ -32,7 +32,7 @@ object MihonFilterMapper {
                     when (val state = filter.state) {
                         is List<*> -> {
                             val checkboxTags = mutableListOf<ContentTag>()
-                            
+
                             state.forEach { subItem ->
                                 if (subItem is Filter<*>) {
                                     when (subItem) {
@@ -61,7 +61,7 @@ object MihonFilterMapper {
                                     }
                                 }
                             }
-                            
+
                             if (checkboxTags.isNotEmpty()) {
                                 tagGroups.add(ContentTagGroup(filter.name, checkboxTags.toSet()))
                             }
@@ -200,7 +200,7 @@ object MihonFilterMapper {
     fun updateMihonFilters(mihonFilters: FilterList, kotoFilter: ContentListFilter) {
         val selectedTags = kotoFilter.tags.mapToSet { it.key }
         val excludedTags = kotoFilter.tagsExclude.mapToSet { it.key }
-        
+
         mihonFilters.forEach { filter ->
             when (filter) {
                 is Filter.Group<*> -> {

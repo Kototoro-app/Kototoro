@@ -7,11 +7,11 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * 带超时控制的 JavaScript 引擎装饰器
- * 
+ *
  * 为 JavaScript 执行添加超时控制，防止恶意或低效的脚本长时间运行
- * 
+ *
  * **参考 Legado**: RhinoScriptEngine.kt 中的超时控制机制
- * 
+ *
  * @param delegate 被装饰的 JavaScript 引擎
  * @param timeoutMillis 超时时间（毫秒），默认 30 秒
  */
@@ -19,7 +19,7 @@ class TimeoutJavaScriptEngine(
     private val delegate: JavaScriptEngine,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS
 ) : JavaScriptEngine {
-    
+
     override fun execute(script: String, context: JavaScriptContext): Any? {
         return try {
             runBlocking {
@@ -35,7 +35,7 @@ class TimeoutJavaScriptEngine(
             throw e
         }
     }
-    
+
     override fun evaluate(expression: String, context: JavaScriptContext): Any? {
         return try {
             runBlocking {
@@ -51,18 +51,18 @@ class TimeoutJavaScriptEngine(
             throw e
         }
     }
-    
+
     override fun registerGlobalObject(name: String, obj: Any) {
         delegate.registerGlobalObject(name, obj)
     }
-    
+
     override fun dispose() {
         delegate.dispose()
     }
-    
+
     companion object {
         private const val TAG = "TimeoutJavaScriptEngine"
-        
+
         /**
          * 默认超时时间：30 秒
          */

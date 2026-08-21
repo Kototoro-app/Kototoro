@@ -77,7 +77,7 @@ class ContentIndex(source: String?) {
         }
         json.put(KEY_APP_ID, BuildConfig.APPLICATION_ID)
         json.put(KEY_APP_VERSION, BuildConfig.VERSION_CODE)
-        
+
         manga.chapters?.let { chapters ->
             val chaptersJson = json.optJSONObject(KEY_CHAPTERS) ?: JSONObject().also { json.put(KEY_CHAPTERS, it) }
             chapters.forEachIndexed { index, chapter ->
@@ -230,10 +230,10 @@ class ContentIndex(source: String?) {
         val chapters = json.optJSONObject(KEY_CHAPTERS) ?: return false
         val idStr = id.toString()
         val jo = chapters.optJSONObject(idStr) ?: return false
-        
+
         val mangaSource = json.optString(KEY_SOURCE)
         val isPurelyLocal = mangaSource == LocalMangaSource.name || mangaSource == LocalNovelSource.name || mangaSource == org.skepsun.kototoro.core.model.LocalVideoSource.name
-        
+
         return if (isPurelyLocal) {
             chapters.remove(idStr) != null
         } else {

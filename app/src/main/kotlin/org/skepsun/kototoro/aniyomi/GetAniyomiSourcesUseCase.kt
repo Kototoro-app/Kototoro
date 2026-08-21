@@ -14,7 +14,7 @@ class GetAniyomiSourcesUseCase @Inject constructor(
     private val extensionManager: AniyomiExtensionManager,
     private val settings: org.skepsun.kototoro.core.prefs.AppSettings,
 ) {
-    
+
     fun getSourcesFlow(): Flow<List<AniyomiSourceItem>> {
         return extensionManager.installedExtensions.map { extensions ->
             val allSources = extensions.flatMap { ext ->
@@ -22,12 +22,12 @@ class GetAniyomiSourcesUseCase @Inject constructor(
                     Triple(ext, catalogueSource, catalogueSource.name)
                 }
             }
-            
+
             val nameCountMap = allSources.groupBy { it.third }.mapValues { it.value.size }
-            
+
             allSources.map { (ext, catalogueSource, baseName) ->
                 val needsLanguageSuffix = nameCountMap[baseName]?.let { it > 1 } ?: false
-                
+
                 AniyomiSourceItem(
                     source = AniyomiAnimeSource(
                         animeCatalogueSource = catalogueSource,
@@ -41,16 +41,16 @@ class GetAniyomiSourcesUseCase @Inject constructor(
             }
         }
     }
-    
+
     fun getSourcesFlowFiltered(userLanguages: Set<String>): Flow<List<AniyomiSourceItem>> {
         return getSourcesFlow()
     }
-    
+
     fun getSourcesByLanguage(): Map<String, List<AniyomiAnimeSource>> {
         return extensionManager.getSourcesByLanguage().mapValues { (_, sources) ->
             sources.map { catalogueSource ->
-                val ext = extensionManager.installedExtensions.value.find { 
-                    it.sources.contains(catalogueSource) 
+                val ext = extensionManager.installedExtensions.value.find {
+                    it.sources.contains(catalogueSource)
                 }
                 AniyomiAnimeSource(
                     animeCatalogueSource = catalogueSource,
@@ -60,9 +60,9 @@ class GetAniyomiSourcesUseCase @Inject constructor(
             }
         }
     }
-    
+
     fun hasExtensions(): Boolean = extensionManager.hasExtensions()
-    
+
     fun isLoading(): Flow<Boolean> = extensionManager.isLoading
 }
 
@@ -79,11 +79,11 @@ data class AniyomiSourceItem(
             source.displayName
         }
     }
-    
+
     val language: String get() = source.language
     val isNsfw: Boolean get() = source.isNsfw
     val sourceId: Long get() = source.sourceId
-    
+
     companion object {
         private fun getLanguageDisplayName(langCode: String): String {
             return when (langCode.lowercase()) {

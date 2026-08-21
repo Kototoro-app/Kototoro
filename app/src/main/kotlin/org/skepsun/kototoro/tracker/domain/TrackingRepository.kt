@@ -276,7 +276,7 @@ class TrackingRepository @Inject constructor(
             }
             val track = getOrCreateTrack(anchorMangaId).mergeWith(updates, anchorMangaId)
             db.getTracksDao().upsert(track)
-            
+
             val resolvedManga = contentDataRepository.updateProjectionSnapshotAtAnchor(
                 manga = updates.manga,
                 anchorMangaId = anchorMangaId,

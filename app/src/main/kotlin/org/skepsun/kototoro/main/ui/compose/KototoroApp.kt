@@ -495,7 +495,7 @@ fun KototoroApp(
     val isLanguagePresetFilterVisibleSetting = filterVisibilityPrefs.isLanguagePresetFilterVisible
     val isContentTypeFilterVisibleSetting = filterVisibilityPrefs.isContentTypeFilterVisible
     val isSourceTagFilterVisibleSetting = filterVisibilityPrefs.isSourceTagFilterVisible
-    
+
     val effectiveLanguagePresetFilterVisible = isLanguagePresetFilterVisible && isLanguagePresetFilterVisibleSetting
     val effectiveContentTypeFilterVisible = isContentTypeFilterVisible &&
         isContentTypeFilterVisibleSetting &&

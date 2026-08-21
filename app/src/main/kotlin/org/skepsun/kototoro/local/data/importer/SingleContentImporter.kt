@@ -132,11 +132,11 @@ class SingleContentImporter @Inject constructor(
         }
         val childFiles = root.listFiles()
         val subDirs = childFiles.filter { it.isDirectory }
-        val importableFiles = childFiles.filter { 
+        val importableFiles = childFiles.filter {
             it.isFile && LocalImportSupport.supportsFileName(it.name ?: "") &&
             (overrideKind == null || hasZipExtension(it.name ?: "") || LocalImportSupport.classifyFileName(it.name ?: "") == overrideKind)
         }
-        
+
         val results = mutableListOf<LocalContent>()
         try {
             for (folder in subDirs) {

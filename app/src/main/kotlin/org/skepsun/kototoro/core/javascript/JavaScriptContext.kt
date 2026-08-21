@@ -6,7 +6,7 @@ import org.skepsun.kototoro.core.parser.legado.runtime.LegadoRuleRuntimeContext
 
 /**
  * JavaScript 执行上下文
- * 
+ *
  * 管理 JavaScript 执行时的变量和状态
  * 与 Legado 的 AnalyzeRule.kt 保持一致
  */
@@ -35,7 +35,7 @@ data class JavaScriptContext(
             else -> variables[name] = value
         }
     }
-    
+
     /**
      * 获取变量
      * 支持嵌套属性访问，如 "book.name"
@@ -45,23 +45,23 @@ data class JavaScriptContext(
         if (variables.containsKey(name)) {
             return variables[name]
         }
-        
+
         // 处理嵌套属性访问
         if (name.contains('.')) {
             val parts = name.split('.', limit = 2)
             val objectName = parts[0]
             val propertyName = parts[1]
-            
+
             val obj = when (objectName) {
                 "book" -> book
                 "chapter" -> chapter
                 "source" -> source
                 else -> variables[objectName]
             }
-            
+
             return getNestedProperty(obj, propertyName)
         }
-        
+
         // 检查上下文中的标准变量
         return when (name) {
             "baseUrl" -> baseUrl
@@ -76,17 +76,17 @@ data class JavaScriptContext(
             else -> null
         }
     }
-    
+
     /**
      * 获取嵌套属性
      * 支持多级访问，如 "book.name" 或 "book.customProperties.type"
      */
     private fun getNestedProperty(obj: Any?, propertyName: String): Any? {
         if (obj == null) return null
-        
+
         val parts = propertyName.split('.', limit = 2)
         val currentProperty = parts[0]
-        
+
         val value = when (obj) {
             is BookInfo -> when (currentProperty) {
                 "bookUrl" -> obj.bookUrl
@@ -116,7 +116,7 @@ data class JavaScriptContext(
             is Map<*, *> -> obj[currentProperty]
             else -> LegadoReflectiveAccess.readProperty(obj, currentProperty)
         }
-        
+
         // 如果还有更多层级，递归获取
         return if (parts.size > 1) {
             getNestedProperty(value, parts[1])
@@ -124,14 +124,14 @@ data class JavaScriptContext(
             value
         }
     }
-    
+
     /**
      * 获取所有变量（用于 JavaScript 引擎）
      */
     fun getAllVariables(): Map<String, Any?> {
         val allVars = mutableMapOf<String, Any?>()
         allVars.putAll(variables)
-        
+
         // 添加标准变量
         // 允许通过 setVariable/putVariable("baseUrl", ...) 动态覆盖上下文 baseUrl
         // 显式变量优先，避免被构造时的 baseUrl 覆盖（与 legado 行为对齐）
@@ -144,19 +144,19 @@ data class JavaScriptContext(
         page?.let { allVars["page"] = it }
         result?.let { allVars["result"] = it }
         (src ?: result)?.let { allVars["src"] = it }
-        
+
         // java 绑定在 Sandbox.setResult 时注入，以便可替换为具备方法的绑定对象
         javaBridge?.let { allVars["java"] = it }
         variables["java"]?.let { allVars["java"] = it }
         // cookie 和 cache 将在 Sandbox 中实际注入
-        
+
         return allVars
     }
 
     fun getMutableVariables(): Map<String, Any?> {
         return variables.toMap()
     }
-    
+
     companion object {
         /**
          * 创建搜索上下文
@@ -168,7 +168,7 @@ data class JavaScriptContext(
                 source = source
             )
         }
-        
+
         /**
          * 创建书籍信息上下文
          */
@@ -179,7 +179,7 @@ data class JavaScriptContext(
                 baseUrl = baseUrl
             )
         }
-        
+
         /**
          * 创建章节列表上下文
          */
@@ -190,7 +190,7 @@ data class JavaScriptContext(
                 baseUrl = baseUrl
             )
         }
-        
+
         /**
          * 创建章节内容上下文
          */
@@ -230,7 +230,7 @@ data class BookInfo(
 ) {
     // Legado 兼容：是否使用替换规则
     private var useReplaceRule: Boolean = true
-    
+
     /**
      * 设置自定义属性
      */
@@ -248,7 +248,7 @@ data class BookInfo(
             else -> customProperties[name] = value
         }
     }
-    
+
     /**
      * 获取属性
      */
@@ -267,9 +267,9 @@ data class BookInfo(
             else -> customProperties[propertyName]
         }
     }
-    
+
     // ======== Legado 兼容：变量管理 ========
-    
+
     /**
      * 存储变量（Legado 兼容）
      * 用于聚合源等场景，在 JavaScript 中调用 book.putVariable(key, value)
@@ -282,7 +282,7 @@ data class BookInfo(
         }
         return true
     }
-    
+
     /**
      * 获取变量（Legado 兼容）
      * 用于聚合源等场景，在 JavaScript 中调用 book.getVariable(key)
@@ -290,7 +290,7 @@ data class BookInfo(
     fun getVariable(key: String): String {
         return variableMap[key] ?: ""
     }
-    
+
     /**
      * 设置是否使用替换规则（Legado 兼容）
      * 部分聚合源会调用 book.setUseReplaceRule(false) 来禁用净化替换
@@ -298,14 +298,14 @@ data class BookInfo(
     fun setUseReplaceRule(useReplaceRule: Boolean) {
         this.useReplaceRule = useReplaceRule
     }
-    
+
     /**
      * 获取是否使用替换规则
      */
     fun getUseReplaceRule(): Boolean {
         return useReplaceRule
     }
-    
+
     /**
      * 获取所有变量（用于序列化等）
      */

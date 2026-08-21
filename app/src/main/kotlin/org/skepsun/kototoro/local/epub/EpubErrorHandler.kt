@@ -4,21 +4,21 @@ import android.util.Log
 
 /**
  * Centralized error handling for EPUB operations.
- * 
+ *
  * Responsibilities:
  * - Log errors with appropriate detail (Requirement 10.5)
  * - Provide user-friendly error messages (Requirements 10.1, 10.2, 10.3, 10.4)
  * - Track error statistics for debugging
- * 
+ *
  * Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
  */
 object EpubErrorHandler {
-    
+
     private const val TAG = "EpubErrorHandler"
-    
+
     /**
      * Handles an EPUB error by logging it with appropriate detail.
-     * 
+     *
      * @param error The error to handle
      * @param context Additional context about where the error occurred
      */
@@ -29,7 +29,7 @@ object EpubErrorHandler {
             }
             append(error.message)
         }
-        
+
         // Log with appropriate level based on error type
         when (error) {
             is EpubError.ParseError -> {
@@ -49,10 +49,10 @@ object EpubErrorHandler {
             }
         }
     }
-    
+
     /**
      * Handles a generic exception by converting it to an EpubError and logging it.
-     * 
+     *
      * @param exception The exception to handle
      * @param context Additional context about where the error occurred
      * @return The converted EpubError
@@ -62,10 +62,10 @@ object EpubErrorHandler {
         handleError(error, context)
         return error
     }
-    
+
     /**
      * Creates a Result.failure with proper error handling.
-     * 
+     *
      * @param error The error to wrap
      * @param context Additional context about where the error occurred
      * @return Result.failure with the error
@@ -74,10 +74,10 @@ object EpubErrorHandler {
         handleError(error, context)
         return Result.failure(Exception(error.userMessage, error.cause))
     }
-    
+
     /**
      * Wraps a block of code with error handling.
-     * 
+     *
      * @param context Context about the operation
      * @param block The code to execute
      * @return Result containing the value or error
@@ -93,10 +93,10 @@ object EpubErrorHandler {
             Result.failure(Exception(error.userMessage, e))
         }
     }
-    
+
     /**
      * Wraps a suspend block of code with error handling.
-     * 
+     *
      * @param context Context about the operation
      * @param block The code to execute
      * @return Result containing the value or error

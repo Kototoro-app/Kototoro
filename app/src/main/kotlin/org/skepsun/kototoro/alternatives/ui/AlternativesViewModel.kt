@@ -57,7 +57,7 @@ class AlternativesViewModel @Inject constructor(
     private var includeDisabledSources = MutableStateFlow(false)
     private var isPinnedOnly = MutableStateFlow(false)
     val pinnedOnly: StateFlow<Boolean> = isPinnedOnly
-    
+
     val isPinnedOnlySelected: Boolean
         get() = isPinnedOnly.value
 

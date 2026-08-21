@@ -1722,14 +1722,14 @@ class DetailsViewModel @Inject constructor(
                         ),
                     ),
                 )
-                
+
                 if (mangaDetails.value == null && cached != null) {
                     cacheTrackingDetails(cached)
                     ingestTrackingDetailsIntoEntityGraph(cached)
                     baseLoadedDetails = ContentDetails(trackingDetailsToSyntheticContent(cached))
                     syncDisplayedState()
                 }
-                
+
                 val remoteDetails = try { trackingSiteDiscoveryService.getDetails(service, activeExternalOrigin.remoteId, activeExternalOrigin.url) } catch (e: Exception) { null }
                 if (remoteDetails != null) {
                     cacheTrackingDetails(remoteDetails)
@@ -1737,7 +1737,7 @@ class DetailsViewModel @Inject constructor(
                     baseLoadedDetails = ContentDetails(trackingDetailsToSyntheticContent(remoteDetails))
                     syncDisplayedState()
                 }
-                
+
                 val trackedEntity = entityGraphRepository.findEntityByBinding(
                     source = service.id.toString(),
                     externalId = activeExternalOrigin.remoteId.toString(),
@@ -1750,7 +1750,7 @@ class DetailsViewModel @Inject constructor(
                 if (remoteDetails != null) {
                     trackingSiteCacheRepository.saveDetails(remoteDetails)
                 }
-                
+
                     flowOrFallback(emptyList()) {
                         db.getTrackingSiteDao().observeLinks(service.id, activeExternalOrigin.remoteId)
                     }.collect { links ->
@@ -3130,7 +3130,7 @@ class DetailsViewModel @Inject constructor(
         .combine(localStorageChanges.onStart { emit(null) }) { details, _ -> details }
         .map { details ->
             if (details == null) return@map 0L
-            
+
             val local = details.local
             if (local != null) {
                 // 普通本地漫画：计算文件夹大小
@@ -5340,14 +5340,14 @@ class DetailsViewModel @Inject constructor(
                     }
                     ?: return@launchJob
             val override = dataRepository.getOverride(manga.id) ?: org.skepsun.kototoro.core.ui.model.ContentOverride(null, null, null)
-            
+
             val isCurrentlyNsfw = manga.isNsfw()
             val newRating = if (isCurrentlyNsfw) {
                 org.skepsun.kototoro.parsers.model.ContentRating.SAFE
             } else {
                 org.skepsun.kototoro.parsers.model.ContentRating.ADULT
             }
-            
+
             dataRepository.setOverride(manga, override.copy(contentRating = newRating))
             doLoad(false)
         }
@@ -5396,13 +5396,13 @@ class DetailsViewModel @Inject constructor(
                 val finalDetails = if (localEpubSource.hasEpubFile(details.id)) {
                     android.util.Log.d("DetailsViewModel", "EPUB file detected for manga ${details.id}")
                     android.util.Log.d("DetailsViewModel", "Using chapters from DetailsLoadUseCase (${details.allChapters.size} chapters)")
-                    
+
                     // IMPORTANT: Reset selectedBranch to null for EPUB
                     // EPUB chapters all have branch=null, so we need to reset selectedBranch
                     // to avoid branch mismatch (e.g., selectedBranch="中日对照" but EPUB branch=null)
                     selectedBranch.value = null
                     android.util.Log.d("DetailsViewModel", "Reset selectedBranch to null for EPUB")
-                    
+
                     // Use the details as-is, which already contains expanded EPUB chapters
                     // from DetailsLoadUseCase (including both internal chapters and download links)
                     details
@@ -5571,10 +5571,10 @@ class DetailsViewModel @Inject constructor(
 
     /**
      * Expand EPUB chapters in the details page (NEW ARCHITECTURE - SIMPLIFIED)
-     * 
+     *
      * In the new architecture, EPUB chapters are already loaded by LocalEpubSource
      * in the doLoad() method, so this method simply returns the chapters as-is.
-     * 
+     *
      * This method is kept for backward compatibility with old EPUB data that
      * still uses the file://path#chapter/N format. Once all data is migrated,
      * this method can be removed entirely.

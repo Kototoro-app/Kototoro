@@ -22,9 +22,9 @@ class HistoryUpdateUseCase @Inject constructor(
     suspend operator fun invoke(manga: Content, readerState: ReaderState, percent: Float) {
         // 从数据库查询父章节ID（用于EPUB内部章节）
         val parentChapterId = extractParentChapterIdFromDatabase(manga.id, readerState.chapterId)
-        
+
         android.util.Log.d("HistoryUpdateUseCase", "Saving history: chapterId=${readerState.chapterId}, parentChapterId=$parentChapterId, percent=$percent")
-        
+
         historyRepository.addOrUpdate(
             manga = manga,
             chapterId = readerState.chapterId,
@@ -35,7 +35,7 @@ class HistoryUpdateUseCase @Inject constructor(
             parentChapterId = parentChapterId,
         )
     }
-    
+
     /**
      * 从数据库查询父章节ID（用于EPUB内部章节）
      * 如果是EPUB内部章节，返回父章节ID；否则返回null

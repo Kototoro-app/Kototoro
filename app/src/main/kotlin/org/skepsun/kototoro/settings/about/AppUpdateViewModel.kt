@@ -105,7 +105,7 @@ class AppUpdateViewModel @Inject constructor(
                 return@launchLoadingJob
             }
             val uri = downloadManager.getUriForDownloadedFile(downloadId) ?: return@launchLoadingJob
-            
+
             val installUri = uri
 
             @Suppress("DEPRECATION")

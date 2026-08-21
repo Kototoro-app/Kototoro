@@ -1560,7 +1560,7 @@ class WebViewExecutor @Inject constructor(
                     if (html.includes('cf-browser-verification') || html.includes('__cf_chl_opt') || html.includes('turnstile') || html.includes('cf_chl') || html.includes('Cloudflare') || html.includes('Ray ID')) {
                         return html;
                     }
-                    
+
                     // Detect if the response is actually JSON dumped into the browser
                     const text = document.body ? (document.body.innerText || document.body.textContent || '').trim() : '';
                     if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
@@ -1569,7 +1569,7 @@ class WebViewExecutor @Inject constructor(
                             return text; // It's valid JSON, return stripped of WebView HTML wrappers
                         } catch(e) { }
                     }
-                    
+
                     return html; // Return full HTML for JSoup parsers
                 })()"""
 			) { result ->

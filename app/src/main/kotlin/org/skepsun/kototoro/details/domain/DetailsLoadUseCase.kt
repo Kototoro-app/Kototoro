@@ -295,13 +295,13 @@ class DetailsLoadUseCase @Inject constructor(
             DETAILS_TRACE_TAG,
             "load.provider start seed=${seed.traceSummary()} force=$force repository=${repository::class.java.name}",
         )
-        
+
         // 对于EPUB源（NoveliaWenku等），强制从服务器获取最新章节列表
         // 这样可以确保未下载的EPUB临时章节不会丢失
-        val isEpubSource = seed.source.name.contains("WENKU", ignoreCase = true) || 
+        val isEpubSource = seed.source.name.contains("WENKU", ignoreCase = true) ||
                            seed.source.name.contains("EPUB", ignoreCase = true)
         val shouldForceRefresh = force || isEpubSource
-        
+
         val manga = if (repository is CachingContentRepository) {
             repository.getDetails(seed, if (shouldForceRefresh) CachePolicy.WRITE_ONLY else CachePolicy.ENABLED)
         } else {
@@ -311,7 +311,7 @@ class DetailsLoadUseCase @Inject constructor(
             DETAILS_TRACE_TAG,
             "getDetails: repository returned in ${SystemClock.elapsedRealtime() - start}ms for mangaId=${seed.id}",
         )
-        
+
         android.util.Log.d("DetailsLoadUseCase", "getDetails: source=${seed.source.name}, isEpubSource=$isEpubSource, force=$force, shouldForceRefresh=$shouldForceRefresh")
         android.util.Log.d("DetailsLoadUseCase", "getDetails: manga has ${manga.chapters?.size ?: 0} chapters from server")
         android.util.Log.d(
@@ -322,7 +322,7 @@ class DetailsLoadUseCase @Inject constructor(
             "DetailsLoadUseCase",
             "getDetails: first chapters=${manga.chapters.orEmpty().take(3).map { "${it.id}|${it.branch}|${it.title}|${it.url}" }}",
         )
-        
+
         // 检查是否有EPUB内部章节需要加载
         val expanded = expandEpubChaptersIfNeeded(manga)
         val resolved = if (hasCoverOverride) {
@@ -369,7 +369,7 @@ class DetailsLoadUseCase @Inject constructor(
 
     /**
      * 如果manga有EPUB下载章节，从数据库加载内部章节并展开
-     * 
+     *
      * 策略：
      * 1. 对于已下载的EPUB（有内部章节映射），用内部章节替换父章节
      * 2. 对于未下载的EPUB，保留原始下载章节
@@ -377,40 +377,40 @@ class DetailsLoadUseCase @Inject constructor(
      */
     private suspend fun expandEpubChaptersIfNeeded(manga: Content): Content {
         val chapters = manga.chapters ?: return manga
-        
+
         // 从数据库加载所有内部章节映射
         // 不再依赖URL模式检测，直接查询数据库
         val epubChapterMappingDao = mangaDatabase.getEpubChapterMappingDao()
         val allMappings = epubChapterMappingDao.findByContentId(manga.id)
-        
+
         if (allMappings.isEmpty()) {
             // 没有EPUB章节映射，返回原始章节
             return manga
         }
-        
+
         android.util.Log.d("DetailsLoadUseCase", "Found EPUB chapters, expanding internal chapters for manga ${manga.id}")
-        
+
         android.util.Log.d("DetailsLoadUseCase", "Found ${allMappings.size} EPUB chapter mappings")
-        
+
         // 按父章节ID分组
         val mappingsByParent = allMappings.groupBy { it.parentChapterId }
         val downloadedParentIds = mappingsByParent.keys
-        
+
         android.util.Log.d("DetailsLoadUseCase", "Downloaded parent chapter IDs: $downloadedParentIds")
-        
+
         // 构建新的章节列表
         val expandedChapters = mutableListOf<org.skepsun.kototoro.parsers.model.ContentChapter>()
-        
+
         android.util.Log.d("DetailsLoadUseCase", "Processing ${chapters.size} chapters...")
         for ((index, chapter) in chapters.withIndex()) {
             android.util.Log.d("DetailsLoadUseCase", "  Chapter[$index]: id=${chapter.id}, title=${chapter.title}, isDownloaded=${chapter.id in downloadedParentIds}")
-            
+
             if (chapter.id in downloadedParentIds) {
                 // 这个EPUB已下载，用内部章节替换
                 val mappings = mappingsByParent[chapter.id] ?: continue
-                
+
                 android.util.Log.d("DetailsLoadUseCase", "  -> Expanding with ${mappings.size} internal chapters")
-                
+
                 // 生成内部章节
                 // IMPORTANT: Set branch to null for EPUB internal chapters
                 // This ensures they can be found when selectedBranch is null
@@ -429,7 +429,7 @@ class DetailsLoadUseCase @Inject constructor(
                         source = LocalNovelSource,
                         )
                     }
-                
+
                 expandedChapters.addAll(internalChapters)
             } else {
                 // 这个EPUB未下载，保留原始下载章节
@@ -438,13 +438,13 @@ class DetailsLoadUseCase @Inject constructor(
                 expandedChapters.add(chapter.copy(branch = null))
             }
         }
-        
+
         android.util.Log.d("DetailsLoadUseCase", "Expanded chapters: ${chapters.size} -> ${expandedChapters.size}")
         android.util.Log.d("DetailsLoadUseCase", "Original chapters: ${chapters.take(3).map { "${it.id}:${it.title}" }}")
         android.util.Log.d("DetailsLoadUseCase", "Expanded chapters (first 3): ${expandedChapters.take(3).map { "${it.id}:${it.title}" }}")
         android.util.Log.d("DetailsLoadUseCase", "Expanded chapters (last 3): ${expandedChapters.takeLast(3).map { "${it.id}:${it.title}" }}")
         android.util.Log.d("DetailsLoadUseCase", "Final chapter count: ${expandedChapters.size}")
-        
+
         val result = manga.copy(chapters = expandedChapters)
         android.util.Log.d("DetailsLoadUseCase", "Returning manga with ${result.chapters?.size ?: 0} chapters")
         return result

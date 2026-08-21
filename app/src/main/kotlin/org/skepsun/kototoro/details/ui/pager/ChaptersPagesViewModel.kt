@@ -74,7 +74,7 @@ abstract class ChaptersPagesViewModel(
 
     val mangaDetails = MutableStateFlow<ContentDetails?>(null)
     val readingState = MutableStateFlow<ReaderState?>(null)
-    
+
     data class QualityProbeResult(val snapshot: Set<Long>, val qualities: List<String>)
     val onShowVideoQualityDialog = MutableEventFlow<QualityProbeResult>()
 
@@ -218,7 +218,7 @@ abstract class ChaptersPagesViewModel(
     protected fun notifyDownloadChanged() {
         downloadInvalidation.value = downloadInvalidation.value + 1
     }
-    
+
     /**
      * Expand EPUB chapters by loading mappings from database.
      * This is a hook that can be overridden by subclasses to provide EPUB expansion.

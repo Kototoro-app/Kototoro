@@ -26,7 +26,7 @@ import java.util.EnumSet
 
 /**
  * ContentRepository implementation for LNReader JS plugins.
- * 
+ *
  * Maps LNReaderPluginBridge output → Kototoro's Content/ContentChapter/ContentPage models.
  * Each content operation creates a fresh QuickJS context (matches IReader pattern of
  * one engine per operation for isolation/memory safety).
@@ -36,26 +36,26 @@ class LNReaderContentRepository(
     private val appContext: Context,
     private val httpClient: OkHttpClient
 ) : ContentRepository {
-    
+
     companion object {
         private const val TAG = "LNReaderContentRepo"
         private const val CHAPTER_SEPARATOR = "|||"
     }
-    
+
     private val jsContent: String
         get() = (source as? JsonContentSource)?.entity?.config ?: ""
-    
+
     private val pluginId: String
         get() = (source as? JsonContentSource)?.entity?.id ?: source.name
-    
+
     override val sortOrders: Set<SortOrder> = EnumSet.of(SortOrder.POPULARITY, SortOrder.NEWEST)
     override var defaultSortOrder: SortOrder = SortOrder.POPULARITY
-    
+
     override val filterCapabilities: ContentListFilterCapabilities = ContentListFilterCapabilities(
         isSearchSupported = true,
         isMultipleTagsSupported = true,
     )
-    
+
     private var cachedFilterOptions: ContentListFilterOptions? = null
     private val chapterHtmlMutex = MultiMutex<String>()
     private val chapterHtmlCache = object : LinkedHashMap<String, String>(16, 0.75f, true) {
@@ -63,20 +63,20 @@ class LNReaderContentRepository(
             return size > 8
         }
     }
-    
+
     override val listPagingMode: ContentRepository.ListPagingMode
         get() = ContentRepository.ListPagingMode.PAGE_INDEX
-    
+
     // ==================== Content Operations ====================
-    
+
     override suspend fun getList(offset: Int, order: SortOrder?, filter: ContentListFilter?): List<Content> {
         val page = offset + 1 // LNReader uses 1-based pages
-        
+
         val selectedFilters = filter?.tags?.associate { tag ->
             val parts = tag.key.split("::", limit = 2)
             if (parts.size == 2) parts[0] to parts[1] else tag.key to tag.key
         }?.takeIf { it.isNotEmpty() }
-        
+
         return try {
             val query = filter?.query
             if (!query.isNullOrBlank()) {
@@ -98,7 +98,7 @@ class LNReaderContentRepository(
             throw Exception("LNReader JS Error in ${source.name}: ${e.message}", e)
         }
     }
-    
+
     override suspend fun getDetails(manga: Content): Content {
         val candidatePaths = buildList {
             manga.url
@@ -112,7 +112,7 @@ class LNReaderContentRepository(
                 ?.let(::add)
         }.distinct()
         if (candidatePaths.isEmpty()) return manga
-        
+
         return try {
             var lastError: Exception? = null
             candidatePaths.firstNotNullOfOrNull { novelPath ->
@@ -203,7 +203,7 @@ class LNReaderContentRepository(
             throw Exception("LNReader JS Error: ${e.message}", e)
         }
     }
-    
+
     override suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage> {
         // LNReader chapters return HTML text, not page images
         // We create a single "page" containing the HTML content
@@ -233,7 +233,7 @@ class LNReaderContentRepository(
             throw Exception("LNReader JS Error: ${e.message}", e)
         }
     }
-    
+
     /**
      * Get chapter content as novel HTML.
      * This is the key method for novel reading — returns HTML text.
@@ -257,12 +257,12 @@ class LNReaderContentRepository(
             throw Exception("LNReader JS Error: ${e.message}", e)
         }
     }
-    
+
     override suspend fun getPageUrl(page: ContentPage): String = page.url
-    
+
     override suspend fun getFilterOptions(): ContentListFilterOptions {
         cachedFilterOptions?.let { return it }
-        
+
         return try {
             executeInPluginContext { bridge ->
                 val lnFilters = bridge.getFilters()
@@ -285,7 +285,7 @@ class LNReaderContentRepository(
             ContentListFilterOptions()
         }
     }
-    
+
     override suspend fun getRelated(seed: Content): List<Content> {
         return RelatedContentSearchFallback.find(seed) { query ->
             getList(
@@ -295,9 +295,9 @@ class LNReaderContentRepository(
             )
         }
     }
-    
+
     // ==================== Internal ====================
-    
+
     /**
      * Execute a block within a fresh plugin context.
      * Creates QuickJS engine → loads plugin → runs block → disposes.
@@ -307,11 +307,11 @@ class LNReaderContentRepository(
             val fetchBridge = LNReaderFetchBridge(httpClient, pluginId, source)
             val engine = LNReaderEngine(appContext, fetchBridge)
             val qjs = engine.createPluginContext(jsContent, pluginId)
-            
+
             try {
                 val bridge = LNReaderPluginBridge(qjs, pluginId)
                 block(bridge).also {
-                    // Re-throw any fatal interactive exceptions that were tunneled out of QuickJS fetch 
+                    // Re-throw any fatal interactive exceptions that were tunneled out of QuickJS fetch
                     // even if Javascript swallowed the error and resolved the promise
                     fetchBridge.pendingFatalException?.let { throw it }
                 }
@@ -351,7 +351,7 @@ class LNReaderContentRepository(
             htmlContent
         }
     }
-    
+
     /**
      * Convert LNReader novel item to Kototoro Content model.
      */

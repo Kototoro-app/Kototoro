@@ -38,37 +38,37 @@ abstract class TagsDao {
 
 	@Query(
         """SELECT tags.* FROM tags
-        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id 
-        WHERE tags.source = :source  
+        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id
+        WHERE tags.source = :source
         GROUP BY tags.title
-        ORDER BY COUNT(manga_id) DESC 
+        ORDER BY COUNT(manga_id) DESC
         LIMIT :limit""",
 	)
 	abstract suspend fun findPopularTags(source: String, limit: Int): List<TagEntity>
 
 	@Query(
         """SELECT tags.* FROM tags
-        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id 
-        WHERE tags.source = :source  
+        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id
+        WHERE tags.source = :source
         GROUP BY tags.title
-        ORDER BY COUNT(manga_id) ASC 
+        ORDER BY COUNT(manga_id) ASC
         LIMIT :limit""",
 	)
 	abstract suspend fun findRareTags(source: String, limit: Int): List<TagEntity>
 
 	@Query(
         """SELECT tags.* FROM tags
-        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id 
-        WHERE tags.source = :source AND title LIKE :query 
+        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id
+        WHERE tags.source = :source AND title LIKE :query
         GROUP BY tags.title
-        ORDER BY COUNT(manga_id) DESC 
+        ORDER BY COUNT(manga_id) DESC
         LIMIT :limit""",
 	)
 	abstract suspend fun findTags(source: String, query: String, limit: Int): List<TagEntity>
 
 	@Query(
         """SELECT tags.* FROM tags
-        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id 
+        LEFT JOIN manga_tags ON tags.tag_id = manga_tags.tag_id
         WHERE title LIKE :query
             AND manga_tags.manga_id IN (
                 SELECT anchor_manga_id FROM work_history WHERE deleted_at = 0
@@ -76,17 +76,17 @@ abstract class TagsDao {
                 SELECT anchor_manga_id FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0
             )
         GROUP BY tags.title
-        ORDER BY COUNT(manga_id) DESC 
+        ORDER BY COUNT(manga_id) DESC
         LIMIT :limit""",
 	)
 	abstract suspend fun findTags(query: String, limit: Int): List<TagEntity>
 
 	@Query(
         """
-        SELECT tags.* FROM manga_tags 
-        LEFT JOIN tags ON tags.tag_id = manga_tags.tag_id 
+        SELECT tags.* FROM manga_tags
+        LEFT JOIN tags ON tags.tag_id = manga_tags.tag_id
         WHERE manga_tags.manga_id IN (SELECT manga_id FROM manga_tags WHERE tag_id = :tagId)
-        GROUP BY tags.tag_id 
+        GROUP BY tags.tag_id
         ORDER BY COUNT(manga_id) DESC;
     """,
 	)
@@ -94,10 +94,10 @@ abstract class TagsDao {
 
 	@Query(
         """
-        SELECT tags.* FROM manga_tags 
-        LEFT JOIN tags ON tags.tag_id = manga_tags.tag_id 
+        SELECT tags.* FROM manga_tags
+        LEFT JOIN tags ON tags.tag_id = manga_tags.tag_id
         WHERE manga_tags.manga_id IN (SELECT manga_id FROM manga_tags WHERE tag_id IN (:ids))
-        GROUP BY tags.tag_id 
+        GROUP BY tags.tag_id
         ORDER BY COUNT(manga_id) DESC;
     """,
 	)

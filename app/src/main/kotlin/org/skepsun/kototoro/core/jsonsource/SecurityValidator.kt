@@ -11,10 +11,10 @@ object SecurityValidator {
 
     /**
      * Validates a URL for security concerns
-     * 
+     *
      * @param url The URL to validate
      * @return ValidationResult indicating if the URL is safe
-     * 
+     *
      * Validates: Requirements 13.1, 13.2
      */
     fun validateUrl(url: String): ValidationResult {
@@ -27,7 +27,7 @@ object SecurityValidator {
 
         return try {
             val uri = URI(url)
-            
+
             // Check protocol - only allow http and https
             val scheme = uri.scheme?.lowercase()
             if (scheme !in listOf("http", "https")) {
@@ -36,7 +36,7 @@ object SecurityValidator {
                     errors = listOf("Invalid protocol: only HTTP and HTTPS are allowed")
                 )
             }
-            
+
             // Check host validity
             val host = uri.host
             if (host.isNullOrBlank()) {
@@ -45,7 +45,7 @@ object SecurityValidator {
                     errors = listOf("Invalid URL: missing or invalid hostname")
                 )
             }
-            
+
             // Prevent access to local addresses
             if (isLocalAddress(host)) {
                 return ValidationResult(
@@ -53,9 +53,9 @@ object SecurityValidator {
                     errors = listOf("Access to local addresses is not allowed")
                 )
             }
-            
+
             ValidationResult(isValid = true, errors = emptyList())
-            
+
         } catch (e: URISyntaxException) {
             ValidationResult(
                 isValid = false,
@@ -71,29 +71,29 @@ object SecurityValidator {
 
     /**
      * Checks if a hostname is a local address
-     * 
+     *
      * @param host The hostname to check
      * @return true if the host is a local address
      */
     private fun isLocalAddress(host: String): Boolean {
         val lowerHost = host.lowercase()
-        
+
         // Check for localhost variants
         if (lowerHost in listOf("localhost", "127.0.0.1", "0.0.0.0", "::1")) {
             return true
         }
-        
+
         // Check for private network ranges
         // 192.168.0.0/16
         if (lowerHost.startsWith("192.168.")) {
             return true
         }
-        
+
         // 10.0.0.0/8
         if (lowerHost.startsWith("10.")) {
             return true
         }
-        
+
         // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
         if (lowerHost.startsWith("172.")) {
             val parts = lowerHost.split(".")
@@ -104,16 +104,16 @@ object SecurityValidator {
                 }
             }
         }
-        
+
         return false
     }
 
     /**
      * Validates a regular expression for security concerns
-     * 
+     *
      * @param pattern The regex pattern to validate
      * @return ValidationResult indicating if the regex is safe
-     * 
+     *
      * Validates: Requirements 13.4
      */
     fun validateRegex(pattern: String): ValidationResult {
@@ -124,7 +124,7 @@ object SecurityValidator {
                 errors = listOf("Regular expression is too long (max 500 characters)")
             )
         }
-        
+
         // Check for dangerous patterns that could cause ReDoS attacks
         val dangerousPatterns = listOf(
             "(.*)*" to "Nested quantifiers on wildcard",
@@ -136,21 +136,21 @@ object SecurityValidator {
             "(.+)*" to "Nested quantifiers on wildcard",
             "(.*)++" to "Possessive nested quantifiers"
         )
-        
+
         val errors = mutableListOf<String>()
         for ((dangerousPattern, reason) in dangerousPatterns) {
             if (pattern.contains(dangerousPattern)) {
                 errors.add("Potentially dangerous pattern detected: $reason")
             }
         }
-        
+
         // Try to compile the regex to check for syntax errors
         try {
             Regex(pattern)
         } catch (e: Exception) {
             errors.add("Invalid regex syntax: ${e.message}")
         }
-        
+
         return if (errors.isEmpty()) {
             ValidationResult(isValid = true, errors = emptyList())
         } else {
@@ -160,10 +160,10 @@ object SecurityValidator {
 
     /**
      * Sanitizes HTML content to prevent XSS attacks
-     * 
+     *
      * @param input The input string to sanitize
      * @return Sanitized string with HTML entities escaped
-     * 
+     *
      * Validates: Requirements 13.3
      */
     fun sanitizeHtmlInput(input: String): String {
@@ -178,16 +178,16 @@ object SecurityValidator {
 
     /**
      * Validates JSON file size
-     * 
+     *
      * @param sizeInBytes The size of the JSON file in bytes
      * @return ValidationResult indicating if the size is acceptable
-     * 
+     *
      * Validates: Requirements 13.3
      */
     fun validateJsonFileSize(sizeInBytes: Long): ValidationResult {
         // Practically no limit for local imports as requested
         val maxSizeBytes = 100 * 1024 * 1024 // 100MB
-        
+
         return if (sizeInBytes > maxSizeBytes) {
             ValidationResult(
                 isValid = false,
@@ -200,12 +200,12 @@ object SecurityValidator {
 
     /**
      * Validates a field value format
-     * 
+     *
      * @param fieldName The name of the field
      * @param value The value to validate
      * @param maxLength Maximum allowed length
      * @return ValidationResult indicating if the field is valid
-     * 
+     *
      * Validates: Requirements 13.3
      */
     fun validateFieldFormat(
@@ -219,14 +219,14 @@ object SecurityValidator {
                 errors = listOf("$fieldName cannot be empty")
             )
         }
-        
+
         if (value.length > maxLength) {
             return ValidationResult(
                 isValid = false,
                 errors = listOf("$fieldName is too long (max $maxLength characters)")
             )
         }
-        
+
         return ValidationResult(isValid = true, errors = emptyList())
     }
 }

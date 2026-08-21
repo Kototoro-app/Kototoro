@@ -34,7 +34,7 @@ fun ChapterListCard(
     }
     val alphaFactor = if (item.isUnread || item.isCurrent) 1.0f else 0.6f
     val titleWeight = if (item.isCurrent) androidx.compose.ui.text.font.FontWeight.Bold else null
-    
+
     Row(
         modifier = modifier
             .fillMaxWidth()

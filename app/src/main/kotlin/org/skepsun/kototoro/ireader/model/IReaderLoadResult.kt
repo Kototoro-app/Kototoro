@@ -13,7 +13,7 @@ sealed class IReaderLoadResult {
         val sources: List<ireader.core.source.Source>,
         val isManagedLocal: Boolean = false,
     ) : IReaderLoadResult()
-    
+
     data class Error(
         val pkgName: String,
         val message: String,

@@ -26,19 +26,19 @@ fun SAnime.toKotoContent(
     publicUrl: String = "",
 ): Content {
     val baseUrl = (source.animeCatalogueSource as? AnimeHttpSource)?.baseUrl ?: ""
-    
+
     val safeUrl = try { url } catch (e: Exception) { "" }
     val safeThumbnail = try { thumbnail_url } catch (e: Exception) { null }
     val absoluteThumbnailUrl = resolveUrl(baseUrl, safeThumbnail)
     val absolutePublicUrl = resolveUrl(baseUrl, safeUrl) ?: safeUrl
-    
+
     val safeTitle = try { title } catch (e: Exception) { "Unknown" }
     val safeGenres = try { getGenres() } catch (e: Exception) { null }
     val safeAuthor = try { author } catch (e: Exception) { null }
     val safeArtist = try { artist } catch (e: Exception) { null }
     val safeDescription = try { description } catch (e: Exception) { null }
     val safeStatus = try { status } catch (e: Exception) { SAnime.UNKNOWN }
-    
+
     return Content(
         id = generateId(safeUrl, source.name, "manga"),
         title = safeTitle,
@@ -79,17 +79,17 @@ fun SAnime.toKotoContent(
 }
 
 fun Content.toAniyomiAnime(): SAnime {
-    val baseUrl = (source as? AniyomiAnimeSource)?.let { 
+    val baseUrl = (source as? AniyomiAnimeSource)?.let {
         (it.animeCatalogueSource as? AnimeHttpSource)?.baseUrl ?: ""
     } ?: ""
-    
+
     var cleanUrl = url
     // Handle duplicate baseUrl and fix protocols as in MihonDataConverters
     cleanUrl = cleanUrl.replace(Regex("^(https?)/+"), "$1://")
     if (baseUrl.isNotBlank() && cleanUrl.startsWith(baseUrl.trimEnd('/'))) {
         cleanUrl = cleanUrl.substring(baseUrl.trimEnd('/').length)
     }
-    
+
     return SAnime.create().apply {
         this.url = cleanUrl
         this.title = this@toAniyomiAnime.title
@@ -145,7 +145,7 @@ fun Video.toKotoPage(
     index: Int
 ): ContentPage {
     val pageId = "${episode.url}|video|$index".hashCode().toLong() and Long.MAX_VALUE
-    
+
     // Convert Headers to Map
     val headerMap = mutableMapOf<String, String>()
     headers?.let { h ->
@@ -153,7 +153,7 @@ fun Video.toKotoPage(
             headerMap[h.name(i)] = h.value(i)
         }
     }
-    
+
     return ContentPage(
         id = pageId,
         url = videoUrl ?: "",

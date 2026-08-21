@@ -7,7 +7,7 @@ import eu.kanade.tachiyomi.animesource.AnimeSource
  * Result of loading an Aniyomi extension.
  */
 sealed class AniyomiLoadResult {
-    
+
     /**
      * Successfully loaded extension.
      */
@@ -22,14 +22,14 @@ sealed class AniyomiLoadResult {
         val sources: List<AnimeSource>,
         val isManagedLocal: Boolean = false,
     ) : AniyomiLoadResult() {
-        
+
         /**
          * Get only AnimeCatalogueSource instances (sources that support browsing).
          */
         val catalogueSources: List<AnimeCatalogueSource>
             get() = sources.filterIsInstance<AnimeCatalogueSource>()
     }
-    
+
     /**
      * Failed to load extension.
      */
@@ -38,7 +38,7 @@ sealed class AniyomiLoadResult {
         val message: String,
         val exception: Throwable? = null,
     ) : AniyomiLoadResult()
-    
+
     /**
      * Extension is untrusted (signature not verified).
      */

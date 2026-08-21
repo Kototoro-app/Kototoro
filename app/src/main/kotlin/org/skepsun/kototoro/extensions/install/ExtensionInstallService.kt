@@ -106,7 +106,7 @@ class ExtensionInstallService @Inject constructor(
             activeCalls.remove(extension.pkgName)
             _downloadStates.update { it - extension.pkgName }
         }
-        
+
         if (extension.type == org.skepsun.kototoro.extensions.repo.ExternalExtensionType.JAR) {
             val pluginsDir = File(context.filesDir, "plugins").apply { mkdirs() }
             val jarFile = File(pluginsDir, "${extension.pkgName}.jar")

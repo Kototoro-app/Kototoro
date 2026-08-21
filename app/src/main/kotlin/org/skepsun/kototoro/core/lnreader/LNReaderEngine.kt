@@ -18,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * QuickJS-based JavaScript engine for executing LNReader plugins.
  * Mirrors IReader's JSEngine — manages a QuickJS context with injected native bridges.
- * 
+ *
  * Uses `com.dokar.quickjs` (dokar3/quickjs-kt) — same library already used by
  * JsContentRepository and TVBoxQuickJsSpiderRuntime in this project.
  */
@@ -31,13 +31,13 @@ class LNReaderEngine(
         private const val MAX_STACK_SIZE = 1L shl 20   // 1MB
         private const val MEMORY_LIMIT = 64L shl 20    // 64MB
     }
-    
+
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
-    
+
     /**
      * Load a LNReader plugin and set up its execution environment.
      * Returns a configured QuickJs instance ready to call plugin methods.
-     * 
+     *
      * The caller should use the returned QuickJs in a coroutine scope via `qjs.use { ... }`.
      *
      * @param jsCode The compiled JS plugin bundle
@@ -47,29 +47,29 @@ class LNReaderEngine(
         val qjs = QuickJs.create(jobDispatcher = Dispatchers.Default)
         qjs.maxStackSize = MAX_STACK_SIZE
         qjs.memoryLimit = MEMORY_LIMIT
-        
+
         try {
             // 1. Register native fetch bridge
             registerFetchBridge(qjs)
-            
+
             // 2. Register console polyfill
             registerConsole(qjs)
-            
+
             // 3. Register global polyfills (URL, URLSearchParams, atob, btoa, etc.)
             registerGlobalPolyfills(qjs)
-            
+
             // 4. Register synchronous cheerio bridge
             registerCheerioBridge(qjs)
 
             // 5. Register native crypto helpers
             registerCryptoBridge(qjs)
-            
+
             // 6. Setup module system for plugins
             setupModuleSystem(qjs)
-            
+
             // 5. Load the plugin code
             qjs.evaluate<Any?>(jsCode, "<lnreader-plugin>")
-            
+
             // 5. Store plugin instance in global scope
             val sanitizedId = pluginId.replace(Regex("[^a-zA-Z0-9_]"), "_")
             qjs.evaluate<Any?>(
@@ -92,7 +92,7 @@ class LNReaderEngine(
                 """.trimIndent(),
                 "<plugin-init>"
             )
-            
+
             Log.d(TAG, "Plugin $pluginId loaded successfully")
             return qjs
         } catch (e: Exception) {
@@ -101,7 +101,7 @@ class LNReaderEngine(
             throw LNReaderJSException("Failed to load plugin $pluginId: ${e.message}", e)
         }
     }
-    
+
     /**
      * Register the native fetch function bridge.
      * JS code calls fetchApi(url, init) which delegates to OkHttp.
@@ -119,7 +119,7 @@ class LNReaderEngine(
             val bodyBase64 = args.getOrNull(2) as? String ?: return@FunctionBinding null
             fetchBridge.fetchBinary(url, init, bodyBase64)
         })
-        
+
         qjs.evaluate<Any?>(
             """
 			var __fetchBridgeResults = {};
@@ -127,12 +127,12 @@ class LNReaderEngine(
             """.trimIndent(),
             "<fetch-init>"
         )
-        
+
         // Inject fetchApi wrapper that uses synchronous __nativeFetch
         val fetchScript = fetchBridge.toJavaScriptFunction()
         qjs.evaluate<Any?>(fetchScript, "<fetch-bridge>")
     }
-    
+
     /**
      * Register console.log/warn/error polyfill.
      */
@@ -146,7 +146,7 @@ class LNReaderEngine(
                 else -> Log.d(TAG, "[JS] $msg")
             }
         })
-        
+
         qjs.evaluate<Any?>(
             """
 			var console = {
@@ -199,7 +199,7 @@ class LNReaderEngine(
             "<console>"
         )
     }
-    
+
     /**
      * Register global polyfills for missing QuickJs properties like URL, URLSearchParams, atob, btoa
      */
@@ -629,7 +629,7 @@ class LNReaderEngine(
             "<module-stubs>"
         )
     }
-    
+
     /**
      * Register the native cheerio bridge.
      * Gives QuickJs access to Jsoup synchronously.
@@ -637,10 +637,10 @@ class LNReaderEngine(
     private fun registerCheerioBridge(qjs: QuickJs) {
         val parsedElements = mutableMapOf<Int, org.jsoup.nodes.Element>()
         var cheerioIdCounter = 0
-        
+
         qjs.defineBinding("__nativeCheerio", FunctionBinding<String> { args ->
             val type = args.getOrNull(0) as? String ?: return@FunctionBinding "{}"
-            
+
             if (type == "parse") {
                 val html = args.getOrNull(1) as? String ?: ""
                 val docId = cheerioIdCounter++
@@ -655,9 +655,9 @@ class LNReaderEngine(
                 val parentIdStr = args.getOrNull(1)?.toString() ?: "-1"
                 val parentId = parentIdStr.toIntOrNull() ?: -1
                 val selector = args.getOrNull(2) as? String ?: ""
-                
+
                 val parent = parsedElements[parentId] ?: return@FunctionBinding "{}"
-                
+
                 try {
                     if (selector.startsWith("__is__:")) {
                         val sel = selector.substringAfter("__is__:")
@@ -673,7 +673,7 @@ class LNReaderEngine(
                         parent.remove()
                         return@FunctionBinding "true"
                     }
-                    
+
                     val selection = when {
                         selector == "__parent__" -> org.jsoup.select.Elements(parent.parent() ?: parent)
                         selector == "__next__" -> parent.nextElementSibling()
@@ -698,7 +698,7 @@ class LNReaderEngine(
                                 put(attr.key, attr.value)
                             }
                         }
-                        
+
                         val itemData = mapOf(
                             "id" to elId.toString(),
                             "text" to element.text(),
@@ -715,7 +715,7 @@ class LNReaderEngine(
                             })
                         ))
                     }
-                    
+
                     val resultJson = """
 						{
 							"text": ${json.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(selection.text()))},
@@ -729,7 +729,7 @@ class LNReaderEngine(
 							"items": [${resultItems.joinToString(",")}]
 						}
                     """.trimIndent()
-                    
+
                     return@FunctionBinding resultJson
                 } catch (e: Exception) {
                     Log.e(TAG, "Cheerio query error: ${e.message}")
@@ -757,7 +757,7 @@ class LNReaderEngine(
             }
         })
     }
-    
+
     private fun getNativeCheerioBridge(): String {
         return """
 			{
@@ -969,7 +969,7 @@ class LNReaderEngine(
 			}
         """.trimIndent()
     }
-    
+
     private fun getHtmlParser2Library(): String {
         return """
 			(function() {
@@ -1024,7 +1024,7 @@ class LNReaderEngine(
 			})()
         """.trimIndent()
     }
-    
+
     private fun getNovelStatusLibrary(): String {
         return """
 			(function() {
@@ -1042,7 +1042,7 @@ class LNReaderEngine(
 			})()
         """.trimIndent()
     }
-    
+
     private fun getFilterInputsLibrary(): String {
         return """
 			(function() {

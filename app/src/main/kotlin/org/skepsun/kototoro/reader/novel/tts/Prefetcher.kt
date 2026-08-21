@@ -37,7 +37,7 @@ class Prefetcher(
         pitch: Float
     ): Flow<Pair<Int, AudioData>> = channelFlow {
         val jobs = kotlinx.coroutines.channels.Channel<kotlinx.coroutines.Deferred<Pair<Int, AudioData>?>>(capacity = tokens.size - startIndex + 1)
-        
+
         launch {
             for (i in startIndex until tokens.size) {
                 val token = tokens[i]

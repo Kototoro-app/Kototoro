@@ -18,32 +18,32 @@ import javax.inject.Singleton
 interface LegacyEpubMigration {
     /**
      * Detects .cbz files that contain EPUB content.
-     * 
+     *
      * @param context Android context
      * @return List of .cbz files that are actually EPUBs
      */
     suspend fun detectLegacyCbzFiles(context: Context): List<File>
-    
+
     /**
      * Converts a .cbz file to .epub format.
-     * 
+     *
      * @param cbzFile The .cbz file to convert
      * @return The converted .epub file, or null if conversion failed
      */
     suspend fun convertCbzToEpub(cbzFile: File): File?
-    
+
     /**
      * Migrates old chapter IDs in history to new chapter IDs.
      * Attempts to find equivalent chapters in the new mapping system.
-     * 
+     *
      * @param context Android context
      * @return Number of history entries migrated
      */
     suspend fun migrateHistoryChapterIds(context: Context): Int
-    
+
     /**
      * Checks if a file needs migration (is a .cbz with EPUB content).
-     * 
+     *
      * @param file File to check
      * @return True if file needs migration
      */
@@ -60,16 +60,16 @@ class LegacyEpubMigrationImpl @Inject constructor(
     private val historyDao: HistoryDao,
     private val chapterIdGenerator: ChapterIdGenerator
 ) : LegacyEpubMigration {
-    
+
     companion object {
         private const val TAG = "LegacyEpubMigration"
         private const val EPUB_MIME_TYPE = "application/epub+zip"
         private const val EPUB_CONTAINER_PATH = "META-INF/container.xml"
     }
-    
+
     override suspend fun detectLegacyCbzFiles(context: Context): List<File> = withContext(Dispatchers.IO) {
         val legacyFiles = mutableListOf<File>()
-        
+
         // Check downloads directory for .cbz files
         val downloadDir = context.getExternalFilesDir("downloads")
         if (downloadDir?.exists() == true) {
@@ -81,10 +81,10 @@ class LegacyEpubMigrationImpl @Inject constructor(
                 }
             }
         }
-        
+
         legacyFiles
     }
-    
+
     override suspend fun convertCbzToEpub(cbzFile: File): File? = withContext(Dispatchers.IO) {
         try {
             // Verify it's actually EPUB content
@@ -92,14 +92,14 @@ class LegacyEpubMigrationImpl @Inject constructor(
                 Log.w(TAG, "File is not EPUB content: ${cbzFile.name}")
                 return@withContext null
             }
-            
+
             // Create new .epub file in EPUB directory
             val epubFileName = cbzFile.nameWithoutExtension + ".epub"
             val epubFile = File(cbzFile.parent, epubFileName)
-            
+
             // Simply rename the file (CBZ and EPUB are both ZIP formats)
             val success = cbzFile.renameTo(epubFile)
-            
+
             if (success) {
                 Log.i(TAG, "Successfully converted ${cbzFile.name} to ${epubFile.name}")
                 epubFile
@@ -112,34 +112,34 @@ class LegacyEpubMigrationImpl @Inject constructor(
             null
         }
     }
-    
+
     override suspend fun migrateHistoryChapterIds(context: Context): Int = withContext(Dispatchers.IO) {
         var migratedCount = 0
-        
+
         try {
             // Get all history entries
             val historyEntries = historyDao.findAll(0, Int.MAX_VALUE)
-            
+
             for (historyWithContent in historyEntries) {
                 val history = historyWithContent.history
                 val oldChapterId = history.chapterId
-                
+
                 // Try to find mapping for this chapter ID
                 val mapping = epubChapterMappingDao.getById(oldChapterId)
-                
+
                 if (mapping == null) {
                     // This might be an old chapter ID that needs migration
                     // Try to find equivalent chapter by looking for similar parent IDs
                     val potentialParentId = extractPotentialParentId(oldChapterId)
-                    
+
                     if (potentialParentId != null) {
                         // Find mappings for this parent
                         val mappings = epubChapterMappingDao.getByParentId(potentialParentId)
-                        
+
                         if (mappings.isNotEmpty()) {
                             // Use the first chapter as fallback
                             val newChapterId = mappings.first().internalChapterId
-                            
+
                             // Update history with new chapter ID
                             historyDao.update(
                                 mangaId = history.mangaId,
@@ -151,26 +151,26 @@ class LegacyEpubMigrationImpl @Inject constructor(
                                 updatedAt = history.updatedAt,
                                 parentChapterId = potentialParentId
                             )
-                            
+
                             migratedCount++
                             Log.i(TAG, "Migrated chapter ID $oldChapterId -> $newChapterId for manga ${history.mangaId}")
                         }
                     }
                 }
             }
-            
+
             Log.i(TAG, "Migration complete: $migratedCount history entries migrated")
         } catch (e: Exception) {
             Log.e(TAG, "Error migrating history chapter IDs", e)
         }
-        
+
         migratedCount
     }
-    
+
     override suspend fun needsMigration(file: File): Boolean = withContext(Dispatchers.IO) {
         file.extension == "cbz" && isEpubContent(file)
     }
-    
+
     /**
      * Checks if a file contains EPUB content by looking for the EPUB container.xml file.
      */
@@ -178,7 +178,7 @@ class LegacyEpubMigrationImpl @Inject constructor(
         if (!file.exists() || !file.isFile) {
             return false
         }
-        
+
         return try {
             ZipFile(file).use { zip ->
                 // EPUB files must have META-INF/container.xml
@@ -189,7 +189,7 @@ class LegacyEpubMigrationImpl @Inject constructor(
             false
         }
     }
-    
+
     /**
      * Attempts to extract a potential parent chapter ID from an old chapter ID.
      * Old IDs might have been generated differently, so we try to reverse-engineer them.
@@ -200,7 +200,7 @@ class LegacyEpubMigrationImpl @Inject constructor(
         return try {
             val index = chapterIdGenerator.extractChapterIndex(oldChapterId)
             val parentId = chapterIdGenerator.extractParentId(oldChapterId)
-            
+
             // Verify this makes sense (index should be reasonable)
             if (index in 0..999) {
                 parentId

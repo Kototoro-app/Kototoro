@@ -112,21 +112,21 @@ data class ContentDetails(
         }
         val remainingLocalChapters = localMap?.values?.toMutableList() ?: mutableListOf()
         val result = ArrayList<ContentChapter>(chapters.size)
-        
+
         for (chapter in chapters) {
             var local = localMap?.remove(chapter.id)
             if (local != null) {
                 remainingLocalChapters.remove(local)
             } else {
                 // Fallback: match by number and title
-                val match = remainingLocalChapters.find { 
+                val match = remainingLocalChapters.find {
                     it.number == chapter.number && it.title == chapter.title
                 } ?: remainingLocalChapters.find {
                     it.number == chapter.number && chapter.number > 0f
                 } ?: remainingLocalChapters.find {
                     it.title == chapter.title && !it.title.isNullOrBlank()
                 }
-                
+
                 if (match != null) {
                     local = match
                     remainingLocalChapters.remove(match)
@@ -139,7 +139,7 @@ data class ContentDetails(
                 chapter
             }
         }
-        
+
         if (remainingLocalChapters.isNotEmpty()) {
             result.addAll(remainingLocalChapters)
         }

@@ -74,9 +74,9 @@ object GlobalExtensionManager {
         for (plugin in plugins) {
             if (plugin.architecture == ParserPluginArchitecture.KOTATSU) {
                 mangaPlugins[plugin.jarName] = plugin
-                val wrapped = plugin.sources.map { 
+                val wrapped = plugin.sources.map {
                     val source = it as MangaSource
-                    PluginMangaSource(source, plugin.jarName, plugin.brokenSourceNames.contains(source.name)) 
+                    PluginMangaSource(source, plugin.jarName, plugin.brokenSourceNames.contains(source.name))
                 }
                 allLoadedMangaSources.addAll(wrapped)
             } else {
@@ -106,7 +106,7 @@ object GlobalExtensionManager {
             }
             prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         }
-        
+
         applyDeduplication(prefs)
         publishRegistryUpdate()
     }
@@ -134,7 +134,7 @@ object GlobalExtensionManager {
     }
 
     fun getMangaParser(source: MangaSource, context: MangaLoaderContext): MangaParser {
-        val pluginSource = source as? PluginMangaSource ?: 
+        val pluginSource = source as? PluginMangaSource ?:
             _mangaSources.value.find { it.originalSource == source || it.name == source.name }
             ?: throw IllegalArgumentException("No PluginMangaSource found for: ${source.name}")
         val plugin = mangaPlugins[pluginSource.jarName] ?: throw IllegalStateException("JAR missing: ${pluginSource.jarName}")
@@ -142,7 +142,7 @@ object GlobalExtensionManager {
     }
 
     fun getContentParser(source: ContentSource, context: ContentLoaderContext): ContentParser {
-        val pluginSource = source as? PluginContentSource ?: 
+        val pluginSource = source as? PluginContentSource ?:
             _contentSources.value.find { it.originalSource == source || it.name == source.name }
             ?: throw IllegalArgumentException("No PluginContentSource found for: ${source.name}")
         val plugin = contentPlugins[pluginSource.jarName] ?: throw IllegalStateException("JAR missing: ${pluginSource.jarName}")

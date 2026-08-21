@@ -167,8 +167,8 @@ class ContentSourcesRepository @Inject constructor(
         get() {
             val set = LinkedHashSet<ContentSource>()
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value.forEach { set.add(it) }
-            org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.forEach { 
-                set.add(cachedKotatsuSources.getOrPut(it.name) { org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(it) }) 
+            org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.forEach {
+                set.add(cachedKotatsuSources.getOrPut(it.name) { org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(it) })
             }
             cloudstreamRuntimeManager.sources.value.forEach { set.add(it) }
             return set
@@ -227,7 +227,7 @@ class ContentSourcesRepository @Inject constructor(
         assimilateNewSources()
         val order = settings.sourcesSortOrder
         val disabledNames = if (!settings.isAllSourcesEnabled) dao.findAll().filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
-        
+
         return dao.findAll(!settings.isAllSourcesEnabled, order).toSources(settings.isNsfwContentDisabled, order)
             .let { enabledSources ->
                 val external = getExternalSources()
@@ -236,7 +236,7 @@ class ContentSourcesRepository @Inject constructor(
                 val mihonSources = getEnabledMihonSources()
                 val aniyomiSources = getEnabledAniyomiSources()
                 val ireaderSources = getEnabledIReaderSources()
-                
+
                 val list = ArrayList<ContentSource>()
                 enabledSources.mapTo(list) { it.mangaSource }
                 external.forEach { if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it) }
@@ -250,12 +250,12 @@ class ContentSourcesRepository @Inject constructor(
                 ireaderSources.forEach {
                     if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
                 }
-                
+
                 if (!settings.isShowBrokenSources) {
                     list.retainAll { !it.isBroken }
                 }
                 list.retainAll { it.isVisibleForTvBoxRepository(jsonSnapshot.activeRepositoryId) }
-                
+
                 canonicalizeSourcesByName(list)
             }
     }
@@ -270,11 +270,11 @@ class ContentSourcesRepository @Inject constructor(
             settings.activeTvBoxRepositoryId = repositoryId
         }
     }
-    
+
     /**
      * Gets all enabled Mihon sources as MihonMangaSource instances.
      * Filters sources based on user's app locale - only sources matching user's language are shown.
-     * 
+     *
      * @return List of enabled Mihon sources
      */
     private fun getEnabledMihonSources(): List<org.skepsun.kototoro.mihon.model.MihonMangaSource> {
@@ -282,7 +282,7 @@ class ContentSourcesRepository @Inject constructor(
         val isNsfwDisabled = settings.isNsfwContentDisabled
         return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
     }
-    
+
     /**
      * Gets all enabled Aniyomi sources as AniyomiAnimeSource instances.
      */
@@ -296,18 +296,18 @@ class ContentSourcesRepository @Inject constructor(
                 )
             }
         }
-        
+
         val isNsfwDisabled = settings.isNsfwContentDisabled
-        
+
         // Note: We bypass `isExtensionsFilterLangEnabled` for Aniyomi because anime viewers
-        // often watch subbed content regardless of the extension's declared language, 
+        // often watch subbed content regardless of the extension's declared language,
         // and Aniyomi extensions frequently mislabel locales or only offer 'en'/'pt-BR' etc.
         return allSources.filter { source ->
             if (isNsfwDisabled && source.isNsfw()) return@filter false
             true
         }
     }
-    
+
     /**
      * Gets all enabled IReader sources as IReaderMangaSource instances.
      */
@@ -316,7 +316,7 @@ class ContentSourcesRepository @Inject constructor(
         val isNsfwDisabled = settings.isNsfwContentDisabled
         return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
     }
-    
+
     /**
      * Observes all IReader sources.
      */
@@ -328,10 +328,10 @@ class ContentSourcesRepository @Inject constructor(
             getEnabledIReaderSources()
         }
     }
-    
+
     /**
      * Gets all enabled JSON sources as ContentSource instances.
-     * 
+     *
      * @return List of enabled JSON sources wrapped as ContentSource
      */
     private suspend fun getEnabledJsonSources(): EnabledJsonSourcesSnapshot {
@@ -388,13 +388,13 @@ class ContentSourcesRepository @Inject constructor(
         sourceTypes: Set<org.skepsun.kototoro.core.jsonsource.SourceType>? = null,
     ): List<ContentSource> {
         assimilateNewSources()
-        
+
         // Filter by source type if specified
-        val shouldIncludeNative = sourceTypes == null || 
+        val shouldIncludeNative = sourceTypes == null ||
             org.skepsun.kototoro.core.jsonsource.SourceType.NATIVE in sourceTypes
-        val shouldIncludeJson = sourceTypes == null || 
+        val shouldIncludeJson = sourceTypes == null ||
             sourceTypes.any { it != org.skepsun.kototoro.core.jsonsource.SourceType.NATIVE }
-        
+
         // Get native sources
         val sources = if (shouldIncludeNative) {
             val entities = dao.findAll().toMutableList()
@@ -413,7 +413,7 @@ class ContentSourcesRepository @Inject constructor(
         } else {
             ArrayList()
         }
-        
+
 
         // Apply filters to all collected sources
         if (locale != null) {
@@ -430,13 +430,13 @@ class ContentSourcesRepository @Inject constructor(
                 it.getTitle(context).contains(query, ignoreCase = true) || it.name.contains(query, ignoreCase = true)
             }
         }
-        
+
         return sources
     }
 
     /**
      * Queries all sources (native and JSON) with filtering options.
-     * 
+     *
      * @param isDisabledOnly If true, only return disabled sources
      * @param isNewOnly If true, only return newly added sources
      * @param excludeBroken If true, exclude broken sources
@@ -460,11 +460,11 @@ class ContentSourcesRepository @Inject constructor(
     ): List<ContentSource> {
         normalizeAllEnabledFlagIfNeeded()
         val result = mutableListOf<ContentSource>()
-        
+
         // Add native sources if requested
-        val shouldIncludeNative = sourceTypes == null || 
+        val shouldIncludeNative = sourceTypes == null ||
             org.skepsun.kototoro.core.jsonsource.SourceType.NATIVE in sourceTypes
-        
+
         if (shouldIncludeNative) {
             val nativeSources = queryParserSources(
                 isDisabledOnly = isDisabledOnly,
@@ -478,11 +478,11 @@ class ContentSourcesRepository @Inject constructor(
             )
             result.addAll(nativeSources)
         }
-        
+
         // Add JSON sources if requested
-        val shouldIncludeJson = sourceTypes == null || 
+        val shouldIncludeJson = sourceTypes == null ||
             sourceTypes.any { it != org.skepsun.kototoro.core.jsonsource.SourceType.NATIVE }
-        
+
         if (shouldIncludeJson) {
             val jsonSources = queryJsonSources(
                 isDisabledOnly = isDisabledOnly,
@@ -492,11 +492,11 @@ class ContentSourcesRepository @Inject constructor(
             )
             result.addAll(jsonSources)
         }
-        
+
         // Add Mihon sources if requested
-        val shouldIncludeMihon = sourceTypes == null || 
+        val shouldIncludeMihon = sourceTypes == null ||
             org.skepsun.kototoro.core.jsonsource.SourceType.MIHON in sourceTypes
-        
+
         if (shouldIncludeMihon) {
             val allMihon = mihonExtensionManager.getMihonMangaSources()
             val disabledNames = if (!settings.isAllSourcesEnabled) dao.findAll().filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
@@ -510,9 +510,9 @@ class ContentSourcesRepository @Inject constructor(
         }
 
         // Add Aniyomi sources if requested
-        val shouldIncludeAniyomi = sourceTypes == null || 
+        val shouldIncludeAniyomi = sourceTypes == null ||
             org.skepsun.kototoro.core.jsonsource.SourceType.ANIYOMI in sourceTypes
-        
+
         if (shouldIncludeAniyomi) {
             val allAniyomi = aniyomiExtensionManager.installedExtensions.value.flatMap { ext ->
                 ext.catalogueSources.map { catalogueSource ->
@@ -534,9 +534,9 @@ class ContentSourcesRepository @Inject constructor(
         }
 
         // Add IReader sources if requested
-        val shouldIncludeIReader = sourceTypes == null || 
+        val shouldIncludeIReader = sourceTypes == null ||
             org.skepsun.kototoro.core.jsonsource.SourceType.IREADER in sourceTypes
-        
+
         if (shouldIncludeIReader) {
             val allIReader = ireaderExtensionManager.getIReaderMangaSources()
             val disabledNames = if (!settings.isAllSourcesEnabled) dao.findAll().filter { !it.isEnabled }.mapToSet { it.source } else emptySet<String>()
@@ -563,14 +563,14 @@ class ContentSourcesRepository @Inject constructor(
             }
             result.addAll(filteredCloudstream)
         }
-        
+
         if (locale != null) {
             result.retainAll { it.getLocale()?.language == locale }
         }
         if (types.isNotEmpty()) {
             result.retainAll { it.getContentType() in types }
         }
-        
+
         val activePresetId = settings.activeSourcePresetId
         if (activePresetId != -1L) {
             val preset = db.getSourcePresetsDao().find(activePresetId)
@@ -583,13 +583,13 @@ class ContentSourcesRepository @Inject constructor(
                 }
             }
         }
-        
+
         return result
     }
-    
+
     /**
      * Queries JSON sources with filtering options.
-     * 
+     *
      * @param isDisabledOnly If true, only return disabled sources
      * @param query Search query to filter by name
      * @param sourceTypes Filter by JSON source types (JSON_LEGADO, JSON_TVBOX)
@@ -603,14 +603,14 @@ class ContentSourcesRepository @Inject constructor(
     ): List<JsonSourceListSource> {
         // Get all JSON sources
         val allJsonSources = jsonDao.observeAllSummaries().first()
-        
+
         // Filter by enabled/disabled
         var filtered = when {
             includeDisabledSources -> allJsonSources
             isDisabledOnly -> allJsonSources.filter { !it.enabled }
             else -> allJsonSources.filter { it.enabled }
         }
-        
+
         // Filter by source type
         if (sourceTypes != null) {
             filtered = filtered.filter { entity ->
@@ -618,7 +618,7 @@ class ContentSourcesRepository @Inject constructor(
                 sourceType in sourceTypes
             }
         }
-        
+
         // Filter by query
         if (!query.isNullOrEmpty()) {
             filtered = filtered.filter { entity ->
@@ -626,10 +626,10 @@ class ContentSourcesRepository @Inject constructor(
                 entity.id.contains(query, ignoreCase = true)
             }
         }
-        
+
         return filtered.map(::JsonSourceListSource)
     }
-    
+
     fun observeIsEnabled(source: ContentSource): Flow<Boolean> {
         // Check if it's a JSON source
         if (sourceTypeIdentifier.isJsonSource(source.name)) {
@@ -648,7 +648,7 @@ class ContentSourcesRepository @Inject constructor(
             }
         ) { skipNsfw, sources ->
             sources.count {
-                it.source.toContentSourceOrNull()?.let { s -> 
+                it.source.toContentSourceOrNull()?.let { s ->
                     (!skipNsfw || !s.isNsfw())
                 } == true
             }
@@ -767,7 +767,7 @@ class ContentSourcesRepository @Inject constructor(
         .combine(observeJsonSources()) { snapshot, jsonSources ->
             val list = ArrayList<ContentSourceInfo>()
             list.addAll(snapshot.sources)
-            
+
             val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
             jsonSources.forEach { jsonSource ->
                 if (jsonSource.name !in existingNames) {
@@ -781,7 +781,7 @@ class ContentSourcesRepository @Inject constructor(
         .combine(observeMihonSources()) { snapshot, mihonSources ->
             val list = ArrayList<ContentSourceInfo>()
             list.addAll(snapshot.sources)
-            
+
             val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
             mihonSources.forEach { mihonSource ->
                 val isVisible = if (snapshot.allEnabled) true else mihonSource.name in snapshot.enabledNames
@@ -796,7 +796,7 @@ class ContentSourcesRepository @Inject constructor(
         .combine(observeAniyomiSources()) { snapshot, aniyomiSources ->
             val list = ArrayList<ContentSourceInfo>()
             list.addAll(snapshot.sources)
-            
+
             val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
             aniyomiSources.forEach { aniyomiSource ->
                 val isVisible = if (snapshot.allEnabled) true else aniyomiSource.name in snapshot.enabledNames
@@ -857,7 +857,7 @@ class ContentSourcesRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Observes all Aniyomi sources.
      */
@@ -869,10 +869,10 @@ class ContentSourcesRepository @Inject constructor(
             getEnabledAniyomiSources()
         }
     }
-    
+
     /**
      * Observes all enabled JSON sources as ContentSource instances.
-     * 
+     *
      * @return Flow emitting list of JSON sources wrapped as ContentSource
      */
     private fun observeJsonSources(): Flow<List<JsonSourceListSource>> {
@@ -887,10 +887,10 @@ class ContentSourcesRepository @Inject constructor(
                 .filter { source -> !skipNsfw || !source.isNsfw() }
         }
     }
-    
+
     /**
      * Observes all Mihon sources.
-     * 
+     *
      * @return Flow emitting list of Mihon sources
      */
     private fun observeMihonSources(): Flow<List<org.skepsun.kototoro.mihon.model.MihonMangaSource>> {
@@ -923,12 +923,12 @@ class ContentSourcesRepository @Inject constructor(
     suspend fun setSourcesEnabledExclusive(sources: Set<ContentSource>) {
         val allSources = queryAllSources(includeDisabledSources = true)
         val enabledNames = sources.map { it.name }.toSet()
-        
+
         val jsonSourcesToEnable = mutableListOf<String>()
         val jsonSourcesToDisable = mutableListOf<String>()
         val nativeSourcesToEnable = mutableListOf<String>()
         val nativeSourcesToDisable = mutableListOf<String>()
-        
+
         for (s in allSources) {
             val isEnabled = s.name in enabledNames
             if (s.name.startsWith("JSON_")) {
@@ -937,10 +937,10 @@ class ContentSourcesRepository @Inject constructor(
                 if (isEnabled) nativeSourcesToEnable.add(s.name) else nativeSourcesToDisable.add(s.name)
             }
         }
-        
+
         if (jsonSourcesToEnable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToEnable, true)
         if (jsonSourcesToDisable.isNotEmpty()) jsonSourceManager.toggleSourcesBatch(jsonSourcesToDisable, false)
-        
+
         db.withTransaction {
             assimilateNewSources()
             for (name in nativeSourcesToEnable) dao.setEnabled(name, true)
@@ -1149,17 +1149,17 @@ class ContentSourcesRepository @Inject constructor(
     /**
      * Gets the source type label for a given source.
      * This is useful for displaying the source type in the UI.
-     * 
+     *
      * @param source The manga source
      * @return A human-readable label for the source type
      */
     fun getSourceTypeLabel(source: ContentSource): String {
         return sourceTypeIdentifier.getSourceTypeLabel(source.name)
     }
-    
+
     /**
      * Observes sources grouped by content type.
-     * 
+     *
      * @param contentGroup The content group to filter by
      * @return Flow emitting list of sources in the specified content group
      */
@@ -1172,10 +1172,10 @@ class ContentSourcesRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Observes sources grouped by origin type.
-     * 
+     *
      * @param originGroup The origin group to filter by
      * @return Flow emitting list of sources in the specified origin group
      */
@@ -1188,10 +1188,10 @@ class ContentSourcesRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Observes counts of sources in each group.
-     * 
+     *
      * @return Flow emitting map of SourceGroup to count
      */
     fun observeGroupCounts(): Flow<Map<org.skepsun.kototoro.core.jsonsource.SourceGroup, Int>> {
@@ -1200,27 +1200,27 @@ class ContentSourcesRepository @Inject constructor(
             sourceGroupManager.getGroupCounts(mangaSources)
         }
     }
-    
+
     /**
      * Checks if a source is a JSON source.
-     * 
+     *
      * @param source The manga source
      * @return true if the source is a JSON source
      */
     fun isJsonSource(source: ContentSource): Boolean {
         return sourceTypeIdentifier.isJsonSource(source.name)
     }
-    
+
     /**
      * Gets the source type for a given source.
-     * 
+     *
      * @param source The manga source
      * @return The SourceType enum value
      */
     fun getSourceType(source: ContentSource): org.skepsun.kototoro.core.jsonsource.SourceType {
         return sourceTypeIdentifier.getSourceType(source.name)
     }
-    
+
     private fun observeExternalSources(): Flow<List<ExternalContentSource>> {
         return callbackFlow {
             val receiver = object : BroadcastReceiver() {
@@ -1271,12 +1271,12 @@ class ContentSourcesRepository @Inject constructor(
                 continue
             }
             // Allow native sources, Mihon sources, and JSON sources
-            val isKnownSource = source in allContentSources || 
+            val isKnownSource = source in allContentSources ||
                                 source is org.skepsun.kototoro.mihon.model.MihonMangaSource ||
                                 source is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource ||
                                 source is org.skepsun.kototoro.ireader.model.IReaderMangaSource ||
                                 source is org.skepsun.kototoro.core.jsonsource.JsonContentSource
-                                
+
             if (isKnownSource) {
                 result.add(
                     ContentSourceInfo(
@@ -1323,8 +1323,8 @@ class ContentSourcesRepository @Inject constructor(
     private fun String.toContentSourceOrNull(allowFallback: Boolean = true): ContentSource? {
         // Try Global Registry for PluginContentSources first
         org.skepsun.kototoro.core.extensions.GlobalExtensionManager.contentSources.value.find { it.name == this }?.let { return it }
-        org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.find { it.name == this }?.let { 
-            return cachedKotatsuSources.getOrPut(it.name) { org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(it) } 
+        org.skepsun.kototoro.core.extensions.GlobalExtensionManager.mangaSources.value.find { it.name == this }?.let {
+            return cachedKotatsuSources.getOrPut(it.name) { org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource(it) }
         }
         cloudstreamRuntimeManager.findSourceByName(this)?.let { return it }
 
@@ -1332,7 +1332,7 @@ class ContentSourcesRepository @Inject constructor(
         if (startsWith("MIHON_")) {
             mihonExtensionManager.getMihonMangaSources().find { it.name == this }?.let { return it }
         }
-        
+
         // Try Aniyomi sources
         if (startsWith("ANIYOMI_")) {
             aniyomiExtensionManager.installedExtensions.value.flatMap { ext ->
@@ -1345,16 +1345,16 @@ class ContentSourcesRepository @Inject constructor(
                 }
             }.find { it.name == this }?.let { return it }
         }
-        
+
         // Try IReader sources
         if (startsWith("IREADER_")) {
             ireaderExtensionManager.getIReaderMangaSources().find { it.name == this }?.let { return it }
         }
-        
+
         // Try JSON sources
         if (startsWith("JSON_")) {
             // This is a bit expensive but necessary for pinning/top sources to work correctly
-            val jsonSources = kotlinx.coroutines.runBlocking { 
+            val jsonSources = kotlinx.coroutines.runBlocking {
                 jsonSourceManager.observeAllJsonSources().first().map {
                     org.skepsun.kototoro.core.jsonsource.JsonContentSource(it)
                 }

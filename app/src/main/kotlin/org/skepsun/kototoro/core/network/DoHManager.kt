@@ -46,9 +46,9 @@ class DoHManager(
         val provider = settings.dnsOverHttps
         val customUrl = settings.dohCustomUrl
         val customIps = settings.dohCustomIps
-        
+
         val customChanged = provider == DoHProvider.CUSTOM && (customUrl != cachedCustomUrl || customIps != cachedCustomIps)
-        
+
         if (delegate == null || provider != cachedProvider || customChanged) {
             delegate = createDelegate(provider, customUrl, customIps)
             cachedDelegate = delegate
@@ -114,7 +114,7 @@ class DoHManager(
                     val url = customUrl.toHttpUrl()
                     val ips = customIps?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
                     val hosts = ips.mapNotNull { tryGetByIp(it) }
-                    
+
                     DnsOverHttps.Builder().client(bootstrapClient)
                         .url(url)
                         .resolvePrivateAddresses(true)

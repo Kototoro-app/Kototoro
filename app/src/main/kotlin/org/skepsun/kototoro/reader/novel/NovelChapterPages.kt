@@ -6,7 +6,7 @@ import androidx.collection.contains
 /**
  * 管理多个章节的页面
  * 类似于漫画阅读器的 ChapterPages
- * 
+ *
  * 关键点：每个章节独立分页，但合并到一个连续的列表中
  */
 class NovelChapterPages private constructor(
@@ -27,16 +27,16 @@ class NovelChapterPages private constructor(
     @Synchronized
     fun removeFirst() {
         if (pages.isEmpty()) return
-        
+
         val chapterId = pages.first().chapterId
         indices.remove(chapterId)
-        
+
         var delta = 0
         while (pages.isNotEmpty() && pages.first().chapterId == chapterId) {
             pages.removeFirst()
             delta--
         }
-        
+
         // 更新剩余章节的索引范围
         shiftIndices(delta)
         updateGlobalIndices()
@@ -48,14 +48,14 @@ class NovelChapterPages private constructor(
     @Synchronized
     fun removeLast() {
         if (pages.isEmpty()) return
-        
+
         val chapterId = pages.last().chapterId
         indices.remove(chapterId)
-        
+
         while (pages.isNotEmpty() && pages.last().chapterId == chapterId) {
             pages.removeLast()
         }
-        
+
         updateGlobalIndices()
     }
 
@@ -67,12 +67,12 @@ class NovelChapterPages private constructor(
         if (chapterId in indices || newPages.isEmpty()) {
             return false
         }
-        
+
         val startIndex = pages.size
         indices.put(chapterId, startIndex until (startIndex + newPages.size))
         pages.addAll(newPages)
         updateGlobalIndices()
-        
+
         return true
     }
 
@@ -84,12 +84,12 @@ class NovelChapterPages private constructor(
         if (chapterId in indices || newPages.isEmpty()) {
             return false
         }
-        
+
         shiftIndices(newPages.size)
         indices.put(chapterId, newPages.indices)
         pages.addAll(0, newPages)
         updateGlobalIndices()
-        
+
         return true
     }
 

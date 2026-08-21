@@ -69,15 +69,15 @@ fun ChaptersScreenRoot(
     val gridSize by settings.observeAsState(AppSettings.KEY_GRID_SIZE_PAGES) { gridSizePages }
 
     val gridScale = (gridSize / 100f)
-    
+
     val chaptersWithHeaders = remember(chapters) {
         chapters.withVolumeHeaders(context)
     }
-    
+
     var groupsVersion by remember { mutableIntStateOf(0) }
-    
+
     val groupsManager = remember { ChapterGroupsManager() }
-    
+
     val collapsedChapters = remember(chaptersWithHeaders, groupsVersion) {
         groupsManager.applyCollapsedState(chaptersWithHeaders)
     }

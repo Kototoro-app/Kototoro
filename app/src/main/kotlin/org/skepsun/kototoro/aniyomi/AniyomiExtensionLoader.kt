@@ -28,7 +28,7 @@ import javax.inject.Singleton
 
 /**
  * Loader for Aniyomi extension APKs.
- * 
+ *
  * Scans for installed Aniyomi extensions and loads their AnimeSource implementations.
  */
 @Singleton
@@ -40,21 +40,21 @@ class AniyomiExtensionLoader @Inject constructor(
     companion object {
         private const val TAG = "AniyomiExtensionLoader"
         private const val ECOSYSTEM_DIR = "aniyomi"
-        
+
         // Feature that marks an APK as an Aniyomi anime extension
         private const val EXTENSION_FEATURE = "tachiyomi.animeextension"
-        
+
         // Metadata keys in AndroidManifest.xml
         private const val METADATA_SOURCE_CLASS = "tachiyomi.animeextension.class"
         private const val METADATA_SOURCE_FACTORY = "tachiyomi.animeextension.factory"
         private const val METADATA_NSFW = "tachiyomi.animeextension.nsfw"
-        
+
         // Supported library version range for Aniyomi
         const val LIB_VERSION_MIN = 12.0
         const val LIB_VERSION_MAX = 16.0
-        
+
     }
-    
+
     /**
      * Load all installed Aniyomi extensions.
      */
@@ -62,26 +62,26 @@ class AniyomiExtensionLoader @Inject constructor(
         try {
             // Ensure Injekt is initialized before loading any extensions
             injektBridge.get().initialize()
-            
+
             val pkgManager = context.packageManager
-            
+
             // Get all installed packages
             val installedPkgs = ExternalExtensionLoaderSupport.getInstalledPackages(pkgManager)
             val localPkgs = LocalApkExtensionSupport.getLocalArchivePackages(context, pkgManager, ECOSYSTEM_DIR)
             android.util.Log.d(TAG, "Filtering ${installedPkgs.size} packages...")
-            
+
             // Filter to only extension packages
             val extPkgs = (installedPkgs + localPkgs)
                 .filter { pkgInfo: PackageInfo -> isPackageAnExtension(pkgInfo) }
                 .distinctBy { it.packageName }
-            
+
             if (extPkgs.isEmpty()) {
                 android.util.Log.d(TAG, "No Aniyomi extensions found")
                 return@withContext emptyList()
             }
-            
+
             android.util.Log.d(TAG, "Found ${extPkgs.size} Aniyomi extension(s)")
-            
+
             // Load extensions in parallel
             extPkgs.map { pkgInfo: PackageInfo ->
                 async { loadExtension(context, pkgInfo) }
@@ -91,25 +91,25 @@ class AniyomiExtensionLoader @Inject constructor(
             emptyList()
         }
     }
-    
+
     /**
      * Load a single Aniyomi extension by package name.
      */
     suspend fun loadExtension(context: Context, packageName: String): AniyomiLoadResult? = withContext(Dispatchers.IO) {
         injektBridge.get().initialize()
-        
+
         val pkgManager = context.packageManager
         val pkgInfo = ExternalExtensionLoaderSupport.getPackageInfoOrNull(pkgManager, packageName)
             ?: LocalApkExtensionSupport.getLocalArchivePackageInfoOrNull(context, pkgManager, ECOSYSTEM_DIR, packageName)
             ?: return@withContext null
-        
+
         if (!isPackageAnExtension(pkgInfo)) {
             return@withContext null
         }
-        
+
         loadExtension(context, pkgInfo)
     }
-    
+
     /**
      * Get list of installed Aniyomi extensions (metadata only, without loading).
      */
@@ -117,31 +117,31 @@ class AniyomiExtensionLoader @Inject constructor(
         val pkgManager = context.packageManager
         val installedPkgs = ExternalExtensionLoaderSupport.getInstalledPackages(pkgManager)
         val localPkgs = LocalApkExtensionSupport.getLocalArchivePackages(context, pkgManager, ECOSYSTEM_DIR)
-        
+
         return (installedPkgs + localPkgs)
             .filter { isPackageAnExtension(it) }
             .distinctBy { it.packageName }
             .mapNotNull { extractExtensionInfo(it) }
     }
-    
+
     private fun isPackageAnExtension(pkgInfo: PackageInfo): Boolean {
         val pkgName = pkgInfo.packageName
-        
+
         // Method 1: Check for explicit feature declaration
         val hasFeature = pkgInfo.reqFeatures?.any { it.name == EXTENSION_FEATURE } == true
-        
+
         // Method 2: Check for package naming convention
         val hasPackageName = ExternalExtensionLoaderSupport.looksLikeAniyomiPackage(pkgName)
-        
+
         // Method 3: Check for metadata in application info
         val hasMetaData = ExternalExtensionMetadataSupport.hasDeclaredSource(
             metaData = pkgInfo.applicationInfo?.metaData,
             sourceClassKey = METADATA_SOURCE_CLASS,
             sourceFactoryKey = METADATA_SOURCE_FACTORY,
         )
-        
+
         val isExtension = hasFeature || (hasPackageName && hasMetaData)
-        
+
         if (BuildConfig.DEBUG && (hasPackageName || isExtension)) {
             android.util.Log.d(TAG, "isPackageAnExtension($pkgName): isExt=$isExtension (feature=$hasFeature, name=$hasPackageName, meta=$hasMetaData)")
             if (!hasFeature) {
@@ -149,10 +149,10 @@ class AniyomiExtensionLoader @Inject constructor(
                 android.util.Log.d(TAG, "$pkgName missing required feature $EXTENSION_FEATURE. Current features: $features")
             }
         }
-        
+
         return isExtension
     }
-    
+
     private fun extractExtensionInfo(pkgInfo: PackageInfo): AniyomiExtensionInfo? {
         val completePkgInfo = ExternalExtensionLoaderSupport.refreshPackageInfoIfNeeded(
             applicationContext.packageManager,
@@ -167,12 +167,12 @@ class AniyomiExtensionLoader @Inject constructor(
             android.util.Log.w(TAG, "extractExtensionInfo($pkgName): skipped because metaData is null")
             return null
         }
-        
+
         val versionName = completePkgInfo.versionName ?: run {
             android.util.Log.w(TAG, "extractExtensionInfo($pkgName): skipped because versionName is null")
             return null
         }
-        
+
         // Aniyomi lib version is usually the first part of the version name
         val libVersion = try {
             versionName.substringBefore('.').toDoubleOrNull() ?: 12.0
@@ -180,7 +180,7 @@ class AniyomiExtensionLoader @Inject constructor(
             android.util.Log.w(TAG, "extractExtensionInfo($pkgName): Failed to parse libVersion from $versionName, defaulting to 12.0")
             12.0
         }
-        
+
         val declaredSource = ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
             metaData = metaData,
             sourceClassKey = METADATA_SOURCE_CLASS,
@@ -190,10 +190,10 @@ class AniyomiExtensionLoader @Inject constructor(
             android.util.Log.w(TAG, "extractExtensionInfo($pkgName): skipped because no declaredSource could be parsed. Keys present in manifest: ${metaData.keySet()?.joinToString()}")
             return null
         }
-        
+
         val appName = ExternalExtensionLoaderSupport.getAppLabel(applicationContext, appInfo)
         val lang = ExternalExtensionLoaderSupport.extractLanguage(completePkgInfo.packageName, "animeextension")
-        
+
         return AniyomiExtensionInfo(
             pkgName = completePkgInfo.packageName,
             appName = appName,
@@ -206,7 +206,7 @@ class AniyomiExtensionLoader @Inject constructor(
             apkPath = appInfo.sourceDir ?: return null,
         )
     }
-    
+
     private fun loadExtension(context: Context, pkgInfo: PackageInfo): AniyomiLoadResult {
         val completePkgInfo = ExternalExtensionLoaderSupport.refreshPackageInfoIfNeeded(
             context.packageManager,
@@ -218,32 +218,32 @@ class AniyomiExtensionLoader @Inject constructor(
                 android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: No ApplicationInfo")
                 return AniyomiLoadResult.Error(pkgName, "No ApplicationInfo")
             }
-        
+
         val versionName = completePkgInfo.versionName
             ?: run {
                 android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: No version name")
                 return AniyomiLoadResult.Error(pkgName, "No version name")
             }
         val versionCode = PackageInfoCompat.getLongVersionCode(completePkgInfo)
-        
+
         val libVersion = versionName.substringBefore('.').toDoubleOrNull()
             ?: run {
                 android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: Invalid lib version format ($versionName)")
                 return AniyomiLoadResult.Error(pkgName, "Invalid lib version format: $versionName")
             }
-        
+
         if (libVersion < LIB_VERSION_MIN || libVersion > LIB_VERSION_MAX) {
             val err = "Incompatible lib version: $libVersion (supported: $LIB_VERSION_MIN-$LIB_VERSION_MAX) for versionName=$versionName"
             android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: $err")
             return AniyomiLoadResult.Error(pkgName, err)
         }
-        
+
         val metaData = ExternalExtensionMetadataSupport.getMetaDataOrNull(appInfo)
             ?: run {
                 android.util.Log.e(TAG, "loadExtension($pkgName) FAILED: No meta-data in manifest")
                 return AniyomiLoadResult.Error(pkgName, "No meta-data in manifest")
             }
-        
+
         val declaredSource = ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
             metaData = metaData,
             sourceClassKey = METADATA_SOURCE_CLASS,
@@ -256,11 +256,11 @@ class AniyomiExtensionLoader @Inject constructor(
             }
         val appName = ExternalExtensionLoaderSupport.getAppLabel(context, appInfo)
         val lang = ExternalExtensionLoaderSupport.extractLanguage(pkgName, "animeextension")
-        
+
         val classLoader = try {
             val apkFile = java.io.File(appInfo.sourceDir)
             android.util.Log.i(TAG, "Loading extension $pkgName from ${appInfo.sourceDir} (exists=${apkFile.exists()}, readable=${apkFile.canRead()}, size=${apkFile.length()})")
-            
+
             if (!apkFile.exists() || !apkFile.canRead()) {
                 android.util.Log.e(TAG, "Extension APK file is missing or not readable!")
             }
@@ -280,14 +280,14 @@ class AniyomiExtensionLoader @Inject constructor(
         } catch (e: Throwable) {
             return AniyomiLoadResult.Error(pkgName, "Failed to create ClassLoader", e)
         }
-        
+
         val sources = try {
             loadSources(pkgName, declaredSource.sourceClassName, classLoader)
         } catch (e: Throwable) {
             android.util.Log.e(TAG, "Failed to load sources from $pkgName", e)
             return AniyomiLoadResult.Error(pkgName, "Failed to load sources: ${e.message}", e)
         }
-        
+
         return AniyomiLoadResult.Success(
             pkgName = pkgName,
             appName = appName,
@@ -300,7 +300,7 @@ class AniyomiExtensionLoader @Inject constructor(
             isManagedLocal = LocalApkExtensionSupport.isManagedLocalPackage(context, ECOSYSTEM_DIR, appInfo.sourceDir),
         )
     }
-    
+
     private fun loadSources(
         pkgName: String,
         sourceClassNames: String,
@@ -317,5 +317,5 @@ class AniyomiExtensionLoader @Inject constructor(
             },
         )
     }
-    
+
 }

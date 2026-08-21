@@ -5,7 +5,7 @@ import java.io.File
 
 /**
  * A ClassLoader that loads classes from its own path before delegating to its parent.
- * 
+ *
  * This is necessary for Aniyomi extensions because they may bundle different versions
  * of libraries than Kototoro uses, and we need to isolate them.
  */
@@ -19,7 +19,7 @@ class ChildFirstPathClassLoader(
     librarySearchPath,
     parent,
 ) {
- 
+
     init {
         android.util.Log.i("ChildFirstPathClassLoader", "Created for path: $dexPath")
     }
@@ -52,7 +52,7 @@ class ChildFirstPathClassLoader(
 
     override fun loadClass(name: String?, resolve: Boolean): Class<*> {
         if (name == null) return super.loadClass(name, resolve)
-        
+
         var c = findLoadedClass(name)
 
         // 1. Try system class loader (core java/android classes)

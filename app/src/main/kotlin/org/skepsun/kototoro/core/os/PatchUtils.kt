@@ -17,11 +17,11 @@ object PatchUtils {
     suspend fun patch(oldFile: File, patchFile: File, newFile: File) = withContext(Dispatchers.IO) {
         val oldRaf = RandomAccessFile(oldFile, "r")
         val patchStream = patchFile.inputStream()
-        
+
         var ctrlStream: InputStream? = null
         var diffStream: InputStream? = null
         var extraStream: InputStream? = null
-        
+
         try {
             // Read the 32-byte header
             val header = ByteArray(32)
@@ -53,7 +53,7 @@ object PatchUtils {
                     // Read control data (3 x 8 bytes)
                     val ctrlBytesRead = ctrlStream.readWithFully(ctrlBlock, 0, 24)
                     if (ctrlBytesRead != 24) throw IllegalStateException("Corrupt patch file (EOF in ctrl stream)")
-                    
+
                     val diffStrLen = readOff(ctrlBlock, 0)
                     val extraStrLen = readOff(ctrlBlock, 8)
                     val seekStrLen = readOff(ctrlBlock, 16)
@@ -84,11 +84,11 @@ object PatchUtils {
                             }
                             oldReadLen += r
                         }
-                        
+
                         for (i in 0 until toRead) {
                             diffBuf[i] = (diffBuf[i] + oldBuf[i]).toByte()
                         }
-                        
+
                         newStream.write(diffBuf, 0, toRead)
                         diffRemaining -= toRead
                         oldPos += toRead

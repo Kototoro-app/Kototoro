@@ -23,7 +23,7 @@ class JsonSourceLoggingInterceptor @Inject constructor() : Interceptor {
         // Log request
         Log.d(TAG, "→ ${request.method} ${request.url}")
         request.headers.forEach { (name, value) ->
-            if (name.equals("Authorization", ignoreCase = true) || 
+            if (name.equals("Authorization", ignoreCase = true) ||
                 name.equals("Cookie", ignoreCase = true)) {
                 Log.d(TAG, "  $name: [REDACTED]")
             } else {
@@ -44,7 +44,7 @@ class JsonSourceLoggingInterceptor @Inject constructor() : Interceptor {
         // Log response
         val duration = System.currentTimeMillis() - startTime
         Log.d(TAG, "← ${response.code} ${request.url} (${duration}ms)")
-        
+
         // Log response headers
         response.headers.forEach { (name, value) ->
             if (name.equals("Set-Cookie", ignoreCase = true)) {
@@ -62,7 +62,7 @@ class JsonSourceLoggingInterceptor @Inject constructor() : Interceptor {
                 source?.request(Long.MAX_VALUE) // Buffer the entire body
                 val buffer = source?.buffer
                 val bodyString = buffer?.clone()?.readUtf8()
-                
+
                 if (bodyString != null) {
                     if (bodyString.length > MAX_BODY_LOG_LENGTH) {
                         Log.d(TAG, "  Body: ${bodyString.take(MAX_BODY_LOG_LENGTH)}... (truncated)")

@@ -26,13 +26,13 @@ import javax.inject.Singleton
 
 /**
  * Manages JSON sources including import, storage, and retrieval operations.
- * 
+ *
  * This class handles the lifecycle of JSON-based manga sources, including:
  * - Generating unique identifiers for sources
  * - Importing and validating JSON configurations
  * - Managing source state (enabled/disabled)
  * - Tracking source usage
- * 
+ *
  * Performance optimizations:
  * - Async processing with coroutines for concurrent operations
  * - Batch database operations for efficiency
@@ -46,7 +46,7 @@ class JsonSourceManager @Inject constructor(
     private val jsSourceParser: JSSourceParser? = null,
     private val jsEnginePool: JavaScriptEnginePool? = null,
 ) {
-    
+
     /**
      * JSON serializer configured for lenient parsing of JSON sources.
      * - ignoreUnknownKeys: Allows parsing JSON with extra fields not defined in the model
@@ -56,13 +56,13 @@ class JsonSourceManager @Inject constructor(
         ignoreUnknownKeys = true
         isLenient = true
     }
-    
+
     /**
      * Cache for frequently accessed sources
      * This reduces database queries for commonly used sources
      */
     private val sourceCache = java.util.concurrent.ConcurrentHashMap<String, JsonSourceEntity>()
-    
+
     companion object {
         private const val JSON_PREFIX = "JSON_"
         private const val LEGADO_PREFIX = "JSON_LEGADO_"
@@ -71,7 +71,7 @@ class JsonSourceManager @Inject constructor(
         private const val JS_PREFIX = "JSON_JS_"
         private const val LNREADER_PREFIX = "JSON_LNREADER_"
         private const val MAX_TVBOX_REPOSITORY_DEPTH = 3
-        
+
         // Regex pattern to match valid identifier characters (alphanumeric and underscore)
         private val VALID_CHAR_REGEX = Regex("[^A-Z0-9_]")
         private val TVBOX_URL_REGEX = Regex("^(https?)://([^/?#]+)(.*)$", RegexOption.IGNORE_CASE)
@@ -82,51 +82,51 @@ class JsonSourceManager @Inject constructor(
             "/provide/vod",
         )
     }
-    
+
     /**
      * Observes all JSON sources in the database.
-     * 
+     *
      * @return Flow emitting list of all JSON sources
      */
     fun observeAllJsonSources(): Flow<List<JsonSourceEntity>> {
         return jsonSourceDao.observeAll()
     }
-    
+
     /**
      * Observes only enabled JSON sources.
-     * 
+     *
      * @return Flow emitting list of enabled JSON sources
      */
     fun observeEnabledJsonSources(): Flow<List<JsonSourceEntity>> {
         return jsonSourceDao.observeEnabled()
     }
-    
+
     /**
      * Gets a JSON source by its ID with caching.
-     * 
+     *
      * This method checks the cache first before querying the database,
      * improving performance for frequently accessed sources.
-     * 
+     *
      * @param sourceId The source identifier
      * @return The JsonSourceEntity if found, null otherwise
      */
     suspend fun getById(sourceId: String): JsonSourceEntity? {
         // Check cache first
         sourceCache[sourceId]?.let { return it }
-        
+
         // Query database if not in cache
         val source = jsonSourceDao.getById(sourceId)
-        
+
         // Cache the result if found
         source?.let { sourceCache[sourceId] = it }
-        
+
         return source
     }
-    
+
     /**
      * Gets multiple sources by IDs (batch query)
      * More efficient than multiple individual queries
-     * 
+     *
      * @param sourceIds List of source identifiers
      * @return List of found sources
      */
@@ -134,7 +134,7 @@ class JsonSourceManager @Inject constructor(
         // Check which sources are already in cache
         val cached = mutableListOf<JsonSourceEntity>()
         val uncachedIds = mutableListOf<String>()
-        
+
         sourceIds.forEach { id ->
             val cachedSource = sourceCache[id]
             if (cachedSource != null) {
@@ -143,7 +143,7 @@ class JsonSourceManager @Inject constructor(
                 uncachedIds.add(id)
             }
         }
-        
+
         // Query database for uncached sources
         val fromDb = if (uncachedIds.isNotEmpty()) {
             jsonSourceDao.getByIds(uncachedIds).also { sources ->
@@ -153,10 +153,10 @@ class JsonSourceManager @Inject constructor(
         } else {
             emptyList()
         }
-        
+
         return cached + fromDb
     }
-    
+
     /**
      * Invalidate cache for a specific source
      * Should be called when a source is updated or deleted
@@ -164,7 +164,7 @@ class JsonSourceManager @Inject constructor(
     private fun invalidateCache(sourceId: String) {
         sourceCache.remove(sourceId)
     }
-    
+
     /**
      * Clear the entire source cache
      * Useful when performing bulk operations
@@ -172,10 +172,10 @@ class JsonSourceManager @Inject constructor(
     fun clearCache() {
         sourceCache.clear()
     }
-    
+
     /**
      * Toggles the enabled state of a JSON source.
-     * 
+     *
      * @param sourceId The source identifier
      * @param enabled Whether the source should be enabled
      */
@@ -190,11 +190,11 @@ class JsonSourceManager @Inject constructor(
             throw JsonSourceError.DatabaseError("toggle source state", e)
         }
     }
-    
+
     /**
      * Batch toggle multiple sources
      * More efficient than toggling sources individually
-     * 
+     *
      * @param sourceIds List of source identifiers
      * @param enabled Whether the sources should be enabled
      */
@@ -233,7 +233,7 @@ class JsonSourceManager @Inject constructor(
 
     /**
      * Deletes a JSON source from the database.
-     * 
+     *
      * @param sourceId The source identifier
      */
     suspend fun deleteSource(sourceId: String) {
@@ -246,11 +246,11 @@ class JsonSourceManager @Inject constructor(
             throw JsonSourceError.DatabaseError("delete source", e)
         }
     }
-    
+
     /**
      * Batch delete multiple sources
      * More efficient than deleting sources individually
-     * 
+     *
      * @param sourceIds List of source identifiers
      */
     suspend fun deleteSourcesBatch(sourceIds: List<String>) {
@@ -263,10 +263,10 @@ class JsonSourceManager @Inject constructor(
             throw JsonSourceError.DatabaseError("batch delete sources", e)
         }
     }
-    
+
     /**
      * Updates the last used timestamp for a source.
-     * 
+     *
      * @param sourceId The source identifier
      */
     suspend fun trackUsage(sourceId: String) {
@@ -286,10 +286,10 @@ class JsonSourceManager @Inject constructor(
         jsonSourceDao.fillMissingIconUrl(sourceId, iconUrl, timestamp)
         invalidateCache(sourceId)
     }
-    
+
     /**
      * Inserts a new JSON source into the database.
-     * 
+     *
      * @param entity The new source entity
      */
     suspend fun insertSource(entity: JsonSourceEntity) {
@@ -305,7 +305,7 @@ class JsonSourceManager @Inject constructor(
 
     /**
      * Updates a JSON source in the database.
-     * 
+     *
      * @param entity The updated source entity
      */
     suspend fun updateSource(entity: JsonSourceEntity) {
@@ -318,7 +318,7 @@ class JsonSourceManager @Inject constructor(
             throw JsonSourceError.DatabaseError("update source", e)
         }
     }
-    
+
     /**
      * Validate a source by performing a multi-stage check:
      * Search -> Details -> Chapter List -> Content
@@ -332,17 +332,17 @@ class JsonSourceManager @Inject constructor(
             Json { ignoreUnknownKeys = true; isLenient = true; allowTrailingComma = true }
                 .decodeFromString<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>(entity.config)
         }.getOrNull() ?: return false
-        
+
         val searchUrl = config.searchUrl
         val exploreUrl = config.exploreUrl
         if (searchUrl.isNullOrBlank() && exploreUrl.isNullOrBlank()) return false
-        
+
         val engine = enginePool.acquire()
         return try {
             val sandbox = LegadoSandbox(engine, client, config)
             val mangaSource = JsonContentSource(entity)
             var results: List<org.skepsun.kototoro.parsers.model.Content> = emptyList()
-            
+
             // 1. Try Search if available
             if (!searchUrl.isNullOrBlank()) {
                 val page = 1
@@ -352,14 +352,14 @@ class JsonSourceManager @Inject constructor(
                     .replace("{key}", encodedKey)
                     .replace("{{page}}", page.toString())
                     .replace("{page}", page.toString())
-                
+
                 val searchResponse = client.get(finalSearchUrl, parseCustomHeaders(config.header), source = null)
                 val searchBody = searchResponse.body?.string().orEmpty()
                 searchResponse.close()
-                
+
                 results = BookList.parse(searchBody, finalSearchUrl, mangaSource, config, true, sandbox)
             }
-            
+
             // 2. Try Explore fallback if search failed or not available
             if (results.isEmpty() && !exploreUrl.isNullOrBlank()) {
                 try {
@@ -368,7 +368,7 @@ class JsonSourceManager @Inject constructor(
                     } else {
                         exploreUrl.split("&&").first().split("\n").first().trim()
                     }
-                    
+
                     if (!firstExploreUrl.isNullOrBlank()) {
                         val fullExploreUrl = if (firstExploreUrl.startsWith("http")) {
                             firstExploreUrl
@@ -376,46 +376,46 @@ class JsonSourceManager @Inject constructor(
                             val baseUrl = config.bookSourceUrl.removeSuffix("/")
                             if (firstExploreUrl.startsWith("/")) "$baseUrl$firstExploreUrl" else "$baseUrl/$firstExploreUrl"
                         }
-                        
+
                         val exploreResponse = client.get(fullExploreUrl, parseCustomHeaders(config.header), source = null)
                         val exploreBody = exploreResponse.body?.string().orEmpty()
                         exploreResponse.close()
-                        
+
                         results = BookList.parse(exploreBody, fullExploreUrl, mangaSource, config, false, sandbox)
                     }
                 } catch (e: Exception) {
                     JsonSourceLogger.logWarning("Explore fallback failed during validation: ${e.message}")
                 }
             }
-            
+
             if (results.isEmpty()) return false
             val firstContent = results.first()
-            
+
             // 2. Details
             val detailsResponse = client.get(firstContent.url, parseCustomHeaders(config.header), source = null)
             val detailsBody = detailsResponse.body?.string().orEmpty()
             detailsResponse.close()
-            
+
             val infoResult = BookInfo.parse(firstContent, detailsBody, firstContent.url, config, sandbox)
-            
+
             // 3. Chapter List (TOC)
             val tocUrl = infoResult.tocUrl ?: firstContent.url
             val tocResponse = client.get(tocUrl, parseCustomHeaders(config.header), source = null)
             val tocBody = tocResponse.body?.string().orEmpty()
             tocResponse.close()
-            
+
             val tocResult = BookChapterList.parse(tocBody, tocUrl, mangaSource, config, sandbox)
             val chapters = tocResult.chapters
             if (chapters.isEmpty()) return false
-            
+
             // 4. Content
             val firstChapter = chapters.first()
             val contentResponse = client.get(firstChapter.url, parseCustomHeaders(config.header), source = null)
             val contentBody = contentResponse.body?.string().orEmpty()
             contentResponse.close()
-            
+
             val content = BookContent.parse(contentBody, firstChapter.url, mangaSource, config, sandbox)
-            
+
             content.pages.isNotEmpty()
         } catch (e: Exception) {
             JsonSourceLogger.logError("Verification failed for ${entity.name}", e)
@@ -424,18 +424,18 @@ class JsonSourceManager @Inject constructor(
             enginePool.release(engine)
         }
     }
-    
+
     /**
      * Imports a single Venera-style JavaScript source.
      */
     suspend fun importJsSource(jsContent: String, enabled: Boolean? = null): Result<Int> {
         val parser = jsSourceParser ?: return Result.failure(IllegalStateException("JS parser unavailable"))
-        
+
         return parser.parseMetadata(jsContent).mapCatching { meta ->
             val base = meta.homepage?.takeIf { it.isNotBlank() } ?: meta.key
             val sourceId = runCatching { generateSourceId(base, JsonSourceType.JS) }
                 .getOrElse { generateSourceIdFromName(meta.key, JsonSourceType.JS) }
-            
+
             val timestamp = System.currentTimeMillis()
             val entity = JsonSourceEntity(
                 id = sourceId,
@@ -449,15 +449,15 @@ class JsonSourceManager @Inject constructor(
                 isPinned = false,
                 iconUrl = deriveFaviconUrl(meta.homepage),
             )
-            
+
             jsonSourceDao.insert(entity)
-            
+
             runCatching { parser.saveSource(jsContent, "$sourceId.js") }
-            
+
             1
         }
     }
-    
+
     /**
      * Imports a LNReader JS plugin.
      * Extracts metadata using regex (no JS engine needed for import),
@@ -476,9 +476,9 @@ class JsonSourceManager @Inject constructor(
                 ?.mergeMissing(extractedMeta)
                 ?.sanitized()
                 ?: extractedMeta
-            
+
             val sourceId = generateSourceId(meta.site.ifBlank { meta.id }, JsonSourceType.LNREADER)
-            
+
             val timestamp = System.currentTimeMillis()
             val entity = JsonSourceEntity(
                 id = sourceId,
@@ -492,10 +492,10 @@ class JsonSourceManager @Inject constructor(
                 isPinned = false,
                 iconUrl = normalizeLnReaderIconUrl(meta.icon),
             )
-            
+
             jsonSourceDao.insert(entity)
             JsonSourceLogger.logInfo("Imported LNReader plugin: ${meta.name} (${meta.id})")
-            
+
             Result.success(1)
         } catch (e: Exception) {
             JsonSourceLogger.logError("Failed to import LNReader plugin", e)
@@ -522,21 +522,21 @@ class JsonSourceManager @Inject constructor(
             .takeIf { it.startsWith("src/") || it.startsWith("multisrc/") }
             ?.let { "https://raw.githubusercontent.com/lnreader/lnreader-plugins/plugins/v3.0.0/public/static/$it" }
     }
-    
+
     /**
      * Imports Legado JSON configuration with async processing.
-     * 
+     *
      * This method:
      * 1. Parses the JSON content into a list of LegadoBookSource objects
      * 2. Validates each source's required fields (in parallel using coroutines)
      * 3. Generates unique identifiers for each source
      * 4. Batch inserts all valid sources into the database
-     * 
+     *
      * Performance optimizations:
      * - Uses coroutines for concurrent validation and processing
      * - Batch database operations for efficiency
      * - Async loading reduces blocking time
-     * 
+     *
      * @param jsonContent The JSON string containing Legado book sources
      * @return Result containing the number of successfully imported sources or error message
      */
@@ -550,22 +550,22 @@ class JsonSourceManager @Inject constructor(
     ): Result<Int> {
         val startTime = System.currentTimeMillis()
         JsonSourceLogger.logImportStart("LEGADO", jsonContent.length)
-        
+
         return try {
             // Parse JSON array into list of LegadoBookSource objects
             val sources = json.decodeFromString<List<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>>(jsonContent)
-            
+
             if (sources.isEmpty()) {
                 JsonSourceLogger.logWarning("JSON array is empty")
                 return Result.failure(IllegalArgumentException("JSON array is empty"))
             }
-            
+
             JsonSourceLogger.logInfo("Parsing ${sources.size} source(s) from JSON")
-            
+
             // Process sources concurrently using coroutines
             val entities = mutableListOf<JsonSourceEntity>()
             val errors = mutableListOf<String>()
-            
+
             // Use withContext to ensure we're on the IO dispatcher
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 // Process sources sequentially for now
@@ -581,7 +581,7 @@ class JsonSourceManager @Inject constructor(
                         enabled = enabled,
                     )
                 }
-                
+
                 // Collect results
                 results.forEach { result ->
                     when (result) {
@@ -590,22 +590,22 @@ class JsonSourceManager @Inject constructor(
                     }
                 }
             }
-            
+
             // Log validation results
             JsonSourceLogger.logInfo("Validation complete: ${entities.size} valid, ${errors.size} invalid out of ${sources.size} total")
-            
+
             // If all sources failed validation, return error
             if (entities.isEmpty()) {
                 val errorMsg = "No valid sources found. All ${sources.size} sources failed validation. Errors:\n${errors.joinToString("\n")}"
                 JsonSourceLogger.logWarning(errorMsg)
                 return Result.failure(IllegalArgumentException(errorMsg))
             }
-            
+
             // Log any validation errors for individual sources
             if (errors.isNotEmpty()) {
                 JsonSourceLogger.logWarning("${errors.size} source(s) failed validation:\n${errors.joinToString("\n")}")
             }
-            
+
             // Batch insert all valid sources
             try {
                 jsonSourceDao.insertAll(entities)
@@ -614,18 +614,18 @@ class JsonSourceManager @Inject constructor(
                 JsonSourceLogger.logDatabaseError("batch insert sources", e)
                 throw JsonSourceError.DatabaseError("batch insert sources", e)
             }
-            
+
             // Return success with count (and warnings if some failed)
             val successCount = entities.size
             val duration = System.currentTimeMillis() - startTime
             JsonSourceLogger.logImportSuccess("LEGADO", successCount, duration)
-            
+
             if (errors.isNotEmpty()) {
                 // Some sources failed but others succeeded
                 JsonSourceLogger.logWarning("${errors.size} source(s) failed validation but $successCount succeeded")
                 return Result.success(successCount)
             }
-            
+
             Result.success(successCount)
         } catch (e: kotlinx.serialization.SerializationException) {
             JsonSourceLogger.logImportError("LEGADO", e)
@@ -749,7 +749,7 @@ class JsonSourceManager @Inject constructor(
             entities.map { it.name }.distinct().sorted()
         }
     }
-    
+
     /**
      * Process a single source (validation, ID generation, entity creation)
      * This is extracted to support concurrent processing
@@ -772,7 +772,7 @@ class JsonSourceManager @Inject constructor(
                     "Source ${index + 1} (${source.bookSourceName}): ${validation.errors.joinToString(", ")}"
                 )
             }
-            
+
             // Basic connectivity check: fetch homepage to ensure reachable HTML
             if (skipUnreachable) {
                 val homeCheck = runCatching { verifyHomePageAccessible(source) }.getOrElse { throwable ->
@@ -782,16 +782,16 @@ class JsonSourceManager @Inject constructor(
                     return SourceProcessResult.Error("Source ${index + 1} (${source.bookSourceName}): homepage unreachable or empty, skipped")
                 }
             }
-            
+
             // Skip sources with no explore/list capability when requested
             if (skipNoExplore && (source.ruleExplore == null || source.ruleExplore?.bookList.isNullOrBlank())) {
                 return SourceProcessResult.Error("Source ${index + 1} (${source.bookSourceName}): no explore rule, skipped by option")
             }
-            
+
             // Generate unique identifier using URL (following Legado's approach)
             val sourceId = generateSourceId(source.bookSourceUrl, JsonSourceType.LEGADO, source.bookSourceType)
             JsonSourceLogger.logIdGeneration(source.bookSourceName, sourceId)
-            
+
             // Serialize the source back to JSON for storage
             val configJson = json.encodeToString(
                 org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource.serializer(),
@@ -804,7 +804,7 @@ class JsonSourceManager @Inject constructor(
                     importKind = sourceLocator?.let(::resolveImportKind),
                 )
             }
-            
+
             // Create entity
             val timestamp = System.currentTimeMillis()
             val entity = JsonSourceEntity(
@@ -819,7 +819,7 @@ class JsonSourceManager @Inject constructor(
                 isPinned = false,
                 iconUrl = deriveFaviconUrl(source.bookSourceUrl),
             )
-            
+
             SourceProcessResult.Success(entity)
         } catch (e: Exception) {
             SourceProcessResult.Error("Source ${index + 1} (${source.bookSourceName}): ${e.message}")
@@ -856,7 +856,7 @@ class JsonSourceManager @Inject constructor(
             else -> "inline"
         }
     }
-    
+
     /**
      * Result of processing a single source
      */
@@ -864,7 +864,7 @@ class JsonSourceManager @Inject constructor(
         data class Success(val entity: JsonSourceEntity) : SourceProcessResult()
         data class Error(val message: String) : SourceProcessResult()
     }
-    
+
     /**
      * Quick reachability check for a source homepage.
      * Returns false if the request fails or HTML is too short/blank.
@@ -872,14 +872,14 @@ class JsonSourceManager @Inject constructor(
     private suspend fun verifyHomePageAccessible(source: org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource): Boolean {
         val client = legadoHttpClient ?: return true
         val url = source.bookSourceUrl.takeIf { it.isNotBlank() } ?: return true // allow empty URLs
-        
+
         // Parse custom headers if provided
         val headers = parseCustomHeaders(source.header)
-        
+
         val response = client.get(url, headers, source = null)
         val body = response.body?.string().orEmpty()
         response.close()
-        
+
         if (!response.isSuccessful) {
             JsonSourceLogger.logWarning("Homepage check failed for ${source.bookSourceName}: HTTP ${response.code}")
             return false
@@ -890,7 +890,7 @@ class JsonSourceManager @Inject constructor(
         }
         return true
     }
-    
+
     private fun parseCustomHeaders(headerStr: String?): Map<String, String> {
         if (headerStr.isNullOrBlank()) return emptyMap()
         return try {
@@ -901,29 +901,29 @@ class JsonSourceManager @Inject constructor(
             emptyMap()
         }
     }
-    
+
     /**
      * Validates a Legado book source configuration.
-     * 
+     *
      * Checks:
      * - Required field: bookSourceName must not be blank
      * - Optional field: bookSourceUrl (can be empty in Legado for certain source types)
      * - URL format: bookSourceUrl must be a valid URL if not empty
-     * 
+     *
      * Note: Following Legado's validation logic, bookSourceUrl can be empty.
      * Some sources in Legado use empty bookSourceUrl for specific purposes.
-     * 
+     *
      * @param source The Legado book source to validate
      * @return ValidationResult indicating whether the source is valid
      */
     fun validateLegadoSource(source: org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource): ValidationResult {
         val errors = mutableListOf<String>()
-        
+
         // Check required field: bookSourceName
         if (source.bookSourceName.isBlank()) {
             errors.add("bookSourceName is required and cannot be blank")
         }
-        
+
         // bookSourceUrl can be empty in Legado (following Legado's validation logic)
         // Only validate URL format if it's not empty
         if (source.bookSourceUrl.isNotEmpty()) {
@@ -934,23 +934,23 @@ class JsonSourceManager @Inject constructor(
                 JsonSourceLogger.logWarning("URL validation warning for ${source.bookSourceName}: ${urlValidation.errors.joinToString(", ")}")
             }
         }
-        
+
         return if (errors.isEmpty()) {
             ValidationResult.success()
         } else {
             ValidationResult.failure(errors)
         }
     }
-    
+
     /**
      * Validates a URL string using SecurityValidator.
-     * 
+     *
      * Checks:
      * - URL must be parseable
      * - Protocol must be http or https
      * - Host must not be blank
      * - Host must not be a local address
-     * 
+     *
      * @param url The URL string to validate
      * @return ValidationResult indicating whether the URL is valid
      */
@@ -1474,19 +1474,19 @@ class JsonSourceManager @Inject constructor(
 
     /**
      * Generates a unique source identifier from source URL and name.
-     * 
+     *
      * Following Legado's approach, we use the bookSourceUrl as the primary identifier.
      * The identifier follows the format: JSON_[TYPE_]URL_HASH
      * where:
      * - JSON_ is the prefix for all JSON sources
      * - [TYPE_] is the type prefix (LEGADO_ or TVBOX_) to distinguish source types
      * - URL_HASH is a hash of the bookSourceUrl to ensure uniqueness
-     * 
+     *
      * This approach ensures:
      * 1. Each source with a unique URL gets a unique ID
      * 2. Works with any language (Chinese, Japanese, etc.)
      * 3. Consistent with Legado's use of bookSourceUrl as primary key
-     * 
+     *
      * @param sourceUrl The source URL (bookSourceUrl in Legado)
      * @param sourceType The type of JSON source (LEGADO or TVBOX)
      * @return A unique identifier string
@@ -1499,19 +1499,19 @@ class JsonSourceManager @Inject constructor(
             JsonSourceType.JS -> JS_PREFIX
             JsonSourceType.LNREADER -> LNREADER_PREFIX
         }
-        
+
         // Generate a hash of the URL to create a unique, stable identifier
         // Using hashCode() and converting to hex for readability
         val urlHash = sourceUrl.hashCode().toUInt().toString(16).uppercase()
-        
+
         // Build the identifier
         val sourceId = "$typePrefix$urlHash"
-        
+
         JsonSourceLogger.logDebug("Generated ID $sourceId for URL: $sourceUrl")
-        
+
         return sourceId
     }
-    
+
     /**
      * Legacy method for backward compatibility - now delegates to URL-based generation
      * @deprecated Use generateSourceId(sourceUrl, sourceType) instead
@@ -1528,10 +1528,10 @@ class JsonSourceManager @Inject constructor(
         }
         return "$typePrefix$uuid"
     }
-    
+
     /**
      * Generates a simple source identifier without type prefix (for backward compatibility).
-     * 
+     *
      * @param sourceName The original source name
      * @return A unique identifier string with JSON_ prefix
      */
@@ -1541,18 +1541,18 @@ class JsonSourceManager @Inject constructor(
             .replace(" ", "_")
             .replace(VALID_CHAR_REGEX, "")
             .take(50)
-        
+
         val baseId = "$JSON_PREFIX$normalizedName"
         var candidateId = baseId
         var suffix = 1
-        
+
         val existingIds = jsonSourceDao.observeAll().first().map { it.id }.toSet()
-        
+
         while (existingIds.contains(candidateId)) {
             candidateId = "${baseId}_$suffix"
             suffix++
         }
-        
+
         return candidateId
     }
 }

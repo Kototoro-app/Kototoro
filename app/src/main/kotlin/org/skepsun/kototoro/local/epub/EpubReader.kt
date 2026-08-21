@@ -19,7 +19,7 @@ interface EpubReader {
      * @return EpubContent containing metadata and chapters, or null if parsing fails
      */
     suspend fun readEpub(file: File): EpubContent?
-    
+
     /**
      * Extracts text content from HTML
      * @param htmlBytes Raw HTML content as byte array
@@ -31,7 +31,7 @@ interface EpubReader {
 /**
  * EPUB文件读取器
  * 支持从CBZ压缩包中读取EPUB文件
- * 
+ *
  * Performance optimizations:
  * - LRU cache for parsed content (Requirement 11.2)
  * - Background thread operations (Requirement 11.3)
@@ -42,7 +42,7 @@ class EpubReaderImpl(
     private val cache: EpubContentCache = EpubContentCache.getInstance(),
     private val progressListener: EpubLoadingProgressListener? = null
 ) : EpubReader {
-    
+
     /**
      * Helper function to log errors safely (won't fail in unit tests)
      */
@@ -55,24 +55,24 @@ class EpubReaderImpl(
             throwable?.printStackTrace()
         }
     }
-    
+
     /**
      * Gets the cache instance for external management.
      */
     fun getCache(): EpubContentCache = cache
-    
+
     /**
      * Reads an EPUB file and extracts its content
      * @param file The EPUB file to read
      * @return EpubContent containing metadata and chapters, or null if parsing fails
-     * 
+     *
      * Performance: Uses LRU cache to avoid re-parsing (Requirement 11.2)
      * Threading: Runs on IO dispatcher (Requirement 11.3)
      * Progress: Reports progress for large files >50MB (Requirement 11.4)
      */
     override suspend fun readEpub(file: File): EpubContent? = withContext(Dispatchers.IO) {
         val progressTracker = EpubLoadingProgressTracker(progressListener)
-        
+
         try {
             // Check if file exists (Requirement 10.4)
             if (!file.exists()) {
@@ -80,29 +80,29 @@ class EpubReaderImpl(
                 EpubErrorHandler.handleError(error, "readEpub")
                 return@withContext null
             }
-            
+
             // Check if file is readable
             if (!file.canRead()) {
                 val error = EpubError.FileSystemError.PermissionDenied(file.absolutePath)
                 EpubErrorHandler.handleError(error, "readEpub")
                 return@withContext null
             }
-            
+
             // Check cache first (Requirement 11.2)
             cache.get(file)?.let { cachedContent ->
                 android.util.Log.d(TAG, "Using cached EPUB content for: ${file.name}")
                 return@withContext cachedContent
             }
-            
+
             // Report progress for large files (Requirement 11.4)
             val fileSize = file.length()
             val isLargeFile = EpubLoadingProgressTracker.isLargeFile(fileSize)
-            
+
             if (isLargeFile) {
                 progressTracker.reportStarted(file.name, fileSize)
                 progressTracker.reportProgress(10, "Opening EPUB file...")
             }
-            
+
             // Parse and cache
             val content = file.inputStream().use { stream ->
                 if (isLargeFile) {
@@ -110,21 +110,21 @@ class EpubReaderImpl(
                 }
                 parseEpub(stream, file.name)
             }
-            
+
             if (isLargeFile && content != null) {
                 progressTracker.reportProgress(90, "Extracting chapters...")
             }
-            
+
             // Cache the result if successful
             if (content != null) {
                 cache.put(file, content)
                 android.util.Log.d(TAG, "Cached EPUB content for: ${file.name}")
-                
+
                 if (isLargeFile) {
                     progressTracker.reportCompleted(content.chapters.size)
                 }
             }
-            
+
             content
         } catch (e: java.io.FileNotFoundException) {
             val error = EpubError.FileSystemError.FileNotFound(file.name, e)
@@ -149,7 +149,7 @@ class EpubReaderImpl(
             null
         }
     }
-    
+
     /**
      * Extracts text content from HTML
      * @param htmlBytes Raw HTML content as byte array
@@ -190,7 +190,7 @@ class EpubReaderImpl(
 
     /**
      * 从章节URL获取EPUB输入流
-     * 
+     *
      * URL格式：
      * - file:///path/to/manga.cbz#chapter/0.epub
      * - zip:file:///path/to/manga.cbz#chapter/0.epub
@@ -198,12 +198,12 @@ class EpubReaderImpl(
     private fun getEpubInputStream(uri: Uri): InputStream? {
         try {
             val uriString = uri.toString()
-            
+
             // 解析ZIP URI
             // 格式: zip:file:///path/to/file.cbz#entry/path.epub
             val zipPath: String
             val entryPath: String
-            
+
             if (uriString.startsWith("zip:")) {
                 val parts = uriString.removePrefix("zip:").split("#", limit = 2)
                 zipPath = parts[0].removePrefix("file://")
@@ -216,16 +216,16 @@ class EpubReaderImpl(
                 // 直接的EPUB文件
                 return java.io.FileInputStream(uri.path ?: return null)
             }
-            
+
             // 打开ZIP文件
             val zipFileObj = java.io.File(zipPath)
             if (!zipFileObj.exists()) {
                 logError("EpubReader", "ZIP file not found: $zipPath")
                 return null
             }
-            
+
             val zip = ZipFile(zipFileObj)
-            
+
             // 查找EPUB文件
             val entry = zip.getEntry(entryPath)
             if (entry == null) {
@@ -233,11 +233,11 @@ class EpubReaderImpl(
                 zip.close()
                 return null
             }
-            
+
             // 读取EPUB文件到内存
             val epubBytes = zip.getInputStream(entry).use { it.readBytes() }
             zip.close()
-            
+
             return epubBytes.inputStream()
         } catch (e: Exception) {
             logError("EpubReader", "Failed to extract EPUB from ZIP", e)
@@ -252,7 +252,7 @@ class EpubReaderImpl(
         return try {
             val reader = AgEpubReader()
             val book = reader.readEpub(inputStream)
-            
+
             extractContent(book)
         } catch (e: IllegalArgumentException) {
             // Invalid EPUB format (Requirement 10.1)
@@ -278,20 +278,20 @@ class EpubReaderImpl(
     private fun extractContent(book: Book): EpubContent {
         val title = book.title ?: "Unknown title"
         val author = book.metadata.authors.firstOrNull()?.toString() ?: "Unknown author"
-        
+
         // 提取所有章节内容
         val chapters = mutableListOf<EpubChapter>()
         val spine = book.spine
-        
+
         // Extract all spine references as individual chapters (Requirement 2.1)
         for ((index, spineRef) in spine.spineReferences.withIndex()) {
             try {
                 val resource = spineRef.resource
                 val htmlContent = String(resource.data, Charsets.UTF_8)
-                
+
                 // 尝试从HTML内容中提取更准确的标题
                 val extractedTitle = extractTitleFromHtml(htmlContent)
-                
+
                 // Preserve chapter titles from EPUB metadata (Requirement 2.2)
                 // Generate default titles using chapter index numbers if missing (Requirement 2.3)
                 val chapterTitle = when {
@@ -299,14 +299,14 @@ class EpubReaderImpl(
                     !resource.title.isNullOrBlank() -> resource.title
                     else -> "Chapter ${index + 1}"
                 }
-                
+
                 // 检测是否是图片章节（封面、插图等）
                 val isImageChapter = detectImageChapter(htmlContent)
-                
+
                 // Convert HTML content to readable text format (Requirement 2.4)
                 // 对于图片章节，保留图片标签
                 val textContent = htmlToTextWithImages(htmlContent)
-                
+
                 chapters.add(
                     EpubChapter(
                         index = index,
@@ -323,14 +323,14 @@ class EpubReaderImpl(
                 // Continue with other chapters instead of failing completely
             }
         }
-        
+
         return EpubContent(
             title = title,
             author = author,
             chapters = chapters,
         )
     }
-    
+
     /**
      * 从HTML内容中提取标题
      * 优先级：
@@ -354,7 +354,7 @@ class EpubReaderImpl(
                 .map { it.groupValues[1].trim() }
                 .filter { it.isNotBlank() }
                 .toList()
-            
+
             if (spans.isNotEmpty()) {
                 // 组合所有span内容，用空格分隔
                 val title = spans.joinToString(" ")
@@ -367,7 +367,7 @@ class EpubReaderImpl(
                 }
             }
         }
-        
+
         // 2. 尝试提取前几个段落中包含"第X章"、"第X话"、"第X卷"等模式的内容
         val chapterPattern = Regex(
             """<p[^>]*>(.*?第\s*[0-9０-９一二三四五六七八九十百千万]+\s*[章话卷節节].*?)</p>""",
@@ -386,7 +386,7 @@ class EpubReaderImpl(
                 return title
             }
         }
-        
+
         // 3. 尝试提取h1标签
         val h1Match = Regex("<h1[^>]*>(.*?)</h1>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             .find(html)
@@ -399,7 +399,7 @@ class EpubReaderImpl(
                 return title
             }
         }
-        
+
         // 4. 尝试提取h2标签
         val h2Match = Regex("<h2[^>]*>(.*?)</h2>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             .find(html)
@@ -412,7 +412,7 @@ class EpubReaderImpl(
                 return title
             }
         }
-        
+
         // 5. 尝试提取h3标签
         val h3Match = Regex("<h3[^>]*>(.*?)</h3>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             .find(html)
@@ -425,7 +425,7 @@ class EpubReaderImpl(
                 return title
             }
         }
-        
+
         // 6. 尝试提取title标签
         val titleMatch = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             .find(html)
@@ -433,7 +433,7 @@ class EpubReaderImpl(
             var title = titleMatch.groupValues[1]
                 .replace(Regex("<[^>]+>"), "")
                 .trim()
-            
+
             // 清理title标签中的书名部分
             // 常见格式：
             // - "书名 - 第X章"
@@ -453,16 +453,16 @@ class EpubReaderImpl(
                         }
                     }
                 }
-                
+
                 android.util.Log.d("EpubReader", "Extracted title from title tag: $title")
                 return title
             }
         }
-        
+
         android.util.Log.d("EpubReader", "No title extracted from HTML")
         return null
     }
-    
+
     /**
      * 检测是否是图片章节
      * 判断标准：
@@ -472,7 +472,7 @@ class EpubReaderImpl(
     private fun detectImageChapter(html: String): Boolean {
         val hasImage = html.contains("<img", ignoreCase = true)
         if (!hasImage) return false
-        
+
         // 提取纯文本内容
         val textContent = html
             .replace(Regex("<script[^>]*>.*?</script>", RegexOption.DOT_MATCHES_ALL), "")
@@ -480,11 +480,11 @@ class EpubReaderImpl(
             .replace(Regex("<[^>]+>"), "")
             .replace("&nbsp;", " ")
             .trim()
-        
+
         // 如果文本内容很少，认为是图片章节
         return textContent.length < 100
     }
-    
+
     /**
      * HTML转文本，保留图片信息
      * 用于图片章节（封面、插图等）
@@ -505,7 +505,7 @@ class EpubReaderImpl(
                     !alt.isNullOrBlank() -> alt
                     else -> src
                 }
-                
+
                 "\n\n📷 [图片: $displayText]\n\n"
             }
             // 将<br>和<p>标签转换为换行
@@ -558,15 +558,15 @@ class EpubReaderImpl(
             .replace(Regex("\n{3,}"), "\n\n")
             .trim()
     }
-    
+
     /**
      * Creates a lazy-loading wrapper for an EPUB file.
-     * 
+     *
      * This allows on-demand loading of chapters for better performance with large files.
-     * 
+     *
      * @param file The EPUB file
      * @return LazyEpubContent for on-demand chapter loading, or null if file cannot be read
-     * 
+     *
      * Requirements: 11.1 - Implement lazy loading for EPUB chapters
      */
     suspend fun createLazyContent(file: File): LazyEpubContent? = withContext(Dispatchers.IO) {
@@ -574,10 +574,10 @@ class EpubReaderImpl(
             if (!file.exists() || !file.canRead()) {
                 return@withContext null
             }
-            
+
             // Read just the metadata (title, author, chapter count)
             val content = readEpub(file) ?: return@withContext null
-            
+
             LazyEpubContent(
                 title = content.title,
                 author = content.author,
@@ -590,7 +590,7 @@ class EpubReaderImpl(
             null
         }
     }
-    
+
     companion object {
         private const val TAG = "EpubReader"
     }

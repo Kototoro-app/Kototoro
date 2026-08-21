@@ -150,7 +150,7 @@ object JarExtensionLoader {
                     val className = entries.nextElement()
                     try {
                         val clazz = dexClassLoader.loadClass(className)
-                        
+
                         val brokenKotatsu = clazz.getAnnotation(org.koitharu.kotatsu.parsers.Broken::class.java)
                         if (brokenKotatsu != null) {
                             val mangaParserAnn = clazz.getAnnotation(org.koitharu.kotatsu.parsers.MangaSourceParser::class.java)
@@ -158,7 +158,7 @@ object JarExtensionLoader {
                                 brokenSourceNames.add(mangaParserAnn.name)
                             }
                         }
-                        
+
                         val brokenKototoro = clazz.getAnnotation(org.skepsun.kototoro.parsers.Broken::class.java)
                         if (brokenKototoro != null) {
                             val contentParserAnn = clazz.getAnnotation(org.skepsun.kototoro.parsers.ContentSourceParser::class.java)

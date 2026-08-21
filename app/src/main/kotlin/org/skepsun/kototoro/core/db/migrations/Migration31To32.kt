@@ -5,7 +5,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * 创建 json_sources 表，用于存储运行时导入的 JSON 解析器配置
- * 
+ *
  * 支持的 JSON 源类型：
  * - LEGADO: Legado 书源配置
  * - TVBOX: TVBox 站点配置
@@ -43,7 +43,7 @@ class Migration31To32 : Migration(31, 32) {
 			ON json_sources(type)
             """.trimIndent()
         )
-        
+
         // 添加复合索引以优化按类型和启用状态的查询
         db.execSQL(
             """
@@ -51,7 +51,7 @@ class Migration31To32 : Migration(31, 32) {
 			ON json_sources(enabled, type)
             """.trimIndent()
         )
-        
+
         // 添加索引以优化最近使用的查询
         db.execSQL(
             """
@@ -59,7 +59,7 @@ class Migration31To32 : Migration(31, 32) {
 			ON json_sources(last_used_at DESC)
             """.trimIndent()
         )
-        
+
         // 添加索引以优化按名称排序的查询
         db.execSQL(
             """

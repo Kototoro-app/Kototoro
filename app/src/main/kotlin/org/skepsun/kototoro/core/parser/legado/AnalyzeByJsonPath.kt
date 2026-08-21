@@ -10,19 +10,19 @@ import org.mozilla.javascript.Undefined
 /**
  * JSONPath analyzer for API responses.
  * Supports standard JSONPath syntax with && || %% rule combination.
- * 
+ *
  * Aligned with legado-with-MD3 AnalyzeByJSonPath pattern.
- * 
+ *
  * 解决阅读"&&"、"||"与jsonPath支持的"&&"、"||"之间的冲突
  * 解决{$.rule}形式规则可能匹配错误的问题
- * 
+ *
  * Syntax: `$.data.list[*].name` or `@json:$.data.list[*].name`
  */
 class AnalyzeByJsonPath(content: Any) {
-    
+
     companion object {
         private const val TAG = "AnalyzeByJsonPath"
-        
+
         fun parse(json: Any): ReadContext {
             return when (json) {
                 is ReadContext -> json
@@ -73,14 +73,14 @@ class AnalyzeByJsonPath(content: Any) {
             }
         }
     }
-    
+
     private val ctx: ReadContext? = try {
         parse(content)
     } catch (e: Exception) {
         Log.e(TAG, "Failed to parse JSON content", e)
         null
     }
-    
+
     /**
      * 改进解析方法
      * 解决阅读"&&"、"||"与jsonPath支持的"&&"、"||"之间的冲突
@@ -124,7 +124,7 @@ class AnalyzeByJsonPath(content: Any) {
             return textList.joinToString("\n")
         }
     }
-    
+
     /**
      * Get string list from JSONPath rule with && || %% support
      */
@@ -181,7 +181,7 @@ class AnalyzeByJsonPath(content: Any) {
             return result
         }
     }
-    
+
     /**
      * Get object from JSONPath
      */
@@ -189,7 +189,7 @@ class AnalyzeByJsonPath(content: Any) {
         if (ctx == null || rule.isBlank()) return null
         return ctx.read(rule)
     }
-    
+
     /**
      * Get list from JSONPath with && || %% support
      */

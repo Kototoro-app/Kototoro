@@ -199,7 +199,7 @@ internal fun SearchFilterPanel(
         if (states.isNotEmpty()) {
             FilterSection(title = stringResource(R.string.state)) {
                 FilterChipFlow {
-                    states.forEach { state -> 
+                    states.forEach { state ->
                         val isSelected = state in selectedStates
                         SearchPanelChip(
                             selected = isSelected,

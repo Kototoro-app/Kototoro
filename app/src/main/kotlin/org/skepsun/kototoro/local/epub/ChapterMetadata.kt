@@ -4,10 +4,10 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 
 /**
  * Extended metadata for ContentChapter to support EPUB functionality
- * 
+ *
  * This class holds EPUB-specific metadata that cannot be stored directly
  * in the parsers library's ContentChapter model.
- * 
+ *
  * Usage:
  * - Store in a separate map/cache keyed by chapter ID
  * - Use extension functions to access metadata
@@ -17,18 +17,18 @@ data class ChapterMetadata(
      * The chapter ID this metadata belongs to
      */
     val chapterId: Long,
-    
+
     /**
      * Type classification of the chapter
      */
     val chapterType: ChapterType = ChapterType.NORMAL,
-    
+
     /**
      * ID of the parent EPUB download chapter (for EPUB_INTERNAL chapters)
      * Null for NORMAL and EPUB_DOWNLOAD chapters
      */
     val parentChapterId: Long? = null,
-    
+
     /**
      * Display name of the EPUB file (for grouping EPUB_INTERNAL chapters)
      * Null for NORMAL chapters
@@ -54,7 +54,7 @@ fun ContentChapter.toMetadata(
 
 /**
  * Wrapper class that combines ContentChapter with its metadata
- * 
+ *
  * This provides a convenient way to work with chapters and their EPUB metadata together.
  */
 data class ChapterWithMetadata(
@@ -66,13 +66,13 @@ data class ChapterWithMetadata(
      */
     val chapterType: ChapterType
         get() = metadata.chapterType
-    
+
     /**
      * Convenience property to access parent chapter ID
      */
     val parentChapterId: Long?
         get() = metadata.parentChapterId
-    
+
     /**
      * Convenience property to access EPUB filename
      */

@@ -206,14 +206,14 @@ class LocalContentDirOutput(
 
     /**
      * 添加完整的EPUB章节文件
-     * 
+     *
      * EPUB本身就是ZIP格式，保存为.epub文件以符合标准
      * 这个方法跳过ZipOutput，直接保存文件并更新index
-     * 
+     *
      * 同时解析EPUB内容，为每个EPUB内部章节创建ContentChapter
-     * 
+     *
      * 重要：删除原始章节，避免章节重复
-     * 
+     *
      * Requirements: 1.1, 1.2, 1.3, 2.1, 2.6, 5.1, 5.3
      * - 1.1: Preserve .epub extension
      * - 1.2: Do not convert EPUB to CBZ
@@ -224,27 +224,27 @@ class LocalContentDirOutput(
      * - 5.3: Persist chapter mappings to database
      */
     suspend fun addEpubChapter(
-        chapter: IndexedValue<ContentChapter>, 
+        chapter: IndexedValue<ContentChapter>,
         epubFile: File,
         epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao? = null
     ) = mutex.withLock {
         android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Starting, epubFile=${epubFile.absolutePath}, exists=${epubFile.exists()}, size=${epubFile.length()}")
         android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Original chapter ID=${chapter.value.id}, title=${chapter.value.title}")
         android.util.Log.i("LocalContentDirOutput", "addEpubChapter: File extension=${epubFile.extension}")
-        
+
         // Verify the file has .epub extension (Requirement 1.1)
         if (epubFile.extension != "epub") {
             android.util.Log.w("LocalContentDirOutput", "addEpubChapter: WARNING - File does not have .epub extension: ${epubFile.extension}")
         }
-        
+
         // 第一步：记录需要隐藏的原始章节ID（用于过滤在线章节）
         try {
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Step 1 - Hiding original chapter")
-            
+
             // 删除本地章节文件（如果存在）
             val originalChapterFileName = index.getChapterFileName(chapter.value.id)
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Original chapter file name: $originalChapterFileName")
-            
+
             val originalChapterFile = originalChapterFileName?.let(rootFile::findFile)
             if (originalChapterFile != null && originalChapterFile.exists()) {
                 android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Deleting original chapter file: ${originalChapterFile.uri}")
@@ -253,52 +253,52 @@ class LocalContentDirOutput(
             } else {
                 android.util.Log.i("LocalContentDirOutput", "addEpubChapter: No original chapter file to delete (file=$originalChapterFile, exists=${originalChapterFile?.exists()})")
             }
-            
+
             // 从index中删除章节记录
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Removing chapter from index")
             val removed = index.removeChapter(chapter.value.id)
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Chapter removed from index: $removed")
-            
+
             // 添加到隐藏列表（用于过滤在线章节）
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Adding chapter to hidden list")
             index.addHiddenChapterId(chapter.value.id)
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Chapter added to hidden list, hidden IDs: ${index.getHiddenChapterIds()}")
-            
+
             android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Step 1 completed - original chapter hidden")
         } catch (e: Exception) {
             android.util.Log.e("LocalContentDirOutput", "addEpubChapter: ERROR in step 1: ${e.message}", e)
             // 继续执行，不影响EPUB添加
         }
-        
+
         // 第二步：保存EPUB文件（保持.epub扩展名，Requirement 1.1 & 1.2）
         // Generate filename that preserves .epub extension
         val chapterFileName = generateEpubChapterFileName(chapter, epubFile)
         val targetFile = rootFile.findFile(chapterFileName) ?: checkNotNull(rootFile.createFile(chapterFileName))
-        
+
         android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Target file=${targetFile.uri}")
-        
+
         runInterruptible(Dispatchers.IO) {
             epubFile.inputStream().use { input -> targetFile.openOutputStream().use(input::copyTo) }
         }
-        
+
         println("LocalContentDirOutput.addEpubChapter: File saved with .epub extension, size=${targetFile.length()}")
-        
+
         // 第三步：解析EPUB并添加内部章节
         // Requirements 2.1, 2.6, 5.1, 5.3
         try {
             val epubParser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile)
             val epubContent = epubParser.parseContent()
             val epubChapters = epubContent?.chapters
-            
+
             if (epubChapters != null && epubChapters.isNotEmpty()) {
                 println("LocalContentDirOutput.addEpubChapter: Found ${epubChapters.size} chapters in EPUB")
-                
+
                 // Initialize ChapterIdGenerator for stable ID generation (Requirement 5.1)
                 val chapterIdGenerator = org.skepsun.kototoro.local.epub.ChapterIdGeneratorImpl()
-                
+
                 // Prepare list of chapter mappings for database storage (Requirement 5.3)
                 val chapterMappings = mutableListOf<org.skepsun.kototoro.core.db.entity.EpubChapterMappingEntity>()
-                
+
                 // 为每个EPUB内部章节创建ContentChapter
                 // 使用原始章节的index作为基础，确保章节顺序正确
                 // Extract all spine references as individual chapters (Requirement 2.1)
@@ -308,7 +308,7 @@ class LocalContentDirOutput(
                         parentChapterId = chapter.value.id,
                         chapterIndex = epubChapterIndex
                     )
-                    
+
                     val subChapter = IndexedValue(
                         index = chapter.index, // 所有EPUB内部章节使用相同的index（原始卷章节的index）
                         value = epubChapter.copy(
@@ -320,7 +320,7 @@ class LocalContentDirOutput(
                     )
                     index.addChapter(subChapter, chapterFileName)
                     println("LocalContentDirOutput.addEpubChapter: Added EPUB chapter ${epubChapterIndex}: ${epubChapter.title}, ID=${internalChapterId}")
-                    
+
                     // Create mapping entity for database storage (Requirement 5.3)
                     val mapping = org.skepsun.kototoro.core.db.entity.EpubChapterMappingEntity(
                         internalChapterId = internalChapterId,
@@ -333,7 +333,7 @@ class LocalContentDirOutput(
                     )
                     chapterMappings.add(mapping)
                 }
-                
+
                 // Store chapter mappings in database (Requirement 5.3)
                 if (epubChapterMappingDao != null && chapterMappings.isNotEmpty()) {
                     try {
@@ -347,7 +347,7 @@ class LocalContentDirOutput(
                 } else {
                     println("LocalContentDirOutput.addEpubChapter: No DAO provided or no mappings to store")
                 }
-                
+
                 println("LocalContentDirOutput.addEpubChapter: Successfully added ${epubChapters.size} EPUB chapters")
             } else {
                 println("LocalContentDirOutput.addEpubChapter: Failed to parse EPUB or no chapters found, adding as single chapter")
@@ -360,15 +360,15 @@ class LocalContentDirOutput(
             // 出错时添加为单个章节
             index.addChapter(chapter, chapterFileName)
         }
-        
+
         flushIndex()
-        
+
         println("LocalContentDirOutput.addEpubChapter: Index updated successfully")
     }
-    
+
     /**
      * Generates a filename for EPUB chapter that preserves the .epub extension.
-     * 
+     *
      * Requirement 1.1: Preserve .epub extension
      * Requirement 1.2: Do not convert to .cbz
      */
@@ -379,7 +379,7 @@ class LocalContentDirOutput(
         } else {
             "${epubFile.nameWithoutExtension}.epub"
         }
-        
+
         // If file already exists, generate unique name
         var targetFileName = baseFileName
         var counter = 1
@@ -388,7 +388,7 @@ class LocalContentDirOutput(
             targetFileName = "${nameWithoutExt}_${counter}.epub"
             counter++
         }
-        
+
         return targetFileName
     }
 

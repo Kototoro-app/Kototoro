@@ -376,7 +376,7 @@ private class AnonymousContentSource(override val name: String) : ContentSource 
     }
 
     override fun hashCode(): Int = name.hashCode()
-    
+
     override fun toString(): String = "AnonymousContentSource(name=$name)"
 }
 

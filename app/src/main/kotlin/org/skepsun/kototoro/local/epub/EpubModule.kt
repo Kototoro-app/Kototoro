@@ -15,36 +15,36 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 interface EpubModule {
-    
+
     @Binds
     @Singleton
     fun bindEpubFileManager(impl: EpubFileManagerImpl): EpubFileManager
-    
+
     @Binds
     @Singleton
     fun bindEpubDeletionManager(impl: EpubDeletionManagerImpl): EpubDeletionManager
-    
+
     @Binds
     @Singleton
     fun bindChapterIdGenerator(impl: ChapterIdGeneratorImpl): ChapterIdGenerator
-    
+
     @Binds
     @Singleton
     fun bindLegacyEpubMigration(impl: LegacyEpubMigrationImpl): LegacyEpubMigration
-    
+
     companion object {
         @Provides
         @Singleton
         fun provideEpubChapterMappingDao(database: MangaDatabase): EpubChapterMappingDao {
             return database.getEpubChapterMappingDao()
         }
-        
+
         @Provides
         @Singleton
         fun provideEpubContentCache(): EpubContentCache {
             return EpubContentCache.getInstance()
         }
-        
+
         @Provides
         @Singleton
         fun provideEpubReader(cache: EpubContentCache): EpubReader {

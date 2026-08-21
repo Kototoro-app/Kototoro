@@ -10,21 +10,21 @@ import java.net.HttpURLConnection.HTTP_UNAVAILABLE
 
 /**
  * Legado-specific CloudFlare resolver for sandbox mode.
- * 
+ *
  * This resolver handles CloudFlare challenges internally within Legado code,
  * without depending on the core CloudFlareInterceptor.
  */
 object LegadoCloudFlareResolver {
-    
+
     private const val TAG = "LegadoCFResolver"
-    
+
     const val PROTECTION_NOT_DETECTED = 0
     const val PROTECTION_CAPTCHA = 1
     const val PROTECTION_BLOCKED = 2
-    
+
     /**
      * Check if a response is a CloudFlare challenge page.
-     * 
+     *
      * @param response The HTTP response to check
      * @param content The response body content (already parsed)
      * @return Protection type constant
@@ -33,23 +33,23 @@ object LegadoCloudFlareResolver {
         if (response.code != HTTP_FORBIDDEN && response.code != HTTP_UNAVAILABLE) {
             return PROTECTION_NOT_DETECTED
         }
-        
+
         // Check headers for CloudFlare indicators
         val cfRay = response.header("cf-ray")
         val server = response.header("server")
         val cfMitigated = response.header("cf-mitigated")
         val isCloudFlareServer = cfRay != null || server?.contains("cloudflare", ignoreCase = true) == true
-        
+
         if (!isCloudFlareServer) {
             return PROTECTION_NOT_DETECTED
         }
-        
+
         // If cf-mitigated header contains "challenge", it's definitely a CF challenge
         if (cfMitigated?.contains("challenge", ignoreCase = true) == true) {
             Log.d(TAG, "CloudFlare challenge detected via cf-mitigated header")
             return PROTECTION_CAPTCHA
         }
-        
+
         // Check content for CloudFlare indicators
         if (content != null) {
             try {
@@ -74,10 +74,10 @@ object LegadoCloudFlareResolver {
                 Log.w(TAG, "Error parsing content for CF detection", e)
             }
         }
-        
+
         return PROTECTION_NOT_DETECTED
     }
-    
+
     /**
      * Synchronize CloudFlare cookies across subdomains for a given URL.
      * This handles cases where verification happens on m. but requests happen on www.
@@ -86,22 +86,22 @@ object LegadoCloudFlareResolver {
         try {
             val cookieManager = android.webkit.CookieManager.getInstance()
             val cookies = cookieManager.getCookie(url) ?: return
-            
-            val cfCookies = cookies.split(";").map { it.trim() }.filter { 
+
+            val cfCookies = cookies.split(";").map { it.trim() }.filter {
                 it.startsWith("cf_clearance=") || it.startsWith("__cf_bm=")
             }
-            
+
             if (cfCookies.isEmpty()) return
-            
+
             val host = java.net.URL(url).host
             val scheme = java.net.URL(url).protocol
             val rootDomain = LegadoNetworkUtils.getSubDomain(url)
-            
+
             val domainsToSync = listOf(
                 rootDomain,
                 ".$rootDomain"
             )
-            
+
             cfCookies.forEach { cookie ->
                 domainsToSync.forEach { domain ->
                     // Set cookie using the actual host as the URL base but with specified domain
@@ -117,7 +117,7 @@ object LegadoCloudFlareResolver {
             Log.w(TAG, "Failed to sync CF cookies", e)
         }
     }
-    
+
     /**
      * Check if response is a CloudFlare challenge.
      * Simplified version that also reads response body.
@@ -125,7 +125,7 @@ object LegadoCloudFlareResolver {
     fun isCfChallenge(response: Response, content: String?): Boolean {
         return checkResponseForProtection(response, content) == PROTECTION_CAPTCHA
     }
-    
+
     /**
      * Create a CloudFlareProtectedException for the given URL and source.
      */

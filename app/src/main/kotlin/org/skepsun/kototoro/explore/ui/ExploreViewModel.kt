@@ -149,7 +149,7 @@ class ExploreViewModel @Inject constructor(
             "content emitted models=${models.size} loadingOnly=${models.size == 1 && models.firstOrNull() is LoadingState}"
         }
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, getLoadingStateList())
-    
+
     /**
      * Set the selected group tab and filter sources accordingly
      */
@@ -167,7 +167,7 @@ class ExploreViewModel @Inject constructor(
     fun setSelectedSourceTags(tags: Set<SourceTag>) {
         globalFavoritesState.setSelectedSourceTags(tags)
     }
-    
+
     /**
      * Get the currently selected group tab
      */
@@ -299,7 +299,7 @@ class ExploreViewModel @Inject constructor(
     ): List<ListModel> {
         // Apply group tab filtering
         val filteredSources = applyGroupTabFilter(sources, groupTab, sourceTags, preset, allowedSourceNames)
-        
+
         val result = ArrayList<ListModel>(filteredSources.size + 3)
         if (filteredSources.isNotEmpty()) {
             if (isGroupedByLanguage) {
@@ -312,11 +312,11 @@ class ExploreViewModel @Inject constructor(
                     )
                     pinned.mapTo(result) { ContentSourceItem(it, isGrid) }
                 }
-                
-                val grouped = unpinned.groupBy { 
+
+                val grouped = unpinned.groupBy {
                     it.mangaSource.getLocale()?.getDisplayName(java.util.Locale.getDefault())?.replaceFirstChar { c -> c.uppercase() } ?: "Other"
                 }.toSortedMap()
-                
+
                 grouped.forEach { (language, sourcesInLang) ->
                     result += ListHeader(
                         text = language,
@@ -343,14 +343,14 @@ class ExploreViewModel @Inject constructor(
         }
         return result
     }
-    
+
     /**
      * Apply group tab filtering to sources
-     * 
+     *
      * Filters sources based on the selected browse group tab:
      * - All: Show all sources
      * - Content/Novel/Video: Filter by content type
-     * 
+     *
      * @param sources The complete list of sources to filter
      * @param groupTab The selected browse group tab
      * @return Filtered list of sources that match the tab criteria
@@ -373,10 +373,10 @@ class ExploreViewModel @Inject constructor(
 
             val contentGroup = sourceGroupManager.getContentGroup(source)
             val originGroup = sourceGroupManager.getOriginGroup(source)
-            
+
             // Apply group tab and secondary tag filters.
             val groupMatches = groupTab.matchesContentGroup(contentGroup) && groupTab.matchesOriginGroup(originGroup)
-            
+
             val originMatches = if (sourceTags.isEmpty()) {
                 true
             } else if (sourceTags.contains(SourceTag.PINNED)) {

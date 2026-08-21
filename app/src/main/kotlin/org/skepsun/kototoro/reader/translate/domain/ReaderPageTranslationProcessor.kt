@@ -91,7 +91,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
 ) {
 
     private val processingSemaphore = Semaphore(MAX_PARALLEL_TRANSLATION_PAGES)
-    
+
     @Volatile
     private var currentE2eConcurrency = 3
     @Volatile
@@ -305,14 +305,14 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 "rec=${settings.readerTranslationPaddleOfficialModelId} " +
                 "autoRecLang=${normalizedAutoRecognizerLanguage ?: "none"}"
         log { processStartLog }
-        
+
         val permitSemaphore = if (settings.readerTranslationPipelineMode == ReaderTranslationPipelineMode.END_TO_END_API) {
             getE2eSemaphore()
         } else {
             processingSemaphore
         }
         Log.d(LOG_TAG, "process debug: waiting permit page=${page.id}")
-        
+
         return withContext(
             loggingPageId.asContextElement(page.id) +
                 automaticRecognizerLanguage.asContextElement(normalizedAutoRecognizerLanguage),
@@ -382,7 +382,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 val bubblePairs = endToEndTranslator.processImage(bitmap, sourceLang, targetLang)
                 val inputs = bubblePairs.map { it.first }
                 val map = bubblePairs.associate { it.first.sourceText to it.second }
-                
+
                 bubbleCount = inputs.size
                 val renderStartMs = SystemClock.elapsedRealtime()
                 val renderPreparation = bubbleRenderCoordinator.prepareBubbles(
@@ -675,7 +675,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             detector = OcrDetectorBackend.MLKIT,
             recognizer = OcrRecognizerBackend.MLKIT,
         )
-        
+
         return routes.toList()
     }
 

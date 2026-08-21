@@ -38,11 +38,11 @@ class EntityGraphMigrationWorker @AssistedInject constructor(
         return try {
             val trackingSiteDao = db.getTrackingSiteDao()
             val allLinks = trackingSiteDao.findAllLinks()
-            
+
             for (link in allLinks) {
                 val service = ScrobblerService.entries.find { it.id == link.service } ?: continue
                 val item = trackingSiteDao.findItem(service.id, link.remoteId) ?: continue
-                
+
                 val aliases = runCatching {
                     val array = JSONArray(item.altTitles ?: "[]")
                     List(array.length()) { array.optString(it) }

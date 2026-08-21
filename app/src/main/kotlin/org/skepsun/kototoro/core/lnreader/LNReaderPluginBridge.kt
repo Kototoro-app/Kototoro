@@ -21,7 +21,7 @@ import org.jsoup.nodes.Document
  * Bridge between Kotlin and LNReader JavaScript plugins.
  * Mirrors IReader's JSPluginBridge — calls JS methods via evaluateScript()
  * with IIFE + Promise polling pattern.
- * 
+ *
  * Each plugin method:
  * 1. Wraps the call in an async IIFE
  * 2. Stores result in globalThis.__result_{id}
@@ -37,14 +37,14 @@ class LNReaderPluginBridge(
         private const val DEFAULT_TIMEOUT_MS = 30_000L
         private const val MAX_POLL_ATTEMPTS = 150
     }
-    
+
     private val sanitizedId = pluginId.replace(Regex("[^a-zA-Z0-9_]"), "_")
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }
-    
+
 // Empty line
-    
+
     // ==================== Plugin Metadata ====================
-    
+
     /**
      * Extract plugin metadata from JS context.
      */
@@ -66,7 +66,7 @@ class LNReaderPluginBridge(
             """.trimIndent(),
             "<metadata>"
         ) ?: "{}"
-        
+
         val obj = json.parseToJsonElement(metadataJson).jsonObject
         return LNReaderPluginMetadata(
             id = obj["id"]?.jsonPrimitive?.contentOrNull?.trim('"') ?: pluginId,
@@ -77,7 +77,7 @@ class LNReaderPluginBridge(
             icon = obj["icon"]?.jsonPrimitive?.contentOrNull?.trim('"') ?: ""
         )
     }
-    
+
     /**
      * Extracts the plugin's exported `filters` object statically.
      * Executes synchronously since `plugin.filters` is a static JS object properties.
@@ -114,7 +114,7 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         val resultJson = runCatching { qjs.evaluate<String>(script, "<getFilters>") }.getOrNull() ?: return emptyList()
         return try {
             val obj = json.parseToJsonElement(resultJson).jsonObject
@@ -139,9 +139,9 @@ class LNReaderPluginBridge(
             emptyList()
         }
     }
-    
+
     // ==================== Content Methods ====================
-    
+
     /**
      * Call plugin.popularNovels(page, {filters}).
      * Returns list of novel items.
@@ -188,11 +188,11 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         val resultJson = executeAsyncAndPoll(script, resultVar, "popularNovels")
         return parseNovelList(resultJson)
     }
-    
+
     /**
      * Call plugin.searchNovels(query, page).
      */
@@ -220,11 +220,11 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         val resultJson = executeAsyncAndPoll(script, resultVar, "searchNovels")
         return parseNovelList(resultJson)
     }
-    
+
     /**
      * Call plugin.parseNovel(url).
      * Returns novel details with chapter list.
@@ -253,7 +253,7 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         val resultJson = executeAsyncAndPoll(script, resultVar, "parseNovel")
         return parseNovelDetails(resultJson)
     }
@@ -289,7 +289,7 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         val resultJson = executeAsyncAndPoll(script, resultVar, "parsePage[$page]")
         return try {
             val element = json.parseToJsonElement(resultJson)
@@ -298,7 +298,7 @@ class LNReaderPluginBridge(
             } else {
                 element.jsonArray
             }
-            
+
             array.mapNotNull { chElement ->
                 val chObj = chElement.jsonObject
                 val chName = chObj["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
@@ -314,7 +314,7 @@ class LNReaderPluginBridge(
             emptyList()
         }
     }
-    
+
     /**
      * Call plugin.parseChapter(chapterUrl).
      * Returns chapter HTML text content.
@@ -353,24 +353,24 @@ class LNReaderPluginBridge(
 				}
 			})();
         """.trimIndent()
-        
+
         return withTimeout(DEFAULT_TIMEOUT_MS) {
             qjs.evaluate<Any?>(script, "<parseChapter>")
-            
+
             var attempts = 0
             var waitTime = 10L
-            
+
             while (attempts < MAX_POLL_ATTEMPTS) {
                 delay(waitTime)
-                
+
                 processCheerioQueue()
-                
+
                 if (attempts % 5 == 0 || attempts < 10) {
                     val checkResult = qjs.evaluate<String?>(
                         "(function() { var r = globalThis.$resultVar; if (!r) return null; return JSON.stringify(r); })()",
                         "<check>"
                     )
-                    
+
                     if (checkResult != null) {
                         val obj = json.parseToJsonElement(checkResult).jsonObject
                         val success = (obj["success"] as? JsonPrimitive)?.content?.toBoolean() ?: false
@@ -385,17 +385,17 @@ class LNReaderPluginBridge(
                         }
                     }
                 }
-                
+
                 attempts++
                 if (waitTime < 200) waitTime = (waitTime * 1.2).toLong().coerceAtMost(200)
             }
-            
+
             throw LNReaderJSException("parseChapter timeout")
         }
     }
-    
+
     // ==================== Internal Helpers ====================
-    
+
     /**
      * Execute an async JS script, poll for result in global variable, return JSON string.
      * Mirrors IReader's JSPluginBridge polling pattern with exponential backoff.
@@ -407,23 +407,23 @@ class LNReaderPluginBridge(
     ): String {
         return withTimeout(DEFAULT_TIMEOUT_MS) {
             qjs.evaluate<Any?>(script, "<$methodName>")
-            
+
             var attempts = 0
             var waitTime = 10L
-            
+
             while (attempts < MAX_POLL_ATTEMPTS) {
                 delay(waitTime)
-                
+
                 // Actively process any cheerio node queries offloaded by NativeCheerioBridge
                 processCheerioQueue()
-                
+
                 // Check every 5 attempts or first 10 to reduce engine calls
                 if (attempts % 5 == 0 || attempts < 10) {
                     val checkResult = qjs.evaluate<String?>(
                         "(function() { var r = globalThis.$resultVar; if (!r) return null; return JSON.stringify(r); })()",
                         "<check>"
                     )
-                    
+
                     if (checkResult != null) {
                         val obj = json.parseToJsonElement(checkResult).jsonObject
                         val success = (obj["success"] as? JsonPrimitive)?.content?.toBoolean() ?: false
@@ -441,16 +441,16 @@ class LNReaderPluginBridge(
                         }
                     }
                 }
-                
+
                 attempts++
                 // Exponential backoff up to 200ms
                 if (waitTime < 200) waitTime = (waitTime * 1.2).toLong().coerceAtMost(200)
             }
-            
+
             throw LNReaderJSException("$methodName timeout after ${MAX_POLL_ATTEMPTS} attempts")
         }
     }
-    
+
     /**
      * Parse JSON array of novel items.
      * LNReader format: [{name, path, cover}, ...]
@@ -471,7 +471,7 @@ class LNReaderPluginBridge(
             emptyList()
         }
     }
-    
+
     /**
      * Parse novel details JSON.
      * LNReader format: {name, path, cover, author, summary, genres, status, chapters: [{name, path, releaseTime}]}
@@ -483,10 +483,10 @@ class LNReaderPluginBridge(
             Log.e(TAG, "Failed to parse novel details JSON: ${e.javaClass.simpleName}")
             return LNReaderNovelDetails(name = "Error", path = "")
         }
-        
+
         val chaptersArray = obj["chapters"] as? JsonArray
         Log.d(TAG, "parseNovelDetails extracted keys: ${obj.keys}, chapters is array = ${chaptersArray != null}, size = ${chaptersArray?.size}")
-        
+
         val totalPages = obj["totalPages"]?.jsonPrimitive?.intOrNull ?: 0
         val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: "Unknown"
         val path = obj["path"]?.jsonPrimitive?.contentOrNull
@@ -496,7 +496,7 @@ class LNReaderPluginBridge(
         val summary = obj["summary"]?.jsonPrimitive?.contentOrNull
             ?: obj["description"]?.jsonPrimitive?.contentOrNull ?: ""
         val status = obj["status"]?.jsonPrimitive?.contentOrNull ?: ""
-        
+
         val genres = try {
             when (val g = obj["genres"]) {
                 is JsonArray -> g.mapNotNull { it.jsonPrimitive.contentOrNull }
@@ -508,7 +508,7 @@ class LNReaderPluginBridge(
                 else -> emptyList()
             }
         } catch (e: Exception) { emptyList() }
-        
+
         val chapters = try {
             (obj["chapters"] as? JsonArray)?.mapNotNull { element ->
                 val chObj = element.jsonObject
@@ -524,14 +524,14 @@ class LNReaderPluginBridge(
             Log.e(TAG, "Failed to parse chapters: ${e.message}")
             emptyList()
         }
-        
+
         return LNReaderNovelDetails(
             name = name, path = path, cover = cover,
             author = author, summary = summary, genres = genres,
             status = status, chapters = chapters, totalPages = totalPages
         )
     }
-    
+
     /**
      * Scans the Javascript environment for NativeCheerioBridge DOM requests (`__cheerioQueue`).
      * Computes the queries using JSoup on the Kotlin thread, and returns the serialised layout data
@@ -540,7 +540,7 @@ class LNReaderPluginBridge(
     private suspend fun processCheerioQueue() {
         // Obsolete empty function
     }
-    
+
     private fun escapeForJS(str: String): String {
         return str
             .replace("\\", "\\\\")

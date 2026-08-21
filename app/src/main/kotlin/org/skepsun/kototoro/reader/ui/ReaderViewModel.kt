@@ -1416,10 +1416,10 @@ class ReaderViewModel @Inject constructor(
                 .collect { useMerge ->
                     val currentState = readingState.value ?: return@collect
                     Log.d(LOG_TAG, "isMergeRepeatedChapters changed to $useMerge")
-                    
+
                     // Keep only the current chapter's pages in memory, clearing any preloaded next/prev chapters
                     chaptersLoader.keepOnlyChapter(currentState.chapterId)
-                    
+
                     // Re-calculate UI state and content snapshot
                     content.value = ReaderContent(getSplitPagesSnapshot(), currentState)
                     notifyStateChanged()

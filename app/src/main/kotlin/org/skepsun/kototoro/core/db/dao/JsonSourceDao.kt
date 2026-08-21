@@ -63,21 +63,21 @@ interface JsonSourceDao {
      */
     @Query("SELECT * FROM json_sources ORDER BY name")
     fun observeAll(): Flow<List<JsonSourceEntity>>
-    
+
     /**
      * Observe sources by type
      * Uses index on 'type' column for efficient filtering
      */
     @Query("SELECT * FROM json_sources WHERE type = :type ORDER BY name")
     fun observeByType(type: JsonSourceType): Flow<List<JsonSourceEntity>>
-    
+
     /**
      * Observe enabled sources by type
      * Uses composite filtering with indexes on both 'enabled' and 'type'
      */
     @Query("SELECT * FROM json_sources WHERE enabled = 1 AND type = :type ORDER BY name")
     fun observeEnabledByType(type: JsonSourceType): Flow<List<JsonSourceEntity>>
-    
+
     /**
      * Get recently used sources (for quick access)
      * Uses index on 'last_used_at' for efficient sorting
@@ -91,21 +91,21 @@ interface JsonSourceDao {
      */
     @Query("SELECT * FROM json_sources WHERE id = :id")
     suspend fun getById(id: String): JsonSourceEntity?
-    
+
     /**
      * Get multiple sources by IDs (batch query)
      * More efficient than multiple individual queries
      */
     @Query("SELECT * FROM json_sources WHERE id IN (:ids)")
     suspend fun getByIds(ids: List<String>): List<JsonSourceEntity>
-    
+
     /**
      * Count sources by type
      * Uses index on 'type' column
      */
     @Query("SELECT COUNT(*) FROM json_sources WHERE type = :type")
     suspend fun countByType(type: JsonSourceType): Int
-    
+
     /**
      * Count enabled sources
      * Uses index on 'enabled' column
@@ -139,7 +139,7 @@ interface JsonSourceDao {
      */
     @Query("UPDATE json_sources SET enabled = :enabled, updated_at = :timestamp WHERE id = :id")
     suspend fun setEnabled(id: String, enabled: Boolean, timestamp: Long)
-    
+
     /**
      * Batch update enabled status
      * More efficient than multiple individual updates
@@ -152,7 +152,7 @@ interface JsonSourceDao {
      */
     @Query("UPDATE json_sources SET is_pinned = :isPinned, updated_at = :timestamp WHERE id = :id")
     suspend fun setPinned(id: String, isPinned: Boolean, timestamp: Long)
-    
+
     /**
      * Batch update pinned status
      */
@@ -181,14 +181,14 @@ interface JsonSourceDao {
      */
     @Query("DELETE FROM json_sources WHERE id = :id")
     suspend fun deleteById(id: String)
-    
+
     /**
      * Batch delete sources by IDs
      * More efficient than multiple individual deletes
      */
     @Query("DELETE FROM json_sources WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
-    
+
     /**
      * Delete all sources of a specific type
      * Uses index on 'type' column

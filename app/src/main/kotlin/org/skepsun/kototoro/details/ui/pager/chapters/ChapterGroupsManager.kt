@@ -8,9 +8,9 @@ import org.skepsun.kototoro.list.ui.model.ListModel
  * Manages the collapsed/expanded state of chapter groups
  */
 class ChapterGroupsManager {
-    
+
     private val collapsedGroups = mutableSetOf<String>()
-    
+
     /**
      * Toggles the collapsed state of a group
      * @param groupId The group identifier
@@ -25,7 +25,7 @@ class ChapterGroupsManager {
             false // Now collapsed
         }
     }
-    
+
     /**
      * Checks if a group is expanded
      * @param groupId The group identifier
@@ -34,7 +34,7 @@ class ChapterGroupsManager {
     fun isGroupExpanded(groupId: String): Boolean {
         return !collapsedGroups.contains(groupId)
     }
-    
+
     /**
      * Applies the collapsed state to a list of items with collapsible headers
      * @param items The list of items including headers and chapters
@@ -44,7 +44,7 @@ class ChapterGroupsManager {
         val result = mutableListOf<ListModel>()
         var currentHeader: CollapsibleListHeader? = null
         var isCurrentGroupCollapsed = false
-        
+
         for (item in items) {
             when (item) {
                 is CollapsibleListHeader -> {
@@ -68,10 +68,10 @@ class ChapterGroupsManager {
                 }
             }
         }
-        
+
         return result
     }
-    
+
     /**
      * Clears all collapsed state
      */

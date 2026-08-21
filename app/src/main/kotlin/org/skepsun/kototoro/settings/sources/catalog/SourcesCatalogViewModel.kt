@@ -128,7 +128,7 @@ class SourcesCatalogViewModel @Inject constructor(
     fun setNewOnly(value: Boolean) {
         appliedFilter.value = appliedFilter.value.copy(isNewOnly = value)
     }
-    
+
     fun setSourceType(value: SourceTypeFilter) {
         appliedFilter.value = appliedFilter.value.copy(sourceType = value)
     }
@@ -143,7 +143,7 @@ class SourcesCatalogViewModel @Inject constructor(
             locale = filter.locale,
             sortOrder = SourcesSortOrder.ALPHABETIC,
         )
-        
+
         // Apply source type filter
         val sourceTypeIdentifier = org.skepsun.kototoro.core.jsonsource.SourceTypeIdentifier()
         val sources = when (filter.sourceType) {
@@ -151,7 +151,7 @@ class SourcesCatalogViewModel @Inject constructor(
             SourceTypeFilter.NATIVE -> allSources.filter { !sourceTypeIdentifier.isJsonSource(it.name) }
             SourceTypeFilter.JSON -> allSources.filter { sourceTypeIdentifier.isJsonSource(it.name) }
         }
-        
+
         return if (sources.isEmpty()) {
             listOf(
                 if (query == null) {

@@ -256,7 +256,7 @@ class DiscoverViewModel @Inject constructor(
             return
         }
         val currentTab = getCurrentBrowseGroupTab()
-        
+
         if (query.isNotBlank()) {
             val models = _items.value.toDiscoverModels()
             val hasLoading = _contentState.value.lastOrNull() is LoadingState
@@ -344,17 +344,17 @@ class DiscoverViewModel @Inject constructor(
     ): Boolean {
         if (currentTab == BrowseGroupTab.All) return true
 
-        val isVideo = categoryId.contains("anime") || categoryId.contains("movie") || categoryId.contains("ova") || 
-            categoryId.contains("tv") || categoryId.contains("calendar") || categoryId.contains("real") || 
+        val isVideo = categoryId.contains("anime") || categoryId.contains("movie") || categoryId.contains("ova") ||
+            categoryId.contains("tv") || categoryId.contains("calendar") || categoryId.contains("real") ||
             categoryId.contains("seasonal") || (service == ScrobblerService.KITSU && !categoryId.contains("manga"))
-            
-        val isNovel = categoryId.contains("novel") || categoryId.contains("light_novel") || 
+
+        val isNovel = categoryId.contains("novel") || categoryId.contains("light_novel") ||
             (service == ScrobblerService.BANGUMI && categoryId == "book")
-            
-        val isManga = categoryId.contains("manga") || categoryId.contains("doujin") || 
-            categoryId.contains("oneshots") || categoryId.contains("manhwa") || 
-            categoryId.contains("manhua") || categoryId.contains("mu_") || 
-            categoryId.contains("al_manga") || categoryId.contains("shiki_manga") || 
+
+        val isManga = categoryId.contains("manga") || categoryId.contains("doujin") ||
+            categoryId.contains("oneshots") || categoryId.contains("manhwa") ||
+            categoryId.contains("manhua") || categoryId.contains("mu_") ||
+            categoryId.contains("al_manga") || categoryId.contains("shiki_manga") ||
             (service == ScrobblerService.BANGUMI && categoryId == "book")
 
         return when (currentTab) {
@@ -422,7 +422,7 @@ class DiscoverViewModel @Inject constructor(
                 _contentState.value = flat.ifEmpty { listOf(EmptyState(icon = R.drawable.ic_bangumi_outline, textPrimary = R.string.discover_empty_title, textSecondary = R.string.discover_empty_text, actionStringRes = 0)) }
                 return
             }
-            
+
             // Parallel fetch top 10 for every category (with retry)
             val visibleCategories = resolveVisibleCategoriesForTab(
                 service = service,
@@ -451,7 +451,7 @@ class DiscoverViewModel @Inject constructor(
                         if (items.isNotEmpty()) break
                         if (attempt < 3) kotlinx.coroutines.delay(800L * attempt)
                     }
-                    
+
                     val row = if (items.isNotEmpty()) {
                         cacheRepository.saveCategoryCache(service, cat.id, items)
                         DiscoverCarouselRow(category = cat, items = items.toDiscoverModels())
@@ -463,7 +463,7 @@ class DiscoverViewModel @Inject constructor(
                 _bangumiRecommendationLoadFailures.tryEmit(Unit)
             }
             val rows = categoryResults.mapNotNull { it.first }
-            
+
             _contentState.value = rows.ifEmpty { listOf(EmptyState(icon = R.drawable.ic_bangumi_outline, textPrimary = R.string.discover_empty_title, textSecondary = R.string.discover_empty_text, actionStringRes = 0)) }
         } else {
             // Search Query layout (flat list pagination)

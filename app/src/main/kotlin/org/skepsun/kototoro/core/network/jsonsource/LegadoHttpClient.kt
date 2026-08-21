@@ -83,7 +83,7 @@ class LegadoHttpClient @Inject constructor(
      * @return HTML content as string
      */
     suspend fun getWithWebView(
-        url: String, 
+        url: String,
         headers: Map<String, String> = emptyMap(),
         delayMs: Long = 1500,
         webJs: String? = null,
@@ -259,14 +259,14 @@ class LegadoHttpClient @Inject constructor(
     ): Request {
         val finalUrl = url
         val headersBuilder = Headers.Builder()
-        
+
         // Add User-Agent if not provided (case-insensitive check)
         val hasUserAgent = customHeaders.keys.any { it.equals("User-Agent", ignoreCase = true) }
         if (!hasUserAgent) {
             // Use mobile User-Agent for better compatibility with mobile-first web sources
             headersBuilder.add("User-Agent", userAgentManager.getUserAgent())
         }
-        
+
         // Add Referer if not provided (many sites require this)
         if (!customHeaders.containsKey("Referer")) {
             try {
@@ -281,7 +281,7 @@ class LegadoHttpClient @Inject constructor(
                 // Ignore if URL parsing fails
             }
         }
-        
+
         // Add custom headers
         customHeaders.forEach { (key, value) ->
             headersBuilder.add(key, value)
@@ -319,12 +319,12 @@ class LegadoHttpClient @Inject constructor(
         if (source?.name?.startsWith("JSON_", ignoreCase = true) == true) {
             requestBuilder.cacheControl(CacheControl.FORCE_NETWORK)
         }
-        
+
         // Tag the request with the source if provided
         if (source != null) {
             requestBuilder.tag(ContentSource::class.java, source)
         }
-        
+
         // Log cookies for debugging
         try {
             val httpUrl = url.toHttpUrlOrNull()
@@ -339,7 +339,7 @@ class LegadoHttpClient @Inject constructor(
         } catch (e: Exception) {
             android.util.Log.w("LegadoHttpClient", "Failed to log cookies", e)
         }
-        
+
         return requestBuilder.build()
     }
 

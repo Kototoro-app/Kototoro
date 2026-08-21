@@ -39,7 +39,7 @@ class LNReaderRepositoriesViewModel @Inject constructor(
     fun addRepo(url: String) {
         val cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return
-        
+
         val currentRepos = settings.lnReaderRepoUrls
         if (currentRepos.contains(cleanUrl)) {
             viewModelScope.launch {
@@ -47,7 +47,7 @@ class LNReaderRepositoriesViewModel @Inject constructor(
             }
             return
         }
-        
+
         settings.lnReaderRepoUrls = currentRepos + cleanUrl
         viewModelScope.launch {
             _onMessage.call("Added repository")

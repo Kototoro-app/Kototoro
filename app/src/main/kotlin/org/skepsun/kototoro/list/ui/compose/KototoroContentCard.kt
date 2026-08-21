@@ -272,7 +272,7 @@ fun KototoroContentCardGrid(
     val sharedKey = remember(manga.source.name, sharedIdentity, sharedElementInstanceKey) {
         contentCoverSharedKey(manga.source.name, sharedIdentity, sharedElementInstanceKey)
     }
-    
+
     val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
     val cardRadius = posterStyle.cornerRadius
 
@@ -1102,7 +1102,7 @@ fun KototoroContentCardDetailedList(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            
+
             val authorText = remember(item.manga.authors) {
                 item.manga.authors.joinToString(", ")
             }

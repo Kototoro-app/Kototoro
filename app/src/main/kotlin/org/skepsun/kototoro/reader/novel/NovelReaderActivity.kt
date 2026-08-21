@@ -98,7 +98,7 @@ import javax.inject.Inject
  * 小说阅读器 Activity。正文、阅读控件与 Space FAB 均由单一 Compose 根节点渲染。
  */
 @AndroidEntryPoint
-class NovelReaderActivity : 
+class NovelReaderActivity :
     BaseComposeFullscreenActivity(),
     ReaderControlDelegate.OnInteractionListener {
 
@@ -133,13 +133,13 @@ class NovelReaderActivity :
 
     @Inject
     lateinit var novelContentLoader: NovelContentLoader
-    
+
     @Inject
     lateinit var epubFileManager: org.skepsun.kototoro.local.epub.EpubFileManager
-    
+
     @Inject
     lateinit var epubChapterMappingDao: org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao
-    
+
     @Inject
     lateinit var epubContentCache: org.skepsun.kototoro.local.epub.EpubContentCache
 
@@ -171,7 +171,7 @@ class NovelReaderActivity :
     private var sessionStartAt: Long = 0L
     private var sessionStartState: ReaderState? = null
     private var sessionStartPercent: Float = 0f
-    
+
     // Continuous Scroll mode properties
     private var lastContinuousTapHandledTime = 0L
     private var imageHeadersProvider: ((String) -> Map<String, String>?)? = null
@@ -202,17 +202,17 @@ class NovelReaderActivity :
             val binder = service as org.skepsun.kototoro.reader.novel.tts.TtsService.TtsBinder
             ttsService = binder.getService()
             isTtsBound = true
-            
+
             lifecycleScope.launch {
                 ttsService?.getState()?.collect { state ->
                     composeReaderViewModel.publishTtsState(state)
-                    
+
                     if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
                         // TODO string sync highlighting
                     } else if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
                         composeReaderViewModel.publishTtsHighlight(null)
                     }
-                    
+
                     // 当当前页朗读完成时，自动翻页并继续朗读
                     if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.COMPLETED) {
                         // Guard: skip if we're already handling a completion event
@@ -222,7 +222,7 @@ class NovelReaderActivity :
                     }
                 }
             }
-            
+
             lifecycleScope.launch {
                 ttsService?.getPlayingTokenIndex()?.collectLatest { index ->
                     val range = index?.let { ttsService?.getToken(it)?.range }
@@ -270,7 +270,7 @@ class NovelReaderActivity :
                 if (!enabled) resetEInkRefreshContext(clearIdentity = false)
             }
             .launchIn(lifecycleScope)
-        
+
         // 只恢复UI状态，不恢复章节和页码（由loadChapters处理）
         savedInstanceState?.let {
             isUiVisible = it.getBoolean(KEY_UI_VISIBLE, true)
@@ -293,17 +293,17 @@ class NovelReaderActivity :
             }
         }.getOrNull()
         originalContent = maybeRemote ?: mangaSeed
-        
+
         val local = runCatching {
             runBlocking {
                 localContentRepository.findSavedContent(mangaSeed, withDetails = true)
             }
         }.getOrNull()
         manga = local?.manga ?: mangaSeed
-        
+
         // 如果是从历史记录进入（可能 URL 是 local 但 source 已修正）或者来源是 Unknown，
         // 尝试修正为原始来源以支持在线跳转，并确保有远程 URL 可用
-        if ((manga.source.name.startsWith("LOCAL") || manga.source == org.skepsun.kototoro.core.model.UnknownContentSource) 
+        if ((manga.source.name.startsWith("LOCAL") || manga.source == org.skepsun.kototoro.core.model.UnknownContentSource)
             && originalContent != null) {
             manga = manga.copy(source = originalContent!!.source, url = originalContent!!.url)
             android.util.Log.d("NovelReaderActivity", "Fixed manga source to ${manga.source.name} and URL to ${manga.url}")
@@ -352,7 +352,7 @@ class NovelReaderActivity :
             epubChapterMappingDao = epubChapterMappingDao,
             epubContentCache = epubContentCache
         )
-        
+
         android.util.Log.d("NovelReaderActivity", "=== onCreate ===")
         android.util.Log.d("NovelReaderActivity", "Content: id=${manga.id}, title=${manga.title}")
         android.util.Log.d("NovelReaderActivity", "Content has chapters: ${manga.chapters != null}, count: ${manga.chapters?.size ?: 0}")
@@ -366,7 +366,7 @@ class NovelReaderActivity :
             progressFlusher = SpaceProgressFlusher { flushForSpaceSwitch() },
         )
         spaceSwitcherDelegate.setControlsVisible(isUiVisible)
-        
+
         // 设置标题为小说名称
         title = manga.title
         supportActionBar?.title = manga.title
@@ -374,9 +374,9 @@ class NovelReaderActivity :
         setupComposeContent()
 
         applyReaderPalette()
-        
+
         applyReadingModeToggles()
-        
+
         updateDualPageMode()
         updateFullscreenMode()
         updateReadingStatusVisibility()
@@ -398,13 +398,13 @@ class NovelReaderActivity :
             } else if (source is org.skepsun.kototoro.core.jsonsource.JsonContentSource) {
                 // Extract headers from Legado JSON source config
                 val headers = mutableMapOf<String, String>()
-                
+
                 try {
-                    val config = kotlinx.serialization.json.Json { 
-                        ignoreUnknownKeys = true 
-                        isLenient = true 
+                    val config = kotlinx.serialization.json.Json {
+                        ignoreUnknownKeys = true
+                        isLenient = true
                     }.decodeFromString<org.skepsun.kototoro.core.model.jsonsource.LegadoBookSource>(source.entity.config)
-                    
+
                     // Parse header from source config
                     val headerStr = config.header
                     if (!headerStr.isNullOrBlank()) {
@@ -416,7 +416,7 @@ class NovelReaderActivity :
                             android.util.Log.w("NovelReaderActivity", "Failed to parse source headers: ${e.message}")
                         }
                     }
-                    
+
                     // Add Referer based on source URL if not already present
                     if (!headers.containsKey("Referer") && !headers.containsKey("referer")) {
                         val sourceUrl = config.bookSourceUrl
@@ -424,17 +424,17 @@ class NovelReaderActivity :
                             headers["Referer"] = sourceUrl
                         }
                     }
-                    
+
                     // Add User-Agent if not present
                     if (!headers.containsKey("User-Agent") && !headers.containsKey("user-agent")) {
                         headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
                     }
-                    
+
                     android.util.Log.d("NovelReaderActivity", "Image headers for $imageUrl: $headers")
                 } catch (e: Exception) {
                     android.util.Log.w("NovelReaderActivity", "Failed to setup image headers: ${e.message}")
                 }
-                
+
                 headers.takeIf { it.isNotEmpty() }
             } else {
                 null
@@ -908,18 +908,18 @@ class NovelReaderActivity :
             showReaderMessage(getString(R.string.novel_cannot_add_bookmark), 1500L)
             return
         }
-        
+
         lifecycleScope.launch {
             try {
                 val composeState = composeReaderViewModel.uiState.value
                 val currentPage = composeState.position?.page ?: currentPageIndex
                 val percent = getCurrentProgressRatio()
-                
+
                 // 检查是否已存在书签
                 val existingBookmark = bookmarksRepository.observeBookmark(
                     manga, chapter.id, currentPage
                 ).first()
-                
+
                 if (existingBookmark != null) {
                     // 删除书签
                     bookmarksRepository.removeBookmark(manga.id, chapter.id, currentPage)
@@ -929,7 +929,7 @@ class NovelReaderActivity :
                     // 添加书签 - 保存当前页面的文本预览
                     val pageText = composeState.currentPageText.ifBlank { composeState.content }
                     val previewText = pageText.take(200).trim() // 取前200字符作为预览
-                    
+
                     val bookmark = org.skepsun.kototoro.bookmarks.domain.Bookmark(
                         manga = manga,
                         pageId = System.currentTimeMillis(), // 使用时间戳作为 ID
@@ -964,22 +964,22 @@ class NovelReaderActivity :
     private fun showVoiceSelectionDialog() {
         val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
         val isSystem = prefs.getString("tts_engine_type", "SYSTEM") == "SYSTEM"
-        
+
         if (isSystem) {
             var localTts: android.speech.tts.TextToSpeech? = null
             localTts = android.speech.tts.TextToSpeech(this) { status ->
                 if (status == android.speech.tts.TextToSpeech.SUCCESS) {
                     val voices = try { localTts?.voices?.toList() ?: emptyList() } catch (e: Exception) { emptyList() }
-                    
+
                     runOnUiThread {
                         if (voices.isNotEmpty()) {
                             val sortedVoices = voices.sortedBy { it.locale.displayName }
                             val entries = sortedVoices.map { "${it.locale.displayName} (${it.name})" }
                             val values = sortedVoices.map { it.name }
-                            
+
                             val currentVoice = prefs.getString("tts_system_voice", "default") ?: "default"
                             val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
-                            
+
                             ttsVoiceDialogState = NovelTtsVoiceDialogState(
                                 title = getString(R.string.tts_system_voice),
                                 entries = entries,
@@ -998,7 +998,7 @@ class NovelReaderActivity :
                                     val values = locales.map { it.toLanguageTag() }
                                     val currentVoice = prefs.getString("tts_system_voice", "default") ?: "default"
                                     val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
-                                    
+
                                     ttsVoiceDialogState = NovelTtsVoiceDialogState(
                                         title = getString(R.string.tts_system_voice),
                                         entries = entries,
@@ -1026,14 +1026,14 @@ class NovelReaderActivity :
             val configs: List<org.skepsun.kototoro.reader.novel.tts.model.TtsHttpConfig> = try {
                 com.google.gson.Gson().fromJson(currentJson, type) ?: emptyList()
             } catch (e: Exception) { emptyList() }
-            
+
             if (configs.isNotEmpty()) {
                 val names = configs.map { it.name }
                 val values = configs.map { it.url }
-                
+
                 val currentVoice = prefs.getString("tts_legado_voice", "").orEmpty()
                 val checkedItem = values.indexOf(currentVoice).takeIf { it >= 0 } ?: 0
-                
+
                 ttsVoiceDialogState = NovelTtsVoiceDialogState(
                     title = getString(R.string.tts_legado_voice),
                     entries = names,
@@ -1085,9 +1085,9 @@ class NovelReaderActivity :
 
     private fun startTtsFromCurrentPage() {
         if (ttsService == null) return
-        
+
         var startIndex = 0
-        
+
         // Safety: Extract text based on current reading mode
         val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
         val text = if (!isScrollMode) {
@@ -1097,21 +1097,21 @@ class NovelReaderActivity :
             ttsScrollModeChapterIndex = composeState.chapterIndex
             composeState.content
         }
-        
+
         if (text.isBlank()) return
         var tokens = org.skepsun.kototoro.reader.novel.tts.Tokenizer.tokenize(text)
         if (tokens.isEmpty()) return
-        
+
         // Paged Mode relative token calibration
         if (!isScrollMode) {
             val pageStart = composeReaderViewModel.uiState.value.currentPageStart
             if (pageStart > 0) {
-                tokens = tokens.map { 
+                tokens = tokens.map {
                     it.copy(range = IntRange(it.range.first + pageStart, it.range.last + pageStart))
                 }
             }
         }
-        
+
         try {
             val intent = android.content.Intent(this, org.skepsun.kototoro.reader.novel.tts.TtsService::class.java)
             androidx.core.content.ContextCompat.startForegroundService(this, intent)
@@ -1127,7 +1127,7 @@ class NovelReaderActivity :
     private fun onTtsPlayPauseClicked() {
         if (ttsService == null) return
         val state = ttsService?.getState()?.value
-        
+
         if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
             ttsService?.pause()
         } else if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PAUSED) {
@@ -1150,14 +1150,14 @@ class NovelReaderActivity :
         // Re-entrant guard: if already handling a completion, skip
         if (isHandlingTtsCompletion) return
         isHandlingTtsCompletion = true
-        
+
         try {
             val isScrollMode = readerSettings.readingMode == org.skepsun.kototoro.reader.novel.ReadingMode.SCROLL
             if (isScrollMode) {
                 // 滚动模式暂不支持自动翻页朗读
                 return
             }
-            
+
             // 尝试翻到下一页
             val position = composeReaderViewModel.uiState.value.position
             val hasNextPage = position != null && position.page + 1 < position.pageCount
@@ -1215,17 +1215,17 @@ class NovelReaderActivity :
     /**
      * Restore reading progress from Intent or history
      * Requirements 7.5, 7.6: Restore last read chapter and page position, fallback to first chapter if not found
-     * 
+     *
      * 修复：改进章节ID查找逻辑，支持数据库映射的章节ID
      */
     private suspend fun restoreReadingProgress(originalChapters: List<ContentChapter>) {
         android.util.Log.d("NovelReaderActivity", "=== restoreReadingProgress() ===")
-        
+
         // Get ReaderState from Intent
         val state = intent.getParcelableExtraCompat<org.skepsun.kototoro.reader.ui.ReaderState>(
             org.skepsun.kototoro.core.nav.ReaderIntent.EXTRA_STATE
         )
-        
+
         // Get history
         val history = historyRepository.getOne(manga)
         data class RestoreCandidate(
@@ -1349,7 +1349,7 @@ class NovelReaderActivity :
             currentChapterIndex = 0
             currentPageIndex = 0
         }
-        
+
         // Clear Intent state to avoid reusing it
         intent.removeExtra(org.skepsun.kototoro.core.nav.ReaderIntent.EXTRA_STATE)
     }
@@ -1367,11 +1367,11 @@ class NovelReaderActivity :
         android.util.Log.d("NovelReaderActivity", "=== loadChapters() called ===")
         android.util.Log.d("NovelReaderActivity", "Current manga.chapters: ${manga.chapters?.size ?: 0} chapters")
         android.util.Log.d("NovelReaderActivity", "Content is local: ${manga.isLocal}")
-        
+
         lifecycleScope.launch(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND)) {
             try {
                 showLoading(true)
-                
+
                 android.util.Log.d("NovelReaderActivity", "Content chapters null or empty: ${manga.chapters.isNullOrEmpty()}, isLocal: ${manga.isLocal}")
 
                 // For local manga, ALWAYS reload from repository to get fresh chapter list from index
@@ -1407,7 +1407,7 @@ class NovelReaderActivity :
                         android.util.Log.w("NovelReaderActivity", "Failed to fetch remote details for originalContent", it)
                     }
                 }
-                
+
                 // 若当前是本地且有原始远端目录，合并远端目录与本地章节，保留未下载章节的占位
                 var originalChapters = details.chapters.orEmpty()
                 if (manga.isLocal && originalContent?.chapters != null) {
@@ -1424,7 +1424,7 @@ class NovelReaderActivity :
                     )
                 }
                 android.util.Log.d("NovelReaderActivity", "Original chapters count: ${originalChapters.size}")
-                
+
                 // 本地 CBZ/ZIP 或无 EPUB 迹象时直接使用原章节，避免错误展开
                 val hasLikelyEpub = !manga.isLocal && originalChapters.any {
                     val url = it.url.lowercase()
@@ -1438,11 +1438,11 @@ class NovelReaderActivity :
                     android.util.Log.d("NovelReaderActivity", "Skip EPUB expansion (local or no epub hints)")
                     chapters = originalChapters
                 }
-                
+
                 // Restore reading progress (Requirements 7.5, 7.6)
                 // Priority: Intent parameters > History > First chapter
                 restoreReadingProgress(originalChapters)
-                
+
                 if (chapters.isEmpty()) {
                     showLoading(false)
                     showError(getString(R.string.no_chapters_in_manga))
@@ -1471,24 +1471,24 @@ class NovelReaderActivity :
         chapterLoadJob = lifecycleScope.launch(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND)) {
             try {
                 // Determine if we need to show the loading spinner
-                val needsLoading = !chapter.url.startsWith("epub://") && 
+                val needsLoading = !chapter.url.startsWith("epub://") &&
                                   !chapter.url.contains("#chapter/") &&
                                   !novelContentLoader.isCached(chapter)
-                
+
                 if (needsLoading) {
                     showLoading(true)
                 }
-                
+
                 // Check if this is an EPUB internal chapter (Requirement 6.1, 6.2, 6.3)
                 if (chapter.url.contains("#chapter/") || chapter.url.startsWith("epub://")) {
                     android.util.Log.d("NovelReaderActivity", "Detected EPUB internal chapter: ${chapter.url}")
-                    
+
                     // Show progress indicator for large files (Requirement 11.4)
-                    
+
                     // Load EPUB internal chapter using the dedicated loader
                     val result = epubInternalChapterLoader.loadEpubInternalChapter(chapter)
-                    
-                    
+
+
                     result.onSuccess { loadResult ->
                         android.util.Log.d("NovelReaderActivity", "Successfully loaded EPUB internal chapter")
                         showLoading(false)  // Dismiss loading indicator
@@ -1506,14 +1506,14 @@ class NovelReaderActivity :
                         }
                         showReaderMessage(errorMessage, 3000L)
                     }
-                    
+
                     return@launch
                 }
-                
+
                 // Use chapter's source to get correct repository (local or online)
                 // This allows seamless switching between downloaded and online chapters
                 val chapterRepo = mangaRepositoryFactory.create(chapter.source)
-                
+
                 // 1. FAST PATH: Check if already cached
                 if (novelContentLoader.isCached(chapter)) {
                     android.util.Log.d("NovelReaderActivity", "✅ Cache hit for chapter, loading directly")
@@ -1525,11 +1525,11 @@ class NovelReaderActivity :
                 }
 
                 // 2. SLOW PATH: Need to fetch from network
-                val isLocalChapter = chapter.source is org.skepsun.kototoro.core.model.LocalNovelSource || 
+                val isLocalChapter = chapter.source is org.skepsun.kototoro.core.model.LocalNovelSource ||
                                     chapter.source is org.skepsun.kototoro.core.model.LocalMangaSource
                 val isLegadoSource = chapterRepo is org.skepsun.kototoro.core.parser.legado.LegadoRepository
                 android.util.Log.d("NovelReaderActivity", "Cache miss, using repository for source: ${chapter.source}, isLocal: $isLocalChapter, isLegado: $isLegadoSource")
-                
+
                 // For Legado sources, skip EPUB check and go directly to flow-based loading with nextChapterUrl
                 // This ensures proper boundary checking to prevent infinite page loading
                 var prefetchedPages: List<org.skepsun.kototoro.parsers.model.ContentPage>? = null
@@ -1537,16 +1537,16 @@ class NovelReaderActivity :
                     // Non-Legado sources: check for EPUB type
                     val pages = chapterRepo.getPages(chapter)
                     prefetchedPages = pages
-                    
+
                     android.util.Log.d("NovelReaderActivity", "Got ${pages.size} pages, first page preview: ${pages.firstOrNull()?.preview}, url: ${pages.firstOrNull()?.url?.take(100)}")
-                    
+
                     // 检查是否为EPUB章节（通过preview字段标记）
                     if (pages.size == 1 && pages[0].preview == "EPUB") {
                         android.util.Log.d("NovelReaderActivity", "Detected EPUB chapter, loading EPUB content")
                         // 尝试读取EPUB内容
                         val epubContent = loadEpubContent(index, chapter)
                         showLoading(false)
-                        
+
                         if (epubContent != null) {
                             // 成功读取EPUB，显示内容
                             renderChapter(index, chapter, epubContent)
@@ -1578,12 +1578,12 @@ class NovelReaderActivity :
                         return@launch
                     }
                 }
-                
+
                 android.util.Log.d("NovelReaderActivity", "Processing as regular chapter with flow-based loading")
-                
+
                 val nextChapterUrl = chapters.getOrNull(index + 1)?.url
                 android.util.Log.d("NovelReaderActivity", "nextChapterUrl for boundary check: $nextChapterUrl")
-                
+
                 try {
                     val plainText = novelContentLoader.loadChapterContentFlow(
                         chapterRepo,
@@ -1602,7 +1602,7 @@ class NovelReaderActivity :
                     showLoading(false)
                     // Optionally show error to user
                 }
-                
+
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1617,19 +1617,19 @@ class NovelReaderActivity :
         if (readerSettings.readingMode == ReadingMode.SCROLL) return
         preloadJob?.cancel()
         val nextChapter = chapters.getOrNull(nextIndex) ?: return
-        
+
         preloadJob = lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
             try {
                 // Paged navigation reaches the boundary quickly, so start warming the next chapter earlier.
                 kotlinx.coroutines.delay(if (readerSettings.readingMode == ReadingMode.PAGED) 350L else 2000L)
-                
+
                 if (novelContentLoader.isCached(nextChapter)) return@launch
-                
+
                 android.util.Log.d("NovelReaderActivity", "Preloading next chapter: ${nextChapter.title}")
                 val chapterRepo = mangaRepositoryFactory.create(nextChapter.source)
                 val nextNextChapterUrl = chapters.getOrNull(nextIndex + 1)?.url
                 novelContentLoader.loadChapterContentFlow(
-                    chapterRepo, 
+                    chapterRepo,
                     nextChapter,
                     priority = org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND,
                     nextChapterUrl = nextNextChapterUrl
@@ -1650,14 +1650,14 @@ class NovelReaderActivity :
     private suspend fun loadEpubContent(chapterIndex: Int, chapter: ContentChapter): String? {
         return try {
             android.util.Log.d("NovelReaderActivity", "Loading EPUB content for: ${chapter.title}, URL: ${chapter.url}")
-            
+
             // 检查URL格式
             if (chapter.url.startsWith("epub://")) {
                 // 新架构：使用EpubInternalChapterLoader
                 android.util.Log.d("NovelReaderActivity", "Using EpubInternalChapterLoader for new architecture")
-                
+
                 val result = this.epubInternalChapterLoader.loadEpubInternalChapter(chapter)
-                    
+
                     if (result.isSuccess) {
                         val loadResult = result.getOrNull()
                         android.util.Log.d("NovelReaderActivity", "EPUB content loaded successfully, length: ${loadResult?.content?.length}")
@@ -1680,16 +1680,16 @@ class NovelReaderActivity :
             } else {
                 // 旧架构：使用EpubReader直接读取
                 android.util.Log.d("NovelReaderActivity", "Using EpubReader for legacy architecture")
-                
+
                 val chapterUri = android.net.Uri.parse(chapter.url)
                 val epubReader = org.skepsun.kototoro.local.epub.EpubReaderImpl()
                 val epubContent = epubReader.readEpubFromUri(chapterUri)
-                
+
                 if (epubContent == null) {
                     android.util.Log.e("NovelReaderActivity", "Failed to read EPUB content")
                     return null
                 }
-                
+
                 // 合并所有章节内容
                 val fullContent = buildString {
                     append("《${epubContent.title}》\n")
@@ -1697,7 +1697,7 @@ class NovelReaderActivity :
                     append("\n")
                     append("=".repeat(40))
                     append("\n\n")
-                    
+
                     for (epubChapter in epubContent.chapters) {
                         append("【${epubChapter.title}】\n\n")
                         append(epubChapter.content)
@@ -1706,7 +1706,7 @@ class NovelReaderActivity :
                         append("\n\n")
                     }
                 }
-                
+
                 android.util.Log.d("NovelReaderActivity", "EPUB content loaded successfully, length: ${fullContent.length}")
                 return fullContent
             }
@@ -1720,7 +1720,7 @@ class NovelReaderActivity :
 
     /**
      * Render EPUB chapter with proper file info for image loading
-     * 
+     *
      * @param chapter The chapter being rendered
      * @param text The chapter content
      * @param epubFile The EPUB file (optional, will be looked up if not provided)
@@ -1850,19 +1850,19 @@ class NovelReaderActivity :
         return withContext(Dispatchers.IO) {
             try {
                 android.util.Log.d("NovelReaderActivity", "Loading EPUB from URL: $url")
-                
+
                 // 首先尝试从本地下载的文件加载
                 val localFile = findLocalEpubFile(chapter)
                 if (localFile != null && localFile.exists()) {
                     android.util.Log.d("NovelReaderActivity", "Found local EPUB file: ${localFile.absolutePath}")
-                    
+
                     // 检查缓存 (cache is now managed by EpubReaderImpl)
                     val cachedContent = epubContentCache.get(localFile)
                     if (cachedContent != null) {
                         android.util.Log.d("NovelReaderActivity", "Using cached EPUB content for: ${localFile.absolutePath}")
                         return@withContext cachedContent
                     }
-                    
+
                     // 读取并缓存 (cache is automatically managed by EpubReaderImpl)
                     val epubReader = org.skepsun.kototoro.local.epub.EpubReaderImpl(epubContentCache)
                     val content = epubReader.readEpub(localFile)
@@ -1871,21 +1871,21 @@ class NovelReaderActivity :
                     }
                     return@withContext content
                 }
-                
+
                 // 如果是file://协议，尝试直接读取
                 if (url.startsWith("file://")) {
                     val filePath = url.substring(7)
                     val file = java.io.File(filePath)
                     if (file.exists()) {
                         android.util.Log.d("NovelReaderActivity", "Loading from file path: $filePath")
-                        
+
                         // 检查缓存 (cache is now managed by EpubReaderImpl)
                         val cachedContent = epubContentCache.get(file)
                         if (cachedContent != null) {
                             android.util.Log.d("NovelReaderActivity", "Using cached EPUB content for: $filePath")
                             return@withContext cachedContent
                         }
-                        
+
                         // 读取并缓存 (cache is automatically managed by EpubReaderImpl)
                         val epubReader = org.skepsun.kototoro.local.epub.EpubReaderImpl(epubContentCache)
                         val content = epubReader.readEpub(file)
@@ -1895,7 +1895,7 @@ class NovelReaderActivity :
                         return@withContext content
                     }
                 }
-                
+
                 android.util.Log.w("NovelReaderActivity", "EPUB file not found locally")
                 null
             } catch (e: Exception) {
@@ -1904,7 +1904,7 @@ class NovelReaderActivity :
             }
         }
     }
-    
+
     /**
      * 查找本地下载的EPUB文件（可能被重命名为.cbz）
      */
@@ -1912,11 +1912,11 @@ class NovelReaderActivity :
         try {
             // 获取下载目录
             val downloadDir = getExternalFilesDir(null)?.resolve("manga") ?: return null
-            
+
             android.util.Log.d("NovelReaderActivity", "Searching for EPUB file in: ${downloadDir.absolutePath}")
             android.util.Log.d("NovelReaderActivity", "Content ID: ${manga.id}, Title: ${manga.title}")
             android.util.Log.d("NovelReaderActivity", "Chapter ID: ${chapter.id}, Title: ${chapter.title}")
-            
+
             // 策略1: 按manga ID查找目录
             val mangaIdStr = manga.id.toString()
             val mangaDirs = listOf(
@@ -1924,14 +1924,14 @@ class NovelReaderActivity :
                 downloadDir.resolve("_${mangaIdStr}"),
                 downloadDir.resolve("__${mangaIdStr}"),
             )
-            
+
             for (dir in mangaDirs) {
                 if (!dir.exists() || !dir.isDirectory) continue
-                
+
                 val files = dir.listFiles { file ->
                     file.isFile && (file.name.endsWith(".cbz") || file.name.endsWith(".epub"))
                 }
-                
+
                 if (files != null && files.isNotEmpty()) {
                     val file = files.firstOrNull()
                     if (file != null) {
@@ -1940,11 +1940,11 @@ class NovelReaderActivity :
                     }
                 }
             }
-            
+
             // 策略2: 在所有子目录中查找，并通过index.json验证是否属于当前manga
             val allDirs = downloadDir.listFiles { file -> file.isDirectory } ?: emptyArray()
             android.util.Log.d("NovelReaderActivity", "Searching in ${allDirs.size} directories")
-            
+
             for (dir in allDirs) {
                 // 检查index.json中的manga信息
                 val indexFile = dir.resolve("index.json")
@@ -1952,22 +1952,22 @@ class NovelReaderActivity :
                     try {
                         val indexContent = indexFile.readText()
                         android.util.Log.d("NovelReaderActivity", "Checking ${dir.name}/index.json")
-                        
+
                         // 严格匹配：必须完全匹配manga ID
                         val idPattern1 = "\"id\":${manga.id}"
                         val idPattern2 = "\"id\": ${manga.id}"
                         val idPattern3 = "\"id\" : ${manga.id}"
-                        
-                        if (indexContent.contains(idPattern1) || 
+
+                        if (indexContent.contains(idPattern1) ||
                             indexContent.contains(idPattern2) ||
                             indexContent.contains(idPattern3)) {
-                            
+
                             android.util.Log.d("NovelReaderActivity", "Content ID matched in ${dir.name}")
-                            
+
                             val files = dir.listFiles { file ->
                                 file.isFile && (file.name.endsWith(".cbz") || file.name.endsWith(".epub"))
                             }
-                            
+
                             if (files != null && files.isNotEmpty()) {
                                 val file = files.firstOrNull()
                                 if (file != null) {
@@ -1985,7 +1985,7 @@ class NovelReaderActivity :
                     android.util.Log.d("NovelReaderActivity", "No index.json in ${dir.name}")
                 }
             }
-            
+
             android.util.Log.d("NovelReaderActivity", "No local EPUB file found for manga ${manga.id}")
         } catch (e: Exception) {
             android.util.Log.e("NovelReaderActivity", "Error finding local EPUB file", e)
@@ -1995,7 +1995,7 @@ class NovelReaderActivity :
 
     /**
      * 展开EPUB章节：将EPUB文件章节替换为其内部章节列表
-     * 
+     *
      * 修复：
      * 1. 使用卷名作为前缀，避免章节名重复
      * 2. 使用数据库映射的章节ID，确保与详情页一致
@@ -2008,31 +2008,31 @@ class NovelReaderActivity :
         }
 
         val expandedChapters = mutableListOf<ContentChapter>()
-        
+
         android.util.Log.d("NovelReaderActivity", "expandEpubChapters: Processing ${originalChapters.size} chapters")
-        
+
         for (chapter in originalChapters) {
             try {
                 // 快速检查：如果URL不像EPUB文件，直接跳过
                 // EPUB文件通常以.epub结尾，或者URL中包含epub关键字
                 val isLikelyEpub = chapter.url.contains(".epub", ignoreCase = true) ||
                     chapter.url.contains("epub", ignoreCase = true)
-                
+
                 if (!isLikelyEpub) {
                     // 不像EPUB文件，直接添加，跳过网络请求
                     android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': Not EPUB-like URL, skipping check")
                     expandedChapters.add(chapter)
                     continue
                 }
-                
+
                 // 可能是EPUB，需要检查
                 android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': Checking if EPUB...")
                 val pages = repository.getPages(chapter)
                 android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': ${pages.size} pages, preview='${pages.firstOrNull()?.preview}'")
-                
+
                 if (pages.size == 1 && pages[0].preview == "EPUB") {
                     android.util.Log.d("NovelReaderActivity", "Found EPUB chapter: ${chapter.title}, ID=${chapter.id}, expanding...")
-                    
+
                     // 首先尝试从数据库读取已保存的章节映射
                     val dbMappings = try {
                         epubChapterMappingDao.getByParentId(chapter.id)
@@ -2040,11 +2040,11 @@ class NovelReaderActivity :
                         android.util.Log.e("NovelReaderActivity", "Failed to query chapter mappings", e)
                         emptyList()
                     }
-                    
+
                     if (dbMappings.isNotEmpty()) {
                         // 使用数据库中的映射
                         android.util.Log.d("NovelReaderActivity", "Using ${dbMappings.size} chapters from database")
-                        
+
                         for (mapping in dbMappings.sortedBy { it.chapterIndex }) {
                             val internalChapter = ContentChapter(
                                 id = mapping.internalChapterId,
@@ -2064,14 +2064,14 @@ class NovelReaderActivity :
                         // 数据库中没有映射，尝试读取EPUB内容
                         android.util.Log.d("NovelReaderActivity", "No database mappings found, reading EPUB content")
                         val epubContent = loadEpubContentFromUrl(pages[0].url, chapter)
-                        
+
                         if (epubContent != null && epubContent.chapters.isNotEmpty()) {
                             // 不过滤，显示所有章节
                             epubContent.chapters.forEachIndexed { chapterIndex, epubChapter ->
                                 val generatedUrl = "${pages[0].url}#chapter/$chapterIndex"
                                 // 使用与DownloadWorker相同的ID生成算法
                                 val internalChapterId = chapter.id + (chapterIndex * 1000000L) + 1
-                                
+
                                 val internalChapter = ContentChapter(
                                     id = internalChapterId,
                                     title = epubChapter.title,  // 不添加卷名前缀，详情页已经分组
@@ -2084,7 +2084,7 @@ class NovelReaderActivity :
                                     source = chapter.source,
                                 )
                                 expandedChapters.add(internalChapter)
-                                
+
                                 // 打印章节映射信息（仅前5个和后5个）
                                 if (chapterIndex < 5 || chapterIndex >= epubContent.chapters.size - 5) {
                                     android.util.Log.d("NovelReaderActivity", "  Chapter mapping: index=$chapterIndex, id=$internalChapterId, title='${internalChapter.title}', url='${internalChapter.url.takeLast(15)}'")
@@ -2107,7 +2107,7 @@ class NovelReaderActivity :
                 expandedChapters.add(chapter)
             }
         }
-        
+
         return expandedChapters
     }
 
@@ -2308,7 +2308,7 @@ class NovelReaderActivity :
             NOVEL_SCROLL_TAP_LOG_TAG,
             "handleTapGesture area=$area action=$action ui=$isUiVisible",
         )
-        
+
         when (action) {
             org.skepsun.kototoro.reader.ui.tapgrid.TapAction.PAGE_NEXT -> switchPageBy(1)
             org.skepsun.kototoro.reader.ui.tapgrid.TapAction.PAGE_PREV -> switchPageBy(-1)
@@ -2390,7 +2390,7 @@ class NovelReaderActivity :
             percent = getCurrentProgressRatio(),
             incognito = false // TODO: 获取无痕模式状态
         )
-        
+
         // 更新历史记录使用实际页数（单页计数）
         updateHistory(page, total)
     }
@@ -2404,7 +2404,7 @@ class NovelReaderActivity :
         propagateFailure: Boolean = false,
     ): Job? {
         val chapter = chapters.getOrNull(currentChapterIndex) ?: return null
-        
+
         return lifecycleScope.launch(CoroutineExceptionHandler { _, error ->
             android.util.Log.e("NovelReaderActivity", "History save job failed", error)
         }) {
@@ -2445,16 +2445,16 @@ class NovelReaderActivity :
                 } else {
                     mergedForHistory
                 }
-                
+
                 // 如果仍然没有章节信息，不保存历史
                 if (mangaWithChapters.chapters.isNullOrEmpty()) {
                     android.util.Log.d("NovelReaderActivity", "Cannot save history: no chapters available")
                     return@launch
                 }
-                
+
                 // 计算当前章节在所有章节中的进度（使用字符偏移更精确，兼容单/双页）
                 val chapterProgress = getCurrentProgressRatio()
-                
+
                 // 计算总体阅读进度
                 // 进度 = (已读完章节数 + 当前章节进度) / 总章节数
                 val totalProgress = if (chapters.isNotEmpty()) {
@@ -2462,9 +2462,9 @@ class NovelReaderActivity :
                 } else {
                     0f
                 }.coerceIn(0f, 1f)
-                
+
                 android.util.Log.d("NovelReaderActivity", "Updating history: chapter=$currentChapterIndex/${chapters.size}, page=$page/$total, progress=$totalProgress")
-                
+
                 // 创建 ReaderState（仍沿用页码字段，历史恢复时会重新分页）
                 val readerState = ReaderState(
                     chapterId = chapter.id,
@@ -2472,10 +2472,10 @@ class NovelReaderActivity :
                     scroll = (chapterProgress * 10000).toInt()
                 )
                 ensureReadingSession(readerState, totalProgress)
-                
+
                 // 异步更新历史记录
                 historyUpdateUseCase(mangaWithChapters, readerState, totalProgress)
-                
+
                 android.util.Log.d("NovelReaderActivity", "History update invoked successfully")
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Failed to update history", e)
@@ -2639,7 +2639,7 @@ class NovelReaderActivity :
         val isDark = palette.isDark
         val visibleBarColor = palette.chromeBackgroundColor
         val immersiveBarColor = ColorUtils.setAlphaComponent(palette.backgroundColor, if (isDark) 242 else 248)
-        
+
         // 状态栏
         if (!readerSettings.enableFullscreen) {
             window.statusBarColor = immersiveBarColor
@@ -2662,7 +2662,7 @@ class NovelReaderActivity :
         // 根据全屏设置和当前 UI 状态控制系统 UI
         val shouldShowSystemUi = !readerSettings.enableFullscreen || isUiVisible
         systemUiController.setSystemUiVisible(shouldShowSystemUi)
-        
+
         // 更新系统栏颜色
         updateSystemBarsColors()
     }
@@ -2726,20 +2726,20 @@ class NovelReaderActivity :
         eInkRefresh = null
         if (clearIdentity) lastEInkPageIdentity = null
     }
-    
+
     private fun applyReadingModeToggles() {
-        
+
         if (composeReaderViewModel.uiState.value.content.isBlank()) {
             // Need to reload content into the new view if it was empty
             loadChapter(currentChapterIndex)
         }
     }
-    
+
     private fun preloadContinuousBoundary(index: Int, isPrevious: Boolean) {
         val chapter = chapters.getOrNull(index) ?: return
-        
+
         if (isPrevious) isLoadingPrevious = true else isLoadingNext = true
-        
+
         lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
             try {
                 // If it's an EPUB chapter, load using EpubLoader
@@ -2761,9 +2761,9 @@ class NovelReaderActivity :
                     }
                     return@launch
                 }
-                
+
                 val chapterRepo = mangaRepositoryFactory.create(chapter.source)
-                
+
                 if (novelContentLoader.isCached(chapter)) {
                     val content = novelContentLoader.loadChapterContent(chapterRepo, chapter)
                     withContext(Dispatchers.Main) {
@@ -2773,19 +2773,19 @@ class NovelReaderActivity :
                     }
                     return@launch
                 }
-                
+
                 // Fetch directly
                 val contentUrl = chapters.getOrNull(index + 1)?.url
                 var fullText = ""
                 novelContentLoader.loadChapterContentFlow(
-                    chapterRepo, 
+                    chapterRepo,
                     chapter,
                     priority = org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND,
                     nextChapterUrl = contentUrl
                 ).collect { text ->
                     fullText = text
                 }
-                
+
                 withContext(Dispatchers.Main) {
                     val data = NovelChapterData(index, fullText, null, null)
                     publishComposeBoundary(data)
@@ -2861,7 +2861,7 @@ class NovelReaderActivity :
     }
 
     private var isToolbarFloating = true
-    
+
     private fun updateToolbarFloatingStyle(isFloating: Boolean) {
         if (isToolbarFloating == isFloating) return
         isToolbarFloating = isFloating

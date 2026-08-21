@@ -6,7 +6,7 @@ object Anime4kSizeEvaluator {
     fun evaluate(expression: String, textureSizes: Map<String, Pair<Int, Int>>): Int {
         val tokens = expression.split(Regex("\\s+")).filter { it.isNotEmpty() }
         val stack = mutableListOf<Float>()
-        
+
         for (token in tokens) {
             when (token) {
                 "+" -> {

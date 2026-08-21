@@ -58,17 +58,17 @@ internal class GeminiEndToEndTranslator(
         // Choose payload format based on endpoint: Assume Native Google API if it ends with generateContent
         val isNativeGoogleFormat = endpoint.contains("generateContent") || endpoint.contains("googleapis.com/v1beta/models/")
         val isOpenAiFormat = !isNativeGoogleFormat
-        
+
         val payload = JSONObject()
         if (isOpenAiFormat) {
             payload.put("model", model)
             payload.put("temperature", 0.1) // Avoid boundary 0 which some proxies reject
             payload.put("max_tokens", 4096)
             // Avoid response_format setting as some proxy APIs strictly reject it for Gemini models.
-            
+
             // Combine system and user prompts to avoid routing crashes on proxies that don't support system instructions with vision payloads
             val combinedPrompt = "$systemPrompt\n\n$userPrompt"
-            
+
             payload.put(
                 "messages",
                 JSONArray().put(
@@ -123,7 +123,7 @@ internal class GeminiEndToEndTranslator(
             val separator = if (endpoint.contains("?")) "&" else "?"
             finalUrl = "$endpoint${separator}key=$apiKey"
         }
-        
+
         // org.json.JSONObject escapes '/' to '\/' which breaks many domestic API proxies in image base64
         val payloadStr = payload.toString().replace("\\/", "/")
 
@@ -157,7 +157,7 @@ internal class GeminiEndToEndTranslator(
         }.onFailure {
             log { "GeminiEndToEndTranslator network error: ${it.message}" }
         }.getOrNull()
-        
+
         if (result == null) return@withContext emptyList()
 
         try {
@@ -166,7 +166,7 @@ internal class GeminiEndToEndTranslator(
                 log { "GeminiEndToEndTranslator failed: code=${result.code} body=$body" }
                 return@withContext emptyList()
             }
-            
+
             return@withContext parseResponse(body, bitmap.width, bitmap.height, sourceLang, targetLang)
         } finally {
             result.close()
@@ -202,9 +202,9 @@ internal class GeminiEndToEndTranslator(
             val optTranslatedText = obj.optString("translated_text", "")
             // Some models might output translation directly under translatedText
             val translatedText = if (optTranslatedText.isBlank()) obj.optString("translation", "") else optTranslatedText
-            
+
             if (translatedText.isBlank() || translatedText.contains("KOTOTORO_IGNORE_BLOCK")) continue
-            
+
             // Discard completely invalid or degenerate boxes
             if (left >= right || top >= bottom) continue
 
@@ -219,7 +219,7 @@ internal class GeminiEndToEndTranslator(
             )
             bubbles.add(bubbleInput to translatedText)
         }
-        
+
         log { "GeminiEndToEndTranslator: Parsed ${bubbles.size} bubbles out of ${jsonArray.length()} array items" }
         return bubbles
     }
@@ -231,14 +231,14 @@ internal class GeminiEndToEndTranslator(
     private fun extractMessageContent(rawBody: String): String {
         return runCatching {
             val json = JSONObject(rawBody)
-            
+
             // Try OpenAI Format first
             val choices = json.optJSONArray("choices")
             if (choices != null && choices.length() > 0) {
                 val message = choices.optJSONObject(0)?.optJSONObject("message")
                 if (message != null) return@runCatching message.optString("content", "")
             }
-            
+
             // Try Native Gemini Format
             val candidates = json.optJSONArray("candidates")
             if (candidates != null && candidates.length() > 0) {
@@ -247,11 +247,11 @@ internal class GeminiEndToEndTranslator(
                     return@runCatching parts.optJSONObject(0)?.optString("text", "") ?: ""
                 }
             }
-            
+
             ""
         }.getOrDefault("")
     }
-    
+
     private fun parseJsonArray(content: String): JSONArray? {
         var clean = content.replace("```json", "").replace("```", "").trim()
         // Fallback patch for Gemini occasionally generating malformed JSON like `"coordinates":,`

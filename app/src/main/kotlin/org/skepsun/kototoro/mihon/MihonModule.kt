@@ -40,8 +40,8 @@ object MihonModule {
             )
         } catch (e: Throwable) {
             android.util.Log.e("MihonModule", "CRITICAL ERROR: Failed to create KotoInjektBridge!", e)
-            // Still need to return something or Dagger will fail. 
-            // In case of fatal libs issue (NoClassDefFound), this might still crash later, 
+            // Still need to return something or Dagger will fail.
+            // In case of fatal libs issue (NoClassDefFound), this might still crash later,
             // but let's try to catch it here.
             throw e
         }

@@ -30,19 +30,19 @@ class LegadoSandbox(
     private val variableStore: KototoroLegadoVariableStore? =
         (runtimeBridge?.variableStore as? KototoroLegadoVariableStore) ?: prefs?.let(::KototoroLegadoVariableStore),
 ) {
-    
+
     private val cache = mutableMapOf<String, String>()
     private var reGetBookAction: (() -> Unit)? = null
     private var refreshTocUrlAction: (() -> Unit)? = null
     private var javaBridgeOverride: Any? = null
-    
+
     inner class CacheBinding {
         fun put(key: String, value: String?) {
             Log.d(TAG, "cache.put(key=$key, value=${value?.take(50)})")
             if (value != null) cache[key] = value
             else cache.remove(key)
         }
-        
+
         // Overload with TTL (time-to-live in seconds) - for Legado compatibility
         // Currently ignores TTL, stores indefinitely
         fun put(key: String, value: String?, ttl: Int) {
@@ -50,24 +50,24 @@ class LegadoSandbox(
             if (value != null) cache[key] = value
             else cache.remove(key)
         }
-        
+
         // Overload with TTL as Long
         fun put(key: String, value: String?, ttl: Long) {
             put(key, value, ttl.toInt())
         }
-        
+
         fun get(key: String): String? {
             val result = cache[key]
             Log.d(TAG, "cache.get(key=$key) = ${result?.take(50) ?: "null"}")
             return result
         }
-        
+
         fun delete(key: String) {
             Log.d(TAG, "cache.delete(key=$key)")
             cache.remove(key)
         }
     }
-    
+
     companion object {
         private const val TAG = "LegadoSandbox"
     }
@@ -117,7 +117,7 @@ class LegadoSandbox(
         }
     }
 
-    
+
     fun getRuleData(): RuleDataInterface = ruleData
 
     fun getSource(): LegadoBookSource = source
@@ -127,7 +127,7 @@ class LegadoSandbox(
     fun getParserSourceName(): String? = parserSourceName
 
     fun getHttpExecutor() = runtimeBridge?.httpExecutor
-    
+
     fun putVariable(key: String, value: String?) {
         ruleData.putVariable(key, value)
         context.setVariable(key, value ?: "")
@@ -179,13 +179,13 @@ class LegadoSandbox(
         val p = prefs ?: return null
         return p.getString("v_${sourceKey}_$key", null)
     }
-    
+
     fun setResult(result: Any?) {
         Log.d(TAG, "setResult: type=${result?.javaClass?.simpleName}, isList=${result is List<*>}, size=${(result as? List<*>)?.size}")
         context.result = result
         context.setVariable("result", result)
     }
-    
+
     fun setBook(book: BookContext) {
         val jsBook = JsBookInfo(
             bookUrl = book.url,
@@ -204,7 +204,7 @@ class LegadoSandbox(
         putVariable("bookUrl", book.url)
         putVariable("tocUrl", book.tocUrl)
     }
-    
+
     fun setChapter(chapter: ChapterContext) {
         val jsChapter = JsChapterInfo(
             chapterUrl = chapter.url,
@@ -216,10 +216,10 @@ class LegadoSandbox(
         putVariable("chapterUrl", chapter.url)
         putVariable("chapterIndex", chapter.index.toString())
     }
-    
+
     fun eval(script: String): Any? {
         if (script.isBlank()) return null
-        
+
         return try {
             ruleData.getVariableMap().forEach { (k, v) ->
                 context.setVariable(k, v)
@@ -235,10 +235,10 @@ class LegadoSandbox(
             null
         }
     }
-    
+
     fun execute(script: String): Any? {
         if (script.isBlank()) return null
-        
+
         return try {
             ruleData.getVariableMap().forEach { (k, v) ->
                 context.setVariable(k, v)
@@ -302,7 +302,7 @@ class LegadoSandbox(
             else -> null
         }
     }
-    
+
     fun reset() {
         ruleData.clearVariables()
         context = JavaScriptContext(
@@ -348,7 +348,7 @@ class LegadoSandbox(
     fun refreshTocUrl() {
         refreshTocUrlAction?.invoke()
     }
-    
+
     data class BookContext(
         val name: String = "",
         val author: String = "",
@@ -360,7 +360,7 @@ class LegadoSandbox(
         val tocUrl: String = "",
         val wordCount: String = "",
     )
-    
+
     data class ChapterContext(
         val title: String = "",
         val url: String = "",

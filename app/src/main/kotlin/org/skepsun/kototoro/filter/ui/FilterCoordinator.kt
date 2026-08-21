@@ -504,14 +504,14 @@ class FilterCoordinator @Inject constructor(
     fun isTextInputTag(tag: ContentTag): Boolean {
         return tag.key.startsWith("text:")
     }
-    
+
     /**
      * Get the display name for a text input tag (without the emoji prefix).
      */
     fun getTextInputLabel(tag: ContentTag): String {
         return tag.title.removePrefix("📝 ")
     }
-    
+
     /**
      * Get the current value for a text input tag, if any.
      */
@@ -521,7 +521,7 @@ class FilterCoordinator @Inject constructor(
             .find { it.key.startsWith(baseKey) && it.key.contains("=") }
             ?.key?.substringAfter("=")
     }
-    
+
     /**
      * Set the value for a text input filter.
      * Creates a new tag with the value appended to the key (format: key=value).
@@ -531,7 +531,7 @@ class FilterCoordinator @Inject constructor(
             // Remove any existing tag with the same base key
             val baseKey = originalTag.key
             val filteredTags = oldValue.tags.filter { !it.key.startsWith(baseKey) }.toSet()
-            
+
             // Add new tag with value if not empty
             val newTags = if (value.isNotBlank()) {
                 val tagWithValue = ContentTag(
@@ -543,7 +543,7 @@ class FilterCoordinator @Inject constructor(
             } else {
                 filteredTags
             }
-            
+
             oldValue.copy(
                 tags = newTags,
                 query = oldValue.takeQueryIfSupported(),

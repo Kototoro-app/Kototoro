@@ -38,7 +38,7 @@ import android.net.Uri
 
 /**
  * ViewModel for managing JSON sources with grouping support.
- * 
+ *
  * Provides functionality to:
  * - Observe all JSON sources
  * - Toggle source enabled/disabled state
@@ -59,7 +59,7 @@ class JsonSourcesViewModel @Inject constructor(
 
     val sourceTypeFilter: JsonSourceType? = savedStateHandle.get<String>(ARG_SOURCE_TYPE)
         ?.let { runCatching { JsonSourceType.valueOf(it) }.getOrNull() }
-    
+
     /**
      * StateFlow of all JSON sources from the database.
      * Automatically updates when sources change.
@@ -81,7 +81,7 @@ class JsonSourcesViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList(),
         )
-    
+
     private val parsedSources = jsonSources.map { sources ->
         sources.associate { entity ->
             entity.id to runCatching {
@@ -110,28 +110,28 @@ class JsonSourcesViewModel @Inject constructor(
      */
     private val _groupingStrategy = MutableStateFlow(GroupingStrategy.BY_ORIGIN)
     val groupingStrategy: StateFlow<GroupingStrategy> = _groupingStrategy.asStateFlow()
-    
+
     /**
      * Map of collapsed group states.
      * Key: SourceGroup, Value: isCollapsed
      */
     private val _collapsedGroups = MutableStateFlow<Map<SourceGroup, Boolean>>(emptyMap())
-    
+
     /**
      * Current sort option.
      */
     private val _sortOption = MutableStateFlow<SortOption>(SortOption.NAME)
-    
+
     /**
      * Current filter option.
      */
     private val _filterOption = MutableStateFlow<FilterOption>(FilterOption.ALL)
-    
+
     /**
      * Current search query.
      */
     private val _searchQuery = MutableStateFlow("")
-    
+
     /**
      * StateFlow of grouped sources.
      * Combines all JSON sources with grouping strategy, collapsed states, sort, filter and search.
@@ -154,7 +154,7 @@ class JsonSourcesViewModel @Inject constructor(
                 entity.id.lowercase().contains(query)
             }
         }
-        
+
         // Filter sources
         val filteredEntities = when (filter) {
             is FilterOption.ALL -> searchedEntities
@@ -190,13 +190,13 @@ class JsonSourcesViewModel @Inject constructor(
                 }
             }
         }
-        
+
         // Sort sources
         val sortedEntities = when (sort) {
             SortOption.NAME -> filteredEntities.sortedBy { it.name.lowercase() }
             SortOption.ENABLED -> filteredEntities.sortedByDescending { it.enabled }
         }
-        
+
         // Convert JSON source entities to ContentSourceInfo
         val sourceInfoList = sortedEntities.map { entity ->
             val jsonContentSource = org.skepsun.kototoro.core.jsonsource.JsonContentSource(entity)
@@ -206,41 +206,41 @@ class JsonSourcesViewModel @Inject constructor(
                 isPinned = entity.isPinned
             )
         }
-        
+
         // Create grouped list
         val grouped = GroupedSourceList.fromSources(
             sources = sourceInfoList,
             groupBy = strategy,
             sourceGroupManager = sourceGroupManager
         )
-        
+
         // Apply collapsed states
         val groupsWithCollapsedState = grouped.groups.map { groupInfo ->
             val isCollapsed = collapsedMap[groupInfo.group] ?: false
             groupInfo.withCollapsed(isCollapsed)
         }
-        
+
         GroupedSourceList(groupsWithCollapsedState).filterNonEmpty()
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = GroupedSourceList.empty()
     )
-    
+
     private val _testResult = MutableStateFlow<TestResult?>(null)
     val testResult: StateFlow<TestResult?> = _testResult.asStateFlow()
     private val _validationStates = MutableStateFlow<Map<String, Boolean?>>(emptyMap())
     val validationStates: StateFlow<Map<String, Boolean?>> = _validationStates.asStateFlow()
-    
+
     private val _validationProgress = MutableStateFlow<Pair<Int, Int>?>(null)
     val validationProgress: StateFlow<Pair<Int, Int>?> = _validationProgress.asStateFlow()
-    
+
     private val _lastInvalidIds = MutableStateFlow<List<String>>(emptyList())
     val lastInvalidIds: StateFlow<List<String>> = _lastInvalidIds.asStateFlow()
-    
+
     /**
      * Toggles the enabled state of a JSON source.
-     * 
+     *
      * @param sourceId The source identifier
      * @param enabled Whether the source should be enabled
      */
@@ -249,10 +249,10 @@ class JsonSourcesViewModel @Inject constructor(
             jsonSourceManager.toggleSource(sourceId, enabled)
         }
     }
-    
+
     /**
      * Deletes a JSON source from the database.
-     * 
+     *
      * @param sourceId The source identifier
      */
     fun deleteSource(sourceId: String) {
@@ -260,22 +260,22 @@ class JsonSourcesViewModel @Inject constructor(
             jsonSourceManager.deleteSource(sourceId)
         }
     }
-    
+
     /**
      * Tests a JSON source by attempting to execute a test request.
-     * 
+     *
      * This is a placeholder implementation. In a full implementation,
      * this would:
      * 1. Create a dynamic parser from the source configuration
      * 2. Execute a test search or list request
      * 3. Return success/failure result
-     * 
+     *
      * @param sourceId The source identifier to test
      */
     fun testSource(sourceId: String) {
         viewModelScope.launch(Dispatchers.Default) {
             _testResult.value = TestResult.Testing(sourceId)
-            
+
             try {
                 val entity = jsonSources.value.firstOrNull { it.id == sourceId }
                 if (entity?.type != JsonSourceType.LEGADO) {
@@ -299,19 +299,19 @@ class JsonSourcesViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun batchEnable(ids: List<String>, enabled: Boolean) {
         launchJob(Dispatchers.Default) {
             jsonSourceManager.toggleSourcesBatch(ids, enabled)
         }
     }
-    
+
     fun batchDelete(ids: List<String>) {
         launchJob(Dispatchers.Default) {
             jsonSourceManager.deleteSourcesBatch(ids)
         }
     }
-    
+
     /**
      * Export selected sources as JSON string.
      * Returns a pair of (JSON string, count of exported sources).
@@ -335,24 +335,24 @@ class JsonSourcesViewModel @Inject constructor(
         }
         return jsonArray.toString(2) to sources.size
     }
-    
+
     private var validationJob: Job? = null
-    
+
     fun batchValidate(ids: List<String>) {
         if (ids.isEmpty()) return
-        
+
         validationJob?.cancel()
         validationJob = launchJob(Dispatchers.Default) {
             _validationProgress.value = 0 to ids.size
             val invalidIds = java.util.Collections.synchronizedList(mutableListOf<String>())
             val updated = java.util.concurrent.ConcurrentHashMap(_validationStates.value)
-            
+
             var completedCount = 0
             val totalCount = ids.size
-            
+
             // Use a semaphore or chunking to limit concurrency (e.g., 3 at a time)
             val semaphore = kotlinx.coroutines.sync.Semaphore(3)
-            
+
             kotlinx.coroutines.coroutineScope {
                 ids.map { id ->
                     launch {
@@ -383,7 +383,7 @@ class JsonSourcesViewModel @Inject constructor(
                     }
                 }
             }.joinAll()
-            
+
             _lastInvalidIds.value = invalidIds.toList()
             // Keep the progress for a moment then clear
             kotlinx.coroutines.delay(1000)
@@ -391,13 +391,13 @@ class JsonSourcesViewModel @Inject constructor(
             validationJob = null
         }
     }
-    
+
     fun stopValidation() {
         validationJob?.cancel()
         validationJob = null
         _validationProgress.value = null
     }
-    
+
     fun clearLastInvalidIds() {
         _lastInvalidIds.value = emptyList()
     }
@@ -408,10 +408,10 @@ class JsonSourcesViewModel @Inject constructor(
     fun clearTestResult() {
         _testResult.value = null
     }
-    
+
     /**
      * Toggles the collapsed state of a group.
-     * 
+     *
      * @param group The source group to toggle
      */
     fun toggleGroupCollapsed(group: SourceGroup) {
@@ -419,16 +419,16 @@ class JsonSourcesViewModel @Inject constructor(
         val currentState = currentMap[group] ?: false
         _collapsedGroups.value = currentMap + (group to !currentState)
     }
-    
+
     /**
      * Sets the grouping strategy.
-     * 
+     *
      * @param strategy The new grouping strategy
      */
     fun setGroupingStrategy(strategy: GroupingStrategy) {
         _groupingStrategy.value = strategy
     }
-    
+
     /**
      * Collapses all groups.
      */
@@ -436,21 +436,21 @@ class JsonSourcesViewModel @Inject constructor(
         val allGroups = groupedSources.value.groups.map { it.group }
         _collapsedGroups.value = allGroups.associateWith { true }
     }
-    
+
     /**
      * Expands all groups.
      */
     fun expandAllGroups() {
         _collapsedGroups.value = emptyMap()
     }
-    
+
     /**
      * Returns a list of all current JSON source IDs.
      */
     fun getJsonSourceIds(): List<String> {
         return jsonSources.value.map { it.id }
     }
-    
+
     /**
      * Returns a list of all currently visible JSON source IDs (after filtering).
      */
@@ -459,21 +459,21 @@ class JsonSourcesViewModel @Inject constructor(
             .filter { it.mangaSource is org.skepsun.kototoro.core.jsonsource.JsonContentSource }
             .map { (it.mangaSource as org.skepsun.kototoro.core.jsonsource.JsonContentSource).entity.id }
     }
-    
+
     /**
      * Sets the sort option.
      */
     fun setSortOption(option: SortOption) {
         _sortOption.value = option
     }
-    
+
     /**
      * Sets the filter option.
      */
     fun setFilterOption(option: FilterOption) {
         _filterOption.value = option
     }
-    
+
     /**
      * Sets the search query.
      */
@@ -563,17 +563,17 @@ private const val ARG_SOURCE_TYPE = "json_source_type"
  */
 sealed class TestResult {
     abstract val sourceId: String
-    
+
     /**
      * Test is in progress.
      */
     data class Testing(override val sourceId: String) : TestResult()
-    
+
     /**
      * Test completed successfully.
      */
     data class Success(override val sourceId: String, val message: String) : TestResult()
-    
+
     /**
      * Test failed with error.
      */

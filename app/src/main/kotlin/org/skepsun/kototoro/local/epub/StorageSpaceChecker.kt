@@ -6,14 +6,14 @@ import java.io.File
 
 /**
  * Utility for checking storage space availability.
- * 
+ *
  * Requirement 10.5: Check storage space before downloads
  */
 object StorageSpaceChecker {
-    
+
     /**
      * Checks if there is sufficient storage space available.
-     * 
+     *
      * @param context Android context
      * @param requiredBytes Number of bytes required
      * @param directory Target directory (defaults to external files dir)
@@ -25,14 +25,14 @@ object StorageSpaceChecker {
         directory: File? = null
     ): Result<Unit> {
         val targetDir = directory ?: context.getExternalFilesDir(null) ?: context.filesDir
-        
+
         return try {
             val stat = StatFs(targetDir.absolutePath)
             val availableBytes = stat.availableBlocksLong * stat.blockSizeLong
-            
+
             // Add 10% buffer for safety
             val requiredWithBuffer = (requiredBytes * 1.1).toLong()
-            
+
             if (availableBytes < requiredWithBuffer) {
                 val error = EpubError.FileSystemError.InsufficientStorage(
                     requiredBytes = requiredBytes,
@@ -50,17 +50,17 @@ object StorageSpaceChecker {
             EpubErrorHandler.createFailure(error, "checkStorageSpace")
         }
     }
-    
+
     /**
      * Gets available storage space in bytes.
-     * 
+     *
      * @param context Android context
      * @param directory Target directory (defaults to external files dir)
      * @return Available bytes, or -1 if check fails
      */
     fun getAvailableSpace(context: Context, directory: File? = null): Long {
         val targetDir = directory ?: context.getExternalFilesDir(null) ?: context.filesDir
-        
+
         return try {
             val stat = StatFs(targetDir.absolutePath)
             stat.availableBlocksLong * stat.blockSizeLong
@@ -69,10 +69,10 @@ object StorageSpaceChecker {
             -1L
         }
     }
-    
+
     /**
      * Formats bytes to human-readable string.
-     * 
+     *
      * @param bytes Number of bytes
      * @return Formatted string (e.g., "1.5 MB")
      */

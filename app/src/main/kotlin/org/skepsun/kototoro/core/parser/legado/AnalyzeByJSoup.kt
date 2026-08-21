@@ -82,7 +82,7 @@ class AnalyzeByJSoup(private val element: Element) {
         }
         return textS
     }
-    
+
     /**
      * 合并内容列表,得到内容
      */
@@ -105,7 +105,7 @@ class AnalyzeByJSoup(private val element: Element) {
      */
     internal fun getString0(ruleStr: String) =
         getString(ruleStr).let { if (it.isEmpty()) "" else it[0] }
-    
+
     /**
      * 获取string list别名（兼容老代码）
      */
@@ -294,7 +294,7 @@ class AnalyzeByJSoup(private val element: Element) {
 
         fun getElementsSingle(temp: Element, rule: String): Elements {
             findIndexSet(rule)
-            
+
             var elements = if (beforeRule.isEmpty()) {
                 temp.children()
             } else {
@@ -311,12 +311,12 @@ class AnalyzeByJSoup(private val element: Element) {
 
             val len = elements.size
             if (len == 0) return elements
-            
+
             // Default to return all if no indexes provided
             if (indexes.isEmpty() && indexDefault.isEmpty()) {
                 return if (split == '!') Elements() else elements
             }
-            
+
             val lastIndexes = (indexDefault.size - 1).takeIf { it != -1 } ?: (indexes.size - 1)
             val indexSet = mutableSetOf<Int>()
 
