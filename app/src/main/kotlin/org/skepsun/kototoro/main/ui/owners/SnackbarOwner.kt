@@ -4,5 +4,5 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 
 interface SnackbarOwner {
 
-	val snackbarHost: CoordinatorLayout
+    val snackbarHost: CoordinatorLayout
 }

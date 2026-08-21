@@ -51,141 +51,141 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @Composable
 internal fun ProtectScreen(
-	password: String,
-	errorMessage: String?,
-	isLoading: Boolean,
-	isNumericPassword: Boolean,
-	canUseBiometric: Boolean,
-	shouldFocusPassword: Boolean,
-	onPasswordChange: (String) -> Unit,
-	onUnlock: (String) -> Unit,
-	onUseBiometric: () -> Unit,
-	onCancel: () -> Unit,
+    password: String,
+    errorMessage: String?,
+    isLoading: Boolean,
+    isNumericPassword: Boolean,
+    canUseBiometric: Boolean,
+    shouldFocusPassword: Boolean,
+    onPasswordChange: (String) -> Unit,
+    onUnlock: (String) -> Unit,
+    onUseBiometric: () -> Unit,
+    onCancel: () -> Unit,
 ) {
-	var passwordVisible by rememberSaveable { mutableStateOf(false) }
-	val passwordFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-	val canUnlock = password.isNotEmpty()
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val passwordFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val canUnlock = password.isNotEmpty()
 
-	LaunchedEffect(shouldFocusPassword) {
-		if (shouldFocusPassword) {
-			passwordFocusRequester.requestFocus()
-		}
-	}
+    LaunchedEffect(shouldFocusPassword) {
+        if (shouldFocusPassword) {
+            passwordFocusRequester.requestFocus()
+        }
+    }
 
-	Column(
-		modifier = Modifier
-			.fillMaxSize()
-			.windowInsetsPadding(WindowInsets.systemBars)
-			.padding(dimensionResource(R.dimen.screen_padding)),
-	) {
-		Column(
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(top = 8.dp),
-			horizontalAlignment = Alignment.CenterHorizontally,
-		) {
-			Image(
-				painter = painterResource(R.drawable.ic_lock),
-				contentDescription = null,
-				modifier = Modifier.size(24.dp),
-				colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.primary),
-			)
-			Text(
-				text = stringResource(R.string.app_name),
-				style = MaterialTheme.typography.headlineSmall,
-				modifier = Modifier.padding(top = 16.dp),
-			)
-		}
-		Text(
-			text = stringResource(R.string.enter_password),
-			style = MaterialTheme.typography.titleMedium,
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(top = 12.dp),
-			textAlign = TextAlign.Center,
-		)
-		OutlinedTextField(
-			value = password,
-			onValueChange = { onPasswordChange(it.take(24)) },
-			modifier = Modifier
-				.fillMaxWidth()
-				.padding(top = 30.dp)
-				.then(Modifier.focusRequester(passwordFocusRequester)),
-			enabled = !isLoading,
-			isError = errorMessage != null,
-			textStyle = TextStyle(fontSize = 16.sp, textAlign = TextAlign.Center),
-			visualTransformation = if (passwordVisible) {
-				VisualTransformation.None
-			} else {
-				PasswordVisualTransformation()
-			},
-			trailingIcon = {
-				if (canUseBiometric && password.isEmpty()) {
-					IconButton(onClick = onUseBiometric) {
-						Icon(
-							painter = painterResource(androidx.biometric.R.drawable.fingerprint_dialog_fp_icon),
-							contentDescription = stringResource(androidx.biometric.R.string.use_biometric_label),
-						)
-					}
-				} else {
-					IconButton(onClick = { passwordVisible = !passwordVisible }) {
-						Icon(
-							imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-							contentDescription = null,
-						)
-					}
-				}
-			},
-			keyboardOptions = KeyboardOptions(
-				keyboardType = if (isNumericPassword) KeyboardType.NumberPassword else KeyboardType.Password,
-				imeAction = ImeAction.Done,
-			),
-			keyboardActions = KeyboardActions(
-				onDone = { if (canUnlock) onUnlock(password) },
-			),
-		)
-		errorMessage?.let { message ->
-			Text(
-				text = message,
-				color = MaterialTheme.colorScheme.error,
-				style = MaterialTheme.typography.bodySmall,
-				modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
-			)
-		}
-		Spacer(modifier = Modifier.weight(1f))
-		Row(
-			modifier = Modifier.fillMaxWidth(),
-			horizontalArrangement = Arrangement.SpaceBetween,
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			OutlinedButton(onClick = onCancel) {
-				Text(text = stringResource(android.R.string.cancel))
-			}
-			Button(
-				enabled = canUnlock,
-				onClick = { onUnlock(password) },
-			) {
-				Text(text = stringResource(R.string.next))
-			}
-		}
-	}
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.systemBars)
+            .padding(dimensionResource(R.dimen.screen_padding)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_lock),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(MaterialTheme.colorScheme.primary),
+            )
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+        Text(
+            text = stringResource(R.string.enter_password),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            textAlign = TextAlign.Center,
+        )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { onPasswordChange(it.take(24)) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 30.dp)
+                .then(Modifier.focusRequester(passwordFocusRequester)),
+            enabled = !isLoading,
+            isError = errorMessage != null,
+            textStyle = TextStyle(fontSize = 16.sp, textAlign = TextAlign.Center),
+            visualTransformation = if (passwordVisible) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
+            trailingIcon = {
+                if (canUseBiometric && password.isEmpty()) {
+                    IconButton(onClick = onUseBiometric) {
+                        Icon(
+                            painter = painterResource(androidx.biometric.R.drawable.fingerprint_dialog_fp_icon),
+                            contentDescription = stringResource(androidx.biometric.R.string.use_biometric_label),
+                        )
+                    }
+                } else {
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                        )
+                    }
+                }
+            },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (isNumericPassword) KeyboardType.NumberPassword else KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { if (canUnlock) onUnlock(password) },
+            ),
+        )
+        errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp),
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedButton(onClick = onCancel) {
+                Text(text = stringResource(android.R.string.cancel))
+            }
+            Button(
+                enabled = canUnlock,
+                onClick = { onUnlock(password) },
+            ) {
+                Text(text = stringResource(R.string.next))
+            }
+        }
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun ProtectScreenPreview() {
-	KototoroTheme {
-		ProtectScreen(
-			password = "1234",
-			errorMessage = null,
-			isLoading = false,
-			isNumericPassword = true,
-			canUseBiometric = false,
-			shouldFocusPassword = false,
-			onPasswordChange = {},
-			onUnlock = {},
-			onUseBiometric = {},
-			onCancel = {},
-		)
-	}
+    KototoroTheme {
+        ProtectScreen(
+            password = "1234",
+            errorMessage = null,
+            isLoading = false,
+            isNumericPassword = true,
+            canUseBiometric = false,
+            shouldFocusPassword = false,
+            onPasswordChange = {},
+            onUnlock = {},
+            onUseBiometric = {},
+            onCancel = {},
+        )
+    }
 }

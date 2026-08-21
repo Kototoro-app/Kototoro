@@ -20,42 +20,42 @@ import org.skepsun.kototoro.core.ui.DefaultActivityLifecycleCallbacks
 import javax.inject.Inject
 
 class ScreenshotPolicyHelper @Inject constructor(
-	private val settings: AppSettings,
+    private val settings: AppSettings,
 ) : DefaultActivityLifecycleCallbacks {
 
-	override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-		(activity as? ContentContainer)?.setupScreenshotPolicy(activity)
-	}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        (activity as? ContentContainer)?.setupScreenshotPolicy(activity)
+    }
 
-	private fun ContentContainer.setupScreenshotPolicy(activity: Activity) =
-		lifecycleScope.launch(Dispatchers.Default) {
-			settings.observeAsFlow(AppSettings.KEY_SCREENSHOTS_POLICY) { screenshotsPolicy }
-				.flatMapLatest { policy ->
-					when (policy) {
-						ScreenshotsPolicy.ALLOW -> flowOf(false)
-						ScreenshotsPolicy.BLOCK_NSFW -> withContext(Dispatchers.Main) {
-							isNsfwContent()
-						}.distinctUntilChanged()
+    private fun ContentContainer.setupScreenshotPolicy(activity: Activity) =
+        lifecycleScope.launch(Dispatchers.Default) {
+            settings.observeAsFlow(AppSettings.KEY_SCREENSHOTS_POLICY) { screenshotsPolicy }
+                .flatMapLatest { policy ->
+                    when (policy) {
+                        ScreenshotsPolicy.ALLOW -> flowOf(false)
+                        ScreenshotsPolicy.BLOCK_NSFW -> withContext(Dispatchers.Main) {
+                            isNsfwContent()
+                        }.distinctUntilChanged()
 
-						ScreenshotsPolicy.BLOCK_ALL -> flowOf(true)
-						ScreenshotsPolicy.BLOCK_INCOGNITO -> settings.observeAsFlow(AppSettings.KEY_INCOGNITO_MODE) {
-							isIncognitoModeEnabled
-						}
-					}
-				}.collect { isSecure ->
-					withContext(Dispatchers.Main) {
-						if (isSecure) {
-							activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-						} else {
-							activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-						}
-					}
-				}
-		}
+                        ScreenshotsPolicy.BLOCK_ALL -> flowOf(true)
+                        ScreenshotsPolicy.BLOCK_INCOGNITO -> settings.observeAsFlow(AppSettings.KEY_INCOGNITO_MODE) {
+                            isIncognitoModeEnabled
+                        }
+                    }
+                }.collect { isSecure ->
+                    withContext(Dispatchers.Main) {
+                        if (isSecure) {
+                            activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        } else {
+                            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        }
+                    }
+                }
+        }
 
-	interface ContentContainer : LifecycleOwner {
+    interface ContentContainer : LifecycleOwner {
 
-		@MainThread
-		fun isNsfwContent(): Flow<Boolean>
-	}
+        @MainThread
+        fun isNsfwContent(): Flow<Boolean>
+    }
 }

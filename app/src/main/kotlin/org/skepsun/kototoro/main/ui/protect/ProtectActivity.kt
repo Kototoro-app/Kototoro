@@ -28,88 +28,88 @@ import org.skepsun.kototoro.core.util.ext.observeEvent
 
 @AndroidEntryPoint
 class ProtectActivity :
-	BaseComposeActivity(),
-	AuthenticationResultCallback {
+    BaseComposeActivity(),
+    AuthenticationResultCallback {
 
-	private val viewModel by viewModels<ProtectViewModel>()
-	private var canUseBiometric by mutableStateOf(false)
-	private var shouldFocusPassword by mutableStateOf(false)
-	private var password by mutableStateOf("")
-	private var errorMessage by mutableStateOf<String?>(null)
+    private val viewModel by viewModels<ProtectViewModel>()
+    private var canUseBiometric by mutableStateOf(false)
+    private var shouldFocusPassword by mutableStateOf(false)
+    private var password by mutableStateOf("")
+    private var errorMessage by mutableStateOf<String?>(null)
 
-	private val biometricPrompt = registerForAuthenticationResult(resultCallback = this)
+    private val biometricPrompt = registerForAuthenticationResult(resultCallback = this)
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
-		viewModel.onError.observeEvent(this) { error ->
-			errorMessage = error.getDisplayMessage(resources)
-		}
-		viewModel.onUnlockSuccess.observeEvent(this) {
-			val sourceIntent = intent.getParcelableExtraCompat<Intent>(EXTRA_INTENT)
-			startActivity(sourceIntent)
-			finishAfterTransition()
-		}
+        viewModel.onError.observeEvent(this) { error ->
+            errorMessage = error.getDisplayMessage(resources)
+        }
+        viewModel.onUnlockSuccess.observeEvent(this) {
+            val sourceIntent = intent.getParcelableExtraCompat<Intent>(EXTRA_INTENT)
+            startActivity(sourceIntent)
+            finishAfterTransition()
+        }
 
-		setComposeContent {
-			ProtectScreen(
-				password = password,
-				errorMessage = errorMessage,
-				isLoading = viewModel.isLoading.value,
-				isNumericPassword = viewModel.isNumericPassword,
-				canUseBiometric = canUseBiometric,
-				shouldFocusPassword = shouldFocusPassword,
-				onPasswordChange = {
-					password = it
-					errorMessage = null
-				},
-				onUnlock = viewModel::tryUnlock,
-				onUseBiometric = ::useFingerprint,
-				onCancel = ::finish,
-			)
-		}
+        setComposeContent {
+            ProtectScreen(
+                password = password,
+                errorMessage = errorMessage,
+                isLoading = viewModel.isLoading.value,
+                isNumericPassword = viewModel.isNumericPassword,
+                canUseBiometric = canUseBiometric,
+                shouldFocusPassword = shouldFocusPassword,
+                onPasswordChange = {
+                    password = it
+                    errorMessage = null
+                },
+                onUnlock = viewModel::tryUnlock,
+                onUseBiometric = ::useFingerprint,
+                onCancel = ::finish,
+            )
+        }
 
-		lifecycleScope.launch {
-			withResumed {
-				canUseBiometric = useFingerprint()
-				shouldFocusPassword = !canUseBiometric
-			}
-		}
-	}
+        lifecycleScope.launch {
+            withResumed {
+                canUseBiometric = useFingerprint()
+                shouldFocusPassword = !canUseBiometric
+            }
+        }
+    }
 
-	override fun onAuthResult(result: AuthenticationResult) {
-		if (result.isSuccess()) {
-			viewModel.unlock()
-		}
-	}
+    override fun onAuthResult(result: AuthenticationResult) {
+        if (result.isSuccess()) {
+            viewModel.unlock()
+        }
+    }
 
-	private fun useFingerprint(): Boolean {
-		if (!viewModel.isBiometricEnabled) {
-			return false
-		}
-		if (BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK) != BIOMETRIC_SUCCESS) {
-			return false
-		}
-		val request = AuthenticationRequest.biometricRequest(
-			title = getString(R.string.app_name),
-			authFallback = Biometric.Fallback.NegativeButton(getString(android.R.string.cancel)),
-			init = {
-				setMinStrength(Biometric.Strength.Class2)
-				setIsConfirmationRequired(false)
-			},
-		)
-		biometricPrompt.launch(request)
-		return true
-	}
+    private fun useFingerprint(): Boolean {
+        if (!viewModel.isBiometricEnabled) {
+            return false
+        }
+        if (BiometricManager.from(this).canAuthenticate(BIOMETRIC_WEAK) != BIOMETRIC_SUCCESS) {
+            return false
+        }
+        val request = AuthenticationRequest.biometricRequest(
+            title = getString(R.string.app_name),
+            authFallback = Biometric.Fallback.NegativeButton(getString(android.R.string.cancel)),
+            init = {
+                setMinStrength(Biometric.Strength.Class2)
+                setIsConfirmationRequired(false)
+            },
+        )
+        biometricPrompt.launch(request)
+        return true
+    }
 
-	companion object {
+    companion object {
 
-		private const val EXTRA_INTENT = "src_intent"
+        private const val EXTRA_INTENT = "src_intent"
 
-		fun newIntent(context: Context, sourceIntent: Intent): Intent {
-			return Intent(context, ProtectActivity::class.java)
-				.putExtra(EXTRA_INTENT, sourceIntent)
-		}
-	}
+        fun newIntent(context: Context, sourceIntent: Intent): Intent {
+            return Intent(context, ProtectActivity::class.java)
+                .putExtra(EXTRA_INTENT, sourceIntent)
+        }
+    }
 }

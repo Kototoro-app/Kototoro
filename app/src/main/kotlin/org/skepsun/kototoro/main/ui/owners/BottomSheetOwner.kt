@@ -4,5 +4,5 @@ import android.view.View
 
 interface BottomSheetOwner {
 
-	val bottomSheet: View?
+    val bottomSheet: View?
 }

@@ -12,18 +12,18 @@ import org.skepsun.kototoro.history.data.HistoryRepository
 import javax.inject.Inject
 
 class ReadingResumeEnabledUseCase @Inject constructor(
-	private val networkState: NetworkState,
-	private val historyRepository: HistoryRepository,
-	private val settings: AppSettings,
+    private val networkState: NetworkState,
+    private val historyRepository: HistoryRepository,
+    private val settings: AppSettings,
 ) {
 
-	operator fun invoke(): Flow<Boolean> = combine(
-		networkState,
-		settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw }
-			.flatMapLatest { excludeNsfw ->
-				historyRepository.observeLast(excludeNsfw = excludeNsfw)
-			},
-	) { isOnline, last ->
-		last != null && (isOnline || last.isLocal)
-	}.distinctUntilChanged()
+    operator fun invoke(): Flow<Boolean> = combine(
+        networkState,
+        settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw }
+            .flatMapLatest { excludeNsfw ->
+                historyRepository.observeLast(excludeNsfw = excludeNsfw)
+            },
+    ) { isOnline, last ->
+        last != null && (isOnline || last.isLocal)
+    }.distinctUntilChanged()
 }

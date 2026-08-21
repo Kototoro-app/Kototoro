@@ -11,60 +11,60 @@ import org.skepsun.kototoro.space.domain.SpaceId
 
 @Stable
 class SpaceNavigationState internal constructor(
-	val mainNavState: MainNavState,
+    val mainNavState: MainNavState,
 )
 
 @Stable
 class SpaceNavigationStates internal constructor(
-	private val states: Map<SpaceId, SpaceNavigationState>,
+    private val states: Map<SpaceId, SpaceNavigationState>,
 ) {
-	operator fun get(spaceId: SpaceId): SpaceNavigationState = states.getValue(spaceId)
-	operator fun contains(spaceId: SpaceId): Boolean = spaceId in states
+    operator fun get(spaceId: SpaceId): SpaceNavigationState = states.getValue(spaceId)
+    operator fun contains(spaceId: SpaceId): Boolean = spaceId in states
 }
 
 @Composable
 fun rememberSpaceNavigationStates(
-	initialTopLevel: TopLevelNavKey,
-	activeSpaceId: SpaceId = BuiltInSpaces.Manga,
+    initialTopLevel: TopLevelNavKey,
+    activeSpaceId: SpaceId = BuiltInSpaces.Manga,
 ): SpaceNavigationStates {
-	val recentCustomIds = remember { mutableStateListOf<SpaceId>() }
-	LaunchedEffect(activeSpaceId) {
-		if (activeSpaceId.value.startsWith("custom:")) {
-			recentCustomIds.remove(activeSpaceId)
-			recentCustomIds.add(activeSpaceId)
-			while (recentCustomIds.size > MAX_RECENT_CUSTOM_NAVIGATION_STATES) {
-				recentCustomIds.removeAt(0)
-			}
-		}
-	}
-	val ids = buildList {
-		addAll(BuiltInSpaces.contexts.map { it.id })
-		addAll(recentCustomIds)
-		if (activeSpaceId.value.startsWith("custom:") && activeSpaceId !in this) add(activeSpaceId)
-	}
-	val states = ids.associateWith { id ->
-		key(id.value) { rememberSpaceNavigationState(initialTopLevel) }
-	}
-	return remember(states) {
-		SpaceNavigationStates(states)
-	}
+    val recentCustomIds = remember { mutableStateListOf<SpaceId>() }
+    LaunchedEffect(activeSpaceId) {
+        if (activeSpaceId.value.startsWith("custom:")) {
+            recentCustomIds.remove(activeSpaceId)
+            recentCustomIds.add(activeSpaceId)
+            while (recentCustomIds.size > MAX_RECENT_CUSTOM_NAVIGATION_STATES) {
+                recentCustomIds.removeAt(0)
+            }
+        }
+    }
+    val ids = buildList {
+        addAll(BuiltInSpaces.contexts.map { it.id })
+        addAll(recentCustomIds)
+        if (activeSpaceId.value.startsWith("custom:") && activeSpaceId !in this) add(activeSpaceId)
+    }
+    val states = ids.associateWith { id ->
+        key(id.value) { rememberSpaceNavigationState(initialTopLevel) }
+    }
+    return remember(states) {
+        SpaceNavigationStates(states)
+    }
 }
 
 private const val MAX_RECENT_CUSTOM_NAVIGATION_STATES = 3
 
 fun resolveNavigationSpaceId(
-	activeSpaceId: SpaceId,
-	persistentNavigationEnabled: Boolean,
+    activeSpaceId: SpaceId,
+    persistentNavigationEnabled: Boolean,
 ): SpaceId = activeSpaceId.takeIf { persistentNavigationEnabled } ?: BuiltInSpaces.Manga
 
 @Composable
 private fun rememberSpaceNavigationState(
-	initialTopLevel: TopLevelNavKey,
+    initialTopLevel: TopLevelNavKey,
 ): SpaceNavigationState {
-	val mainNavState = rememberMainNavState(initialTopLevel)
-	return remember(mainNavState) {
-		SpaceNavigationState(
-			mainNavState = mainNavState,
-		)
-	}
+    val mainNavState = rememberMainNavState(initialTopLevel)
+    return remember(mainNavState) {
+        SpaceNavigationState(
+            mainNavState = mainNavState,
+        )
+    }
 }

@@ -17,43 +17,43 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 
 class ExitCallback(
-	private val activity: MainActivity,
-	private val snackbarHost: View,
+    private val activity: MainActivity,
+    private val snackbarHost: View,
 ) : OnBackPressedCallback(false) {
 
-	private var job: Job? = null
-	private val isDisabledByTimeout = MutableStateFlow(false)
+    private var job: Job? = null
+    private val isDisabledByTimeout = MutableStateFlow(false)
 
-	init {
-		activity.lifecycleScope.launch {
-			combine(
-				observeSettings(),
-				isDisabledByTimeout,
-			) { enabledInSettings, disabledTemporary ->
-				enabledInSettings && !disabledTemporary
-			}.collect {
-				isEnabled = it
-			}
-		}
-	}
+    init {
+        activity.lifecycleScope.launch {
+            combine(
+                observeSettings(),
+                isDisabledByTimeout,
+            ) { enabledInSettings, disabledTemporary ->
+                enabledInSettings && !disabledTemporary
+            }.collect {
+                isEnabled = it
+            }
+        }
+    }
 
-	override fun handleOnBackPressed() {
-		job?.cancel()
-		job = activity.lifecycleScope.launch {
-			resetExitConfirmation()
-		}
-	}
+    override fun handleOnBackPressed() {
+        job?.cancel()
+        job = activity.lifecycleScope.launch {
+            resetExitConfirmation()
+        }
+    }
 
-	private suspend fun resetExitConfirmation() {
-		isDisabledByTimeout.value = true
-		val snackbar = Snackbar.make(snackbarHost, R.string.confirm_exit, Snackbar.LENGTH_INDEFINITE)
-		snackbar.show()
-		delay(2000)
-		snackbar.dismiss()
-		isDisabledByTimeout.value = false
-	}
+    private suspend fun resetExitConfirmation() {
+        isDisabledByTimeout.value = true
+        val snackbar = Snackbar.make(snackbarHost, R.string.confirm_exit, Snackbar.LENGTH_INDEFINITE)
+        snackbar.show()
+        delay(2000)
+        snackbar.dismiss()
+        isDisabledByTimeout.value = false
+    }
 
-	private fun observeSettings(): Flow<Boolean> = activity.settings
-		.observeAsFlow(AppSettings.KEY_EXIT_CONFIRM) { isExitConfirmationEnabled }
-		.flowOn(Dispatchers.Default)
+    private fun observeSettings(): Flow<Boolean> = activity.settings
+        .observeAsFlow(AppSettings.KEY_EXIT_CONFIRM) { isExitConfirmationEnabled }
+        .flowOn(Dispatchers.Default)
 }

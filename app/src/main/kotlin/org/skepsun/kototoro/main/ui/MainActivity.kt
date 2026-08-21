@@ -649,37 +649,37 @@ class MainActivity : BaseComposeActivity() {
         }
     }
 
-	fun resolveDetailsOriginForContent(
-		content: Content,
-		onResolved: (DetailsOrigin) -> Unit,
-	) {
-		lifecycleScope.launch {
-			val origin = withContext(Dispatchers.IO) {
-				val entityId = workResolver.resolveByMangaId(content.id).entityId
-				val cachedProjection = entityId?.let {
-					contentDataRepository.findContentById(content.id, withChapters = false)
-				}
-				val canResolveProjection = entityId != null && cachedProjection != null
-				android.util.Log.i(
-					"DetailsTrace",
-					"origin.resolve inputId=${content.id} inputSource=${content.source.name} " +
-						"inputLocale=${content.source.locale} entityId=$entityId " +
-						"cached=${cachedProjection != null} cachedSource=${cachedProjection?.source?.name} " +
-						"cachedLocale=${cachedProjection?.source?.locale}",
-				)
-				if (entityId != null && canResolveProjection) {
-					android.util.Log.i(
-						"DetailsTrace",
-						"origin.entityGraph entityId=$entityId initialProjectionId=${content.id}",
-					)
-					DetailsOrigin.EntityGraph(
-						entityId = entityId,
-						initialProjectionLocalMangaId = content.id,
-					)
-				} else {
-					android.util.Log.i("DetailsTrace", "origin.localContent id=${content.id}")
-					DetailsOrigin.LocalMangaContent(ParcelableContent(content))
-				}
+    fun resolveDetailsOriginForContent(
+        content: Content,
+        onResolved: (DetailsOrigin) -> Unit,
+    ) {
+        lifecycleScope.launch {
+            val origin = withContext(Dispatchers.IO) {
+                val entityId = workResolver.resolveByMangaId(content.id).entityId
+                val cachedProjection = entityId?.let {
+                    contentDataRepository.findContentById(content.id, withChapters = false)
+                }
+                val canResolveProjection = entityId != null && cachedProjection != null
+                android.util.Log.i(
+                    "DetailsTrace",
+                    "origin.resolve inputId=${content.id} inputSource=${content.source.name} " +
+                        "inputLocale=${content.source.locale} entityId=$entityId " +
+                        "cached=${cachedProjection != null} cachedSource=${cachedProjection?.source?.name} " +
+                        "cachedLocale=${cachedProjection?.source?.locale}",
+                )
+                if (entityId != null && canResolveProjection) {
+                    android.util.Log.i(
+                        "DetailsTrace",
+                        "origin.entityGraph entityId=$entityId initialProjectionId=${content.id}",
+                    )
+                    DetailsOrigin.EntityGraph(
+                        entityId = entityId,
+                        initialProjectionLocalMangaId = content.id,
+                    )
+                } else {
+                    android.util.Log.i("DetailsTrace", "origin.localContent id=${content.id}")
+                    DetailsOrigin.LocalMangaContent(ParcelableContent(content))
+                }
             }
             onResolved(origin)
         }

@@ -16,62 +16,62 @@ import javax.inject.Singleton
 
 @Singleton
 class AppProtectHelper @Inject constructor(
-	@ApplicationContext context: Context,
-	private val settings: AppSettings,
+    @ApplicationContext context: Context,
+    private val settings: AppSettings,
 ) : DefaultActivityLifecycleCallbacks,
-	ComponentCallbacks2 {
+    ComponentCallbacks2 {
 
-	private var isUnlocked = settings.appPassword.isNullOrEmpty()
-	private var isProtecting = false
+    private var isUnlocked = settings.appPassword.isNullOrEmpty()
+    private var isProtecting = false
 
-	init {
-		(context.applicationContext as Application).registerComponentCallbacks(this)
-	}
+    init {
+        (context.applicationContext as Application).registerComponentCallbacks(this)
+    }
 
-	override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-		protectIfNeeded(activity)
-	}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        protectIfNeeded(activity)
+    }
 
-	private fun protectIfNeeded(activity: Activity) {
-		val shouldProtect = !isUnlocked &&
-			!isProtecting &&
-			activity !is ProtectActivity &&
-			activity !is CrashReportDialog
-		if (shouldProtect) {
-			isProtecting = true
-			val sourceIntent = Intent(activity, activity.javaClass)
-			activity.intent?.let {
-				sourceIntent.putExtras(it)
-				sourceIntent.action = it.action
-				sourceIntent.setDataAndType(it.data, it.type)
-			}
-			activity.startActivity(ProtectActivity.newIntent(activity, sourceIntent))
-			activity.finishAfterTransition()
-		}
-	}
+    private fun protectIfNeeded(activity: Activity) {
+        val shouldProtect = !isUnlocked &&
+            !isProtecting &&
+            activity !is ProtectActivity &&
+            activity !is CrashReportDialog
+        if (shouldProtect) {
+            isProtecting = true
+            val sourceIntent = Intent(activity, activity.javaClass)
+            activity.intent?.let {
+                sourceIntent.putExtras(it)
+                sourceIntent.action = it.action
+                sourceIntent.setDataAndType(it.data, it.type)
+            }
+            activity.startActivity(ProtectActivity.newIntent(activity, sourceIntent))
+            activity.finishAfterTransition()
+        }
+    }
 
-	override fun onActivityResumed(activity: Activity) {
-		protectIfNeeded(activity)
-	}
+    override fun onActivityResumed(activity: Activity) {
+        protectIfNeeded(activity)
+    }
 
-	fun unlock() {
-		isProtecting = false
-		isUnlocked = true
-	}
+    fun unlock() {
+        isProtecting = false
+        isUnlocked = true
+    }
 
-	override fun onTrimMemory(level: Int) {
-		if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
-			restoreLock()
-		}
-	}
+    override fun onTrimMemory(level: Int) {
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            restoreLock()
+        }
+    }
 
-	override fun onConfigurationChanged(newConfig: Configuration) = Unit
+    override fun onConfigurationChanged(newConfig: Configuration) = Unit
 
-	@Suppress("OVERRIDE_DEPRECATION")
-	override fun onLowMemory() = Unit
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun onLowMemory() = Unit
 
-	private fun restoreLock() {
-		isProtecting = false
-		isUnlocked = settings.appPassword.isNullOrEmpty()
-	}
+    private fun restoreLock() {
+        isProtecting = false
+        isUnlocked = settings.appPassword.isNullOrEmpty()
+    }
 }
