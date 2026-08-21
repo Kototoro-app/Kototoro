@@ -304,12 +304,17 @@ fun ChaptersScreen(
 }
 
 @Composable
-fun CollapsibleHeaderUI(header: CollapsibleListHeader, onClick: () -> Unit) {
+fun CollapsibleHeaderUI(
+    header: CollapsibleListHeader,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     ChapterHeaderUI(
         text = header.text,
         isCollapsible = header.isCollapsible,
         isExpanded = header.isExpanded,
         onClick = onClick,
+        modifier = modifier,
     )
 }
 
@@ -319,9 +324,10 @@ private fun ChapterHeaderUI(
     isCollapsible: Boolean = false,
     isExpanded: Boolean = true,
     onClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(enabled = isCollapsible, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),

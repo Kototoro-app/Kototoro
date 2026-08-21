@@ -62,6 +62,8 @@ import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -551,6 +553,7 @@ fun MetadataItem(
 fun DetailsHeroBadge(
     text: String,
     @DrawableRes iconRes: Int? = null,
+    modifier: Modifier = Modifier,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val content: @Composable () -> Unit = {
@@ -576,6 +579,7 @@ fun DetailsHeroBadge(
     }
     if (expressive) {
         Surface(
+            modifier = modifier,
             shape = RoundedCornerShape(999.dp),
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -587,6 +591,7 @@ fun DetailsHeroBadge(
         }
     } else {
         GlassSurface(
+            modifier = modifier,
             style = GlassDefaults.subtleStyle(),
             shape = Capsule(),
         ) {
@@ -608,3 +613,35 @@ data class DetailsHeroBadgeSpec(
     val text: String,
     @DrawableRes val iconRes: Int? = null,
 )
+
+@Preview(showBackground = true)
+@Composable
+private fun DetailsHeaderActionButtonPreview() {
+    KototoroTheme {
+        DetailsHeaderActionButton(
+            iconRes = R.drawable.ic_bookmark,
+            label = "Bookmark",
+            onClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DetailsHeroBadgePreview() {
+    KototoroTheme {
+        DetailsHeroBadge(text = "Author: Demo Author")
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MetadataItemPreview() {
+    KototoroTheme {
+        MetadataItem(
+            label = "Status",
+            value = "Ongoing",
+            iconRes = R.drawable.ic_info_outline,
+        )
+    }
+}

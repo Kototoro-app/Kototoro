@@ -48,6 +48,8 @@ import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCard
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 
 @Composable
@@ -68,11 +70,12 @@ fun DetailsChromeButton(
 @Composable
 fun DetailsRelationSections(
     sections: List<EntityRelationSection>,
+    modifier: Modifier = Modifier,
     outerHorizontalPadding: Dp = AppLayoutTokens.sectionHorizontalPadding,
     onItemClick: (EntityRelationItem) -> Unit,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(top = 12.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -241,12 +244,14 @@ private fun EntityRelationSectionHeader(
 fun EntityRelationCard(
     item: EntityRelationItem,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val type = item.type
     val typeLabel = type?.let { stringResource(entityRelationTypeLabelRes(it)) }
     val typeIconRes = type?.let { entityRelationTypeIconRes(it) }
     val opensExternalPage = type == null && item.trackingService == null && item.remoteId == null && !item.url.isNullOrBlank()
     DetailsRelationItemCard(
+        modifier = modifier,
         width = if (type != null) 148.dp else 132.dp,
         title = item.name,
         subtitle = item.subtitle,
@@ -496,5 +501,23 @@ private fun entityRelationTypeIconRes(type: org.skepsun.kototoro.entitygraph.dom
     org.skepsun.kototoro.entitygraph.domain.EntityType.CHARACTER -> R.drawable.ic_user
     org.skepsun.kototoro.entitygraph.domain.EntityType.PERSON -> R.drawable.ic_user
     org.skepsun.kototoro.entitygraph.domain.EntityType.ORGANIZATION -> R.drawable.ic_select_group
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun EntityRelationCardPreview() {
+    KototoroTheme {
+        EntityRelationCard(
+            item = EntityRelationItem(
+                stableKey = "preview-1",
+                name = "Kototoro",
+                coverUrl = null,
+                type = org.skepsun.kototoro.entitygraph.domain.EntityType.WORK,
+                subtitle = "Fork of Kotatsu",
+                supportingText = "Manga · Ongoing",
+            ),
+            onClick = {},
+        )
+    }
 }
 
