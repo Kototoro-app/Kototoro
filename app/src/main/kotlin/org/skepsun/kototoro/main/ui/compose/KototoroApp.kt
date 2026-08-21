@@ -572,14 +572,20 @@ fun KototoroApp(
     var bottomNavHeightPx by remember { mutableIntStateOf(0) }
     var bottomNavOffset by chromeScrollState.bottomNavOffset
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
-    var isSearchOverlayVisible by rememberSaveable { mutableStateOf(false) }
-    var isSearchOverlayMounted by rememberSaveable { mutableStateOf(false) }
-    var searchOverlayInitialQuery by rememberSaveable { mutableStateOf("") }
-    var isSearchOverlayQueryCommitted by rememberSaveable { mutableStateOf(false) }
-    var isDetailsChromeTransitionPending by rememberSaveable { mutableStateOf(false) }
-    var detailsBottomPanelExpansion by remember { mutableFloatStateOf(0f) }
-    var detailsBottomObstruction by remember { mutableStateOf(0.dp) }
-    var detailsBottomPanelRoute by remember { mutableStateOf<String?>(null) }
+    val chromeState = rememberKototoroAppChromeState()
+    var isSearchOverlayVisible by chromeState.isSearchOverlayVisible
+    var isSearchOverlayMounted by chromeState.isSearchOverlayMounted
+    var searchOverlayInitialQuery by chromeState.searchOverlayInitialQuery
+    var isSearchOverlayQueryCommitted by chromeState.isSearchOverlayQueryCommitted
+    var isDetailsChromeTransitionPending by chromeState.isDetailsChromeTransitionPending
+    var detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
+    var detailsBottomObstruction by chromeState.detailsBottomObstruction
+    var detailsBottomPanelRoute by chromeState.detailsBottomPanelRoute
+    var materialTopBarScrollEnabled by chromeState.materialTopBarScrollEnabled
+    var lastChromeTopBarOwnerKey by chromeState.lastChromeTopBarOwnerKey
+    var lastHeroTransitionStartedAtMs by chromeState.lastHeroTransitionStartedAtMs
+    var heroTransitionPhase by chromeState.heroTransitionPhase
+    var chromeSharedTransitionScope by chromeState.chromeSharedTransitionScope
     var mainSpaceSwitcherFabBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var canMeasureMainSpaceSwitcherFab by remember { mutableStateOf(true) }
     var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -600,7 +606,6 @@ fun KototoroApp(
     val navigationBarHeightPx = with(density) {
         WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding().roundToPx()
     }
-    var materialTopBarScrollEnabled by remember { mutableStateOf(true) }
     val topAppBarState = chromeScrollState.topAppBarState
     val topAppBarScrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
         state = topAppBarState,
@@ -924,7 +929,6 @@ fun KototoroApp(
     }
     val currentTopLevelKey = if (shouldShowChrome) mainNavState.selectedTopLevel else null
     val currentTopBarOwnerKey = routeOwnerKeyForTopLevelKey(currentTopLevelKey)
-    var lastChromeTopBarOwnerKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(currentTopBarOwnerKey) {
         if (currentTopBarOwnerKey != null) {
             lastChromeTopBarOwnerKey = currentTopBarOwnerKey
@@ -942,8 +946,6 @@ fun KototoroApp(
     val shouldReserveChromeInsets = shouldShowChrome || (isImmersiveRoute && isDetailsChromeTransitionPending)
     var isChromeVisible by rememberSaveable { mutableStateOf(shouldShowChrome && !isImmersiveRoute) }
     var pendingChromeRestoreFromDetails by rememberSaveable { mutableStateOf(isImmersiveRoute) }
-    var lastHeroTransitionStartedAtMs by remember { mutableLongStateOf(0L) }
-    var heroTransitionPhase by rememberSaveable { mutableStateOf(HeroTransitionPhase.Idle) }
     val shouldHideChromeForEnteringDetails =
         isDetailsChromeTransitionPending && heroTransitionPhase == HeroTransitionPhase.EnteringDetails
     val shouldDelayChromeRestoreFromDetails =
@@ -1206,7 +1208,6 @@ fun KototoroApp(
             )
         }
     }
-    var chromeSharedTransitionScope by remember { mutableStateOf<SharedTransitionScope?>(null) }
 
 
     KototoroTheme(cornerRadius = cornerRadius) {
