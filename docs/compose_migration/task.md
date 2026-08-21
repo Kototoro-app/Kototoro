@@ -140,7 +140,7 @@
 - [x] `collectAsState` → `collectAsStateWithLifecycle` 批量替换（全仓已 0 处裸 `collectAsState(`，346 处全部 WithLifecycle）
 - [x] `ChaptersScreen` / `PagesScreen` / `BookmarksScreen` 滚动条组件升级（5/1：从 modifier 改独立 `VerticalScrollbar` composable；新增 `activeDetailsPaneState` 优化 pane 联动）
 - [x] `ChaptersScreen` 章节标签中文化（5/1：`fastScrollLabels` 生成"第N章"格式标签）
-- [ ] 抽 `ContentHeroBackdropCarousel` 通用组件（Home/Explore/Discover 共用，~300 行清理）
+- [~] `ContentHeroBackdropCarousel` 通用组件：**部分完成**。已删 Discover 私有 `DiscoverHeroPanoramaPrefs`/`rememberDiscoverHeroPanoramaPrefs`（~25 行），改复用共享 `rememberPanoramaBackdropPrefs`（details 模块）+ 底层 `panoramaAnimation*` 已共享；**剩余**：Discover hero 内联 panorama 动画对齐 `AnimatedPanoramaBackdrop`（Home/Details 已复用）——视觉重构，需有截图验证手段再做
 - [x] `KototoroApp` 参数聚合为 `MainAppState` data class（30+ 参数坏味）
 - [x] `AppNavGraph` 内联路由拆为独立 `AppXxxRoute` 文件（**已过时**：`AppNavGraph.kt` 已随导航3重构废除，路由在 `navigation3/` + `MainShellScene.kt` 内 8 个独立 `TopLevelRouteContent` 函数按 key 分发，非 NavHost 内联）
 - [x] `as? MainActivity` 静默 no-op → 改用 `LocalMainChromeController` CompositionLocal（MainActivity 壳根注入；Home/List/Stats/MainShell 过滤器回调改读 Local，MainActivity 旧包装删除）

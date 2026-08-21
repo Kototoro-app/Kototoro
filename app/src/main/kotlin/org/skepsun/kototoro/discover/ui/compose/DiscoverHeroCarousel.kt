@@ -100,6 +100,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.details.ui.compose.rememberPanoramaBackdropPrefs
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.secondaryTitleText
 import org.skepsun.kototoro.list.ui.model.supportingText
@@ -118,33 +119,6 @@ internal fun discoverHeroHeight(
     isLandscape -> DiscoverHeroHeightLandscape
     detachedBottomContent -> DiscoverHeroHeightDetached
     else -> DiscoverHeroHeight
-}
-
-@Immutable
-private data class DiscoverHeroPanoramaPrefs(
-    val isEnabled: Boolean,
-    val blurPercent: Int,
-    val animationEnabled: Boolean,
-)
-
-@Composable
-private fun rememberDiscoverHeroPanoramaPrefs(settings: AppSettings): DiscoverHeroPanoramaPrefs {
-    val supportsRealtimeEffects = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val prefs by settings.observeAsState(
-        AppSettings.KEY_PANORAMA_ENABLED,
-        AppSettings.KEY_PANORAMA_BLUR,
-        AppSettings.KEY_PANORAMA_ANIMATION_ENABLED,
-        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
-    ) {
-        DiscoverHeroPanoramaPrefs(
-            isEnabled = isPanoramaCoverEnabled,
-            blurPercent = panoramaCoverBlur,
-            animationEnabled = supportsRealtimeEffects &&
-                isPanoramaCoverAnimationEnabled &&
-                !isReducedVisualEffectsEnabled,
-        )
-    }
-    return prefs
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
@@ -177,12 +151,12 @@ fun DiscoverHeroCarousel(
     )
     val context = LocalContext.current
     val resolvedSettings = settings ?: remember(context.applicationContext) { AppSettings(context.applicationContext) }
-    val panoramaPrefs = rememberDiscoverHeroPanoramaPrefs(resolvedSettings)
+    val panoramaPrefs = rememberPanoramaBackdropPrefs(resolvedSettings)
     val useRealtimeBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         panoramaPrefs.blurPercent > 0 &&
         !heroTransitionInProgress
     val isPanoramaEnabled = panoramaPrefs.isEnabled && !heroTransitionInProgress
-    val isPanoramaAnimationEnabled = panoramaPrefs.animationEnabled && !heroTransitionInProgress
+    val isPanoramaAnimationEnabled = panoramaPrefs.isAnimationEnabled && !heroTransitionInProgress
     val realtimeBlurRadius = ((panoramaPrefs.blurPercent.coerceIn(0, 100) / 100f) * 18f).dp
     val panoramaRequestSize = rememberPanoramaRequestSize(
         minWidthPx = 1280,
