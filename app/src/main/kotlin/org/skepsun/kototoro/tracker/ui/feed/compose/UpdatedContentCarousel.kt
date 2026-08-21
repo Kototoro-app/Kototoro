@@ -41,6 +41,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -84,7 +85,12 @@ fun UpdatedContentCarousel(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 12.dp, top = 0.dp, end = 12.dp, bottom = 8.dp),
+                    .padding(
+                        start = AppLayoutTokens.screenHorizontalPadding,
+                        top = 0.dp,
+                        end = AppLayoutTokens.screenHorizontalPadding,
+                        bottom = 8.dp,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -109,7 +115,12 @@ fun UpdatedContentCarousel(
         LazyRow(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 2.dp),
+            // Respect the global screen margin at the initial position; the row is still
+            // scrollable so content can reach the left edge of the screen while swiping.
+            contentPadding = PaddingValues(
+                start = AppLayoutTokens.screenHorizontalPadding,
+                end = 2.dp,
+            ),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             itemsIndexed(

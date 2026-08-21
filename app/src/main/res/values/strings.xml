@@ -2826,6 +2826,8 @@
     <string name="unified_sources_delete_selected_no_packages">No removable packages were found in the current selection.</string>
     <string name="unified_sources_enable_all">Enable all</string>
     <string name="unified_sources_disable_all">Disable all</string>
+    <string name="unified_sources_expand_all">Expand all</string>
+    <string name="unified_sources_collapse_all">Collapse all</string>
     <string name="unified_sources_enable_all_confirmation">Enable all %1$d sources in the current filter?</string>
     <string name="unified_sources_disable_all_confirmation">Disable all %1$d sources in the current filter?</string>
     <string name="unified_sources_mark_nsfw">Mark NSFW</string>

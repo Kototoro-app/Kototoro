@@ -77,10 +77,26 @@ internal fun UnifiedSourceList(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val horizontalPadding = if (expressive) 8.dp else 0.dp
-    var collapsedPackageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Multi-source packages are collapsed into a single expandable group by default.
+    // Only the groups the user explicitly expands are kept open, so newly appearing
+    // groups (e.g. after a filter change) start collapsed as well.
+    val collapsiblePackageIds = remember(sources) {
+        buildSet {
+            sources.groupBy { it.packageId }.forEach { (packageId, members) ->
+                if (packageId != null && members.size > 1) add(packageId)
+            }
+        }
+    }
+    var expandedPackageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    val collapsedPackageIds = remember(collapsiblePackageIds, expandedPackageIds) {
+        collapsiblePackageIds - expandedPackageIds
+    }
     val displayRows = remember(sources, collapsedPackageIds) {
         buildGroupedUnifiedSourceRows(sources, collapsedPackageIds)
     }
+    // Keep the first action chip aligned with the global content margin; the actions
+    // row itself is still horizontally scrollable towards the screen edge.
+    val actionsStartPadding = (SettingsContentHorizontalPadding - horizontalPadding).coerceAtLeast(0.dp)
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -98,6 +114,7 @@ internal fun UnifiedSourceList(
                         .fillMaxWidth()
                         .padding(bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(start = actionsStartPadding),
                 ) {
                     item(key = "enable_all_sources") {
                         CompactActionChip(
@@ -111,6 +128,20 @@ internal fun UnifiedSourceList(
                             onClick = onDisableAllSources,
                             enabled = sources.isNotEmpty(),
                             label = { Text(stringResource(R.string.unified_sources_disable_all)) },
+                        )
+                    }
+                    item(key = "expand_all_groups") {
+                        CompactActionChip(
+                            onClick = { expandedPackageIds = collapsiblePackageIds },
+                            enabled = collapsiblePackageIds.isNotEmpty(),
+                            label = { Text(stringResource(R.string.unified_sources_expand_all)) },
+                        )
+                    }
+                    item(key = "collapse_all_groups") {
+                        CompactActionChip(
+                            onClick = { expandedPackageIds = emptySet() },
+                            enabled = collapsiblePackageIds.isNotEmpty(),
+                            label = { Text(stringResource(R.string.unified_sources_collapse_all)) },
                         )
                     }
                 }
@@ -157,7 +188,7 @@ internal fun UnifiedSourceList(
                                     }
                                     onSourceSelectionChange(updated)
                                 } else {
-                                    collapsedPackageIds = togglePackageCollapsed(collapsedPackageIds, row.packageId)
+                                    expandedPackageIds = togglePackageExpanded(expandedPackageIds, row.packageId)
                                 }
                             },
                             onLongClick = {
@@ -167,7 +198,7 @@ internal fun UnifiedSourceList(
                                 onSourceSelectionChange(selectedSourceIds + memberIds)
                             },
                             onToggleCollapse = {
-                                collapsedPackageIds = togglePackageCollapsed(collapsedPackageIds, row.packageId)
+                                expandedPackageIds = togglePackageExpanded(expandedPackageIds, row.packageId)
                             },
                         )
                         if (expressive) {
@@ -277,7 +308,7 @@ internal fun buildGroupedUnifiedSourceRows(
     }
 }
 
-private fun togglePackageCollapsed(current: Set<String>, packageId: String): Set<String> =
+private fun togglePackageExpanded(current: Set<String>, packageId: String): Set<String> =
     if (packageId in current) current - packageId else current + packageId
 
 /**
