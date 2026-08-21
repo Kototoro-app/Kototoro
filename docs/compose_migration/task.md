@@ -48,9 +48,9 @@
 - [ ] 应用直接升级的分段 versioned migration（避免停在「版本变化即全量 sanitize」）
 - [ ] 旧备份高风险偏好回归用例（nav/grid/panorama/popup/search suggestions/list badges）
 - [ ] Compose 首屏读取阶段的旧 key / 旧值域偏好审计
-- [ ] 主页恢复备份 UI 回归：高亮三合一卡片渲染无崩溃（当前 `GlassSurface` 为自绘模糊、未接 haze；若 haze 落地需重验）
+- [ ] 主页恢复备份 UI 回归：高亮三合一卡片渲染无崩溃（`GlassSurface` 为自绘实现、无 haze 依赖）
 - [~] `ContentHeroBackdropCarousel`：Discover hero 内联 panorama 动画对齐共享 `AnimatedPanoramaBackdrop`（Home/Details 已复用）——视觉重构，需有截图验证手段再做（prefs 部分已去重，49592af7a）
-- [ ] `GlassSurface` 接入 `dev.chrisbanes.haze`：**新依赖**，需产品拍板 + CONTRIBUTING 例外
+- [x] `GlassSurface` 接入 `dev.chrisbanes.haze`（**已过时/不适用**：全仓 0 处 haze 引用，gradle 未声明依赖；`GlassSurface`（core/ui/glass）为自绘实现（Surface + shadow/border + tonal elevation + gesture），无 blur 后端可接）
 - [ ] `SettingsActivity` 死 import 清理（`androidx.preference.Preference` / `PreferenceFragmentCompat` / `PreferenceManager`，未使用）
 - [ ] `androidx.preference` 依赖评估：`ComposePreferenceAdapter`（源专属偏好 XML 桥）为刻意保留；Reader / Novel / TTS / Video 中的 Preference 用法需逐屏评估
 - [~] 详情页系统级共享元素锚点方案去留（设计开放项）
