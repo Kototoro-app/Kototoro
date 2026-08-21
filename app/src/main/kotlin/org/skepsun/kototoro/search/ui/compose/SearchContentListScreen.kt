@@ -551,11 +551,11 @@ fun AppSearchContentListRoute(
                     error
                 }
                 if (exceptionResolver.resolve(resolverError, tryAutoResolve = false)) {
-					Log.i(
-						"SearchCfResolver",
-						"manual resolver succeeded, retrying source=${viewModel.source.name} " +
-							"challengeUrl=${cloudflare?.url}",
-					)
+                    Log.i(
+                        "SearchCfResolver",
+                        "manual resolver succeeded, retrying source=${viewModel.source.name} " +
+                            "challengeUrl=${cloudflare?.url}",
+                    )
                     viewModel.onRetry()
                 } else {
                     Log.w("SearchCfResolver", "manual resolver failed or was unavailable")

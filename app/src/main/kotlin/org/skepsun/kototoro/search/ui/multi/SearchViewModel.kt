@@ -69,477 +69,477 @@ private const val TAG = "SearchViewModel"
 
 @HiltViewModel(assistedFactory = SearchViewModel.Factory::class)
 class SearchViewModel @AssistedInject constructor(
-	@Assisted("query") query: String,
-	@Assisted("kind") kind: SearchKind,
-	@Assisted("advancedTitle") advancedTitle: String,
-	@Assisted("advancedTags") advancedTags: String,
-	@Assisted("advancedAuthor") advancedAuthor: String,
-	@Assisted("pinnedOnly") initialPinnedOnly: Boolean,
-	@Assisted("hideEmpty") initialHideEmpty: Boolean,
-	@Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
-	@Assisted("contentKindNames") contentKindNames: Collection<String>?,
-	private val mangaListMapper: ContentListMapper,
-	private val searchHelperFactory: SearchV2Helper.Factory,
-	private val sourcesRepository: ContentSourcesRepository,
-	private val sourceTypeIdentifier: SourceTypeIdentifier,
-	private val appSettings: AppSettings,
-	private val sourcePresetsRepository: SourcePresetsRepository,
-	private val globalFavoritesState: GlobalFavoritesState,
-	private val historyRepository: HistoryRepository,
-	private val favouritesRepository: FavouritesRepository,
+    @Assisted("query") query: String,
+    @Assisted("kind") kind: SearchKind,
+    @Assisted("advancedTitle") advancedTitle: String,
+    @Assisted("advancedTags") advancedTags: String,
+    @Assisted("advancedAuthor") advancedAuthor: String,
+    @Assisted("pinnedOnly") initialPinnedOnly: Boolean,
+    @Assisted("hideEmpty") initialHideEmpty: Boolean,
+    @Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
+    @Assisted("contentKindNames") contentKindNames: Collection<String>?,
+    private val mangaListMapper: ContentListMapper,
+    private val searchHelperFactory: SearchV2Helper.Factory,
+    private val sourcesRepository: ContentSourcesRepository,
+    private val sourceTypeIdentifier: SourceTypeIdentifier,
+    private val appSettings: AppSettings,
+    private val sourcePresetsRepository: SourcePresetsRepository,
+    private val globalFavoritesState: GlobalFavoritesState,
+    private val historyRepository: HistoryRepository,
+    private val favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
-	@AssistedFactory
-	interface Factory {
-		fun create(
-			@Assisted("query") query: String,
-			@Assisted("kind") kind: SearchKind,
-			@Assisted("advancedTitle") advancedTitle: String,
-			@Assisted("advancedTags") advancedTags: String,
-			@Assisted("advancedAuthor") advancedAuthor: String,
-			@Assisted("pinnedOnly") pinnedOnly: Boolean,
-			@Assisted("hideEmpty") hideEmpty: Boolean,
-			@Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
-			@Assisted("contentKindNames") contentKindNames: Collection<String>?,
-		): SearchViewModel
-	}
+    @AssistedFactory
+    interface Factory {
+        fun create(
+            @Assisted("query") query: String,
+            @Assisted("kind") kind: SearchKind,
+            @Assisted("advancedTitle") advancedTitle: String,
+            @Assisted("advancedTags") advancedTags: String,
+            @Assisted("advancedAuthor") advancedAuthor: String,
+            @Assisted("pinnedOnly") pinnedOnly: Boolean,
+            @Assisted("hideEmpty") hideEmpty: Boolean,
+            @Assisted("sourceTypeNames") sourceTypeNames: Collection<String>?,
+            @Assisted("contentKindNames") contentKindNames: Collection<String>?,
+        ): SearchViewModel
+    }
 
-	val query = query
-	val kind = kind
+    val query = query
+    val kind = kind
 
-	val advancedQuery = if (kind == SearchKind.ADVANCED) {
-		AdvancedSearchParams(
-			query = query,
-			title = advancedTitle,
-			tags = advancedTags,
-			author = advancedAuthor,
-    	)
-	} else null
+    val advancedQuery = if (kind == SearchKind.ADVANCED) {
+        AdvancedSearchParams(
+            query = query,
+            title = advancedTitle,
+            tags = advancedTags,
+            author = advancedAuthor,
+        )
+    } else null
 
-	private var includeDisabledSources = MutableStateFlow(false)
-	private var pinnedOnly = MutableStateFlow(initialPinnedOnly)
-	private var hideEmpty = MutableStateFlow(initialHideEmpty)
-	private var sourceTypes = MutableStateFlow(
-		sourceTypesFromNames(sourceTypeNames)
-			?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
-	)
-	private var contentKinds = MutableStateFlow(
-		searchContentKindsFromNames(contentKindNames)
-			?: ALL_SEARCH_CONTENT_KINDS,
-	)
-	val languagePresets: StateFlow<List<SourcePreset>> = sourcePresetsRepository.observeAll()
-		.stateIn(viewModelScope + Dispatchers.IO, SharingStarted.Eagerly, emptyList())
-	val activeLanguagePresetId: StateFlow<Long> = appSettings.observeAsStateFlow(
-		scope = viewModelScope + Dispatchers.IO,
-		key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
-		valueProducer = { appSettings.activeSourcePresetId },
-	)
-	val globalTagBlacklist: StateFlow<Set<String>> = appSettings.observeAsStateFlow(
-		scope = viewModelScope + Dispatchers.IO,
-		key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
-		valueProducer = { appSettings.globalTagBlacklist },
-	)
-	private val results = MutableStateFlow<List<SearchResultsListModel>>(emptyList())
+    private var includeDisabledSources = MutableStateFlow(false)
+    private var pinnedOnly = MutableStateFlow(initialPinnedOnly)
+    private var hideEmpty = MutableStateFlow(initialHideEmpty)
+    private var sourceTypes = MutableStateFlow(
+        sourceTypesFromNames(sourceTypeNames)
+            ?: sourceTypesFromTags(globalFavoritesState.selectedSourceTags.value),
+    )
+    private var contentKinds = MutableStateFlow(
+        searchContentKindsFromNames(contentKindNames)
+            ?: ALL_SEARCH_CONTENT_KINDS,
+    )
+    val languagePresets: StateFlow<List<SourcePreset>> = sourcePresetsRepository.observeAll()
+        .stateIn(viewModelScope + Dispatchers.IO, SharingStarted.Eagerly, emptyList())
+    val activeLanguagePresetId: StateFlow<Long> = appSettings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.IO,
+        key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
+        valueProducer = { appSettings.activeSourcePresetId },
+    )
+    val globalTagBlacklist: StateFlow<Set<String>> = appSettings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.IO,
+        key = AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
+        valueProducer = { appSettings.globalTagBlacklist },
+    )
+    private val results = MutableStateFlow<List<SearchResultsListModel>>(emptyList())
 
-	private var searchJob: Job? = null
+    private var searchJob: Job? = null
 
-	val list: StateFlow<List<ListModel>> = combine(
-		results,
-		isLoading.dropWhile { !it },
-		includeDisabledSources,
-		hideEmpty,
-	) { list, loading, includeDisabled, hideEmptyVal ->
-		val filteredList = if (hideEmptyVal) {
-			list.filter { it.list.isNotEmpty() }
-		} else {
-			list
-		}
-		when {
-			filteredList.isEmpty() -> listOf(
-				when {
-					loading -> LoadingState
-					else -> EmptyState(
-						icon = R.drawable.ic_empty_common,
-						textPrimary = R.string.nothing_found,
-						textSecondary = R.string.text_search_holder_secondary,
-						actionStringRes = 0,
-					)
-				},
-			)
+    val list: StateFlow<List<ListModel>> = combine(
+        results,
+        isLoading.dropWhile { !it },
+        includeDisabledSources,
+        hideEmpty,
+    ) { list, loading, includeDisabled, hideEmptyVal ->
+        val filteredList = if (hideEmptyVal) {
+            list.filter { it.list.isNotEmpty() }
+        } else {
+            list
+        }
+        when {
+            filteredList.isEmpty() -> listOf(
+                when {
+                    loading -> LoadingState
+                    else -> EmptyState(
+                        icon = R.drawable.ic_empty_common,
+                        textPrimary = R.string.nothing_found,
+                        textSecondary = R.string.text_search_holder_secondary,
+                        actionStringRes = 0,
+                    )
+                },
+            )
 
-			loading -> filteredList + LoadingFooter()
-			includeDisabled -> filteredList
-			else -> filteredList + ButtonFooter(R.string.search_disabled_sources)
-		}
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+            loading -> filteredList + LoadingFooter()
+            includeDisabled -> filteredList
+            else -> filteredList + ButtonFooter(R.string.search_disabled_sources)
+        }
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
 
-	init {
-		doSearch()
-	}
+    init {
+        doSearch()
+    }
 
-	fun getItems(ids: LongSet): Set<Content> {
-		val snapshot = results.value
-		val result = ArraySet<Content>(ids.size)
-		snapshot.forEach { x ->
-			for (item in x.list) {
-				if (item.id in ids) {
-					result.add(item.manga)
-				}
-			}
-		}
-		return result
-	}
+    fun getItems(ids: LongSet): Set<Content> {
+        val snapshot = results.value
+        val result = ArraySet<Content>(ids.size)
+        snapshot.forEach { x ->
+            for (item in x.list) {
+                if (item.id in ids) {
+                    result.add(item.manga)
+                }
+            }
+        }
+        return result
+    }
 
-	fun getItems(ids: Set<Long>): Set<Content> {
-		val snapshot = results.value
-		val result = ArraySet<Content>(ids.size)
-		snapshot.forEach { x ->
-			for (item in x.list) {
-				if (item.id in ids) {
-					result.add(item.manga)
-				}
-			}
-		}
-		return result
-	}
+    fun getItems(ids: Set<Long>): Set<Content> {
+        val snapshot = results.value
+        val result = ArraySet<Content>(ids.size)
+        snapshot.forEach { x ->
+            for (item in x.list) {
+                if (item.id in ids) {
+                    result.add(item.manga)
+                }
+            }
+        }
+        return result
+    }
 
-	fun retry() {
-		searchJob?.cancel()
-		results.value = emptyList()
-		includeDisabledSources.value = false
-		doSearch()
-	}
+    fun retry() {
+        searchJob?.cancel()
+        results.value = emptyList()
+        includeDisabledSources.value = false
+        doSearch()
+    }
 
-	fun setPinnedOnly(value: Boolean) {
-		if (pinnedOnly.value != value) {
-			pinnedOnly.value = value
-			retry()
-		}
-	}
+    fun setPinnedOnly(value: Boolean) {
+        if (pinnedOnly.value != value) {
+            pinnedOnly.value = value
+            retry()
+        }
+    }
 
-	fun setHideEmpty(value: Boolean) {
-		hideEmpty.value = value
-	}
+    fun setHideEmpty(value: Boolean) {
+        hideEmpty.value = value
+    }
 
-	val isPinnedOnlySelected: Boolean
-		get() = pinnedOnly.value
+    val isPinnedOnlySelected: Boolean
+        get() = pinnedOnly.value
 
-	val isHideEmptySelected: Boolean
-		get() = hideEmpty.value
+    val isHideEmptySelected: Boolean
+        get() = hideEmpty.value
 
-	fun isSourceTypeEnabled(type: SourceType): Boolean {
-		return type in sourceTypes.value
-	}
+    fun isSourceTypeEnabled(type: SourceType): Boolean {
+        return type in sourceTypes.value
+    }
 
-	fun setSourceTypeEnabled(type: SourceType, enabled: Boolean) {
-		val updated = sourceTypes.value.toMutableSet().apply {
-			if (enabled) add(type) else remove(type)
-		}
-		setSourceTypes(updated)
-	}
+    fun setSourceTypeEnabled(type: SourceType, enabled: Boolean) {
+        val updated = sourceTypes.value.toMutableSet().apply {
+            if (enabled) add(type) else remove(type)
+        }
+        setSourceTypes(updated)
+    }
 
-	fun setSourceTypes(types: Set<SourceType>) {
-		val resolved = if (types.isEmpty()) ALL_SOURCE_TYPES else types
-		if (resolved != sourceTypes.value) {
-			sourceTypes.value = resolved
-			retry()
-		}
-	}
+    fun setSourceTypes(types: Set<SourceType>) {
+        val resolved = if (types.isEmpty()) ALL_SOURCE_TYPES else types
+        if (resolved != sourceTypes.value) {
+            sourceTypes.value = resolved
+            retry()
+        }
+    }
 
-	fun getSourceTypes(): Set<SourceType> {
-		return sourceTypes.value
-	}
+    fun getSourceTypes(): Set<SourceType> {
+        return sourceTypes.value
+    }
 
-	fun setContentKinds(kinds: Set<SearchContentKind>) {
-		val resolved = if (kinds.isEmpty()) ALL_SEARCH_CONTENT_KINDS else kinds
-		if (resolved != contentKinds.value) {
-			contentKinds.value = resolved
-			retry()
-		}
-	}
+    fun setContentKinds(kinds: Set<SearchContentKind>) {
+        val resolved = if (kinds.isEmpty()) ALL_SEARCH_CONTENT_KINDS else kinds
+        if (resolved != contentKinds.value) {
+            contentKinds.value = resolved
+            retry()
+        }
+    }
 
-	fun getContentKinds(): Set<SearchContentKind> {
-		return contentKinds.value
-	}
+    fun getContentKinds(): Set<SearchContentKind> {
+        return contentKinds.value
+    }
 
-	fun setActiveLanguagePreset(presetId: Long) {
-		if (appSettings.activeSourcePresetId != presetId) {
-			appSettings.activeSourcePresetId = presetId
-			retry()
-		}
-	}
+    fun setActiveLanguagePreset(presetId: Long) {
+        if (appSettings.activeSourcePresetId != presetId) {
+            appSettings.activeSourcePresetId = presetId
+            retry()
+        }
+    }
 
-	fun continueSearch() {
-		if (includeDisabledSources.value) {
-			return
-		}
-		val prevJob = searchJob
-		searchJob = launchLoadingJob(Dispatchers.Default) {
-			includeDisabledSources.value = true
-			prevJob?.join()
-			val sources = if (pinnedOnly.value) {
-				emptyList()
-			} else {
-				sourcesRepository.getDisabledSources()
-					.sortedByDescending { it.priority() }
-			}
-			val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
-			val semaphore = Semaphore(MAX_PARALLELISM)
-			filteredSources.map { source ->
-				launch {
-					semaphore.withPermit {
-						appendResult(searchSource(source))
-					}
-				}
-			}.joinAll()
-		}
-	}
+    fun continueSearch() {
+        if (includeDisabledSources.value) {
+            return
+        }
+        val prevJob = searchJob
+        searchJob = launchLoadingJob(Dispatchers.Default) {
+            includeDisabledSources.value = true
+            prevJob?.join()
+            val sources = if (pinnedOnly.value) {
+                emptyList()
+            } else {
+                sourcesRepository.getDisabledSources()
+                    .sortedByDescending { it.priority() }
+            }
+            val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
+            val semaphore = Semaphore(MAX_PARALLELISM)
+            filteredSources.map { source ->
+                launch {
+                    semaphore.withPermit {
+                        appendResult(searchSource(source))
+                    }
+                }
+            }.joinAll()
+        }
+    }
 
-	private fun doSearch() {
-		val prevJob = searchJob
-		searchJob = launchLoadingJob(Dispatchers.Default) {
-			prevJob?.cancelAndJoin()
-			appendResult(searchHistory())
-			appendResult(searchFavorites())
-			appendResult(searchLocal())
-			val sources = if (pinnedOnly.value) {
-				sourcesRepository.getPinnedSources().toList()
-			} else {
-				sourcesRepository.getEnabledSources()
-			}
-			val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
-			val semaphore = Semaphore(MAX_PARALLELISM)
-			filteredSources.map { source ->
-				launch {
-					semaphore.withPermit {
-						appendResult(searchSource(source))
-					}
-				}
-			}.joinAll()
-		}
-	}
+    private fun doSearch() {
+        val prevJob = searchJob
+        searchJob = launchLoadingJob(Dispatchers.Default) {
+            prevJob?.cancelAndJoin()
+            appendResult(searchHistory())
+            appendResult(searchFavorites())
+            appendResult(searchLocal())
+            val sources = if (pinnedOnly.value) {
+                sourcesRepository.getPinnedSources().toList()
+            } else {
+                sourcesRepository.getEnabledSources()
+            }
+            val filteredSources = filterSourcesByType(filterSourcesByActivePreset(sources))
+            val semaphore = Semaphore(MAX_PARALLELISM)
+            filteredSources.map { source ->
+                launch {
+                    semaphore.withPermit {
+                        appendResult(searchSource(source))
+                    }
+                }
+            }.joinAll()
+        }
+    }
 
-	// impl
+    // impl
 
-	private suspend fun searchSource(source: ContentSource): SearchResultsListModel? = runCatchingCancellable {
-		val searchHelper = searchHelperFactory.create(source)
-		searchHelper(query, kind, advancedQuery)
-	}.fold(
-		onSuccess = { result ->
-			if (result == null || result.manga.isEmpty()) {
-				null
-			} else {
-				val list = mangaListMapper.toListModelList(
-					manga = result.manga,
-					mode = ListMode.GRID,
-				)
-				Log.d(
-					TAG,
-					"searchSource result source=${source.name} rawCount=${result.manga.size} mappedCount=${list.size} rawCovers=${
-						result.manga.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
-					} mappedCovers=${
-						list.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
-					}",
-				)
-				SearchResultsListModel(
-					titleResId = 0,
-					source = source,
-					list = list,
-					error = null,
-					listFilter = result.listFilter,
-					sortOrder = result.sortOrder,
-				)
-			}
-		},
-		onFailure = { error ->
-			error.printStackTraceDebug()
-			SearchResultsListModel(0, source, null, null, emptyList(), error)
-		},
-	)
+    private suspend fun searchSource(source: ContentSource): SearchResultsListModel? = runCatchingCancellable {
+        val searchHelper = searchHelperFactory.create(source)
+        searchHelper(query, kind, advancedQuery)
+    }.fold(
+        onSuccess = { result ->
+            if (result == null || result.manga.isEmpty()) {
+                null
+            } else {
+                val list = mangaListMapper.toListModelList(
+                    manga = result.manga,
+                    mode = ListMode.GRID,
+                )
+                Log.d(
+                    TAG,
+                    "searchSource result source=${source.name} rawCount=${result.manga.size} mappedCount=${list.size} rawCovers=${
+                        result.manga.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+                    } mappedCovers=${
+                        list.joinToString(limit = 5) { "${it.title}=>${it.coverUrl ?: "<null>"}" }
+                    }",
+                )
+                SearchResultsListModel(
+                    titleResId = 0,
+                    source = source,
+                    list = list,
+                    error = null,
+                    listFilter = result.listFilter,
+                    sortOrder = result.sortOrder,
+                )
+            }
+        },
+        onFailure = { error ->
+            error.printStackTraceDebug()
+            SearchResultsListModel(0, source, null, null, emptyList(), error)
+        },
+    )
 
-	private suspend fun searchHistory(): SearchResultsListModel? = runCatchingCancellable {
-		historyRepository.search(query, kind, Int.MAX_VALUE)
-	}.fold(
-		onSuccess = { result ->
-			val filtered = filterContentBySourceType(result).applyAdvancedFilter()
-			if (filtered.isNotEmpty()) {
-				SearchResultsListModel(
-					titleResId = R.string.history,
-					source = UnknownContentSource,
-					list = mangaListMapper.toListModelList(manga = filtered, mode = ListMode.GRID),
-					error = null,
-					listFilter = null,
-					sortOrder = null,
-				)
-			} else {
-				null
-			}
-		},
-		onFailure = { error ->
-			SearchResultsListModel(
-				titleResId = R.string.history,
-				source = UnknownContentSource,
-				list = emptyList(),
-				error = error,
-				listFilter = null,
-				sortOrder = null,
-			)
-		},
-	)
+    private suspend fun searchHistory(): SearchResultsListModel? = runCatchingCancellable {
+        historyRepository.search(query, kind, Int.MAX_VALUE)
+    }.fold(
+        onSuccess = { result ->
+            val filtered = filterContentBySourceType(result).applyAdvancedFilter()
+            if (filtered.isNotEmpty()) {
+                SearchResultsListModel(
+                    titleResId = R.string.history,
+                    source = UnknownContentSource,
+                    list = mangaListMapper.toListModelList(manga = filtered, mode = ListMode.GRID),
+                    error = null,
+                    listFilter = null,
+                    sortOrder = null,
+                )
+            } else {
+                null
+            }
+        },
+        onFailure = { error ->
+            SearchResultsListModel(
+                titleResId = R.string.history,
+                source = UnknownContentSource,
+                list = emptyList(),
+                error = error,
+                listFilter = null,
+                sortOrder = null,
+            )
+        },
+    )
 
-	private suspend fun searchFavorites(): SearchResultsListModel? = runCatchingCancellable {
-		favouritesRepository.search(query, kind, Int.MAX_VALUE)
-	}.fold(
-		onSuccess = { result ->
-			val filtered = filterContentBySourceType(result).applyAdvancedFilter()
-			if (filtered.isNotEmpty()) {
-				SearchResultsListModel(
-					titleResId = R.string.favourites,
-					source = UnknownContentSource,
-					list = mangaListMapper.toListModelList(
-						manga = filtered,
-						mode = ListMode.GRID,
-						flags = ContentListMapper.NO_FAVORITE,
-					),
-					error = null,
-					listFilter = null,
-					sortOrder = null,
-				)
-			} else {
-				null
-			}
-		},
-		onFailure = { error ->
-			SearchResultsListModel(
-				titleResId = R.string.favourites,
-				source = UnknownContentSource,
-				list = emptyList(),
-				error = error,
-				listFilter = null,
-				sortOrder = null,
-			)
-		},
-	)
+    private suspend fun searchFavorites(): SearchResultsListModel? = runCatchingCancellable {
+        favouritesRepository.search(query, kind, Int.MAX_VALUE)
+    }.fold(
+        onSuccess = { result ->
+            val filtered = filterContentBySourceType(result).applyAdvancedFilter()
+            if (filtered.isNotEmpty()) {
+                SearchResultsListModel(
+                    titleResId = R.string.favourites,
+                    source = UnknownContentSource,
+                    list = mangaListMapper.toListModelList(
+                        manga = filtered,
+                        mode = ListMode.GRID,
+                        flags = ContentListMapper.NO_FAVORITE,
+                    ),
+                    error = null,
+                    listFilter = null,
+                    sortOrder = null,
+                )
+            } else {
+                null
+            }
+        },
+        onFailure = { error ->
+            SearchResultsListModel(
+                titleResId = R.string.favourites,
+                source = UnknownContentSource,
+                list = emptyList(),
+                error = error,
+                listFilter = null,
+                sortOrder = null,
+            )
+        },
+    )
 
-	private suspend fun searchLocal(): SearchResultsListModel? = runCatchingCancellable {
-		if (isSourceTypeAllowed(LocalMangaSource)) {
-			searchHelperFactory.create(LocalMangaSource).invoke(query, kind, advancedQuery)
-		} else {
-			null
-		}
-	}.fold(
-		onSuccess = { result ->
-			if (!result?.manga.isNullOrEmpty()) {
-				SearchResultsListModel(
-					titleResId = 0,
-					source = LocalMangaSource,
-					list = mangaListMapper.toListModelList(
-						manga = result.manga,
-						mode = ListMode.GRID,
-						flags = ContentListMapper.NO_SAVED,
-					),
-					error = null,
-					listFilter = result.listFilter,
-					sortOrder = result.sortOrder,
-				)
-			} else {
-				null
-			}
-		},
-		onFailure = { error ->
-			SearchResultsListModel(
-				titleResId = 0,
-				source = LocalMangaSource,
-				list = emptyList(),
-				error = error,
-				listFilter = null,
-				sortOrder = null,
-			)
-		},
-	)
+    private suspend fun searchLocal(): SearchResultsListModel? = runCatchingCancellable {
+        if (isSourceTypeAllowed(LocalMangaSource)) {
+            searchHelperFactory.create(LocalMangaSource).invoke(query, kind, advancedQuery)
+        } else {
+            null
+        }
+    }.fold(
+        onSuccess = { result ->
+            if (!result?.manga.isNullOrEmpty()) {
+                SearchResultsListModel(
+                    titleResId = 0,
+                    source = LocalMangaSource,
+                    list = mangaListMapper.toListModelList(
+                        manga = result.manga,
+                        mode = ListMode.GRID,
+                        flags = ContentListMapper.NO_SAVED,
+                    ),
+                    error = null,
+                    listFilter = result.listFilter,
+                    sortOrder = result.sortOrder,
+                )
+            } else {
+                null
+            }
+        },
+        onFailure = { error ->
+            SearchResultsListModel(
+                titleResId = 0,
+                source = LocalMangaSource,
+                list = emptyList(),
+                error = error,
+                listFilter = null,
+                sortOrder = null,
+            )
+        },
+    )
 
-	private fun appendResult(item: SearchResultsListModel?) {
-		if (item != null) {
-			results.append(item)
-		}
-	}
+    private fun appendResult(item: SearchResultsListModel?) {
+        if (item != null) {
+            results.append(item)
+        }
+    }
 
-	private fun filterSourcesByType(sources: Collection<ContentSource>): List<ContentSource> {
-		val allowedSourceTypes = sourceTypes.value
-		val allowedContentKinds = contentKinds.value
-		return sources.filter { source ->
-			sourceTypeIdentifier.getSourceType(source.name) in allowedSourceTypes &&
-				allowedContentKinds.any { it.matches(source) }
-		}
-	}
+    private fun filterSourcesByType(sources: Collection<ContentSource>): List<ContentSource> {
+        val allowedSourceTypes = sourceTypes.value
+        val allowedContentKinds = contentKinds.value
+        return sources.filter { source ->
+            sourceTypeIdentifier.getSourceType(source.name) in allowedSourceTypes &&
+                allowedContentKinds.any { it.matches(source) }
+        }
+    }
 
-	private fun filterSourcesByActivePreset(sources: Collection<ContentSource>): List<ContentSource> {
-		val activePreset = languagePresets.value.firstOrNull { it.id == activeLanguagePresetId.value }
-			?: return sources.toList()
-		if (activePreset.sources.isEmpty()) {
-			return emptyList()
-		}
-		return sources.filter { it.name in activePreset.sources }
-	}
+    private fun filterSourcesByActivePreset(sources: Collection<ContentSource>): List<ContentSource> {
+        val activePreset = languagePresets.value.firstOrNull { it.id == activeLanguagePresetId.value }
+            ?: return sources.toList()
+        if (activePreset.sources.isEmpty()) {
+            return emptyList()
+        }
+        return sources.filter { it.name in activePreset.sources }
+    }
 
-	private fun filterContentBySourceType(manga: List<Content>): List<Content> {
-		val allowedSourceTypes = sourceTypes.value
-		val allowedContentKinds = contentKinds.value
-		return manga.filter { item ->
-			sourceTypeIdentifier.getSourceType(item.source.name) in allowedSourceTypes &&
-				allowedContentKinds.any { it.matches(item) }
-		}
-	}
+    private fun filterContentBySourceType(manga: List<Content>): List<Content> {
+        val allowedSourceTypes = sourceTypes.value
+        val allowedContentKinds = contentKinds.value
+        return manga.filter { item ->
+            sourceTypeIdentifier.getSourceType(item.source.name) in allowedSourceTypes &&
+                allowedContentKinds.any { it.matches(item) }
+        }
+    }
 
-	private fun isSourceTypeAllowed(source: ContentSource): Boolean {
-		return sourceTypeIdentifier.getSourceType(source.name) in sourceTypes.value &&
-			contentKinds.value.any { it.matches(source) }
-	}
+    private fun isSourceTypeAllowed(source: ContentSource): Boolean {
+        return sourceTypeIdentifier.getSourceType(source.name) in sourceTypes.value &&
+            contentKinds.value.any { it.matches(source) }
+    }
 
-	
-	private fun List<Content>.applyAdvancedFilter(): List<Content> {
-		val advanced = advancedQuery ?: return this
-		if (kind != SearchKind.ADVANCED) return this
-		return filter { m ->
-			var titleMatch: Boolean? = null
-			var authorMatch: Boolean? = null
-			var tagsMatch: Boolean? = null
-			if (advanced.title.isNotEmpty()) {
-				val threshold = 0.2f
-				val titleDist = minOf(
-					m.title.levenshteinDistance(advanced.title),
-					m.altTitle?.levenshteinDistance(advanced.title) ?: Int.MAX_VALUE,
-				)
-				val titleLen = maxOf(
-					maxOf(m.title.length, advanced.title.length),
-					m.altTitle?.let { maxOf(it.length, advanced.title.length) } ?: 0,
-				)
-				titleMatch = titleLen > 0 && titleDist.toFloat() / titleLen <= threshold
-			}
-			if (advanced.author.isNotEmpty()) {
-				authorMatch = m.authors.isEmpty() ||
-					m.authors.any { it.contains(advanced.author, ignoreCase = true) }
-			}
-			if (advanced.tags.isNotEmpty()) {
-				val parts = advanced.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-				val includeTags = parts.filter { it[0] != '-' }
-				val excludeTags = parts.filter { it[0] == '-' }.map { it.substring(1) }
-				val hasAllIncluded = includeTags.all { q ->
-					m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
-				}
-				val hasAnyExcluded = excludeTags.any { q ->
-					m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
-				}
-				tagsMatch = hasAllIncluded && !hasAnyExcluded
-			}
-			titleMatch != false && authorMatch != false && tagsMatch != false
-		}
-	}
+    
+    private fun List<Content>.applyAdvancedFilter(): List<Content> {
+        val advanced = advancedQuery ?: return this
+        if (kind != SearchKind.ADVANCED) return this
+        return filter { m ->
+            var titleMatch: Boolean? = null
+            var authorMatch: Boolean? = null
+            var tagsMatch: Boolean? = null
+            if (advanced.title.isNotEmpty()) {
+                val threshold = 0.2f
+                val titleDist = minOf(
+                    m.title.levenshteinDistance(advanced.title),
+                    m.altTitle?.levenshteinDistance(advanced.title) ?: Int.MAX_VALUE,
+                )
+                val titleLen = maxOf(
+                    maxOf(m.title.length, advanced.title.length),
+                    m.altTitle?.let { maxOf(it.length, advanced.title.length) } ?: 0,
+                )
+                titleMatch = titleLen > 0 && titleDist.toFloat() / titleLen <= threshold
+            }
+            if (advanced.author.isNotEmpty()) {
+                authorMatch = m.authors.isEmpty() ||
+                    m.authors.any { it.contains(advanced.author, ignoreCase = true) }
+            }
+            if (advanced.tags.isNotEmpty()) {
+                val parts = advanced.tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                val includeTags = parts.filter { it[0] != '-' }
+                val excludeTags = parts.filter { it[0] == '-' }.map { it.substring(1) }
+                val hasAllIncluded = includeTags.all { q ->
+                    m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
+                }
+                val hasAnyExcluded = excludeTags.any { q ->
+                    m.tags.any { tag -> tag.title.equals(q, ignoreCase = true) }
+                }
+                tagsMatch = hasAllIncluded && !hasAnyExcluded
+            }
+            titleMatch != false && authorMatch != false && tagsMatch != false
+        }
+    }
 
-	private fun ContentSource.priority(): Int {
-		var res = 0
-		if (this.getLocale() == Locale.getDefault()) res += 2
-		return res
-	}
+    private fun ContentSource.priority(): Int {
+        var res = 0
+        if (this.getLocale() == Locale.getDefault()) res += 2
+        return res
+    }
 
 }

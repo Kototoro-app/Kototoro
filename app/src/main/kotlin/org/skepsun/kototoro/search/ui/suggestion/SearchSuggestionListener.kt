@@ -9,13 +9,13 @@ import org.skepsun.kototoro.search.domain.SearchKind
 
 interface SearchSuggestionListener : TextWatcher, TextView.OnEditorActionListener {
 
-	fun onContentClick(manga: Content)
+    fun onContentClick(manga: Content)
 
-	fun onQueryClick(query: String, kind: SearchKind, submit: Boolean)
+    fun onQueryClick(query: String, kind: SearchKind, submit: Boolean)
 
-	fun onSourceToggle(source: ContentSource, isEnabled: Boolean)
+    fun onSourceToggle(source: ContentSource, isEnabled: Boolean)
 
-	fun onSourceClick(source: ContentSource)
+    fun onSourceClick(source: ContentSource)
 
-	fun onTagClick(tag: ContentTag)
+    fun onTagClick(tag: ContentTag)
 }
