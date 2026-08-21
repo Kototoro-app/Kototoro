@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -13,6 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.Image
 import coil3.ImageLoader
 import coil3.memory.MemoryCache
@@ -63,9 +63,9 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
             BaseApp.BaseAppEntryPoint::class.java,
         )
     }
-    val mihonChanges by entryPoint.mihonExtensionManager().changes.collectAsState()
-    val aniyomiChanges by entryPoint.aniyomiExtensionManager().changes.collectAsState()
-    val ireaderChanges by entryPoint.ireaderExtensionManager().changes.collectAsState()
+    val mihonChanges by entryPoint.mihonExtensionManager().changes.collectAsStateWithLifecycle()
+    val aniyomiChanges by entryPoint.aniyomiExtensionManager().changes.collectAsStateWithLifecycle()
+    val ireaderChanges by entryPoint.ireaderExtensionManager().changes.collectAsStateWithLifecycle()
     val jsonKey = remember(name) {
         name.takeIf { it.startsWith("JSON_") }
     }

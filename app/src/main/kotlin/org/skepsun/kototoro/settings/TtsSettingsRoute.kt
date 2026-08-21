@@ -12,7 +12,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.settings.compose.SettingsAlertDialog
 import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import androidx.core.content.edit
@@ -89,12 +89,12 @@ fun TtsSettingsRoute(
     val legadoVoice = settings.observeAsState(TtsSettingsCoordinator.KEY_TTS_LEGADO_VOICE) {
         prefs.getString(TtsSettingsCoordinator.KEY_TTS_LEGADO_VOICE, "") ?: ""
     }.value
-    val systemVoiceOptions by coordinator.systemVoiceOptionsFlow.collectAsState()
-    val systemVoiceSummary by coordinator.systemVoiceSummaryFlow.collectAsState()
-    val legadoVoiceOptions by coordinator.legadoVoiceOptionsFlow.collectAsState()
-    val legadoVoiceSummary by coordinator.legadoVoiceSummaryFlow.collectAsState()
-    val legadoConfigCount by coordinator.legadoConfigCountFlow.collectAsState()
-    val isTestRunning by coordinator.isTestRunningFlow.collectAsState()
+    val systemVoiceOptions by coordinator.systemVoiceOptionsFlow.collectAsStateWithLifecycle()
+    val systemVoiceSummary by coordinator.systemVoiceSummaryFlow.collectAsStateWithLifecycle()
+    val legadoVoiceOptions by coordinator.legadoVoiceOptionsFlow.collectAsStateWithLifecycle()
+    val legadoVoiceSummary by coordinator.legadoVoiceSummaryFlow.collectAsStateWithLifecycle()
+    val legadoConfigCount by coordinator.legadoConfigCountFlow.collectAsStateWithLifecycle()
+    val isTestRunning by coordinator.isTestRunningFlow.collectAsStateWithLifecycle()
 
     TtsSettingsScreen(
         state = TtsSettingsUiState(

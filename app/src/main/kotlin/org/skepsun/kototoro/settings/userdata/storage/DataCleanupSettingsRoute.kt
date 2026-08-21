@@ -1,10 +1,10 @@
 package org.skepsun.kototoro.settings.userdata.storage
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.FileSize
@@ -28,98 +28,98 @@ fun DataCleanupSettingsRoute(
     val context = LocalContext.current
     val resources = context.resources
 
-    val searchHistoryCount by viewModel.searchHistoryCount.collectAsState(initial = -1)
+    val searchHistoryCount by viewModel.searchHistoryCount.collectAsStateWithLifecycle(initialValue = -1)
     val searchHistorySummary = if (searchHistoryCount < 0) {
         context.getString(R.string.loading_)
     } else {
         resources.getQuantityStringSafe(R.plurals.items, searchHistoryCount, searchHistoryCount)
     }
 
-    val feedItemsCount by viewModel.feedItemsCount.collectAsState(initial = -1)
+    val feedItemsCount by viewModel.feedItemsCount.collectAsStateWithLifecycle(initialValue = -1)
     val updatesFeedSummary = if (feedItemsCount < 0) {
         context.getString(R.string.loading_)
     } else {
         resources.getQuantityStringSafe(R.plurals.items, feedItemsCount, feedItemsCount)
     }
 
-    val thumbsCacheSize by viewModel.cacheSizes[CacheDir.THUMBS]!!.collectAsState(initial = -1L)
+    val thumbsCacheSize by viewModel.cacheSizes[CacheDir.THUMBS]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val thumbsCacheSummary = if (thumbsCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, thumbsCacheSize)
     }
 
-    val faviconsCacheSize by viewModel.cacheSizes[CacheDir.FAVICONS]!!.collectAsState(initial = -1L)
+    val faviconsCacheSize by viewModel.cacheSizes[CacheDir.FAVICONS]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val faviconsCacheSummary = if (faviconsCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, faviconsCacheSize)
     }
 
-    val pagesCacheSize by viewModel.cacheSizes[CacheDir.PAGES]!!.collectAsState(initial = -1L)
+    val pagesCacheSize by viewModel.cacheSizes[CacheDir.PAGES]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val pagesCacheSummary = if (pagesCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, pagesCacheSize)
     }
 
-    val novelCacheSize by viewModel.cacheSizes[CacheDir.NOVELS]!!.collectAsState(initial = -1L)
+    val novelCacheSize by viewModel.cacheSizes[CacheDir.NOVELS]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val novelCacheSummary = if (novelCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, novelCacheSize)
     }
 
-    val videoCacheSize by viewModel.cacheSizes[CacheDir.VIDEO]!!.collectAsState(initial = -1L)
+    val videoCacheSize by viewModel.cacheSizes[CacheDir.VIDEO]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val videoCacheSummary = if (videoCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, videoCacheSize)
     }
 
-    val videoProxyCacheSize by viewModel.cacheSizes[CacheDir.VIDEO_PROXY]!!.collectAsState(initial = -1L)
+    val videoProxyCacheSize by viewModel.cacheSizes[CacheDir.VIDEO_PROXY]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val videoProxyCacheSummary = if (videoProxyCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, videoProxyCacheSize)
     }
 
-    val torrentCacheSize by viewModel.cacheSizes[CacheDir.TORRENT]!!.collectAsState(initial = -1L)
+    val torrentCacheSize by viewModel.cacheSizes[CacheDir.TORRENT]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val torrentCacheSummary = if (torrentCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, torrentCacheSize)
     }
 
-    val danmakuCacheSize by viewModel.cacheSizes[CacheDir.DANMAKU]!!.collectAsState(initial = -1L)
+    val danmakuCacheSize by viewModel.cacheSizes[CacheDir.DANMAKU]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val danmakuCacheSummary = if (danmakuCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, danmakuCacheSize)
     }
 
-    val ttsCacheSize by viewModel.cacheSizes[CacheDir.TtsAudio]!!.collectAsState(initial = -1L)
+    val ttsCacheSize by viewModel.cacheSizes[CacheDir.TtsAudio]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val ttsCacheSummary = if (ttsCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, ttsCacheSize)
     }
 
-    val superResolutionCacheSize by viewModel.cacheSizes[CacheDir.SUPER_RESOLUTION]!!.collectAsState(initial = -1L)
+    val superResolutionCacheSize by viewModel.cacheSizes[CacheDir.SUPER_RESOLUTION]!!.collectAsStateWithLifecycle(initialValue = -1L)
     val superResolutionCacheSummary = if (superResolutionCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, superResolutionCacheSize)
     }
 
-    val httpCacheSize by viewModel.httpCacheSize.collectAsState(initial = -1L)
+    val httpCacheSize by viewModel.httpCacheSize.collectAsStateWithLifecycle(initialValue = -1L)
     val networkCacheSummary = if (httpCacheSize < 0) {
         context.getString(R.string.computing_)
     } else {
         FileSize.BYTES.format(context, httpCacheSize)
     }
 
-    val loadingKeys by viewModel.loadingKeys.collectAsState(initial = emptySet())
+    val loadingKeys by viewModel.loadingKeys.collectAsStateWithLifecycle(initialValue = emptySet())
 
     DataCleanupSettingsScreen(
         settings = settings,

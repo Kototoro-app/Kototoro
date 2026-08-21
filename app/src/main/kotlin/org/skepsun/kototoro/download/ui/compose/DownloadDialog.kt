@@ -33,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +47,7 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.google.android.material.snackbar.Snackbar
@@ -116,13 +116,13 @@ fun DownloadDialog(
         }
     }
 
-    val isOptionsLoading by viewModel.isOptionsLoading.collectAsState()
-    val chaptersSelectOptions by viewModel.chaptersSelectOptions.collectAsState()
-    val isVideoContent by viewModel.isVideoContent.collectAsState()
-    val isVideoQualitiesLoading by viewModel.isVideoQualitiesLoading.collectAsState()
-    val videoQualities by viewModel.videoQualities.collectAsState()
-    val defaultFormat by viewModel.defaultFormat.collectAsState()
-    val availableDestinations by viewModel.availableDestinations.collectAsState()
+    val isOptionsLoading by viewModel.isOptionsLoading.collectAsStateWithLifecycle()
+    val chaptersSelectOptions by viewModel.chaptersSelectOptions.collectAsStateWithLifecycle()
+    val isVideoContent by viewModel.isVideoContent.collectAsStateWithLifecycle()
+    val isVideoQualitiesLoading by viewModel.isVideoQualitiesLoading.collectAsStateWithLifecycle()
+    val videoQualities by viewModel.videoQualities.collectAsStateWithLifecycle()
+    val defaultFormat by viewModel.defaultFormat.collectAsStateWithLifecycle()
+    val availableDestinations by viewModel.availableDestinations.collectAsStateWithLifecycle()
 
     var showMoreOptions by remember { mutableStateOf(false) }
     var startNow by remember { mutableStateOf(true) }

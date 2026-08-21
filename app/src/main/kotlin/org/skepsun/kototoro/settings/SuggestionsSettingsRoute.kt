@@ -7,12 +7,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,8 +68,8 @@ fun SuggestionsSettingsRoute(
             settings.prefs.unregisterOnSharedPreferenceChangeListener(listener)
         }
     }
-    val excludeTags by excludeTagsFlow.collectAsState()
-    val preferredTags by preferredTagsFlow.collectAsState()
+    val excludeTags by excludeTagsFlow.collectAsStateWithLifecycle()
+    val preferredTags by preferredTagsFlow.collectAsStateWithLifecycle()
     val sourceTypeIdentifier = remember { SourceTypeIdentifier() }
     val sourceOptions by produceState<List<SuggestionSourceOption>>(emptyList(), contentSourcesRepository, context) {
         value = kotlinx.coroutines.withContext(Dispatchers.IO) {

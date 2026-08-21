@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
 import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
@@ -110,7 +111,7 @@ fun KototoroBottomNav(
     continueReadingContentDescriptionRes: Int = R.string._continue,
     continueReadingCoverModel: Any? = null,
 ) {
-    val navState by state.collectAsState()
+    val navState by state.collectAsStateWithLifecycle()
     val clickPulses = remember { mutableStateMapOf<Int, Int>() }
     val context = LocalContext.current
     val configuration = LocalConfiguration.current

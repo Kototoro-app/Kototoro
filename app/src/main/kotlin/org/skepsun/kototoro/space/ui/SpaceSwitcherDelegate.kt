@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +28,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.combine
@@ -148,8 +148,8 @@ class SpaceSwitcherDelegate @Inject constructor(
 	@Composable
 	fun Fab(modifier: Modifier = Modifier) {
 		if (!composeFabVisible) return
-		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
-		val spaces by catalogRepository.spaces.collectAsState()
+		val activeSpaceId by spaceRepository.activeSpace.collectAsStateWithLifecycle()
+		val spaces by catalogRepository.spaces.collectAsStateWithLifecycle()
 		val position by settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
 			spaceSwitcherPosition
 		}
@@ -203,9 +203,9 @@ class SpaceSwitcherDelegate @Inject constructor(
 
 	@Composable
 	fun Overlays(modifier: Modifier = Modifier) {
-		val transitionState by transitionController.state.collectAsState()
-		val spaces by catalogRepository.spaces.collectAsState()
-		val activeSpaceId by spaceRepository.activeSpace.collectAsState()
+		val transitionState by transitionController.state.collectAsStateWithLifecycle()
+		val spaces by catalogRepository.spaces.collectAsStateWithLifecycle()
+		val activeSpaceId by spaceRepository.activeSpace.collectAsStateWithLifecycle()
 		val position by settings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
 			spaceSwitcherPosition
 		}
@@ -217,10 +217,10 @@ class SpaceSwitcherDelegate @Inject constructor(
 			// closes during a space switch, and restarting the flow on every reopen
 			// blanked every card cover for a frame before AsyncImage decoded.
 			val resumeFlow = remember(resumeStateSource) { resumeStateSource.observe() }
-			val resumeState by resumeFlow.collectAsState(initial = SpaceResumeUiState())
+			val resumeState by resumeFlow.collectAsStateWithLifecycle(initialValue = SpaceResumeUiState())
 			if (switcherVisible) {
 				val activity = activity ?: return@Box
-				val switchState by coordinator.state.collectAsState()
+				val switchState by coordinator.state.collectAsStateWithLifecycle()
 				SpaceSidekick(
 					state = SpaceUiState(
 						activeSpaceId = activeSpaceId,

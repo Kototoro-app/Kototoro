@@ -1,8 +1,8 @@
 package org.skepsun.kototoro.settings
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.settings.compose.ProxySettingsScreen
@@ -14,8 +14,8 @@ fun ProxySettingsRoute(
     isTestRunningFlow: MutableStateFlow<Boolean>,
     onTestConnection: () -> Unit,
 ) {
-    val testSummary by testSummaryFlow.collectAsState()
-    val isTestRunning by isTestRunningFlow.collectAsState()
+    val testSummary by testSummaryFlow.collectAsStateWithLifecycle()
+    val isTestRunning by isTestRunningFlow.collectAsStateWithLifecycle()
     ProxySettingsScreen(
         settings = settings,
         testSummary = testSummary,

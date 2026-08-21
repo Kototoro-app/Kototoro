@@ -7,8 +7,8 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.fragment.app.viewModels
 import com.google.android.material.snackbar.Snackbar
 import org.skepsun.kototoro.R
@@ -30,9 +30,9 @@ fun AboutSettingsRoute(
     onLinkClick: (String) -> Unit,
     onCrashLogsClick: () -> Unit,
 ) {
-    val isUpdateSupported by viewModel.isUpdateSupported.collectAsState(initial = false)
-    val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsState(initial = false)
-    val isLoading by viewModel.isLoading.collectAsState(initial = false)
+    val isUpdateSupported by viewModel.isUpdateSupported.collectAsStateWithLifecycle(initialValue = false)
+    val isUpdateAvailable by viewModel.isUpdateAvailable.collectAsStateWithLifecycle(initialValue = false)
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
 
     AboutSettingsScreen(
         settings = settings,

@@ -29,7 +29,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
@@ -117,12 +117,12 @@ fun ContentStatsDialog(
 ) {
     val manga = viewModel.manga
     val context = LocalContext.current
-    val stats by viewModel.stats.collectAsState()
-    val startDate by viewModel.startDate.collectAsState()
-    val totalDuration by viewModel.totalDuration.collectAsState()
-    val sessionCount by viewModel.sessionCount.collectAsState()
-    val units by viewModel.units.collectAsState()
-    val kind by viewModel.kind.collectAsState()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val startDate by viewModel.startDate.collectAsStateWithLifecycle()
+    val totalDuration by viewModel.totalDuration.collectAsStateWithLifecycle()
+    val sessionCount by viewModel.sessionCount.collectAsStateWithLifecycle()
+    val units by viewModel.units.collectAsStateWithLifecycle()
+    val kind by viewModel.kind.collectAsStateWithLifecycle()
     val barColor = remember(manga) {
         Color(KototoroColors.ofContent(context, manga))
     }
@@ -205,12 +205,12 @@ fun ContentStatsSheetContent(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val stats by viewModel.stats.collectAsState()
-    val startDate by viewModel.startDate.collectAsState()
-    val totalDuration by viewModel.totalDuration.collectAsState()
-    val sessionCount by viewModel.sessionCount.collectAsState()
-    val units by viewModel.units.collectAsState()
-    val kind by viewModel.kind.collectAsState()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val startDate by viewModel.startDate.collectAsStateWithLifecycle()
+    val totalDuration by viewModel.totalDuration.collectAsStateWithLifecycle()
+    val sessionCount by viewModel.sessionCount.collectAsStateWithLifecycle()
+    val units by viewModel.units.collectAsStateWithLifecycle()
+    val kind by viewModel.kind.collectAsStateWithLifecycle()
     val barColor = remember(manga) {
         Color(KototoroColors.ofContent(context, manga))
     }
@@ -264,8 +264,8 @@ fun ContentStatsHistoryChart(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val stats by viewModel.stats.collectAsState()
-    val startDate by viewModel.startDate.collectAsState()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
+    val startDate by viewModel.startDate.collectAsStateWithLifecycle()
     val barColor = remember(manga) {
         Color(KototoroColors.ofContent(context, manga))
     }

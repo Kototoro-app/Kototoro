@@ -7,7 +7,6 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -266,12 +265,12 @@ class MainActivity : BaseComposeActivity() {
         }
 
         setComposeContent {
-            val suggestions by searchSuggestionViewModel.suggestion.collectAsState(initial = emptyList())
-            val appUpdate by viewModel.appUpdate.collectAsState(initial = null)
-            val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsState()
+            val suggestions by searchSuggestionViewModel.suggestion.collectAsStateWithLifecycle(initialValue = emptyList())
+            val appUpdate by viewModel.appUpdate.collectAsStateWithLifecycle(initialValue = null)
+            val isIncognitoModeEnabled by viewModel.isIncognitoModeEnabled.collectAsStateWithLifecycle()
             val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
-            val sourcePresets by sourcePresetsRepository.observeAll().collectAsState(initial = emptyList())
-            val lastReadContent by viewModel.lastReadContent.collectAsState()
+            val sourcePresets by sourcePresetsRepository.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+            val lastReadContent by viewModel.lastReadContent.collectAsStateWithLifecycle()
             val spaceFlags by spaceFeatureFlagsRepository.flags.collectAsStateWithLifecycle()
             val spaceEnabled = spaceFlags.entitySpaceEnabled
             val spaceUiState by if (spaceEnabled) {
@@ -293,7 +292,7 @@ class MainActivity : BaseComposeActivity() {
             }
             // This state bridges tasks and must remain current while MainActivity is stopped;
             // lifecycle-gated collection would expose a stale IDLE frame when the task returns.
-            val spaceTransitionState by spaceTransitionCurtainController.state.collectAsState()
+            val spaceTransitionState by spaceTransitionCurtainController.state.collectAsStateWithLifecycle()
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
