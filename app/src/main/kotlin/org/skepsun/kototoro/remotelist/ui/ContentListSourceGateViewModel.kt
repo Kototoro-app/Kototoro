@@ -21,28 +21,28 @@ private const val SourceResolutionTimeoutMillis = 5_000L
 
 @HiltViewModel
 class ContentListSourceGateViewModel @Inject constructor(
-	savedStateHandle: SavedStateHandle,
-	private val sourcesRepository: ContentSourcesRepository,
+    savedStateHandle: SavedStateHandle,
+    private val sourcesRepository: ContentSourcesRepository,
 ) : ViewModel() {
-	private val sourceName = savedStateHandle.get<String>(AppRouter.KEY_SOURCE)
-		?: savedStateHandle.get<String>("sourceName")
-		?: PendingContentListNavigation.peekSourceName()
+    private val sourceName = savedStateHandle.get<String>(AppRouter.KEY_SOURCE)
+        ?: savedStateHandle.get<String>("sourceName")
+        ?: PendingContentListNavigation.peekSourceName()
 
-	val isResolutionReady: StateFlow<Boolean> = flow {
-		if (sourceName.isNullOrBlank() || sourcesRepository.isSourceAvailable(sourceName)) {
-			emit(true)
-			return@flow
-		}
-		emit(false)
-		withTimeoutOrNull(SourceResolutionTimeoutMillis) {
-			sourcesRepository.observeEnabledSources().first {
-				sourcesRepository.isSourceAvailable(sourceName)
-			}
-		}
-		emit(true)
-	}.flowOn(Dispatchers.Default).stateIn(
-		scope = viewModelScope,
-		started = SharingStarted.Eagerly,
-		initialValue = false,
-	)
+    val isResolutionReady: StateFlow<Boolean> = flow {
+        if (sourceName.isNullOrBlank() || sourcesRepository.isSourceAvailable(sourceName)) {
+            emit(true)
+            return@flow
+        }
+        emit(false)
+        withTimeoutOrNull(SourceResolutionTimeoutMillis) {
+            sourcesRepository.observeEnabledSources().first {
+                sourcesRepository.isSourceAvailable(sourceName)
+            }
+        }
+        emit(true)
+    }.flowOn(Dispatchers.Default).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = false,
+    )
 }
