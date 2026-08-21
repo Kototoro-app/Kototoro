@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.ui.compose
 import android.util.Log
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import org.skepsun.kototoro.details.ui.pager.chapters.compose.ChapterSelectionUi
 import kotlin.math.sign
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
+@Stable
 internal class ComposeReaderController(
     private val lifecycleOwner: LifecycleOwner,
     private val viewModel: ReaderViewModel,
