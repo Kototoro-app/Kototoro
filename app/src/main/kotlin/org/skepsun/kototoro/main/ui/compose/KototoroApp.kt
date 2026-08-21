@@ -230,13 +230,13 @@ private fun rememberMainResumeCoverRequest(content: Content?): ImageRequest? {
 }
 
 @Immutable
-private data class KototoroNavigationPrefs(
+internal data class KototoroNavigationPrefs(
     val isFloating: Boolean,
     val isLayeredSurface: Boolean,
 )
 
 @Immutable
-private data class KototoroDisplayPrefs(
+internal data class KototoroDisplayPrefs(
     val activeSourcePresetId: Long,
     val listMode: ListMode,
     val browseListMode: ListMode,
@@ -247,7 +247,7 @@ private data class KototoroDisplayPrefs(
 )
 
 @Immutable
-private data class KototoroFilterVisibilityPrefs(
+internal data class KototoroFilterVisibilityPrefs(
     val isLanguagePresetFilterVisible: Boolean,
     val isContentTypeFilterVisible: Boolean,
     val isSourceTagFilterVisible: Boolean,
@@ -441,60 +441,22 @@ fun KototoroApp(
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val navigationPrefs by appSettings.observeAsState(
-        AppSettings.KEY_NAV_FLOATING,
-        AppSettings.KEY_NAV_LAYERED_SURFACE,
-    ) {
-        KototoroNavigationPrefs(
-            isFloating = isNavFloating,
-            isLayeredSurface = isNavLayeredSurface,
-        )
-    }
-    val displayPrefs by appSettings.observeAsState(
-        AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
-        AppSettings.KEY_LIST_MODE,
-        AppSettings.KEY_LIST_MODE_BROWSE,
-        AppSettings.KEY_GRID_SIZE,
-        AppSettings.KEY_POPUP_RADIUS,
-        AppSettings.KEY_BROWSE_TRACKING_RECOMMENDATIONS,
-        AppSettings.KEY_BROWSE_MORE_TRACKING_RECOMMENDATIONS,
-    ) {
-        KototoroDisplayPrefs(
-            activeSourcePresetId = activeSourcePresetId,
-            listMode = listMode,
-            browseListMode = browseListMode,
-            gridSize = gridSize,
-            cornerRadius = cornerRadius,
-            isBrowseTrackingRecommendationsEnabled = isBrowseTrackingRecommendationsEnabled,
-            isBrowseMoreTrackingRecommendationsEnabled = isBrowseMoreTrackingRecommendationsEnabled,
-        )
-    }
-    val filterVisibilityPrefs by appSettings.observeAsState(
-        AppSettings.KEY_SHOW_LANGUAGE_PRESET_FILTER,
-        AppSettings.KEY_SHOW_CONTENT_TYPE_FILTER,
-        AppSettings.KEY_SHOW_SOURCE_TAG_FILTER,
-    ) {
-        KototoroFilterVisibilityPrefs(
-            isLanguagePresetFilterVisible = isShowLanguagePresetFilter,
-            isContentTypeFilterVisible = isShowContentTypeFilter,
-            isSourceTagFilterVisible = isShowSourceTagFilter,
-        )
-    }
-    val detailsTransitionStyle by appSettings.observeAsState(
-        AppSettings.KEY_LIST_TO_DETAILS_TRANSITION,
-    ) {
-        listToDetailsTransition
-    }
-    val isReducedVisualEffectsEnabled by appSettings.observeAsState(
-        AppSettings.KEY_REDUCED_VISUAL_EFFECTS,
-    ) {
-        isReducedVisualEffectsEnabled
-    }
-    val globalTagBlacklist by appSettings.observeAsState(
-        AppSettings.KEY_GLOBAL_TAG_BLACKLIST,
-    ) {
-        this.globalTagBlacklist
-    }
+    val prefs = rememberKototoroAppPrefs(appSettings)
+    val navigationPrefs by prefs.navigationPrefs
+    val displayPrefs by prefs.displayPrefs
+    val filterVisibilityPrefs by prefs.filterVisibilityPrefs
+    val detailsTransitionStyle by prefs.detailsTransitionStyle
+    val isReducedVisualEffectsEnabled by prefs.isReducedVisualEffectsEnabled
+    val globalTagBlacklist by prefs.globalTagBlacklist
+    val isNavBarPinned by prefs.isNavBarPinned
+    val tabletUiMode by prefs.tabletUiMode
+    val mainNavItems by prefs.mainNavItems
+    val isMainFabEnabled by prefs.isMainFabEnabled
+    val sidekickPosition by prefs.sidekickPosition
+    val globalFavoritesSortOrder by prefs.globalFavoritesSortOrder
+    val showAllUpdates by prefs.showAllUpdates
+    val feedLimit by prefs.feedLimit
+    val exitConfirmationEnabled by prefs.exitConfirmationEnabled
     val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
         spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
     // Keep the shared transition scope STABLE across a space switch: the
@@ -513,7 +475,6 @@ fun KototoroApp(
             animatorDurationScale = context.animatorDurationScale,
         )
     }
-    val isNavBarPinned by appSettings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }
     val isFloating = navigationPrefs.isFloating
     val isLayeredSurface = navigationPrefs.isLayeredSurface
     val activeSourcePresetId = displayPrefs.activeSourcePresetId
@@ -523,7 +484,6 @@ fun KototoroApp(
     val cornerRadius = displayPrefs.cornerRadius
     val isBrowseTrackingRecommendationsEnabled = displayPrefs.isBrowseTrackingRecommendationsEnabled
     val isBrowseMoreTrackingRecommendationsEnabled = displayPrefs.isBrowseMoreTrackingRecommendationsEnabled
-    val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
     val isLandscapeNavigation = remember(
         context,
         configuration.orientation,
@@ -542,7 +502,6 @@ fun KototoroApp(
         !spaceUiState.switcherEnabled
     val effectiveSourceTagFilterVisible = isSourceTagFilterVisible && isSourceTagFilterVisibleSetting
 
-    val mainNavItems by appSettings.observeAsState(AppSettings.KEY_NAV_MAIN) { mainNavItems }
     val initialTopLevel = remember(mainNavItems) {
         topLevelKeyForBottomNavItem(mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home)
     }
@@ -878,7 +837,6 @@ fun KototoroApp(
         looksLikeVideoContent = effectiveResumeContent?.looksLikeLocalVideoContent() == true,
     )
     val effectiveResumeCoverModel = rememberMainResumeCoverRequest(effectiveResumeContent)
-    val isMainFabEnabled by appSettings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }
     val effectiveResumeEnabled = isMainFabEnabled && if (spaceUiState.switcherEnabled) {
         activeSpaceResumeItem?.canResume == true
     } else {
@@ -888,9 +846,6 @@ fun KototoroApp(
         { onSpaceResume(spaceUiState.activeSpaceId) }
     } else {
         onResumeClick
-    }
-    val sidekickPosition by appSettings.observeAsState(AppSettings.KEY_SPACE_SWITCHER_POSITION) {
-        spaceSwitcherPosition
     }
     LaunchedEffect(shouldShowChrome, navigationSpaceId, isLandscapeNavigation) {
         traceSpaceFab {
@@ -1096,15 +1051,6 @@ fun KototoroApp(
     val supportsGridSizeSlider = chromeTopLevelKey.supportsGridSizeSlider()
     val isFavoritesRoute = chromeTopLevelKey == FavoritesNavKey
     val fallbackFavoritesSortOrders = if (isFavoritesRoute) ListSortOrder.FAVORITES.sortedByOrdinal() else emptyList()
-    val globalFavoritesSortOrder by appSettings.observeAsState(keys = arrayOf(AppSettings.KEY_FAVORITES_ORDER)) {
-        allFavoritesSortOrder
-    }
-    val showAllUpdates by appSettings.observeAsState(keys = arrayOf(org.skepsun.kototoro.core.prefs.AppSettings.KEY_SHOW_ALL_UPDATES)) {
-        showAllUpdates
-    }
-    val feedLimit by appSettings.observeAsState(keys = arrayOf(org.skepsun.kototoro.core.prefs.AppSettings.KEY_FEED_LIMIT)) {
-        feedLimit
-    }
     val sortOrders = layeredTopBarOverrideState?.sortOrders?.takeIf { it.isNotEmpty() } ?: fallbackFavoritesSortOrders
     val selectedSortOrder = layeredTopBarOverrideState?.selectedSortOrder ?: if (isFavoritesRoute) {
         globalFavoritesSortOrder
@@ -1737,9 +1683,6 @@ fun KototoroApp(
         onSearchNavigationHandled()
     }
 
-    val exitConfirmationEnabled by appSettings.observeAsState(
-        AppSettings.KEY_EXIT_CONFIRM,
-    ) { isExitConfirmationEnabled }
 
     var lastBackTime by remember { mutableLongStateOf(0L) }
     val primaryNavItemId = mainNavItems.firstOrNull()?.id ?: org.skepsun.kototoro.R.id.nav_home
