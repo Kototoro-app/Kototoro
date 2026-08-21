@@ -42,9 +42,9 @@ private const val CACHE_SIZE_MIN: Long = 10 * 1024 * 1024 // 10MB
 private const val CACHE_SIZE_MAX: Long = 250 * 1024 * 1024 // 250MB
 
 enum class StorageContentKind {
-	MANGA,
-	NOVEL,
-	VIDEO,
+    MANGA,
+    NOVEL,
+    VIDEO,
 }
 
 @Reusable
@@ -53,477 +53,477 @@ class LocalStorageManager @Inject constructor(
     private val settings: AppSettings,
 ) {
 
-	val contentResolver: ContentResolver
-		get() = context.contentResolver
+    val contentResolver: ContentResolver
+        get() = context.contentResolver
 
-	@WorkerThread
-	fun createHttpCache(): Cache {
-		val directory = File(context.externalCacheDir ?: context.cacheDir, "http")
-		directory.mkdirs()
-		val maxSize = settings.httpCacheSizeMb * 1024L * 1024L
-		return Cache(directory, maxSize)
-	}
+    @WorkerThread
+    fun createHttpCache(): Cache {
+        val directory = File(context.externalCacheDir ?: context.cacheDir, "http")
+        directory.mkdirs()
+        val maxSize = settings.httpCacheSizeMb * 1024L * 1024L
+        return Cache(directory, maxSize)
+    }
 
-	suspend fun computeCacheSize(cache: CacheDir) = withContext(Dispatchers.IO) {
-		getCacheDirsFor(cache).sumOf { it.computeSize() }
-	}
+    suspend fun computeCacheSize(cache: CacheDir) = withContext(Dispatchers.IO) {
+        getCacheDirsFor(cache).sumOf { it.computeSize() }
+    }
 
-	suspend fun computeStorageSize(kind: StorageContentKind) = withContext(Dispatchers.IO) {
-		getReadableDirs(kind).toSet().sumOf { it.computeSize() }
-	}
+    suspend fun computeStorageSize(kind: StorageContentKind) = withContext(Dispatchers.IO) {
+        getReadableDirs(kind).toSet().sumOf { it.computeSize() }
+    }
 
-	suspend fun computeCacheSize() = withContext(Dispatchers.IO) {
-		getCacheDirs().sumOf { it.computeSize() } + getCacheDirsFor(CacheDir.VIDEO).sumOf { it.computeSize() }
-	}
+    suspend fun computeCacheSize() = withContext(Dispatchers.IO) {
+        getCacheDirs().sumOf { it.computeSize() } + getCacheDirsFor(CacheDir.VIDEO).sumOf { it.computeSize() }
+    }
 
-	suspend fun computeStorageSize() = withContext(Dispatchers.IO) {
-		getAllReadableDirs().toSet().sumOf { it.computeSize() }
-	}
+    suspend fun computeStorageSize() = withContext(Dispatchers.IO) {
+        getAllReadableDirs().toSet().sumOf { it.computeSize() }
+    }
 
-	suspend fun computeAiModelsSize() = withContext(Dispatchers.IO) {
-		var total = 0L
-		val externalModels = File(context.getExternalFilesDir(null), "models")
-		val internalModels = File(context.filesDir, "models")
-		val mlKitDir = File(context.filesDir.parentFile, "no_backup/com.google.mlkit.translate.models")
-		
-		val dirs = setOf(externalModels, internalModels, mlKitDir)
-		for (dir in dirs) {
-			if (dir.exists()) {
-				total += dir.computeSize()
-			}
-		}
-		total
-	}
+    suspend fun computeAiModelsSize() = withContext(Dispatchers.IO) {
+        var total = 0L
+        val externalModels = File(context.getExternalFilesDir(null), "models")
+        val internalModels = File(context.filesDir, "models")
+        val mlKitDir = File(context.filesDir.parentFile, "no_backup/com.google.mlkit.translate.models")
+        
+        val dirs = setOf(externalModels, internalModels, mlKitDir)
+        for (dir in dirs) {
+            if (dir.exists()) {
+                total += dir.computeSize()
+            }
+        }
+        total
+    }
 
-	suspend fun computeAvailableSize() = runInterruptible(Dispatchers.IO) {
-		(
-			getConfiguredStorageDirs() +
-				getConfiguredNovelStorageDirs() +
-				getConfiguredVideoStorageDirs()
-			)
-			.mapToSet { it.freeSpace }
-			.sum()
-	}
+    suspend fun computeAvailableSize() = runInterruptible(Dispatchers.IO) {
+        (
+            getConfiguredStorageDirs() +
+                getConfiguredNovelStorageDirs() +
+                getConfiguredVideoStorageDirs()
+            )
+            .mapToSet { it.freeSpace }
+            .sum()
+    }
 
-	suspend fun computeAvailableSize(root: LocalStorageRoot): Long? = runInterruptible(Dispatchers.IO) {
-		val statTarget = root.rawFile ?: resolveExternalStorageVolumeTarget(root.uri) ?: return@runInterruptible null
-		runCatching { StatFs(statTarget.absolutePath).availableBytes }.getOrNull()
-	}
+    suspend fun computeAvailableSize(root: LocalStorageRoot): Long? = runInterruptible(Dispatchers.IO) {
+        val statTarget = root.rawFile ?: resolveExternalStorageVolumeTarget(root.uri) ?: return@runInterruptible null
+        runCatching { StatFs(statTarget.absolutePath).availableBytes }.getOrNull()
+    }
 
-	suspend fun clearCache(cache: CacheDir) = runInterruptible(Dispatchers.IO) {
-		getCacheDirsFor(cache).forEach { it.deleteRecursively() }
-	}
+    suspend fun clearCache(cache: CacheDir) = runInterruptible(Dispatchers.IO) {
+        getCacheDirsFor(cache).forEach { it.deleteRecursively() }
+    }
 
-	suspend fun getReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		getConfiguredStorageDirs()
-			.filter { it.isReadable() }
-	}
+    suspend fun getReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        getConfiguredStorageDirs()
+            .filter { it.isReadable() }
+    }
 
-	suspend fun getWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		getConfiguredStorageDirs()
-			.filter { it.isWriteable() }
-	}
+    suspend fun getWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        getConfiguredStorageDirs()
+            .filter { it.isWriteable() }
+    }
 
-	suspend fun getDefaultWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
-		val preferredDir = settings.mangaStorageDir?.takeIfWriteable()
-		preferredDir ?: getFallbackStorageDir()?.takeIfWriteable()
-	}
+    suspend fun getDefaultWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
+        val preferredDir = settings.mangaStorageDir?.takeIfWriteable()
+        preferredDir ?: getFallbackStorageDir()?.takeIfWriteable()
+    }
 
-	suspend fun getReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getConfiguredStorageRoots().filter(LocalStorageRoot::isReadable)
-	}
+    suspend fun getReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getConfiguredStorageRoots().filter(LocalStorageRoot::isReadable)
+    }
 
-	suspend fun getReadableRoots(kind: StorageContentKind): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		when (kind) {
-			StorageContentKind.MANGA -> getConfiguredStorageRoots()
-			StorageContentKind.NOVEL -> getConfiguredNovelStorageRoots()
-			StorageContentKind.VIDEO -> getConfiguredVideoStorageRoots()
-		}.filter(LocalStorageRoot::isReadable)
-	}
+    suspend fun getReadableRoots(kind: StorageContentKind): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        when (kind) {
+            StorageContentKind.MANGA -> getConfiguredStorageRoots()
+            StorageContentKind.NOVEL -> getConfiguredNovelStorageRoots()
+            StorageContentKind.VIDEO -> getConfiguredVideoStorageRoots()
+        }.filter(LocalStorageRoot::isReadable)
+    }
 
-	suspend fun getWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getConfiguredStorageRoots().filter(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getConfiguredStorageRoots().filter(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getDefaultWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
-		settings.mangaStorageUri
-			?.let { LocalStorageRoot.fromUri(context, it) }
-			?.takeIf(LocalStorageRoot::isWriteable)
-			?: getFallbackStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getDefaultWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+        settings.mangaStorageUri
+            ?.let { LocalStorageRoot.fromUri(context, it) }
+            ?.takeIf(LocalStorageRoot::isWriteable)
+            ?: getFallbackStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getAllReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		(getConfiguredStorageDirs() + getConfiguredNovelStorageDirs() + getConfiguredVideoStorageDirs())
-			.filter { it.isReadable() }
-	}
+    suspend fun getAllReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        (getConfiguredStorageDirs() + getConfiguredNovelStorageDirs() + getConfiguredVideoStorageDirs())
+            .filter { it.isReadable() }
+    }
 
-	suspend fun getAllWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		(getConfiguredStorageDirs() + getConfiguredNovelStorageDirs() + getConfiguredVideoStorageDirs())
-			.filter { it.isWriteable() }
-	}
+    suspend fun getAllWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        (getConfiguredStorageDirs() + getConfiguredNovelStorageDirs() + getConfiguredVideoStorageDirs())
+            .filter { it.isWriteable() }
+    }
 
-	suspend fun getNovelReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		getConfiguredNovelStorageDirs()
-			.filter { it.isReadable() }
-	}
+    suspend fun getNovelReadableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        getConfiguredNovelStorageDirs()
+            .filter { it.isReadable() }
+    }
 
-	suspend fun getNovelReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isReadable)
-	}
+    suspend fun getNovelReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isReadable)
+    }
 
-	suspend fun getNovelWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		getConfiguredNovelStorageDirs()
-			.filter { it.isWriteable() }
-	}
+    suspend fun getNovelWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        getConfiguredNovelStorageDirs()
+            .filter { it.isWriteable() }
+    }
 
-	suspend fun getDefaultNovelWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
-		val preferredDir = settings.novelStorageDir?.takeIfWriteable()
-		preferredDir ?: getFallbackNovelStorageDir()?.takeIfWriteable()
-	}
+    suspend fun getDefaultNovelWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
+        val preferredDir = settings.novelStorageDir?.takeIfWriteable()
+        preferredDir ?: getFallbackNovelStorageDir()?.takeIfWriteable()
+    }
 
-	suspend fun getNovelWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getNovelWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getConfiguredNovelStorageRoots().filter(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getDefaultNovelWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
-		settings.novelStorageUri
-			?.let { LocalStorageRoot.fromUri(context, it) }
-			?.takeIf(LocalStorageRoot::isWriteable)
-			?: getFallbackNovelStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getDefaultNovelWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+        settings.novelStorageUri
+            ?.let { LocalStorageRoot.fromUri(context, it) }
+            ?.takeIf(LocalStorageRoot::isWriteable)
+            ?: getFallbackNovelStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getVideoWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
-		getConfiguredVideoStorageDirs()
-			.filter { it.isWriteable() }
-	}
+    suspend fun getVideoWriteableDirs(): List<File> = runInterruptible(Dispatchers.IO) {
+        getConfiguredVideoStorageDirs()
+            .filter { it.isWriteable() }
+    }
 
-	suspend fun getVideoWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getConfiguredVideoStorageRoots().filter(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getVideoWriteableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getConfiguredVideoStorageRoots().filter(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getDefaultVideoWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
-		settings.videoStorageUri
-			?.let { LocalStorageRoot.fromUri(context, it) }
-			?.takeIf(LocalStorageRoot::isWriteable)
-			?: getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
-	}
+    suspend fun getDefaultVideoWriteableRoot(): LocalStorageRoot? = runInterruptible(Dispatchers.IO) {
+        settings.videoStorageUri
+            ?.let { LocalStorageRoot.fromUri(context, it) }
+            ?.takeIf(LocalStorageRoot::isWriteable)
+            ?: getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)?.takeIf(LocalStorageRoot::isWriteable)
+    }
 
-	suspend fun getApplicationStorageDirs(): Set<File> = runInterruptible(Dispatchers.IO) {
-		getAvailableStorageDirs()
-	}
+    suspend fun getApplicationStorageDirs(): Set<File> = runInterruptible(Dispatchers.IO) {
+        getAvailableStorageDirs()
+    }
 
-	suspend fun getApplicationStorageRoots(): Set<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-	}
+    suspend fun getApplicationStorageRoots(): Set<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+    }
 
-	suspend fun getAllReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
-		(
-			getConfiguredStorageRoots() +
-				getConfiguredNovelStorageRoots() +
-				getConfiguredVideoStorageRoots()
-			).distinct().filter(LocalStorageRoot::isReadable)
-	}
+    suspend fun getAllReadableRoots(): List<LocalStorageRoot> = runInterruptible(Dispatchers.IO) {
+        (
+            getConfiguredStorageRoots() +
+                getConfiguredNovelStorageRoots() +
+                getConfiguredVideoStorageRoots()
+            ).distinct().filter(LocalStorageRoot::isReadable)
+    }
 
-	suspend fun getReadableDirs(kind: StorageContentKind): List<File> = runInterruptible(Dispatchers.IO) {
-		when (kind) {
-			StorageContentKind.MANGA -> getConfiguredStorageDirs()
-			StorageContentKind.NOVEL -> getConfiguredNovelStorageDirs()
-			StorageContentKind.VIDEO -> getConfiguredVideoStorageDirs()
-		}.filter { it.isReadable() }
-	}
+    suspend fun getReadableDirs(kind: StorageContentKind): List<File> = runInterruptible(Dispatchers.IO) {
+        when (kind) {
+            StorageContentKind.MANGA -> getConfiguredStorageDirs()
+            StorageContentKind.NOVEL -> getConfiguredNovelStorageDirs()
+            StorageContentKind.VIDEO -> getConfiguredVideoStorageDirs()
+        }.filter { it.isReadable() }
+    }
 
-	suspend fun resolveUri(uri: Uri): File = runInterruptible(Dispatchers.IO) {
-		if (uri.isFileUri()) {
-			uri.toFile()
-		} else {
-			uri.resolveFile(context) ?: throw NonFileUriException(uri)
-		}
-	}
+    suspend fun resolveUri(uri: Uri): File = runInterruptible(Dispatchers.IO) {
+        if (uri.isFileUri()) {
+            uri.toFile()
+        } else {
+            uri.resolveFile(context) ?: throw NonFileUriException(uri)
+        }
+    }
 
-	suspend fun resolveRoot(uri: Uri): LocalStorageRoot = runInterruptible(Dispatchers.IO) {
-		LocalStorageRoot.fromUri(context, uri) ?: throw NonFileUriException(uri)
-	}
+    suspend fun resolveRoot(uri: Uri): LocalStorageRoot = runInterruptible(Dispatchers.IO) {
+        LocalStorageRoot.fromUri(context, uri) ?: throw NonFileUriException(uri)
+    }
 
-	suspend fun setDirIsNoMedia(dir: File) = runInterruptible(Dispatchers.IO) {
-		File(dir, NOMEDIA).createNewFile()
-	}
+    suspend fun setDirIsNoMedia(dir: File) = runInterruptible(Dispatchers.IO) {
+        File(dir, NOMEDIA).createNewFile()
+    }
 
-	suspend fun setDirIsNoMedia(root: LocalStorageRoot) = runInterruptible(Dispatchers.IO) {
-		root.file.findFile(NOMEDIA) ?: root.file.createFile(NOMEDIA)?.openOutputStream()?.close()
-	}
+    suspend fun setDirIsNoMedia(root: LocalStorageRoot) = runInterruptible(Dispatchers.IO) {
+        root.file.findFile(NOMEDIA) ?: root.file.createFile(NOMEDIA)?.openOutputStream()?.close()
+    }
 
-	fun takePermissions(uri: Uri, isReadOnly: Boolean = false) {
-		val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-			(if (isReadOnly) 0 else Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-		contentResolver.takePersistableUriPermission(uri, flags)
-	}
+    fun takePermissions(uri: Uri, isReadOnly: Boolean = false) {
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            (if (isReadOnly) 0 else Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        contentResolver.takePersistableUriPermission(uri, flags)
+    }
 
-	fun isOnExternalStorage(file: File): Boolean {
-		return !file.absolutePath.contains(context.packageName)
-	}
+    fun isOnExternalStorage(file: File): Boolean {
+        return !file.absolutePath.contains(context.packageName)
+    }
 
-	@WorkerThread
-	private fun resolveExternalStorageVolumeTarget(uri: Uri): File? {
-		if (uri.authority != "com.android.externalstorage.documents" || !DocumentsContract.isTreeUri(uri)) {
-			return null
-		}
-		val volumeId = runCatching { DocumentsContract.getTreeDocumentId(uri).substringBefore(':') }.getOrNull()
-			?: return null
-		val storageManager = context.getSystemService(StorageManager::class.java) ?: return null
-		return context.getExternalFilesDirs(null).filterNotNull().firstOrNull { directory ->
-			val volume = storageManager.getStorageVolume(directory) ?: return@firstOrNull false
-			if (volumeId.equals("primary", ignoreCase = true)) {
-				volume.isPrimary
-			} else {
-				volume.uuid.equals(volumeId, ignoreCase = true)
-			}
-		}
-	}
+    @WorkerThread
+    private fun resolveExternalStorageVolumeTarget(uri: Uri): File? {
+        if (uri.authority != "com.android.externalstorage.documents" || !DocumentsContract.isTreeUri(uri)) {
+            return null
+        }
+        val volumeId = runCatching { DocumentsContract.getTreeDocumentId(uri).substringBefore(':') }.getOrNull()
+            ?: return null
+        val storageManager = context.getSystemService(StorageManager::class.java) ?: return null
+        return context.getExternalFilesDirs(null).filterNotNull().firstOrNull { directory ->
+            val volume = storageManager.getStorageVolume(directory) ?: return@firstOrNull false
+            if (volumeId.equals("primary", ignoreCase = true)) {
+                volume.isPrimary
+            } else {
+                volume.uuid.equals(volumeId, ignoreCase = true)
+            }
+        }
+    }
 
-	fun hasExternalStoragePermission(isReadOnly: Boolean): Boolean {
-		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-			Environment.isExternalStorageManager()
-		} else {
-			val permission = if (isReadOnly) {
-				Manifest.permission.READ_EXTERNAL_STORAGE
-			} else {
-				Manifest.permission.WRITE_EXTERNAL_STORAGE
-			}
-			ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-		}
-	}
+    fun hasExternalStoragePermission(isReadOnly: Boolean): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            val permission = if (isReadOnly) {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            } else {
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            }
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        }
+    }
 
-	suspend fun getDirectoryDisplayName(dir: File, isFullPath: Boolean): String = runInterruptible(Dispatchers.IO) {
-		val packageName = context.packageName
-		if (dir.absolutePath.contains(packageName)) {
-			dir.getStorageName(context)
-		} else if (isFullPath) {
-			dir.path
-		} else {
-			dir.name
-		}
-	}
+    suspend fun getDirectoryDisplayName(dir: File, isFullPath: Boolean): String = runInterruptible(Dispatchers.IO) {
+        val packageName = context.packageName
+        if (dir.absolutePath.contains(packageName)) {
+            dir.getStorageName(context)
+        } else if (isFullPath) {
+            dir.path
+        } else {
+            dir.name
+        }
+    }
 
-	suspend fun getDirectoryDisplayName(root: LocalStorageRoot, isFullPath: Boolean): String =
-		runInterruptible(Dispatchers.IO) {
-			if (isFullPath) root.displayPath else root.name
-		}
+    suspend fun getDirectoryDisplayName(root: LocalStorageRoot, isFullPath: Boolean): String =
+        runInterruptible(Dispatchers.IO) {
+            if (isFullPath) root.displayPath else root.name
+        }
 
-	@WorkerThread
-	private fun getConfiguredStorageDirs(): MutableSet<File> {
-		val set = getAvailableStorageDirs()
-		set.addAll(settings.userSpecifiedContentDirectories)
-		return set
-	}
+    @WorkerThread
+    private fun getConfiguredStorageDirs(): MutableSet<File> {
+        val set = getAvailableStorageDirs()
+        set.addAll(settings.userSpecifiedContentDirectories)
+        return set
+    }
 
-	@WorkerThread
-	private fun getConfiguredStorageRoots(): MutableSet<LocalStorageRoot> {
-		val roots = getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-		settings.userSpecifiedContentDirectoryUris.mapNotNullTo(roots) {
-			LocalStorageRoot.fromUri(context, it)
-		}
-		return roots
-	}
+    @WorkerThread
+    private fun getConfiguredStorageRoots(): MutableSet<LocalStorageRoot> {
+        val roots = getAvailableStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+        settings.userSpecifiedContentDirectoryUris.mapNotNullTo(roots) {
+            LocalStorageRoot.fromUri(context, it)
+        }
+        return roots
+    }
 
-	@WorkerThread
-	private fun getAvailableStorageDirs(): MutableSet<File> {
-		val result = LinkedHashSet<File>()
-		result += File(context.filesDir, DIR_NAME)
-		context.getExternalFilesDirs(DIR_NAME).filterNotNullTo(result)
-		result.retainAll { it.exists() || it.mkdirs() }
-		return result
-	}
+    @WorkerThread
+    private fun getAvailableStorageDirs(): MutableSet<File> {
+        val result = LinkedHashSet<File>()
+        result += File(context.filesDir, DIR_NAME)
+        context.getExternalFilesDirs(DIR_NAME).filterNotNullTo(result)
+        result.retainAll { it.exists() || it.mkdirs() }
+        return result
+    }
 
-	@WorkerThread
-	private fun getAvailableNovelStorageDirs(): MutableSet<File> {
-		val result = LinkedHashSet<File>()
-		result += File(context.filesDir, DIR_NAME_NOVEL)
-		context.getExternalFilesDirs(DIR_NAME_NOVEL).filterNotNullTo(result)
-		result.retainAll { it.exists() || it.mkdirs() }
-		return result
-	}
+    @WorkerThread
+    private fun getAvailableNovelStorageDirs(): MutableSet<File> {
+        val result = LinkedHashSet<File>()
+        result += File(context.filesDir, DIR_NAME_NOVEL)
+        context.getExternalFilesDirs(DIR_NAME_NOVEL).filterNotNullTo(result)
+        result.retainAll { it.exists() || it.mkdirs() }
+        return result
+    }
 
-	@WorkerThread
-	private fun getConfiguredNovelStorageDirs(): MutableSet<File> {
-		val result = getAvailableNovelStorageDirs()
-		settings.novelStorageDir?.let(result::add)
-		return result
-	}
+    @WorkerThread
+    private fun getConfiguredNovelStorageDirs(): MutableSet<File> {
+        val result = getAvailableNovelStorageDirs()
+        settings.novelStorageDir?.let(result::add)
+        return result
+    }
 
-	@WorkerThread
-	private fun getConfiguredNovelStorageRoots(): MutableSet<LocalStorageRoot> {
-		val roots = getAvailableNovelStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-		(settings.userSpecifiedNovelDirectoryUris + listOfNotNull(settings.novelStorageUri)).forEach { uri ->
-			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
-		}
-		return roots
-	}
+    @WorkerThread
+    private fun getConfiguredNovelStorageRoots(): MutableSet<LocalStorageRoot> {
+        val roots = getAvailableNovelStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+        (settings.userSpecifiedNovelDirectoryUris + listOfNotNull(settings.novelStorageUri)).forEach { uri ->
+            LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
+        }
+        return roots
+    }
 
-	@WorkerThread
-	private fun getAvailableVideoStorageDirs(): MutableSet<File> {
-		val result = LinkedHashSet<File>()
-		result += File(context.filesDir, DIR_NAME_VIDEO)
-		context.getExternalFilesDirs(DIR_NAME_VIDEO).filterNotNullTo(result)
-		result.retainAll { it.exists() || it.mkdirs() }
-		return result
-	}
+    @WorkerThread
+    private fun getAvailableVideoStorageDirs(): MutableSet<File> {
+        val result = LinkedHashSet<File>()
+        result += File(context.filesDir, DIR_NAME_VIDEO)
+        context.getExternalFilesDirs(DIR_NAME_VIDEO).filterNotNullTo(result)
+        result.retainAll { it.exists() || it.mkdirs() }
+        return result
+    }
 
-	@WorkerThread
-	private fun getConfiguredVideoStorageDirs(): MutableSet<File> {
-		val result = getAvailableVideoStorageDirs()
-		settings.videoStorageDir?.let(result::add)
-		return result
-	}
+    @WorkerThread
+    private fun getConfiguredVideoStorageDirs(): MutableSet<File> {
+        val result = getAvailableVideoStorageDirs()
+        settings.videoStorageDir?.let(result::add)
+        return result
+    }
 
-	@WorkerThread
-	private fun getConfiguredVideoStorageRoots(): MutableSet<LocalStorageRoot> {
-		val roots = getAvailableVideoStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
-		(settings.userSpecifiedVideoDirectoryUris + listOfNotNull(settings.videoStorageUri)).forEach { uri ->
-			LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
-		}
-		return roots
-	}
+    @WorkerThread
+    private fun getConfiguredVideoStorageRoots(): MutableSet<LocalStorageRoot> {
+        val roots = getAvailableVideoStorageDirs().mapTo(LinkedHashSet(), LocalStorageRoot::fromFile)
+        (settings.userSpecifiedVideoDirectoryUris + listOfNotNull(settings.videoStorageUri)).forEach { uri ->
+            LocalStorageRoot.fromUri(context, uri)?.let(roots::add)
+        }
+        return roots
+    }
 
-	/**
-	 * 返回小说下载根目录（files/novel）
-	 */
-	@WorkerThread
-	fun getNovelRoot(): File? {
-		return File(context.filesDir, DIR_NAME_NOVEL).takeIf { it.exists() || it.mkdirs() }
-	}
+    /**
+     * 返回小说下载根目录（files/novel）
+     */
+    @WorkerThread
+    fun getNovelRoot(): File? {
+        return File(context.filesDir, DIR_NAME_NOVEL).takeIf { it.exists() || it.mkdirs() }
+    }
 
-	/**
-	 * 返回视频下载根目录（files/video）
-	 */
-	suspend fun getDefaultVideoWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
-		val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
-		preferredDir ?: getFallbackVideoStorageDir()?.takeIfWriteable()
-	}
+    /**
+     * 返回视频下载根目录（files/video）
+     */
+    suspend fun getDefaultVideoWriteableDir(): File? = runInterruptible(Dispatchers.IO) {
+        val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
+        preferredDir ?: getFallbackVideoStorageDir()?.takeIfWriteable()
+    }
 
-	/**
-	 * 返回视频下载根目录。
-	 * 优先使用「本地内容目录 - 视频」中设置的默认目录（SAF URI 解析为真实路径），
-	 * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
-	 */
-	@WorkerThread
-	fun getVideoRoot(): File? {
-		val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
-		return preferredDir ?: getFallbackVideoStorageDir()
-	}
+    /**
+     * 返回视频下载根目录。
+     * 优先使用「本地内容目录 - 视频」中设置的默认目录（SAF URI 解析为真实路径），
+     * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
+     */
+    @WorkerThread
+    fun getVideoRoot(): File? {
+        val preferredDir = resolveStorageUriToFile(settings.videoStorageUri, settings.videoStorageDir)
+        return preferredDir ?: getFallbackVideoStorageDir()
+    }
 
-	/**
-	 * 将存储设置解析为可写的真实目录。
-	 * 优先解析 SAF/文件 URI（file:// 直接取路径，content:// 树 URI 通过系统存储卷转换为绝对路径），
-	 * 再回退到遗留的 File 路径偏好；均不可写时返回 null。
-	 */
-	@WorkerThread
-	private fun resolveStorageUriToFile(uri: Uri?, legacyDir: File?): File? {
-		uri?.let {
-			val file = if (it.isFileUri()) {
-				it.toFile()
-			} else {
-				it.resolveFile(context)
-			}
-			file?.takeIfWriteable()?.let { resolved -> return resolved }
-		}
-		return legacyDir?.takeIfWriteable()
-	}
+    /**
+     * 将存储设置解析为可写的真实目录。
+     * 优先解析 SAF/文件 URI（file:// 直接取路径，content:// 树 URI 通过系统存储卷转换为绝对路径），
+     * 再回退到遗留的 File 路径偏好；均不可写时返回 null。
+     */
+    @WorkerThread
+    private fun resolveStorageUriToFile(uri: Uri?, legacyDir: File?): File? {
+        uri?.let {
+            val file = if (it.isFileUri()) {
+                it.toFile()
+            } else {
+                it.resolveFile(context)
+            }
+            file?.takeIfWriteable()?.let { resolved -> return resolved }
+        }
+        return legacyDir?.takeIfWriteable()
+    }
 
-	/**
-	 * 返回视频下载根目录（SAF 感知的本地根）。
-	 * 优先使用「本地内容目录 - 视频」设置的默认目录（含 SAF 树 URI，通过 DocumentsProvider 写入），
-	 * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
-	 */
-	@WorkerThread
-	fun getVideoStorageRoot(): LocalStorageRoot? {
-		settings.videoStorageUri
-			?.let { LocalStorageRoot.fromUri(context, it) }
-			?.takeIf(LocalStorageRoot::isWriteable)
-			?.let { return it }
-		settings.videoStorageDir
-			?.takeIfWriteable()
-			?.let(LocalStorageRoot::fromFile)
-			?.takeIf(LocalStorageRoot::isWriteable)
-			?.let { return it }
-		return getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)
-	}
+    /**
+     * 返回视频下载根目录（SAF 感知的本地根）。
+     * 优先使用「本地内容目录 - 视频」设置的默认目录（含 SAF 树 URI，通过 DocumentsProvider 写入），
+     * 其次使用遗留的 File 路径偏好，最后回退到应用外部私有目录 files/video。
+     */
+    @WorkerThread
+    fun getVideoStorageRoot(): LocalStorageRoot? {
+        settings.videoStorageUri
+            ?.let { LocalStorageRoot.fromUri(context, it) }
+            ?.takeIf(LocalStorageRoot::isWriteable)
+            ?.let { return it }
+        settings.videoStorageDir
+            ?.takeIfWriteable()
+            ?.let(LocalStorageRoot::fromFile)
+            ?.takeIf(LocalStorageRoot::isWriteable)
+            ?.let { return it }
+        return getFallbackVideoStorageDir()?.let(LocalStorageRoot::fromFile)
+    }
 
-	/**
-	 * 返回小说下载的优先根目录（遵循「本地内容目录 - 小说」设置），未设置或不可写时返回 null。
-	 * 供 EPUB 存储等场景使用，仅在已配置时返回，不会创建目录。
-	 */
-	@WorkerThread
-	fun getPreferredNovelDownloadDir(): File? = resolveStorageUriToFile(settings.novelStorageUri, settings.novelStorageDir)
+    /**
+     * 返回小说下载的优先根目录（遵循「本地内容目录 - 小说」设置），未设置或不可写时返回 null。
+     * 供 EPUB 存储等场景使用，仅在已配置时返回，不会创建目录。
+     */
+    @WorkerThread
+    fun getPreferredNovelDownloadDir(): File? = resolveStorageUriToFile(settings.novelStorageUri, settings.novelStorageDir)
 
-	@WorkerThread
-	private fun getFallbackNovelStorageDir(): File? {
-		return context.getExternalFilesDir(DIR_NAME_NOVEL) ?: File(context.filesDir, DIR_NAME_NOVEL).takeIf {
-			it.exists() || it.mkdirs()
-		}
-	}
+    @WorkerThread
+    private fun getFallbackNovelStorageDir(): File? {
+        return context.getExternalFilesDir(DIR_NAME_NOVEL) ?: File(context.filesDir, DIR_NAME_NOVEL).takeIf {
+            it.exists() || it.mkdirs()
+        }
+    }
 
-	@WorkerThread
-	private fun getFallbackStorageDir(): File? {
-		return context.getExternalFilesDir(DIR_NAME) ?: File(context.filesDir, DIR_NAME).takeIf {
-			it.exists() || it.mkdirs()
-		}
-	}
+    @WorkerThread
+    private fun getFallbackStorageDir(): File? {
+        return context.getExternalFilesDir(DIR_NAME) ?: File(context.filesDir, DIR_NAME).takeIf {
+            it.exists() || it.mkdirs()
+        }
+    }
 
-	@WorkerThread
-	private fun getFallbackVideoStorageDir(): File? {
-		return context.getExternalFilesDir(DIR_NAME_VIDEO) ?: File(context.filesDir, DIR_NAME_VIDEO).takeIf {
-			it.exists() || it.mkdirs()
-		}
-	}
+    @WorkerThread
+    private fun getFallbackVideoStorageDir(): File? {
+        return context.getExternalFilesDir(DIR_NAME_VIDEO) ?: File(context.filesDir, DIR_NAME_VIDEO).takeIf {
+            it.exists() || it.mkdirs()
+        }
+    }
 
-	@WorkerThread
-	private fun getCacheDirsFor(cache: CacheDir): MutableSet<File> {
-		val result = LinkedHashSet<File>()
-		when (cache) {
-			CacheDir.VIDEO -> {
-				result += File(context.filesDir, "mpv_cache")
-				context.getExternalFilesDirs("mpv_cache").filterNotNullTo(result)
-				result += File(context.filesDir, "video_cache")
-				context.getExternalFilesDirs("video_cache").filterNotNullTo(result)
-			}
-			CacheDir.VIDEO_PROXY -> {
-				result += File(context.filesDir, cache.dir)
-				context.getExternalFilesDirs(cache.dir).filterNotNullTo(result)
-			}
-			CacheDir.DANMAKU,
-			CacheDir.TORRENT,
-			CacheDir.HTTP,
-			CacheDir.SUPER_RESOLUTION,
-			CacheDir.THUMBS,
-			CacheDir.FAVICONS,
-			CacheDir.PAGES,
-			CacheDir.NOVELS,
-			CacheDir.TtsAudio -> {
-				val subDir = cache.dir
-				result += File(context.cacheDir, subDir)
-				context.externalCacheDirs.mapNotNullTo(result) {
-					File(it ?: return@mapNotNullTo null, subDir)
-				}
-			}
-		}
-		return result
-	}
+    @WorkerThread
+    private fun getCacheDirsFor(cache: CacheDir): MutableSet<File> {
+        val result = LinkedHashSet<File>()
+        when (cache) {
+            CacheDir.VIDEO -> {
+                result += File(context.filesDir, "mpv_cache")
+                context.getExternalFilesDirs("mpv_cache").filterNotNullTo(result)
+                result += File(context.filesDir, "video_cache")
+                context.getExternalFilesDirs("video_cache").filterNotNullTo(result)
+            }
+            CacheDir.VIDEO_PROXY -> {
+                result += File(context.filesDir, cache.dir)
+                context.getExternalFilesDirs(cache.dir).filterNotNullTo(result)
+            }
+            CacheDir.DANMAKU,
+            CacheDir.TORRENT,
+            CacheDir.HTTP,
+            CacheDir.SUPER_RESOLUTION,
+            CacheDir.THUMBS,
+            CacheDir.FAVICONS,
+            CacheDir.PAGES,
+            CacheDir.NOVELS,
+            CacheDir.TtsAudio -> {
+                val subDir = cache.dir
+                result += File(context.cacheDir, subDir)
+                context.externalCacheDirs.mapNotNullTo(result) {
+                    File(it ?: return@mapNotNullTo null, subDir)
+                }
+            }
+        }
+        return result
+    }
 
-	@WorkerThread
-	private fun getCacheDirs(): MutableSet<File> {
-		val result = LinkedHashSet<File>()
-		result += context.cacheDir
-		context.externalCacheDirs.filterNotNullTo(result)
-		return result
-	}
+    @WorkerThread
+    private fun getCacheDirs(): MutableSet<File> {
+        val result = LinkedHashSet<File>()
+        result += context.cacheDir
+        context.externalCacheDirs.filterNotNullTo(result)
+        return result
+    }
 
-	private fun calculateDiskCacheSize(cacheDirectory: File): Long {
-		return try {
-			val cacheDir = StatFs(cacheDirectory.absolutePath)
-			val size = CACHE_DISK_PERCENTAGE * cacheDir.blockCountLong * cacheDir.blockSizeLong
-			return size.toLong().coerceIn(CACHE_SIZE_MIN, CACHE_SIZE_MAX)
-		} catch (_: Exception) {
-			CACHE_SIZE_MIN
-		}
-	}
+    private fun calculateDiskCacheSize(cacheDirectory: File): Long {
+        return try {
+            val cacheDir = StatFs(cacheDirectory.absolutePath)
+            val size = CACHE_DISK_PERCENTAGE * cacheDir.blockCountLong * cacheDir.blockSizeLong
+            return size.toLong().coerceIn(CACHE_SIZE_MIN, CACHE_SIZE_MAX)
+        } catch (_: Exception) {
+            CACHE_SIZE_MIN
+        }
+    }
 }
