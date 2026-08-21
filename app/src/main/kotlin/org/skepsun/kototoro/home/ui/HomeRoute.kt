@@ -21,7 +21,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.home.ui.compose.HomeScreen
 import org.skepsun.kototoro.home.ui.compose.HomeScreenActions
-import org.skepsun.kototoro.main.ui.MainActivity
+import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey
 import org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey
@@ -41,7 +41,6 @@ import org.skepsun.kototoro.space.ui.spaceBoundHiltViewModel
 internal fun HomeRoute(
     animatedVisibilityScope: AnimatedVisibilityScope,
     activity: FragmentActivity,
-    mainActivity: MainActivity?,
     appRouter: AppRouter,
     rootView: View,
     contentPadding: PaddingValues,
@@ -51,6 +50,7 @@ internal fun HomeRoute(
     isRouteVisible: Boolean = true,
 ) {
     val viewModel = spaceBoundHiltViewModel<HomeViewModel>("home")
+    val mainChromeController = LocalMainChromeController.current
     val state by viewModel.summaryState.collectAsStateWithLifecycle()
     val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
 
@@ -78,7 +78,7 @@ internal fun HomeRoute(
         }
     }
 
-    DisposableEffect(mainActivity, viewModel, state.selectedTab, state.selectedSourceTags) {
+    DisposableEffect(mainChromeController, viewModel, state.selectedTab, state.selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = when (state.selectedTab) {
                 HomeContentTab.MANGA -> BrowseGroupTab.Content
@@ -112,9 +112,9 @@ internal fun HomeRoute(
                 )
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 

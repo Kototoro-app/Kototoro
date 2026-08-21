@@ -37,6 +37,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
+import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.core.nav.router
@@ -293,7 +294,6 @@ private fun MainShellTopLevelEntryContent(
         org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeRoute(
             animatedVisibilityScope = animatedVisibilityScope,
             activity = activity,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             rootView = rootView,
             contentPadding = contentPadding,
@@ -657,6 +657,7 @@ internal fun BrowseTopLevelRouteContent(
         }
     }
 
+    val mainChromeController = LocalMainChromeController.current
     DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
@@ -678,9 +679,9 @@ internal fun BrowseTopLevelRouteContent(
                 )
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 
@@ -724,6 +725,7 @@ internal fun FeedTopLevelRouteContent(
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
+    val mainChromeController = LocalMainChromeController.current
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
@@ -745,9 +747,9 @@ internal fun FeedTopLevelRouteContent(
                 )
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 
@@ -1068,6 +1070,7 @@ internal fun BookmarksTopLevelRouteContent(
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
+    val mainChromeController = LocalMainChromeController.current
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
@@ -1089,9 +1092,9 @@ internal fun BookmarksTopLevelRouteContent(
                 )
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 
@@ -1330,6 +1333,7 @@ internal fun HistoryTopLevelRouteContent(
         }
     }
 
+    val mainChromeController = LocalMainChromeController.current
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
@@ -1350,9 +1354,9 @@ internal fun HistoryTopLevelRouteContent(
                 )
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 
@@ -1737,6 +1741,7 @@ internal fun FavoritesTopLevelRouteContent(
         }
     }
 
+    val mainChromeController = LocalMainChromeController.current
     DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun isSourceTagFilterVisible(): Boolean = true
@@ -1765,9 +1770,9 @@ internal fun FavoritesTopLevelRouteContent(
                 }
             }
         }
-        mainActivity?.setActiveFilterCallback(callback)
+        mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
-            mainActivity?.clearActiveFilterCallback(callback)
+            mainChromeController?.clearActiveFilterCallback(callback)
         }
     }
 

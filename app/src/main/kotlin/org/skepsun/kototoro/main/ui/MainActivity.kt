@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -153,18 +154,6 @@ class MainActivity : BaseComposeActivity() {
 
     private lateinit var topBarController: MainChromeController
 
-    fun setActiveFilterCallback(callback: SearchBarFilterCallback) {
-        topBarController.setActiveFilterCallback(callback)
-    }
-
-    fun clearActiveFilterCallback(callback: SearchBarFilterCallback) {
-        topBarController.clearActiveFilterCallback(callback)
-    }
-
-    fun refreshFilters() {
-        topBarController.refreshFilters()
-    }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -233,6 +222,7 @@ class MainActivity : BaseComposeActivity() {
             val mainTransitionSuppressionTarget by immersiveSpaceSessionRegistry
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
+            CompositionLocalProvider(LocalMainChromeController provides topBarController) {
             KototoroApp(
                 mainAppState = MainAppState(
                     appSettings = settings,
@@ -450,6 +440,7 @@ class MainActivity : BaseComposeActivity() {
                     },
                 ),
             )
+            }
         }
 
         installSpaceResumeObserverIfEnabled()

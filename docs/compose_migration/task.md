@@ -143,7 +143,7 @@
 - [ ] 抽 `ContentHeroBackdropCarousel` 通用组件（Home/Explore/Discover 共用，~300 行清理）
 - [x] `KototoroApp` 参数聚合为 `MainAppState` data class（30+ 参数坏味）
 - [ ] `AppNavGraph` 内联路由拆为独立 `AppXxxRoute` 文件
-- [ ] `as? MainActivity` 静默 no-op → 改用 `CompositionLocal`
+- [x] `as? MainActivity` 静默 no-op → 改用 `LocalMainChromeController` CompositionLocal（MainActivity 壳根注入；Home/List/Stats/MainShell 过滤器回调改读 Local，MainActivity 旧包装删除）
 - [ ] `ReadButtonDelegate`（ViewBinding）与 Compose `ReadDock` 双按钮去重
 - [ ] `GlassSurface` 接入 `dev.chrisbanes.haze` 真实后端
 

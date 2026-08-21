@@ -56,7 +56,7 @@ import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
 import org.skepsun.kototoro.list.domain.ListSortOrder
-import org.skepsun.kototoro.main.ui.MainActivity
+import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
@@ -84,14 +84,14 @@ fun KototoroFavoritesHostRoute(
     viewModel: FavouritesContainerViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val mainActivity = LocalContext.current as? MainActivity
+    val mainChromeController = LocalMainChromeController.current
     val context = LocalContext.current
     val globalState = viewModel.globalFavoritesState
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
     val allFavoritesSortOrder by viewModel.allFavoritesSortOrder.collectAsStateWithLifecycle()
 
-    DisposableEffect(mainActivity, globalState, selectedGroupTab, selectedSourceTags, registerFilterCallback) {
+    DisposableEffect(mainChromeController, globalState, selectedGroupTab, selectedSourceTags, registerFilterCallback) {
         if (!registerFilterCallback) {
             onDispose { }
         } else {
@@ -116,14 +116,14 @@ fun KototoroFavoritesHostRoute(
                     }
                 }
             }
-            mainActivity?.setActiveFilterCallback(callback)
-            onDispose { mainActivity?.clearActiveFilterCallback(callback) }
+            mainChromeController?.setActiveFilterCallback(callback)
+            onDispose { mainChromeController?.clearActiveFilterCallback(callback) }
         }
     }
 
     SideEffect {
         if (registerFilterCallback) {
-            mainActivity?.refreshFilters()
+            mainChromeController?.refreshFilters()
         }
     }
 

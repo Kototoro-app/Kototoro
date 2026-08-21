@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
 import org.skepsun.kototoro.list.ui.ContentListViewModel
+import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -432,11 +433,11 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     // When registerFilterCallback is false, the parent composable manages the callback
     // (e.g. FavoritesHostScreen centralizes it to avoid HorizontalPager contention)
     if (registerFilterCallback) {
-        val mainActivity = activity as? MainActivity
+        val mainChromeController = LocalMainChromeController.current
         val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
         val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
-        DisposableEffect(mainActivity, viewModel) {
+        DisposableEffect(mainChromeController, viewModel) {
             val callback = object : SearchBarFilterCallback {
                 override fun isContentTypeFilterVisible(): Boolean = isContentTypeFilterVisible
                 override fun isSourceTagFilterVisible(): Boolean = isSourceTagFilterVisible
@@ -471,15 +472,15 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 }
             }
 
-            mainActivity?.setActiveFilterCallback(callback)
+            mainChromeController?.setActiveFilterCallback(callback)
             onDispose {
-                mainActivity?.clearActiveFilterCallback(callback)
+                mainChromeController?.clearActiveFilterCallback(callback)
             }
         }
 
         // 每次过滤状态变化时刷新胶囊栏的选中状态
         SideEffect {
-            mainActivity?.refreshFilters()
+            mainChromeController?.refreshFilters()
         }
     }
 

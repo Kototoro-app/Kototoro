@@ -4,6 +4,7 @@ import android.view.View
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -172,6 +173,14 @@ class MainChromeController(
         }
     }
 }
+
+/**
+ * CompositionLocal exposing the main shell's [MainChromeController] to nested routes,
+ * replacing the previous silent `LocalContext.current as? MainActivity` lookups for
+ * filter-bar callback registration. Provided by [org.skepsun.kototoro.main.ui.MainActivity]
+ * at the shell root; null outside the main shell (e.g. standalone activities).
+ */
+val LocalMainChromeController = staticCompositionLocalOf<MainChromeController?> { null }
 
 private fun ContentType?.toSearchContentKinds(): Set<SearchContentKind> = when (this) {
     ContentType.MANGA -> setOf(SearchContentKind.MANGA)
