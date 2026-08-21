@@ -238,14 +238,14 @@ class AnimeOfflineRepository @Inject constructor(
                 val key = "${service.id}:${mapping.remoteId}"
                 val current = candidates[key]
                 if (current == null || confidence > current.confidence) {
-	                    candidates[key] = TrackingSiteMatchResult(
-	                        service = service,
-	                        remoteId = mapping.remoteId,
-	                        localContent = content,
-	                        contentType = content.source.contentType,
-	                        confidence = confidence,
-	                        title = entry.title,
-	                        url = mapping.url,
+                        candidates[key] = TrackingSiteMatchResult(
+                            service = service,
+                            remoteId = mapping.remoteId,
+                            localContent = content,
+                            contentType = content.source.contentType,
+                            confidence = confidence,
+                            title = entry.title,
+                            url = mapping.url,
                         reason = if (normalizeTitle(entry.title) == normalized) "anime_offline_title" else "anime_offline_synonym",
                         isLinked = false,
                         isManual = false,

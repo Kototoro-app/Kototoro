@@ -16,21 +16,21 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 interface TrackingDiscoveryModule {
 
-	@Binds
-	@Singleton
-	fun bindTrackingSiteDiscoveryService(
-		impl: DefaultTrackingSiteDiscoveryService,
-	): TrackingSiteDiscoveryService
+    @Binds
+    @Singleton
+    fun bindTrackingSiteDiscoveryService(
+        impl: DefaultTrackingSiteDiscoveryService,
+    ): TrackingSiteDiscoveryService
 
-	@Binds
-	@Singleton
-	fun bindPreferredTrackingSiteProvider(
-		impl: AppSettingsPreferredTrackingSiteProvider,
-	): PreferredTrackingSiteProvider
+    @Binds
+    @Singleton
+    fun bindPreferredTrackingSiteProvider(
+        impl: AppSettingsPreferredTrackingSiteProvider,
+    ): PreferredTrackingSiteProvider
 
-	@Binds
-	@Singleton
-	fun bindTrackingSiteMatcher(
-		impl: DefaultTrackingSiteMatcher,
-	): TrackingSiteMatcher
+    @Binds
+    @Singleton
+    fun bindTrackingSiteMatcher(
+        impl: DefaultTrackingSiteMatcher,
+    ): TrackingSiteMatcher
 }

@@ -5,9 +5,9 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 interface PreferredTrackingSiteProvider {
 
-	val preferredSite: Flow<ScrobblerService>
+    val preferredSite: Flow<ScrobblerService>
 
-	fun getPreferredSite(): ScrobblerService
+    fun getPreferredSite(): ScrobblerService
 
-	fun setPreferredSite(service: ScrobblerService)
+    fun setPreferredSite(service: ScrobblerService)
 }
