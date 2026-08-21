@@ -4,7 +4,7 @@ import androidx.annotation.FloatRange
 import org.skepsun.kototoro.parsers.model.Content
 
 data class ContentSuggestion(
-	val manga: Content,
-	@FloatRange(from = 0.0, to = 1.0)
-	val relevance: Float,
+    val manga: Content,
+    @FloatRange(from = 0.0, to = 1.0)
+    val relevance: Float,
 )
