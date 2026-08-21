@@ -19,77 +19,77 @@ import javax.inject.Inject
 
 @ViewModelScoped
 class StatsCollector @Inject constructor(
-	private val db: MangaDatabase,
-	private val settings: AppSettings,
-	private val workResolver: WorkResolver,
-	lifecycle: ViewModelLifecycle,
+    private val db: MangaDatabase,
+    private val settings: AppSettings,
+    private val workResolver: WorkResolver,
+    lifecycle: ViewModelLifecycle,
 ) {
 
-	private val viewModelScope = RetainedLifecycleCoroutineScope(lifecycle)
-	private val stats = LongSparseArray<Entry>(1)
+    private val viewModelScope = RetainedLifecycleCoroutineScope(lifecycle)
+    private val stats = LongSparseArray<Entry>(1)
 
-	@Synchronized
-	fun onStateChanged(mangaId: Long, state: ReaderState) {
-		if (!settings.isStatsEnabled) {
-			return
-		}
-		val now = System.currentTimeMillis()
-		val entry = stats[mangaId]
-		if (entry == null) {
-			stats[mangaId] = Entry(
-				state = state,
-				stats = StatsEntity(
-					mangaId = mangaId,
-					startedAt = now,
-					duration = 0,
-					pages = 0,
-				),
-			)
-			return
-		}
-		val pagesDelta = if (entry.state.page != state.page || entry.state.chapterId != state.chapterId) 1 else 0
-		val newEntry = entry.copy(
-			stats = StatsEntity(
-				mangaId = mangaId,
-				startedAt = entry.stats.startedAt,
-				duration = now - entry.stats.startedAt,
-				pages = entry.stats.pages + pagesDelta,
-			),
-		)
-		stats[mangaId] = newEntry
-		commit(newEntry.stats)
-	}
+    @Synchronized
+    fun onStateChanged(mangaId: Long, state: ReaderState) {
+        if (!settings.isStatsEnabled) {
+            return
+        }
+        val now = System.currentTimeMillis()
+        val entry = stats[mangaId]
+        if (entry == null) {
+            stats[mangaId] = Entry(
+                state = state,
+                stats = StatsEntity(
+                    mangaId = mangaId,
+                    startedAt = now,
+                    duration = 0,
+                    pages = 0,
+                ),
+            )
+            return
+        }
+        val pagesDelta = if (entry.state.page != state.page || entry.state.chapterId != state.chapterId) 1 else 0
+        val newEntry = entry.copy(
+            stats = StatsEntity(
+                mangaId = mangaId,
+                startedAt = entry.stats.startedAt,
+                duration = now - entry.stats.startedAt,
+                pages = entry.stats.pages + pagesDelta,
+            ),
+        )
+        stats[mangaId] = newEntry
+        commit(newEntry.stats)
+    }
 
-	@Synchronized
-	fun onPause(mangaId: Long) {
-		stats.remove(mangaId)
-	}
+    @Synchronized
+    fun onPause(mangaId: Long) {
+        stats.remove(mangaId)
+    }
 
-	private fun commit(entity: StatsEntity) {
-		viewModelScope.launch(Dispatchers.Default) {
-			runCatchingCancellable {
-				val identity = workResolver.resolveByMangaId(entity.mangaId)
-				val entityId = identity.entityId
-				if (entityId != null) {
-					val anchorMangaId = identity.preferredMangaId ?: entity.mangaId
-					db.getWorkStatsDao().upsert(
-						WorkStatsEntity(
-							entityId = entityId,
-							anchorMangaId = anchorMangaId,
-							startedAt = entity.startedAt,
-							duration = entity.duration,
-							pages = entity.pages,
-						),
-					)
-				}
-			}.onFailure { e ->
-				e.printStackTraceDebug()
-			}
-		}
-	}
+    private fun commit(entity: StatsEntity) {
+        viewModelScope.launch(Dispatchers.Default) {
+            runCatchingCancellable {
+                val identity = workResolver.resolveByMangaId(entity.mangaId)
+                val entityId = identity.entityId
+                if (entityId != null) {
+                    val anchorMangaId = identity.preferredMangaId ?: entity.mangaId
+                    db.getWorkStatsDao().upsert(
+                        WorkStatsEntity(
+                            entityId = entityId,
+                            anchorMangaId = anchorMangaId,
+                            startedAt = entity.startedAt,
+                            duration = entity.duration,
+                            pages = entity.pages,
+                        ),
+                    )
+                }
+            }.onFailure { e ->
+                e.printStackTraceDebug()
+            }
+        }
+    }
 
-	private data class Entry(
-		val state: ReaderState,
-		val stats: StatsEntity,
-	)
+    private data class Entry(
+        val state: ReaderState,
+        val stats: StatsEntity,
+    )
 }

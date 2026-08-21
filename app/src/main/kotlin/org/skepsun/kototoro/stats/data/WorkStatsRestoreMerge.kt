@@ -12,15 +12,15 @@ package org.skepsun.kototoro.stats.data
  * dropping data.
  */
 fun mergeRestoredWorkStats(
-	base: WorkStatsEntity,
-	other: WorkStatsEntity,
+    base: WorkStatsEntity,
+    other: WorkStatsEntity,
 ): WorkStatsEntity {
-	val winner = compareValuesBy(other, base, { it.pages }, { it.duration })
-		.takeIf { it > 0 }
-		?.let { other }
-		?: base
-	return winner.copy(
-		entityId = base.entityId,
-		startedAt = base.startedAt,
-	)
+    val winner = compareValuesBy(other, base, { it.pages }, { it.duration })
+        .takeIf { it > 0 }
+        ?.let { other }
+        ?: base
+    return winner.copy(
+        entityId = base.entityId,
+        startedAt = base.startedAt,
+    )
 }

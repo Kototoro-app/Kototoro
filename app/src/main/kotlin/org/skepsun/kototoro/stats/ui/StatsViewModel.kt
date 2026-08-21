@@ -18,34 +18,34 @@ import javax.inject.Inject
 
 @HiltViewModel
 class StatsViewModel @Inject constructor(
-	private val repository: StatsRepository,
+    private val repository: StatsRepository,
 ) : BaseViewModel() {
 
-	val period = MutableStateFlow(StatsPeriod.WEEK)
-	val onActionDone = MutableEventFlow<ReversibleAction>()
-	val selectedKind = MutableStateFlow(StatsContentKind.ALL)
+    val period = MutableStateFlow(StatsPeriod.WEEK)
+    val onActionDone = MutableEventFlow<ReversibleAction>()
+    val selectedKind = MutableStateFlow(StatsContentKind.ALL)
 
-	val dashboard = MutableStateFlow(StatsDashboard())
+    val dashboard = MutableStateFlow(StatsDashboard())
 
-	init {
-		launchJob(Dispatchers.Default) {
-			combine(
-				period,
-				selectedKind,
-			) { selectedPeriod, kind -> selectedPeriod to kind }
-				.collectLatest { (selectedPeriod, kind) ->
-					dashboard.value = withLoading {
-						repository.getDashboard(selectedPeriod, emptySet(), kind)
-					}
-				}
-		}
-	}
+    init {
+        launchJob(Dispatchers.Default) {
+            combine(
+                period,
+                selectedKind,
+            ) { selectedPeriod, kind -> selectedPeriod to kind }
+                .collectLatest { (selectedPeriod, kind) ->
+                    dashboard.value = withLoading {
+                        repository.getDashboard(selectedPeriod, emptySet(), kind)
+                    }
+                }
+        }
+    }
 
-	fun clearStats() {
-		launchLoadingJob(Dispatchers.Default) {
-			repository.clearStats()
-			dashboard.value = StatsDashboard()
-			onActionDone.call(ReversibleAction(R.string.stats_cleared, null))
-		}
-	}
+    fun clearStats() {
+        launchLoadingJob(Dispatchers.Default) {
+            repository.clearStats()
+            dashboard.value = StatsDashboard()
+            onActionDone.call(ReversibleAction(R.string.stats_cleared, null))
+        }
+    }
 }

@@ -6,6 +6,6 @@ import androidx.room.Query
 @Dao
 abstract class StatsDao {
 
-	@Query("DELETE FROM stats")
-	abstract suspend fun clear()
+    @Query("DELETE FROM stats")
+    abstract suspend fun clear()
 }
