@@ -29,7 +29,11 @@ data class LocalContent(
         private set
         get() {
             if (field == -1L) {
-                field = file.creationTime
+                field = runCatching { file.creationTime }.getOrElse {
+                    // 文件可能已被移动/删除，或 url 是无 scheme 的相对路径（历史坏数据）
+                    // 出现 NoSuchFileException 等读写错误时退化为 0，避免崩溃整个列表。
+                    0L
+                }
             }
             return field
         }

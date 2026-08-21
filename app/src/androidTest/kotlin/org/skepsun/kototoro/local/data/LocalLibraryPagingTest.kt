@@ -175,6 +175,19 @@ class LocalLibraryPagingTest {
 	}
 
 	@Test
+	fun remoteSourceDownloadsAppearInLocalLibrary() = runTest {
+		// 回归验证：下载到本地（含自定义目录）的漫画在 manga 表保留远程 source，
+		// 只要 local_index 有记录就应出现在本地列表，不能按 LOCAL source 过滤掉。
+		seedManga(3, prefix = "DL", source = "MANGADEX", contentType = ContentType.MANGA)
+		seedManga(2, prefix = "Mem", source = LocalMangaSource.name, contentType = ContentType.MANGA, startId = 100L)
+
+		val all = repository.getAll(SortOrder.ALPHABETICAL, null)
+		assertEquals(5, all.size)
+		assertTrue(all.any { it.title == "DL 001" && it.source.name == "MANGADEX" })
+		assertTrue(all.any { it.title == "Mem 100" && it.source.name == "LOCAL" })
+	}
+
+	@Test
 	fun getAllReturnsTheFullDatabaseBackedList() = runTest {
 		seedManga(33)
 

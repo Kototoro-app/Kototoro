@@ -15,8 +15,6 @@ import kotlinx.coroutines.runInterruptible
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.LocalMangaSource
-import org.skepsun.kototoro.core.model.LocalNovelSource
-import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.getContentType
@@ -28,6 +26,7 @@ import org.skepsun.kototoro.core.util.ext.deleteAwait
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.takeIfWriteable
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
+import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withChildren
 import org.skepsun.kototoro.local.data.index.LocalContentIndex
 import org.skepsun.kototoro.local.data.input.LocalContentParser
@@ -58,12 +57,6 @@ import javax.inject.Singleton
 private const val MAX_PARALLELISM = 4
 private const val FILENAME_SKIP = ".notamanga"
 private const val BACKUP_SUFFIX = ".bk"
-
-private val LOCAL_SOURCE_NAMES = listOf(
-    LocalMangaSource.name,
-    LocalNovelSource.name,
-    LocalVideoSource.name,
-)
 
 private const val LOCAL_PAGE_SIZE = 128
 
@@ -383,19 +376,26 @@ class LocalMangaRepository @Inject constructor(
      * 只读 manga/local_index 表，不解析文件系统；索引过期时由
      * [LocalContentIndex.updateIfRequired] 触发一次全量扫描修复。
      * 结果以 local_index 中存在的记录为准，避免把已删除的本地文件继续展示。
+     * 注意：local_index 表也可能包含 source 为远程源的已下载漫画（下载完成时
+     * 写入本地 path，但 manga 行保留远程 source），因此不能按 LOCAL source 过滤。
+     * file 定位/详情页使用 local_index 表中的 path 作为 storageUri：
+     * 下载到自定义目录（SAF）时是 content://，直接按 manga.url 拼 File 会得到无效
+     * 根路径，导致 createdAt 抛 NoSuchFileException（已由 LocalContent.createdAt 兜底）。
      */
     private suspend fun getIndexedList(): ArrayList<LocalContent> {
         val dao = db.getMangaDao()
-        val all = dao.findAllBySources(LOCAL_SOURCE_NAMES)
-        if (all.isEmpty()) {
+        val entities = db.getLocalContentIndexDao().findAllPaths()
+        if (entities.isEmpty()) {
             return ArrayList()
         }
-        val indexed = db.getLocalContentIndexDao()
-            .findExistingIds(all.mapTo(ArrayList(all.size)) { it.manga.id })
-            .toHashSet()
-        return all.asSequence()
-            .filter { it.manga.id in indexed }
-            .map { LocalContent(it.toContent()) }
+        val pathByMangaId = entities.associateBy { it.mangaId }
+        return dao.findWithTagsByIds(pathByMangaId.keys)
+            .asSequence()
+            .mapNotNull { mwt ->
+                val path = pathByMangaId[mwt.manga.id]?.path ?: return@mapNotNull null
+                val storageUri = path.toUriOrNull()
+                LocalContent(mwt.toContent(), storageUri = storageUri)
+            }
             .toCollection(ArrayList())
     }
 
