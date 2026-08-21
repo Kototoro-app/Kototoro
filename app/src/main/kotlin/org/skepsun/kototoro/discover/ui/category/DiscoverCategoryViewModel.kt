@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,7 +68,7 @@ class DiscoverCategoryViewModel @Inject constructor(
     val content: StateFlow<List<ListModel>> = _contentState.asStateFlow()
     val selectedCalendarDateMillis: StateFlow<Long?> = _selectedCalendarDateMillis.asStateFlow()
 
-    private var isPageLoading = false
+    private val isPageLoading = AtomicBoolean(false)
     private var currentService: ScrobblerService? = null
     private var currentCategory: String? = null
     private var currentSortOptionId: String? = null
@@ -195,16 +196,16 @@ class DiscoverCategoryViewModel @Inject constructor(
     }
 
     fun loadNextPage() {
-        if (isPageLoading || !canLoadMore) return
+        if (isPageLoading.get() || !canLoadMore) return
         val service = currentService ?: return
         val category = currentCategory ?: return
         val nextPage = _page.value + 1
+        if (!isPageLoading.compareAndSet(false, true)) return
         viewModelScope.launch {
-            isPageLoading = true
             try {
                 loadData(service, category, nextPage)
             } finally {
-                isPageLoading = false
+                isPageLoading.set(false)
             }
         }
     }

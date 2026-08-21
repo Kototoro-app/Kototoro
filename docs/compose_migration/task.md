@@ -136,8 +136,8 @@
 
 以下条目来自 4/18 洞察但尚未落实，优先级低于 L1→L2 推进：
 
-- [ ] `DiscoverViewModel.isPageLoading` 并发保护（改用 `AtomicBoolean` 或 `Mutex`）
-- [ ] `collectAsState` → `collectAsStateWithLifecycle` 批量替换（详情页、Feed 等后台页面）
+- [x] `DiscoverViewModel.isPageLoading` 并发保护（改用 `AtomicBoolean` CAS：compareAndSet(false,true) 原子加锁，finally set(false) 释放）
+- [x] `collectAsState` → `collectAsStateWithLifecycle` 批量替换（全仓已 0 处裸 `collectAsState(`，346 处全部 WithLifecycle）
 - [x] `ChaptersScreen` / `PagesScreen` / `BookmarksScreen` 滚动条组件升级（5/1：从 modifier 改独立 `VerticalScrollbar` composable；新增 `activeDetailsPaneState` 优化 pane 联动）
 - [x] `ChaptersScreen` 章节标签中文化（5/1：`fastScrollLabels` 生成"第N章"格式标签）
 - [ ] 抽 `ContentHeroBackdropCarousel` 通用组件（Home/Explore/Discover 共用，~300 行清理）

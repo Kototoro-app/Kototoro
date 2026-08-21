@@ -2,6 +2,7 @@ package org.skepsun.kototoro.discover.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -167,7 +168,7 @@ class DiscoverViewModel @Inject constructor(
     private val _page = MutableStateFlow(0)
     private val _contentState = MutableStateFlow<List<ListModel>>(listOf(LoadingState))
     private val _bangumiRecommendationLoadFailures = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    private var isPageLoading = false
+    private val isPageLoading = AtomicBoolean(false)
     private var lastHandledRefreshVersion = 0
 
     val content: StateFlow<List<ListModel>> = _contentState.asStateFlow()
@@ -366,18 +367,18 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadNextPage() {
-        if (isPageLoading) return
+        if (isPageLoading.get()) return
         val query = searchQuery.value.trim()
         if (!shouldLoadBrowseRecommendations(query)) return
         val nextPage = _page.value + 1
         val service = activeService.value
         val category = activeCategory.value
+        if (!isPageLoading.compareAndSet(false, true)) return
         viewModelScope.launch {
-            isPageLoading = true
             try {
                 loadData(service, category, query, nextPage)
             } finally {
-                isPageLoading = false
+                isPageLoading.set(false)
             }
         }
     }
