@@ -21,154 +21,154 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 @AndroidEntryPoint
 class UnifiedSourcesActivity : BaseComposeActivity() {
 
-	private val viewModel by viewModels<UnifiedSourcesViewModel>()
-	private var pendingFileImportKind: UnifiedSourceKind? = null
-	private var pendingFileImportEnabled = true
+    private val viewModel by viewModels<UnifiedSourcesViewModel>()
+    private var pendingFileImportKind: UnifiedSourceKind? = null
+    private var pendingFileImportEnabled = true
 
-	private val openRepositoryFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-		if (uri == null) return@registerForActivityResult
-		val kind = pendingFileImportKind ?: return@registerForActivityResult
-		pendingFileImportKind = null
-		persistReadPermission(uri)
-		viewModel.addRepositoryFromFile(kind, uri, pendingFileImportEnabled)
-	}
+    private val openRepositoryFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val kind = pendingFileImportKind ?: return@registerForActivityResult
+        pendingFileImportKind = null
+        persistReadPermission(uri)
+        viewModel.addRepositoryFromFile(kind, uri, pendingFileImportEnabled)
+    }
 
-	private val openLocalJar = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-		if (uri == null) return@registerForActivityResult
-		persistReadPermission(uri)
-		viewModel.importLocalJar(uri)
-	}
+    private val openLocalJar = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        persistReadPermission(uri)
+        viewModel.importLocalJar(uri)
+    }
 
-	private val installLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-		viewModel.onInstallerActivityReturned()
-	}
+    private val installLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        viewModel.onInstallerActivityReturned()
+    }
 
-	private val uninstallLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-		viewModel.onUninstallActivityResult()
-	}
+    private val uninstallLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        viewModel.onUninstallActivityResult()
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		val initialKind = intent.resolveInitialRepositoryKind()
-		val initialUrl = intent.resolveInitialRepositoryUrl()
-		setComposeContent {
-			UnifiedSourcesContent(
-				initialAddRepositoryKind = initialKind,
-				initialAddRepositoryUrl = initialUrl,
-				modifier = Modifier.fillMaxSize(),
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val initialKind = intent.resolveInitialRepositoryKind()
+        val initialUrl = intent.resolveInitialRepositoryUrl()
+        setComposeContent {
+            UnifiedSourcesContent(
+                initialAddRepositoryKind = initialKind,
+                initialAddRepositoryUrl = initialUrl,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 
-	@Composable
-	fun UnifiedSourcesContent(
-		initialAddRepositoryKind: UnifiedSourceKind? = null,
-		initialAddRepositoryUrl: String? = null,
-		modifier: Modifier = Modifier,
-	) {
-		var searchActive by remember { mutableStateOf(false) }
-		var activePanel by remember { mutableStateOf<UnifiedToolbarFilterPanel?>(null) }
-		UnifiedSourcesRoute(
-			searchActive = searchActive,
-			onSearchActiveChange = { searchActive = it },
-			activePanel = activePanel,
-			onActivePanelChange = { activePanel = it },
-			initialAddRepositoryKind = initialAddRepositoryKind,
-			initialAddRepositoryUrl = initialAddRepositoryUrl,
-			viewModel = viewModel,
-			onBrowseSource = { item -> router.openList(item.source, null, null) },
-			onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
-			onOpenRepositoryFile = ::openRepositoryFilePicker,
-			onOpenLocalJarPicker = ::openLocalJarPicker,
-			onStartInstall = { intent ->
-				runCatching { installLauncher.launch(intent) }
-					.onFailure {
-						viewModel.onInstallerActivityReturned()
-						Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show()
-					}
-			},
-			onStartUninstall = { intent ->
-				runCatching { uninstallLauncher.launch(intent) }
-					.onFailure { Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show() }
-			},
-			modifier = modifier,
-		)
-	}
+    @Composable
+    fun UnifiedSourcesContent(
+        initialAddRepositoryKind: UnifiedSourceKind? = null,
+        initialAddRepositoryUrl: String? = null,
+        modifier: Modifier = Modifier,
+    ) {
+        var searchActive by remember { mutableStateOf(false) }
+        var activePanel by remember { mutableStateOf<UnifiedToolbarFilterPanel?>(null) }
+        UnifiedSourcesRoute(
+            searchActive = searchActive,
+            onSearchActiveChange = { searchActive = it },
+            activePanel = activePanel,
+            onActivePanelChange = { activePanel = it },
+            initialAddRepositoryKind = initialAddRepositoryKind,
+            initialAddRepositoryUrl = initialAddRepositoryUrl,
+            viewModel = viewModel,
+            onBrowseSource = { item -> router.openList(item.source, null, null) },
+            onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
+            onOpenRepositoryFile = ::openRepositoryFilePicker,
+            onOpenLocalJarPicker = ::openLocalJarPicker,
+            onStartInstall = { intent ->
+                runCatching { installLauncher.launch(intent) }
+                    .onFailure {
+                        viewModel.onInstallerActivityReturned()
+                        Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show()
+                    }
+            },
+            onStartUninstall = { intent ->
+                runCatching { uninstallLauncher.launch(intent) }
+                    .onFailure { Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show() }
+            },
+            modifier = modifier,
+        )
+    }
 
-	private fun openRepositoryFilePicker(kind: UnifiedSourceKind, enableImportedSources: Boolean) {
-		pendingFileImportKind = kind
-		pendingFileImportEnabled = enableImportedSources
-		openRepositoryFile.launch(
-			arrayOf(
-				"application/json",
-				"text/plain",
-				"application/javascript",
-				"text/javascript",
-				"*/*",
-			),
-		)
-	}
+    private fun openRepositoryFilePicker(kind: UnifiedSourceKind, enableImportedSources: Boolean) {
+        pendingFileImportKind = kind
+        pendingFileImportEnabled = enableImportedSources
+        openRepositoryFile.launch(
+            arrayOf(
+                "application/json",
+                "text/plain",
+                "application/javascript",
+                "text/javascript",
+                "*/*",
+            ),
+        )
+    }
 
-	private fun openLocalJarPicker() {
-		openLocalJar.launch(
-			arrayOf(
-				"application/java-archive",
-				"application/zip",
-				"*/*",
-			),
-		)
-	}
+    private fun openLocalJarPicker() {
+        openLocalJar.launch(
+            arrayOf(
+                "application/java-archive",
+                "application/zip",
+                "*/*",
+            ),
+        )
+    }
 
-	private fun persistReadPermission(uri: Uri) {
-		runCatching {
-			contentResolver.takePersistableUriPermission(
-				uri,
-				Intent.FLAG_GRANT_READ_URI_PERMISSION,
-			)
-		}
-	}
+    private fun persistReadPermission(uri: Uri) {
+        runCatching {
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+    }
 
-	companion object {
+    companion object {
 
-		const val EXTRA_INITIAL_REPOSITORY_KIND = "initial_repository_kind"
-		const val EXTRA_INITIAL_REPOSITORY_URL = "initial_repository_url"
-		private const val HOST_ADD_REPO = "add-repo"
+        const val EXTRA_INITIAL_REPOSITORY_KIND = "initial_repository_kind"
+        const val EXTRA_INITIAL_REPOSITORY_URL = "initial_repository_url"
+        private const val HOST_ADD_REPO = "add-repo"
 
-		fun newIntent(
-			context: Context,
-			initialRepositoryKind: UnifiedSourceKind? = null,
-			initialRepositoryUrl: String? = null,
-		): Intent {
-			return Intent(context, UnifiedSourcesActivity::class.java).apply {
-				if (initialRepositoryKind != null) {
-					putExtra(EXTRA_INITIAL_REPOSITORY_KIND, initialRepositoryKind.name)
-				}
-				if (initialRepositoryUrl != null) {
-					putExtra(EXTRA_INITIAL_REPOSITORY_URL, initialRepositoryUrl)
-				}
-			}
-		}
+        fun newIntent(
+            context: Context,
+            initialRepositoryKind: UnifiedSourceKind? = null,
+            initialRepositoryUrl: String? = null,
+        ): Intent {
+            return Intent(context, UnifiedSourcesActivity::class.java).apply {
+                if (initialRepositoryKind != null) {
+                    putExtra(EXTRA_INITIAL_REPOSITORY_KIND, initialRepositoryKind.name)
+                }
+                if (initialRepositoryUrl != null) {
+                    putExtra(EXTRA_INITIAL_REPOSITORY_URL, initialRepositoryUrl)
+                }
+            }
+        }
 
-		private fun Intent.resolveInitialRepositoryKind(): UnifiedSourceKind? {
-			val extraKind = getStringExtra(EXTRA_INITIAL_REPOSITORY_KIND)
-				?.let { runCatching { enumValueOf<UnifiedSourceKind>(it) }.getOrNull() }
-			if (extraKind != null) {
-				return extraKind
-			}
-			if (action != Intent.ACTION_VIEW || data?.host != HOST_ADD_REPO) {
-				return null
-			}
-			return when (data?.scheme) {
-				"aniyomi", "anikku" -> UnifiedSourceKind.ANIYOMI
-				else -> UnifiedSourceKind.MIHON
-			}
-		}
+        private fun Intent.resolveInitialRepositoryKind(): UnifiedSourceKind? {
+            val extraKind = getStringExtra(EXTRA_INITIAL_REPOSITORY_KIND)
+                ?.let { runCatching { enumValueOf<UnifiedSourceKind>(it) }.getOrNull() }
+            if (extraKind != null) {
+                return extraKind
+            }
+            if (action != Intent.ACTION_VIEW || data?.host != HOST_ADD_REPO) {
+                return null
+            }
+            return when (data?.scheme) {
+                "aniyomi", "anikku" -> UnifiedSourceKind.ANIYOMI
+                else -> UnifiedSourceKind.MIHON
+            }
+        }
 
-		private fun Intent.resolveInitialRepositoryUrl(): String? {
-			return getStringExtra(EXTRA_INITIAL_REPOSITORY_URL)
-				?: data
-					?.takeIf { action == Intent.ACTION_VIEW && it.host == HOST_ADD_REPO }
-					?.getQueryParameter("url")
-		}
-	}
+        private fun Intent.resolveInitialRepositoryUrl(): String? {
+            return getStringExtra(EXTRA_INITIAL_REPOSITORY_URL)
+                ?: data
+                    ?.takeIf { action == Intent.ACTION_VIEW && it.host == HOST_ADD_REPO }
+                    ?.getQueryParameter("url")
+        }
+    }
 }
