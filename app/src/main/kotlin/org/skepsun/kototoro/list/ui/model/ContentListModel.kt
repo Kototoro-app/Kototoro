@@ -16,62 +16,62 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 
 sealed class ContentListModel : ListModel {
 
-	abstract val override: ContentOverride?
-	abstract val manga: Content
-	abstract val counter: Int
-	open val projectionCount: Int = 0
-	open val isPinned: Boolean = false
-	open val metadataTrackingService: ScrobblerService? = null
-	open val scoreText: String? = null
+    abstract val override: ContentOverride?
+    abstract val manga: Content
+    abstract val counter: Int
+    open val projectionCount: Int = 0
+    open val isPinned: Boolean = false
+    open val metadataTrackingService: ScrobblerService? = null
+    open val scoreText: String? = null
 
-	open val id: Long
-		get() = manga.id
+    open val id: Long
+        get() = manga.id
 
-	val title: String
-		get() = override?.title.ifNullOrEmpty { manga.title }
+    val title: String
+        get() = override?.title.ifNullOrEmpty { manga.title }
 
-	val coverUrl: String?
-		get() = override?.coverUrl.ifNullOrEmpty { manga.coverUrl }
+    val coverUrl: String?
+        get() = override?.coverUrl.ifNullOrEmpty { manga.coverUrl }
 
-	val source: ContentSource
-		get() = manga.source
+    val source: ContentSource
+        get() = manga.source
 
-	fun toContentWithOverride() = manga.withOverride(override)
+    fun toContentWithOverride() = manga.withOverride(override)
 
-	open fun getSummary(context: Context): CharSequence = buildSpannedString {
-		bold {
-			append(manga.title)
-		}
-		appendLine()
-		if (manga.tags.isNotEmpty()) {
-			manga.tags.joinTo(this) { it.title }
-			appendLine()
-		}
-		append(manga.source.getTitle(context))
-	}
+    open fun getSummary(context: Context): CharSequence = buildSpannedString {
+        bold {
+            append(manga.title)
+        }
+        appendLine()
+        if (manga.tags.isNotEmpty()) {
+            manga.tags.joinTo(this) { it.title }
+            appendLine()
+        }
+        append(manga.source.getTitle(context))
+    }
 
-	override fun areItemsTheSame(other: ListModel): Boolean {
-		return other is ContentListModel && other.javaClass == javaClass && id == other.id
-	}
+    override fun areItemsTheSame(other: ListModel): Boolean {
+        return other is ContentListModel && other.javaClass == javaClass && id == other.id
+    }
 
-	override fun getChangePayload(previousState: ListModel): Any? = when {
-		previousState !is ContentListModel || previousState.manga != manga -> null
-		previousState.counter != counter -> PAYLOAD_ANYTHING_CHANGED
-		previousState.projectionCount != projectionCount -> PAYLOAD_ANYTHING_CHANGED
-		else -> null
-	}
+    override fun getChangePayload(previousState: ListModel): Any? = when {
+        previousState !is ContentListModel || previousState.manga != manga -> null
+        previousState.counter != counter -> PAYLOAD_ANYTHING_CHANGED
+        previousState.projectionCount != projectionCount -> PAYLOAD_ANYTHING_CHANGED
+        else -> null
+    }
 }
 
 fun ContentListModel.secondaryTitleText(): String? = when (this) {
-	is ContentCompactListModel -> subtitle
-	is ContentDetailedListModel -> subtitle
-	is ContentGridModel -> subtitle
+    is ContentCompactListModel -> subtitle
+    is ContentDetailedListModel -> subtitle
+    is ContentGridModel -> subtitle
 }
 
 fun ContentListModel.supportingText(): String? = when (this) {
-	is ContentCompactListModel -> supportingText
-	is ContentDetailedListModel -> supportingText
-	else -> null
+    is ContentCompactListModel -> supportingText
+    is ContentDetailedListModel -> supportingText
+    else -> null
 }
 
 fun ContentListModel.buildInfoText(context: Context): String? {

@@ -1103,14 +1103,14 @@ fun KototoroContentCardDetailedList(
                 overflow = TextOverflow.Ellipsis
             )
             
-			val authorText = remember(item.manga.authors) {
-				item.manga.authors.joinToString(", ")
-			}
-			if (!item.subtitle.isNullOrBlank()) {
-				Text(
-					text = item.subtitle.orEmpty(),
-					style = MaterialTheme.typography.bodyMedium,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
+            val authorText = remember(item.manga.authors) {
+                item.manga.authors.joinToString(", ")
+            }
+            if (!item.subtitle.isNullOrBlank()) {
+                Text(
+                    text = item.subtitle.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 4.dp)
