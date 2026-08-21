@@ -4,13 +4,13 @@ import org.skepsun.kototoro.browser.BrowserCallback
 
 interface CloudFlareCallback : BrowserCallback {
 
-	override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) = Unit
+    override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) = Unit
 
-	fun onPageLoaded()
+    fun onPageLoaded()
 
-	fun onCheckPassed()
+    fun onCheckPassed()
 
-	fun onLoopDetected()
+    fun onLoopDetected()
 
-	fun onMainFrameError() = Unit
+    fun onMainFrameError() = Unit
 }

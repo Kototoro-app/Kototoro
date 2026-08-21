@@ -19,9 +19,9 @@ private val BLOCKED_HEADERS = setOf(
 )
 
 class CloudFlareInterceptClient(
-	private val cookieJar: MutableCookieJar,
-	callback: CloudFlareCallback,
-	adBlock: AdBlock?,
+    private val cookieJar: MutableCookieJar,
+    callback: CloudFlareCallback,
+    adBlock: AdBlock?,
     targetUrl: String,
 ) : CloudFlareClient(cookieJar, callback, adBlock = adBlock, targetUrl = targetUrl) {
 

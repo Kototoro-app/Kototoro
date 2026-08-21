@@ -37,64 +37,64 @@ class BrowserActivity : BaseBrowserActivity() {
     @javax.inject.Inject
     lateinit var legadoHttpClient: LegadoHttpClient
 
-	@javax.inject.Inject
-	lateinit var captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator
+    @javax.inject.Inject
+    lateinit var captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator
 
-	private var pendingResult = RESULT_CANCELED
-	private var successCookieUrl: String? = null
-	private var successCookieName: String? = null
-	private var initialSuccessCookieValue: String? = null
+    private var pendingResult = RESULT_CANCELED
+    private var successCookieUrl: String? = null
+    private var successCookieName: String? = null
+    private var initialSuccessCookieValue: String? = null
     private var browserWaitToken: String? = null
     private var browserWaitCompleted = false
     private var initialHtml: String? = null
     private var refetchAfterSuccess: Boolean = true
-	private var sawChallengePage = false
+    private var sawChallengePage = false
     private var autoSavingVerificationResult = false
-	private var cfResolveResultNotified = false
-	private var sourceRequestHeaders: Map<String, String> = emptyMap()
+    private var cfResolveResultNotified = false
+    private var sourceRequestHeaders: Map<String, String> = emptyMap()
 
-	override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
-		sourceRequestHeaders = repository?.getRequestHeaders().orEmpty()
-		setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		successCookieUrl = intent?.getStringExtra(AppRouter.KEY_SUCCESS_COOKIE_URL)
-		successCookieName = intent?.getStringExtra(AppRouter.KEY_SUCCESS_COOKIE_NAME)
+    override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
+        sourceRequestHeaders = repository?.getRequestHeaders().orEmpty()
+        setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
+        successCookieUrl = intent?.getStringExtra(AppRouter.KEY_SUCCESS_COOKIE_URL)
+        successCookieName = intent?.getStringExtra(AppRouter.KEY_SUCCESS_COOKIE_NAME)
         browserWaitToken = intent?.getStringExtra(AppRouter.KEY_BROWSER_WAIT_TOKEN)
         initialHtml = intent?.getStringExtra(AppRouter.KEY_BROWSER_HTML)
         refetchAfterSuccess = intent?.getBooleanExtra(AppRouter.KEY_BROWSER_REFETCH_AFTER_SUCCESS, true) ?: true
-		browserWebView.webViewClient = BrowserClient(this, adBlock)
-		initialSuccessCookieValue = getSuccessCookieValue()
-		logCookieState("open", initialSuccessCookieValue)
-		logBrowserState("open", intent?.dataString)
-		lifecycleScope.launch {
-			try {
-				proxyProvider.applyWebViewConfig()
-			} catch (e: Exception) {
-				e.printStackTraceDebug()
-				Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
-			}
-			if (savedInstanceState == null) {
-				val url = intent?.dataString
-				if (url.isNullOrEmpty()) {
-					finishAfterTransition()
-				} else {
-					onTitleChanged(
-						intent?.getStringExtra(AppRouter.KEY_TITLE) ?: getString(R.string.loading_),
-						url,
-					)
-					val html = initialHtml
-					if (!html.isNullOrBlank()) {
-						browserWebView.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
-					} else {
-						if (sourceRequestHeaders.isEmpty()) {
-							browserWebView.loadUrl(url)
-						} else {
-							browserWebView.loadUrl(url, sourceRequestHeaders)
-						}
-					}
-				}
-			}
-		}
-	}
+        browserWebView.webViewClient = BrowserClient(this, adBlock)
+        initialSuccessCookieValue = getSuccessCookieValue()
+        logCookieState("open", initialSuccessCookieValue)
+        logBrowserState("open", intent?.dataString)
+        lifecycleScope.launch {
+            try {
+                proxyProvider.applyWebViewConfig()
+            } catch (e: Exception) {
+                e.printStackTraceDebug()
+                Snackbar.make(browserWebView, e.getDisplayMessage(resources), Snackbar.LENGTH_LONG).show()
+            }
+            if (savedInstanceState == null) {
+                val url = intent?.dataString
+                if (url.isNullOrEmpty()) {
+                    finishAfterTransition()
+                } else {
+                    onTitleChanged(
+                        intent?.getStringExtra(AppRouter.KEY_TITLE) ?: getString(R.string.loading_),
+                        url,
+                    )
+                    val html = initialHtml
+                    if (!html.isNullOrBlank()) {
+                        browserWebView.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url)
+                    } else {
+                        if (sourceRequestHeaders.isEmpty()) {
+                            browserWebView.loadUrl(url)
+                        } else {
+                            browserWebView.loadUrl(url, sourceRequestHeaders)
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     override fun onLoadingStateChanged(isLoading: Boolean) {
         super.onLoadingStateChanged(isLoading)
@@ -106,9 +106,9 @@ class BrowserActivity : BaseBrowserActivity() {
         maybeCompleteAfterVerification()
     }
 
-	override fun onPageFinished(webView: WebView, url: String) {
-		logBrowserState("page_finished", url)
-		flushBrowserCookies()
+    override fun onPageFinished(webView: WebView, url: String) {
+        logBrowserState("page_finished", url)
+        flushBrowserCookies()
         if (browserWaitCompleted || autoSavingVerificationResult) {
             return
         }
@@ -122,154 +122,154 @@ class BrowserActivity : BaseBrowserActivity() {
         }
     }
 
-	override fun finish() {
-		if (browserWaitToken != null && !browserWaitCompleted) {
+    override fun finish() {
+        if (browserWaitToken != null && !browserWaitCompleted) {
             browserWaitCompleted = true
             lifecycleScope.launch {
                 completeBrowserWait()
                 finish()
             }
-			return
-		}
-		logBrowserState("finish")
-		flushBrowserCookies()
-		val currentValue = getSuccessCookieValue()
-		logCookieState("finish", currentValue)
-		pendingResult = if (isSuccessCookieSatisfied(currentValue)) RESULT_OK else RESULT_CANCELED
-		setResult(pendingResult)
-		if (!cfResolveResultNotified) {
-			cfResolveResultNotified = true
-			intent?.getStringExtra(EXTRA_CF_RESOLVE_KEY)?.let { resolveKey ->
-				captchaAutoResolveCoordinator.notifyResolveResult(resolveKey, pendingResult == RESULT_OK)
-			}
-		}
-		super.finish()
-	}
+            return
+        }
+        logBrowserState("finish")
+        flushBrowserCookies()
+        val currentValue = getSuccessCookieValue()
+        logCookieState("finish", currentValue)
+        pendingResult = if (isSuccessCookieSatisfied(currentValue)) RESULT_OK else RESULT_CANCELED
+        setResult(pendingResult)
+        if (!cfResolveResultNotified) {
+            cfResolveResultNotified = true
+            intent?.getStringExtra(EXTRA_CF_RESOLVE_KEY)?.let { resolveKey ->
+                captchaAutoResolveCoordinator.notifyResolveResult(resolveKey, pendingResult == RESULT_OK)
+            }
+        }
+        super.finish()
+    }
 
-	override fun onPause() {
-		flushBrowserCookies()
-		super.onPause()
-	}
+    override fun onPause() {
+        flushBrowserCookies()
+        super.onPause()
+    }
 
-	override fun onCreateOptionsMenu(menu: Menu): Boolean {
-		super.onCreateOptionsMenu(menu)
-		menuInflater.inflate(R.menu.opt_browser, menu)
-		return true
-	}
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        super.onCreateOptionsMenu(menu)
+        menuInflater.inflate(R.menu.opt_browser, menu)
+        return true
+    }
 
-	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-		android.R.id.home -> {
-			browserWebView.stopLoading()
-			finishAfterTransition()
-			true
-		}
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        android.R.id.home -> {
+            browserWebView.stopLoading()
+            finishAfterTransition()
+            true
+        }
 
-		R.id.action_browser -> {
-			if (!router.openExternalBrowser(browserWebView.url.orEmpty(), item.title)) {
-				Snackbar.make(browserWebView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
-			}
-			true
-		}
+        R.id.action_browser -> {
+            if (!router.openExternalBrowser(browserWebView.url.orEmpty(), item.title)) {
+                Snackbar.make(browserWebView, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+            }
+            true
+        }
 
-		else -> super.onOptionsItemSelected(item)
-	}
+        else -> super.onOptionsItemSelected(item)
+    }
 
-	class Contract : ActivityResultContract<InteractiveActionRequiredException, Boolean>() {
-		override fun createIntent(
-			context: Context,
-			input: InteractiveActionRequiredException
-		): Intent = AppRouter.browserIntent(
-			context = context,
-			url = input.url,
-			source = input.source,
-			title = null,
-		).apply {
-			input.userAgent?.let {
-				putExtra(AppRouter.KEY_USER_AGENT, it)
-			}
-			input.successCookieUrl?.let {
-				putExtra(AppRouter.KEY_SUCCESS_COOKIE_URL, it)
-			}
-			input.successCookieName?.let {
-				putExtra(AppRouter.KEY_SUCCESS_COOKIE_NAME, it)
-			}
-		}
+    class Contract : ActivityResultContract<InteractiveActionRequiredException, Boolean>() {
+        override fun createIntent(
+            context: Context,
+            input: InteractiveActionRequiredException
+        ): Intent = AppRouter.browserIntent(
+            context = context,
+            url = input.url,
+            source = input.source,
+            title = null,
+        ).apply {
+            input.userAgent?.let {
+                putExtra(AppRouter.KEY_USER_AGENT, it)
+            }
+            input.successCookieUrl?.let {
+                putExtra(AppRouter.KEY_SUCCESS_COOKIE_URL, it)
+            }
+            input.successCookieName?.let {
+                putExtra(AppRouter.KEY_SUCCESS_COOKIE_NAME, it)
+            }
+        }
 
-		override fun parseResult(resultCode: Int, intent: Intent?): Boolean = resultCode == RESULT_OK
-	}
+        override fun parseResult(resultCode: Int, intent: Intent?): Boolean = resultCode == RESULT_OK
+    }
 
-	private fun isSuccessCookieSatisfied(currentValue: String? = null): Boolean {
-		val cookieUrl = successCookieUrl ?: return true
-		val cookieName = successCookieName ?: return true
-		runCatching { CookieManager.getInstance().flush() }
-		val resolvedCurrentValue = currentValue ?: getCookieValue(cookieUrl, cookieName)
-		val isSatisfied = !resolvedCurrentValue.isNullOrEmpty() && resolvedCurrentValue != initialSuccessCookieValue
-		android.util.Log.d(
-			TAG,
-			"success_check url=$cookieUrl cookie=$cookieName " +
-				"initial=${sensitiveValueFingerprint(initialSuccessCookieValue)} " +
-				"current=${sensitiveValueFingerprint(resolvedCurrentValue)} passed=$isSatisfied",
-		)
-		return isSatisfied
-	}
+    private fun isSuccessCookieSatisfied(currentValue: String? = null): Boolean {
+        val cookieUrl = successCookieUrl ?: return true
+        val cookieName = successCookieName ?: return true
+        runCatching { CookieManager.getInstance().flush() }
+        val resolvedCurrentValue = currentValue ?: getCookieValue(cookieUrl, cookieName)
+        val isSatisfied = !resolvedCurrentValue.isNullOrEmpty() && resolvedCurrentValue != initialSuccessCookieValue
+        android.util.Log.d(
+            TAG,
+            "success_check url=$cookieUrl cookie=$cookieName " +
+                "initial=${sensitiveValueFingerprint(initialSuccessCookieValue)} " +
+                "current=${sensitiveValueFingerprint(resolvedCurrentValue)} passed=$isSatisfied",
+        )
+        return isSatisfied
+    }
 
-	private fun getSuccessCookieValue(): String? {
-		val cookieUrl = successCookieUrl ?: return null
-		val cookieName = successCookieName ?: return null
-		return getCookieValue(cookieUrl, cookieName)
-	}
+    private fun getSuccessCookieValue(): String? {
+        val cookieUrl = successCookieUrl ?: return null
+        val cookieName = successCookieName ?: return null
+        return getCookieValue(cookieUrl, cookieName)
+    }
 
-	private fun getCookieValue(url: String, name: String): String? {
-		val raw = CookieManager.getInstance().getCookie(url) ?: return null
-		return raw.split(';')
-			.asSequence()
-			.map { it.trim() }
-			.firstOrNull { it.startsWith("$name=") }
-			?.substringAfter('=')
-			?.takeIf { it.isNotEmpty() }
-	}
+    private fun getCookieValue(url: String, name: String): String? {
+        val raw = CookieManager.getInstance().getCookie(url) ?: return null
+        return raw.split(';')
+            .asSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("$name=") }
+            ?.substringAfter('=')
+            ?.takeIf { it.isNotEmpty() }
+    }
 
-	private fun logCookieState(stage: String, cookieValue: String?) {
-		val cookieUrl = successCookieUrl ?: return
-		val cookieName = successCookieName ?: return
-		val rawCookie = CookieManager.getInstance().getCookie(cookieUrl)
-		android.util.Log.d(
-			TAG,
-			"cookie_state stage=$stage url=$cookieUrl cookie=$cookieName " +
-				"fingerprint=${sensitiveValueFingerprint(cookieValue)} hasCookie=${!cookieValue.isNullOrEmpty()} " +
-				"rawHasCfClearance=${rawCookie?.contains("$cookieName=") == true}",
-		)
-	}
+    private fun logCookieState(stage: String, cookieValue: String?) {
+        val cookieUrl = successCookieUrl ?: return
+        val cookieName = successCookieName ?: return
+        val rawCookie = CookieManager.getInstance().getCookie(cookieUrl)
+        android.util.Log.d(
+            TAG,
+            "cookie_state stage=$stage url=$cookieUrl cookie=$cookieName " +
+                "fingerprint=${sensitiveValueFingerprint(cookieValue)} hasCookie=${!cookieValue.isNullOrEmpty()} " +
+                "rawHasCfClearance=${rawCookie?.contains("$cookieName=") == true}",
+        )
+    }
 
-	private fun logBrowserState(stage: String, url: String? = browserWebView.url) {
-		val parsedUrl = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
-		val rawCookies = url?.let { runCatching { CookieManager.getInstance().getCookie(it).orEmpty() }.getOrDefault("") }
-		val parsedCookies = rawCookies
-			.orEmpty()
-			.split(';')
-			.mapNotNull { rawCookie ->
-				val parts = rawCookie.trim().split('=', limit = 2)
-				parts.takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
-			}
-		val cookieNames = parsedCookies
-			.map(Pair<String, String>::first)
-			.distinct()
-			.joinToString(",")
-			.ifBlank { "<none>" }
-		val clearance = parsedCookies.firstOrNull { it.first == "cf_clearance" }?.second
-		val queryNames = parsedUrl?.queryParameterNames
-			?.joinToString(",")
-			?.ifBlank { "<none>" }
-			?: "<none>"
-		android.util.Log.d(
-			TAG,
-			"browser_state stage=$stage host=${parsedUrl?.host ?: "<none>"} " +
-				"path=${parsedUrl?.path ?: "<none>"} queryNames=$queryNames " +
-				"cookieNames=[$cookieNames] cfClearanceFingerprint=${sensitiveValueFingerprint(clearance)} " +
-				"uaFingerprint=${sensitiveValueFingerprint(browserWebView.settings.userAgentString)} " +
-				"title=${browserWebView.title.orEmpty().take(80)}",
-		)
-	}
+    private fun logBrowserState(stage: String, url: String? = browserWebView.url) {
+        val parsedUrl = url?.let { runCatching { Uri.parse(it) }.getOrNull() }
+        val rawCookies = url?.let { runCatching { CookieManager.getInstance().getCookie(it).orEmpty() }.getOrDefault("") }
+        val parsedCookies = rawCookies
+            .orEmpty()
+            .split(';')
+            .mapNotNull { rawCookie ->
+                val parts = rawCookie.trim().split('=', limit = 2)
+                parts.takeIf { it.size == 2 && it[0].isNotBlank() }?.let { it[0] to it[1] }
+            }
+        val cookieNames = parsedCookies
+            .map(Pair<String, String>::first)
+            .distinct()
+            .joinToString(",")
+            .ifBlank { "<none>" }
+        val clearance = parsedCookies.firstOrNull { it.first == "cf_clearance" }?.second
+        val queryNames = parsedUrl?.queryParameterNames
+            ?.joinToString(",")
+            ?.ifBlank { "<none>" }
+            ?: "<none>"
+        android.util.Log.d(
+            TAG,
+            "browser_state stage=$stage host=${parsedUrl?.host ?: "<none>"} " +
+                "path=${parsedUrl?.path ?: "<none>"} queryNames=$queryNames " +
+                "cookieNames=[$cookieNames] cfClearanceFingerprint=${sensitiveValueFingerprint(clearance)} " +
+                "uaFingerprint=${sensitiveValueFingerprint(browserWebView.settings.userAgentString)} " +
+                "title=${browserWebView.title.orEmpty().take(80)}",
+        )
+    }
 
     private fun maybeCompleteAfterVerification() {
         lifecycleScope.launch {
@@ -304,9 +304,9 @@ class BrowserActivity : BaseBrowserActivity() {
         return !successCookieUrl.isNullOrBlank() && !successCookieName.isNullOrBlank()
     }
 
-	private fun flushBrowserCookies() {
-		runCatching { CookieManager.getInstance().flush() }
-	}
+    private fun flushBrowserCookies() {
+        runCatching { CookieManager.getInstance().flush() }
+    }
 
     private fun superFinishAfterVerification() {
         setResult(pendingResult)
@@ -383,8 +383,8 @@ class BrowserActivity : BaseBrowserActivity() {
         }
     }
 
-	companion object {
-		const val EXTRA_CF_RESOLVE_KEY = "cf_resolve_key"
-		const val TAG = "BrowserActivity"
-	}
+    companion object {
+        const val EXTRA_CF_RESOLVE_KEY = "cf_resolve_key"
+        const val TAG = "BrowserActivity"
+    }
 }

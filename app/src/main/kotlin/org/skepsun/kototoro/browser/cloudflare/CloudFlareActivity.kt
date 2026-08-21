@@ -39,252 +39,252 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class CloudFlareActivity : BaseBrowserActivity(), CloudFlareCallback {
 
-	private var pendingResult = RESULT_CANCELED
-	private val isHidden: Boolean by lazy { intent?.getBooleanExtra(EXTRA_HIDDEN, false) == true }
-	private val isAutoResolve: Boolean by lazy { intent?.getBooleanExtra(EXTRA_AUTO_RESOLVE, false) == true }
-	private var resultNotified = false
-	private var hiddenTimeoutJob: Job? = null
-	private var clearanceVerificationJob: Job? = null
-	private var clearancePollingJob: Job? = null
+    private var pendingResult = RESULT_CANCELED
+    private val isHidden: Boolean by lazy { intent?.getBooleanExtra(EXTRA_HIDDEN, false) == true }
+    private val isAutoResolve: Boolean by lazy { intent?.getBooleanExtra(EXTRA_AUTO_RESOLVE, false) == true }
+    private var resultNotified = false
+    private var hiddenTimeoutJob: Job? = null
+    private var clearanceVerificationJob: Job? = null
+    private var clearancePollingJob: Job? = null
 
-	@Inject
-	lateinit var cookieJar: MutableCookieJar
+    @Inject
+    lateinit var cookieJar: MutableCookieJar
 
-	@Inject
-	lateinit var captchaHandler: CaptchaHandler
+    @Inject
+    lateinit var captchaHandler: CaptchaHandler
 
-	@Inject
-	lateinit var captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator
+    @Inject
+    lateinit var captchaAutoResolveCoordinator: CaptchaAutoResolveCoordinator
 
-	private lateinit var cfClient: CloudFlareClient
+    private lateinit var cfClient: CloudFlareClient
 
-	override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
-		if (isHidden) {
-			supportActionBar?.hide()
-			setBrowserToolbarVisible(false)
-			setBrowserProgressVisible(false)
-			setBrowserContentAlpha(0.01f)
-			window.addFlags(
-				WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-					WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-			)
-			hiddenTimeoutJob = lifecycleScope.launch {
-				delay(HIDDEN_TIMEOUT_MS)
-				browserWebView.stopLoading()
-				finishAfterTransition()
-			}
-		} else {
-			setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
-		}
-		val url = intent?.dataString
-		if (url.isNullOrEmpty()) {
-			finishAfterTransition()
-			return
-		}
-		lifecycleScope.launch {
-			try {
-				proxyProvider.applyWebViewConfig()
-			} catch (e: Exception) {
-				showSnackbar(e.getDisplayMessage(resources))
-			}
-			val targetHttpUrl = url.toHttpUrlOrNull()
-			if (targetHttpUrl != null) {
-				clearRejectedClearance(targetHttpUrl)
-			}
-			cfClient = if (shouldUseInterception(repository)) {
-				CloudFlareInterceptClient(cookieJar, this@CloudFlareActivity, adBlock, url)
-			} else {
-				CloudFlareClient(cookieJar, this@CloudFlareActivity, adBlock, url)
-			}
-			browserWebView.webViewClient = cfClient
-			startClearancePolling()
-			if (savedInstanceState == null) {
-				onTitleChanged(getString(R.string.loading_), url)
-				val method = intent?.getStringExtra(EXTRA_METHOD)?.uppercase() ?: "GET"
-				android.util.Log.i(TAG, "Loading challenge navigation: requestMethod=$method url=$url")
-				// A POST API challenge cannot be reproduced with WebView.postUrl(), which
-				// always uses form encoding. Navigate to the challenged endpoint with GET
-				// for user interaction; the transport retries the original POST afterwards.
-				browserWebView.loadUrl(url)
-			}
-		}
-	}
+    override fun onCreate2(savedInstanceState: Bundle?, source: ContentSource, repository: ParserContentRepository?) {
+        if (isHidden) {
+            supportActionBar?.hide()
+            setBrowserToolbarVisible(false)
+            setBrowserProgressVisible(false)
+            setBrowserContentAlpha(0.01f)
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            )
+            hiddenTimeoutJob = lifecycleScope.launch {
+                delay(HIDDEN_TIMEOUT_MS)
+                browserWebView.stopLoading()
+                finishAfterTransition()
+            }
+        } else {
+            setDisplayHomeAsUp(isEnabled = true, showUpAsClose = true)
+        }
+        val url = intent?.dataString
+        if (url.isNullOrEmpty()) {
+            finishAfterTransition()
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                proxyProvider.applyWebViewConfig()
+            } catch (e: Exception) {
+                showSnackbar(e.getDisplayMessage(resources))
+            }
+            val targetHttpUrl = url.toHttpUrlOrNull()
+            if (targetHttpUrl != null) {
+                clearRejectedClearance(targetHttpUrl)
+            }
+            cfClient = if (shouldUseInterception(repository)) {
+                CloudFlareInterceptClient(cookieJar, this@CloudFlareActivity, adBlock, url)
+            } else {
+                CloudFlareClient(cookieJar, this@CloudFlareActivity, adBlock, url)
+            }
+            browserWebView.webViewClient = cfClient
+            startClearancePolling()
+            if (savedInstanceState == null) {
+                onTitleChanged(getString(R.string.loading_), url)
+                val method = intent?.getStringExtra(EXTRA_METHOD)?.uppercase() ?: "GET"
+                android.util.Log.i(TAG, "Loading challenge navigation: requestMethod=$method url=$url")
+                // A POST API challenge cannot be reproduced with WebView.postUrl(), which
+                // always uses form encoding. Navigate to the challenged endpoint with GET
+                // for user interaction; the transport retries the original POST afterwards.
+                browserWebView.loadUrl(url)
+            }
+        }
+    }
 
-	override fun onCreateOptionsMenu(menu: Menu?): Boolean {
-		if (isHidden) {
-			return false
-		}
-		menuInflater.inflate(R.menu.opt_captcha, menu)
-		return true
-	}
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        if (isHidden) {
+            return false
+        }
+        menuInflater.inflate(R.menu.opt_captcha, menu)
+        return true
+    }
 
-	override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
-		android.R.id.home -> {
-			browserWebView.stopLoading()
-			finishAfterTransition()
-			true
-		}
+    override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        android.R.id.home -> {
+            browserWebView.stopLoading()
+            finishAfterTransition()
+            true
+        }
 
-		R.id.action_retry -> {
-			restartCheck()
-			true
-		}
+        R.id.action_retry -> {
+            restartCheck()
+            true
+        }
 
-		R.id.action_open_browser -> {
-			val url = intent?.dataString
-			if (!url.isNullOrBlank()) {
-					runCatching {
-						val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
-							?.let { name -> org.skepsun.kototoro.core.model.ContentSource(name) }
-						startActivity(
-							AppRouter.browserIntent(
-								this,
-								CloudFlareHelper.getChallengeUrl(url),
-								source,
-								getString(R.string.open_in_browser),
-							),
-						)
-				}.onFailure { showSnackbar(it.getDisplayMessage(resources)) }
-			}
-			true
-		}
+        R.id.action_open_browser -> {
+            val url = intent?.dataString
+            if (!url.isNullOrBlank()) {
+                    runCatching {
+                        val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
+                            ?.let { name -> org.skepsun.kototoro.core.model.ContentSource(name) }
+                        startActivity(
+                            AppRouter.browserIntent(
+                                this,
+                                CloudFlareHelper.getChallengeUrl(url),
+                                source,
+                                getString(R.string.open_in_browser),
+                            ),
+                        )
+                }.onFailure { showSnackbar(it.getDisplayMessage(resources)) }
+            }
+            true
+        }
 
-		else -> super.onOptionsItemSelected(item)
-	}
+        else -> super.onOptionsItemSelected(item)
+    }
 
-	override fun finish() {
-		hiddenTimeoutJob?.cancel()
-		clearancePollingJob?.cancel()
-		setResult(pendingResult)
-		if (isAutoResolve && !resultNotified) {
-			resultNotified = true
-			intent?.getStringExtra(EXTRA_RESOLVE_KEY)?.let { resolveKey ->
-				captchaAutoResolveCoordinator.notifyResolveResult(
-					resolveKey,
-					pendingResult == RESULT_OK,
-				)
-			}
-		}
-		super.finish()
-	}
+    override fun finish() {
+        hiddenTimeoutJob?.cancel()
+        clearancePollingJob?.cancel()
+        setResult(pendingResult)
+        if (isAutoResolve && !resultNotified) {
+            resultNotified = true
+            intent?.getStringExtra(EXTRA_RESOLVE_KEY)?.let { resolveKey ->
+                captchaAutoResolveCoordinator.notifyResolveResult(
+                    resolveKey,
+                    pendingResult == RESULT_OK,
+                )
+            }
+        }
+        super.finish()
+    }
 
-	override fun onLoadingStateChanged(isLoading: Boolean) = Unit
+    override fun onLoadingStateChanged(isLoading: Boolean) = Unit
 
-	override fun onPageLoaded() {
-		if (!isHidden) {
-			setBrowserProgressVisible(false)
-		}
-	}
+    override fun onPageLoaded() {
+        if (!isHidden) {
+            setBrowserProgressVisible(false)
+        }
+    }
 
-	override fun onLoopDetected() {
-		if (isHidden) {
-			restartCheck()
-		} else {
-			cfClient.reset()
-			android.util.Log.w(TAG, "Cloudflare loop detected; keeping manual browser open for user action")
-		}
-	}
+    override fun onLoopDetected() {
+        if (isHidden) {
+            restartCheck()
+        } else {
+            cfClient.reset()
+            android.util.Log.w(TAG, "Cloudflare loop detected; keeping manual browser open for user action")
+        }
+    }
 
-	override fun onCheckPassed() {
-		if (clearanceVerificationJob?.isActive == true) {
-			return
-		}
-		clearanceVerificationJob = lifecycleScope.launch {
-			val url = intent?.dataString
-			if (url.isNullOrBlank()) {
-				return@launch
-			}
-			pendingResult = RESULT_OK
-			val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
-			if (source != null) {
-				runCatchingCancellable {
-					captchaHandler.discard(org.skepsun.kototoro.core.model.ContentSource(source))
-				}.onFailure {
-					it.printStackTraceDebug()
-				}
-			}
-			finishAfterTransition()
-		}
-	}
+    override fun onCheckPassed() {
+        if (clearanceVerificationJob?.isActive == true) {
+            return
+        }
+        clearanceVerificationJob = lifecycleScope.launch {
+            val url = intent?.dataString
+            if (url.isNullOrBlank()) {
+                return@launch
+            }
+            pendingResult = RESULT_OK
+            val source = intent?.getStringExtra(AppRouter.KEY_SOURCE)
+            if (source != null) {
+                runCatchingCancellable {
+                    captchaHandler.discard(org.skepsun.kototoro.core.model.ContentSource(source))
+                }.onFailure {
+                    it.printStackTraceDebug()
+                }
+            }
+            finishAfterTransition()
+        }
+    }
 
-	private fun showSnackbar(message: CharSequence) {
-		if (isFinishing || isDestroyed || !browserWebView.isAttachedToWindow) {
-			return
-		}
-		Snackbar.make(browserWebView, message, Snackbar.LENGTH_LONG).show()
-	}
+    private fun showSnackbar(message: CharSequence) {
+        if (isFinishing || isDestroyed || !browserWebView.isAttachedToWindow) {
+            return
+        }
+        Snackbar.make(browserWebView, message, Snackbar.LENGTH_LONG).show()
+    }
 
-	private fun startClearancePolling() {
-		if (clearancePollingJob?.isActive == true) return
-		clearancePollingJob = lifecycleScope.launch {
-			while (true) {
-				if (cfClient.checkClearance()) return@launch
-				delay(CLEARANCE_POLL_INTERVAL_MS)
-			}
-		}
-	}
+    private fun startClearancePolling() {
+        if (clearancePollingJob?.isActive == true) return
+        clearancePollingJob = lifecycleScope.launch {
+            while (true) {
+                if (cfClient.checkClearance()) return@launch
+                delay(CLEARANCE_POLL_INTERVAL_MS)
+            }
+        }
+    }
 
-	override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {
-		setTitle(title)
-		supportActionBar?.subtitle = subtitle?.toString()?.toHttpUrlOrNull()?.host.ifNullOrEmpty { subtitle }
-	}
+    override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {
+        setTitle(title)
+        supportActionBar?.subtitle = subtitle?.toString()?.toHttpUrlOrNull()?.host.ifNullOrEmpty { subtitle }
+    }
 
-	private fun restartCheck() {
-		lifecycleScope.launch {
-			browserWebView.stopLoading()
-			yield()
-			cfClient.reset()
-			val targetUrl = intent?.dataString?.toHttpUrlOrNull()
-			if (targetUrl != null) {
-				clearCfCookies(targetUrl)
-			browserWebView.loadUrl(targetUrl.toString())
-			}
-		}
-	}
+    private fun restartCheck() {
+        lifecycleScope.launch {
+            browserWebView.stopLoading()
+            yield()
+            cfClient.reset()
+            val targetUrl = intent?.dataString?.toHttpUrlOrNull()
+            if (targetUrl != null) {
+                clearCfCookies(targetUrl)
+            browserWebView.loadUrl(targetUrl.toString())
+            }
+        }
+    }
 
-	private suspend fun clearCfCookies(url: HttpUrl) = runInterruptible(Dispatchers.Default) {
-		cookieJar.removeCookies(url) { cookie ->
-			CloudFlareHelper.isCloudFlareCookie(cookie.name)
-		}
-	}
+    private suspend fun clearCfCookies(url: HttpUrl) = runInterruptible(Dispatchers.Default) {
+        cookieJar.removeCookies(url) { cookie ->
+            CloudFlareHelper.isCloudFlareCookie(cookie.name)
+        }
+    }
 
-	private suspend fun clearRejectedClearance(url: HttpUrl) = runInterruptible(Dispatchers.Default) {
-		cookieJar.removeCookies(url) { cookie ->
-			cookie.name == CF_CLEARANCE_COOKIE
-		}
-	}
+    private suspend fun clearRejectedClearance(url: HttpUrl) = runInterruptible(Dispatchers.Default) {
+        cookieJar.removeCookies(url) { cookie ->
+            cookie.name == CF_CLEARANCE_COOKIE
+        }
+    }
 
-	private suspend fun shouldUseInterception(repository: ParserContentRepository?): Boolean {
-		if (repository == null) {
-			return false
-		}
-		val key = repository.getConfigKeys()
-			.filterIsInstance<ConfigKey.InterceptCloudflare>()
-			.firstOrNull()
-			?: return false
-		return repository.getConfig()[key]
-	}
+    private suspend fun shouldUseInterception(repository: ParserContentRepository?): Boolean {
+        if (repository == null) {
+            return false
+        }
+        val key = repository.getConfigKeys()
+            .filterIsInstance<ConfigKey.InterceptCloudflare>()
+            .firstOrNull()
+            ?: return false
+        return repository.getConfig()[key]
+    }
 
-	class Contract : ActivityResultContract<CloudFlareProtectedException, Boolean>() {
-		override fun createIntent(context: Context, input: CloudFlareProtectedException): Intent {
-			return AppRouter.cloudFlareResolveIntent(context, input)
-		}
+    class Contract : ActivityResultContract<CloudFlareProtectedException, Boolean>() {
+        override fun createIntent(context: Context, input: CloudFlareProtectedException): Intent {
+            return AppRouter.cloudFlareResolveIntent(context, input)
+        }
 
-		override fun parseResult(resultCode: Int, intent: Intent?): Boolean {
-			return resultCode == RESULT_OK
-		}
-	}
+        override fun parseResult(resultCode: Int, intent: Intent?): Boolean {
+            return resultCode == RESULT_OK
+        }
+    }
 
-	companion object {
+    companion object {
 
-		const val TAG = "CloudFlareActivity"
-		const val EXTRA_HIDDEN = "hidden"
-		const val EXTRA_AUTO_RESOLVE = "auto_resolve"
-		const val EXTRA_RESOLVE_KEY = "resolve_key"
-		const val EXTRA_METHOD = "method"
-		const val EXTRA_BODY = "body"
-		const val EXTRA_CONTENT_TYPE = "content_type"
-		private const val HIDDEN_TIMEOUT_MS = 45_000L
-		private const val CLEARANCE_POLL_INTERVAL_MS = 250L
-	}
+        const val TAG = "CloudFlareActivity"
+        const val EXTRA_HIDDEN = "hidden"
+        const val EXTRA_AUTO_RESOLVE = "auto_resolve"
+        const val EXTRA_RESOLVE_KEY = "resolve_key"
+        const val EXTRA_METHOD = "method"
+        const val EXTRA_BODY = "body"
+        const val EXTRA_CONTENT_TYPE = "content_type"
+        private const val HIDDEN_TIMEOUT_MS = 45_000L
+        private const val CLEARANCE_POLL_INTERVAL_MS = 250L
+    }
 }

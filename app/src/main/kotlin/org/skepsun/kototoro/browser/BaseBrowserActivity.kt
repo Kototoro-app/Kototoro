@@ -36,148 +36,148 @@ import javax.inject.Inject
 @AndroidEntryPoint
 abstract class BaseBrowserActivity : BaseComposeActivity(), BrowserCallback {
 
-	@Inject
-	lateinit var proxyProvider: ProxyProvider
+    @Inject
+    lateinit var proxyProvider: ProxyProvider
 
-	@Inject
-	lateinit var mangaRepositoryFactory: ContentRepository.Factory
+    @Inject
+    lateinit var mangaRepositoryFactory: ContentRepository.Factory
 
-	@Inject
-	lateinit var adBlock: AdBlock
+    @Inject
+    lateinit var adBlock: AdBlock
 
-	private lateinit var onBackPressedCallback: WebViewBackPressedCallback
-	protected lateinit var browserWebView: WebView
+    private lateinit var onBackPressedCallback: WebViewBackPressedCallback
+    protected lateinit var browserWebView: WebView
 
-	private var isBrowserLoading by mutableStateOf(false)
-	private var shouldShowBrowserToolbar by mutableStateOf(true)
-	private var webViewContentAlpha by mutableFloatStateOf(1f)
+    private var isBrowserLoading by mutableStateOf(false)
+    private var shouldShowBrowserToolbar by mutableStateOf(true)
+    private var webViewContentAlpha by mutableFloatStateOf(1f)
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		try {
-			browserWebView = WebView(this)
-		} catch (e: Exception) {
-			if (e is android.util.AndroidException || e.cause is android.util.AndroidException) {
-				android.widget.Toast.makeText(this, org.skepsun.kototoro.R.string.web_view_unavailable, android.widget.Toast.LENGTH_LONG).show()
-				finishAfterTransition()
-				return
-			}
-			throw e
-		}
-		setComposeContent {
-			Column(
-				modifier = Modifier
-					.fillMaxSize()
-					.windowInsetsPadding(WindowInsets.statusBars),
-			) {
-				if (shouldShowBrowserToolbar) {
-					AndroidView(
-						factory = { browserToolbar },
-						modifier = Modifier
-							.fillMaxWidth()
-							.height(64.dp),
-					)
-				}
-				Box(modifier = Modifier.fillMaxSize()) {
-					AndroidView(
-						factory = { browserWebView },
-						modifier = Modifier.fillMaxSize(),
-					)
-					if (isBrowserLoading) {
-						LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-					}
-				}
-			}
-		}
-		setSupportActionBar(browserToolbar)
-		browserWebView.alpha = webViewContentAlpha
-		browserWebView.webViewClient = android.webkit.WebViewClient()
-		browserWebView.webChromeClient = android.webkit.WebChromeClient()
-		onBackPressedCallback = WebViewBackPressedCallback(browserWebView)
-		onBackPressedDispatcher.addCallback(onBackPressedCallback)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        try {
+            browserWebView = WebView(this)
+        } catch (e: Exception) {
+            if (e is android.util.AndroidException || e.cause is android.util.AndroidException) {
+                android.widget.Toast.makeText(this, org.skepsun.kototoro.R.string.web_view_unavailable, android.widget.Toast.LENGTH_LONG).show()
+                finishAfterTransition()
+                return
+            }
+            throw e
+        }
+        setComposeContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            ) {
+                if (shouldShowBrowserToolbar) {
+                    AndroidView(
+                        factory = { browserToolbar },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp),
+                    )
+                }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        factory = { browserWebView },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (isBrowserLoading) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
+        setSupportActionBar(browserToolbar)
+        browserWebView.alpha = webViewContentAlpha
+        browserWebView.webViewClient = android.webkit.WebViewClient()
+        browserWebView.webChromeClient = android.webkit.WebChromeClient()
+        onBackPressedCallback = WebViewBackPressedCallback(browserWebView)
+        onBackPressedDispatcher.addCallback(onBackPressedCallback)
 
-		val mangaSource = ContentSource(intent?.getStringExtra(AppRouter.KEY_SOURCE))
-		val repository = mangaRepositoryFactory.create(mangaSource) as? ParserContentRepository
-		val userAgent = intent?.getStringExtra(AppRouter.KEY_USER_AGENT)?.nullIfEmpty()
-			?: repository?.getRequestHeaders()?.get(CommonHeaders.USER_AGENT)
-		browserWebView.configureForParser(userAgent)
+        val mangaSource = ContentSource(intent?.getStringExtra(AppRouter.KEY_SOURCE))
+        val repository = mangaRepositoryFactory.create(mangaSource) as? ParserContentRepository
+        val userAgent = intent?.getStringExtra(AppRouter.KEY_USER_AGENT)?.nullIfEmpty()
+            ?: repository?.getRequestHeaders()?.get(CommonHeaders.USER_AGENT)
+        browserWebView.configureForParser(userAgent)
 
-		onCreate2(savedInstanceState, mangaSource, repository)
-	}
+        onCreate2(savedInstanceState, mangaSource, repository)
+    }
 
-	private val browserToolbar by lazy { com.google.android.material.appbar.MaterialToolbar(this) }
+    private val browserToolbar by lazy { com.google.android.material.appbar.MaterialToolbar(this) }
 
-	protected fun setBrowserToolbarVisible(visible: Boolean) {
-		shouldShowBrowserToolbar = visible
-	}
+    protected fun setBrowserToolbarVisible(visible: Boolean) {
+        shouldShowBrowserToolbar = visible
+    }
 
-	protected fun setBrowserContentAlpha(alpha: Float) {
-		webViewContentAlpha = alpha
-		if (::browserWebView.isInitialized) {
-			browserWebView.alpha = alpha
-		}
-	}
+    protected fun setBrowserContentAlpha(alpha: Float) {
+        webViewContentAlpha = alpha
+        if (::browserWebView.isInitialized) {
+            browserWebView.alpha = alpha
+        }
+    }
 
-	protected fun setBrowserProgressVisible(visible: Boolean) {
-		isBrowserLoading = visible
-	}
+    protected fun setBrowserProgressVisible(visible: Boolean) {
+        isBrowserLoading = visible
+    }
 
-	protected fun setDisplayHomeAsUp(isEnabled: Boolean, showUpAsClose: Boolean) {
-		supportActionBar?.run {
-			setDisplayHomeAsUpEnabled(isEnabled)
-			if (showUpAsClose) {
-				setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_clear_material)
-			}
-		}
-	}
+    protected fun setDisplayHomeAsUp(isEnabled: Boolean, showUpAsClose: Boolean) {
+        supportActionBar?.run {
+            setDisplayHomeAsUpEnabled(isEnabled)
+            if (showUpAsClose) {
+                setHomeAsUpIndicator(androidx.appcompat.R.drawable.abc_ic_clear_material)
+            }
+        }
+    }
 
-	protected abstract fun onCreate2(
-		savedInstanceState: Bundle?,
-		source: ContentSource,
-		repository: ParserContentRepository?
-	)
+    protected abstract fun onCreate2(
+        savedInstanceState: Bundle?,
+        source: ContentSource,
+        repository: ParserContentRepository?
+    )
 
-	override fun onPause() {
-		if (::browserWebView.isInitialized) {
-			browserWebView.onPause()
-		}
-		super.onPause()
-	}
+    override fun onPause() {
+        if (::browserWebView.isInitialized) {
+            browserWebView.onPause()
+        }
+        super.onPause()
+    }
 
-	override fun onResume() {
-		super.onResume()
-		if (::browserWebView.isInitialized) {
-			browserWebView.onResume()
-		}
-	}
+    override fun onResume() {
+        super.onResume()
+        if (::browserWebView.isInitialized) {
+            browserWebView.onResume()
+        }
+    }
 
-	override fun onDestroy() {
-		super.onDestroy()
-		if (::browserWebView.isInitialized) {
-			with(browserWebView) {
-				stopLoading()
-				loadUrl("about:blank")
-				onPause()
-				clearHistory()
-				removeAllViews()
-				(parent as? ViewGroup)?.removeView(this)
-				destroy()
-			}
-		}
-	}
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::browserWebView.isInitialized) {
+            with(browserWebView) {
+                stopLoading()
+                loadUrl("about:blank")
+                onPause()
+                clearHistory()
+                removeAllViews()
+                (parent as? ViewGroup)?.removeView(this)
+                destroy()
+            }
+        }
+    }
 
-	override fun onLoadingStateChanged(isLoading: Boolean) {
-		isBrowserLoading = isLoading
-	}
+    override fun onLoadingStateChanged(isLoading: Boolean) {
+        isBrowserLoading = isLoading
+    }
 
-	override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {
-		this.title = title
-		supportActionBar?.subtitle = subtitle
-	}
+    override fun onTitleChanged(title: CharSequence, subtitle: CharSequence?) {
+        this.title = title
+        supportActionBar?.subtitle = subtitle
+    }
 
-	override fun onPageFinished(webView: android.webkit.WebView, url: String) = Unit
+    override fun onPageFinished(webView: android.webkit.WebView, url: String) = Unit
 
-	override fun onHistoryChanged() {
-		onBackPressedCallback.onHistoryChanged()
-	}
+    override fun onHistoryChanged() {
+        onBackPressedCallback.onHistoryChanged()
+    }
 }
