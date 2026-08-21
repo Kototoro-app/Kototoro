@@ -4,8 +4,10 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -332,7 +334,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 
 		return combine(apkPackages, jarPackages, cloudstreamPackages, jsonPackages) { apk, jar, cloudstream, json ->
 			(apk + jar + cloudstream + json).sortedWith(compareBy({ it.kind.ordinal }, { it.name.lowercase() }))
-		}
+		}.flowOn(Dispatchers.Default)
 	}
 
 	fun observeSources(): Flow<List<UnifiedSourceItem>> {
@@ -348,6 +350,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 		) { _, _ -> Unit }
 		return combine(dbChanges, runtimeChanges, settingsChanges, nsfwOverrideChanges) { _, _, _, _ -> Unit }
 			.mapLatest { buildSourceItems() }
+			.flowOn(Dispatchers.Default)
 			.combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
 				sources.map { source ->
 					source.copy(

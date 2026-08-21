@@ -177,9 +177,10 @@ fun ContentSourceResolvedIcon(
     val resolvedSource = source
     val listIconUrl = (resolvedSource as? JsonSourceListSource)?.iconUrl?.takeIf { it.isNotBlank() }
     val jarIdentity = resolvedSource.jarIdentityForIcon()
-    val sourceFailureKey = remember(resolvedSource.name, resolvedSource.javaClass.name, jarIdentity, styleResId, listIconUrl) {
+    val sourceIdentity = resolvedSource.sourceIconIdentity()
+    val sourceFailureKey = remember(resolvedSource.name, sourceIdentity, jarIdentity, styleResId, listIconUrl) {
         val iconPart = listIconUrl?.let { "#${it.hashCode()}" }.orEmpty()
-        "${resolvedSource.name}#$SOURCE_ICON_CACHE_VERSION#${resolvedSource.javaClass.name}#$jarIdentity#$styleResId$iconPart"
+        "$sourceIdentity#$SOURCE_ICON_CACHE_VERSION#${resolvedSource.javaClass.name}#$jarIdentity#$styleResId$iconPart"
     }
     val fallbackDrawable = remember(
         resolvedSource.name,
@@ -316,6 +317,29 @@ private fun ContentSource.jarIdentityForIcon(): String = when (this) {
     is PluginContentSource -> jarName
     is KotatsuParserSource -> (delegate as? PluginMangaSource)?.jarName.orEmpty()
     else -> ""
+}
+
+/**
+ * Icon cache identity used to de-duplicate favicon loads.
+ *
+ * For APK-housed runtimes (Mihon/Aniyomi/IReader) a single package can expose the same
+ * source many times as separate per-language instances, each with its own unique `name`
+ * (e.g. `MIHON_{id}`). Keying the icon cache on `name` would then re-fetch the same
+ * favicon once per language once you scroll past that block. Instead we key on
+ * `package + base source name`, so every language variant of one source shares a single
+ * memory/disk cache entry and a single negative-cache slot.
+ */
+private fun ContentSource.sourceIconIdentity(): String = when (this) {
+    is org.skepsun.kototoro.mihon.model.MihonMangaSource ->
+        "mihon:$pkgName:${catalogueSource.name}"
+
+    is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource ->
+        "aniyomi:$pkgName:${animeCatalogueSource.name}"
+
+    is org.skepsun.kototoro.ireader.model.IReaderMangaSource ->
+        "ireader:$pkgName:${catalogueSource.name}"
+
+    else -> name
 }
 
 private fun logSourceIconRequest(
