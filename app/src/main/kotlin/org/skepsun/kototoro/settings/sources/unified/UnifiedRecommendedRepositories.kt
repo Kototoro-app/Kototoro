@@ -40,13 +40,6 @@ object UnifiedRecommendedRepositories {
             ),
             UnifiedRecommendedRepository(
                 kind = UnifiedSourceKind.JAR,
-                name = "Yakateam Parsers",
-                url = "https://raw.githubusercontent.com/skepsun/k-parsers-y/repo/index.min.json",
-                locationType = UnifiedRepositoryLocationType.REMOTE_URL,
-                capabilities = jarRepoCapabilities,
-            ),
-            UnifiedRecommendedRepository(
-                kind = UnifiedSourceKind.JAR,
                 name = "Redo Parsers",
                 url = "https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json",
                 locationType = UnifiedRepositoryLocationType.REMOTE_URL,
@@ -212,8 +205,8 @@ object UnifiedRecommendedRepositories {
         ),
         UnifiedRecommendedRepository(
             kind = UnifiedSourceKind.MIHON,
-            name = "Yuzono Manga Repo",
-            url = "https://raw.githubusercontent.com/yuzono/manga-repo/repo/index.min.json",
+            name = "cursed",
+            url = "https://github.com/yuzono/cursed-manga-repo/raw/repo/index.pb",
             locationType = UnifiedRepositoryLocationType.REMOTE_URL,
             capabilities = extensionRepoCapabilities,
         ),
