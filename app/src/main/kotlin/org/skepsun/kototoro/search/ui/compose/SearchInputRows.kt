@@ -80,6 +80,8 @@ import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceSwitcherIcon
 import org.skepsun.kototoro.parsers.model.ContentTag
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 internal fun buildSourcePinnedTags(
     contentItems: List<ContentListModel>,
@@ -132,12 +134,13 @@ internal fun SearchInputRow(
     onClose: () -> Unit,
     onSubmit: () -> Unit,
     focusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
 ) {
     LaunchedEffect(focusRequester) {
         focusRequester.requestFocus()
     }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
             .padding(horizontal = 2.dp),
@@ -685,3 +688,14 @@ private fun sourceTagChipKey(
     index: Int,
 ): String = "${tag.source.name}:${tag.key}:${tag.title}:$index"
 
+@Preview(showBackground = true)
+@Composable
+private fun PinnedRowPillPreview() {
+    KototoroTheme {
+        PinnedRowPill(
+            selected = true,
+            onClick = {},
+            content = { Text("Filter") },
+        )
+    }
+}

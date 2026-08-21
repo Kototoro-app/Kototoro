@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 
 @Composable
@@ -96,3 +99,16 @@ private fun HomeSkeletonBlock(
     )
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun HomeLoadingSkeletonPreview() {
+    KototoroTheme {
+        HomeLoadingSkeleton(
+            posterStyle = CompactPosterCardStyle(
+                itemWidth = 84.dp,
+                posterHeight = 120.dp,
+                cornerRadius = 8.dp,
+            ),
+        )
+    }
+}

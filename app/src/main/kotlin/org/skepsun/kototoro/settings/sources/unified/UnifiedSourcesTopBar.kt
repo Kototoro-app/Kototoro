@@ -35,6 +35,8 @@ import org.skepsun.kototoro.settings.compose.SettingsDialogActionButton
 import org.skepsun.kototoro.settings.compose.SettingsTopBarIconButton
 import org.skepsun.kototoro.settings.compose.SettingsTopBarSurface
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @Composable
 private fun ToolbarSearchIconButton(
@@ -114,12 +116,13 @@ fun UnifiedSourcesSearchTopBar(
 	onSearchQueryChange: (String) -> Unit,
 	onLanguageFilterClick: () -> Unit,
 	onMoreFiltersClick: () -> Unit,
+	modifier: Modifier = Modifier,
 ) {
 	BackHandler(onBack = onNavigateUp)
 	val tokens = LocalInterfaceStyleTokens.current
 	SettingsTopBarSurface {
 		Row(
-			modifier = Modifier
+			modifier = modifier
 				.fillMaxWidth()
 				.height(tokens.secondaryTopBarHeight),
 			verticalAlignment = Alignment.CenterVertically,
@@ -219,3 +222,16 @@ internal fun UnifiedFilterGroupDialog(
 	)
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun UnifiedSourcesSearchTopBarPreview() {
+    KototoroTheme {
+        UnifiedSourcesSearchTopBar(
+            readyState = null,
+            onNavigateUp = {},
+            onSearchQueryChange = {},
+            onLanguageFilterClick = {},
+            onMoreFiltersClick = {},
+        )
+    }
+}
