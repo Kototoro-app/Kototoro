@@ -8,6 +8,8 @@
 
 ## 已核销（2026-08-21 以代码为准）
 
+- [x] **全仓 legacy 规模核实（2026-08-21）**：0 ViewBinding / 0 RecyclerView / 0 Adapter / 0 `setContentView` / 0 FragmentContainerView / 0 `BaseAdaptiveSheet` / 0 `PreferenceFragmentCompat`；45 个 Activity 文件（40 个 `setComposeContent`）；「DialogFragment」仅 2 处**注释**（VideoPlayerActivity / FavoriteDialogScreen）；`LayoutInflater` 仅 settings route 自绘行 + WebView 基础设施（61 文件），无 UI 壳
+
 ### Phase 1 详情页
 - [x] `DetailsActivity` 已去壳：`BaseComposeActivity` + `setComposeContent`（DetailsActivity.kt:46/91），无 `ActivityDetailsBinding`
 - [x] `TrackingSiteDetailsActivity` / `TrackingSiteDetailsScreen` 已不存在；tracking 详情已改由 `TrackingDiscoverActivity` + 面板（`TrackingBottomBar` / `TrackingLocalSearchSheet` / `TrackingAlternativeTrackersPanel`）承载
@@ -51,15 +53,15 @@
 - [ ] 主页恢复备份 UI 回归：高亮三合一卡片渲染无崩溃（`GlassSurface` 为自绘实现、无 haze 依赖）
 - [~] `ContentHeroBackdropCarousel`：Discover hero 内联 panorama 动画对齐共享 `AnimatedPanoramaBackdrop`（Home/Details 已复用）——视觉重构，需有截图验证手段再做（prefs 部分已去重，49592af7a）
 - [x] `GlassSurface` 接入 `dev.chrisbanes.haze`（**已过时/不适用**：全仓 0 处 haze 引用，gradle 未声明依赖；`GlassSurface`（core/ui/glass）为自绘实现（Surface + shadow/border + tonal elevation + gesture），无 blur 后端可接）
-- [ ] `SettingsActivity` 死 import 清理（`androidx.preference.Preference` / `PreferenceFragmentCompat` / `PreferenceManager`，未使用）
-- [ ] `androidx.preference` 依赖评估：`ComposePreferenceAdapter`（源专属偏好 XML 桥）为刻意保留；Reader / Novel / TTS / Video 中的 Preference 用法需逐屏评估
+- [x] `SettingsActivity` 死 import 清理（已删 `Preference` / `PreferenceFragmentCompat`；`PreferenceManager` 保留，1717 行在用；7d265d3d5）
+- [ ] `androidx.preference` 依赖评估：全仓**无任何 Preference UI**（0 处 `PreferenceFragmentCompat`）。依赖仅用于 (a) `ComposePreferenceAdapter` 源专属偏好 XML 桥（刻意保留）(b) `PreferenceManager.getDefaultSharedPreferences` 读默认 pref 文件——NovelReaderActivity / TtsManager / TtsService / SystemTTSEngine / VideoPlayerActivity / SettingsActivity(1717)。若移除需先确认与 AppSettings 默认 pref 文件同源，再做 API 替换
 - [~] 详情页系统级共享元素锚点方案去留（设计开放项）
 
 ---
 
 ## 暂缓项
 
-- [ ] Reader / Video 全量架构重写
+- [ ] Reader / Video 架构深化（**已非去壳项**：ReaderActivity 纯 Compose host（setComposeContent:552）、VideoPlayerActivity 为 `BaseComposeFullscreenActivity`；剩余为架构深度，非 shell 清理）
 - [ ] 全仓 ViewModel 模式重构
 - [ ] 全局设计系统大拆分
 - [ ] 共享层 / CMP 的工程化落地
