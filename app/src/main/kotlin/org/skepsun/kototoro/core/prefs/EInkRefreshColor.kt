@@ -6,6 +6,6 @@ import androidx.annotation.Keep
 
 @Keep
 enum class EInkRefreshColor(@ColorInt val colorInt: Int) {
-	WHITE(Color.WHITE),
-	BLACK(Color.BLACK),
+    WHITE(Color.WHITE),
+    BLACK(Color.BLACK),
 }
