@@ -8,5 +8,5 @@ import org.skepsun.kototoro.sync.domain.SyncHelper
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface SyncAdapterEntryPoint {
-	val syncHelperFactory: SyncHelper.Factory
+    val syncHelperFactory: SyncHelper.Factory
 }

@@ -10,15 +10,15 @@ import org.skepsun.kototoro.R
 
 class FavouritesSyncAdapter(context: Context) : AbstractThreadedSyncAdapter(context, true) {
 
-	override fun onPerformSync(
-		account: Account,
-		extras: Bundle,
-		authority: String,
-		provider: ContentProviderClient,
-		syncResult: SyncResult,
-	) {
-		if (!context.resources.getBoolean(R.bool.is_sync_enabled)) {
-			return
-		}
-	}
+    override fun onPerformSync(
+        account: Account,
+        extras: Bundle,
+        authority: String,
+        provider: ContentProviderClient,
+        syncResult: SyncResult,
+    ) {
+        if (!context.resources.getBoolean(R.bool.is_sync_enabled)) {
+            return
+        }
+    }
 }

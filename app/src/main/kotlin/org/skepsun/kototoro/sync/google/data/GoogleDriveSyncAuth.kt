@@ -19,77 +19,77 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 data class GoogleDriveAuthorization(
-	val accessToken: String,
-	val email: String?,
-	val displayName: String?,
-	val account: Account?,
+    val accessToken: String,
+    val email: String?,
+    val displayName: String?,
+    val account: Account?,
 )
 
 @Singleton
 class GoogleDriveSyncAuth @Inject constructor(
-	@ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context,
 ) {
 
-	suspend fun authorize(promptSelectAccount: Boolean = false): GoogleDriveAuthorization {
-		val result = Identity.getAuthorizationClient(context)
-			.authorize(request(promptSelectAccount))
-			.await()
-		return result.toAuthorization()
-	}
+    suspend fun authorize(promptSelectAccount: Boolean = false): GoogleDriveAuthorization {
+        val result = Identity.getAuthorizationClient(context)
+            .authorize(request(promptSelectAccount))
+            .await()
+        return result.toAuthorization()
+    }
 
-	suspend fun requireAccessToken(): String = authorize().accessToken
+    suspend fun requireAccessToken(): String = authorize().accessToken
 
-	fun authorizationFromIntent(data: Intent?): GoogleDriveAuthorization {
-		val result = Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data)
-		return result.toAuthorization()
-	}
+    fun authorizationFromIntent(data: Intent?): GoogleDriveAuthorization {
+        val result = Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data)
+        return result.toAuthorization()
+    }
 
-	suspend fun revokeAccess(account: Account?) {
-		val requestBuilder = RevokeAccessRequest.builder()
-			.setScopes(scopes())
-		if (account != null) {
-			requestBuilder.setAccount(account)
-		}
-		Identity.getAuthorizationClient(context).revokeAccess(requestBuilder.build()).await()
-	}
+    suspend fun revokeAccess(account: Account?) {
+        val requestBuilder = RevokeAccessRequest.builder()
+            .setScopes(scopes())
+        if (account != null) {
+            requestBuilder.setAccount(account)
+        }
+        Identity.getAuthorizationClient(context).revokeAccess(requestBuilder.build()).await()
+    }
 
-	private fun request(promptSelectAccount: Boolean): AuthorizationRequest {
-		val builder = AuthorizationRequest.builder()
-			.setRequestedScopes(scopes())
-		if (promptSelectAccount) {
-			builder.setPrompt(Prompt.SELECT_ACCOUNT)
-		}
-		return builder.build()
-	}
+    private fun request(promptSelectAccount: Boolean): AuthorizationRequest {
+        val builder = AuthorizationRequest.builder()
+            .setRequestedScopes(scopes())
+        if (promptSelectAccount) {
+            builder.setPrompt(Prompt.SELECT_ACCOUNT)
+        }
+        return builder.build()
+    }
 
-	private fun AuthorizationResult.accessTokenOrThrow(): String {
-		val token = accessToken
-		if (!token.isNullOrBlank()) {
-			return token
-		}
-		throw GoogleDriveSyncAuthorizationException(pendingIntent)
-	}
+    private fun AuthorizationResult.accessTokenOrThrow(): String {
+        val token = accessToken
+        if (!token.isNullOrBlank()) {
+            return token
+        }
+        throw GoogleDriveSyncAuthorizationException(pendingIntent)
+    }
 
-	private fun AuthorizationResult.toAuthorization(): GoogleDriveAuthorization {
-		val account = toGoogleSignInAccount()
-		return GoogleDriveAuthorization(
-			accessToken = accessTokenOrThrow(),
-			email = account?.email,
-			displayName = account?.displayName,
-			account = account?.account,
-		)
-	}
+    private fun AuthorizationResult.toAuthorization(): GoogleDriveAuthorization {
+        val account = toGoogleSignInAccount()
+        return GoogleDriveAuthorization(
+            accessToken = accessTokenOrThrow(),
+            email = account?.email,
+            displayName = account?.displayName,
+            account = account?.account,
+        )
+    }
 
-	private fun scopes() = listOf(Scope(SCOPE_DRIVE_APPDATA))
+    private fun scopes() = listOf(Scope(SCOPE_DRIVE_APPDATA))
 
-	private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
-		addOnSuccessListener { result -> cont.resume(result) }
-		addOnFailureListener { error -> cont.resumeWithException(error) }
-		addOnCanceledListener { cont.cancel() }
-	}
+    private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
+        addOnSuccessListener { result -> cont.resume(result) }
+        addOnFailureListener { error -> cont.resumeWithException(error) }
+        addOnCanceledListener { cont.cancel() }
+    }
 
-	companion object {
+    companion object {
 
-		const val SCOPE_DRIVE_APPDATA = "https://www.googleapis.com/auth/drive.appdata"
-	}
+        const val SCOPE_DRIVE_APPDATA = "https://www.googleapis.com/auth/drive.appdata"
+    }
 }

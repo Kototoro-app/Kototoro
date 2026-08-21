@@ -16,30 +16,30 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SyncAuthViewModel @Inject constructor(
-	@ApplicationContext context: Context,
-	private val api: SyncAuthApi,
+    @ApplicationContext context: Context,
+    private val api: SyncAuthApi,
 ) : BaseViewModel() {
 
-	val onAccountAlreadyExists = MutableEventFlow<Unit>()
-	val onTokenObtained = MutableEventFlow<SyncAuthResult>()
-	val syncURL = MutableStateFlow(context.resources.getStringArray(R.array.sync_url_list).first())
+    val onAccountAlreadyExists = MutableEventFlow<Unit>()
+    val onTokenObtained = MutableEventFlow<SyncAuthResult>()
+    val syncURL = MutableStateFlow(context.resources.getStringArray(R.array.sync_url_list).first())
 
-	init {
-		launchJob(Dispatchers.Default) {
-			val am = AccountManager.get(context)
-			val accounts = am.getAccountsByType(context.getString(R.string.account_type_sync))
-			if (accounts.isNotEmpty()) {
-				onAccountAlreadyExists.call(Unit)
-			}
-		}
-	}
+    init {
+        launchJob(Dispatchers.Default) {
+            val am = AccountManager.get(context)
+            val accounts = am.getAccountsByType(context.getString(R.string.account_type_sync))
+            if (accounts.isNotEmpty()) {
+                onAccountAlreadyExists.call(Unit)
+            }
+        }
+    }
 
-	fun obtainToken(email: String, password: String) {
-		val urlValue = syncURL.value
-		launchLoadingJob(Dispatchers.Default) {
-			val token = api.authenticate(urlValue, email, password)
-			val result = SyncAuthResult(syncURL.value, email, password, token)
-			onTokenObtained.call(result)
-		}
-	}
+    fun obtainToken(email: String, password: String) {
+        val urlValue = syncURL.value
+        launchLoadingJob(Dispatchers.Default) {
+            val token = api.authenticate(urlValue, email, password)
+            val result = SyncAuthResult(syncURL.value, email, password, token)
+            onTokenObtained.call(result)
+        }
+    }
 }

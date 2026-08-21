@@ -11,41 +11,41 @@ import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
 import javax.inject.Inject
 
 class SyncSettings(
-	context: Context,
-	private val account: Account?,
+    context: Context,
+    private val account: Account?,
 ) {
 
-	@Inject
-	constructor(@ApplicationContext context: Context) : this(
-		context,
-		AccountManager.get(context)?.getAccountsByType(
-			context.getString(R.string.account_type_sync),
-		)?.firstOrNull(),
-	)
+    @Inject
+    constructor(@ApplicationContext context: Context) : this(
+        context,
+        AccountManager.get(context)?.getAccountsByType(
+            context.getString(R.string.account_type_sync),
+        )?.firstOrNull(),
+    )
 
-	private val accountManager = AccountManager.get(context)
-	private val defaultSyncUrl = context.resources.getStringArray(R.array.sync_url_list).first()
+    private val accountManager = AccountManager.get(context)
+    private val defaultSyncUrl = context.resources.getStringArray(R.array.sync_url_list).first()
 
-	@get:WorkerThread
-	@set:WorkerThread
-	var syncUrl: String
-		get() = account?.let {
-			accountManager.getUserData(it, KEY_SYNC_URL)?.withHttpSchema()
-		}.ifNullOrEmpty { defaultSyncUrl }
-		set(value) {
-			account?.let {
-				accountManager.setUserData(it, KEY_SYNC_URL, value)
-			}
-		}
+    @get:WorkerThread
+    @set:WorkerThread
+    var syncUrl: String
+        get() = account?.let {
+            accountManager.getUserData(it, KEY_SYNC_URL)?.withHttpSchema()
+        }.ifNullOrEmpty { defaultSyncUrl }
+        set(value) {
+            account?.let {
+                accountManager.setUserData(it, KEY_SYNC_URL, value)
+            }
+        }
 
-	companion object {
+    companion object {
 
-		private fun String.withHttpSchema(): String = if (isHttpUrl()) {
-			this
-		} else {
-			"http://$this"
-		}
+        private fun String.withHttpSchema(): String = if (isHttpUrl()) {
+            this
+        } else {
+            "http://$this"
+        }
 
-		const val KEY_SYNC_URL = "host"
-	}
+        const val KEY_SYNC_URL = "host"
+    }
 }
