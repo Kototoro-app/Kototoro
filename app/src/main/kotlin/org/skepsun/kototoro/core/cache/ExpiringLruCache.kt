@@ -6,39 +6,39 @@ import java.util.concurrent.TimeUnit
 import org.skepsun.kototoro.core.cache.MemoryContentCache.Key as CacheKey
 
 class ExpiringLruCache<T>(
-	val maxSize: Int,
-	private val lifetime: Long,
-	private val timeUnit: TimeUnit,
+    val maxSize: Int,
+    private val lifetime: Long,
+    private val timeUnit: TimeUnit,
 ) {
 
-	private val cache = SynchronizedSieveCache<CacheKey, ExpiringValue<T>>(maxSize)
+    private val cache = SynchronizedSieveCache<CacheKey, ExpiringValue<T>>(maxSize)
 
-	operator fun get(key: CacheKey): T? {
-		val value = cache[key] ?: return null
-		if (value.isExpired) {
-			cache.remove(key)
-		}
-		return value.get()
-	}
+    operator fun get(key: CacheKey): T? {
+        val value = cache[key] ?: return null
+        if (value.isExpired) {
+            cache.remove(key)
+        }
+        return value.get()
+    }
 
-	operator fun set(key: CacheKey, value: T) {
-		val value = ExpiringValue(value, lifetime, timeUnit)
-		cache.put(key, value)
-	}
+    operator fun set(key: CacheKey, value: T) {
+        val value = ExpiringValue(value, lifetime, timeUnit)
+        cache.put(key, value)
+    }
 
-	fun clear() {
-		cache.evictAll()
-	}
+    fun clear() {
+        cache.evictAll()
+    }
 
-	fun trimToSize(size: Int) {
-		cache.trimToSize(size)
-	}
+    fun trimToSize(size: Int) {
+        cache.trimToSize(size)
+    }
 
-	fun remove(key: CacheKey) {
-		cache.remove(key)
-	}
+    fun remove(key: CacheKey) {
+        cache.remove(key)
+    }
 
-	fun removeAll(source: ContentSource) {
-		cache.removeIf { key, _ -> key.source == source }
-	}
+    fun removeAll(source: ContentSource) {
+        cache.removeIf { key, _ -> key.source == source }
+    }
 }

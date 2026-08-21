@@ -48,181 +48,181 @@ import javax.inject.Singleton
 
 @Singleton
 class AppShortcutManager @Inject constructor(
-	@LocalizedAppContext private val context: Context,
-	private val coil: ImageLoader,
-	private val historyRepository: HistoryRepository,
-	private val mangaRepository: ContentDataRepository,
-	private val settings: AppSettings,
-	private val entityGraphRepository: EntityGraphRepository,
-	private val workResolver: WorkResolver,
+    @LocalizedAppContext private val context: Context,
+    private val coil: ImageLoader,
+    private val historyRepository: HistoryRepository,
+    private val mangaRepository: ContentDataRepository,
+    private val settings: AppSettings,
+    private val entityGraphRepository: EntityGraphRepository,
+    private val workResolver: WorkResolver,
 ) : InvalidationTracker.Observer(
-	TABLE_WORK_HISTORY,
-	TABLE_ENTITY_PREFERENCES,
-	TABLE_MANGA,
+    TABLE_WORK_HISTORY,
+    TABLE_ENTITY_PREFERENCES,
+    TABLE_MANGA,
 ), SharedPreferences.OnSharedPreferenceChangeListener {
 
-	private val iconSize by lazy {
-		Size(ShortcutManagerCompat.getIconMaxWidth(context), ShortcutManagerCompat.getIconMaxHeight(context))
-	}
-	private var shortcutsUpdateJob: Job? = null
-	@Volatile
-	private var isUpdatingShortcuts = false
-	@Volatile
-	private var hasPendingShortcutsUpdate = false
+    private val iconSize by lazy {
+        Size(ShortcutManagerCompat.getIconMaxWidth(context), ShortcutManagerCompat.getIconMaxHeight(context))
+    }
+    private var shortcutsUpdateJob: Job? = null
+    @Volatile
+    private var isUpdatingShortcuts = false
+    @Volatile
+    private var hasPendingShortcutsUpdate = false
 
-	init {
-		settings.subscribe(this)
-	}
+    init {
+        settings.subscribe(this)
+    }
 
-	override fun onInvalidated(tables: Set<String>) {
-		if (!settings.isDynamicShortcutsEnabled) {
-			return
-		}
-		if (isUpdatingShortcuts) {
-			hasPendingShortcutsUpdate = true
-			return
-		}
-		val prevJob = shortcutsUpdateJob
-		shortcutsUpdateJob = processLifecycleScope.launch(Dispatchers.Default) {
-			prevJob?.join()
-			updateShortcutsImpl()
-		}
-	}
+    override fun onInvalidated(tables: Set<String>) {
+        if (!settings.isDynamicShortcutsEnabled) {
+            return
+        }
+        if (isUpdatingShortcuts) {
+            hasPendingShortcutsUpdate = true
+            return
+        }
+        val prevJob = shortcutsUpdateJob
+        shortcutsUpdateJob = processLifecycleScope.launch(Dispatchers.Default) {
+            prevJob?.join()
+            updateShortcutsImpl()
+        }
+    }
 
-	override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-		if (key == AppSettings.KEY_SHORTCUTS) {
-			if (settings.isDynamicShortcutsEnabled) {
-				onInvalidated(emptySet())
-			} else {
-				clearShortcuts()
-			}
-		}
-	}
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (key == AppSettings.KEY_SHORTCUTS) {
+            if (settings.isDynamicShortcutsEnabled) {
+                onInvalidated(emptySet())
+            } else {
+                clearShortcuts()
+            }
+        }
+    }
 
-	suspend fun requestPinShortcut(manga: Content): Boolean = try {
-		ShortcutManagerCompat.requestPinShortcut(context, buildShortcutInfo(manga), null)
-	} catch (e: IllegalStateException) {
-		e.printStackTraceDebug()
-		false
-	}
+    suspend fun requestPinShortcut(manga: Content): Boolean = try {
+        ShortcutManagerCompat.requestPinShortcut(context, buildShortcutInfo(manga), null)
+    } catch (e: IllegalStateException) {
+        e.printStackTraceDebug()
+        false
+    }
 
-	suspend fun requestPinShortcut(source: ContentSource): Boolean = try {
-		ShortcutManagerCompat.requestPinShortcut(context, buildShortcutInfo(source), null)
-	} catch (e: IllegalStateException) {
-		e.printStackTraceDebug()
-		false
-	}
+    suspend fun requestPinShortcut(source: ContentSource): Boolean = try {
+        ShortcutManagerCompat.requestPinShortcut(context, buildShortcutInfo(source), null)
+    } catch (e: IllegalStateException) {
+        e.printStackTraceDebug()
+        false
+    }
 
-	fun getContentShortcuts(): Set<Long> {
-		val shortcuts = ShortcutManagerCompat.getShortcuts(
-			context,
-			ShortcutManagerCompat.FLAG_MATCH_CACHED or ShortcutManagerCompat.FLAG_MATCH_PINNED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC,
-		)
-		return shortcuts.mapNotNullToSet { it.id.toLongOrNull() }
-	}
+    fun getContentShortcuts(): Set<Long> {
+        val shortcuts = ShortcutManagerCompat.getShortcuts(
+            context,
+            ShortcutManagerCompat.FLAG_MATCH_CACHED or ShortcutManagerCompat.FLAG_MATCH_PINNED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC,
+        )
+        return shortcuts.mapNotNullToSet { it.id.toLongOrNull() }
+    }
 
-	@VisibleForTesting
-	suspend fun await(): Boolean {
-		return shortcutsUpdateJob?.join() != null
-	}
+    @VisibleForTesting
+    suspend fun await(): Boolean {
+        return shortcutsUpdateJob?.join() != null
+    }
 
-	fun notifyContentOpened(mangaId: Long) {
-		processLifecycleScope.launch(Dispatchers.Default) {
-			val shortcutMangaId = mangaRepository.findDisplayContentById(mangaId, withChapters = false)?.id ?: mangaId
-			ShortcutManagerCompat.reportShortcutUsed(context, shortcutMangaId.toString())
-		}
-	}
+    fun notifyContentOpened(mangaId: Long) {
+        processLifecycleScope.launch(Dispatchers.Default) {
+            val shortcutMangaId = mangaRepository.findDisplayContentById(mangaId, withChapters = false)?.id ?: mangaId
+            ShortcutManagerCompat.reportShortcutUsed(context, shortcutMangaId.toString())
+        }
+    }
 
-	fun isDynamicShortcutsAvailable(): Boolean {
-		return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1 &&
-			context.getSystemService(ShortcutManager::class.java).maxShortcutCountPerActivity > 0
-	}
+    fun isDynamicShortcutsAvailable(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1 &&
+            context.getSystemService(ShortcutManager::class.java).maxShortcutCountPerActivity > 0
+    }
 
-	private suspend fun updateShortcutsImpl() = runCatchingCancellable {
-		do {
-			hasPendingShortcutsUpdate = false
-			isUpdatingShortcuts = true
-			val maxShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).coerceAtLeast(5)
-			val shortcuts = historyRepository.getList(0, maxShortcuts)
-				.filter { x -> x.title.isNotEmpty() }
-				.map { buildShortcutInfo(it) }
-			ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
-			isUpdatingShortcuts = false
-		} while (hasPendingShortcutsUpdate)
-	}.onFailure {
-		it.printStackTraceDebug()
-	}.also {
-		isUpdatingShortcuts = false
-	}
+    private suspend fun updateShortcutsImpl() = runCatchingCancellable {
+        do {
+            hasPendingShortcutsUpdate = false
+            isUpdatingShortcuts = true
+            val maxShortcuts = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).coerceAtLeast(5)
+            val shortcuts = historyRepository.getList(0, maxShortcuts)
+                .filter { x -> x.title.isNotEmpty() }
+                .map { buildShortcutInfo(it) }
+            ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+            isUpdatingShortcuts = false
+        } while (hasPendingShortcutsUpdate)
+    }.onFailure {
+        it.printStackTraceDebug()
+    }.also {
+        isUpdatingShortcuts = false
+    }
 
-	private fun clearShortcuts() {
-		try {
-			ShortcutManagerCompat.removeAllDynamicShortcuts(context)
-		} catch (_: IllegalStateException) {
-		}
-	}
+    private fun clearShortcuts() {
+        try {
+            ShortcutManagerCompat.removeAllDynamicShortcuts(context)
+        } catch (_: IllegalStateException) {
+        }
+    }
 
-	private suspend fun buildShortcutInfo(manga: Content): ShortcutInfoCompat = withContext(Dispatchers.Default) {
-		val entityId = workResolver.resolveByMangaId(manga.id).entityId
-		val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
-		val resolvedId = preferredLocalMangaId ?: manga.id
-		val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = false)
-			?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = false)
-			?: mangaRepository.findContentById(resolvedId, withChapters = false)
-			?: manga
-		val icon = runCatchingCancellable {
-			coil.execute(
-				ImageRequest.Builder(context)
-					.data(currentManga.coverUrl)
-					.size(iconSize)
-					.mangaSourceExtra(currentManga.source)
-					.scale(Scale.FILL)
-					.transformations(ThumbnailTransformation())
-					.build(),
-			).getDrawableOrThrow().toBitmap()
-		}.fold(
-			onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
-			onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
-		)
-		val title = currentManga.title.ifEmpty {
-			currentManga.altTitles.firstOrNull()
-		}.ifNullOrEmpty {
-			context.getString(R.string.unknown)
-		}
-		ShortcutInfoCompat.Builder(context, currentManga.id.toString())
-			.setShortLabel(title)
-			.setLongLabel(title)
-			.setIcon(icon)
-			.setLongLived(true)
-			.setIntent(
-				ReaderIntent.Builder(context)
-					.mangaId(currentManga.id)
-					.build()
-					.intent,
-			).build()
-	}
+    private suspend fun buildShortcutInfo(manga: Content): ShortcutInfoCompat = withContext(Dispatchers.Default) {
+        val entityId = workResolver.resolveByMangaId(manga.id).entityId
+        val preferredLocalMangaId = entityId?.let { workResolver.selectPreferredProjection(it) }
+        val resolvedId = preferredLocalMangaId ?: manga.id
+        val currentManga = mangaRepository.findDisplayContentById(resolvedId, withChapters = false)
+            ?: mangaRepository.findPreferredLocalContentById(resolvedId, withChapters = false)
+            ?: mangaRepository.findContentById(resolvedId, withChapters = false)
+            ?: manga
+        val icon = runCatchingCancellable {
+            coil.execute(
+                ImageRequest.Builder(context)
+                    .data(currentManga.coverUrl)
+                    .size(iconSize)
+                    .mangaSourceExtra(currentManga.source)
+                    .scale(Scale.FILL)
+                    .transformations(ThumbnailTransformation())
+                    .build(),
+            ).getDrawableOrThrow().toBitmap()
+        }.fold(
+            onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
+            onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
+        )
+        val title = currentManga.title.ifEmpty {
+            currentManga.altTitles.firstOrNull()
+        }.ifNullOrEmpty {
+            context.getString(R.string.unknown)
+        }
+        ShortcutInfoCompat.Builder(context, currentManga.id.toString())
+            .setShortLabel(title)
+            .setLongLabel(title)
+            .setIcon(icon)
+            .setLongLived(true)
+            .setIntent(
+                ReaderIntent.Builder(context)
+                    .mangaId(currentManga.id)
+                    .build()
+                    .intent,
+            ).build()
+    }
 
-	private suspend fun buildShortcutInfo(source: ContentSource): ShortcutInfoCompat = withContext(Dispatchers.Default) {
-		val icon = runCatchingCancellable {
-			coil.execute(
-				ImageRequest.Builder(context)
-					.data(source.faviconUri())
-					.mangaSourceExtra(source)
-					.size(iconSize)
-					.scale(Scale.FIT)
-					.build(),
-			).getDrawableOrThrow().toBitmap()
-		}.fold(
-			onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
-			onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
-		)
-		val title = source.getTitle(context)
-		ShortcutInfoCompat.Builder(context, source.name)
-			.setShortLabel(title)
-			.setLongLabel(title)
-			.setIcon(icon)
-			.setLongLived(true)
-			.setIntent(AppRouter.listIntent(context, source, null, null))
-			.build()
-	}
+    private suspend fun buildShortcutInfo(source: ContentSource): ShortcutInfoCompat = withContext(Dispatchers.Default) {
+        val icon = runCatchingCancellable {
+            coil.execute(
+                ImageRequest.Builder(context)
+                    .data(source.faviconUri())
+                    .mangaSourceExtra(source)
+                    .size(iconSize)
+                    .scale(Scale.FIT)
+                    .build(),
+            ).getDrawableOrThrow().toBitmap()
+        }.fold(
+            onSuccess = { IconCompat.createWithAdaptiveBitmap(it) },
+            onFailure = { IconCompat.createWithResource(context, R.drawable.ic_shortcut_default) },
+        )
+        val title = source.getTitle(context)
+        ShortcutInfoCompat.Builder(context, source.name)
+            .setShortLabel(title)
+            .setLongLabel(title)
+            .setIcon(icon)
+            .setLongLived(true)
+            .setIntent(AppRouter.listIntent(context, source, null, null))
+            .build()
+    }
 }

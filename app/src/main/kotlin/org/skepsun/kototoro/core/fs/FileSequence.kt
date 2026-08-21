@@ -10,22 +10,22 @@ import java.nio.file.Path
 
 sealed interface FileSequence : CloseableSequence<File> {
 
-	@RequiresApi(Build.VERSION_CODES.O)
-	class StreamImpl(dir: File) : FileSequence {
+    @RequiresApi(Build.VERSION_CODES.O)
+    class StreamImpl(dir: File) : FileSequence {
 
-		private val stream = Files.newDirectoryStream(dir.toPath())
+        private val stream = Files.newDirectoryStream(dir.toPath())
 
-		override fun iterator(): Iterator<File> = MappingIterator(stream.iterator(), Path::toFile)
+        override fun iterator(): Iterator<File> = MappingIterator(stream.iterator(), Path::toFile)
 
-		override fun close() = stream.close()
-	}
+        override fun close() = stream.close()
+    }
 
-	class ListImpl(dir: File) : FileSequence {
+    class ListImpl(dir: File) : FileSequence {
 
-		private val list = dir.listFiles().orEmpty()
+        private val list = dir.listFiles().orEmpty()
 
-		override fun iterator(): Iterator<File> = list.iterator()
+        override fun iterator(): Iterator<File> = list.iterator()
 
-		override fun close() = Unit
-	}
+        override fun close() = Unit
+    }
 }

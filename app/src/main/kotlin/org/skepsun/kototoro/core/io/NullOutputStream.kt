@@ -5,9 +5,9 @@ import java.util.Objects
 
 class NullOutputStream : OutputStream() {
 
-	override fun write(b: Int) = Unit
+    override fun write(b: Int) = Unit
 
-	override fun write(b: ByteArray, off: Int, len: Int) {
-		Objects.checkFromIndexSize(off, len, b.size)
-	}
+    override fun write(b: ByteArray, off: Int, len: Int) {
+        Objects.checkFromIndexSize(off, len, b.size)
+    }
 }

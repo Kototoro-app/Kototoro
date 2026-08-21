@@ -374,31 +374,31 @@ class AppRouter(
         startActivity(detailsIntent(contextOrNull() ?: return, DetailsOrigin.TrackingItem(service.id.toString(), remoteId, url)))
     }
 
-	fun openTrackingDiscover(service: ScrobblerService, forceLoad: Boolean = false) {
-		startActivity(
-			Intent(contextOrNull() ?: return, org.skepsun.kototoro.discover.ui.TrackingDiscoverActivity::class.java)
-				.putExtra(KEY_ID, service.name)
-				.putExtra(KEY_FORCE_LOAD, forceLoad),
-		)
-	}
+    fun openTrackingDiscover(service: ScrobblerService, forceLoad: Boolean = false) {
+        startActivity(
+            Intent(contextOrNull() ?: return, org.skepsun.kototoro.discover.ui.TrackingDiscoverActivity::class.java)
+                .putExtra(KEY_ID, service.name)
+                .putExtra(KEY_FORCE_LOAD, forceLoad),
+        )
+    }
 
-	fun openTrackingDiscoveryCategory(service: ScrobblerService, categoryId: String, titleResId: Int) {
-		startActivity(
-			Intent(contextOrNull() ?: return, org.skepsun.kototoro.discover.ui.category.DiscoverCategoryActivity::class.java)
-				.putExtra(KEY_ID, service.name)
-				.putExtra(KEY_KIND, categoryId)
-				.putExtra(KEY_TITLE, titleResId)
-				.putExtra(KEY_SOURCE, (if (service.name == "BANGUMI") "TRACKING_BANGUMI_" else "TRACKING_SHIKIMORI_") + categoryId)
-		)
-	}
+    fun openTrackingDiscoveryCategory(service: ScrobblerService, categoryId: String, titleResId: Int) {
+        startActivity(
+            Intent(contextOrNull() ?: return, org.skepsun.kototoro.discover.ui.category.DiscoverCategoryActivity::class.java)
+                .putExtra(KEY_ID, service.name)
+                .putExtra(KEY_KIND, categoryId)
+                .putExtra(KEY_TITLE, titleResId)
+                .putExtra(KEY_SOURCE, (if (service.name == "BANGUMI") "TRACKING_BANGUMI_" else "TRACKING_SHIKIMORI_") + categoryId)
+        )
+    }
 
-	fun openReader(
-		manga: Content,
-		anchor: View? = null,
-		contentTypeOverride: ContentType? = null,
-		state: ReaderState? = null,
-	) {
-		val source = manga.source.unwrap()
+    fun openReader(
+        manga: Content,
+        anchor: View? = null,
+        contentTypeOverride: ContentType? = null,
+        state: ReaderState? = null,
+    ) {
+        val source = manga.source.unwrap()
         val contentType = contentTypeOverride ?: if (manga.looksLikeLocalVideoContent()) {
             ContentType.VIDEO
         } else {
@@ -416,65 +416,65 @@ class AppRouter(
             return
         }
         if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
-			openVideoContent(manga, anchor, state)
+            openVideoContent(manga, anchor, state)
         } else {
             openReader(
                 ReaderIntent.Builder(contextOrNull() ?: return)
                     .manga(manga)
-					.state(state)
+                    .state(state)
                     .build(),
                 anchor,
             )
         }
     }
 
-	private fun openVideoContent(
-		manga: Content,
-		anchor: View?,
-		state: ReaderState?,
-	) {
-		val target = resolveVideoLaunchTarget(manga, state)
-		val lastSegment = target.url.toUriOrNull()?.lastPathSegment ?: target.url
-		val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
-			lastSegment.endsWith(".mp4", ignoreCase = true)
-		if (isDirectStream || !manga.chapters.isNullOrEmpty()) {
-			openVideo(target.url, manga, anchor, target.state)
-			return
-		}
+    private fun openVideoContent(
+        manga: Content,
+        anchor: View?,
+        state: ReaderState?,
+    ) {
+        val target = resolveVideoLaunchTarget(manga, state)
+        val lastSegment = target.url.toUriOrNull()?.lastPathSegment ?: target.url
+        val isDirectStream = lastSegment.endsWith(".m3u8", ignoreCase = true) ||
+            lastSegment.endsWith(".mp4", ignoreCase = true)
+        if (isDirectStream || !manga.chapters.isNullOrEmpty()) {
+            openVideo(target.url, manga, anchor, target.state)
+            return
+        }
 
-		val lifecycleOwner = activity as? LifecycleOwner
-		if (lifecycleOwner == null) {
-			openVideo(target.url, manga, anchor, target.state)
-			return
-		}
-		lifecycleOwner.lifecycleScope.launch {
-			try {
-				val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
-				val resolvedTarget = resolveVideoLaunchTarget(details, state)
-				openVideo(resolvedTarget.url, details, anchor, resolvedTarget.state)
-			} catch (e: Exception) {
-				Log.e("AppRouter", "Failed to load chapters for video", e)
-				openVideo(target.url, manga, anchor, target.state)
-			}
-		}
-	}
+        val lifecycleOwner = activity as? LifecycleOwner
+        if (lifecycleOwner == null) {
+            openVideo(target.url, manga, anchor, target.state)
+            return
+        }
+        lifecycleOwner.lifecycleScope.launch {
+            try {
+                val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
+                val resolvedTarget = resolveVideoLaunchTarget(details, state)
+                openVideo(resolvedTarget.url, details, anchor, resolvedTarget.state)
+            } catch (e: Exception) {
+                Log.e("AppRouter", "Failed to load chapters for video", e)
+                openVideo(target.url, manga, anchor, target.state)
+            }
+        }
+    }
 
-	fun openReader(intent: ReaderIntent, anchor: View? = null) {
-		val activityIntent = intent.intent
-		// Intercept video sources when ReaderIntent carries a Content extra and route accordingly
-		runCatching {
-			val parcelable = activityIntent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
-			val manga = parcelable?.manga ?: run {
-				val contentIntent = ContentIntent(activityIntent)
-				val mangaId = contentIntent.mangaId
-				if (mangaId != ContentIntent.ID_NONE) {
-					kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-						contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
-							?: contentDataRepository.findContentById(mangaId, withChapters = false)
-					}
-				} else null
-			}
-			if (manga != null) {
+    fun openReader(intent: ReaderIntent, anchor: View? = null) {
+        val activityIntent = intent.intent
+        // Intercept video sources when ReaderIntent carries a Content extra and route accordingly
+        runCatching {
+            val parcelable = activityIntent.getParcelableExtraCompat<ParcelableContent>(KEY_MANGA)
+            val manga = parcelable?.manga ?: run {
+                val contentIntent = ContentIntent(activityIntent)
+                val mangaId = contentIntent.mangaId
+                if (mangaId != ContentIntent.ID_NONE) {
+                    kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                        contentDataRepository.findDisplayContentById(mangaId, withChapters = false)
+                            ?: contentDataRepository.findContentById(mangaId, withChapters = false)
+                    }
+                } else null
+            }
+            if (manga != null) {
                 // 瀵硅棰戝唴瀹瑰拰EPUB鍐呭锛氫紶?ReaderState锛屼紭鍏堜娇鐢ㄥ巻鍙茶褰曚腑鐨勭姸?
                 val source = manga.source.unwrap()
                 val history = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
@@ -506,9 +506,9 @@ class AppRouter(
                     )
                     return
                 }
-				if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
+                if (contentType == ContentType.VIDEO || contentType == ContentType.HENTAI_VIDEO) {
                     val state = activityIntent.getParcelableExtraCompat<ReaderState>(ReaderIntent.EXTRA_STATE)
-					openVideoContent(manga, anchor, state)
+                    openVideoContent(manga, anchor, state)
                     return
                 }
             }
@@ -1092,15 +1092,15 @@ class AppRouter(
         )
     }
 
-	fun showBackupRestoreDialog(
-		fileUri: Uri,
-		restoreFormat: BackupRestoreFormat = BackupRestoreFormat.KOTOTORO_CURRENT,
-	) {
+    fun showBackupRestoreDialog(
+        fileUri: Uri,
+        restoreFormat: BackupRestoreFormat = BackupRestoreFormat.KOTOTORO_CURRENT,
+    ) {
         val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
-			RestoreDialogRoute(
-				uri = fileUri,
-				restoreFormat = restoreFormat,
+            RestoreDialogRoute(
+                uri = fileUri,
+                restoreFormat = restoreFormat,
                 onRestoreStarted = {
                     closeWelcomeSheet()
                     composeActivity.dismissComposeModal()

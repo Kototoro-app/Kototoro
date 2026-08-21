@@ -19,199 +19,199 @@ import java.util.Base64
  * Returns a map matching the Fetch Response interface: {ok, status, statusText, url, text, headers}
  */
 class LNReaderFetchBridge(
-	private val httpClient: OkHttpClient,
-	private val pluginId: String,
-	private val source: ContentSource? = null,
+    private val httpClient: OkHttpClient,
+    private val pluginId: String,
+    private val source: ContentSource? = null,
 ) {
-	companion object {
-		private const val TAG = "LNReaderFetchBridge"
-		private const val DEFAULT_USER_AGENT =
-			"Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-	}
-	
-	var pendingFatalException: Exception? = null
+    companion object {
+        private const val TAG = "LNReaderFetchBridge"
+        private const val DEFAULT_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    }
+    
+    var pendingFatalException: Exception? = null
 
-	/**
-	 * Performs an HTTP request matching the Fetch API contract.
-	 * Called from JavaScript via native bridge.
-	 * 
-	 * @param url The URL to fetch
-	 * @param initStr Optional RequestInit JSON string (method, headers, body)
-	 * @return Response JSON string {ok, status, statusText, url, text, headers}
-	 */
-	fun fetch(url: String, initStr: String? = null): String {
-		return try {
-			Log.d(TAG, "[$pluginId] Fetching: $url")
-			
-			// Validate URL
-			if (!isValidUrl(url)) {
-				return errorResponse(url, 0, "Security Error", "Invalid URL: $url")
-			}
-			
-			val init = try {
-				if (!initStr.isNullOrEmpty()) org.json.JSONObject(initStr) else null
-			} catch (e: Exception) {
-				null
-			}
-			
-			val method = (init?.optString("method"))?.ifEmpty { "GET" }?.uppercase() ?: "GET"
-			val headersMap = extractRequestHeaders(init, includeOrigin = method != "GET" && method != "HEAD")
-			val body = extractBody(init)
-			
-			// Build OkHttp request
-			val requestBuilder = Request.Builder()
-				.url(url)
-			source?.let { requestBuilder.tag(ContentSource::class.java, it) }
-			
-			// Add headers
-			val headerBuilder = Headers.Builder()
-			if (!headersMap.containsKey("User-Agent")) {
-				headerBuilder.add("User-Agent", DEFAULT_USER_AGENT)
-			}
-			headersMap.forEach { (key, value) ->
-				headerBuilder.add(key, value)
-			}
-			requestBuilder.headers(headerBuilder.build())
-			
-			// Set method and body
-			when (method) {
-				"GET" -> requestBuilder.get()
-				"POST" -> {
-					val contentType = headersMap["Content-Type"] ?: "application/x-www-form-urlencoded"
-					val requestBody = (body ?: "").toRequestBody(contentType.toMediaType())
-					requestBuilder.post(requestBody)
-				}
-				"PUT" -> {
-					val contentType = headersMap["Content-Type"] ?: "application/x-www-form-urlencoded"
-					val requestBody = (body ?: "").toRequestBody(contentType.toMediaType())
-					requestBuilder.put(requestBody)
-				}
-				"DELETE" -> requestBuilder.delete()
-				else -> requestBuilder.method(method, null)
-			}
-			
-			// Execute request
-			val response = httpClient.newCall(requestBuilder.build()).execute()
-			val responseBody = response.body?.string() ?: ""
-			val responseHeaders = mutableMapOf<String, String>()
-			response.headers.forEach { (name, value) ->
-				responseHeaders[name] = value
-			}
-			
-			Log.d(TAG, "[$pluginId] Success: ${response.code} (${responseBody.length} bytes)")
-			
-			val responseJson = org.json.JSONObject()
-			responseJson.put("ok", response.isSuccessful)
-			responseJson.put("status", response.code)
-			responseJson.put("statusText", response.message.ifEmpty { "OK" })
-			responseJson.put("url", url)
-			responseJson.put("text", responseBody)
-			
-			val jsHeaders = org.json.JSONObject()
-			responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
-			responseJson.put("headers", jsHeaders)
-			
-			responseJson.toString()
-		} catch (e: Exception) {
-			val interactiveEx = e.findInteractiveException()
-			if (interactiveEx != null) {
-				Log.e(TAG, "[$pluginId] Native Protection engaged: ${interactiveEx.message}")
-				pendingFatalException = interactiveEx
-				errorResponse(url, 403, "Protected", interactiveEx.message ?: "Protected")
-			} else if (e is java.io.IOException) {
-				Log.e(TAG, "[$pluginId] Network error: ${e.message}")
-				errorResponse(url, 0, "Network Error", e.message ?: "Network error")
-			} else {
-				Log.e(TAG, "[$pluginId] Fatal error: ${e.message}")
-				errorResponse(url, 0, "Fatal Error", "Fatal error: ${e.message}")
-			}
-		}
-	}
+    /**
+     * Performs an HTTP request matching the Fetch API contract.
+     * Called from JavaScript via native bridge.
+     * 
+     * @param url The URL to fetch
+     * @param initStr Optional RequestInit JSON string (method, headers, body)
+     * @return Response JSON string {ok, status, statusText, url, text, headers}
+     */
+    fun fetch(url: String, initStr: String? = null): String {
+        return try {
+            Log.d(TAG, "[$pluginId] Fetching: $url")
+            
+            // Validate URL
+            if (!isValidUrl(url)) {
+                return errorResponse(url, 0, "Security Error", "Invalid URL: $url")
+            }
+            
+            val init = try {
+                if (!initStr.isNullOrEmpty()) org.json.JSONObject(initStr) else null
+            } catch (e: Exception) {
+                null
+            }
+            
+            val method = (init?.optString("method"))?.ifEmpty { "GET" }?.uppercase() ?: "GET"
+            val headersMap = extractRequestHeaders(init, includeOrigin = method != "GET" && method != "HEAD")
+            val body = extractBody(init)
+            
+            // Build OkHttp request
+            val requestBuilder = Request.Builder()
+                .url(url)
+            source?.let { requestBuilder.tag(ContentSource::class.java, it) }
+            
+            // Add headers
+            val headerBuilder = Headers.Builder()
+            if (!headersMap.containsKey("User-Agent")) {
+                headerBuilder.add("User-Agent", DEFAULT_USER_AGENT)
+            }
+            headersMap.forEach { (key, value) ->
+                headerBuilder.add(key, value)
+            }
+            requestBuilder.headers(headerBuilder.build())
+            
+            // Set method and body
+            when (method) {
+                "GET" -> requestBuilder.get()
+                "POST" -> {
+                    val contentType = headersMap["Content-Type"] ?: "application/x-www-form-urlencoded"
+                    val requestBody = (body ?: "").toRequestBody(contentType.toMediaType())
+                    requestBuilder.post(requestBody)
+                }
+                "PUT" -> {
+                    val contentType = headersMap["Content-Type"] ?: "application/x-www-form-urlencoded"
+                    val requestBody = (body ?: "").toRequestBody(contentType.toMediaType())
+                    requestBuilder.put(requestBody)
+                }
+                "DELETE" -> requestBuilder.delete()
+                else -> requestBuilder.method(method, null)
+            }
+            
+            // Execute request
+            val response = httpClient.newCall(requestBuilder.build()).execute()
+            val responseBody = response.body?.string() ?: ""
+            val responseHeaders = mutableMapOf<String, String>()
+            response.headers.forEach { (name, value) ->
+                responseHeaders[name] = value
+            }
+            
+            Log.d(TAG, "[$pluginId] Success: ${response.code} (${responseBody.length} bytes)")
+            
+            val responseJson = org.json.JSONObject()
+            responseJson.put("ok", response.isSuccessful)
+            responseJson.put("status", response.code)
+            responseJson.put("statusText", response.message.ifEmpty { "OK" })
+            responseJson.put("url", url)
+            responseJson.put("text", responseBody)
+            
+            val jsHeaders = org.json.JSONObject()
+            responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
+            responseJson.put("headers", jsHeaders)
+            
+            responseJson.toString()
+        } catch (e: Exception) {
+            val interactiveEx = e.findInteractiveException()
+            if (interactiveEx != null) {
+                Log.e(TAG, "[$pluginId] Native Protection engaged: ${interactiveEx.message}")
+                pendingFatalException = interactiveEx
+                errorResponse(url, 403, "Protected", interactiveEx.message ?: "Protected")
+            } else if (e is java.io.IOException) {
+                Log.e(TAG, "[$pluginId] Network error: ${e.message}")
+                errorResponse(url, 0, "Network Error", e.message ?: "Network error")
+            } else {
+                Log.e(TAG, "[$pluginId] Fatal error: ${e.message}")
+                errorResponse(url, 0, "Fatal Error", "Fatal error: ${e.message}")
+            }
+        }
+    }
 
-	fun fetchBinary(url: String, initStr: String? = null, bodyBase64: String): String {
-		return try {
-			Log.d(TAG, "[$pluginId] Fetching binary: $url")
+    fun fetchBinary(url: String, initStr: String? = null, bodyBase64: String): String {
+        return try {
+            Log.d(TAG, "[$pluginId] Fetching binary: $url")
 
-			if (!isValidUrl(url)) {
-				return errorResponse(url, 0, "Security Error", "Invalid URL: $url")
-			}
+            if (!isValidUrl(url)) {
+                return errorResponse(url, 0, "Security Error", "Invalid URL: $url")
+            }
 
-			val init = try {
-				if (!initStr.isNullOrEmpty()) org.json.JSONObject(initStr) else null
-			} catch (e: Exception) {
-				null
-			}
-			val headersMap = extractRequestHeaders(init, includeOrigin = true)
-			val requestBodyBytes = Base64.getDecoder().decode(bodyBase64)
-			val contentType = headersMap["Content-Type"] ?: "application/octet-stream"
-			val requestBody = requestBodyBytes.toRequestBody(contentType.toMediaType())
+            val init = try {
+                if (!initStr.isNullOrEmpty()) org.json.JSONObject(initStr) else null
+            } catch (e: Exception) {
+                null
+            }
+            val headersMap = extractRequestHeaders(init, includeOrigin = true)
+            val requestBodyBytes = Base64.getDecoder().decode(bodyBase64)
+            val contentType = headersMap["Content-Type"] ?: "application/octet-stream"
+            val requestBody = requestBodyBytes.toRequestBody(contentType.toMediaType())
 
-			val headerBuilder = Headers.Builder()
-			if (!headersMap.containsKey("User-Agent")) {
-				headerBuilder.add("User-Agent", DEFAULT_USER_AGENT)
-			}
-			headersMap.forEach { (key, value) ->
-				headerBuilder.add(key, value)
-			}
+            val headerBuilder = Headers.Builder()
+            if (!headersMap.containsKey("User-Agent")) {
+                headerBuilder.add("User-Agent", DEFAULT_USER_AGENT)
+            }
+            headersMap.forEach { (key, value) ->
+                headerBuilder.add(key, value)
+            }
 
-			val request = Request.Builder()
-				.url(url)
-				.apply { source?.let { tag(ContentSource::class.java, it) } }
-				.headers(headerBuilder.build())
-				.post(requestBody)
-				.build()
+            val request = Request.Builder()
+                .url(url)
+                .apply { source?.let { tag(ContentSource::class.java, it) } }
+                .headers(headerBuilder.build())
+                .post(requestBody)
+                .build()
 
-			val response = httpClient.newCall(request).execute()
-			val responseBytes = response.body?.bytes() ?: ByteArray(0)
-			val responseHeaders = mutableMapOf<String, String>()
-			response.headers.forEach { (name, value) ->
-				responseHeaders[name] = value
-			}
+            val response = httpClient.newCall(request).execute()
+            val responseBytes = response.body?.bytes() ?: ByteArray(0)
+            val responseHeaders = mutableMapOf<String, String>()
+            response.headers.forEach { (name, value) ->
+                responseHeaders[name] = value
+            }
 
-			Log.d(TAG, "[$pluginId] Binary success: ${response.code} (${responseBytes.size} bytes)")
+            Log.d(TAG, "[$pluginId] Binary success: ${response.code} (${responseBytes.size} bytes)")
 
-			val responseJson = org.json.JSONObject()
-			responseJson.put("ok", response.isSuccessful)
-			responseJson.put("status", response.code)
-			responseJson.put("statusText", response.message.ifEmpty { "OK" })
-			responseJson.put("url", url)
-			responseJson.put("bodyBase64", Base64.getEncoder().encodeToString(responseBytes))
+            val responseJson = org.json.JSONObject()
+            responseJson.put("ok", response.isSuccessful)
+            responseJson.put("status", response.code)
+            responseJson.put("statusText", response.message.ifEmpty { "OK" })
+            responseJson.put("url", url)
+            responseJson.put("bodyBase64", Base64.getEncoder().encodeToString(responseBytes))
 
-			val jsHeaders = org.json.JSONObject()
-			responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
-			responseJson.put("headers", jsHeaders)
+            val jsHeaders = org.json.JSONObject()
+            responseHeaders.forEach { (k, v) -> jsHeaders.put(k, v) }
+            responseJson.put("headers", jsHeaders)
 
-			responseJson.toString()
-		} catch (e: Exception) {
-			val interactiveEx = e.findInteractiveException()
-			if (interactiveEx != null) {
-				Log.e(TAG, "[$pluginId] Native binary protection engaged: ${interactiveEx.message}")
-				pendingFatalException = interactiveEx
-				errorResponse(url, 403, "Protected", interactiveEx.message ?: "Protected")
-			} else if (e is IOException) {
-				Log.e(TAG, "[$pluginId] Binary network error: ${e.message}")
-				errorResponse(url, 0, "Network Error", e.message ?: "Network error")
-			} else {
-				Log.e(TAG, "[$pluginId] Binary fatal error: ${e.message}")
-				errorResponse(url, 0, "Fatal Error", "Fatal error: ${e.message}")
-			}
-		}
-	}
+            responseJson.toString()
+        } catch (e: Exception) {
+            val interactiveEx = e.findInteractiveException()
+            if (interactiveEx != null) {
+                Log.e(TAG, "[$pluginId] Native binary protection engaged: ${interactiveEx.message}")
+                pendingFatalException = interactiveEx
+                errorResponse(url, 403, "Protected", interactiveEx.message ?: "Protected")
+            } else if (e is IOException) {
+                Log.e(TAG, "[$pluginId] Binary network error: ${e.message}")
+                errorResponse(url, 0, "Network Error", e.message ?: "Network error")
+            } else {
+                Log.e(TAG, "[$pluginId] Binary fatal error: ${e.message}")
+                errorResponse(url, 0, "Fatal Error", "Fatal error: ${e.message}")
+            }
+        }
+    }
 
-	private fun Exception.findInteractiveException(): Exception? {
-		return generateSequence(this as Throwable) { it.cause }
-			.firstOrNull {
-				it.javaClass.name.contains("CloudFlare") ||
-					it.javaClass.name.contains("InteractiveAction")
-			} as? Exception
-	}
-	
-	/**
-	 * Generate the JavaScript wrapper function for injection into QuickJS.
-	 * Matches IReader's JSFetchApi.toJavaScriptFunction().
-	 */
-	fun toJavaScriptFunction(): String {
-		return """
+    private fun Exception.findInteractiveException(): Exception? {
+        return generateSequence(this as Throwable) { it.cause }
+            .firstOrNull {
+                it.javaClass.name.contains("CloudFlare") ||
+                    it.javaClass.name.contains("InteractiveAction")
+            } as? Exception
+    }
+    
+    /**
+     * Generate the JavaScript wrapper function for injection into QuickJS.
+     * Matches IReader's JSFetchApi.toJavaScriptFunction().
+     */
+    fun toJavaScriptFunction(): String {
+        return """
 			class Headers {
 				constructor(init) {
 					this.map = {};
@@ -290,11 +290,11 @@ class LNReaderFetchBridge(
 			};
 
 			${getProtoFetchScript()}
-		""".trimIndent()
-	}
+        """.trimIndent()
+    }
 
-	private fun getProtoFetchScript(): String {
-		return """
+    private fun getProtoFetchScript(): String {
+        return """
 			(function() {
 				function bytesToBase64(bytes) {
 					var binary = '';
@@ -579,82 +579,82 @@ class LNReaderFetchBridge(
 					}
 				};
 			})();
-		""".trimIndent()
-	}
-	
-	private fun extractHeaders(init: org.json.JSONObject?): Map<String, String> {
-		if (init == null || !init.has("headers")) return emptyMap()
-		val headersObj = init.optJSONObject("headers") ?: return emptyMap()
-		val result = mutableMapOf<String, String>()
-		val keys = headersObj.keys()
-		while (keys.hasNext()) {
-			val key = keys.next()
-			result[key] = headersObj.optString(key)
-		}
-		return result
-	}
+        """.trimIndent()
+    }
+    
+    private fun extractHeaders(init: org.json.JSONObject?): Map<String, String> {
+        if (init == null || !init.has("headers")) return emptyMap()
+        val headersObj = init.optJSONObject("headers") ?: return emptyMap()
+        val result = mutableMapOf<String, String>()
+        val keys = headersObj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            result[key] = headersObj.optString(key)
+        }
+        return result
+    }
 
-	private fun extractRequestHeaders(
-		init: org.json.JSONObject?,
-		includeOrigin: Boolean,
-	): Map<String, String> {
-		val result = extractHeaders(init).toMutableMap()
-		val referrer = init?.optString("referrer")?.takeIf { it.isNotBlank() }
-		if (referrer != null && result.keys.none { it.equals("Referer", ignoreCase = true) }) {
-			result["Referer"] = referrer
-		}
-		if (includeOrigin && referrer != null && result.keys.none { it.equals("Origin", ignoreCase = true) }) {
-			runCatching {
-				val referrerUri = URI(referrer)
-				if (!referrerUri.scheme.isNullOrBlank() && !referrerUri.host.isNullOrBlank()) {
-					result["Origin"] = buildString {
-						append(referrerUri.scheme)
-						append("://")
-						append(referrerUri.host)
-						if (referrerUri.port > 0) append(":${referrerUri.port}")
-					}
-				}
-			}
-		}
-		return result
-	}
+    private fun extractRequestHeaders(
+        init: org.json.JSONObject?,
+        includeOrigin: Boolean,
+    ): Map<String, String> {
+        val result = extractHeaders(init).toMutableMap()
+        val referrer = init?.optString("referrer")?.takeIf { it.isNotBlank() }
+        if (referrer != null && result.keys.none { it.equals("Referer", ignoreCase = true) }) {
+            result["Referer"] = referrer
+        }
+        if (includeOrigin && referrer != null && result.keys.none { it.equals("Origin", ignoreCase = true) }) {
+            runCatching {
+                val referrerUri = URI(referrer)
+                if (!referrerUri.scheme.isNullOrBlank() && !referrerUri.host.isNullOrBlank()) {
+                    result["Origin"] = buildString {
+                        append(referrerUri.scheme)
+                        append("://")
+                        append(referrerUri.host)
+                        if (referrerUri.port > 0) append(":${referrerUri.port}")
+                    }
+                }
+            }
+        }
+        return result
+    }
 
-	private fun extractBody(init: org.json.JSONObject?): String? {
-		if (init == null || !init.has("body")) return null
-		val body = init.opt("body")
-		return when (body) {
-			is String -> body
-			is org.json.JSONObject -> {
-				val parts = mutableListOf<String>()
-				val keys = body.keys()
-				while (keys.hasNext()) {
-					val key = keys.next()
-					parts.add("$key=${java.net.URLEncoder.encode(body.optString(key), "UTF-8")}")
-				}
-				parts.joinToString("&")
-			}
-			else -> body?.toString()
-		}
-	}
-	
-	private fun isValidUrl(url: String): Boolean {
-		return try {
-			val uri = URI(url)
-			val scheme = uri.scheme?.lowercase()
-			scheme == "http" || scheme == "https"
-		} catch (e: Exception) {
-			false
-		}
-	}
-	
-	private fun errorResponse(url: String, status: Int, statusText: String, error: String): String {
-		val res = org.json.JSONObject()
-		res.put("ok", false)
-		res.put("status", status)
-		res.put("statusText", statusText)
-		res.put("url", url)
-		res.put("text", "")
-		res.put("error", error)
-		return res.toString()
-	}
+    private fun extractBody(init: org.json.JSONObject?): String? {
+        if (init == null || !init.has("body")) return null
+        val body = init.opt("body")
+        return when (body) {
+            is String -> body
+            is org.json.JSONObject -> {
+                val parts = mutableListOf<String>()
+                val keys = body.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    parts.add("$key=${java.net.URLEncoder.encode(body.optString(key), "UTF-8")}")
+                }
+                parts.joinToString("&")
+            }
+            else -> body?.toString()
+        }
+    }
+    
+    private fun isValidUrl(url: String): Boolean {
+        return try {
+            val uri = URI(url)
+            val scheme = uri.scheme?.lowercase()
+            scheme == "http" || scheme == "https"
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    private fun errorResponse(url: String, status: Int, statusText: String, error: String): String {
+        val res = org.json.JSONObject()
+        res.put("ok", false)
+        res.put("status", status)
+        res.put("statusText", statusText)
+        res.put("url", url)
+        res.put("text", "")
+        res.put("error", error)
+        return res.toString()
+    }
 }

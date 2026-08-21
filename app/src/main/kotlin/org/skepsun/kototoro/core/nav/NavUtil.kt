@@ -12,64 +12,64 @@ import org.skepsun.kototoro.core.util.ext.isAnimationsEnabled
 import org.skepsun.kototoro.core.util.ext.isOnScreen
 
 inline val FragmentActivity.router: AppRouter
-	get() = AppRouter(this)
+    get() = AppRouter(this)
 
 fun scaleUpActivityOptionsOf(view: View): Bundle? {
-	if (!view.context.isAnimationsEnabled || !view.isOnScreen()) {
-		return null
-	}
-	return ActivityOptions.makeScaleUpAnimation(
-		/* source = */ view,
-		/* startX = */ 0,
-		/* startY = */ 0,
-		/* width = */ view.width,
-		/* height = */ view.height,
-	).toBundle()
+    if (!view.context.isAnimationsEnabled || !view.isOnScreen()) {
+        return null
+    }
+    return ActivityOptions.makeScaleUpAnimation(
+        /* source = */ view,
+        /* startX = */ 0,
+        /* startY = */ 0,
+        /* width = */ view.width,
+        /* height = */ view.height,
+    ).toBundle()
 }
 
 fun sceneTransitionOptionsOf(view: View): Bundle? {
-	if (!view.context.isAnimationsEnabled || !view.isOnScreen() || view.transitionName.isNullOrEmpty()) {
-		return scaleUpActivityOptionsOf(view)
-	}
-	val activity = view.context.findActivity() ?: return scaleUpActivityOptionsOf(view)
-	return androidx.core.app.ActivityOptionsCompat.makeSceneTransitionAnimation(activity, view, view.transitionName).toBundle()
+    if (!view.context.isAnimationsEnabled || !view.isOnScreen() || view.transitionName.isNullOrEmpty()) {
+        return scaleUpActivityOptionsOf(view)
+    }
+    val activity = view.context.findActivity() ?: return scaleUpActivityOptionsOf(view)
+    return androidx.core.app.ActivityOptionsCompat.makeSceneTransitionAnimation(activity, view, view.transitionName).toBundle()
 }
 
 fun activityTransitionOptionsOf(activity: FragmentActivity): Bundle? {
-	if (!activity.isAnimationsEnabled) {
-		return null
-	}
-	return androidx.core.app.ActivityOptionsCompat.makeSceneTransitionAnimation(activity).toBundle()
+    if (!activity.isAnimationsEnabled) {
+        return null
+    }
+    return androidx.core.app.ActivityOptionsCompat.makeSceneTransitionAnimation(activity).toBundle()
 }
 
 fun Activity.applyHorizontalRouteOpenTransition() {
-	if (!isAnimationsEnabled) {
-		return
-	}
-	if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-		overrideActivityTransition(
-			Activity.OVERRIDE_TRANSITION_OPEN,
-			R.anim.route_slide_in_right,
-			R.anim.route_slide_out_left,
-		)
-	} else {
-		@Suppress("DEPRECATION")
-		overridePendingTransition(R.anim.route_slide_in_right, R.anim.route_slide_out_left)
-	}
+    if (!isAnimationsEnabled) {
+        return
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(
+            Activity.OVERRIDE_TRANSITION_OPEN,
+            R.anim.route_slide_in_right,
+            R.anim.route_slide_out_left,
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.route_slide_in_right, R.anim.route_slide_out_left)
+    }
 }
 
 fun Activity.applyHorizontalRouteCloseTransition() {
-	if (!isAnimationsEnabled) {
-		return
-	}
-	if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-		overrideActivityTransition(
-			Activity.OVERRIDE_TRANSITION_CLOSE,
-			R.anim.route_slide_in_left,
-			R.anim.route_slide_out_right,
-		)
-	} else {
-		@Suppress("DEPRECATION")
-		overridePendingTransition(R.anim.route_slide_in_left, R.anim.route_slide_out_right)
-	}
+    if (!isAnimationsEnabled) {
+        return
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(
+            Activity.OVERRIDE_TRANSITION_CLOSE,
+            R.anim.route_slide_in_left,
+            R.anim.route_slide_out_right,
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.route_slide_in_left, R.anim.route_slide_out_right)
+    }
 }

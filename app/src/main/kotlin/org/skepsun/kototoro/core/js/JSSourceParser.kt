@@ -19,18 +19,18 @@ import javax.inject.Singleton
  */
 @Singleton
 class JSSourceParser @Inject constructor(
-	@ApplicationContext private val context: Context,
-	private val jsEngine: JSEngine,
+    @ApplicationContext private val context: Context,
+    private val jsEngine: JSEngine,
 ) {
 
-	private val json = Json {
-		ignoreUnknownKeys = true
-		isLenient = true
-	}
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+    }
 
-	private val classNameRegex = Regex("""class\s+([A-Za-z0-9_]+)\s+extends\s+ComicSource""")
+    private val classNameRegex = Regex("""class\s+([A-Za-z0-9_]+)\s+extends\s+ComicSource""")
 
-	private val metadataBootstrap = """
+    private val metadataBootstrap = """
 		;(() => {
 			// Minimal host stubs to allow class definition without side effects.
 			const __store = {};
@@ -94,13 +94,13 @@ class JSSourceParser @Inject constructor(
 			}
 			globalThis.ComicSource = __StubComicSource;
 		})();
-	""".trimIndent()
+    """.trimIndent()
 
-	private fun buildMetadataExtractor(preferredClass: String?): String {
-		val preferredExpr = preferredClass?.takeIf { it.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) }
-			?.let { "(typeof $it !== 'undefined' ? $it : null)" }
-			?: "null"
-		return """
+    private fun buildMetadataExtractor(preferredClass: String?): String {
+        val preferredExpr = preferredClass?.takeIf { it.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")) }
+            ?.let { "(typeof $it !== 'undefined' ? $it : null)" }
+            ?: "null"
+        return """
 		;(() => {
 			const candidates = [];
 			const fromName = $preferredExpr;
@@ -134,60 +134,60 @@ class JSSourceParser @Inject constructor(
 			};
 			return JSON.stringify(meta);
 		})();
-		""".trimIndent()
-	}
+        """.trimIndent()
+    }
 
-	@Serializable
-	data class JsSourceMetadata(
-		val key: String,
-		val name: String,
-		val version: String? = null,
-		val minAppVersion: String? = null,
-		val lang: String? = null,
-		val homepage: String? = null,
-		val description: String? = null,
-	)
+    @Serializable
+    data class JsSourceMetadata(
+        val key: String,
+        val name: String,
+        val version: String? = null,
+        val minAppVersion: String? = null,
+        val lang: String? = null,
+        val homepage: String? = null,
+        val description: String? = null,
+    )
 
-	/**
-	 * Extract metadata from a JS source.
-	 */
-	fun parseMetadata(js: String): Result<JsSourceMetadata> = runCatching {
-		val preferredClass = classNameRegex.find(js)?.groupValues?.getOrNull(1)
-		val script = buildString {
-			append(metadataBootstrap)
-			append("\n")
-			append(js)
-			append("\n")
-			append(buildMetadataExtractor(preferredClass))
-		}
+    /**
+     * Extract metadata from a JS source.
+     */
+    fun parseMetadata(js: String): Result<JsSourceMetadata> = runCatching {
+        val preferredClass = classNameRegex.find(js)?.groupValues?.getOrNull(1)
+        val script = buildString {
+            append(metadataBootstrap)
+            append("\n")
+            append(js)
+            append("\n")
+            append(buildMetadataExtractor(preferredClass))
+        }
 
-		val result = jsEngine.evaluate(script, "js-source-import", String::class.java)
-			?: throw IllegalStateException("JS returned null metadata")
+        val result = jsEngine.evaluate(script, "js-source-import", String::class.java)
+            ?: throw IllegalStateException("JS returned null metadata")
 
-		val element = json.parseToJsonElement(result)
-		val obj = element as? JsonObject
-			?: throw IllegalArgumentException("Metadata is not an object")
+        val element = json.parseToJsonElement(result)
+        val obj = element as? JsonObject
+            ?: throw IllegalArgumentException("Metadata is not an object")
 
-		obj["error"]?.jsonPrimitive?.contentOrNull?.let { err ->
-			throw IllegalArgumentException("JS metadata error: $err")
-		}
+        obj["error"]?.jsonPrimitive?.contentOrNull?.let { err ->
+            throw IllegalArgumentException("JS metadata error: $err")
+        }
 
-		if (!obj.containsKey("key") || !obj.containsKey("name")) {
-			throw IllegalArgumentException("Metadata missing key/name")
-		}
+        if (!obj.containsKey("key") || !obj.containsKey("name")) {
+            throw IllegalArgumentException("Metadata missing key/name")
+        }
 
-		val meta = json.decodeFromJsonElement(JsSourceMetadata.serializer(), obj)
-		if (meta.name.isBlank()) throw IllegalArgumentException("name is empty")
-		if (meta.key.isBlank()) throw IllegalArgumentException("key is empty")
-		meta
-	}
+        val meta = json.decodeFromJsonElement(JsSourceMetadata.serializer(), obj)
+        if (meta.name.isBlank()) throw IllegalArgumentException("name is empty")
+        if (meta.key.isBlank()) throw IllegalArgumentException("key is empty")
+        meta
+    }
 
-	/**
-	 * Persist JS script for debugging or later reload.
-	 */
-	fun saveSource(js: String, fileName: String): File {
-		val dir = File(context.filesDir, "js_sources")
-		if (!dir.exists()) dir.mkdirs()
-		return File(dir, fileName).also { it.writeText(js) }
-	}
+    /**
+     * Persist JS script for debugging or later reload.
+     */
+    fun saveSource(js: String, fileName: String): File {
+        val dir = File(context.filesDir, "js_sources")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, fileName).also { it.writeText(js) }
+    }
 }

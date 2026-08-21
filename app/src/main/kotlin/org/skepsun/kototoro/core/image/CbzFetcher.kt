@@ -23,54 +23,54 @@ import java.util.zip.ZipInputStream
 import coil3.Uri as CoilUri
 
 class CbzFetcher(
-	private val uri: Uri,
-	private val options: Options,
-	private val contentResolver: ContentResolver,
+    private val uri: Uri,
+    private val options: Options,
+    private val contentResolver: ContentResolver,
 ) : Fetcher {
 
-	override suspend fun fetch() = runInterruptible {
-		val entryName = requireNotNull(uri.fragment)
-		if (uri.isContentZipUri()) {
-			val source = Buffer()
-			val input = checkNotNull(contentResolver.openInputStream(uri.toUnderlyingZipUri())) {
-				"Cannot open $uri"
-			}
-			ZipInputStream(input.buffered()).use { zip ->
-				var entry = zip.nextEntry
-				while (entry != null && entry.name != entryName) {
-					entry = zip.nextEntry
-				}
-				if (entry == null) throw IOException("ZIP entry not found: $entryName")
-				source.write(zip.readBytes())
-			}
-			return@runInterruptible SourceFetchResult(
-				source = ImageSource(source, FileSystem.SYSTEM),
-				mimeType = MimeTypes.getMimeTypeFromExtension(entryName)?.toString(),
-				dataSource = DataSource.DISK,
-			)
-		}
-		val filePath = uri.schemeSpecificPart.toPath()
-		val fs = options.fileSystem.openZip(filePath)
-		SourceFetchResult(
-			source = ImageSource(entryName.toPath(), fs),
-			mimeType = MimeTypes.getMimeTypeFromExtension(entryName)?.toString(),
-			dataSource = DataSource.DISK,
-		)
-	}
+    override suspend fun fetch() = runInterruptible {
+        val entryName = requireNotNull(uri.fragment)
+        if (uri.isContentZipUri()) {
+            val source = Buffer()
+            val input = checkNotNull(contentResolver.openInputStream(uri.toUnderlyingZipUri())) {
+                "Cannot open $uri"
+            }
+            ZipInputStream(input.buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null && entry.name != entryName) {
+                    entry = zip.nextEntry
+                }
+                if (entry == null) throw IOException("ZIP entry not found: $entryName")
+                source.write(zip.readBytes())
+            }
+            return@runInterruptible SourceFetchResult(
+                source = ImageSource(source, FileSystem.SYSTEM),
+                mimeType = MimeTypes.getMimeTypeFromExtension(entryName)?.toString(),
+                dataSource = DataSource.DISK,
+            )
+        }
+        val filePath = uri.schemeSpecificPart.toPath()
+        val fs = options.fileSystem.openZip(filePath)
+        SourceFetchResult(
+            source = ImageSource(entryName.toPath(), fs),
+            mimeType = MimeTypes.getMimeTypeFromExtension(entryName)?.toString(),
+            dataSource = DataSource.DISK,
+        )
+    }
 
-	class Factory : Fetcher.Factory<CoilUri> {
+    class Factory : Fetcher.Factory<CoilUri> {
 
-		override fun create(
-			data: CoilUri,
-			options: Options,
-			imageLoader: ImageLoader
-		): Fetcher? {
-			val androidUri = data.toAndroidUri()
-			return if (androidUri.isZipUri() || androidUri.isContentZipUri()) {
-				CbzFetcher(androidUri, options, options.context.contentResolver)
-			} else {
-				null
-			}
-		}
-	}
+        override fun create(
+            data: CoilUri,
+            options: Options,
+            imageLoader: ImageLoader
+        ): Fetcher? {
+            val androidUri = data.toAndroidUri()
+            return if (androidUri.isZipUri() || androidUri.isContentZipUri()) {
+                CbzFetcher(androidUri, options, options.context.contentResolver)
+            } else {
+                null
+            }
+        }
+    }
 }

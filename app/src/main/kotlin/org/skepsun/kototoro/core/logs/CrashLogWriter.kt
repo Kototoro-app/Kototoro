@@ -7,20 +7,20 @@ import android.content.Context
  * delegating to the previous handler (e.g. ACRA).
  */
 class CrashLogWriter(
-	private val context: Context,
-	private val previousHandler: Thread.UncaughtExceptionHandler?,
+    private val context: Context,
+    private val previousHandler: Thread.UncaughtExceptionHandler?,
 ) : Thread.UncaughtExceptionHandler {
 
-	override fun uncaughtException(t: Thread, e: Throwable) {
-		CrashLogManager.writeCrashLog(context, t, e)
-		previousHandler?.uncaughtException(t, e)
-	}
+    override fun uncaughtException(t: Thread, e: Throwable) {
+        CrashLogManager.writeCrashLog(context, t, e)
+        previousHandler?.uncaughtException(t, e)
+    }
 
-	companion object {
+    companion object {
 
-		fun install(context: Context) {
-			val previous = Thread.getDefaultUncaughtExceptionHandler()
-			Thread.setDefaultUncaughtExceptionHandler(CrashLogWriter(context, previous))
-		}
-	}
+        fun install(context: Context) {
+            val previous = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler(CrashLogWriter(context, previous))
+        }
+    }
 }
