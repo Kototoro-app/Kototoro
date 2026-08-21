@@ -16,21 +16,21 @@ import org.skepsun.kototoro.space.domain.SpaceId
 
 @Composable
 internal fun ViewSpaceSwitcherFab(
-	activeSpaceId: SpaceId,
-	activeSpace: SpaceContext?,
+    activeSpaceId: SpaceId,
+    activeSpace: SpaceContext?,
 ) {
-	Box(
-		modifier = Modifier
-			.fillMaxSize()
-			.background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
-			.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
-	) {
-		CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
-			SpaceSwitcherIcon(
-				activeSpaceId = activeSpaceId,
-				activeSpace = activeSpace,
-				modifier = Modifier.fillMaxSize(),
-			)
-		}
-	}
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainer, CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+    ) {
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+            SpaceSwitcherIcon(
+                activeSpaceId = activeSpaceId,
+                activeSpace = activeSpace,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
 }

@@ -9,10 +9,10 @@ import javax.inject.Singleton
 
 @Singleton
 class DefaultSpaceSourceAvailability @Inject constructor(
-	private val contentSourcesRepository: ContentSourcesRepository,
+    private val contentSourcesRepository: ContentSourcesRepository,
 ) : SpaceSourceAvailability {
 
-	override suspend fun isAvailable(sourceName: String): Boolean = withContext(Dispatchers.IO) {
-		contentSourcesRepository.isSourceAvailable(sourceName)
-	}
+    override suspend fun isAvailable(sourceName: String): Boolean = withContext(Dispatchers.IO) {
+        contentSourcesRepository.isSourceAvailable(sourceName)
+    }
 }

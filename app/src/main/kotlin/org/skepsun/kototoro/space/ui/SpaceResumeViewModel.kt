@@ -37,136 +37,136 @@ import org.skepsun.kototoro.space.domain.SpaceRepository
 import javax.inject.Inject
 
 data class SpaceResumeItem(
-	val spaceId: SpaceId,
-	val title: String,
-	val content: Content,
-	val canResume: Boolean,
+    val spaceId: SpaceId,
+    val title: String,
+    val content: Content,
+    val canResume: Boolean,
 )
 
 data class SpaceResumeUiState(
-	val items: Map<SpaceId, SpaceResumeItem> = emptyMap(),
+    val items: Map<SpaceId, SpaceResumeItem> = emptyMap(),
 )
 
 data class SpaceResumeRequest(
-	val content: Content,
-	val contentType: ContentType?,
-	val state: ReaderState?,
+    val content: Content,
+    val contentType: ContentType?,
+    val state: ReaderState?,
 )
 
 @Reusable
 class SpaceResumeStateSource @Inject constructor(
-	historyRepository: HistoryRepository,
-	catalogRepository: SpaceCatalogRepository,
-	featureFlagsRepository: SpaceFeatureFlagsRepository,
-	private val networkState: NetworkState,
-	private val settings: AppSettings,
+    historyRepository: HistoryRepository,
+    catalogRepository: SpaceCatalogRepository,
+    featureFlagsRepository: SpaceFeatureFlagsRepository,
+    private val networkState: NetworkState,
+    private val settings: AppSettings,
 ) {
-	private val activeContexts = combine(
-		catalogRepository.spaces,
-		featureFlagsRepository.flags,
-	) { contexts, flags ->
-		contexts.takeIf { flags.effectiveSwitcherEnabled }.orEmpty()
-	}
+    private val activeContexts = combine(
+        catalogRepository.spaces,
+        featureFlagsRepository.flags,
+    ) { contexts, flags ->
+        contexts.takeIf { flags.effectiveSwitcherEnabled }.orEmpty()
+    }
 
-	private val recentBySpace = combine(
-		activeContexts,
-		settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw },
-	) { contexts, excludeNsfw ->
-		contexts to excludeNsfw
-	}.flatMapLatest { (contexts, excludeNsfw) ->
-		if (contexts.isEmpty()) {
-			flowOf(emptyMap())
-		} else {
-			combine(contexts.map { context ->
-				historyRepository.observeLast(
-					spaceId = context.id,
-					excludeNsfw = excludeNsfw,
-				).map { context.id to it }
-			}) { entries -> entries.toMap() }
-		}
-	}
+    private val recentBySpace = combine(
+        activeContexts,
+        settings.observeAsFlow(AppSettings.KEY_HISTORY_EXCLUDE_NSFW) { isHistoryExcludeNsfw },
+    ) { contexts, excludeNsfw ->
+        contexts to excludeNsfw
+    }.flatMapLatest { (contexts, excludeNsfw) ->
+        if (contexts.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(contexts.map { context ->
+                historyRepository.observeLast(
+                    spaceId = context.id,
+                    excludeNsfw = excludeNsfw,
+                ).map { context.id to it }
+            }) { entries -> entries.toMap() }
+        }
+    }
 
-	fun observe() = combine(
-		recentBySpace,
-		networkState,
-	) { recent, isOnline ->
-		buildSpaceResumeUiState(recent, isOnline, true)
-	}.distinctUntilChanged()
+    fun observe() = combine(
+        recentBySpace,
+        networkState,
+    ) { recent, isOnline ->
+        buildSpaceResumeUiState(recent, isOnline, true)
+    }.distinctUntilChanged()
 }
 
 @HiltViewModel
 class SpaceResumeViewModel @Inject constructor(
-	stateSource: SpaceResumeStateSource,
-	private val spaceRepository: SpaceRepository,
-	private val catalogRepository: SpaceCatalogRepository,
-	private val historyRepository: HistoryRepository,
+    stateSource: SpaceResumeStateSource,
+    private val spaceRepository: SpaceRepository,
+    private val catalogRepository: SpaceCatalogRepository,
+    private val historyRepository: HistoryRepository,
 ) : BaseViewModel() {
 
-	val onOpenReader = MutableEventFlow<SpaceResumeRequest>()
+    val onOpenReader = MutableEventFlow<SpaceResumeRequest>()
 
-	val uiState = stateSource.observe().stateIn(
-		scope = viewModelScope + Dispatchers.Default,
-		started = SharingStarted.WhileSubscribed(5_000),
-		initialValue = SpaceResumeUiState(),
-	)
+    val uiState = stateSource.observe().stateIn(
+        scope = viewModelScope + Dispatchers.Default,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = SpaceResumeUiState(),
+    )
 
-	fun resume(spaceId: SpaceId) {
-		launchLoadingJob(Dispatchers.Default) {
-			val item = uiState.value.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
-				?: withTimeoutOrNull(2_000L) {
-					uiState.map { state ->
-						state.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
-					}.first { it != null }
-				}
-				?: return@launchLoadingJob
-			spaceRepository.activate(spaceId)
-			val history = historyRepository.getOne(item.content)
-			onOpenReader.call(
-				SpaceResumeRequest(
-					content = item.content.normalizeLocalVideoSource(),
-					contentType = catalogRepository.find(spaceId)?.kind?.toContentType(),
-					state = history?.let(::ReaderState),
-				),
-			)
-		}
-	}
+    fun resume(spaceId: SpaceId) {
+        launchLoadingJob(Dispatchers.Default) {
+            val item = uiState.value.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
+                ?: withTimeoutOrNull(2_000L) {
+                    uiState.map { state ->
+                        state.items[spaceId]?.takeIf(SpaceResumeItem::canResume)
+                    }.first { it != null }
+                }
+                ?: return@launchLoadingJob
+            spaceRepository.activate(spaceId)
+            val history = historyRepository.getOne(item.content)
+            onOpenReader.call(
+                SpaceResumeRequest(
+                    content = item.content.normalizeLocalVideoSource(),
+                    contentType = catalogRepository.find(spaceId)?.kind?.toContentType(),
+                    state = history?.let(::ReaderState),
+                ),
+            )
+        }
+    }
 
-	private fun Content.normalizeLocalVideoSource(): Content {
-		if (!looksLikeLocalVideoContent() || source.getContentType() == ContentType.VIDEO) return this
-		return copy(
-			source = LocalVideoSource,
-			chapters = chapters?.map { chapter ->
-				if (chapter.source.getContentType() == ContentType.MANGA && chapter.url.looksLikeVideoUrl()) {
-					chapter.copy(source = LocalVideoSource)
-				} else {
-					chapter
-				}
-			},
-		)
-	}
+    private fun Content.normalizeLocalVideoSource(): Content {
+        if (!looksLikeLocalVideoContent() || source.getContentType() == ContentType.VIDEO) return this
+        return copy(
+            source = LocalVideoSource,
+            chapters = chapters?.map { chapter ->
+                if (chapter.source.getContentType() == ContentType.MANGA && chapter.url.looksLikeVideoUrl()) {
+                    chapter.copy(source = LocalVideoSource)
+                } else {
+                    chapter
+                }
+            },
+        )
+    }
 }
 
 private fun SpaceKind.toContentType(): ContentType = when (this) {
-	SpaceKind.MANGA -> ContentType.MANGA
-	SpaceKind.NOVEL -> ContentType.NOVEL
-	SpaceKind.ANIME -> ContentType.VIDEO
+    SpaceKind.MANGA -> ContentType.MANGA
+    SpaceKind.NOVEL -> ContentType.NOVEL
+    SpaceKind.ANIME -> ContentType.VIDEO
 }
 
 internal fun buildSpaceResumeUiState(
-	recent: Map<SpaceId, Content?>,
-	isOnline: Boolean,
-	resumeEnabled: Boolean,
+    recent: Map<SpaceId, Content?>,
+    isOnline: Boolean,
+    resumeEnabled: Boolean,
 ): SpaceResumeUiState {
-	return SpaceResumeUiState(
-		items = recent.mapNotNull { (spaceId, content) ->
-			content?.let {
-				spaceId to SpaceResumeItem(
-					spaceId = spaceId,
-					title = it.title,
-					content = it,
-					canResume = resumeEnabled && (isOnline || it.isLocal),
-				)
-			}
-		}.toMap(),
-	)
+    return SpaceResumeUiState(
+        items = recent.mapNotNull { (spaceId, content) ->
+            content?.let {
+                spaceId to SpaceResumeItem(
+                    spaceId = spaceId,
+                    title = it.title,
+                    content = it,
+                    canResume = resumeEnabled && (isOnline || it.isLocal),
+                )
+            }
+        }.toMap(),
+    )
 }

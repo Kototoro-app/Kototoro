@@ -31,38 +31,38 @@ import org.skepsun.kototoro.space.domain.SpaceCatalogRepository
 @InstallIn(SingletonComponent::class)
 interface SpaceModule {
 
-	@Binds
-	fun bindSpaceContentPolicy(impl: DefaultSpaceContentPolicy): SpaceContentPolicy
+    @Binds
+    fun bindSpaceContentPolicy(impl: DefaultSpaceContentPolicy): SpaceContentPolicy
 
-	@Binds
-	fun bindSpaceCatalogRepository(impl: DefaultSpaceCatalogRepository): SpaceCatalogRepository
+    @Binds
+    fun bindSpaceCatalogRepository(impl: DefaultSpaceCatalogRepository): SpaceCatalogRepository
 
-	@Binds
-	fun bindSpaceRepository(impl: DefaultSpaceRepository): SpaceRepository
+    @Binds
+    fun bindSpaceRepository(impl: DefaultSpaceRepository): SpaceRepository
 
-	@Binds
-	fun bindSpaceRoutePreferencesRepository(
-		impl: DefaultSpaceRoutePreferencesRepository,
-	): SpaceRoutePreferencesRepository
+    @Binds
+    fun bindSpaceRoutePreferencesRepository(
+        impl: DefaultSpaceRoutePreferencesRepository,
+    ): SpaceRoutePreferencesRepository
 
-	@Binds
-	fun bindSpaceLocalDataSource(impl: AppSettingsSpaceLocalDataSource): SpaceLocalDataSource
+    @Binds
+    fun bindSpaceLocalDataSource(impl: AppSettingsSpaceLocalDataSource): SpaceLocalDataSource
 
-	@Binds
-	fun bindSpaceDiagnostics(impl: LogcatSpaceDiagnostics): SpaceDiagnostics
+    @Binds
+    fun bindSpaceDiagnostics(impl: LogcatSpaceDiagnostics): SpaceDiagnostics
 
-	@Binds
-	fun bindSpaceFeatureFlagsRepository(impl: DefaultSpaceFeatureFlagsRepository): SpaceFeatureFlagsRepository
+    @Binds
+    fun bindSpaceFeatureFlagsRepository(impl: DefaultSpaceFeatureFlagsRepository): SpaceFeatureFlagsRepository
 
-	@Binds
-	fun bindSpaceSessionRepository(impl: DefaultSpaceSessionRepository): SpaceSessionRepository
+    @Binds
+    fun bindSpaceSessionRepository(impl: DefaultSpaceSessionRepository): SpaceSessionRepository
 
-	@Binds
-	fun bindSpaceSessionValidator(impl: DefaultSpaceSessionValidator): SpaceSessionValidator
+    @Binds
+    fun bindSpaceSessionValidator(impl: DefaultSpaceSessionValidator): SpaceSessionValidator
 
-	@Binds
-	fun bindSpaceSourceAvailability(impl: DefaultSpaceSourceAvailability): SpaceSourceAvailability
+    @Binds
+    fun bindSpaceSourceAvailability(impl: DefaultSpaceSourceAvailability): SpaceSourceAvailability
 
-	@Binds
-	fun bindSpaceSwitchCoordinator(impl: DefaultSpaceSwitchCoordinator): SpaceSwitchCoordinator
+    @Binds
+    fun bindSpaceSwitchCoordinator(impl: DefaultSpaceSwitchCoordinator): SpaceSwitchCoordinator
 }

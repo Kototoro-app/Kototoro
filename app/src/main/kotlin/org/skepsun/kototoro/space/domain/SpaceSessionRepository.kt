@@ -8,46 +8,46 @@ const val MAX_SPACE_NAVIGATION_ENTRIES_PER_STACK = 20
 @Serializable
 sealed interface SpaceRouteSnapshot {
 
-	@Serializable
-	data class TopLevel(val key: String) : SpaceRouteSnapshot
+    @Serializable
+    data class TopLevel(val key: String) : SpaceRouteSnapshot
 
-	@Serializable
-	data class WorkDetails(
-		val entityId: Long,
-		val requestedProjectionId: Long?,
-	) : SpaceRouteSnapshot
+    @Serializable
+    data class WorkDetails(
+        val entityId: Long,
+        val requestedProjectionId: Long?,
+    ) : SpaceRouteSnapshot
 
-	@Serializable
-	data class ContentList(val sourceName: String) : SpaceRouteSnapshot
+    @Serializable
+    data class ContentList(val sourceName: String) : SpaceRouteSnapshot
 
-	@Serializable
-	data class Search(
-		val query: String,
-		val kind: String,
-		val sourceTypes: String,
-		val contentKinds: String,
-		val advancedTitle: String,
-		val advancedTags: String,
-		val advancedAuthor: String,
-		val pinnedOnly: Boolean,
-		val hideEmpty: Boolean,
-	) : SpaceRouteSnapshot
+    @Serializable
+    data class Search(
+        val query: String,
+        val kind: String,
+        val sourceTypes: String,
+        val contentKinds: String,
+        val advancedTitle: String,
+        val advancedTags: String,
+        val advancedAuthor: String,
+        val pinnedOnly: Boolean,
+        val hideEmpty: Boolean,
+    ) : SpaceRouteSnapshot
 }
 
 data class SpaceSessionSnapshot(
-	val spaceId: SpaceId,
-	val selectedTopLevel: String,
-	val resumeRoute: SpaceRouteSnapshot?,
-	val stacks: Map<String, List<SpaceRouteSnapshot>>,
-	val lastAccessed: Long,
-	val updatedAt: Long,
+    val spaceId: SpaceId,
+    val selectedTopLevel: String,
+    val resumeRoute: SpaceRouteSnapshot?,
+    val stacks: Map<String, List<SpaceRouteSnapshot>>,
+    val lastAccessed: Long,
+    val updatedAt: Long,
 )
 
 interface SpaceSessionRepository {
 
-	suspend fun load(spaceId: SpaceId): SpaceSessionSnapshot?
+    suspend fun load(spaceId: SpaceId): SpaceSessionSnapshot?
 
-	suspend fun save(snapshot: SpaceSessionSnapshot)
+    suspend fun save(snapshot: SpaceSessionSnapshot)
 
-	suspend fun delete(spaceId: SpaceId)
+    suspend fun delete(spaceId: SpaceId)
 }

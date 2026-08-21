@@ -38,198 +38,198 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 enum class SpaceTransitionPhase {
-	IDLE,
-	COVERING,
-	COVERED,
-	REVEALING,
+    IDLE,
+    COVERING,
+    COVERED,
+    REVEALING,
 }
 
 @Immutable
 data class SpaceTransitionState(
-	val phase: SpaceTransitionPhase = SpaceTransitionPhase.IDLE,
-	val fromSpaceId: SpaceId? = null,
-	val targetSpaceId: SpaceId? = null,
-	val animated: Boolean = true,
-	val showOnTarget: Boolean = true,
+    val phase: SpaceTransitionPhase = SpaceTransitionPhase.IDLE,
+    val fromSpaceId: SpaceId? = null,
+    val targetSpaceId: SpaceId? = null,
+    val animated: Boolean = true,
+    val showOnTarget: Boolean = true,
 ) {
-	val isVisible: Boolean
-		get() = phase != SpaceTransitionPhase.IDLE
+    val isVisible: Boolean
+        get() = phase != SpaceTransitionPhase.IDLE
 }
 
 internal fun isSpaceCurtainRevealHost(
-	targetSpaceId: SpaceId?,
-	hostSpaceId: SpaceId?,
-	activeSpaceId: SpaceId,
+    targetSpaceId: SpaceId?,
+    hostSpaceId: SpaceId?,
+    activeSpaceId: SpaceId,
 ): Boolean = targetSpaceId != null && targetSpaceId == hostSpaceId && targetSpaceId == activeSpaceId
 
 @Singleton
 class SpaceTransitionCurtainController @Inject constructor() {
-	private val coverMutex = Mutex()
-	private val revealMutex = Mutex()
-	private val mutableState = MutableStateFlow(SpaceTransitionState())
-	val state: StateFlow<SpaceTransitionState> = mutableState.asStateFlow()
+    private val coverMutex = Mutex()
+    private val revealMutex = Mutex()
+    private val mutableState = MutableStateFlow(SpaceTransitionState())
+    val state: StateFlow<SpaceTransitionState> = mutableState.asStateFlow()
 
-	suspend fun cover(
-		from: SpaceId,
-		target: SpaceId,
-		animated: Boolean,
-		showOnTarget: Boolean = true,
-	): Boolean {
-		if (from == target || mutableState.value.isVisible) return false
-		return coverMutex.withLock {
-			if (from == target || mutableState.value.isVisible) return@withLock false
-			mutableState.value = SpaceTransitionState(
-				phase = SpaceTransitionPhase.COVERING,
-				fromSpaceId = from,
-				targetSpaceId = target,
-				animated = animated,
-				showOnTarget = showOnTarget,
-			)
-			try {
-				state.first { it.targetSpaceId != target || it.phase != SpaceTransitionPhase.COVERING }
-				mutableState.value.targetSpaceId == target &&
-					mutableState.value.phase == SpaceTransitionPhase.COVERED
-			} catch (error: Throwable) {
-				cancel(target)
-				throw error
-			}
-		}
-	}
+    suspend fun cover(
+        from: SpaceId,
+        target: SpaceId,
+        animated: Boolean,
+        showOnTarget: Boolean = true,
+    ): Boolean {
+        if (from == target || mutableState.value.isVisible) return false
+        return coverMutex.withLock {
+            if (from == target || mutableState.value.isVisible) return@withLock false
+            mutableState.value = SpaceTransitionState(
+                phase = SpaceTransitionPhase.COVERING,
+                fromSpaceId = from,
+                targetSpaceId = target,
+                animated = animated,
+                showOnTarget = showOnTarget,
+            )
+            try {
+                state.first { it.targetSpaceId != target || it.phase != SpaceTransitionPhase.COVERING }
+                mutableState.value.targetSpaceId == target &&
+                    mutableState.value.phase == SpaceTransitionPhase.COVERED
+            } catch (error: Throwable) {
+                cancel(target)
+                throw error
+            }
+        }
+    }
 
-	suspend fun reveal(target: SpaceId) = revealMutex.withLock {
-		val current = mutableState.value
-		if (
-			current.targetSpaceId != target ||
-			current.phase == SpaceTransitionPhase.IDLE ||
-			current.phase == SpaceTransitionPhase.REVEALING
-		) return@withLock
-		mutableState.value = current.copy(phase = SpaceTransitionPhase.REVEALING)
-		try {
-			state.first { it.targetSpaceId != target || it.phase != SpaceTransitionPhase.REVEALING }
-		} finally {
-			cancel(target)
-		}
-	}
+    suspend fun reveal(target: SpaceId) = revealMutex.withLock {
+        val current = mutableState.value
+        if (
+            current.targetSpaceId != target ||
+            current.phase == SpaceTransitionPhase.IDLE ||
+            current.phase == SpaceTransitionPhase.REVEALING
+        ) return@withLock
+        mutableState.value = current.copy(phase = SpaceTransitionPhase.REVEALING)
+        try {
+            state.first { it.targetSpaceId != target || it.phase != SpaceTransitionPhase.REVEALING }
+        } finally {
+            cancel(target)
+        }
+    }
 
-	fun markCovered(target: SpaceId) {
-		val current = mutableState.value
-		if (current.targetSpaceId == target && current.phase == SpaceTransitionPhase.COVERING) {
-			mutableState.value = current.copy(phase = SpaceTransitionPhase.COVERED)
-		}
-	}
+    fun markCovered(target: SpaceId) {
+        val current = mutableState.value
+        if (current.targetSpaceId == target && current.phase == SpaceTransitionPhase.COVERING) {
+            mutableState.value = current.copy(phase = SpaceTransitionPhase.COVERED)
+        }
+    }
 
-	fun markRevealFinished(target: SpaceId) {
-		val current = mutableState.value
-		if (current.targetSpaceId == target && current.phase == SpaceTransitionPhase.REVEALING) {
-			mutableState.value = SpaceTransitionState()
-		}
-	}
+    fun markRevealFinished(target: SpaceId) {
+        val current = mutableState.value
+        if (current.targetSpaceId == target && current.phase == SpaceTransitionPhase.REVEALING) {
+            mutableState.value = SpaceTransitionState()
+        }
+    }
 
-	fun cancel(target: SpaceId) {
-		if (mutableState.value.targetSpaceId == target) {
-			mutableState.value = SpaceTransitionState()
-		}
-	}
+    fun cancel(target: SpaceId) {
+        if (mutableState.value.targetSpaceId == target) {
+            mutableState.value = SpaceTransitionState()
+        }
+    }
 }
 
 @Composable
 fun SpaceTransitionCurtain(
-	state: SpaceTransitionState,
-	spaces: List<SpaceContext>,
-	modifier: Modifier = Modifier,
-	allowReveal: Boolean = true,
-	isTargetHost: Boolean = allowReveal,
-	onCoverFinished: (SpaceId) -> Unit = {},
-	onRevealFinished: (SpaceId) -> Unit = {},
+    state: SpaceTransitionState,
+    spaces: List<SpaceContext>,
+    modifier: Modifier = Modifier,
+    allowReveal: Boolean = true,
+    isTargetHost: Boolean = allowReveal,
+    onCoverFinished: (SpaceId) -> Unit = {},
+    onRevealFinished: (SpaceId) -> Unit = {},
 ) {
-	if (!state.isVisible) return
-	val hideOnTargetHost = isTargetHost && !state.showOnTarget
-	val initialAlpha = when (state.phase) {
-		SpaceTransitionPhase.COVERED,
-		SpaceTransitionPhase.REVEALING,
-		-> if (hideOnTargetHost) 0f else 1f
-		else -> 0f
-	}
-	val alpha = remember { Animatable(initialAlpha) }
-	LaunchedEffect(
-		state.phase,
-		state.targetSpaceId,
-		state.animated,
-		isTargetHost,
-		allowReveal,
-		state.showOnTarget,
-	) {
-		val target = state.targetSpaceId ?: return@LaunchedEffect
-		when (state.phase) {
-			SpaceTransitionPhase.COVERING -> {
-				if (state.animated) {
-					alpha.animateTo(1f, tween(SpaceMotion.CurtainCoverMillis))
-				} else {
-					alpha.snapTo(1f)
-				}
-				androidx.compose.runtime.withFrameNanos { }
-				onCoverFinished(target)
-			}
-			SpaceTransitionPhase.COVERED -> alpha.snapTo(if (hideOnTargetHost) 0f else 1f)
-			SpaceTransitionPhase.REVEALING -> {
-				if (hideOnTargetHost) {
-					alpha.snapTo(0f)
-					if (allowReveal) {
-						androidx.compose.runtime.withFrameNanos { }
-						onRevealFinished(target)
-					}
-				} else if (!allowReveal) {
-					alpha.snapTo(1f)
-				} else {
-					if (state.animated) {
-						alpha.animateTo(0f, tween(SpaceMotion.CurtainRevealMillis))
-					} else {
-						alpha.snapTo(0f)
-					}
-					androidx.compose.runtime.withFrameNanos { }
-					onRevealFinished(target)
-				}
-			}
-			SpaceTransitionPhase.IDLE -> alpha.snapTo(0f)
-		}
-	}
-	val from = spaces.firstOrNull { it.id == state.fromSpaceId }
-	val target = spaces.firstOrNull { it.id == state.targetSpaceId }
-	val fromLabel = state.fromSpaceId?.let { spaceDisplayLabel(it, from) }.orEmpty()
-	val targetLabel = state.targetSpaceId?.let { spaceDisplayLabel(it, target) }.orEmpty()
-	val description = "$fromLabel → $targetLabel"
-	val colorScheme = MaterialTheme.colorScheme
-	val isDarkTheme = colorScheme.isDarkTheme()
-	val curtainContentColor = if (isDarkTheme) Color.White else colorScheme.onSurface
-	Box(
-		modifier = modifier
-			.fillMaxSize()
-			.alpha(alpha.value)
-			.background(colorScheme.surface)
-			.pointerInput(Unit) {
-				awaitPointerEventScope {
-					while (true) awaitPointerEvent()
-				}
-			}
-			.semantics { contentDescription = description },
-		contentAlignment = Alignment.Center,
-	) {
-		CompositionLocalProvider(LocalContentColor provides curtainContentColor) {
-			Column(
-				horizontalAlignment = Alignment.CenterHorizontally,
-				verticalArrangement = Arrangement.spacedBy(12.dp),
-				modifier = Modifier.padding(32.dp),
-			) {
-				Row(
-					horizontalArrangement = Arrangement.spacedBy(16.dp),
-					verticalAlignment = Alignment.CenterVertically,
-				) {
-					state.fromSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = from) }
-					Text(text = "→", style = MaterialTheme.typography.headlineSmall)
-					state.targetSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = target) }
-				}
-				Text(text = description, style = MaterialTheme.typography.titleMedium)
-			}
-		}
-	}
+    if (!state.isVisible) return
+    val hideOnTargetHost = isTargetHost && !state.showOnTarget
+    val initialAlpha = when (state.phase) {
+        SpaceTransitionPhase.COVERED,
+        SpaceTransitionPhase.REVEALING,
+        -> if (hideOnTargetHost) 0f else 1f
+        else -> 0f
+    }
+    val alpha = remember { Animatable(initialAlpha) }
+    LaunchedEffect(
+        state.phase,
+        state.targetSpaceId,
+        state.animated,
+        isTargetHost,
+        allowReveal,
+        state.showOnTarget,
+    ) {
+        val target = state.targetSpaceId ?: return@LaunchedEffect
+        when (state.phase) {
+            SpaceTransitionPhase.COVERING -> {
+                if (state.animated) {
+                    alpha.animateTo(1f, tween(SpaceMotion.CurtainCoverMillis))
+                } else {
+                    alpha.snapTo(1f)
+                }
+                androidx.compose.runtime.withFrameNanos { }
+                onCoverFinished(target)
+            }
+            SpaceTransitionPhase.COVERED -> alpha.snapTo(if (hideOnTargetHost) 0f else 1f)
+            SpaceTransitionPhase.REVEALING -> {
+                if (hideOnTargetHost) {
+                    alpha.snapTo(0f)
+                    if (allowReveal) {
+                        androidx.compose.runtime.withFrameNanos { }
+                        onRevealFinished(target)
+                    }
+                } else if (!allowReveal) {
+                    alpha.snapTo(1f)
+                } else {
+                    if (state.animated) {
+                        alpha.animateTo(0f, tween(SpaceMotion.CurtainRevealMillis))
+                    } else {
+                        alpha.snapTo(0f)
+                    }
+                    androidx.compose.runtime.withFrameNanos { }
+                    onRevealFinished(target)
+                }
+            }
+            SpaceTransitionPhase.IDLE -> alpha.snapTo(0f)
+        }
+    }
+    val from = spaces.firstOrNull { it.id == state.fromSpaceId }
+    val target = spaces.firstOrNull { it.id == state.targetSpaceId }
+    val fromLabel = state.fromSpaceId?.let { spaceDisplayLabel(it, from) }.orEmpty()
+    val targetLabel = state.targetSpaceId?.let { spaceDisplayLabel(it, target) }.orEmpty()
+    val description = "$fromLabel → $targetLabel"
+    val colorScheme = MaterialTheme.colorScheme
+    val isDarkTheme = colorScheme.isDarkTheme()
+    val curtainContentColor = if (isDarkTheme) Color.White else colorScheme.onSurface
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .alpha(alpha.value)
+            .background(colorScheme.surface)
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent()
+                }
+            }
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(LocalContentColor provides curtainContentColor) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(32.dp),
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    state.fromSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = from) }
+                    Text(text = "→", style = MaterialTheme.typography.headlineSmall)
+                    state.targetSpaceId?.let { SpaceSwitcherIcon(activeSpaceId = it, activeSpace = target) }
+                }
+                Text(text = description, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
 }

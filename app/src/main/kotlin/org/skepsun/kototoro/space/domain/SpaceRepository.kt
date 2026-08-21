@@ -7,40 +7,40 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 
 interface SpaceRepository {
 
-	val activeSpace: StateFlow<SpaceId>
+    val activeSpace: StateFlow<SpaceId>
 
-	suspend fun activate(spaceId: SpaceId)
+    suspend fun activate(spaceId: SpaceId)
 }
 
 data class SpaceFeatureFlags(
-	val entitySpaceEnabled: Boolean,
-	val spaceSwitcherEnabled: Boolean,
-	val spacePersistentNavigationEnabled: Boolean,
-	val spaceImmersiveSwitchEnabled: Boolean,
-	val spaceRoutePreferencesEnabled: Boolean,
+    val entitySpaceEnabled: Boolean,
+    val spaceSwitcherEnabled: Boolean,
+    val spacePersistentNavigationEnabled: Boolean,
+    val spaceImmersiveSwitchEnabled: Boolean,
+    val spaceRoutePreferencesEnabled: Boolean,
 ) {
-	val effectiveSwitcherEnabled: Boolean
-		get() = entitySpaceEnabled && spaceSwitcherEnabled
+    val effectiveSwitcherEnabled: Boolean
+        get() = entitySpaceEnabled && spaceSwitcherEnabled
 
-	val effectivePersistentNavigationEnabled: Boolean
-		get() = effectiveSwitcherEnabled && spacePersistentNavigationEnabled
+    val effectivePersistentNavigationEnabled: Boolean
+        get() = effectiveSwitcherEnabled && spacePersistentNavigationEnabled
 
-	val effectiveImmersiveSwitchEnabled: Boolean
-		get() = effectiveSwitcherEnabled && spaceImmersiveSwitchEnabled
+    val effectiveImmersiveSwitchEnabled: Boolean
+        get() = effectiveSwitcherEnabled && spaceImmersiveSwitchEnabled
 
-	val effectiveRoutePreferencesEnabled: Boolean
-		get() = entitySpaceEnabled && spaceRoutePreferencesEnabled
+    val effectiveRoutePreferencesEnabled: Boolean
+        get() = entitySpaceEnabled && spaceRoutePreferencesEnabled
 }
 
 interface SpaceFeatureFlagsRepository {
-	val flags: StateFlow<SpaceFeatureFlags>
+    val flags: StateFlow<SpaceFeatureFlags>
 }
 
 fun SpaceRepository.observeActiveSpaceScope(
-	featureFlagsRepository: SpaceFeatureFlagsRepository,
+    featureFlagsRepository: SpaceFeatureFlagsRepository,
 ): Flow<SpaceId?> = combine(
-	activeSpace,
-	featureFlagsRepository.flags,
+    activeSpace,
+    featureFlagsRepository.flags,
 ) { activeSpace, flags ->
-	activeSpace.takeIf { flags.effectiveSwitcherEnabled }
+    activeSpace.takeIf { flags.effectiveSwitcherEnabled }
 }.distinctUntilChanged()
