@@ -11,34 +11,34 @@ import org.skepsun.kototoro.scrobbling.kitsu.ui.KitsuAuthActivity
 import javax.inject.Inject
 
 class ScrobblerAuthHelper @Inject constructor(
-	private val repositoriesMap: ScrobblerRepositoryMap,
+    private val repositoriesMap: ScrobblerRepositoryMap,
 ) {
 
-	fun isAuthorized(scrobbler: ScrobblerService) = repositoriesMap[scrobbler].isAuthorized
+    fun isAuthorized(scrobbler: ScrobblerService) = repositoriesMap[scrobbler].isAuthorized
 
-	fun getCachedUser(scrobbler: ScrobblerService): ScrobblerUser? {
-		return repositoriesMap[scrobbler].cachedUser
-	}
+    fun getCachedUser(scrobbler: ScrobblerService): ScrobblerUser? {
+        return repositoriesMap[scrobbler].cachedUser
+    }
 
-	suspend fun getUser(scrobbler: ScrobblerService): ScrobblerUser {
-		return repositoriesMap[scrobbler].loadUser()
-	}
+    suspend fun getUser(scrobbler: ScrobblerService): ScrobblerUser {
+        return repositoriesMap[scrobbler].loadUser()
+    }
 
-	@SuppressLint("UnsafeImplicitIntentLaunch")
-	fun startAuth(context: Context, scrobbler: ScrobblerService) = runCatching {
-		if (scrobbler == ScrobblerService.KITSU) {
-			launchKitsuAuth(context)
-		} else if (scrobbler == ScrobblerService.MANGAUPDATES) {
-			context.startActivity(Intent(context, org.skepsun.kototoro.scrobbling.mangaupdates.ui.MangaUpdatesAuthActivity::class.java))
-		} else {
-			val repository = repositoriesMap[scrobbler]
-			val intent = Intent(Intent.ACTION_VIEW)
-			intent.data = repository.oauthUrl.toUri()
-			context.startActivity(intent)
-		}
-	}
+    @SuppressLint("UnsafeImplicitIntentLaunch")
+    fun startAuth(context: Context, scrobbler: ScrobblerService) = runCatching {
+        if (scrobbler == ScrobblerService.KITSU) {
+            launchKitsuAuth(context)
+        } else if (scrobbler == ScrobblerService.MANGAUPDATES) {
+            context.startActivity(Intent(context, org.skepsun.kototoro.scrobbling.mangaupdates.ui.MangaUpdatesAuthActivity::class.java))
+        } else {
+            val repository = repositoriesMap[scrobbler]
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.data = repository.oauthUrl.toUri()
+            context.startActivity(intent)
+        }
+    }
 
-	private fun launchKitsuAuth(context: Context) {
-		context.startActivity(Intent(context, KitsuAuthActivity::class.java))
-	}
+    private fun launchKitsuAuth(context: Context) {
+        context.startActivity(Intent(context, KitsuAuthActivity::class.java))
+    }
 }

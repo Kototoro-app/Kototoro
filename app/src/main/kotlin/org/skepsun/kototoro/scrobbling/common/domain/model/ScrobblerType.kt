@@ -4,5 +4,5 @@ import javax.inject.Qualifier
 
 @Qualifier
 annotation class ScrobblerType(
-	val service: ScrobblerService
+    val service: ScrobblerService
 )

@@ -13,22 +13,22 @@ import javax.inject.Inject
 import javax.inject.Provider
 
 class ScrobblerRepositoryMap @Inject constructor(
-	private val shikimoriRepository: Provider<ShikimoriRepository>,
-	private val aniListRepository: Provider<AniListRepository>,
-	private val malRepository: Provider<MALRepository>,
-	private val kitsuRepository: Provider<KitsuRepository>,
-	private val bangumiRepository: Provider<BangumiRepository>,
-	private val mangaUpdatesRepository: Provider<MangaUpdatesRepository>,
-	private val simklRepository: Provider<SimklRepository>,
+    private val shikimoriRepository: Provider<ShikimoriRepository>,
+    private val aniListRepository: Provider<AniListRepository>,
+    private val malRepository: Provider<MALRepository>,
+    private val kitsuRepository: Provider<KitsuRepository>,
+    private val bangumiRepository: Provider<BangumiRepository>,
+    private val mangaUpdatesRepository: Provider<MangaUpdatesRepository>,
+    private val simklRepository: Provider<SimklRepository>,
 ) {
 
-	operator fun get(scrobblerService: ScrobblerService): ScrobblerRepository = when (scrobblerService) {
-		ScrobblerService.SHIKIMORI -> shikimoriRepository
-		ScrobblerService.ANILIST -> aniListRepository
-		ScrobblerService.MAL -> malRepository
-		ScrobblerService.KITSU -> kitsuRepository
-		ScrobblerService.BANGUMI -> bangumiRepository
-		ScrobblerService.MANGAUPDATES -> mangaUpdatesRepository
-		ScrobblerService.SIMKL -> simklRepository
-	}.get()
+    operator fun get(scrobblerService: ScrobblerService): ScrobblerRepository = when (scrobblerService) {
+        ScrobblerService.SHIKIMORI -> shikimoriRepository
+        ScrobblerService.ANILIST -> aniListRepository
+        ScrobblerService.MAL -> malRepository
+        ScrobblerService.KITSU -> kitsuRepository
+        ScrobblerService.BANGUMI -> bangumiRepository
+        ScrobblerService.MANGAUPDATES -> mangaUpdatesRepository
+        ScrobblerService.SIMKL -> simklRepository
+    }.get()
 }
