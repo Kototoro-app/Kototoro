@@ -22,13 +22,17 @@ import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeStage
 import org.skepsun.kototoro.favourites.ui.migration.MigrationUiState
 
 @Composable
-internal fun ButtonLabel(text: String) {
+internal fun ButtonLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
         textAlign = TextAlign.Center,
+        modifier = modifier,
     )
 }
 

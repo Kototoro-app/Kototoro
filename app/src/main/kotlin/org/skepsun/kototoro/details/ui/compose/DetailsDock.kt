@@ -1041,11 +1041,14 @@ private fun MenuSelectionIndicator(
 }
 
 @Composable
-internal fun DetailsMenuIcon(iconRes: Int) {
+internal fun DetailsMenuIcon(
+    iconRes: Int,
+    modifier: Modifier = Modifier,
+) {
     Icon(
         painter = rememberSafePainter(iconRes),
         contentDescription = null,
-        modifier = Modifier.size(20.dp),
+        modifier = modifier.size(20.dp),
     )
 }
 
@@ -1516,4 +1519,12 @@ internal fun modernDockDragHandleGap(revealProgress: Float): androidx.compose.ui
 @Composable
 internal fun rememberDetailsSheetGlassPrefs() =
     rememberGlassPrefsOrFallback()
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun DetailsMenuIconPreview() {
+    org.skepsun.kototoro.core.ui.theme.KototoroTheme {
+        DetailsMenuIcon(iconRes = R.drawable.ic_info_outline)
+    }
+}
 

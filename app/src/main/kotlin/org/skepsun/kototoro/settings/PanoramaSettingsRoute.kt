@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.settings.compose.PanoramaEffectPreset
@@ -11,7 +12,10 @@ import org.skepsun.kototoro.settings.compose.PanoramaSettingsUiState
 import org.skepsun.kototoro.settings.compose.resolvePanoramaEffectPreset
 
 @Composable
-fun PanoramaSettingsRoute(settings: AppSettings) {
+fun PanoramaSettingsRoute(
+    settings: AppSettings,
+    modifier: Modifier = Modifier,
+) {
     val enabled by settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }
     val blurPercent by settings.observeAsState(AppSettings.KEY_PANORAMA_BLUR) { panoramaCoverBlur }
     val transitionRangePercent by settings.observeAsState(AppSettings.KEY_PANORAMA_TRANSITION_INTENSITY) {
@@ -36,6 +40,7 @@ fun PanoramaSettingsRoute(settings: AppSettings) {
     }
 
     PanoramaSettingsScreen(
+        modifier = modifier,
         state = PanoramaSettingsUiState(
             enabled = enabled,
             layoutMode = layoutMode,

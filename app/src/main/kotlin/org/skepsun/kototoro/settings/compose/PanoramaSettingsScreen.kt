@@ -38,6 +38,7 @@ data class PanoramaSettingsUiState(
 @Composable
 fun PanoramaSettingsScreen(
     state: PanoramaSettingsUiState,
+    modifier: Modifier = Modifier,
     onEnabledChange: (Boolean) -> Unit,
     onLayoutModeChange: (PanoramaLayoutMode) -> Unit,
     onPresetChange: (PanoramaEffectPreset) -> Unit,
@@ -48,7 +49,7 @@ fun PanoramaSettingsScreen(
     onTopOpacityChange: (Int) -> Unit,
     onReset: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(

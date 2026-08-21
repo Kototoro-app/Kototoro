@@ -23,9 +23,10 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 @Composable
 internal fun HomeLoadingSkeleton(
     posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 2.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

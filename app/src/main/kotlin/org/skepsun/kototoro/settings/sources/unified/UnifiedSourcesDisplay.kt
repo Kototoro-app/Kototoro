@@ -177,6 +177,7 @@ internal enum class CompactTagTone {
 @Composable
 internal fun CompactTag(
     text: String,
+    modifier: Modifier = Modifier,
     isWarning: Boolean = false,
     tone: CompactTagTone? = null,
 ) {
@@ -192,6 +193,7 @@ internal fun CompactTag(
             MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(4.dp),
         color = containerColor,
         contentColor = contentColor,

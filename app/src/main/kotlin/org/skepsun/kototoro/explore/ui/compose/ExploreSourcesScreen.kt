@@ -50,6 +50,7 @@ fun KototoroExploreSourcesScreen(
     viewModel: ExploreViewModel,
     contentPadding: PaddingValues,
     appRouter: AppRouter,
+    modifier: Modifier = Modifier,
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle()
     var composeSelectionIds: LongSet by remember { mutableStateOf(longSetOf()) }

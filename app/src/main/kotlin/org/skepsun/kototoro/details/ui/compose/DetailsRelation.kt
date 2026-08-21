@@ -148,9 +148,10 @@ internal fun DetailsRelatedContentSection(
 internal fun DetailsSupplementMetadataCard(
     properties: List<Pair<String, String>>,
     outerHorizontalPadding: Dp,
+    modifier: Modifier = Modifier,
 ) {
     GlassSurface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = outerHorizontalPadding),
         style = GlassDefaults.subtleStyle(),
@@ -517,6 +518,20 @@ private fun EntityRelationCardPreview() {
                 supportingText = "Manga · Ongoing",
             ),
             onClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DetailsSupplementMetadataCardPreview() {
+    KototoroTheme {
+        DetailsSupplementMetadataCard(
+            properties = listOf(
+                "Publisher" to "Demo Studio",
+                "Year" to "2026",
+            ),
+            outerHorizontalPadding = 16.dp,
         )
     }
 }

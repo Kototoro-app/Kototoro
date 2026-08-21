@@ -372,9 +372,11 @@ internal fun CompactDropdownMenuText(
 }
 
 @Composable
-internal fun CompactDropdownMenuDivider() {
+internal fun CompactDropdownMenuDivider(
+    modifier: Modifier = Modifier,
+) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .width(96.dp)
             .height(1.dp)

@@ -145,9 +145,10 @@ internal fun TrackingCompactPoster(
 
 @Composable
 internal fun BrowseHeroSkeleton(
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = CompactTopBarHorizontalPadding),
         verticalArrangement = Arrangement.spacedBy(12.dp),

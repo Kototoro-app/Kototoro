@@ -1126,17 +1126,20 @@ fun SettingsReorderPreference(
 }
 
 @Composable
-fun SettingsSectionDivider() {
-    SettingsGroupDivider()
+fun SettingsSectionDivider(
+    modifier: Modifier = Modifier,
+) {
+    SettingsGroupDivider(modifier = modifier)
 }
 
 @Composable
 fun SettingsGroupDivider(
+    modifier: Modifier = Modifier,
     startPadding: Dp = 20.dp,
     endPadding: Dp = 20.dp,
 ) {
     HorizontalDivider(
-        modifier = Modifier.padding(start = startPadding, end = endPadding),
+        modifier = modifier.padding(start = startPadding, end = endPadding),
         color = settingsSeparatorColor(),
     )
 }

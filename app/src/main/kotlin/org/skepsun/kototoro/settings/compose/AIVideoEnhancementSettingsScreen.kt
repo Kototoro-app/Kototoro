@@ -23,7 +23,10 @@ import org.skepsun.kototoro.core.prefs.VideoEnhancementAlgorithm
 import org.skepsun.kototoro.core.prefs.observeAsState
 
 @Composable
-fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
+fun AIVideoEnhancementSettingsScreen(
+    settings: AppSettings,
+    modifier: Modifier = Modifier,
+) {
     val persistedAlgorithm by settings.observeAsState(AppSettings.KEY_VIDEO_ENHANCEMENT_ALGORITHM) {
         videoEnhancementAlgorithm
     }
@@ -33,7 +36,7 @@ fun AIVideoEnhancementSettingsScreen(settings: AppSettings) {
     val remember by settings.observeAsState(AppSettings.KEY_VIDEO_ENHANCEMENT_REMEMBER) {
         videoEnhancementRememberAcrossVideos
     }
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    Surface(modifier = modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
