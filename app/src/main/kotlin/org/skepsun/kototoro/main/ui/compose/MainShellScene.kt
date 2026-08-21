@@ -231,7 +231,6 @@ fun MainShellScene(
                             MainShellTopLevelEntryContent(
                                 key = key,
                                 mainNavState = mainNavState,
-                                activity = activity,
                                 mainActivity = mainActivity,
                                 appRouter = appRouter,
                                 rootView = rootView,
@@ -269,7 +268,6 @@ fun MainShellScene(
 private fun MainShellTopLevelEntryContent(
     key: MainNavKey,
     mainNavState: MainNavState,
-    activity: FragmentActivity,
     mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     rootView: android.view.View,
@@ -290,10 +288,10 @@ private fun MainShellTopLevelEntryContent(
     val animatedVisibilityScope = checkNotNull(LocalNavAnimatedVisibilityScope.current) {
         "MainShellTopLevelEntryContent requires LocalNavAnimatedVisibilityScope"
     }
+    val activity = LocalContext.current as FragmentActivity
     when (key) {
         org.skepsun.kototoro.main.ui.navigation3.HomeNavKey -> HomeRoute(
             animatedVisibilityScope = animatedVisibilityScope,
-            activity = activity,
             appRouter = appRouter,
             rootView = rootView,
             contentPadding = contentPadding,
@@ -315,7 +313,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey -> HistoryTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            activity = activity,
             mainActivity = mainActivity,
             appRouter = appRouter,
             rootView = rootView,
@@ -384,7 +381,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey -> UpdatedTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            activity = activity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
@@ -1109,7 +1105,6 @@ internal fun BookmarksTopLevelRouteContent(
 @Composable
 internal fun UpdatedTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    activity: FragmentActivity,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
@@ -1177,7 +1172,6 @@ internal fun UpdatedTopLevelRouteContent(
 @Composable
 internal fun HistoryTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    activity: FragmentActivity,
     mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     rootView: android.view.View,
@@ -1190,6 +1184,7 @@ internal fun HistoryTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
+    val activity = LocalContext.current as FragmentActivity
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.history.ui.HistoryListViewModel>("history")
     val context = LocalContext.current
     val entryPoint = remember(context.applicationContext) {

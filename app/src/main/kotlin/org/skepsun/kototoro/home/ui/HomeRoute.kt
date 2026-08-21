@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
@@ -40,7 +41,6 @@ import org.skepsun.kototoro.space.ui.spaceBoundHiltViewModel
 @Composable
 internal fun HomeRoute(
     animatedVisibilityScope: AnimatedVisibilityScope,
-    activity: FragmentActivity,
     appRouter: AppRouter,
     rootView: View,
     contentPadding: PaddingValues,
@@ -53,6 +53,7 @@ internal fun HomeRoute(
     val mainChromeController = LocalMainChromeController.current
     val state by viewModel.summaryState.collectAsStateWithLifecycle()
     val isRandomLoading by viewModel.isRandomLoading.collectAsStateWithLifecycle()
+    val activity = LocalContext.current as? FragmentActivity
 
     LaunchedEffect(viewModel.onOpenContent, navigateToDetailsWithContent) {
         viewModel.onOpenContent.collect { event ->
@@ -70,7 +71,7 @@ internal fun HomeRoute(
     }
 
     LaunchedEffect(viewModel.onError, activity) {
-        val host = activity.window.decorView.rootView
+        val host = activity?.window?.decorView?.rootView ?: return@LaunchedEffect
         val resolver = (activity as? BaseComposeActivity)?.exceptionResolver
         val observer = SnackbarErrorObserver(host, resolver, null)
         viewModel.onError.collect { event ->
