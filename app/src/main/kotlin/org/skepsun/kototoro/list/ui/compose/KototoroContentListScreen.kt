@@ -1220,20 +1220,7 @@ private fun listModelComposeKey(
     listModel: ListModel,
     index: Int,
 ): String = when (listModel) {
-    is ContentListModel -> buildString {
-        append(listModel.javaClass.simpleName)
-        append(':')
-        append(listModel.source.name)
-        append(':')
-        append(listModel.id)
-        append(':')
-        append(
-            listModel.manga.url
-                .ifBlank { listModel.manga.publicUrl }
-                .ifBlank { listModel.title },
-        )
-        append(':')
-    }
+    is ContentListModel -> "${listModel.javaClass.simpleName}:${listModel.id}"
     is ListHeader -> "header:${listModel.hashCode()}"
     is QuickFilter -> "quick_filter"
     is InfoModel -> "info:${listModel.hashCode()}:$index"

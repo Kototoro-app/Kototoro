@@ -40,8 +40,19 @@ abstract class ContentListViewModel(
     @param:LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
 ) : BaseViewModel() {
 
+    data class RetainedPagingSnapshot(
+        val generation: Long,
+        val items: List<ListModel>,
+        val anchorItemId: Long,
+        val listMode: ListMode,
+        val firstVisibleItemIndex: Int,
+        val firstVisibleItemScrollOffset: Int,
+    )
+
     abstract val content: StateFlow<List<ListModel>>
     open val pagingContent: Flow<PagingData<ListModel>>? = null
+    private var retainedPagingSnapshot: RetainedPagingSnapshot? = null
+    private var retainedPagingSnapshotGeneration = 0L
     open val hasMoreItems: StateFlow<Boolean> = flowOf(true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
@@ -99,6 +110,37 @@ abstract class ContentListViewModel(
     open fun resolveEntityIdForUiItemId(id: Long): Long? = null
 
     open fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
+
+    @Synchronized
+    fun retainPagingSnapshot(
+        items: List<ListModel>,
+        anchorItemId: Long,
+        listMode: ListMode,
+        firstVisibleItemIndex: Int,
+        firstVisibleItemScrollOffset: Int,
+    ) {
+        if (items.isNotEmpty()) {
+            retainedPagingSnapshotGeneration += 1L
+            retainedPagingSnapshot = RetainedPagingSnapshot(
+                generation = retainedPagingSnapshotGeneration,
+                items = items,
+                anchorItemId = anchorItemId,
+                listMode = listMode,
+                firstVisibleItemIndex = firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            )
+        }
+    }
+
+    @Synchronized
+    fun peekRetainedPagingSnapshot(): RetainedPagingSnapshot? = retainedPagingSnapshot
+
+    @Synchronized
+    fun clearRetainedPagingSnapshot(generation: Long) {
+        if (retainedPagingSnapshot?.generation == generation) {
+            retainedPagingSnapshot = null
+        }
+    }
 
     val isIncognitoModeEnabled: Boolean
         get() = settings.isIncognitoModeEnabled

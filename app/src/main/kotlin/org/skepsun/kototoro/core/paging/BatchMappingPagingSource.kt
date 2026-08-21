@@ -44,6 +44,9 @@ class BatchMappingPagingSource<Input : Any, Output : Any>(
             }
         }
         val firstPage = initial
+        if (params is LoadParams.Prepend) {
+            return loadPrepend(params, firstPage, loadStartedAt)
+        }
         var page: LoadResult.Page<Int, Input> = firstPage
         val mapped = ArrayList<Output>(params.loadSize)
         var rawItemCount = 0
@@ -83,6 +86,50 @@ class BatchMappingPagingSource<Input : Any, Output : Any>(
                 is LoadResult.Invalid -> return LoadResult.Invalid()
             }
         }
+    }
+
+    private suspend fun loadPrepend(
+        params: LoadParams.Prepend<Int>,
+        firstPage: LoadResult.Page<Int, Input>,
+        loadStartedAt: Long,
+    ): LoadResult<Int, Output> {
+        var earliestPage = firstPage
+        val mapped = ArrayList<Output>(params.loadSize)
+        mapped += withContext(Dispatchers.Default) { transform(firstPage.data) }
+        var rawItemCount = firstPage.data.size
+        var rawPageCount = 1
+        while (mapped.size < params.loadSize) {
+            val previousKey = earliestPage.prevKey ?: break
+            val previousPage = when (val previous = delegate.load(
+                LoadParams.Prepend(
+                    key = previousKey,
+                    loadSize = params.loadSize,
+                    placeholdersEnabled = params.placeholdersEnabled,
+                ),
+            )) {
+                is LoadResult.Page -> previous
+                is LoadResult.Error -> return LoadResult.Error(previous.throwable)
+                is LoadResult.Invalid -> return LoadResult.Invalid()
+            }
+            mapped.addAll(0, withContext(Dispatchers.Default) { transform(previousPage.data) })
+            rawItemCount += previousPage.data.size
+            rawPageCount++
+            earliestPage = previousPage
+        }
+        diagnosticLabel?.let { label ->
+            Log.d(
+                "LibraryPaging",
+                "$label ${params.javaClass.simpleName} rawPages=$rawPageCount rawItems=$rawItemCount " +
+                    "mappedItems=${mapped.size} elapsedMs=${SystemClock.elapsedRealtime() - loadStartedAt}",
+            )
+        }
+        return LoadResult.Page(
+            data = mapped,
+            prevKey = earliestPage.prevKey,
+            nextKey = firstPage.nextKey,
+            itemsBefore = earliestPage.itemsBefore,
+            itemsAfter = firstPage.itemsAfter,
+        )
     }
 
     override fun getRefreshKey(state: PagingState<Int, Output>): Int? {

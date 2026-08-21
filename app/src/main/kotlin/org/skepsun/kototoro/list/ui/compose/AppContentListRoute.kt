@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
+import androidx.compose.animation.EnterExitState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -18,6 +19,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
@@ -30,7 +32,9 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.alternatives.ui.AutoFixService
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
+import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -49,6 +53,10 @@ import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import dagger.hilt.android.EntryPointAccessors
 import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
+
+private fun List<ListModel>.contentIndexOf(itemId: Long): Int {
+    return indexOfFirst { model -> model is ContentListModel && model.id == itemId }
+}
 
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
@@ -113,6 +121,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     showQuickFilterInline: Boolean = true,
     quickFilterOverride: QuickFilter? = null,
     enableItemAnimations: Boolean = true,
+    retainPagingSnapshotOnDetailsNavigation: Boolean = false,
 ) {
     val pagingFlow = viewModel.pagingContent
     val lazyPagingItems = pagingFlow?.collectAsLazyPagingItems()
@@ -169,19 +178,149 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val coroutineScope = rememberCoroutineScope()
     val exceptionResolver = (activity as? BaseComposeActivity)?.exceptionResolver
     val loadedPagingItems = lazyPagingItems?.itemSnapshotList?.items.orEmpty()
-    val selectionModels = remember(items, loadedPagingItems, composeSelectionIds) {
-        prepareContentSelectionModels(if (lazyPagingItems == null) items else loadedPagingItems, composeSelectionIds)
+    val initialRetainedPagingSnapshot = remember(viewModel, retainPagingSnapshotOnDetailsNavigation) {
+        if (retainPagingSnapshotOnDetailsNavigation) {
+            viewModel.peekRetainedPagingSnapshot()
+        } else {
+            null
+        }
     }
-    val selectedModels = selectionModels.selectedModels
+    var retainedPagingSnapshot by remember(viewModel, retainPagingSnapshotOnDetailsNavigation) {
+        mutableStateOf(initialRetainedPagingSnapshot)
+    }
     val quickFilter = remember(items) { items.firstOrNull { it is QuickFilter } as? QuickFilter }
-    val gridState = rememberSaveable(viewModel, saver = LazyGridState.Saver) {
+    val initialLiveAnchorIndex = initialRetainedPagingSnapshot?.anchorItemId?.let(loadedPagingItems::contentIndexOf)
+        ?.takeIf { it >= 0 }
+    val restoredViewportIndex = initialRetainedPagingSnapshot?.let { retained ->
+        initialLiveAnchorIndex?.let { items.size + it } ?: retained.firstVisibleItemIndex
+    } ?: 0
+    val restoredViewportOffset = initialRetainedPagingSnapshot?.firstVisibleItemScrollOffset ?: 0
+    val restoreGridViewport = initialRetainedPagingSnapshot?.listMode == ListMode.GRID ||
+        initialRetainedPagingSnapshot?.listMode == ListMode.COMPACT_GRID
+    val restoreListViewport = initialRetainedPagingSnapshot?.listMode == ListMode.LIST
+    val restoreDetailedListViewport = initialRetainedPagingSnapshot?.listMode == ListMode.DETAILED_LIST
+    val gridState = initialRetainedPagingSnapshot?.let { retained ->
+        key("retained_paging_grid", retained.generation) {
+            rememberSaveable(saver = LazyGridState.Saver) {
+                LazyGridState(
+                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreGridViewport } ?: 0,
+                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreGridViewport } ?: 0,
+                )
+            }
+        }
+    } ?: rememberSaveable(viewModel, saver = LazyGridState.Saver) {
         LazyGridState()
     }
-    val listState = rememberSaveable(viewModel, saver = LazyListState.Saver) {
+    val listState = initialRetainedPagingSnapshot?.let { retained ->
+        key("retained_paging_list", retained.generation) {
+            rememberSaveable(saver = LazyListState.Saver) {
+                LazyListState(
+                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreListViewport } ?: 0,
+                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreListViewport } ?: 0,
+                )
+            }
+        }
+    } ?: rememberSaveable(viewModel, saver = LazyListState.Saver) {
         LazyListState()
     }
-    val detailedListState = rememberSaveable(viewModel, saver = LazyListState.Saver) {
+    val detailedListState = initialRetainedPagingSnapshot?.let { retained ->
+        key("retained_paging_detailed_list", retained.generation) {
+            rememberSaveable(saver = LazyListState.Saver) {
+                LazyListState(
+                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreDetailedListViewport } ?: 0,
+                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreDetailedListViewport } ?: 0,
+                )
+            }
+        }
+    } ?: rememberSaveable(viewModel, saver = LazyListState.Saver) {
         LazyListState()
+    }
+    val navigationTransition = LocalNavAnimatedVisibilityScope.current?.transition
+    var returnTransitionSettled by remember(viewModel, initialRetainedPagingSnapshot?.generation) {
+        mutableStateOf(initialRetainedPagingSnapshot == null)
+    }
+    LaunchedEffect(initialRetainedPagingSnapshot?.generation, navigationTransition) {
+        val transition = navigationTransition
+        if (initialRetainedPagingSnapshot == null || transition == null) {
+            returnTransitionSettled = true
+            return@LaunchedEffect
+        }
+
+        // The transition can still report idle during the first composition of the returning destination.
+        // Keep the retained snapshot through that frame, then wait for the destination to become fully visible.
+        withFrameNanos { }
+        snapshotFlow {
+            !transition.isRunning &&
+                transition.currentState == EnterExitState.Visible &&
+                transition.targetState == EnterExitState.Visible
+        }.first { it }
+        returnTransitionSettled = true
+    }
+    val retainedAnchorIndex = retainedPagingSnapshot?.let { retained ->
+        retained.items.contentIndexOf(retained.anchorItemId)
+    } ?: -1
+    val liveAnchorIndex = retainedPagingSnapshot?.let { retained ->
+        loadedPagingItems.contentIndexOf(retained.anchorItemId)
+    } ?: -1
+    val retainedAnchorIsLoaded = liveAnchorIndex >= 0
+    val pagingPrependExhausted = (lazyPagingItems?.loadState?.prepend as? LoadState.NotLoading)
+        ?.endOfPaginationReached == true
+    val retainedAnchorPrefixIsReady = retainedAnchorIsLoaded &&
+        (liveAnchorIndex >= retainedAnchorIndex || pagingPrependExhausted)
+    val useRetainedPagingSnapshot = retainPagingSnapshotOnDetailsNavigation &&
+        lazyPagingItems != null &&
+        retainedPagingSnapshot != null &&
+        (!retainedAnchorPrefixIsReady || !returnTransitionSettled)
+    LaunchedEffect(
+        useRetainedPagingSnapshot,
+        returnTransitionSettled,
+        retainedAnchorIndex,
+        liveAnchorIndex,
+        pagingPrependExhausted,
+    ) {
+        if (
+            useRetainedPagingSnapshot &&
+            returnTransitionSettled &&
+            liveAnchorIndex in 0 until retainedAnchorIndex &&
+            !pagingPrependExhausted
+        ) {
+            lazyPagingItems[0]
+        }
+    }
+    val displayedItems = remember(items, retainedPagingSnapshot, useRetainedPagingSnapshot) {
+        if (useRetainedPagingSnapshot) items + retainedPagingSnapshot?.items.orEmpty() else items
+    }
+    val displayedPagingItems = if (useRetainedPagingSnapshot) null else lazyPagingItems
+    val selectionModels = remember(displayedItems, loadedPagingItems, displayedPagingItems, composeSelectionIds) {
+        prepareContentSelectionModels(
+            if (displayedPagingItems == null) displayedItems else loadedPagingItems,
+            composeSelectionIds,
+        )
+    }
+    val selectedModels = selectionModels.selectedModels
+    LaunchedEffect(useRetainedPagingSnapshot, loadedPagingItems.size) {
+        if (!useRetainedPagingSnapshot && loadedPagingItems.isNotEmpty() && retainedPagingSnapshot != null) {
+            val retained = checkNotNull(retainedPagingSnapshot)
+            val liveAnchorLayoutIndex = liveAnchorIndex.takeIf { it >= 0 }?.let { items.size + it }
+            liveAnchorLayoutIndex?.let { targetIndex ->
+                when (listMode) {
+                    ListMode.GRID, ListMode.COMPACT_GRID -> gridState.requestScrollToItem(
+                        index = targetIndex,
+                        scrollOffset = gridState.firstVisibleItemScrollOffset,
+                    )
+                    ListMode.LIST -> listState.requestScrollToItem(
+                        index = targetIndex,
+                        scrollOffset = listState.firstVisibleItemScrollOffset,
+                    )
+                    ListMode.DETAILED_LIST -> detailedListState.requestScrollToItem(
+                        index = targetIndex,
+                        scrollOffset = detailedListState.firstVisibleItemScrollOffset,
+                    )
+                }
+            }
+            viewModel.clearRetainedPagingSnapshot(retained.generation)
+            retainedPagingSnapshot = null
+        }
     }
     val quickFilterRailOverride = remember(quickFilter, context) {
         quickFilter?.let { filter ->
@@ -502,10 +641,10 @@ fun <VM : ContentListViewModel> AppContentListRoute(
 
     KototoroContentListScreen(
         contentPadding = contentPadding,
-        items = items,
-        pagingItems = lazyPagingItems,
+        items = displayedItems,
+        pagingItems = displayedPagingItems,
         listMode = listMode,
-        isRefreshing = isRefreshing || pagingIsRefreshing,
+        isRefreshing = isRefreshing || (pagingIsRefreshing && !useRetainedPagingSnapshot),
         pullRefreshEnabled = pullRefreshEnabled,
         showRemoveOption = showRemoveOption,
         sharedTransitionEnabled = sharedTransitionEnabled,
@@ -531,6 +670,29 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             } else {
                 val content = item.toContentWithOverride()
                 if (viewModel.onContentClick(content)) return@itemClick
+                if (retainPagingSnapshotOnDetailsNavigation && lazyPagingItems != null) {
+                    val snapshotItems = retainedPagingSnapshot?.items
+                        ?.takeIf { useRetainedPagingSnapshot }
+                        ?: loadedPagingItems
+                    val (firstVisibleIndex, firstVisibleScrollOffset) = when (listMode) {
+                        ListMode.GRID, ListMode.COMPACT_GRID ->
+                            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+                        ListMode.LIST ->
+                            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                        ListMode.DETAILED_LIST ->
+                            detailedListState.firstVisibleItemIndex to detailedListState.firstVisibleItemScrollOffset
+                    }
+                    val firstVisiblePagingIndex = (firstVisibleIndex - items.size).coerceAtLeast(0)
+                    val anchorItemId = (snapshotItems.getOrNull(firstVisiblePagingIndex) as? ContentListModel)?.id
+                        ?: item.id
+                    viewModel.retainPagingSnapshot(
+                        items = snapshotItems,
+                        anchorItemId = anchorItemId,
+                        listMode = listMode,
+                        firstVisibleItemIndex = firstVisibleIndex,
+                        firstVisibleItemScrollOffset = firstVisibleScrollOffset,
+                    )
+                }
                 val sharedElementKey = contentCoverSharedKey(
                     item.source.name,
                     item.coverUrl.orEmpty(),

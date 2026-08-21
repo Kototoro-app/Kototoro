@@ -191,6 +191,30 @@ class BatchMappingPagingSourceTest {
 		assertEquals(after.sorted(), after)
 		assertEquals(after.size, after.distinct().size)
 	}
+
+	@Test
+	fun `filtered prepend fills backward without overlapping the refresh page`() = runTest {
+		val delegate = RecordingEntityPagingSource((1L..257L).toList())
+		val source = BatchMappingPagingSource(delegate) { page ->
+			page.filter { it % 2L == 0L }
+		}
+		val refresh = source.load(
+			PagingSource.LoadParams.Refresh(84, LargeLibraryPagingConfig.initialLoadSize, false),
+		) as PagingSource.LoadResult.Page
+		val prepend = source.load(
+			PagingSource.LoadParams.Prepend(
+				key = requireNotNull(refresh.prevKey),
+				loadSize = LargeLibraryPagingConfig.pageSize,
+				placeholdersEnabled = false,
+			),
+		) as PagingSource.LoadResult.Page
+
+		assertTrue(prepend.data.intersect(refresh.data.toSet()).isEmpty())
+		assertTrue(prepend.data.last() < refresh.data.first())
+		assertEquals((prepend.data + refresh.data).sorted(), prepend.data + refresh.data)
+		assertEquals((prepend.data + refresh.data).size, (prepend.data + refresh.data).distinct().size)
+	}
+
 	private suspend fun assertPagedDataset(size: Int) {
 		val delegate = RecordingEntityPagingSource((1L..size.toLong()).toList())
 		val source = BatchMappingPagingSource(delegate) { page -> page.map { it * 10L } }
@@ -225,11 +249,17 @@ class BatchMappingPagingSourceTest {
 
 		override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Long> {
 			requestedLoadSizes += params.loadSize
-			val offset = params.key ?: 0
-			val end = (offset + params.loadSize).coerceAtMost(entityIds.size)
+			val key = params.key ?: 0
+			val offset = when (params) {
+				is LoadParams.Prepend -> (key - params.loadSize).coerceAtLeast(0)
+				is LoadParams.Append -> key
+				is LoadParams.Refresh -> key.coerceAtMost((entityIds.size - params.loadSize).coerceAtLeast(0))
+			}
+			val limit = if (params is LoadParams.Prepend) params.loadSize.coerceAtMost(key) else params.loadSize
+			val end = (offset + limit).coerceAtMost(entityIds.size)
 			return LoadResult.Page(
 				data = entityIds.subList(offset, end),
-				prevKey = (offset - params.loadSize).takeIf { it >= 0 },
+				prevKey = offset.takeIf { it > 0 },
 				nextKey = end.takeIf { it < entityIds.size },
 				itemsBefore = offset,
 				itemsAfter = entityIds.size - end,
