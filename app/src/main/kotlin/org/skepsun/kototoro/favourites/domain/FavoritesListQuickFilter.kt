@@ -63,9 +63,9 @@ class FavoritesListQuickFilter @AssistedInject constructor(
         ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
         val hideNsfw = settings.isFavouritesExcludeNsfw
         try {
-            repository.findPopularTags(categoryId, 3)
-                .mapTo(this) { ListFilterOption.Tag(it) }
-            repository.findPopularSources(categoryId, Int.MAX_VALUE)
+            val metadata = repository.findQuickFilterMetadata(categoryId, tagLimit = 3)
+            metadata.tags.mapTo(this) { ListFilterOption.Tag(it) }
+            metadata.sources
                 .filterNot { hideNsfw && it.isNsfw() }
                 .mapTo(this) { ListFilterOption.Source(it) }
         } catch (e: CancellationException) {

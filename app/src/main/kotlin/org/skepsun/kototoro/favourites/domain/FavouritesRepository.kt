@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
+import org.skepsun.kototoro.core.db.entity.toContentTag
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
@@ -73,6 +74,11 @@ class FavouritesRepository @Inject constructor(
     private val workAggregateRepository: WorkAggregateRepository,
     private val settings: AppSettings,
 ) {
+
+    data class QuickFilterMetadata(
+        val tags: List<ContentTag>,
+        val sources: List<ContentSource>,
+    )
 
     private data class WorkFavouriteNormalizationKey(
         val entityId: Long,
@@ -347,32 +353,12 @@ class FavouritesRepository @Inject constructor(
         return findWorkCategoryIds(mangaId)
     }
 
-    suspend fun findPopularSources(categoryId: Long, limit: Int): List<ContentSource> {
-        return buildWorkFavouriteProjectionContents(
-            categoryId = categoryId,
-            order = ListSortOrder.NEWEST,
+    suspend fun findQuickFilterMetadata(categoryId: Long, tagLimit: Int): QuickFilterMetadata {
+        val dao = db.getWorkFavouritesDao()
+        return QuickFilterMetadata(
+            tags = dao.findQuickFilterTags(categoryId, tagLimit).map { it.toContentTag() },
+            sources = dao.findQuickFilterSourceNames(categoryId).toContentSources(),
         )
-            .groupingBy { it.source.name }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .take(limit)
-            .map { it.key }
-            .toContentSources()
-    }
-
-    suspend fun findPopularTags(categoryId: Long, limit: Int): List<ContentTag> {
-        return buildWorkFavouriteProjectionContents(
-            categoryId = categoryId,
-            order = ListSortOrder.NEWEST,
-        )
-            .flatMap { it.tags }
-            .groupingBy { it }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .take(limit)
-            .map { it.key }
     }
 
     suspend fun createCategory(

@@ -40,8 +40,27 @@ class WorkAggregateRepository @Inject constructor(
         order: ListSortOrder,
         filterOptions: Set<ListFilterOption>,
         spaceId: SpaceId?,
+        groupTab: BrowseGroupTab,
     ): PagingSource<Int, WorkAggregate> {
         val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
+        val contentTypes = groupTab.allowedContentTypes()?.map(ContentType::name).orEmpty()
+        val publicationStates = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.PublicationState>()
+            .map { it.state.name }
+            .toSet()
+        val exactSources = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.Source>()
+            .map { it.mangaSource.name }
+            .toSet()
+        val tagIds = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.Tag>()
+            .map(ListFilterOption.Tag::tagId)
+            .toSet()
+        val nsfwMode = when {
+            ListFilterOption.Macro.NSFW in filterOptions -> 1
+            filterOptions.any { it is ListFilterOption.Inverted && it.option == ListFilterOption.Macro.NSFW } -> 0
+            else -> -1
+        }
         val delegate = db.getWorkFavouritesDao().pagingSource(
             categoryId = categoryId,
             orderName = order.name,
@@ -50,6 +69,17 @@ class WorkAggregateRepository @Inject constructor(
             classifiedTypes = classifiedTypeNames,
             applySourceFilter = allowedSources != null,
             allowedSources = allowedSources.orEmpty(),
+            applyContentTypeFilter = contentTypes.isNotEmpty(),
+            contentTypes = contentTypes,
+            applyPublicationStateFilter = publicationStates.isNotEmpty(),
+            publicationStates = publicationStates,
+            nsfwMode = nsfwMode,
+            requireDownloaded = ListFilterOption.Downloaded in filterOptions,
+            requireNewChapters = ListFilterOption.Macro.NEW_CHAPTERS in filterOptions,
+            applyExactSourceFilter = exactSources.isNotEmpty(),
+            exactSources = exactSources,
+            applyTagFilter = tagIds.isNotEmpty(),
+            tagIds = tagIds,
         )
         return BatchMappingPagingSource(delegate, diagnosticLabel = "favourites-aggregate") { entries ->
             filterFavouriteAggregates(
@@ -729,6 +759,9 @@ class WorkAggregateRepository @Inject constructor(
         brokenProjectionSourceNames: Set<String>,
         readingStatus: ScrobblingStatus?,
     ): Boolean {
+        if (!aggregate.matchesTagAndSourceFilters(filterOptions)) {
+            return false
+        }
         if (!content.matchesPublicationStateFilters(filterOptions)) {
             return false
         }
@@ -749,8 +782,9 @@ class WorkAggregateRepository @Inject constructor(
                     ListFilterOption.Macro.NSFW -> !content.isNsfw()
                     else -> true
                 }
-                is ListFilterOption.Tag -> content.tags.any { tag -> tag.title == option.tag.title && tag.key == option.tag.key }
-                is ListFilterOption.Source -> content.source.name == option.mangaSource.name
+                is ListFilterOption.Tag,
+                is ListFilterOption.Source,
+                -> true
                 is ListFilterOption.PublicationState -> true
                 is ListFilterOption.ReadingStatus -> true
                 else -> true

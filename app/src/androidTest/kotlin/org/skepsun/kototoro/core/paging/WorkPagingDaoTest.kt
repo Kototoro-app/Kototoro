@@ -15,6 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 
 @RunWith(AndroidJUnit4::class)
 class WorkPagingDaoTest {
@@ -54,15 +55,7 @@ class WorkPagingDaoTest {
 
 	@Test
 	fun favouritesAndHistoryPageByUniqueEntity() = runTest {
-		val favourites = db.getWorkFavouritesDao().pagingSource(
-			categoryId = -1L,
-			orderName = "NEWEST",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-		)
+		val favourites = favouritePagingSource()
 		val favouriteFirst = favourites.load(refreshParams()) as PagingSource.LoadResult.Page
 		val favouriteSecond = favourites.load(appendParams(requireNotNull(favouriteFirst.nextKey)))
 			as PagingSource.LoadResult.Page
@@ -75,6 +68,8 @@ class WorkPagingDaoTest {
 			classifiedTypes = emptyList(),
 			applySourceFilter = false,
 			allowedSources = emptyList(),
+			applyTabFilter = false,
+			tabAllowedTypes = emptyList(),
 		)
 		val historyFirst = history.load(refreshParams()) as PagingSource.LoadResult.Page
 		val historySecond = history.load(appendParams(requireNotNull(historyFirst.nextKey)))
@@ -87,15 +82,7 @@ class WorkPagingDaoTest {
 		// 6500 favourites + 3200 history are seeded in @Before. This measures the
 		// exact first-screen window the FavouriteLibraryPagingConfig prefetch
 		// distance (128) fills: initial 64 plus the two 64-row appends.
-		val favourites = db.getWorkFavouritesDao().pagingSource(
-			categoryId = -1L,
-			orderName = "NEWEST",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-		)
+		val favourites = favouritePagingSource()
 		val t0 = SystemClock.elapsedRealtime()
 		val first = favourites.load(refreshParams()) as PagingSource.LoadResult.Page
 		val t1 = SystemClock.elapsedRealtime()
@@ -107,7 +94,11 @@ class WorkPagingDaoTest {
 		val t3 = SystemClock.elapsedRealtime()
 
 		Log.d("LibraryPaging", "favourites-bench Refresh rawItems=" + first.data.size + " firstPageMs=" + (t1 - t0))
-		Log.d("LibraryPaging", "favourites-bench Append(64) ms=" + (t2 - t1) + " Append(128) ms=" + (t3 - t2) + " total192Ms=" + (t3 - t0))
+		Log.d(
+			"LibraryPaging",
+			"favourites-bench Append(64) ms=" + (t2 - t1) + " Append(128) ms=" + (t3 - t2) +
+				" total192Ms=" + (t3 - t0),
+		)
 
 		assertEquals(64, first.data.size)
 		assertEquals(64, second.data.size)
@@ -115,6 +106,58 @@ class WorkPagingDaoTest {
 		assertEquals(192, (first.data + second.data + third.data).map { it.entityId }.distinct().size)
 		// Loose budget: catches pathological regressions, not microsecond noise.
 		assertTrue("first favourite page took " + (t1 - t0) + "ms", t1 - t0 < 5_000)
+	}
+
+	@Test
+	fun favouriteFiltersAreAppliedBeforePaging() = runTest {
+		val sql = db.openHelper.writableDatabase
+		val mangaId = 10_001L
+		val secondaryMangaId = 20_001L
+		val tagId = 91L
+		sql.execSQL("UPDATE manga SET state = 'ONGOING', nsfw = 1 WHERE manga_id = ?", arrayOf<Any?>(mangaId))
+		sql.execSQL("INSERT INTO local_index VALUES (?, ?)", arrayOf<Any?>(mangaId, "/tmp/one"))
+		sql.execSQL(
+			"""
+			INSERT INTO manga (
+				manga_id, title, alt_title, url, public_url, rating, nsfw, content_rating,
+				cover_url, large_cover_url, state, author, source, description, content_type
+			) VALUES (?, 'Secondary', NULL, '', '', 0, 0, NULL, '', NULL, NULL, NULL, 'SECONDARY', NULL, 'MANGA')
+			""".trimIndent(),
+			arrayOf<Any?>(secondaryMangaId),
+		)
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', ?, 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+			arrayOf<Any?>(secondaryMangaId.toString()),
+		)
+		sql.execSQL("INSERT INTO tags VALUES (?, 'Action', 'action', 'TEST', 0)", arrayOf<Any?>(tagId))
+		sql.execSQL("INSERT INTO manga_tags VALUES (?, ?)", arrayOf<Any?>(secondaryMangaId, tagId))
+
+		assertEquals(64, firstPage(favouritePagingSource(exactSources = setOf("TEST"))).data.size)
+		assertTrue(firstPage(favouritePagingSource(exactSources = setOf("MISSING"))).data.isEmpty())
+		assertEquals(
+			listOf(1L),
+			firstPage(favouritePagingSource(exactSources = setOf("MISSING", "SECONDARY"))).data.map { it.entityId },
+		)
+		assertEquals(64, firstPage(favouritePagingSource(contentTypes = setOf("MANGA"))).data.size)
+		assertTrue(firstPage(favouritePagingSource(contentTypes = setOf("NOVEL"))).data.isEmpty())
+		assertEquals(
+			listOf(1L),
+			firstPage(favouritePagingSource(publicationStates = setOf("ONGOING"))).data.map { it.entityId },
+		)
+		assertEquals(listOf(1L), firstPage(favouritePagingSource(nsfwMode = 1)).data.map { it.entityId })
+		assertEquals(listOf(1L), firstPage(favouritePagingSource(requireDownloaded = true)).data.map { it.entityId })
+		assertEquals(listOf(1L), firstPage(favouritePagingSource(tagIds = setOf(tagId))).data.map { it.entityId })
+	}
+
+	@Test
+	fun favouriteQuickFilterMetadataUsesDatabaseAggregation() = runTest {
+		val sql = db.openHelper.writableDatabase
+		val tagId = 92L
+		sql.execSQL("INSERT INTO tags VALUES (?, 'Drama', 'drama', 'TEST', 0)", arrayOf<Any?>(tagId))
+		sql.execSQL("INSERT INTO manga_tags VALUES (?, ?)", arrayOf<Any?>(10_001L, tagId))
+
+		assertEquals("TEST", db.getWorkFavouritesDao().findQuickFilterSourceNames(-1L).first())
+		assertEquals(tagId, db.getWorkFavouritesDao().findQuickFilterTags(-1L, 3).first().id)
 	}
 
 	@Test
@@ -126,6 +169,8 @@ class WorkPagingDaoTest {
 			classifiedTypes = emptyList(),
 			applySourceFilter = false,
 			allowedSources = emptyList(),
+			applyTabFilter = false,
+			tabAllowedTypes = emptyList(),
 		)
 		val t0 = SystemClock.elapsedRealtime()
 		val first = history.load(refreshParams()) as PagingSource.LoadResult.Page
@@ -162,6 +207,40 @@ class WorkPagingDaoTest {
 		key = key,
 		loadSize = LargeLibraryPagingConfig.pageSize,
 		placeholdersEnabled = false,
+	)
+
+	private suspend fun firstPage(
+		source: PagingSource<Int, WorkFavouriteEntity>,
+	) =
+		source.load(refreshParams()) as PagingSource.LoadResult.Page
+
+	private fun favouritePagingSource(
+		contentTypes: Set<String> = emptySet(),
+		publicationStates: Set<String> = emptySet(),
+		nsfwMode: Int = -1,
+		requireDownloaded: Boolean = false,
+		requireNewChapters: Boolean = false,
+		exactSources: Set<String> = emptySet(),
+		tagIds: Set<Long> = emptySet(),
+	) = db.getWorkFavouritesDao().pagingSource(
+		categoryId = -1L,
+		orderName = "NEWEST",
+		applySpaceFilter = false,
+		allowedTypes = emptyList(),
+		classifiedTypes = emptyList(),
+		applySourceFilter = false,
+		allowedSources = emptyList(),
+		applyContentTypeFilter = contentTypes.isNotEmpty(),
+		contentTypes = contentTypes,
+		applyPublicationStateFilter = publicationStates.isNotEmpty(),
+		publicationStates = publicationStates,
+		nsfwMode = nsfwMode,
+		requireDownloaded = requireDownloaded,
+		requireNewChapters = requireNewChapters,
+		applyExactSourceFilter = exactSources.isNotEmpty(),
+		exactSources = exactSources,
+		applyTagFilter = tagIds.isNotEmpty(),
+		tagIds = tagIds,
 	)
 
 	private fun assertUniqueEntities(first: List<Long>, second: List<Long>) {

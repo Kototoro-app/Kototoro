@@ -215,17 +215,21 @@ fun KototoroContentListScreen(
     listState: LazyListState? = null,
     detailedListState: LazyListState? = null,
 ) {
-    val itemCount = pagingItems?.itemCount ?: items.size
+    val leadingItemCount = if (pagingItems == null) 0 else items.size
+    val pagingItemCount = pagingItems?.itemCount ?: 0
+    val itemCount = if (pagingItems == null) items.size else leadingItemCount + pagingItemCount
     val pagingRefreshState = pagingItems?.loadState?.refresh
-    fun peekItem(index: Int): ListModel? = if (pagingItems == null) {
-        items.getOrNull(index)
-    } else {
-        runCatching { pagingItems.peek(index) }.getOrNull()
+    fun peekItem(index: Int): ListModel? {
+        if (pagingItems == null || index < leadingItemCount) {
+            return items.getOrNull(index)
+        }
+        return runCatching { pagingItems.peek(index - leadingItemCount) }.getOrNull()
     }
-    fun getItem(index: Int): ListModel? = if (pagingItems == null) {
-        items.getOrNull(index)
-    } else {
-        runCatching { pagingItems[index] }.getOrNull()
+    fun getItem(index: Int): ListModel? {
+        if (pagingItems == null || index < leadingItemCount) {
+            return items.getOrNull(index)
+        }
+        return runCatching { pagingItems[index - leadingItemCount] }.getOrNull()
     }
     fun itemKey(index: Int): Any = peekItem(index)?.let { listModelComposeKey(it, index) }
         ?: "paging_placeholder:$index"
@@ -282,11 +286,11 @@ fun KototoroContentListScreen(
             enabled = pullRefreshEnabled,
             indicatorTopInset = innerPadding,
         ) {
-            if (itemCount == 0 && pagingRefreshState is LoadState.Loading) {
+            if (pagingItemCount == 0 && pagingRefreshState is LoadState.Loading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     KototoroLoadingIndicator()
                 }
-            } else if (itemCount == 0 && pagingRefreshState is LoadState.Error) {
+            } else if (pagingItemCount == 0 && pagingRefreshState is LoadState.Error) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     ErrorStateCard(
                         item = pagingRefreshState.error.toErrorState(),

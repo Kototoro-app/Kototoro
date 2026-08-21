@@ -9,6 +9,7 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
@@ -88,10 +89,47 @@ class WorkAggregateFavouriteFilterTest {
 		assertTrue(ScrobblingStatus.COMPLETED.matchesReadingStatusFilters(emptySet()))
 	}
 
+	@Test
+	fun `source filters use OR and match any projection`() {
+		val aggregate = aggregate(projectionSources = listOf("primary", "secondary"))
+		val filters = setOf(
+			ListFilterOption.Source(source("missing")),
+			ListFilterOption.Source(source("secondary")),
+		)
+
+		assertTrue(aggregate.matchesTagAndSourceFilters(filters))
+		assertFalse(
+			aggregate.matchesTagAndSourceFilters(setOf(ListFilterOption.Source(source("missing")))),
+		)
+	}
+
+	@Test
+	fun `tag filters use OR and match any projection`() {
+		val matchingTag = tag("action", "secondary")
+		val aggregate = aggregate(
+			projections = listOf(
+				content(2L, "primary"),
+				content(3L, "secondary", tags = setOf(matchingTag)),
+			),
+		)
+		val filters = setOf(
+			ListFilterOption.Tag(tag("missing", "primary")),
+			ListFilterOption.Tag(matchingTag),
+		)
+
+		assertTrue(aggregate.matchesTagAndSourceFilters(filters))
+		assertFalse(
+			aggregate.matchesTagAndSourceFilters(
+				setOf(ListFilterOption.Tag(tag("action", "primary"))),
+			),
+		)
+	}
+
 	private fun aggregate(
 		percent: Float? = null,
 		newChapters: Int? = null,
 		projectionSources: List<String> = emptyList(),
+		projections: List<Content>? = null,
 	): WorkAggregate = WorkAggregate(
 		identity = WorkIdentity(
 			entityId = 1L,
@@ -100,8 +138,8 @@ class WorkAggregateFavouriteFilterTest {
 			localMangaIds = setOf(2L),
 			migrationState = WorkMigrationState.VALID,
 		),
-		displayProjection = projectionSources.firstOrNull()?.let { content(2L, it) },
-		projections = projectionSources.mapIndexed { index, source -> content(index + 2L, source) },
+		displayProjection = projections?.firstOrNull() ?: projectionSources.firstOrNull()?.let { content(2L, it) },
+		projections = projections ?: projectionSources.mapIndexed { index, source -> content(index + 2L, source) },
 		history = percent?.let {
 			WorkHistoryEntity(
 				entityId = 1L,
@@ -131,6 +169,7 @@ class WorkAggregateFavouriteFilterTest {
 		id: Long,
 		sourceName: String,
 		state: ContentState? = null,
+		tags: Set<ContentTag> = emptySet(),
 	): Content = Content(
 		id = id,
 		title = "Work $id",
@@ -140,13 +179,21 @@ class WorkAggregateFavouriteFilterTest {
 		rating = RATING_UNKNOWN,
 		contentRating = null,
 		coverUrl = null,
-		tags = emptySet(),
+		tags = tags,
 		state = state,
 		authors = emptySet(),
-		source = object : ContentSource {
-			override val name = sourceName
-			override val locale = ""
-			override val contentType = ContentType.MANGA
-		},
+		source = source(sourceName),
 	)
+
+	private fun tag(key: String, sourceName: String) = ContentTag(
+		title = key.replaceFirstChar(Char::uppercase),
+		key = key,
+		source = source(sourceName),
+	)
+
+	private fun source(name: String) = object : ContentSource {
+		override val name = name
+		override val locale = ""
+		override val contentType = ContentType.MANGA
+	}
 }

@@ -9,6 +9,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
+import org.skepsun.kototoro.core.db.entity.TagEntity
 
 @Dao
 abstract class WorkFavouritesDao {
@@ -78,6 +79,33 @@ abstract class WorkFavouritesDao {
 					AND sm.content_type NOT IN (:allowedTypes)
 			)
 		))
+			AND (:applyContentTypeFilter = 0 OR m.content_type IS NULL OR m.content_type IN (:contentTypes))
+			AND (:applyPublicationStateFilter = 0 OR m.state IN (:publicationStates))
+			AND (:nsfwMode = -1 OR m.nsfw = :nsfwMode)
+			AND (:requireDownloaded = 0 OR EXISTS (
+				SELECT 1 FROM local_index li WHERE li.manga_id = m.manga_id
+			))
+			AND (:requireNewChapters = 0 OR COALESCE(tracking.new_chapters, 0) > 0)
+			AND (:applyExactSourceFilter = 0 OR m.source IN (:exactSources) OR EXISTS (
+				SELECT 1 FROM entity_binding source_binding
+				INNER JOIN manga source_manga ON source_manga.manga_id = CAST(source_binding.external_id AS INTEGER)
+				WHERE source_binding.entity_id = selected.entity_id
+					AND source_binding.source IN ('local_manga', '0')
+					AND source_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND source_manga.source IN (:exactSources)
+			))
+			AND (:applyTagFilter = 0 OR EXISTS (
+				SELECT 1 FROM manga_tags display_tags
+				WHERE display_tags.manga_id = m.manga_id AND display_tags.tag_id IN (:tagIds)
+			) OR EXISTS (
+				SELECT 1 FROM entity_binding tag_binding
+				INNER JOIN manga_tags projection_tags
+					ON projection_tags.manga_id = CAST(tag_binding.external_id AS INTEGER)
+				WHERE tag_binding.entity_id = selected.entity_id
+					AND tag_binding.source IN ('local_manga', '0')
+					AND tag_binding.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+					AND projection_tags.tag_id IN (:tagIds)
+			))
 		ORDER BY
 			selected.pinned DESC,
 			CASE WHEN :orderName = 'RATING' THEN m.rating END DESC,
@@ -106,7 +134,74 @@ abstract class WorkFavouritesDao {
         classifiedTypes: Collection<String>,
         applySourceFilter: Boolean,
         allowedSources: Collection<String>,
+        applyContentTypeFilter: Boolean,
+        contentTypes: Collection<String>,
+        applyPublicationStateFilter: Boolean,
+        publicationStates: Collection<String>,
+        nsfwMode: Int,
+        requireDownloaded: Boolean,
+        requireNewChapters: Boolean,
+        applyExactSourceFilter: Boolean,
+        exactSources: Collection<String>,
+        applyTagFilter: Boolean,
+        tagIds: Collection<Long>,
     ): PagingSource<Int, WorkFavouriteEntity>
+
+    @Query(
+        """
+		WITH favorite_projections AS (
+			SELECT wf.entity_id, wf.anchor_manga_id AS manga_id
+			FROM work_favourites wf
+			WHERE wf.anchor_manga_id IS NOT NULL
+				AND wf.deleted_at = 0
+				AND (:categoryId = -1 OR wf.category_id = :categoryId)
+			UNION
+			SELECT wf.entity_id, CAST(eb.external_id AS INTEGER) AS manga_id
+			FROM work_favourites wf
+			INNER JOIN entity_binding eb ON eb.entity_id = wf.entity_id
+			WHERE wf.anchor_manga_id IS NOT NULL
+				AND wf.deleted_at = 0
+				AND (:categoryId = -1 OR wf.category_id = :categoryId)
+				AND eb.source IN ('local_manga', '0')
+				AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		)
+		SELECT m.source
+		FROM favorite_projections fp
+		INNER JOIN manga m ON m.manga_id = fp.manga_id
+		GROUP BY m.source
+		ORDER BY COUNT(DISTINCT fp.entity_id) DESC, m.source ASC
+        """,
+    )
+    abstract suspend fun findQuickFilterSourceNames(categoryId: Long): List<String>
+
+    @Query(
+        """
+		WITH favorite_projections AS (
+			SELECT wf.entity_id, wf.anchor_manga_id AS manga_id
+			FROM work_favourites wf
+			WHERE wf.anchor_manga_id IS NOT NULL
+				AND wf.deleted_at = 0
+				AND (:categoryId = -1 OR wf.category_id = :categoryId)
+			UNION
+			SELECT wf.entity_id, CAST(eb.external_id AS INTEGER) AS manga_id
+			FROM work_favourites wf
+			INNER JOIN entity_binding eb ON eb.entity_id = wf.entity_id
+			WHERE wf.anchor_manga_id IS NOT NULL
+				AND wf.deleted_at = 0
+				AND (:categoryId = -1 OR wf.category_id = :categoryId)
+				AND eb.source IN ('local_manga', '0')
+				AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		)
+		SELECT tags.*
+		FROM favorite_projections fp
+		INNER JOIN manga_tags mt ON mt.manga_id = fp.manga_id
+		INNER JOIN tags ON tags.tag_id = mt.tag_id
+		GROUP BY tags.tag_id
+		ORDER BY COUNT(DISTINCT fp.entity_id) DESC, tags.title COLLATE NOCASE ASC
+		LIMIT :limit
+        """,
+    )
+    abstract suspend fun findQuickFilterTags(categoryId: Long, limit: Int): List<TagEntity>
 
     @Query(
         """

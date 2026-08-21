@@ -237,6 +237,7 @@ class FavouritesListViewModel @AssistedInject constructor(
                     order = params.order,
                     filterOptions = params.filters,
                     spaceId = params.spaceId,
+                    groupTab = params.groupTab,
                 )
                 BatchMappingPagingSource(aggregateSource, diagnosticLabel = "favourites-ui") { aggregates ->
                     mapFavouritePage(aggregates, params)

@@ -69,3 +69,25 @@ internal fun ScrobblingStatus.matchesReadingStatusFilters(filterOptions: Set<Lis
         .toSet()
     return selectedStatuses.isEmpty() || this in selectedStatuses
 }
+
+internal fun WorkAggregate.matchesTagAndSourceFilters(filterOptions: Set<ListFilterOption>): Boolean {
+    val selectedTags = filterOptions.asSequence()
+        .filterIsInstance<ListFilterOption.Tag>()
+        .map(ListFilterOption.Tag::tag)
+        .toSet()
+    val selectedSourceNames = filterOptions.asSequence()
+        .filterIsInstance<ListFilterOption.Source>()
+        .map { it.mangaSource.name }
+        .toSet()
+    if (selectedTags.isEmpty() && selectedSourceNames.isEmpty()) {
+        return true
+    }
+    val candidates = projections.ifEmpty { listOfNotNull(displayProjection) }
+    val matchesTag = selectedTags.isEmpty() || candidates.any { content ->
+        content.tags.any(selectedTags::contains)
+    }
+    val matchesSource = selectedSourceNames.isEmpty() || candidates.any { content ->
+        content.source.name in selectedSourceNames
+    }
+    return matchesTag && matchesSource
+}
