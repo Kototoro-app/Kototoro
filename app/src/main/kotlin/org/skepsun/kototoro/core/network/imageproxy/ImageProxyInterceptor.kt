@@ -7,5 +7,5 @@ import okhttp3.Response
 
 interface ImageProxyInterceptor : Interceptor {
 
-	suspend fun interceptPageRequest(request: Request, okHttp: OkHttpClient): Response
+    suspend fun interceptPageRequest(request: Request, okHttp: OkHttpClient): Response
 }

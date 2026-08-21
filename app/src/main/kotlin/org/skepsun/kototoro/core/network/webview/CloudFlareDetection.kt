@@ -9,54 +9,54 @@ package org.skepsun.kototoro.core.network.webview
  * - "hard_block"：被明确阻断
  */
 internal enum class CloudFlarePageState {
-	NORMAL,
-	LOADING,
-	MANAGED_CHALLENGE,
-	INTERACTIVE_CHALLENGE,
-	HARD_BLOCK,
+    NORMAL,
+    LOADING,
+    MANAGED_CHALLENGE,
+    INTERACTIVE_CHALLENGE,
+    HARD_BLOCK,
 }
 
 internal class BrowserDocumentReadinessTracker(
-	private val quietWindowMs: Long,
+    private val quietWindowMs: Long,
 ) {
-	private var stableSince: Long? = null
-	private var lastResourceCount: Int? = null
+    private var stableSince: Long? = null
+    private var lastResourceCount: Int? = null
 
-	fun observe(
-		pageState: CloudFlarePageState,
-		readyState: String,
-		url: String,
-		resourceCount: Int,
-		nowMs: Long,
-	): Boolean {
-		val resourceChanged = lastResourceCount != null && lastResourceCount != resourceCount
-		lastResourceCount = resourceCount
-		val isStableCandidate = pageState == CloudFlarePageState.NORMAL &&
-			readyState == "complete" &&
-			!url.contains("__cf_chl_", ignoreCase = true)
-		if (!isStableCandidate || resourceChanged) {
-			stableSince = null
-			return false
-		}
-		val since = stableSince ?: nowMs.also { stableSince = it }
-		return nowMs - since >= quietWindowMs
-	}
+    fun observe(
+        pageState: CloudFlarePageState,
+        readyState: String,
+        url: String,
+        resourceCount: Int,
+        nowMs: Long,
+    ): Boolean {
+        val resourceChanged = lastResourceCount != null && lastResourceCount != resourceCount
+        lastResourceCount = resourceCount
+        val isStableCandidate = pageState == CloudFlarePageState.NORMAL &&
+            readyState == "complete" &&
+            !url.contains("__cf_chl_", ignoreCase = true)
+        if (!isStableCandidate || resourceChanged) {
+            stableSince = null
+            return false
+        }
+        val since = stableSince ?: nowMs.also { stableSince = it }
+        return nowMs - since >= quietWindowMs
+    }
 }
 
 internal const val CF_CLEARANCE_COOKIE = "cf_clearance"
 
 internal const val CF_CHALLENGE_SELECTOR =
-	"#challenge-running, #challenge-stage, #cf-challenge-running, .cf-browser-verification, " +
-		"#turnstile-wrapper, .cf-turnstile, #cf-please-wait, #challenge-form, " +
-		"iframe[src*='challenges.cloudflare.com'], iframe[title*='Cloudflare'], " +
-		"input[name='cf-turnstile-response']"
+    "#challenge-running, #challenge-stage, #cf-challenge-running, .cf-browser-verification, " +
+        "#turnstile-wrapper, .cf-turnstile, #cf-please-wait, #challenge-form, " +
+        "iframe[src*='challenges.cloudflare.com'], iframe[title*='Cloudflare'], " +
+        "input[name='cf-turnstile-response']"
 
 internal fun parseCloudFlarePageState(raw: String?): CloudFlarePageState = when (raw?.removeSurrounding("\"")) {
-	"normal" -> CloudFlarePageState.NORMAL
-	"hard_block" -> CloudFlarePageState.HARD_BLOCK
-	"interactive" -> CloudFlarePageState.INTERACTIVE_CHALLENGE
-	"managed" -> CloudFlarePageState.MANAGED_CHALLENGE
-	else -> CloudFlarePageState.LOADING
+    "normal" -> CloudFlarePageState.NORMAL
+    "hard_block" -> CloudFlarePageState.HARD_BLOCK
+    "interactive" -> CloudFlarePageState.INTERACTIVE_CHALLENGE
+    "managed" -> CloudFlarePageState.MANAGED_CHALLENGE
+    else -> CloudFlarePageState.LOADING
 }
 
 internal const val CF_STATE_JS = """

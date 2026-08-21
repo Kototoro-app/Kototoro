@@ -8,14 +8,14 @@ import okhttp3.HttpUrl
 
 interface MutableCookieJar : CookieJar {
 
-	@WorkerThread
-	override fun loadForRequest(url: HttpUrl): List<Cookie>
+    @WorkerThread
+    override fun loadForRequest(url: HttpUrl): List<Cookie>
 
-	@WorkerThread
-	override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>)
+    @WorkerThread
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>)
 
-	@WorkerThread
-	fun removeCookies(url: HttpUrl, predicate: Predicate<Cookie>?)
+    @WorkerThread
+    fun removeCookies(url: HttpUrl, predicate: Predicate<Cookie>?)
 
-	suspend fun clear(): Boolean
+    suspend fun clear(): Boolean
 }

@@ -7,17 +7,17 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 
 open class ContinuationResumeWebViewClient(
-	private val continuation: Continuation<Unit>,
+    private val continuation: Continuation<Unit>,
 ) : WebViewClient() {
 
-	override fun onPageFinished(view: WebView?, url: String?) {
-		resumeContinuation(view)
-	}
+    override fun onPageFinished(view: WebView?, url: String?) {
+        resumeContinuation(view)
+    }
 
-	protected fun resumeContinuation(view: WebView?) {
-		if (continuation !is CancellableContinuation || continuation.isActive) {
-			view?.webViewClient = WebViewClient() // reset to default
-			continuation.resume(Unit)
-		}
-	}
+    protected fun resumeContinuation(view: WebView?) {
+        if (continuation !is CancellableContinuation || continuation.isActive) {
+            view?.webViewClient = WebViewClient() // reset to default
+            continuation.resume(Unit)
+        }
+    }
 }

@@ -35,95 +35,95 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 interface NetworkModule {
 
-	@Binds
-	fun bindCookieJar(androidCookieJar: MutableCookieJar): CookieJar
+    @Binds
+    fun bindCookieJar(androidCookieJar: MutableCookieJar): CookieJar
 
-	@Binds
-	fun bindImageProxyInterceptor(impl: RealImageProxyInterceptor): ImageProxyInterceptor
+    @Binds
+    fun bindImageProxyInterceptor(impl: RealImageProxyInterceptor): ImageProxyInterceptor
 
-	companion object {
+    companion object {
 
-		@Provides
-		@Singleton
-		fun provideCookieJar(
-			@ApplicationContext context: Context
-		): MutableCookieJar = runCatching {
-			AndroidCookieJar()
-		}.getOrElse { e ->
-			e.printStackTraceDebug()
-			// WebView is not available
-			PreferencesCookieJar(context)
-		}
+        @Provides
+        @Singleton
+        fun provideCookieJar(
+            @ApplicationContext context: Context
+        ): MutableCookieJar = runCatching {
+            AndroidCookieJar()
+        }.getOrElse { e ->
+            e.printStackTraceDebug()
+            // WebView is not available
+            PreferencesCookieJar(context)
+        }
 
-		@Provides
-		@Singleton
-		fun provideHttpCache(
-			localStorageManager: LocalStorageManager,
-		): Cache = localStorageManager.createHttpCache()
+        @Provides
+        @Singleton
+        fun provideHttpCache(
+            localStorageManager: LocalStorageManager,
+        ): Cache = localStorageManager.createHttpCache()
 
-		@Provides
-		@Singleton
-		@BaseHttpClient
-		fun provideBaseHttpClient(
-			@ApplicationContext contextProvider: Provider<Context>,
-			cache: Cache,
-			cookieJar: CookieJar,
-			settings: AppSettings,
-			proxyProvider: ProxyProvider,
-			webViewExecutor: dagger.Lazy<WebViewExecutor>,
-			clearanceSolver: WebViewClearanceSolver,
-		): OkHttpClient = OkHttpClient.Builder().apply {
-			assertNotInMainThread()
-			val chromeTlsSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-				.tlsVersions(TlsVersion.TLS_1_3, TlsVersion.TLS_1_2)
-				.cipherSuites(
-					CipherSuite.TLS_AES_128_GCM_SHA256,
-					CipherSuite.TLS_AES_256_GCM_SHA384,
-					CipherSuite.TLS_CHACHA20_POLY1305_SHA256,
-					CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-					CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-					CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-					CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-					CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-					CipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
-				)
-				.build()
-			connectionSpecs(listOf(chromeTlsSpec, ConnectionSpec.CLEARTEXT))
-			connectTimeout(20, TimeUnit.SECONDS)
-			readTimeout(60, TimeUnit.SECONDS)
-			writeTimeout(20, TimeUnit.SECONDS)
-			callTimeout(300, TimeUnit.SECONDS)
-			cookieJar(cookieJar)
-			proxySelector(proxyProvider.selector)
-			proxyAuthenticator(proxyProvider.authenticator)
-			dns(DoHManager(cache, settings))
-			if (settings.isSSLBypassEnabled) {
-				disableCertificateVerification()
-			} else {
-				installExtraCertificates(contextProvider.get())
-			}
-			cache(cache)
-			// Send requests normally first; GZipInterceptor only retries compatible GET/HEAD
-			// requests after a 400/415 response.
-			addInterceptor(GZipInterceptor())
-			addInterceptor(CloudFlareInterceptor(webViewExecutor, settings, clearanceSolver))
-			addInterceptor(RateLimitInterceptor())
-			addNetworkInterceptor(BrotliInterceptor)
-			if (BuildConfig.DEBUG) {
-				addInterceptor(CurlLoggingInterceptor())
-			}
-		}.build()
+        @Provides
+        @Singleton
+        @BaseHttpClient
+        fun provideBaseHttpClient(
+            @ApplicationContext contextProvider: Provider<Context>,
+            cache: Cache,
+            cookieJar: CookieJar,
+            settings: AppSettings,
+            proxyProvider: ProxyProvider,
+            webViewExecutor: dagger.Lazy<WebViewExecutor>,
+            clearanceSolver: WebViewClearanceSolver,
+        ): OkHttpClient = OkHttpClient.Builder().apply {
+            assertNotInMainThread()
+            val chromeTlsSpec = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+                .tlsVersions(TlsVersion.TLS_1_3, TlsVersion.TLS_1_2)
+                .cipherSuites(
+                    CipherSuite.TLS_AES_128_GCM_SHA256,
+                    CipherSuite.TLS_AES_256_GCM_SHA384,
+                    CipherSuite.TLS_CHACHA20_POLY1305_SHA256,
+                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                    CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                    CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                    CipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+                    CipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+                )
+                .build()
+            connectionSpecs(listOf(chromeTlsSpec, ConnectionSpec.CLEARTEXT))
+            connectTimeout(20, TimeUnit.SECONDS)
+            readTimeout(60, TimeUnit.SECONDS)
+            writeTimeout(20, TimeUnit.SECONDS)
+            callTimeout(300, TimeUnit.SECONDS)
+            cookieJar(cookieJar)
+            proxySelector(proxyProvider.selector)
+            proxyAuthenticator(proxyProvider.authenticator)
+            dns(DoHManager(cache, settings))
+            if (settings.isSSLBypassEnabled) {
+                disableCertificateVerification()
+            } else {
+                installExtraCertificates(contextProvider.get())
+            }
+            cache(cache)
+            // Send requests normally first; GZipInterceptor only retries compatible GET/HEAD
+            // requests after a 400/415 response.
+            addInterceptor(GZipInterceptor())
+            addInterceptor(CloudFlareInterceptor(webViewExecutor, settings, clearanceSolver))
+            addInterceptor(RateLimitInterceptor())
+            addNetworkInterceptor(BrotliInterceptor)
+            if (BuildConfig.DEBUG) {
+                addInterceptor(CurlLoggingInterceptor())
+            }
+        }.build()
 
-		@Provides
-		@Singleton
-		@ContentHttpClient
-		fun provideContentHttpClient(
-			@BaseHttpClient baseClient: OkHttpClient,
-			commonHeadersInterceptor: CommonHeadersInterceptor,
-		): OkHttpClient = baseClient.newBuilder().apply {
-			addNetworkInterceptor(CacheLimitInterceptor())
-			addInterceptor(commonHeadersInterceptor)
-		}.build()
+        @Provides
+        @Singleton
+        @ContentHttpClient
+        fun provideContentHttpClient(
+            @BaseHttpClient baseClient: OkHttpClient,
+            commonHeadersInterceptor: CommonHeadersInterceptor,
+        ): OkHttpClient = baseClient.newBuilder().apply {
+            addNetworkInterceptor(CacheLimitInterceptor())
+            addInterceptor(commonHeadersInterceptor)
+        }.build()
 
-	}
+    }
 }
