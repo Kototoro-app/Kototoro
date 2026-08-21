@@ -14,15 +14,15 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 interface EntityGraphModule {
 
-	@Binds
-	@Singleton
-	fun bindEntityBindingMatcher(
-		impl: DefaultEntityBindingMatcher,
-	): EntityBindingMatcher
+    @Binds
+    @Singleton
+    fun bindEntityBindingMatcher(
+        impl: DefaultEntityBindingMatcher,
+    ): EntityBindingMatcher
 
-	@Binds
-	@Singleton
-	fun bindEntityGraphSourceAdapter(
-		impl: DefaultEntityGraphSourceAdapter,
-	): EntityGraphSourceAdapter
+    @Binds
+    @Singleton
+    fun bindEntityGraphSourceAdapter(
+        impl: DefaultEntityGraphSourceAdapter,
+    ): EntityGraphSourceAdapter
 }

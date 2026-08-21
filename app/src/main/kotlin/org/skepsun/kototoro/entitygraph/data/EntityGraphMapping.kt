@@ -15,92 +15,92 @@ import org.skepsun.kototoro.parsers.util.longHashCode
 import org.skepsun.kototoro.parsers.model.ContentType
 
 internal fun EntityRecord.toModel(): Entity = Entity(
-	id = id,
-	type = runCatching { EntityType.valueOf(type) }.getOrDefault(EntityType.WORK),
-	contentType = contentType?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() },
-	primaryName = primaryName,
-	aliases = decodeStringList(aliases),
-	createdAt = createdAt,
-	lastAccessed = lastAccessed,
-	accessCount = accessCount,
+    id = id,
+    type = runCatching { EntityType.valueOf(type) }.getOrDefault(EntityType.WORK),
+    contentType = contentType?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() },
+    primaryName = primaryName,
+    aliases = decodeStringList(aliases),
+    createdAt = createdAt,
+    lastAccessed = lastAccessed,
+    accessCount = accessCount,
 )
 
 internal fun EntityBindingRecord.toModel(): EntityBinding = EntityBinding(
-	entityId = entityId,
-	source = source,
-	externalId = externalId,
-	confidence = confidence,
-	isPrimary = isPrimary,
-	sourceKindName = sourceKind,
-	stateName = state,
-	createdBy = createdBy,
-	updatedAt = updatedAt,
+    entityId = entityId,
+    source = source,
+    externalId = externalId,
+    confidence = confidence,
+    isPrimary = isPrimary,
+    sourceKindName = sourceKind,
+    stateName = state,
+    createdBy = createdBy,
+    updatedAt = updatedAt,
 )
 
 fun EntityBindingRecord.isLocalReadingSource(): Boolean {
-	return source.isLocalEntityBindingSource()
+    return source.isLocalEntityBindingSource()
 }
 
 fun EntityBindingRecord.isActiveBinding(): Boolean {
-	return state.toEntityBindingStateOrNull() in ACTIVE_BINDING_STATES
+    return state.toEntityBindingStateOrNull() in ACTIVE_BINDING_STATES
 }
 
 private val ACTIVE_BINDING_STATES = setOf(
-	EntityBindingState.MANUAL,
-	EntityBindingState.CONFIRMED,
-	EntityBindingState.LEGACY,
+    EntityBindingState.MANUAL,
+    EntityBindingState.CONFIRMED,
+    EntityBindingState.LEGACY,
 )
 
 internal fun RelationRecord.toModel(): Relation = Relation(
-	id = id,
-	fromEntityId = fromEntityId,
-	toEntityId = toEntityId,
-	type = RelationType.valueOf(type),
-	weight = weight,
-	createdAt = createdAt,
-	sourceBindingSource = sourceBindingSource.takeIf { it.isNotBlank() },
-	sourceBindingExternalId = sourceBindingExternalId.takeIf { it.isNotBlank() },
-	originName = origin,
-	stateName = state,
-	updatedAt = updatedAt,
+    id = id,
+    fromEntityId = fromEntityId,
+    toEntityId = toEntityId,
+    type = RelationType.valueOf(type),
+    weight = weight,
+    createdAt = createdAt,
+    sourceBindingSource = sourceBindingSource.takeIf { it.isNotBlank() },
+    sourceBindingExternalId = sourceBindingExternalId.takeIf { it.isNotBlank() },
+    originName = origin,
+    stateName = state,
+    updatedAt = updatedAt,
 )
 
 internal fun encodeStringList(values: Collection<String>): String? {
-	val normalized = values
-		.map { it.trim() }
-		.filter { it.isNotEmpty() }
-		.distinct()
-	if (normalized.isEmpty()) {
-		return null
-	}
-	return JSONArray(normalized).toString()
+    val normalized = values
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+    if (normalized.isEmpty()) {
+        return null
+    }
+    return JSONArray(normalized).toString()
 }
 
 internal fun decodeStringList(raw: String?): List<String> {
-	if (raw.isNullOrBlank()) {
-		return emptyList()
-	}
-	return runCatching {
-		JSONArray(raw).let { json ->
-			buildList(json.length()) {
-				for (index in 0 until json.length()) {
-					val value = json.optString(index).trim()
-					if (value.isNotEmpty()) {
-						add(value)
-					}
-				}
-			}
-		}
-	}.getOrElse { emptyList() }
+    if (raw.isNullOrBlank()) {
+        return emptyList()
+    }
+    return runCatching {
+        JSONArray(raw).let { json ->
+            buildList(json.length()) {
+                for (index in 0 until json.length()) {
+                    val value = json.optString(index).trim()
+                    if (value.isNotEmpty()) {
+                        add(value)
+                    }
+                }
+            }
+        }
+    }.getOrElse { emptyList() }
 }
 
 internal fun mergeAliases(primaryName: String, aliases: Collection<String>): List<String> {
-	return buildList {
-		add(primaryName)
-		addAll(aliases)
-	}.map { it.trim() }
-		.filter { it.isNotEmpty() }
-		.distinct()
+    return buildList {
+        add(primaryName)
+        addAll(aliases)
+    }.map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
 }
 
 
@@ -115,33 +115,33 @@ internal fun normalizeName(value: String): String = normalizeEntityName(value)
  * Used as a dedup candidate key; callers must still compare normalized names after a hash match.
  */
 internal fun computeNameHash(primaryName: String): Long {
-	return normalizeName(primaryName.trim()).longHashCode()
+    return normalizeName(primaryName.trim()).longHashCode()
 }
 
 internal fun hasSameNormalizedEntityName(left: String, right: String): Boolean {
-	val normalizedLeft = normalizeName(left)
-	return normalizedLeft.isNotEmpty() && normalizedLeft == normalizeName(right)
+    val normalizedLeft = normalizeName(left)
+    return normalizedLeft.isNotEmpty() && normalizedLeft == normalizeName(right)
 }
 
 internal fun computeProjectionSyncId(source: String, externalId: String): String {
-	val normalizedSource = source.trim()
-	val normalizedExternalId = externalId.trim()
-	return "projection:${normalizedSource.length}:$normalizedSource:${normalizedExternalId.length}:$normalizedExternalId"
+    val normalizedSource = source.trim()
+    val normalizedExternalId = externalId.trim()
+    return "projection:${normalizedSource.length}:$normalizedSource:${normalizedExternalId.length}:$normalizedExternalId"
 }
 
 internal fun EntityRecord.resolveProjectionSyncId(
-	projectionSyncId: String,
-	conflictingEntityId: Long?,
+    projectionSyncId: String,
+    conflictingEntityId: Long?,
 ): String {
-	if (conflictingEntityId == null || conflictingEntityId == id) {
-		return projectionSyncId
-	}
-	return syncId.ifBlank { java.util.UUID.randomUUID().toString() }
+    if (conflictingEntityId == null || conflictingEntityId == id) {
+        return projectionSyncId
+    }
+    return syncId.ifBlank { java.util.UUID.randomUUID().toString() }
 }
 
 internal fun EntityBindingRecord.isAuthoritativeProjectionBinding(): Boolean {
-	if (source.isLocalEntityBindingSource()) {
-		return false
-	}
-	return sourceKind != EntityBindingSourceKind.TRACKING_SOURCE.name
+    if (source.isLocalEntityBindingSource()) {
+        return false
+    }
+    return sourceKind != EntityBindingSourceKind.TRACKING_SOURCE.name
 }
