@@ -9,18 +9,18 @@ import org.skepsun.kototoro.core.util.ext.findActivity
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 
 class DownloadStartedObserver(
-	private val snackbarHost: View,
+    private val snackbarHost: View,
 ) : FlowCollector<Unit> {
 
-	override suspend fun emit(value: Unit) {
-		val snackbar = Snackbar.make(snackbarHost, R.string.download_started, Snackbar.LENGTH_LONG)
-		val router = AppRouter.from(snackbarHost)
-		if (router != null) {
-			snackbar.setAction(R.string.details) { router.openDownloads() }
-			snackbar.setActionTextColor(
-				snackbarHost.context.getThemeColor(androidx.appcompat.R.attr.colorPrimary),
-			)
-		}
-		snackbar.show()
-	}
+    override suspend fun emit(value: Unit) {
+        val snackbar = Snackbar.make(snackbarHost, R.string.download_started, Snackbar.LENGTH_LONG)
+        val router = AppRouter.from(snackbarHost)
+        if (router != null) {
+            snackbar.setAction(R.string.details) { router.openDownloads() }
+            snackbar.setActionTextColor(
+                snackbarHost.context.getThemeColor(androidx.appcompat.R.attr.colorPrimary),
+            )
+        }
+        snackbar.show()
+    }
 }

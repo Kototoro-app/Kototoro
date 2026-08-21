@@ -758,7 +758,7 @@ private fun DestinationMenuItem(destination: DirectoryModel) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-		destination.root?.displayPath?.let { path ->
+        destination.root?.displayPath?.let { path ->
             Text(
                 text = path,
                 style = MaterialTheme.typography.bodySmall,
