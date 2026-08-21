@@ -12,10 +12,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TrackerDebugViewModel @Inject constructor(
-	repository: TrackingRepository,
+    repository: TrackingRepository,
 ) : BaseViewModel() {
 
-	val content = repository.observeTrackDebugItems()
-		.withErrorHandling()
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+    val content = repository.observeTrackDebugItems()
+        .withErrorHandling()
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 }

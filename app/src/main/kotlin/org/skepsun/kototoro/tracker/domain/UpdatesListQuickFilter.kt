@@ -7,14 +7,14 @@ import org.skepsun.kototoro.list.domain.ContentListQuickFilter
 import javax.inject.Inject
 
 class UpdatesListQuickFilter @Inject constructor(
-	private val favouritesRepository: FavouritesRepository,
-	settings: AppSettings,
+    private val favouritesRepository: FavouritesRepository,
+    settings: AppSettings,
 ) : ContentListQuickFilter(settings) {
 
-	override suspend fun getAvailableFilterOptions(): List<ListFilterOption> =
-		favouritesRepository.getMostUpdatedCategories(
-			limit = 4,
-		).map {
-			ListFilterOption.Favorite(it)
-		}
+    override suspend fun getAvailableFilterOptions(): List<ListFilterOption> =
+        favouritesRepository.getMostUpdatedCategories(
+            limit = 4,
+        ).map {
+            ListFilterOption.Favorite(it)
+        }
 }

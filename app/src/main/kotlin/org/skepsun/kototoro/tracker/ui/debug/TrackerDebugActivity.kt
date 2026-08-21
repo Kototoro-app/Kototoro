@@ -11,17 +11,17 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 @AndroidEntryPoint
 class TrackerDebugActivity : BaseComposeActivity() {
 
-	private val viewModel by viewModels<TrackerDebugViewModel>()
+    private val viewModel by viewModels<TrackerDebugViewModel>()
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setComposeContent {
-			val content by viewModel.content.collectAsStateWithLifecycle()
-			TrackerDebugScreen(
-				items = content,
-				onNavigateUp = ::finish,
-				onItemClick = { router.openResolvedDetails(it.manga) },
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setComposeContent {
+            val content by viewModel.content.collectAsStateWithLifecycle()
+            TrackerDebugScreen(
+                items = content,
+                onNavigateUp = ::finish,
+                onItemClick = { router.openResolvedDetails(it.manga) },
+            )
+        }
+    }
 }

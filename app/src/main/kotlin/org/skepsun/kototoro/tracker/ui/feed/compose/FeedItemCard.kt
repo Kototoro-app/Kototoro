@@ -52,117 +52,117 @@ import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun FeedItemCard(
-	item: FeedItem,
-	onClick: (Rect?) -> Unit,
-	modifier: Modifier = Modifier
+    item: FeedItem,
+    onClick: (Rect?) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-	var coverBounds by remember(item.id) { mutableStateOf<Rect?>(null) }
-	val badgeMetrics = remember { contentCardBadgeMetricsFor(40.dp) }
-	val sharedTransitionScope = LocalSharedTransitionScope.current
-	val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-	val sharedElementKey = remember(item.id, item.imageUrl, item.manga.source.name) {
-		contentCoverSharedKey(item.manga.source.name, item.imageUrl.orEmpty(), instanceKey = "feed_${item.id}")
-	}
-	val context = LocalContext.current
-	val allowCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
-	val imageRequest = remember(context, item.manga.source.name, item.manga.url, item.manga.publicUrl, item.imageUrl, allowCrossfade) {
-		val cacheKey = contentCoverCacheKey(item.manga, item.imageUrl)
-		ImageRequest.Builder(context)
-			.data(item.imageUrl)
-			.memoryCacheKey(cacheKey)
-			.diskCacheKey(cacheKey)
-			.mangaExtra(item.manga)
-			.crossfade(allowCrossfade)
-			.build()
-	}
+    var coverBounds by remember(item.id) { mutableStateOf<Rect?>(null) }
+    val badgeMetrics = remember { contentCardBadgeMetricsFor(40.dp) }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+    val sharedElementKey = remember(item.id, item.imageUrl, item.manga.source.name) {
+        contentCoverSharedKey(item.manga.source.name, item.imageUrl.orEmpty(), instanceKey = "feed_${item.id}")
+    }
+    val context = LocalContext.current
+    val allowCrossfade = sharedTransitionScope == null || animatedVisibilityScope == null
+    val imageRequest = remember(context, item.manga.source.name, item.manga.url, item.manga.publicUrl, item.imageUrl, allowCrossfade) {
+        val cacheKey = contentCoverCacheKey(item.manga, item.imageUrl)
+        ImageRequest.Builder(context)
+            .data(item.imageUrl)
+            .memoryCacheKey(cacheKey)
+            .diskCacheKey(cacheKey)
+            .mangaExtra(item.manga)
+            .crossfade(allowCrossfade)
+            .build()
+    }
 
-	Row(
-		modifier = modifier
-			.fillMaxWidth()
-			.clickable { onClick(coverBounds) }
-			.padding(horizontal = 16.dp, vertical = 16.dp),
-		verticalAlignment = Alignment.CenterVertically
-	) {
-		Box(
-			modifier = Modifier
-				.size(40.dp)
-				.onGloballyPositioned { coordinates ->
-					coverBounds = coordinates.unclippedBoundsInWindow()
-				}
-				.then(
-					if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-						with(sharedTransitionScope) {
-							Modifier.sharedElement(
-								rememberSharedContentState(key = sharedElementKey),
-								animatedVisibilityScope = animatedVisibilityScope,
-							)
-						}
-					} else Modifier
-				)
-				.clip(CompactContentCoverShape)
-		) {
-			AsyncImage(
-				model = imageRequest,
-				contentDescription = item.title,
-				contentScale = ContentScale.Crop,
-				modifier = Modifier.matchParentSize(),
-				onSuccess = { state ->
-					HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-				},
-			)
-			if (item.manga.isNsfw()) {
-				ContentCardNsfwBadge(
-					metrics = badgeMetrics,
-					modifier = Modifier
-						.align(Alignment.BottomEnd)
-						.padding(badgeMetrics.outerPadding * 0.6f),
-				)
-			}
-		}
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick(coverBounds) }
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .onGloballyPositioned { coordinates ->
+                    coverBounds = coordinates.unclippedBoundsInWindow()
+                }
+                .then(
+                    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                rememberSharedContentState(key = sharedElementKey),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                            )
+                        }
+                    } else Modifier
+                )
+                .clip(CompactContentCoverShape)
+        ) {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = item.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+                onSuccess = { state ->
+                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                },
+            )
+            if (item.manga.isNsfw()) {
+                ContentCardNsfwBadge(
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(badgeMetrics.outerPadding * 0.6f),
+                )
+            }
+        }
 
-		Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
-		Column(modifier = Modifier.weight(1f)) {
-			Row(
-				verticalAlignment = Alignment.CenterVertically,
-			) {
-				if (item.isNew) {
-					Box(
-						modifier = Modifier
-							.size(8.dp)
-							.clip(CircleShape)
-							.background(MaterialTheme.colorScheme.error),
-					)
-					Spacer(modifier = Modifier.width(6.dp))
-				}
-				Text(
-					text = item.title,
-					style = MaterialTheme.typography.titleSmall,
-					color = MaterialTheme.colorScheme.onSurface,
-					maxLines = 1,
-					overflow = TextOverflow.Ellipsis,
-				)
-			}
-			val chapterText = if (item.count > 0) {
-				pluralStringResource(
-					id = R.plurals.new_chapters,
-					count = item.count,
-					item.count,
-				)
-			} else {
-				pluralStringResource(
-					id = R.plurals.old_chapters_in_total,
-					count = item.totalChapters,
-					item.totalChapters,
-				)
-			}
-			Text(
-				text = chapterText,
-				style = MaterialTheme.typography.bodySmall,
-				color = MaterialTheme.colorScheme.onSurfaceVariant,
-				maxLines = 1,
-				overflow = TextOverflow.Ellipsis
-			)
-		}
-	}
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (item.isNew) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error),
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val chapterText = if (item.count > 0) {
+                pluralStringResource(
+                    id = R.plurals.new_chapters,
+                    count = item.count,
+                    item.count,
+                )
+            } else {
+                pluralStringResource(
+                    id = R.plurals.old_chapters_in_total,
+                    count = item.totalChapters,
+                    item.totalChapters,
+                )
+            }
+            Text(
+                text = chapterText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
