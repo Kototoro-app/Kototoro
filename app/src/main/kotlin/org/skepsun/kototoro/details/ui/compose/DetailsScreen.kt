@@ -251,25 +251,25 @@ private fun DetailsScreenContent(
     isTemporaryReadOnly: Boolean = false,
 ) {
     val detailsScreenState = rememberDetailsScreenState()
-    var showDeleteLocalDialog by detailsScreenState.showDeleteLocalDialog
-    var showShareOptions by detailsScreenState.showShareOptions
-    var pendingAuthorSearch by detailsScreenState.pendingAuthorSearch
-    var pendingTagSearch by detailsScreenState.pendingTagSearch
-    var showFavoriteDialog by detailsScreenState.showFavoriteDialog
-    var showDownloadDialog by detailsScreenState.showDownloadDialog
-    var showReadingRecordSheet by detailsScreenState.showReadingRecordSheet
-    var showCommentsDialog by detailsScreenState.showCommentsDialog
-    var showReviewsDialog by detailsScreenState.showReviewsDialog
-    var selectedSupplementalRelationItem by detailsScreenState.selectedSupplementalRelationItem
-    var showMetadataSourceDialog by detailsScreenState.showMetadataSourceDialog
-    var showReadingSourceDialog by detailsScreenState.showReadingSourceDialog
-    var isModernDockCompact by detailsScreenState.isModernDockCompact
-    var toolbarBottomPx by detailsScreenState.toolbarBottomPx
-    var lastToolbarBottomPx by detailsScreenState.lastToolbarBottomPx
-    var infoCardTopPx by detailsScreenState.infoCardTopPx
-    var infoCardMidPx by detailsScreenState.infoCardMidPx
-    var initialInfoCardTopPx by detailsScreenState.initialInfoCardTopPx
-    var initialInfoCardMidPx by detailsScreenState.initialInfoCardMidPx
+    val showDeleteLocalDialog by detailsScreenState.showDeleteLocalDialog
+    val showShareOptions by detailsScreenState.showShareOptions
+    val pendingAuthorSearch by detailsScreenState.pendingAuthorSearch
+    val pendingTagSearch by detailsScreenState.pendingTagSearch
+    val showFavoriteDialog by detailsScreenState.showFavoriteDialog
+    val showDownloadDialog by detailsScreenState.showDownloadDialog
+    val showReadingRecordSheet by detailsScreenState.showReadingRecordSheet
+    val showCommentsDialog by detailsScreenState.showCommentsDialog
+    val showReviewsDialog by detailsScreenState.showReviewsDialog
+    val selectedSupplementalRelationItem by detailsScreenState.selectedSupplementalRelationItem
+    val showMetadataSourceDialog by detailsScreenState.showMetadataSourceDialog
+    val showReadingSourceDialog by detailsScreenState.showReadingSourceDialog
+    val isModernDockCompact by detailsScreenState.isModernDockCompact
+    val toolbarBottomPx by detailsScreenState.toolbarBottomPx
+    val lastToolbarBottomPx by detailsScreenState.lastToolbarBottomPx
+    val infoCardTopPx by detailsScreenState.infoCardTopPx
+    val infoCardMidPx by detailsScreenState.infoCardMidPx
+    val initialInfoCardTopPx by detailsScreenState.initialInfoCardTopPx
+    val initialInfoCardMidPx by detailsScreenState.initialInfoCardMidPx
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
     val localSize by viewModel.localSize.collectAsStateWithLifecycle()
@@ -481,7 +481,7 @@ private fun DetailsScreenContent(
         modernDockExpandThresholdPx,
     ) {
         if (!isModernDetailsDockEnabled || isWideAdaptiveLayout || compactPaneAnchor != CompactDetailsPaneAnchor.Collapsed) {
-            isModernDockCompact = false
+            detailsScreenState.setIsModernDockCompact(false)
             return@LaunchedEffect
         }
         var lastScrollValue = scrollState.value
@@ -498,11 +498,11 @@ private fun DetailsScreenContent(
             }
             when {
                 accumulatedScroll >= modernDockCollapseThresholdPx -> {
-                    isModernDockCompact = true
+                    detailsScreenState.setIsModernDockCompact(true)
                     accumulatedScroll = 0
                 }
                 accumulatedScroll <= -modernDockExpandThresholdPx -> {
-                    isModernDockCompact = false
+                    detailsScreenState.setIsModernDockCompact(false)
                     accumulatedScroll = 0
                 }
             }
@@ -594,11 +594,11 @@ private fun DetailsScreenContent(
     val syncInfoCardBounds: (Float, Float) -> Unit = remember {
         { top, bottom ->
             val midpoint = (top + bottom) / 2f
-            infoCardTopPx = top
-            infoCardMidPx = midpoint
+            detailsScreenState.setInfoCardTopPx(top)
+            detailsScreenState.setInfoCardMidPx(midpoint)
             if (top.isFinite() && (!initialInfoCardTopPx.isFinite() || top > initialInfoCardTopPx)) {
-                initialInfoCardTopPx = top
-                initialInfoCardMidPx = midpoint
+                detailsScreenState.setInitialInfoCardTopPx(top)
+                detailsScreenState.setInitialInfoCardMidPx(midpoint)
             }
         }
     }
@@ -791,7 +791,7 @@ private fun DetailsScreenContent(
                 compactPaneAnchor != CompactDetailsPaneAnchor.Collapsed &&
                 requestedTabId == sheetTabSelection
             if (isModernDetailsDockEnabled) {
-                isModernDockCompact = false
+                detailsScreenState.setIsModernDockCompact(false)
             }
             persistSelectedPaneTab(requestedTabId)
             if (!isWideAdaptiveLayout) {
@@ -818,13 +818,13 @@ private fun DetailsScreenContent(
                 openPaneTab(DETAILS_TAB_BOOKMARKS)
             }
             DetailsAction.Download -> {
-                showDownloadDialog = true
+                detailsScreenState.setShowDownloadDialog(true)
             }
             DetailsAction.OpenReadingRecord -> {
-                showReadingRecordSheet = true
+                detailsScreenState.setShowReadingRecordSheet(true)
             }
             DetailsAction.OpenAlternatives -> {
-                if (isWorkActionEnabled) showReadingSourceDialog = true
+                if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
             }
             else -> onActionClick(action)
         }
@@ -1028,9 +1028,9 @@ private fun DetailsScreenContent(
                         .fillMaxWidth()
                         .onGloballyPositioned { coordinates ->
                             val bottom = coordinates.boundsInRoot().bottom
-                            toolbarBottomPx = bottom
+                            detailsScreenState.setToolbarBottomPx(bottom)
                             if (bottom.isFinite() && bottom > 0f) {
-                                lastToolbarBottomPx = bottom
+                                detailsScreenState.setLastToolbarBottomPx(bottom)
                             }
                         },
                 ) {
@@ -1113,7 +1113,7 @@ private fun DetailsScreenContent(
                                     }
                                     DetailsChromeButton(
                                         onClick = {
-                                            showShareOptions = true
+                                            detailsScreenState.setShowShareOptions(true)
                                         },
                                         modifier = Modifier.size(interfaceStyleTokens.topBarButtonSize),
                                     ) {
@@ -1279,16 +1279,16 @@ private fun DetailsScreenContent(
                                     isTemporaryReadOnly = isTemporaryReadOnly,
                                     isWorkDetails = isWorkDetails,
                                     sharedElementKey = sharedElementKey,
-                                    pendingTagSearch = { pendingTagSearch = it },
+                                    pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                     pendingAuthorSearch = { author, source ->
-                                        pendingAuthorSearch = PendingAuthorSearch(author = author, source = source)
+                                        detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
                                     },
                                     onInfoCardBoundsSync = syncInfoCardBounds,
-                                    onFavoriteClick = { showFavoriteDialog = true },
+                                    onFavoriteClick = { detailsScreenState.setShowFavoriteDialog(true) },
                                     onSupplementalRelationClick = { item ->
                                         when {
                                             shouldOpenTrackingRelationSheet(item) -> {
-                                                selectedSupplementalRelationItem = item
+                                                detailsScreenState.setSelectedSupplementalRelationItem(item)
                                             }
                                             !item.url.isNullOrBlank() -> {
                                                 handleActionClick(DetailsAction.OpenWebUrl(item.url))
@@ -1296,10 +1296,10 @@ private fun DetailsScreenContent(
                                         }
                                     },
                                     onOpenMetadataSourceSheet = {
-                                        if (!isTemporaryReadOnly) showMetadataSourceDialog = true
+                                        if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
                                     },
                                     onOpenReadingSourceSheet = {
-                                        if (isWorkActionEnabled) showReadingSourceDialog = true
+                                        if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
                                     },
                                     onUpdateLinkedTrackingStatus = { linked, status ->
                                         viewModel.updateScrobbling(
@@ -1464,16 +1464,16 @@ private fun DetailsScreenContent(
                                 isTemporaryReadOnly = isTemporaryReadOnly,
                                 isWorkDetails = isWorkDetails,
                                 sharedElementKey = sharedElementKey,
-                                pendingTagSearch = { pendingTagSearch = it },
+                                pendingTagSearch = { detailsScreenState.setPendingTagSearch(it) },
                                 pendingAuthorSearch = { author, source ->
-                                    pendingAuthorSearch = PendingAuthorSearch(author = author, source = source)
+                                    detailsScreenState.setPendingAuthorSearch(PendingAuthorSearch(author = author, source = source))
                                 },
                                 onInfoCardBoundsSync = syncInfoCardBounds,
-                                onFavoriteClick = { showFavoriteDialog = true },
+                                onFavoriteClick = { detailsScreenState.setShowFavoriteDialog(true) },
                                 onSupplementalRelationClick = { item ->
                                     when {
                                         shouldOpenTrackingRelationSheet(item) -> {
-                                            selectedSupplementalRelationItem = item
+                                            detailsScreenState.setSelectedSupplementalRelationItem(item)
                                         }
                                         !item.url.isNullOrBlank() -> {
                                             handleActionClick(DetailsAction.OpenWebUrl(item.url))
@@ -1481,10 +1481,10 @@ private fun DetailsScreenContent(
                                     }
                                 },
                                 onOpenMetadataSourceSheet = {
-                                    if (!isTemporaryReadOnly) showMetadataSourceDialog = true
+                                    if (!isTemporaryReadOnly) detailsScreenState.setShowMetadataSourceDialog(true)
                                 },
                                 onOpenReadingSourceSheet = {
-                                    if (isWorkActionEnabled) showReadingSourceDialog = true
+                                    if (isWorkActionEnabled) detailsScreenState.setShowReadingSourceDialog(true)
                                 },
                                 onUpdateLinkedTrackingStatus = { linked, status ->
                                     viewModel.updateScrobbling(
@@ -1626,13 +1626,13 @@ private fun DetailsScreenContent(
                 iconRes = R.drawable.ic_user,
                 title = pending.author,
                 sourceTitle = rememberResolvedSourceTitle(pending.source),
-                onDismissRequest = { pendingAuthorSearch = null },
+                onDismissRequest = { detailsScreenState.setPendingAuthorSearch(null) },
                 onSearchOnSource = {
-                    pendingAuthorSearch = null
+                    detailsScreenState.setPendingAuthorSearch(null)
                     handleActionClick(DetailsAction.SearchAuthorOnSource(pending.author, pending.source))
                 },
                 onSearchEverywhere = {
-                    pendingAuthorSearch = null
+                    detailsScreenState.setPendingAuthorSearch(null)
                     handleActionClick(DetailsAction.SearchAuthorEverywhere(pending.author))
                 },
             )
@@ -1643,13 +1643,13 @@ private fun DetailsScreenContent(
                 iconRes = R.drawable.ic_tag,
                 title = tag.title,
                 sourceTitle = rememberResolvedSourceTitle(tag.source),
-                onDismissRequest = { pendingTagSearch = null },
+                onDismissRequest = { detailsScreenState.setPendingTagSearch(null) },
                 onSearchOnSource = {
-                    pendingTagSearch = null
+                    detailsScreenState.setPendingTagSearch(null)
                     handleActionClick(DetailsAction.SearchTagOnSource(tag))
                 },
                 onSearchEverywhere = {
-                    pendingTagSearch = null
+                    detailsScreenState.setPendingTagSearch(null)
                     handleActionClick(DetailsAction.SearchTagEverywhere(tag.title))
                 },
             )
@@ -1659,9 +1659,9 @@ private fun DetailsScreenContent(
             ShareOptionsDialog(
                 title = content.title,
                 sourceTitle = rememberResolvedSourceTitle(content.source),
-                onDismissRequest = { showShareOptions = false },
+                onDismissRequest = { detailsScreenState.setShowShareOptions(false) },
                 onShareAppLink = {
-                    showShareOptions = false
+                    detailsScreenState.setShowShareOptions(false)
                     handleActionClick(
                         DetailsAction.ShareLink(
                             title = content.title,
@@ -1670,7 +1670,7 @@ private fun DetailsScreenContent(
                     )
                 },
                 onShareSourceLink = {
-                    showShareOptions = false
+                    detailsScreenState.setShowShareOptions(false)
                     handleActionClick(
                         DetailsAction.ShareLink(
                             title = content.title,
@@ -1684,9 +1684,9 @@ private fun DetailsScreenContent(
             if (showDeleteLocalDialog && content != null) {
             DeleteLocalDialog(
                 title = content.title,
-                onDismissRequest = { showDeleteLocalDialog = false },
+                onDismissRequest = { detailsScreenState.setShowDeleteLocalDialog(false) },
                 onConfirm = {
-                    showDeleteLocalDialog = false
+                    detailsScreenState.setShowDeleteLocalDialog(false)
                     handleActionClick(DetailsAction.DeleteLocal)
                 },
             )
@@ -1706,10 +1706,10 @@ private fun DetailsScreenContent(
                     viewModel.setFavouriteCategory(categoryId, isChecked)
                 },
                 onManageCategories = {
-                    showFavoriteDialog = false
+                    detailsScreenState.setShowFavoriteDialog(false)
                     handleActionClick(DetailsAction.ManageCategories)
                 },
-                onDismiss = { showFavoriteDialog = false },
+                onDismiss = { detailsScreenState.setShowFavoriteDialog(false) },
             )
             DuplicateFavoritePromptDialog(
                 prompt = duplicateFavoritePrompt,
@@ -1725,7 +1725,7 @@ private fun DetailsScreenContent(
                 snackbarHostState = snackbarHostState,
                 onOpenDownloads = appRouter::openDownloads,
                 viewModel = downloadDialogViewModel,
-                onDismiss = { showDownloadDialog = false },
+                onDismiss = { detailsScreenState.setShowDownloadDialog(false) },
             )
             }
 
@@ -1749,9 +1749,9 @@ private fun DetailsScreenContent(
                             ?: context.getString(R.string.chapter_number, chapterId.toString())
                     },
                     progressPercent = historyInfo.percent,
-                    onDismissRequest = { showReadingRecordSheet = false },
+                    onDismissRequest = { detailsScreenState.setShowReadingRecordSheet(false) },
                     onJumpPointClick = { point ->
-                        showReadingRecordSheet = false
+                        detailsScreenState.setShowReadingRecordSheet(false)
                         appRouter.openReader(
                             org.skepsun.kototoro.core.nav.ReaderIntent.Builder(context)
                                 .manga(content)
@@ -1783,7 +1783,7 @@ private fun DetailsScreenContent(
                         stringResource(R.string.status_on_hold),
                         stringResource(R.string.status_dropped),
                     ),
-                    onDismissRequest = { showMetadataSourceDialog = false },
+                    onDismissRequest = { detailsScreenState.setShowMetadataSourceDialog(false) },
                     onSelectOption = viewModel::selectMetadataSource,
                     onRemoveOption = viewModel::removeMetadataSourceBinding,
                     onSearchQueryChange = viewModel::updateMetadataSearchQuery,
@@ -1835,7 +1835,7 @@ private fun DetailsScreenContent(
                     },
                     onMigrateResult = { candidate ->
                         viewModel.bindReadingCandidateToTracking(candidate) {
-                            showReadingSourceDialog = false
+                            detailsScreenState.setShowReadingSourceDialog(false)
                         }
                     },
                     onDeleteProjection = { option ->
@@ -1844,7 +1844,7 @@ private fun DetailsScreenContent(
                     onActivateProjection = { option ->
                         option.targetMangaId?.let(viewModel::selectActiveLocalSource)
                     },
-                    onDismissRequest = { showReadingSourceDialog = false },
+                    onDismissRequest = { detailsScreenState.setShowReadingSourceDialog(false) },
                 )
             }
 
@@ -1852,9 +1852,9 @@ private fun DetailsScreenContent(
                 TrackingCommentsSheet(
                     threads = supplementalCommentThreads,
                     externalUrl = supplementalCommentsUrl,
-                    onDismissRequest = { showCommentsDialog = false },
+                    onDismissRequest = { detailsScreenState.setShowCommentsDialog(false) },
                     onOpenExternal = { url ->
-                        showCommentsDialog = false
+                        detailsScreenState.setShowCommentsDialog(false)
                         handleActionClick(DetailsAction.OpenWebUrl(url))
                     },
                 )
@@ -1864,9 +1864,9 @@ private fun DetailsScreenContent(
                 TrackingReviewsSheet(
                     reviews = supplementalReviews,
                     externalUrl = supplementalReviewsUrl,
-                    onDismissRequest = { showReviewsDialog = false },
+                    onDismissRequest = { detailsScreenState.setShowReviewsDialog(false) },
                     onOpenExternal = { url ->
-                        showReviewsDialog = false
+                        detailsScreenState.setShowReviewsDialog(false)
                         handleActionClick(DetailsAction.OpenWebUrl(url))
                     },
                 )
@@ -1875,9 +1875,9 @@ private fun DetailsScreenContent(
             selectedSupplementalRelationItem?.let { item ->
                 TrackingRelationItemSheet(
                     item = item,
-                    onDismissRequest = { selectedSupplementalRelationItem = null },
+                    onDismissRequest = { detailsScreenState.setSelectedSupplementalRelationItem(null) },
                     onOpenExternal = { url ->
-                        selectedSupplementalRelationItem = null
+                        detailsScreenState.setSelectedSupplementalRelationItem(null)
                         handleActionClick(DetailsAction.OpenWebUrl(url))
                     },
                 )
