@@ -7,23 +7,23 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
 class JsonContentSourceResolver @Inject constructor(
-	private val jsonSourceManager: JsonSourceManager,
+    private val jsonSourceManager: JsonSourceManager,
 ) : ContentSourceResolver {
 
-	override fun supports(source: ContentSource): Boolean {
-		return source !is JsonContentSource && source.name.startsWith(JSON_PREFIX)
-	}
+    override fun supports(source: ContentSource): Boolean {
+        return source !is JsonContentSource && source.name.startsWith(JSON_PREFIX)
+    }
 
-	override fun resolve(source: ContentSource): ContentSource? {
-		if (!supports(source)) {
-			return null
-		}
-		return runBlocking {
-			jsonSourceManager.getById(source.name)
-		}?.let(::JsonContentSource)
-	}
+    override fun resolve(source: ContentSource): ContentSource? {
+        if (!supports(source)) {
+            return null
+        }
+        return runBlocking {
+            jsonSourceManager.getById(source.name)
+        }?.let(::JsonContentSource)
+    }
 
-	private companion object {
-		private const val JSON_PREFIX = "JSON_"
-	}
+    private companion object {
+        private const val JSON_PREFIX = "JSON_"
+    }
 }

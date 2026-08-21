@@ -15,17 +15,17 @@ package org.skepsun.kototoro.core.parser.rule
  * @property combinedRules Optional list of rules to combine (for && operator - execute all and merge results)
  */
 data class CompiledRule(
-	val type: RuleType,
-	val selector: String,
-	val attribute: String? = null,
-	val regex: Regex? = null,
-	val modifiers: List<RuleModifier> = emptyList(),
-	val chainedRules: List<CompiledRule>? = null,
-	val elementIndex: Int? = null,
-	val indexSpec: IndexSpec? = null,
-	val regexReplacement: Regex? = null,
-	val alternativeRules: List<CompiledRule>? = null,
-	val combinedRules: List<CompiledRule>? = null,
+    val type: RuleType,
+    val selector: String,
+    val attribute: String? = null,
+    val regex: Regex? = null,
+    val modifiers: List<RuleModifier> = emptyList(),
+    val chainedRules: List<CompiledRule>? = null,
+    val elementIndex: Int? = null,
+    val indexSpec: IndexSpec? = null,
+    val regexReplacement: Regex? = null,
+    val alternativeRules: List<CompiledRule>? = null,
+    val combinedRules: List<CompiledRule>? = null,
 )
 
 /**
@@ -33,29 +33,29 @@ data class CompiledRule(
  * Supports single index, multiple indexes, or range
  */
 sealed class IndexSpec {
-	/** Single index: div[0] or div.-1 */
-	data class Single(val index: Int) : IndexSpec()
-	
-	/** Multiple indexes: div[0,2,4] */
-	data class Multiple(val indexes: List<Int>) : IndexSpec()
-	
-	/** Range with optional step: div[0:5] or div[0:10:2] */
-	data class Range(val start: Int, val end: Int, val step: Int = 1) : IndexSpec()
-	
-	/** Exclude indexes: div[!0,1] */
-	data class Exclude(val indexes: List<Int>) : IndexSpec()
+    /** Single index: div[0] or div.-1 */
+    data class Single(val index: Int) : IndexSpec()
+    
+    /** Multiple indexes: div[0,2,4] */
+    data class Multiple(val indexes: List<Int>) : IndexSpec()
+    
+    /** Range with optional step: div[0:5] or div[0:10:2] */
+    data class Range(val start: Int, val end: Int, val step: Int = 1) : IndexSpec()
+    
+    /** Exclude indexes: div[!0,1] */
+    data class Exclude(val indexes: List<Int>) : IndexSpec()
 }
 
 /**
  * Represents a modifier that can be applied to rule results
  */
 sealed class RuleModifier {
-	data class Get(val index: Int) : RuleModifier()
-	object First : RuleModifier()
-	object Last : RuleModifier()
-	object Size : RuleModifier()
-	data class Replace(val old: String, val new: String) : RuleModifier()
-	data class Substring(val start: Int, val end: Int?) : RuleModifier()
-	object AbsoluteURL : RuleModifier()
-	object RelativeURL : RuleModifier()
+    data class Get(val index: Int) : RuleModifier()
+    object First : RuleModifier()
+    object Last : RuleModifier()
+    object Size : RuleModifier()
+    data class Replace(val old: String, val new: String) : RuleModifier()
+    data class Substring(val start: Int, val end: Int?) : RuleModifier()
+    object AbsoluteURL : RuleModifier()
+    object RelativeURL : RuleModifier()
 }

@@ -11,44 +11,44 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 
 internal interface TVBoxSpiderRuntime {
 
-	val id: String
+    val id: String
 
-	fun describeCapability(config: TVBoxStoredConfig): String
+    fun describeCapability(config: TVBoxStoredConfig): String
 
-	fun describeUnavailability(config: TVBoxStoredConfig): String?
+    fun describeUnavailability(config: TVBoxStoredConfig): String?
 
-	suspend fun getList(
-		offset: Int,
-		order: SortOrder?,
-		filter: ContentListFilter?,
-	): List<Content>?
+    suspend fun getList(
+        offset: Int,
+        order: SortOrder?,
+        filter: ContentListFilter?,
+    ): List<Content>?
 
-	suspend fun getDetails(manga: Content, forceRefresh: Boolean = false): Content?
+    suspend fun getDetails(manga: Content, forceRefresh: Boolean = false): Content?
 
-	suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage>?
+    suspend fun getPages(chapter: ContentChapter, nextChapterUrl: String?): List<ContentPage>?
 
-	suspend fun getFilterOptions(): ContentListFilterOptions?
+    suspend fun getFilterOptions(): ContentListFilterOptions?
 
-	suspend fun executeAction(action: String): TVBoxActionResult?
+    suspend fun executeAction(action: String): TVBoxActionResult?
 
-	fun getRequestHeaders(): Map<String, String>?
+    fun getRequestHeaders(): Map<String, String>?
 }
 
 internal data class TVBoxActionResult(
-	val message: String?,
+    val message: String?,
 ) {
-	companion object {
-		fun parse(raw: String): TVBoxActionResult? {
-			if (raw.isBlank()) return null
-			val root = runCatching { JSONObject(raw) }.getOrNull()
-			val message = if (root == null) {
-				raw
-			} else {
-				sequenceOf("msg", "message", "error")
-					.map { root.optString(it).trim() }
-					.firstOrNull { it.isNotBlank() }
-			}
-			return TVBoxActionResult(message = message?.trim()?.takeIf { it.isNotBlank() })
-		}
-	}
+    companion object {
+        fun parse(raw: String): TVBoxActionResult? {
+            if (raw.isBlank()) return null
+            val root = runCatching { JSONObject(raw) }.getOrNull()
+            val message = if (root == null) {
+                raw
+            } else {
+                sequenceOf("msg", "message", "error")
+                    .map { root.optString(it).trim() }
+                    .firstOrNull { it.isNotBlank() }
+            }
+            return TVBoxActionResult(message = message?.trim()?.takeIf { it.isNotBlank() })
+        }
+    }
 }

@@ -14,95 +14,95 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import javax.inject.Inject
 
 class MirrorSwitcher @Inject constructor(
-	private val settings: AppSettings,
-	@ContentHttpClient private val okHttpClient: OkHttpClient,
+    private val settings: AppSettings,
+    @ContentHttpClient private val okHttpClient: OkHttpClient,
 ) {
 
-	private val blacklist = mutableSetOf<String>()
-	private val mutex: Mutex = Mutex()
+    private val blacklist = mutableSetOf<String>()
+    private val mutex: Mutex = Mutex()
 
-	val isEnabled: Boolean
-		get() = settings.isMirrorSwitchingEnabled
+    val isEnabled: Boolean
+        get() = settings.isMirrorSwitchingEnabled
 
-	suspend fun <T : Any> trySwitchMirror(repository: ParserContentRepository, loader: suspend () -> T?): T? {
-		val source = repository.source
-		if (!isEnabled || source.name in blacklist) {
-			return null
-		}
-		val availableMirrors = repository.domains
-		val currentHost = repository.domain
-		if (availableMirrors.size <= 1 || currentHost !in availableMirrors) {
-			return null
-		}
-		mutex.withLock {
-			if (source.name in blacklist) {
-				return null
-			}
-			logd { "Looking for mirrors for ${source}..." }
-			findRedirect(repository)?.let { mirror ->
-				repository.domain = mirror
-				runCatchingCancellable {
-					loader()?.takeIfValid()
-				}.getOrNull()?.let {
-					logd { "Found redirect for $source: $mirror" }
-					return it
-				}
-			}
-			for (mirror in availableMirrors) {
-				repository.domain = mirror
-				runCatchingCancellable {
-					loader()?.takeIfValid()
-				}.getOrNull()?.let {
-					logd { "Found mirror for $source: $mirror" }
-					return it
-				}
-			}
-			repository.domain = currentHost // rollback
-			blacklist.add(source.name)
-			logd { "$source blacklisted" }
-			return null
-		}
-	}
+    suspend fun <T : Any> trySwitchMirror(repository: ParserContentRepository, loader: suspend () -> T?): T? {
+        val source = repository.source
+        if (!isEnabled || source.name in blacklist) {
+            return null
+        }
+        val availableMirrors = repository.domains
+        val currentHost = repository.domain
+        if (availableMirrors.size <= 1 || currentHost !in availableMirrors) {
+            return null
+        }
+        mutex.withLock {
+            if (source.name in blacklist) {
+                return null
+            }
+            logd { "Looking for mirrors for ${source}..." }
+            findRedirect(repository)?.let { mirror ->
+                repository.domain = mirror
+                runCatchingCancellable {
+                    loader()?.takeIfValid()
+                }.getOrNull()?.let {
+                    logd { "Found redirect for $source: $mirror" }
+                    return it
+                }
+            }
+            for (mirror in availableMirrors) {
+                repository.domain = mirror
+                runCatchingCancellable {
+                    loader()?.takeIfValid()
+                }.getOrNull()?.let {
+                    logd { "Found mirror for $source: $mirror" }
+                    return it
+                }
+            }
+            repository.domain = currentHost // rollback
+            blacklist.add(source.name)
+            logd { "$source blacklisted" }
+            return null
+        }
+    }
 
-	suspend fun findRedirect(repository: ParserContentRepository): String? {
-		if (!isEnabled) {
-			return null
-		}
-		val currentHost = repository.domain
-		val newHost = okHttpClient.newCall(
-			Request.Builder()
-				.url("https://$currentHost")
-				.head()
-				.build(),
-		).await().use {
-			if (it.isSuccessful) {
-				it.request.url.host
-			} else {
-				null
-			}
-		}
-		return if (newHost != currentHost) {
-			newHost
-		} else {
-			null
-		}
-	}
+    suspend fun findRedirect(repository: ParserContentRepository): String? {
+        if (!isEnabled) {
+            return null
+        }
+        val currentHost = repository.domain
+        val newHost = okHttpClient.newCall(
+            Request.Builder()
+                .url("https://$currentHost")
+                .head()
+                .build(),
+        ).await().use {
+            if (it.isSuccessful) {
+                it.request.url.host
+            } else {
+                null
+            }
+        }
+        return if (newHost != currentHost) {
+            newHost
+        } else {
+            null
+        }
+    }
 
-	private fun <T : Any> T.takeIfValid() = takeIf {
-		when (it) {
-			is Collection<*> -> it.isNotEmpty()
-			else -> true
-		}
-	}
+    private fun <T : Any> T.takeIfValid() = takeIf {
+        when (it) {
+            is Collection<*> -> it.isNotEmpty()
+            else -> true
+        }
+    }
 
-	private companion object {
+    private companion object {
 
-		const val TAG = "MirrorSwitcher"
+        const val TAG = "MirrorSwitcher"
 
-		inline fun logd(message: () -> String) {
-			if (BuildConfig.DEBUG) {
-				Log.d(TAG, message())
-			}
-		}
-	}
+        inline fun logd(message: () -> String) {
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, message())
+            }
+        }
+    }
 }

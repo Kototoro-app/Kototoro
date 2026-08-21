@@ -10,21 +10,21 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
 class BuiltinContentRepositoryProvider @Inject constructor(
-	private val localMangaRepository: LocalMangaRepository,
-	private val localNovelRepository: LocalNovelRepository,
+    private val localMangaRepository: LocalMangaRepository,
+    private val localNovelRepository: LocalNovelRepository,
 ) : ContentRepositoryProvider {
 
-	override fun supports(source: ContentSource): Boolean {
-		return source == LocalMangaSource || source == LocalNovelSource || source == LocalVideoSource || source == UnknownContentSource
-	}
+    override fun supports(source: ContentSource): Boolean {
+        return source == LocalMangaSource || source == LocalNovelSource || source == LocalVideoSource || source == UnknownContentSource
+    }
 
-	override fun create(source: ContentSource): ContentRepository? {
-		return when (source) {
-			LocalMangaSource -> localMangaRepository
-			LocalNovelSource -> localNovelRepository
-			LocalVideoSource -> localMangaRepository
-			UnknownContentSource -> EmptyContentRepository(source)
-			else -> null
-		}
-	}
+    override fun create(source: ContentSource): ContentRepository? {
+        return when (source) {
+            LocalMangaSource -> localMangaRepository
+            LocalNovelSource -> localNovelRepository
+            LocalVideoSource -> localMangaRepository
+            UnknownContentSource -> EmptyContentRepository(source)
+            else -> null
+        }
+    }
 }

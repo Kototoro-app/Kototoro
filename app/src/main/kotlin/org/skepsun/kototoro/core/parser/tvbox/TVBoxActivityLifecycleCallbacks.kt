@@ -10,15 +10,15 @@ import javax.inject.Singleton
 @Singleton
 class TVBoxActivityLifecycleCallbacks @Inject constructor() : DefaultActivityLifecycleCallbacks {
 
-	override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-		AppManager.getInstance().addActivity(activity)
-	}
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+        AppManager.getInstance().addActivity(activity)
+    }
 
-	override fun onActivityResumed(activity: Activity) {
-		AppManager.getInstance().setCurrentActivity(activity)
-	}
+    override fun onActivityResumed(activity: Activity) {
+        AppManager.getInstance().setCurrentActivity(activity)
+    }
 
-	override fun onActivityDestroyed(activity: Activity) {
-		AppManager.getInstance().finishActivity(activity)
-	}
+    override fun onActivityDestroyed(activity: Activity) {
+        AppManager.getInstance().finishActivity(activity)
+    }
 }

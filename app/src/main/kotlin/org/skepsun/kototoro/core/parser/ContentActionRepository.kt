@@ -4,13 +4,13 @@ import org.skepsun.kototoro.parsers.model.Content
 
 interface ContentActionRepository {
 
-	fun isAction(content: Content): Boolean
+    fun isAction(content: Content): Boolean
 
-	fun requiresActivityHost(content: Content): Boolean = false
+    fun requiresActivityHost(content: Content): Boolean = false
 
-	suspend fun executeAction(content: Content): ContentActionResult?
+    suspend fun executeAction(content: Content): ContentActionResult?
 }
 
 data class ContentActionResult(
-	val message: String?,
+    val message: String?,
 )

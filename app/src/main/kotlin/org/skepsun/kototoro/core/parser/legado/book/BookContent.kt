@@ -268,13 +268,13 @@ object BookContent {
             }
         }
         
-	        if (pages.isNotEmpty()) {
-	            android.util.Log.d(TAG, "[Content] Page[0] URL: ${pages[0].url}")
-	        } else if (isContent) {
-	            detectApiErrorMessage(content)?.let { message ->
-	                throw ContentUnavailableException(message)
-	            }
-	        }
+            if (pages.isNotEmpty()) {
+                android.util.Log.d(TAG, "[Content] Page[0] URL: ${pages[0].url}")
+            } else if (isContent) {
+                detectApiErrorMessage(content)?.let { message ->
+                    throw ContentUnavailableException(message)
+                }
+            }
 
         val nextPageUrls = rule.nextContentUrl
             ?.let { analyzeRule.getStringList(it, isUrl = true) }
@@ -461,35 +461,35 @@ object BookContent {
                (trimmed.contains(".") && !trimmed.contains(" ") && !trimmed.contains("\n"))
     }
 
-	    private fun resolveUrl(baseUrl: String, relativeUrl: String): String {
-	        if (relativeUrl.isBlank() || relativeUrl.startsWith("http")) return relativeUrl
-	        return try {
-	            java.net.URL(java.net.URL(baseUrl), relativeUrl).toString()
-	        } catch (e: Exception) {
-	            relativeUrl
-	        }
-	    }
+        private fun resolveUrl(baseUrl: String, relativeUrl: String): String {
+            if (relativeUrl.isBlank() || relativeUrl.startsWith("http")) return relativeUrl
+            return try {
+                java.net.URL(java.net.URL(baseUrl), relativeUrl).toString()
+            } catch (e: Exception) {
+                relativeUrl
+            }
+        }
 
-	    private fun detectApiErrorMessage(content: String): String? {
-	        val trimmed = content.trim()
-	        if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
-	        val obj = runCatching { JSONObject(trimmed) }.getOrNull() ?: return null
+        private fun detectApiErrorMessage(content: String): String? {
+            val trimmed = content.trim()
+            if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
+            val obj = runCatching { JSONObject(trimmed) }.getOrNull() ?: return null
 
-	        val codeValue = obj.opt("code")?.toString()?.trim().orEmpty()
-	        val statusValue = obj.opt("status")?.toString()?.trim().orEmpty()
-	        val message = (obj.optString("message").ifBlank { obj.optString("msg") }).trim()
-	        if (message.isBlank()) return null
+            val codeValue = obj.opt("code")?.toString()?.trim().orEmpty()
+            val statusValue = obj.opt("status")?.toString()?.trim().orEmpty()
+            val message = (obj.optString("message").ifBlank { obj.optString("msg") }).trim()
+            if (message.isBlank()) return null
 
-	        // 常见约定：
-	        // - code: 0 / success
-	        // - status: 0 / 200 / ok
-	        val isSuccess = codeValue == "0" ||
-	            codeValue.equals("success", ignoreCase = true) ||
-	            statusValue == "0" ||
-	            statusValue == "200" ||
-	            statusValue.equals("ok", ignoreCase = true)
-	        return if (isSuccess) null else message
-	    }
+            // 常见约定：
+            // - code: 0 / success
+            // - status: 0 / 200 / ok
+            val isSuccess = codeValue == "0" ||
+                codeValue.equals("success", ignoreCase = true) ||
+                statusValue == "0" ||
+                statusValue == "200" ||
+                statusValue.equals("ok", ignoreCase = true)
+            return if (isSuccess) null else message
+        }
 
         private fun splitUrlAndHeaders(raw: String): Pair<String, Map<String, String>> {
             val splitMatch = optionsSplitRegex.find(raw)

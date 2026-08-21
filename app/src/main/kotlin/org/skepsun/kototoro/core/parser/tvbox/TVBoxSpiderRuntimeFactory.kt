@@ -8,31 +8,31 @@ import org.skepsun.kototoro.video.data.VideoLocalCacheProxy
 
 internal object TVBoxSpiderRuntimeFactory {
 
-	fun create(
-		source: JsonContentSource,
-		config: TVBoxStoredConfig,
-		context: Context,
-		httpClient: LegadoHttpClient,
-		videoLocalCacheProxy: VideoLocalCacheProxy,
-	): TVBoxSpiderRuntime? {
-		return when {
-			config.site.type == 4 -> TVBoxQuickJsSpiderRuntime(
-				source = source,
-				config = config,
-				context = context,
-				httpClient = httpClient,
-				videoLocalCacheProxy = videoLocalCacheProxy,
-			)
+    fun create(
+        source: JsonContentSource,
+        config: TVBoxStoredConfig,
+        context: Context,
+        httpClient: LegadoHttpClient,
+        videoLocalCacheProxy: VideoLocalCacheProxy,
+    ): TVBoxSpiderRuntime? {
+        return when {
+            config.site.type == 4 -> TVBoxQuickJsSpiderRuntime(
+                source = source,
+                config = config,
+                context = context,
+                httpClient = httpClient,
+                videoLocalCacheProxy = videoLocalCacheProxy,
+            )
 
-			config.site.type == 3 || config.site.api.startsWith("csp_", ignoreCase = true) -> TVBoxJarSpiderRuntime(
-				source = source,
-				config = config,
-				context = context,
-				httpClient = httpClient,
-				videoLocalCacheProxy = videoLocalCacheProxy,
-			)
+            config.site.type == 3 || config.site.api.startsWith("csp_", ignoreCase = true) -> TVBoxJarSpiderRuntime(
+                source = source,
+                config = config,
+                context = context,
+                httpClient = httpClient,
+                videoLocalCacheProxy = videoLocalCacheProxy,
+            )
 
-			else -> null
-		}
-	}
+            else -> null
+        }
+    }
 }
