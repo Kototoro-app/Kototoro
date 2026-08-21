@@ -10,17 +10,17 @@ import javax.inject.Inject
  * New enhancement work must target [ComposeReaderImagePipeline], not this adapter.
  */
 class ComposeReaderPageLoader @Inject constructor(
-	private val pageLoader: PageLoader,
+    private val pageLoader: PageLoader,
 ) {
 
-	val imageLoader
-		get() = pageLoader.imageLoader
+    val imageLoader
+        get() = pageLoader.imageLoader
 
-	suspend fun load(page: ReaderPage, force: Boolean = false): Uri {
-		return pageLoader.loadPage(page.toContentPage(), force)
-	}
+    suspend fun load(page: ReaderPage, force: Boolean = false): Uri {
+        return pageLoader.loadPage(page.toContentPage(), force)
+    }
 
-	fun prefetch(pages: List<ReaderPage>) {
-		pageLoader.prefetch(pages)
-	}
+    fun prefetch(pages: List<ReaderPage>) {
+        pageLoader.prefetch(pages)
+    }
 }

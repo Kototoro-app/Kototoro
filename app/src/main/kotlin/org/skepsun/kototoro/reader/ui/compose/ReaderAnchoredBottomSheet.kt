@@ -6,13 +6,13 @@ import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
 
 @Composable
 internal fun ReaderAnchoredBottomSheet(
-	onDismissRequest: () -> Unit,
-	modifier: Modifier = Modifier,
-	content: @Composable (dragModifier: Modifier) -> Unit,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable (dragModifier: Modifier) -> Unit,
 ) {
-	StableAnchoredBottomSheet(
-		onDismissRequest = onDismissRequest,
-		modifier = modifier,
-		content = content,
-	)
+    StableAnchoredBottomSheet(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        content = content,
+    )
 }

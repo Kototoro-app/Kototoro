@@ -35,94 +35,94 @@ import org.skepsun.kototoro.reader.ui.compose.whenReaderAnimationsEnabled
 
 @Composable
 internal fun NovelReaderOverlay(
-	loading: Boolean,
-	message: NovelReaderMessage?,
-	controlsVisible: Boolean,
-	animationsEnabled: Boolean = true,
-	onMessageExpired: (Long) -> Unit,
-	ttsVisible: Boolean,
-	ttsState: TtsState,
-	onTtsPrevious: () -> Unit,
-	onTtsPlayPause: () -> Unit,
-	onTtsNext: () -> Unit,
-	onTtsVoice: () -> Unit,
-	onTtsClose: () -> Unit,
+    loading: Boolean,
+    message: NovelReaderMessage?,
+    controlsVisible: Boolean,
+    animationsEnabled: Boolean = true,
+    onMessageExpired: (Long) -> Unit,
+    ttsVisible: Boolean,
+    ttsState: TtsState,
+    onTtsPrevious: () -> Unit,
+    onTtsPlayPause: () -> Unit,
+    onTtsNext: () -> Unit,
+    onTtsVoice: () -> Unit,
+    onTtsClose: () -> Unit,
 ) {
-	var displayedMessage by remember { mutableStateOf(message) }
-	LaunchedEffect(message) {
-		if (message != null) displayedMessage = message
-	}
-	Box(modifier = Modifier.fillMaxSize()) {
-		AnimatedVisibility(
-			visible = loading,
-			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
-			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
-			modifier = Modifier.align(Alignment.Center),
-		) {
-			Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-				Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
-					KototoroLoadingIndicator()
-					Text(
-						stringResource(R.string.loading_),
-						style = MaterialTheme.typography.titleMedium,
-						modifier = Modifier.padding(top = 10.dp),
-					)
-				}
-			}
-		}
-		LaunchedEffect(message?.id) {
-			val current = message ?: return@LaunchedEffect
-			delay(current.durationMillis)
-			onMessageExpired(current.id)
-		}
-		AnimatedVisibility(
-			visible = message != null,
-			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
-			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
-			modifier = Modifier
-				.align(Alignment.BottomCenter)
-				.navigationBarsPadding()
-				.padding(horizontal = 20.dp)
-				.padding(bottom = if (controlsVisible) 76.dp else 20.dp),
-		) {
-			Surface(
-				shape = MaterialTheme.shapes.small,
-				color = Color.Black.copy(alpha = 0.82f),
-				contentColor = Color.White,
-			) {
-				Text(displayedMessage?.text.orEmpty(), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
-			}
-		}
-		AnimatedVisibility(
-			visible = ttsVisible,
-			enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
-			exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
-			modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
-		) {
-			Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
-				Row(
-					horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
-					verticalAlignment = Alignment.CenterVertically,
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-				) {
-					TtsButton(R.drawable.ic_prev, stringResource(R.string.prev_page), onTtsPrevious)
-					TtsButton(
-						if (ttsState == TtsState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
-						stringResource(if (ttsState == TtsState.PLAYING) R.string.pause else R.string.play),
-						onTtsPlayPause,
-					)
-					TtsButton(R.drawable.ic_next, stringResource(R.string.next), onTtsNext)
-					TtsButton(R.drawable.ic_voice_input, stringResource(R.string.tts_settings_title), onTtsVoice)
-					TtsButton(R.drawable.ic_tts_close, stringResource(R.string.close), onTtsClose)
-				}
-			}
-		}
-	}
+    var displayedMessage by remember { mutableStateOf(message) }
+    LaunchedEffect(message) {
+        if (message != null) displayedMessage = message
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = loading,
+            enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+            exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(20.dp)) {
+                    KototoroLoadingIndicator()
+                    Text(
+                        stringResource(R.string.loading_),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 10.dp),
+                    )
+                }
+            }
+        }
+        LaunchedEffect(message?.id) {
+            val current = message ?: return@LaunchedEffect
+            delay(current.durationMillis)
+            onMessageExpired(current.id)
+        }
+        AnimatedVisibility(
+            visible = message != null,
+            enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+            exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = if (controlsVisible) 76.dp else 20.dp),
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = Color.Black.copy(alpha = 0.82f),
+                contentColor = Color.White,
+            ) {
+                Text(displayedMessage?.text.orEmpty(), modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+            }
+        }
+        AnimatedVisibility(
+            visible = ttsVisible,
+            enter = fadeIn().whenReaderAnimationsEnabled(animationsEnabled),
+            exit = fadeOut().whenReaderAnimationsEnabled(animationsEnabled),
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
+        ) {
+            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
+                Row(
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    TtsButton(R.drawable.ic_prev, stringResource(R.string.prev_page), onTtsPrevious)
+                    TtsButton(
+                        if (ttsState == TtsState.PLAYING) R.drawable.ic_pause else R.drawable.ic_play,
+                        stringResource(if (ttsState == TtsState.PLAYING) R.string.pause else R.string.play),
+                        onTtsPlayPause,
+                    )
+                    TtsButton(R.drawable.ic_next, stringResource(R.string.next), onTtsNext)
+                    TtsButton(R.drawable.ic_voice_input, stringResource(R.string.tts_settings_title), onTtsVoice)
+                    TtsButton(R.drawable.ic_tts_close, stringResource(R.string.close), onTtsClose)
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun TtsButton(icon: Int, description: String, onClick: () -> Unit) {
-	IconButton(onClick = onClick) {
-		Icon(painterResource(icon), contentDescription = description)
-	}
+    IconButton(onClick = onClick) {
+        Icon(painterResource(icon), contentDescription = description)
+    }
 }

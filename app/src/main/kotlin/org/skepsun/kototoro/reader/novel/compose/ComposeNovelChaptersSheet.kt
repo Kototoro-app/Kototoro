@@ -42,244 +42,244 @@ import org.skepsun.kototoro.core.model.LocalNovelSource
 import org.skepsun.kototoro.parsers.model.ContentChapter
 
 internal sealed interface NovelChapterListItem {
-	val key: String
-	data class Header(val title: String, val occurrence: Int) : NovelChapterListItem {
-		override val key = "header:$title:$occurrence"
-	}
-	data class Chapter(val chapter: ContentChapter, val originalIndex: Int) : NovelChapterListItem {
-		override val key = "chapter:${chapter.id}:$originalIndex"
-	}
+    val key: String
+    data class Header(val title: String, val occurrence: Int) : NovelChapterListItem {
+        override val key = "header:$title:$occurrence"
+    }
+    data class Chapter(val chapter: ContentChapter, val originalIndex: Int) : NovelChapterListItem {
+        override val key = "chapter:${chapter.id}:$originalIndex"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposeNovelChaptersSheet(
-	chapters: List<ContentChapter>,
-	currentIndex: Int,
-	onDismiss: () -> Unit,
-	onChapterSelected: (Int) -> Unit,
+    chapters: List<ContentChapter>,
+    currentIndex: Int,
+    onDismiss: () -> Unit,
+    onChapterSelected: (Int) -> Unit,
 ) {
-	val context = LocalContext.current
-	var reversed by remember { mutableStateOf(false) }
-	var query by remember { mutableStateOf("") }
-	val items = remember(chapters, reversed, query, context) {
-		buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
-	}
-	val currentPosition = items.indexOfFirst {
-		it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
-	}.coerceAtLeast(0)
-	val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition)
-	LaunchedEffect(reversed, query) {
-		if (query.isBlank()) listState.scrollToItem(currentPosition)
-	}
-	ModalBottomSheet(
-		onDismissRequest = onDismiss,
-		modifier = Modifier.fillMaxHeight(),
-	) {
-		BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-				val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
-				Column(
-					verticalArrangement = Arrangement.spacedBy(10.dp),
-					modifier = Modifier
-						.widthIn(max = contentWidth)
-						.align(Alignment.TopCenter)
-						.padding(horizontal = 16.dp),
-				) {
-						Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-						Column(modifier = Modifier.weight(1f)) {
-							Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge)
-							Text(
-								stringResource(R.string.novel_chapters_count, chapters.size),
-								style = MaterialTheme.typography.bodySmall,
-								color = MaterialTheme.colorScheme.onSurfaceVariant,
-							)
-						}
-						IconButton(onClick = { reversed = !reversed }) {
-							Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
-						}
-					}
-					OutlinedTextField(
-						value = query,
-						onValueChange = { query = it },
-						label = { Text(stringResource(R.string.search_chapters)) },
-						singleLine = true,
-						modifier = Modifier.fillMaxWidth(),
-					)
-					LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
-						items(items, key = NovelChapterListItem::key) { item ->
-							when (item) {
-								is NovelChapterListItem.Header -> {
-									Text(
-										item.title,
-										style = MaterialTheme.typography.titleSmall,
-										fontWeight = FontWeight.SemiBold,
-										color = MaterialTheme.colorScheme.primary,
-										modifier = Modifier
-											.fillMaxWidth()
-											.padding(horizontal = 16.dp, vertical = 10.dp),
-									)
-								}
-								is NovelChapterListItem.Chapter -> {
-									val selected = item.originalIndex == currentIndex
-									ListItem(
-										headlineContent = {
-											Text(
-												item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-												maxLines = 2,
-												overflow = TextOverflow.Ellipsis,
-												fontWeight = if (selected) {
-													FontWeight.SemiBold
-												} else {
-													FontWeight.Normal
-												},
-											)
-										},
-										leadingContent = if (selected) {
-											{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
-										} else {
-											null
-										},
-										colors = ListItemDefaults.colors(
-											containerColor = if (selected) {
-												MaterialTheme.colorScheme.secondaryContainer
-											} else {
-												MaterialTheme.colorScheme.surfaceContainerLow
-											},
-										),
-										modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
-									)
-									HorizontalDivider()
-								}
-							}
-						}
-					}
-				}
-		}
-	}
+    val context = LocalContext.current
+    var reversed by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val items = remember(chapters, reversed, query, context) {
+        buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
+    }
+    val currentPosition = items.indexOfFirst {
+        it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
+    }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition)
+    LaunchedEffect(reversed, query) {
+        if (query.isBlank()) listState.scrollToItem(currentPosition)
+    }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.fillMaxHeight(),
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val contentWidth = if (maxWidth >= 720.dp) 680.dp else maxWidth
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .widthIn(max = contentWidth)
+                        .align(Alignment.TopCenter)
+                        .padding(horizontal = 16.dp),
+                ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                stringResource(R.string.novel_chapters_count, chapters.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = { reversed = !reversed }) {
+                            Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
+                        }
+                    }
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        label = { Text(stringResource(R.string.search_chapters)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
+                        items(items, key = NovelChapterListItem::key) { item ->
+                            when (item) {
+                                is NovelChapterListItem.Header -> {
+                                    Text(
+                                        item.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    )
+                                }
+                                is NovelChapterListItem.Chapter -> {
+                                    val selected = item.originalIndex == currentIndex
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(
+                                                item.chapter.title ?: stringResource(R.string.unnamed_chapter),
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                fontWeight = if (selected) {
+                                                    FontWeight.SemiBold
+                                                } else {
+                                                    FontWeight.Normal
+                                                },
+                                            )
+                                        },
+                                        leadingContent = if (selected) {
+                                            { Icon(painterResource(R.drawable.ic_current_chapter), null) }
+                                        } else {
+                                            null
+                                        },
+                                        colors = ListItemDefaults.colors(
+                                            containerColor = if (selected) {
+                                                MaterialTheme.colorScheme.secondaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.surfaceContainerLow
+                                            },
+                                        ),
+                                        modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
+                                    )
+                                    HorizontalDivider()
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+    }
 }
 
 @Composable
 internal fun ComposeNovelChaptersPanel(
-	chapters: List<ContentChapter>,
-	currentIndex: Int,
-	onChapterSelected: (Int) -> Unit,
-	modifier: Modifier = Modifier,
+    chapters: List<ContentChapter>,
+    currentIndex: Int,
+    onChapterSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	val context = LocalContext.current
-	var reversed by remember { mutableStateOf(false) }
-	var query by remember { mutableStateOf("") }
-	val items = remember(chapters, reversed, query, context) {
-		buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
-	}
-	val currentPosition = items.indexOfFirst {
-		it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
-	}.coerceAtLeast(0)
-	val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition)
-	LaunchedEffect(reversed, query) {
-		if (query.isBlank()) listState.scrollToItem(currentPosition)
-	}
-	Column(
-		verticalArrangement = Arrangement.spacedBy(8.dp),
-		modifier = modifier
-			.fillMaxWidth()
-			.padding(horizontal = 12.dp, vertical = 10.dp),
-	) {
-		Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-			Column(modifier = Modifier.weight(1f)) {
-				Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleMedium)
-				Text(
-					stringResource(R.string.novel_chapters_count, chapters.size),
-					style = MaterialTheme.typography.bodySmall,
-					color = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
-			}
-			IconButton(onClick = { reversed = !reversed }) {
-				Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
-			}
-		}
-		OutlinedTextField(
-			value = query,
-			onValueChange = { query = it },
-			label = { Text(stringResource(R.string.search_chapters)) },
-			singleLine = true,
-			modifier = Modifier.fillMaxWidth(),
-		)
-		LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp)) {
-			items(items, key = NovelChapterListItem::key) { item ->
-				when (item) {
-					is NovelChapterListItem.Header -> Text(
-						item.title,
-						style = MaterialTheme.typography.titleSmall,
-						fontWeight = FontWeight.SemiBold,
-						color = MaterialTheme.colorScheme.primary,
-						modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-					)
-					is NovelChapterListItem.Chapter -> {
-						val selected = item.originalIndex == currentIndex
-						ListItem(
-							headlineContent = {
-								Text(
-									item.chapter.title ?: stringResource(R.string.unnamed_chapter),
-									maxLines = 2,
-									overflow = TextOverflow.Ellipsis,
-									fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-								)
-							},
-							leadingContent = if (selected) {
-								{ Icon(painterResource(R.drawable.ic_current_chapter), null) }
-							} else {
-								null
-							},
-							colors = ListItemDefaults.colors(
-								containerColor = if (selected) {
-									MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-								} else {
-									androidx.compose.ui.graphics.Color.Transparent
-								},
-							),
-							modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
-						)
-						HorizontalDivider()
-					}
-				}
-			}
-		}
-	}
+    val context = LocalContext.current
+    var reversed by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    val items = remember(chapters, reversed, query, context) {
+        buildChapterItems(chapters, reversed, query) { context.getString(R.string.volume_, it) }
+    }
+    val currentPosition = items.indexOfFirst {
+        it is NovelChapterListItem.Chapter && it.originalIndex == currentIndex
+    }.coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPosition)
+    LaunchedEffect(reversed, query) {
+        if (query.isBlank()) listState.scrollToItem(currentPosition)
+    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.chapters), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.novel_chapters_count, chapters.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            IconButton(onClick = { reversed = !reversed }) {
+                Icon(painterResource(R.drawable.ic_sort_desc), stringResource(R.string.reverse_order))
+            }
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            label = { Text(stringResource(R.string.search_chapters)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 330.dp)) {
+            items(items, key = NovelChapterListItem::key) { item ->
+                when (item) {
+                    is NovelChapterListItem.Header -> Text(
+                        item.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                    is NovelChapterListItem.Chapter -> {
+                        val selected = item.originalIndex == currentIndex
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    item.chapter.title ?: stringResource(R.string.unnamed_chapter),
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            },
+                            leadingContent = if (selected) {
+                                { Icon(painterResource(R.drawable.ic_current_chapter), null) }
+                            } else {
+                                null
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = if (selected) {
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                } else {
+                                    androidx.compose.ui.graphics.Color.Transparent
+                                },
+                            ),
+                            modifier = Modifier.clickable { onChapterSelected(item.originalIndex) },
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        }
+    }
 }
 
 internal fun buildChapterItems(
-	chapters: List<ContentChapter>,
-	reversed: Boolean,
-	query: String,
-	volumeTitle: (Int) -> String = { "Volume $it" },
+    chapters: List<ContentChapter>,
+    reversed: Boolean,
+    query: String,
+    volumeTitle: (Int) -> String = { "Volume $it" },
 ): List<NovelChapterListItem> {
-	val indexed = chapters.withIndex().let { if (reversed) it.reversed() else it }
-	val filtered = indexed.filter { (_, chapter) ->
-		query.isBlank() || listOf(chapter.title, chapter.branch, chapter.scanlator)
-			.any { it?.contains(query, ignoreCase = true) == true }
-	}
-	val result = mutableListOf<NovelChapterListItem>()
-	var previousGroup: String? = null
-	var previousVolume: Int? = null
-	var headerOccurrence = 0
-	filtered.forEach { (index, chapter) ->
-		val group = chapter.branch?.takeIf(String::isNotBlank)
-			?: chapter.scanlator?.takeIf { it.isNotBlank() && chapter.source == LocalNovelSource }
-			.orEmpty()
-		val groupChanged = group != previousGroup
-		if (groupChanged) {
-			if (group.isNotEmpty()) {
-				result += NovelChapterListItem.Header(group, headerOccurrence++)
-			}
-			previousVolume = null
-		}
-		val volume = chapter.volume.takeIf { it > 0 }
-		if (volume != null && volume != previousVolume) {
-			result += NovelChapterListItem.Header(volumeTitle(volume), headerOccurrence++)
-		}
-		result += NovelChapterListItem.Chapter(chapter, index)
-		previousGroup = group
-		previousVolume = volume
-	}
-	return result
+    val indexed = chapters.withIndex().let { if (reversed) it.reversed() else it }
+    val filtered = indexed.filter { (_, chapter) ->
+        query.isBlank() || listOf(chapter.title, chapter.branch, chapter.scanlator)
+            .any { it?.contains(query, ignoreCase = true) == true }
+    }
+    val result = mutableListOf<NovelChapterListItem>()
+    var previousGroup: String? = null
+    var previousVolume: Int? = null
+    var headerOccurrence = 0
+    filtered.forEach { (index, chapter) ->
+        val group = chapter.branch?.takeIf(String::isNotBlank)
+            ?: chapter.scanlator?.takeIf { it.isNotBlank() && chapter.source == LocalNovelSource }
+            .orEmpty()
+        val groupChanged = group != previousGroup
+        if (groupChanged) {
+            if (group.isNotEmpty()) {
+                result += NovelChapterListItem.Header(group, headerOccurrence++)
+            }
+            previousVolume = null
+        }
+        val volume = chapter.volume.takeIf { it > 0 }
+        if (volume != null && volume != previousVolume) {
+            result += NovelChapterListItem.Header(volumeTitle(volume), headerOccurrence++)
+        }
+        result += NovelChapterListItem.Chapter(chapter, index)
+        previousGroup = group
+        previousVolume = volume
+    }
+    return result
 }

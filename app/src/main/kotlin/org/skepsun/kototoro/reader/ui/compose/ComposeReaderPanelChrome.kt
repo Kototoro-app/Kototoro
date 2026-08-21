@@ -16,37 +16,37 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun ReaderPanelDragHandle(
-	onDismiss: () -> Unit,
-	modifier: Modifier = Modifier,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	Box(
-		contentAlignment = Alignment.Center,
-		modifier = modifier
-			.fillMaxWidth()
-			.height(32.dp)
-			.pointerInput(onDismiss) {
-				var dragDistance = 0f
-				detectVerticalDragGestures(
-					onVerticalDrag = { change, dragAmount ->
-						if (dragAmount > 0f) {
-							dragDistance += dragAmount
-							change.consume()
-						}
-					},
-					onDragEnd = {
-						if (dragDistance >= 56.dp.toPx()) onDismiss()
-						dragDistance = 0f
-					},
-					onDragCancel = { dragDistance = 0f },
-				)
-			},
-	) {
-		Box(
-			modifier = Modifier
-				.clip(RoundedCornerShape(50))
-				.background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f))
-				.height(4.dp)
-				.fillMaxWidth(0.12f),
-		)
-	}
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(onDismiss) {
+                var dragDistance = 0f
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, dragAmount ->
+                        if (dragAmount > 0f) {
+                            dragDistance += dragAmount
+                            change.consume()
+                        }
+                    },
+                    onDragEnd = {
+                        if (dragDistance >= 56.dp.toPx()) onDismiss()
+                        dragDistance = 0f
+                    },
+                    onDragCancel = { dragDistance = 0f },
+                )
+            },
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f))
+                .height(4.dp)
+                .fillMaxWidth(0.12f),
+        )
+    }
 }

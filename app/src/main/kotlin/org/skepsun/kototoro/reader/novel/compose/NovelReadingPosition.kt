@@ -7,26 +7,26 @@ import org.skepsun.kototoro.reader.ui.ReaderState
  * this value, so history and reading records do not depend on a rendering implementation.
  */
 data class NovelReadingPosition(
-	val chapterId: Long,
-	val page: Int,
-	val pageCount: Int,
-	val chapterProgress: Float,
+    val chapterId: Long,
+    val page: Int,
+    val pageCount: Int,
+    val chapterProgress: Float,
 ) {
-	init {
-		require(page >= 0)
-		require(pageCount >= 0)
-	}
+    init {
+        require(page >= 0)
+        require(pageCount >= 0)
+    }
 
-	val normalizedChapterProgress: Float
-		get() = chapterProgress.coerceIn(0f, 1f)
+    val normalizedChapterProgress: Float
+        get() = chapterProgress.coerceIn(0f, 1f)
 
-	fun toReaderState(): ReaderState = ReaderState(
-		chapterId = chapterId,
-		page = page,
-		scroll = (normalizedChapterProgress * PROGRESS_SCALE).toInt(),
-	)
+    fun toReaderState(): ReaderState = ReaderState(
+        chapterId = chapterId,
+        page = page,
+        scroll = (normalizedChapterProgress * PROGRESS_SCALE).toInt(),
+    )
 
-	companion object {
-		private const val PROGRESS_SCALE = 10_000f
-	}
+    companion object {
+        private const val PROGRESS_SCALE = 10_000f
+    }
 }

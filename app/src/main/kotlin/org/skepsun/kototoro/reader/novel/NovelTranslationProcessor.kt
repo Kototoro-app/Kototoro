@@ -138,7 +138,7 @@ class NovelTranslationProcessor @Inject constructor(
             targetLang,
             settings.readerTranslationMode.name,
             settings.readerTranslationOnnxModelId,
-			settings.readerTranslationApiProviderPreset,
+            settings.readerTranslationApiProviderPreset,
             settings.readerTranslationApiEndpoint,
             settings.readerTranslationApiModel,
         ).joinToString("|")

@@ -27,621 +27,621 @@ import kotlin.math.sign
 
 /** Activity-owned Compose reader surface. It replaces the mode-specific Fragment hosts. */
 internal class ComposeReaderController(
-	private val lifecycleOwner: LifecycleOwner,
-	private val viewModel: ReaderViewModel,
-	private val imagePipeline: DefaultComposeReaderImagePipeline,
-	private val errorHost: ReaderErrorHost,
-	private val chromeCallbacks: ComposeReaderChromeCallbacks,
-	initialEInkModeEnabled: Boolean,
-	private val chaptersPanelContent: @Composable (
-		Int,
-		ReaderChapterPanelUiState,
-		(ChapterSelectionUiState?) -> Unit,
-	) -> Unit = { _, _, _ -> },
+    private val lifecycleOwner: LifecycleOwner,
+    private val viewModel: ReaderViewModel,
+    private val imagePipeline: DefaultComposeReaderImagePipeline,
+    private val errorHost: ReaderErrorHost,
+    private val chromeCallbacks: ComposeReaderChromeCallbacks,
+    initialEInkModeEnabled: Boolean,
+    private val chaptersPanelContent: @Composable (
+        Int,
+        ReaderChapterPanelUiState,
+        (ChapterSelectionUiState?) -> Unit,
+    ) -> Unit = { _, _, _ -> },
 ) : ReaderNavigator {
 
-	private var currentPageKey: Long? = null
-	private var currentInternalScroll by mutableIntStateOf(viewModel.getCurrentState()?.scroll ?: 0)
-	private var requestedPageKey by mutableStateOf<Long?>(null)
-	private var requestedPositionSmooth by mutableStateOf(false)
-	private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
-	private var cumulativeScrollDelta = 0L
-	private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
-	private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
-	var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
-		private set
-	private var isDoublePage by mutableStateOf(false)
-	private var layoutGeneration by mutableIntStateOf(0)
-	val readerLayoutGeneration: Int
-		get() = layoutGeneration
-	private var chromeState by mutableStateOf(
-		ComposeReaderChromeState(
-			controlsVisible = false,
-			eInkModeEnabled = initialEInkModeEnabled,
-		),
-	)
-	private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
-	private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
-	private var isChromeEnabled = false
-	private var areControlsVisible = true
-	private var nextCommandId = 0L
-	private var nextMessageId = 0L
-	private var nextEInkRefreshId = 0L
-	private var messageAction: (() -> Unit)? = null
-	private var lastLayoutAnchor: ReaderState? = null
+    private var currentPageKey: Long? = null
+    private var currentInternalScroll by mutableIntStateOf(viewModel.getCurrentState()?.scroll ?: 0)
+    private var requestedPageKey by mutableStateOf<Long?>(null)
+    private var requestedPositionSmooth by mutableStateOf(false)
+    private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
+    private var cumulativeScrollDelta = 0L
+    private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
+    private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
+    var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
+        private set
+    private var isDoublePage by mutableStateOf(false)
+    private var layoutGeneration by mutableIntStateOf(0)
+    val readerLayoutGeneration: Int
+        get() = layoutGeneration
+    private var chromeState by mutableStateOf(
+        ComposeReaderChromeState(
+            controlsVisible = false,
+            eInkModeEnabled = initialEInkModeEnabled,
+        ),
+    )
+    private var chaptersTabId by mutableIntStateOf(DETAILS_TAB_CHAPTERS)
+    private var selectionDialog by mutableStateOf<ReaderSelectionDialogState?>(null)
+    private var isChromeEnabled = false
+    private var areControlsVisible = true
+    private var nextCommandId = 0L
+    private var nextMessageId = 0L
+    private var nextEInkRefreshId = 0L
+    private var messageAction: (() -> Unit)? = null
+    private var lastLayoutAnchor: ReaderState? = null
 
-	@Composable
-	fun Content(showFloatingControlLabels: Boolean) {
-		val infoBarEmbedded = readerMode != ReaderMode.WEBTOON
-		val systemStatus = if (infoBarEmbedded) rememberReaderSystemStatus() else null
-		ComposeReaderActivityScaffold(
-					state = chromeState,
-					showFloatingControlLabels = showFloatingControlLabels,
-					infoBarEmbedded = infoBarEmbedded,
-					chapterPanelTabId = chaptersTabId,
-					chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
-						chaptersPanelContent(selectedTabId, panelState, onSelectionStateChange)
-					},
-					translationTaskPanelContent = {
-						ComposeTranslationTaskPanelContent(viewModel = viewModel, modifier = Modifier.fillMaxSize())
-					},
-					callbacks = chromeCallbacks.copy(
-						onZoomIn = ::onZoomIn,
-						onZoomOut = ::onZoomOut,
-						onMessageExpired = ::hideMessage,
-						onEInkRefreshConsumed = ::consumeEInkRefresh,
-						onMessageAction = ::performMessageAction,
-						options = chromeCallbacks.options.copy(onDismiss = ::hideOptions),
-						onPrimaryDestination = { destination ->
-							when {
-								destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY &&
-									chromeState.options.visible -> hideOptions()
-								destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS &&
-									chromeState.toolsVisible -> hideTools()
-								else -> chromeCallbacks.onPrimaryDestination(destination)
-							}
-						},
-					),
-				) {
-					ComposeReaderScreenRoot(
-						viewModel = viewModel,
-						imageLoader = imagePipeline.imageLoader,
-						imagePipeline = imagePipeline,
-						requestedPageKey = requestedPageKey,
-						requestedPageSmooth = requestedPositionSmooth,
-						webtoonScrollRequest = scrollRequest,
-						zoomCommand = zoomCommand,
-						webtoonZoomCommand = webtoonZoomCommand,
-						animationsEnabled = !chromeState.eInkModeEnabled,
-						isDoublePage = isDoublePage,
-						layoutGeneration = readerLayoutGeneration,
-						pageOverlay = {
-							systemStatus?.let {
-									ReaderPageInfoBar(
-										state = chromeState.infoBar,
-										controlsVisible = chromeState.controlsVisible,
-										systemStatus = it,
-										animationsEnabled = !chromeState.eInkModeEnabled,
-									)
-								}
-							},
-							shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
-							shouldAcceptReaderPageKey = { pageKey -> shouldAcceptPageKey(pageKey) },
-						onShowErrorDetails = errorHost::showReaderErrorDetails,
-						onRetryError = errorHost::resolveReaderError,
-						resolveErrorStringId = errorHost::getReaderErrorActionStringId,
-							onReaderPositionChanged = positionChanged@ { position, internalScroll ->
-							val pendingPosition = resolveRequestedPosition()
-							val statePosition = resolveReaderInitialPagePosition(
-								viewModel.content.value.pages,
-								viewModel.getCurrentState(),
-							)
-							if (pendingPosition == null && currentPageKey == null && position != statePosition) {
-								Log.d(
-									READER_DEBUG_TAG,
-									"Ignore stale initial page callback position=$position statePosition=$statePosition " +
-										"state=${viewModel.getCurrentState()}",
-								)
-								return@positionChanged
-							}
-							Log.d(
-								READER_DEBUG_TAG,
-								"positionCallback mode=$readerMode double=$isDoublePage position=$position " +
-									"pending=$pendingPosition currentKey=$currentPageKey state=${viewModel.getCurrentState()} " +
-									"pages=${viewModel.content.value.pages.size}",
-							)
-							if (!shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)) {
-								Log.d(
-									READER_DEBUG_TAG,
-									"Ignore transitional page callback position=$position pending=$pendingPosition",
-								)
-								return@positionChanged
-							}
-							currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
-							currentInternalScroll = internalScroll
-							if (
-								pendingPosition != null &&
-								shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)
-							) {
-								requestedPageKey = null
-							}
-							},
-							onReaderPageKeyChanged = { pageKey, internalScroll ->
-								currentPageKey = pageKey
-								currentInternalScroll = internalScroll
-								val pendingPageKey = requestedPageKey
-								if (pageKey == pendingPageKey) {
-									requestedPageKey = null
-								}
-							},
-						onReaderInternalScrollChanged = { pageKey, internalScroll ->
-							if (pageKey == currentPageKey) {
-								currentInternalScroll = internalScroll
-							}
-						},
-						onReaderInteraction = chromeCallbacks.onReaderInteraction,
-						onGridTap = chromeCallbacks.onGridTap,
-						onGridLongTap = chromeCallbacks.onGridLongTap,
-					)
-				}
-		selectionDialog?.let { state ->
-			ComposeReaderSelectionDialog(state = state, onDismiss = ::hideSelectionDialog)
-		}
-		}
+    @Composable
+    fun Content(showFloatingControlLabels: Boolean) {
+        val infoBarEmbedded = readerMode != ReaderMode.WEBTOON
+        val systemStatus = if (infoBarEmbedded) rememberReaderSystemStatus() else null
+        ComposeReaderActivityScaffold(
+                    state = chromeState,
+                    showFloatingControlLabels = showFloatingControlLabels,
+                    infoBarEmbedded = infoBarEmbedded,
+                    chapterPanelTabId = chaptersTabId,
+                    chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
+                        chaptersPanelContent(selectedTabId, panelState, onSelectionStateChange)
+                    },
+                    translationTaskPanelContent = {
+                        ComposeTranslationTaskPanelContent(viewModel = viewModel, modifier = Modifier.fillMaxSize())
+                    },
+                    callbacks = chromeCallbacks.copy(
+                        onZoomIn = ::onZoomIn,
+                        onZoomOut = ::onZoomOut,
+                        onMessageExpired = ::hideMessage,
+                        onEInkRefreshConsumed = ::consumeEInkRefresh,
+                        onMessageAction = ::performMessageAction,
+                        options = chromeCallbacks.options.copy(onDismiss = ::hideOptions),
+                        onPrimaryDestination = { destination ->
+                            when {
+                                destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY &&
+                                    chromeState.options.visible -> hideOptions()
+                                destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS &&
+                                    chromeState.toolsVisible -> hideTools()
+                                else -> chromeCallbacks.onPrimaryDestination(destination)
+                            }
+                        },
+                    ),
+                ) {
+                    ComposeReaderScreenRoot(
+                        viewModel = viewModel,
+                        imageLoader = imagePipeline.imageLoader,
+                        imagePipeline = imagePipeline,
+                        requestedPageKey = requestedPageKey,
+                        requestedPageSmooth = requestedPositionSmooth,
+                        webtoonScrollRequest = scrollRequest,
+                        zoomCommand = zoomCommand,
+                        webtoonZoomCommand = webtoonZoomCommand,
+                        animationsEnabled = !chromeState.eInkModeEnabled,
+                        isDoublePage = isDoublePage,
+                        layoutGeneration = readerLayoutGeneration,
+                        pageOverlay = {
+                            systemStatus?.let {
+                                    ReaderPageInfoBar(
+                                        state = chromeState.infoBar,
+                                        controlsVisible = chromeState.controlsVisible,
+                                        systemStatus = it,
+                                        animationsEnabled = !chromeState.eInkModeEnabled,
+                                    )
+                                }
+                            },
+                            shouldAcceptReaderPosition = { position -> shouldAcceptPosition(position) },
+                            shouldAcceptReaderPageKey = { pageKey -> shouldAcceptPageKey(pageKey) },
+                        onShowErrorDetails = errorHost::showReaderErrorDetails,
+                        onRetryError = errorHost::resolveReaderError,
+                        resolveErrorStringId = errorHost::getReaderErrorActionStringId,
+                            onReaderPositionChanged = positionChanged@ { position, internalScroll ->
+                            val pendingPosition = resolveRequestedPosition()
+                            val statePosition = resolveReaderInitialPagePosition(
+                                viewModel.content.value.pages,
+                                viewModel.getCurrentState(),
+                            )
+                            if (pendingPosition == null && currentPageKey == null && position != statePosition) {
+                                Log.d(
+                                    READER_DEBUG_TAG,
+                                    "Ignore stale initial page callback position=$position statePosition=$statePosition " +
+                                        "state=${viewModel.getCurrentState()}",
+                                )
+                                return@positionChanged
+                            }
+                            Log.d(
+                                READER_DEBUG_TAG,
+                                "positionCallback mode=$readerMode double=$isDoublePage position=$position " +
+                                    "pending=$pendingPosition currentKey=$currentPageKey state=${viewModel.getCurrentState()} " +
+                                    "pages=${viewModel.content.value.pages.size}",
+                            )
+                            if (!shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)) {
+                                Log.d(
+                                    READER_DEBUG_TAG,
+                                    "Ignore transitional page callback position=$position pending=$pendingPosition",
+                                )
+                                return@positionChanged
+                            }
+                            currentPageKey = viewModel.content.value.pages.getOrNull(position)?.readerKey
+                            currentInternalScroll = internalScroll
+                            if (
+                                pendingPosition != null &&
+                                shouldAcceptReaderPosition(position, pendingPosition, allowAdjacent = isDoublePage)
+                            ) {
+                                requestedPageKey = null
+                            }
+                            },
+                            onReaderPageKeyChanged = { pageKey, internalScroll ->
+                                currentPageKey = pageKey
+                                currentInternalScroll = internalScroll
+                                val pendingPageKey = requestedPageKey
+                                if (pageKey == pendingPageKey) {
+                                    requestedPageKey = null
+                                }
+                            },
+                        onReaderInternalScrollChanged = { pageKey, internalScroll ->
+                            if (pageKey == currentPageKey) {
+                                currentInternalScroll = internalScroll
+                            }
+                        },
+                        onReaderInteraction = chromeCallbacks.onReaderInteraction,
+                        onGridTap = chromeCallbacks.onGridTap,
+                        onGridLongTap = chromeCallbacks.onGridLongTap,
+                    )
+                }
+        selectionDialog?.let { state ->
+            ComposeReaderSelectionDialog(state = state, onDismiss = ::hideSelectionDialog)
+        }
+        }
 
-	fun updateConfiguration(mode: ReaderMode, doublePage: Boolean) {
-		applyReaderLayout(mode, doublePage)
-	}
+    fun updateConfiguration(mode: ReaderMode, doublePage: Boolean) {
+        applyReaderLayout(mode, doublePage)
+    }
 
-	fun setDoublePageEnabled(enabled: Boolean) {
-		val effectiveMode = viewModel.readerMode.value ?: readerMode
-		val state = viewModel.getCurrentState()
-		if (readerMode == effectiveMode && isDoublePage == enabled && currentPageKey == null &&
-			state != null && state != lastLayoutAnchor
-		) {
-			requestPagePosition(resolveReaderInitialPagePosition(viewModel.content.value.pages, state), smooth = false)
-			lastLayoutAnchor = state
-			layoutGeneration++
-			Log.d(READER_DEBUG_TAG, "resyncReaderLayout state=$state requestedKey=$requestedPageKey generation=$layoutGeneration")
-			return
-		}
-		applyReaderLayout(effectiveMode, enabled)
-	}
+    fun setDoublePageEnabled(enabled: Boolean) {
+        val effectiveMode = viewModel.readerMode.value ?: readerMode
+        val state = viewModel.getCurrentState()
+        if (readerMode == effectiveMode && isDoublePage == enabled && currentPageKey == null &&
+            state != null && state != lastLayoutAnchor
+        ) {
+            requestPagePosition(resolveReaderInitialPagePosition(viewModel.content.value.pages, state), smooth = false)
+            lastLayoutAnchor = state
+            layoutGeneration++
+            Log.d(READER_DEBUG_TAG, "resyncReaderLayout state=$state requestedKey=$requestedPageKey generation=$layoutGeneration")
+            return
+        }
+        applyReaderLayout(effectiveMode, enabled)
+    }
 
-	private fun applyReaderLayout(mode: ReaderMode, doublePage: Boolean) {
-		val nextDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
-		if (readerMode == mode && isDoublePage == nextDoublePage) return
-		val anchorPosition = resolveCurrentPosition()
-		val anchorState = getCurrentState()
-		Log.d(
-			READER_DEBUG_TAG,
-			"applyReaderLayout from=$readerMode/$isDoublePage to=$mode/$nextDoublePage " +
-				"anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
-				"requestedKey=$requestedPageKey contentState=${viewModel.getCurrentState()}",
-		)
-		if (anchorState != null) {
-			lastLayoutAnchor = anchorState
-			requestPagePosition(anchorPosition, smooth = false)
-		}
-		readerMode = mode
-		isDoublePage = nextDoublePage
-		layoutGeneration++
-	}
+    private fun applyReaderLayout(mode: ReaderMode, doublePage: Boolean) {
+        val nextDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
+        if (readerMode == mode && isDoublePage == nextDoublePage) return
+        val anchorPosition = resolveCurrentPosition()
+        val anchorState = getCurrentState()
+        Log.d(
+            READER_DEBUG_TAG,
+            "applyReaderLayout from=$readerMode/$isDoublePage to=$mode/$nextDoublePage " +
+                "anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
+                "requestedKey=$requestedPageKey contentState=${viewModel.getCurrentState()}",
+        )
+        if (anchorState != null) {
+            lastLayoutAnchor = anchorState
+            requestPagePosition(anchorPosition, smooth = false)
+        }
+        readerMode = mode
+        isDoublePage = nextDoublePage
+        layoutGeneration++
+    }
 
-	fun setChromeEnabled(enabled: Boolean) {
-		isChromeEnabled = enabled
-		chromeState = chromeState.copy(controlsVisible = enabled && areControlsVisible)
-	}
+    fun setChromeEnabled(enabled: Boolean) {
+        isChromeEnabled = enabled
+        chromeState = chromeState.copy(controlsVisible = enabled && areControlsVisible)
+    }
 
-	fun setControlsVisible(visible: Boolean) {
-		areControlsVisible = visible
-		chromeState = chromeState.copy(controlsVisible = isChromeEnabled && visible)
-	}
+    fun setControlsVisible(visible: Boolean) {
+        areControlsVisible = visible
+        chromeState = chromeState.copy(controlsVisible = isChromeEnabled && visible)
+    }
 
-	fun setLoadingVisible(visible: Boolean) {
-		chromeState = chromeState.copy(loadingVisible = visible)
-	}
+    fun setLoadingVisible(visible: Boolean) {
+        chromeState = chromeState.copy(loadingVisible = visible)
+    }
 
-	fun setTitle(title: String, subtitle: String) {
-		chromeState = chromeState.copy(title = title, subtitle = subtitle)
-	}
+    fun setTitle(title: String, subtitle: String) {
+        chromeState = chromeState.copy(title = title, subtitle = subtitle)
+    }
 
-	fun setZoomVisible(visible: Boolean) {
-		chromeState = chromeState.copy(zoomVisible = visible)
-	}
+    fun setZoomVisible(visible: Boolean) {
+        chromeState = chromeState.copy(zoomVisible = visible)
+    }
 
-	fun setEInkModeEnabled(enabled: Boolean) {
-		chromeState = chromeState.copy(
-			eInkModeEnabled = enabled,
-			eInkRefresh = chromeState.eInkRefresh.takeIf { enabled },
-		)
-	}
+    fun setEInkModeEnabled(enabled: Boolean) {
+        chromeState = chromeState.copy(
+            eInkModeEnabled = enabled,
+            eInkRefresh = chromeState.eInkRefresh.takeIf { enabled },
+        )
+    }
 
-	fun clearEInkRefresh() {
-		chromeState = chromeState.copy(eInkRefresh = null)
-	}
+    fun clearEInkRefresh() {
+        chromeState = chromeState.copy(eInkRefresh = null)
+    }
 
-	fun showEInkRefresh(durationMillis: Int, colorArgb: Int) {
-		chromeState = chromeState.copy(
-			eInkRefresh = ReaderEInkRefresh(
-				id = ++nextEInkRefreshId,
-				durationMillis = durationMillis,
-				colorArgb = colorArgb,
-			),
-		)
-	}
+    fun showEInkRefresh(durationMillis: Int, colorArgb: Int) {
+        chromeState = chromeState.copy(
+            eInkRefresh = ReaderEInkRefresh(
+                id = ++nextEInkRefreshId,
+                durationMillis = durationMillis,
+                colorArgb = colorArgb,
+            ),
+        )
+    }
 
-	private fun consumeEInkRefresh(id: Long) {
-		if (chromeState.eInkRefresh?.id == id) {
-			clearEInkRefresh()
-		}
-	}
+    private fun consumeEInkRefresh(id: Long) {
+        if (chromeState.eInkRefresh?.id == id) {
+            clearEInkRefresh()
+        }
+    }
 
-	fun updateInfoBar(transform: ReaderInfoBarState.() -> ReaderInfoBarState) {
-		chromeState = chromeState.copy(infoBar = chromeState.infoBar.transform())
-	}
+    fun updateInfoBar(transform: ReaderInfoBarState.() -> ReaderInfoBarState) {
+        chromeState = chromeState.copy(infoBar = chromeState.infoBar.transform())
+    }
 
-	fun showMessage(
-		text: CharSequence,
-		durationMillis: Long? = null,
-		actionLabel: String? = null,
-		onAction: (() -> Unit)? = null,
-	) {
-		messageAction = onAction
-		chromeState = chromeState.copy(
-			message = ReaderMessage(++nextMessageId, text.toString(), durationMillis, actionLabel),
-		)
-	}
+    fun showMessage(
+        text: CharSequence,
+        durationMillis: Long? = null,
+        actionLabel: String? = null,
+        onAction: (() -> Unit)? = null,
+    ) {
+        messageAction = onAction
+        chromeState = chromeState.copy(
+            message = ReaderMessage(++nextMessageId, text.toString(), durationMillis, actionLabel),
+        )
+    }
 
-	fun hideMessage(id: Long? = null) {
-		if (id == null || chromeState.message?.id == id) {
-			messageAction = null
-			chromeState = chromeState.copy(message = null)
-		}
-	}
+    fun hideMessage(id: Long? = null) {
+        if (id == null || chromeState.message?.id == id) {
+            messageAction = null
+            chromeState = chromeState.copy(message = null)
+        }
+    }
 
-	private fun performMessageAction() {
-		val action = messageAction
-		hideMessage()
-		action?.invoke()
-	}
+    private fun performMessageAction() {
+        val action = messageAction
+        hideMessage()
+        action?.invoke()
+    }
 
-	fun updateAutoScroll(transform: ReaderAutoScrollUiState.() -> ReaderAutoScrollUiState) {
-		chromeState = chromeState.copy(autoScroll = chromeState.autoScroll.transform())
-	}
+    fun updateAutoScroll(transform: ReaderAutoScrollUiState.() -> ReaderAutoScrollUiState) {
+        chromeState = chromeState.copy(autoScroll = chromeState.autoScroll.transform())
+    }
 
-	fun showAutoScroll() {
-		chromeState = chromeState.copy(
-			autoScroll = chromeState.autoScroll.copy(visible = true),
-			options = chromeState.options.copy(visible = false),
-			toolsVisible = false,
-			chaptersVisible = false,
-		)
-	}
+    fun showAutoScroll() {
+        chromeState = chromeState.copy(
+            autoScroll = chromeState.autoScroll.copy(visible = true),
+            options = chromeState.options.copy(visible = false),
+            toolsVisible = false,
+            chaptersVisible = false,
+        )
+    }
 
-	fun toggleAutoScroll() {
-		if (chromeState.autoScroll.visible) {
-			updateAutoScroll { copy(visible = false) }
-		} else {
-			showAutoScroll()
-		}
-	}
+    fun toggleAutoScroll() {
+        if (chromeState.autoScroll.visible) {
+            updateAutoScroll { copy(visible = false) }
+        } else {
+            showAutoScroll()
+        }
+    }
 
-	fun updateActions(transform: ReaderActionsUiState.() -> ReaderActionsUiState) {
-		chromeState = chromeState.copy(actions = chromeState.actions.transform())
-	}
+    fun updateActions(transform: ReaderActionsUiState.() -> ReaderActionsUiState) {
+        chromeState = chromeState.copy(actions = chromeState.actions.transform())
+    }
 
-	fun updateChapterPanel(transform: ReaderChapterPanelUiState.() -> ReaderChapterPanelUiState) {
-		chromeState = chromeState.copy(chapterPanel = chromeState.chapterPanel.transform())
-	}
+    fun updateChapterPanel(transform: ReaderChapterPanelUiState.() -> ReaderChapterPanelUiState) {
+        chromeState = chromeState.copy(chapterPanel = chromeState.chapterPanel.transform())
+    }
 
-	fun toggleChapterSearch() {
-		val nextVisible = !chromeState.chapterPanel.searchVisible
-		updateChapterPanel { copy(searchVisible = nextVisible) }
-		if (!nextVisible) viewModel.performChapterSearch(null)
-	}
+    fun toggleChapterSearch() {
+        val nextVisible = !chromeState.chapterPanel.searchVisible
+        updateChapterPanel { copy(searchVisible = nextVisible) }
+        if (!nextVisible) viewModel.performChapterSearch(null)
+    }
 
-	fun selectChaptersTab(tabId: Int) {
-		chaptersTabId = tabId
-		if (tabId != DETAILS_TAB_CHAPTERS) {
-			updateChapterPanel { copy(searchVisible = false) }
-			viewModel.performChapterSearch(null)
-		}
-	}
+    fun selectChaptersTab(tabId: Int) {
+        chaptersTabId = tabId
+        if (tabId != DETAILS_TAB_CHAPTERS) {
+            updateChapterPanel { copy(searchVisible = false) }
+            viewModel.performChapterSearch(null)
+        }
+    }
 
-	fun showOptions(state: ComposeReaderOptionsState) {
-		val cachedPreview = imagePipeline.cachedDisplay(currentPageKey)?.toString()
-		chromeState = chromeState.copy(
-			options = state.copy(
-				visible = true,
-				appearancePreviewOriginalUri = cachedPreview,
-				appearancePreviewProcessedUri = cachedPreview,
-			),
-			autoScroll = chromeState.autoScroll.copy(visible = false),
-			toolsVisible = false,
-			chaptersVisible = false,
-		)
-	}
+    fun showOptions(state: ComposeReaderOptionsState) {
+        val cachedPreview = imagePipeline.cachedDisplay(currentPageKey)?.toString()
+        chromeState = chromeState.copy(
+            options = state.copy(
+                visible = true,
+                appearancePreviewOriginalUri = cachedPreview,
+                appearancePreviewProcessedUri = cachedPreview,
+            ),
+            autoScroll = chromeState.autoScroll.copy(visible = false),
+            toolsVisible = false,
+            chaptersVisible = false,
+        )
+    }
 
-	fun refreshAppearancePreview() {
-		val page = viewModel.content.value.pages.firstOrNull { it.readerKey == currentPageKey } ?: return
-		updateOptions { copy(appearancePreviewLoading = true) }
-		lifecycleOwner.lifecycleScope.launch {
-			val result = imagePipeline.observe(page, force = true).first {
-				it is ComposeReaderImageState.OriginalReady || it is ComposeReaderImageState.Failed
-			}
-			updateOptions {
-				val resultUri = when (result) {
-					is ComposeReaderImageState.OriginalReady -> result.original.toString()
-					is ComposeReaderImageState.Failed -> result.original?.toString()
-					else -> null
-				}
-				copy(
-					appearancePreviewOriginalUri = appearancePreviewOriginalUri ?: resultUri,
-					appearancePreviewProcessedUri = resultUri ?: appearancePreviewProcessedUri,
-					appearancePreviewLoading = false,
-				)
-			}
-		}
-	}
+    fun refreshAppearancePreview() {
+        val page = viewModel.content.value.pages.firstOrNull { it.readerKey == currentPageKey } ?: return
+        updateOptions { copy(appearancePreviewLoading = true) }
+        lifecycleOwner.lifecycleScope.launch {
+            val result = imagePipeline.observe(page, force = true).first {
+                it is ComposeReaderImageState.OriginalReady || it is ComposeReaderImageState.Failed
+            }
+            updateOptions {
+                val resultUri = when (result) {
+                    is ComposeReaderImageState.OriginalReady -> result.original.toString()
+                    is ComposeReaderImageState.Failed -> result.original?.toString()
+                    else -> null
+                }
+                copy(
+                    appearancePreviewOriginalUri = appearancePreviewOriginalUri ?: resultUri,
+                    appearancePreviewProcessedUri = resultUri ?: appearancePreviewProcessedUri,
+                    appearancePreviewLoading = false,
+                )
+            }
+        }
+    }
 
-	fun showTools() {
-		chromeState = chromeState.copy(
-			options = chromeState.options.copy(visible = false),
-			autoScroll = chromeState.autoScroll.copy(visible = false),
-			toolsVisible = true,
-			chaptersVisible = false,
-		)
-	}
+    fun showTools() {
+        chromeState = chromeState.copy(
+            options = chromeState.options.copy(visible = false),
+            autoScroll = chromeState.autoScroll.copy(visible = false),
+            toolsVisible = true,
+            chaptersVisible = false,
+        )
+    }
 
-	fun showSelectionDialog(
-		title: String,
-		entries: List<String>,
-		selectedIndex: Int? = null,
-		onSelected: (Int) -> Unit,
-	) {
-		selectionDialog = ReaderSelectionDialogState(
-			title = title,
-			entries = entries,
-			selectedIndex = selectedIndex,
-			onSelected = { index ->
-				hideSelectionDialog()
-				onSelected(index)
-			},
-		)
-	}
+    fun showSelectionDialog(
+        title: String,
+        entries: List<String>,
+        selectedIndex: Int? = null,
+        onSelected: (Int) -> Unit,
+    ) {
+        selectionDialog = ReaderSelectionDialogState(
+            title = title,
+            entries = entries,
+            selectedIndex = selectedIndex,
+            onSelected = { index ->
+                hideSelectionDialog()
+                onSelected(index)
+            },
+        )
+    }
 
-	private fun hideSelectionDialog() {
-		selectionDialog = null
-	}
+    private fun hideSelectionDialog() {
+        selectionDialog = null
+    }
 
-	fun closeExpandedPanel(): Boolean {
-		return when {
-			chromeState.options.visible -> {
-				hideOptions()
-				true
-			}
-			chromeState.toolsVisible -> {
-				hideTools()
-				true
-			}
-			chromeState.chaptersVisible -> {
-				hideChapters()
-				true
-			}
-			chromeState.autoScroll.visible -> {
-				updateAutoScroll { copy(visible = false) }
-				true
-			}
-			else -> false
-		}
-	}
+    fun closeExpandedPanel(): Boolean {
+        return when {
+            chromeState.options.visible -> {
+                hideOptions()
+                true
+            }
+            chromeState.toolsVisible -> {
+                hideTools()
+                true
+            }
+            chromeState.chaptersVisible -> {
+                hideChapters()
+                true
+            }
+            chromeState.autoScroll.visible -> {
+                updateAutoScroll { copy(visible = false) }
+                true
+            }
+            else -> false
+        }
+    }
 
-	fun closeChrome(): Boolean {
-		val isVisible = chromeState.controlsVisible ||
-			chromeState.options.visible ||
-			chromeState.toolsVisible ||
-			chromeState.chaptersVisible ||
-			chromeState.autoScroll.visible
-		if (!isVisible) return false
-		areControlsVisible = false
-		chromeState = chromeState.copy(
-			controlsVisible = false,
-			options = chromeState.options.copy(visible = false),
-			toolsVisible = false,
-			chaptersVisible = false,
-			autoScroll = chromeState.autoScroll.copy(visible = false),
-		)
-		return true
-	}
+    fun closeChrome(): Boolean {
+        val isVisible = chromeState.controlsVisible ||
+            chromeState.options.visible ||
+            chromeState.toolsVisible ||
+            chromeState.chaptersVisible ||
+            chromeState.autoScroll.visible
+        if (!isVisible) return false
+        areControlsVisible = false
+        chromeState = chromeState.copy(
+            controlsVisible = false,
+            options = chromeState.options.copy(visible = false),
+            toolsVisible = false,
+            chaptersVisible = false,
+            autoScroll = chromeState.autoScroll.copy(visible = false),
+        )
+        return true
+    }
 
-	val isChromeControlsVisible: Boolean
-		get() = chromeState.controlsVisible
+    val isChromeControlsVisible: Boolean
+        get() = chromeState.controlsVisible
 
-	fun toggleChapters(defaultTab: Int = DETAILS_TAB_CHAPTERS) {
-		chromeState = if (chromeState.chaptersVisible) {
-			chromeState.copy(chaptersVisible = false)
-		} else {
-			chaptersTabId = defaultTab
-			chromeState.copy(
-				chaptersVisible = true,
-				options = chromeState.options.copy(visible = false),
-				autoScroll = chromeState.autoScroll.copy(visible = false),
-				toolsVisible = false,
-			)
-		}
-	}
+    fun toggleChapters(defaultTab: Int = DETAILS_TAB_CHAPTERS) {
+        chromeState = if (chromeState.chaptersVisible) {
+            chromeState.copy(chaptersVisible = false)
+        } else {
+            chaptersTabId = defaultTab
+            chromeState.copy(
+                chaptersVisible = true,
+                options = chromeState.options.copy(visible = false),
+                autoScroll = chromeState.autoScroll.copy(visible = false),
+                toolsVisible = false,
+            )
+        }
+    }
 
-	fun hideChapters() {
-		chromeState = chromeState.copy(chaptersVisible = false)
-	}
+    fun hideChapters() {
+        chromeState = chromeState.copy(chaptersVisible = false)
+    }
 
-	private fun hideTools() {
-		chromeState = chromeState.copy(toolsVisible = false)
-	}
+    private fun hideTools() {
+        chromeState = chromeState.copy(toolsVisible = false)
+    }
 
-	fun updateOptions(transform: ComposeReaderOptionsState.() -> ComposeReaderOptionsState) {
-		chromeState = chromeState.copy(options = chromeState.options.transform())
-	}
+    fun updateOptions(transform: ComposeReaderOptionsState.() -> ComposeReaderOptionsState) {
+        chromeState = chromeState.copy(options = chromeState.options.transform())
+    }
 
-	private fun hideOptions() {
-		chromeState = chromeState.copy(options = chromeState.options.copy(visible = false))
-	}
+    private fun hideOptions() {
+        chromeState = chromeState.copy(options = chromeState.options.copy(visible = false))
+    }
 
-	fun closeOptions(): Boolean {
-		if (!chromeState.options.visible) return false
-		hideOptions()
-		return true
-	}
+    fun closeOptions(): Boolean {
+        if (!chromeState.options.visible) return false
+        hideOptions()
+        return true
+    }
 
-	override val isReaderResumed: Boolean
-		get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+    override val isReaderResumed: Boolean
+        get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
-	override fun switchPageBy(delta: Int) {
-		val pages = viewModel.content.value.pages
-		val basePosition = resolvePageNavigationBasePosition(
-			pageKeys = pages.map { it.readerKey },
-			requestedPageKey = requestedPageKey,
-			settledPosition = resolveCurrentPosition(),
-		)
-		val targetPosition = if (isDoublePage) {
-			resolveDoublePageNavigationTarget(
-				displayItems = buildDoublePageDisplayItems(
-					pages = pages,
-					coverPage = viewModel.readerSettingsProducer.value.isReaderDoubleCoverPage,
-				),
-				currentPosition = basePosition,
-				delta = delta,
-			) ?: return
-		} else {
-			resolvePageNavigationTarget(basePosition, delta, pageStep = 1)
-		}
-		if (targetPosition !in pages.indices) {
-			requestedPageKey = null
-			viewModel.switchChapterBy(delta.sign, openLastPage = delta < 0)
-			return
-		}
-		switchPageTo(
-			position = targetPosition,
-			smooth = true,
-		)
-	}
+    override fun switchPageBy(delta: Int) {
+        val pages = viewModel.content.value.pages
+        val basePosition = resolvePageNavigationBasePosition(
+            pageKeys = pages.map { it.readerKey },
+            requestedPageKey = requestedPageKey,
+            settledPosition = resolveCurrentPosition(),
+        )
+        val targetPosition = if (isDoublePage) {
+            resolveDoublePageNavigationTarget(
+                displayItems = buildDoublePageDisplayItems(
+                    pages = pages,
+                    coverPage = viewModel.readerSettingsProducer.value.isReaderDoubleCoverPage,
+                ),
+                currentPosition = basePosition,
+                delta = delta,
+            ) ?: return
+        } else {
+            resolvePageNavigationTarget(basePosition, delta, pageStep = 1)
+        }
+        if (targetPosition !in pages.indices) {
+            requestedPageKey = null
+            viewModel.switchChapterBy(delta.sign, openLastPage = delta < 0)
+            return
+        }
+        switchPageTo(
+            position = targetPosition,
+            smooth = true,
+        )
+    }
 
-	override fun switchPageTo(position: Int, smooth: Boolean) {
-		requestPagePosition(position, smooth)
-	}
+    override fun switchPageTo(position: Int, smooth: Boolean) {
+        requestPagePosition(position, smooth)
+    }
 
-	override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
-		if (readerMode != ReaderMode.WEBTOON) return false
-		cumulativeScrollDelta += delta
-		scrollRequest = ComposeReaderScrollRequest(++nextCommandId, delta, cumulativeScrollDelta, smooth)
-		return true
-	}
+    override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
+        if (readerMode != ReaderMode.WEBTOON) return false
+        cumulativeScrollDelta += delta
+        scrollRequest = ComposeReaderScrollRequest(++nextCommandId, delta, cumulativeScrollDelta, smooth)
+        return true
+    }
 
-	override fun getCurrentState(): ReaderState? {
-		val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition())
-			?: return viewModel.getCurrentState()
-		return ReaderState(page.chapterId, page.index, currentInternalScroll)
-	}
+    override fun getCurrentState(): ReaderState? {
+        val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition())
+            ?: return viewModel.getCurrentState()
+        return ReaderState(page.chapterId, page.index, currentInternalScroll)
+    }
 
-	private fun resolveCurrentPosition(): Int {
-		val pages = viewModel.content.value.pages
-		return resolveReaderCurrentPagePosition(pages, currentPageKey, viewModel.getCurrentState())
-	}
+    private fun resolveCurrentPosition(): Int {
+        val pages = viewModel.content.value.pages
+        return resolveReaderCurrentPagePosition(pages, currentPageKey, viewModel.getCurrentState())
+    }
 
-	private fun shouldAcceptPosition(position: Int): Boolean {
-		val pendingPosition = resolveRequestedPosition()
-		if (!shouldAcceptReaderPosition(position, pendingPosition)) return false
-		if (pendingPosition == null && currentPageKey == null) {
-			val statePosition = resolveReaderInitialPagePosition(
-				viewModel.content.value.pages,
-				viewModel.getCurrentState(),
-			)
-			return position == statePosition
-		}
-		return true
-	}
+    private fun shouldAcceptPosition(position: Int): Boolean {
+        val pendingPosition = resolveRequestedPosition()
+        if (!shouldAcceptReaderPosition(position, pendingPosition)) return false
+        if (pendingPosition == null && currentPageKey == null) {
+            val statePosition = resolveReaderInitialPagePosition(
+                viewModel.content.value.pages,
+                viewModel.getCurrentState(),
+            )
+            return position == statePosition
+        }
+        return true
+    }
 
-	private fun shouldAcceptPageKey(pageKey: Long): Boolean {
-		val pages = viewModel.content.value.pages
-		val initialPageKey = viewModel.getCurrentState()?.let { state ->
-			pages.firstOrNull { it.chapterId == state.chapterId && it.index == state.page }?.readerKey
-		}
-		return shouldAcceptReaderPageKey(
-			pageKeys = pages.map { it.readerKey },
-			pageKey = pageKey,
-			requestedPageKey = requestedPageKey,
-			currentPageKey = currentPageKey,
-			initialPageKey = initialPageKey,
-		)
-	}
+    private fun shouldAcceptPageKey(pageKey: Long): Boolean {
+        val pages = viewModel.content.value.pages
+        val initialPageKey = viewModel.getCurrentState()?.let { state ->
+            pages.firstOrNull { it.chapterId == state.chapterId && it.index == state.page }?.readerKey
+        }
+        return shouldAcceptReaderPageKey(
+            pageKeys = pages.map { it.readerKey },
+            pageKey = pageKey,
+            requestedPageKey = requestedPageKey,
+            currentPageKey = currentPageKey,
+            initialPageKey = initialPageKey,
+        )
+    }
 
-	private fun resolveRequestedPosition(): Int? {
-		return resolvePageKeyPosition(
-			pageKeys = viewModel.content.value.pages.map { it.readerKey },
-			pageKey = requestedPageKey,
-		)
-	}
+    private fun resolveRequestedPosition(): Int? {
+        return resolvePageKeyPosition(
+            pageKeys = viewModel.content.value.pages.map { it.readerKey },
+            pageKey = requestedPageKey,
+        )
+    }
 
-	private fun requestPagePosition(position: Int, smooth: Boolean) {
-		val page = viewModel.content.value.pages.getOrNull(position) ?: return
-		requestedPageKey = page.readerKey
-		requestedPositionSmooth = smooth
-	}
+    private fun requestPagePosition(position: Int, smooth: Boolean) {
+        val page = viewModel.content.value.pages.getOrNull(position) ?: return
+        requestedPageKey = page.readerKey
+        requestedPositionSmooth = smooth
+    }
 
-	override fun onZoomIn() = issueZoomCommand(1.1f)
+    override fun onZoomIn() = issueZoomCommand(1.1f)
 
-	override fun onZoomOut() = issueZoomCommand(0.9f)
+    override fun onZoomOut() = issueZoomCommand(0.9f)
 
-	private fun issueZoomCommand(factor: Float) {
-		if (readerMode == ReaderMode.WEBTOON) {
-			webtoonZoomCommand = ComposeWebtoonZoomCommand(++nextCommandId, factor)
-			return
-		}
-		val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition()) ?: return
-		zoomCommand = ComposeReaderZoomCommand(++nextCommandId, page.readerKey, factor)
-	}
+    private fun issueZoomCommand(factor: Float) {
+        if (readerMode == ReaderMode.WEBTOON) {
+            webtoonZoomCommand = ComposeWebtoonZoomCommand(++nextCommandId, factor)
+            return
+        }
+        val page = viewModel.content.value.pages.getOrNull(resolveCurrentPosition()) ?: return
+        zoomCommand = ComposeReaderZoomCommand(++nextCommandId, page.readerKey, factor)
+    }
 
-	private companion object {
-		const val READER_DEBUG_TAG = "ReaderDebug"
-	}
+    private companion object {
+        const val READER_DEBUG_TAG = "ReaderDebug"
+    }
 }
 
 internal fun shouldAcceptReaderPosition(
-	position: Int,
-	requestedPosition: Int?,
-	allowAdjacent: Boolean = false,
+    position: Int,
+    requestedPosition: Int?,
+    allowAdjacent: Boolean = false,
 ): Boolean {
-	// A double-page settled callback reports the selected page in the spread,
-	// which can be the neighbour of the requested anchor (usually the lower
-	// page). Accept that callback so the transition request cannot remain
-	// pending forever and block all later page callbacks.
-	return requestedPosition == null || position == requestedPosition ||
-		(allowAdjacent && kotlin.math.abs(position - requestedPosition) == 1)
+    // A double-page settled callback reports the selected page in the spread,
+    // which can be the neighbour of the requested anchor (usually the lower
+    // page). Accept that callback so the transition request cannot remain
+    // pending forever and block all later page callbacks.
+    return requestedPosition == null || position == requestedPosition ||
+        (allowAdjacent && kotlin.math.abs(position - requestedPosition) == 1)
 }
 
 internal fun shouldAcceptReaderPageKey(
-	pageKeys: List<Long>,
-	pageKey: Long,
-	requestedPageKey: Long?,
-	currentPageKey: Long?,
-	initialPageKey: Long?,
+    pageKeys: List<Long>,
+    pageKey: Long,
+    requestedPageKey: Long?,
+    currentPageKey: Long?,
+    initialPageKey: Long?,
 ): Boolean {
-	val position = pageKeys.indexOf(pageKey)
-	if (position < 0) return false
-	if (requestedPageKey != null) {
-		return pageKey == requestedPageKey
-	}
-	return currentPageKey != null || pageKey == initialPageKey
+    val position = pageKeys.indexOf(pageKey)
+    if (position < 0) return false
+    if (requestedPageKey != null) {
+        return pageKey == requestedPageKey
+    }
+    return currentPageKey != null || pageKey == initialPageKey
 }
 
 internal fun resolvePageKeyPosition(pageKeys: List<Long>, pageKey: Long?): Int? {
-	if (pageKey == null) return null
-	return pageKeys.indexOf(pageKey).takeIf { it >= 0 }
+    if (pageKey == null) return null
+    return pageKeys.indexOf(pageKey).takeIf { it >= 0 }
 }
 
 internal fun resolvePageNavigationBasePosition(
-	pageKeys: List<Long>,
-	requestedPageKey: Long?,
-	settledPosition: Int,
+    pageKeys: List<Long>,
+    requestedPageKey: Long?,
+    settledPosition: Int,
 ): Int = resolvePageKeyPosition(pageKeys, requestedPageKey) ?: settledPosition

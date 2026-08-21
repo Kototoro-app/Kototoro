@@ -163,7 +163,7 @@ class ReaderActivity :
     private lateinit var pageSaveHelper: PageSaveHelper
     private lateinit var controlDelegate: ReaderControlDelegate
     private lateinit var composeReaderController: ComposeReaderController
-	private lateinit var systemUiController: SystemUiController
+    private lateinit var systemUiController: SystemUiController
     private val hideUiRunnable = Runnable { setUiIsVisible(false) }
     private val eInkRefreshPolicy = EInkRefreshPolicy()
     private var currentTranslationLayerState: TranslationLayerState = TranslationLayerState.IDLE
@@ -172,9 +172,9 @@ class ReaderActivity :
     private var translationShortcutVisibleForSession = false
     private var enableTranslationAfterSetup = false
     private var composeSliderValue = 0
-	private var areControlsVisible = true
-	private var loadingError by mutableStateOf<Throwable?>(null)
-	private var pendingIncognitoDialog by mutableStateOf<IncognitoDialogState?>(null)
+    private var areControlsVisible = true
+    private var loadingError by mutableStateOf<Throwable?>(null)
+    private var pendingIncognitoDialog by mutableStateOf<IncognitoDialogState?>(null)
 
     // Tracks whether the foldable device is in an unfolded state (half-opened or flat)
     private var isFoldUnfolded: Boolean = false
@@ -276,25 +276,25 @@ class ReaderActivity :
             viewModel = viewModel,
             imagePipeline = composeReaderImagePipeline,
             errorHost = this,
-			initialEInkModeEnabled = settings.isEInkModeEnabled,
-			chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
-				ChaptersPagesTabsContent(
+            initialEInkModeEnabled = settings.isEInkModeEnabled,
+            chaptersPanelContent = { selectedTabId, panelState, onSelectionStateChange ->
+                ChaptersPagesTabsContent(
                     viewModel = viewModel,
                     pagesViewModel = pagesViewModel,
                     bookmarksViewModel = bookmarksViewModel,
                     settings = settings,
-					appRouter = router,
-					pageSaveHelper = pageSaveHelper,
-					selectedTabId = selectedTabId,
-					showTabStrip = false,
-					isSheetFullyExpanded = true,
-					isChapterListScrollEnabled = true,
-					chapterQuery = panelState.searchQuery,
-					isChapterSearchVisible = panelState.searchVisible,
-					onChapterQueryChange = { query -> viewModel.performChapterSearch(query) },
-					onChapterSelectionStateChange = onSelectionStateChange,
-					onSelectedTabIdChange = composeReaderController::selectChaptersTab,
-				)
+                    appRouter = router,
+                    pageSaveHelper = pageSaveHelper,
+                    selectedTabId = selectedTabId,
+                    showTabStrip = false,
+                    isSheetFullyExpanded = true,
+                    isChapterListScrollEnabled = true,
+                    chapterQuery = panelState.searchQuery,
+                    isChapterSearchVisible = panelState.searchVisible,
+                    onChapterQueryChange = { query -> viewModel.performChapterSearch(query) },
+                    onChapterSelectionStateChange = onSelectionStateChange,
+                    onSelectedTabIdChange = composeReaderController::selectChaptersTab,
+                )
             },
             chromeCallbacks = ComposeReaderChromeCallbacks(
                 onNavigateBack = { dispatchNavigateUp() },
@@ -319,15 +319,15 @@ class ReaderActivity :
                         if (!composeReaderController.closeOptions()) openMenu()
                     },
                     onOptionsLongClick = router::openReaderSettings,
-						onSliderValueChanged = { value ->
-							val page = value.toInt()
-							if (page != composeSliderValue) {
-								window.decorView.performSegmentHapticFeedback()
-								composeSliderValue = page
-								composeReaderController.updateActions { copy(sliderValue = value) }
-							}
-						},
-						onSliderValueChangeFinished = { switchPageTo(composeSliderValue) },
+                        onSliderValueChanged = { value ->
+                            val page = value.toInt()
+                            if (page != composeSliderValue) {
+                                window.decorView.performSegmentHapticFeedback()
+                                composeSliderValue = page
+                                composeReaderController.updateActions { copy(sliderValue = value) }
+                            }
+                        },
+                        onSliderValueChangeFinished = { switchPageTo(composeSliderValue) },
                 ),
                 autoScroll = ReaderAutoScrollCallbacks(
                     onOpen = {
@@ -356,132 +356,132 @@ class ReaderActivity :
                         composeReaderController.updateAutoScroll { copy(pauseOnUi = it) }
                     },
                 ),
-				options = ComposeReaderOptionsCallbacks(
-					onModeChanged = { mode ->
-						composeReaderController.updateOptions { copy(mode = mode) }
-						onReaderModeChanged(mode)
-					},
-					onAnimationChanged = { animation ->
-						settings.readerAnimation = animation
-						composeReaderController.updateOptions { copy(animation = animation) }
-					},
-					onDoublePageChanged = { enabled ->
-						settings.isReaderDoubleOnLandscape = enabled
-						composeReaderController.updateOptions { copy(doublePage = enabled) }
-						onDoubleModeChanged(enabled)
-					},
-					onDoublePageFoldableChanged = { enabled ->
-						settings.isReaderDoubleOnFoldable = enabled
-						composeReaderController.updateOptions { copy(doublePageFoldable = enabled) }
-						onDoubleModeChanged(settings.isReaderDoubleOnLandscape)
-					},
-					onDoublePageCoverChanged = { enabled ->
-						settings.isReaderDoubleCoverPage = enabled
-						composeReaderController.updateOptions { copy(doublePageCover = enabled) }
-					},
-					onSplitPagesChanged = { enabled ->
-						settings.isReaderSplitPagesEnabled = enabled
-						composeReaderController.updateOptions { copy(splitPages = enabled) }
-						onSplitModeChanged(enabled)
-					},
-					onDoublePageSensitivityChanged = { value ->
-						settings.readerDoublePagesSensitivity = value
-						composeReaderController.updateOptions { copy(doublePageSensitivity = value) }
-					},
-					onSuperResolutionChanged = { enabled ->
-						settings.isReaderSuperResolutionEnabled = enabled
-						composeReaderController.updateOptions { copy(superResolution = enabled) }
-						viewModel.reload()
-						composeReaderController.refreshAppearancePreview()
-					},
-					onBackgroundChanged = { background ->
-						settings.readerBackground = background
-						composeReaderController.updateOptions { copy(background = background) }
-					},
-					onImageServerChanged = ::updateImageServer,
-					onSavePage = ::onSavePageClick,
-					onPreviousChapter = { switchChapterBy(-1) },
-					onNextChapter = { switchChapterBy(1) },
-					onPages = { composeReaderController.toggleChapters() },
-					onBookmark = ::onBookmarkClick,
-					onDownload = ::onDownloadClick,
-					onRotate = ::toggleScreenOrientation,
-					onAutoScroll = { onScrollTimerClick(false) },
-					onTranslation = ::onTranslateClick,
-					onOpenSettings = router::openReaderSettings,
-					onColorFilterChanged = { colorFilter ->
-						composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
-					},
-					onSaveColorFilterForManga = { colorFilter ->
-						val manga = viewModel.getContentOrNull()
-						if (manga != null) {
-							lifecycleScope.launch {
-								contentDataRepository.saveColorFilter(manga, colorFilter)
-								viewModel.reload()
-							}
-						}
-					},
-					onSaveColorFilterGlobally = { colorFilter ->
-						lifecycleScope.launch {
-							settings.readerColorFilter = colorFilter
-							contentDataRepository.resetColorFilters()
-							viewModel.reload()
-						}
-					},
-					onOpenBrowser = ::openCurrentChapterInBrowser,
-					onTranslationSettings = router::openTranslationSettings,
-					onRetranslatePage = viewModel::retranslateCurrent,
-					onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
-					onRetranslateChapter = viewModel::retranslateCurrentChapter,
-				),
-				chapterPanel = ReaderChapterPanelCallbacks(
-					onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
-					onSearchToggle = { composeReaderController.toggleChapterSearch() },
-					onSearchQueryChange = { query -> viewModel.performChapterSearch(query) },
-					onToggleChaptersReversed = {
-					viewModel.setChaptersReversed(!viewModel.isChaptersReversed.value)
-				},
-					onToggleChaptersGrid = {
-					viewModel.setChaptersInGridView(!viewModel.isChaptersInGridView.value)
-				},
-					onToggleHideReadChapters = {
-					viewModel.setHideReadChapters(!viewModel.isHideReadChapters.value)
-				},
-					onToggleMergeRepeatedChapters = {
-					viewModel.setMergeRepeatedChapters(!viewModel.isMergeRepeatedChapters.value)
-				},
-					onToggleDownloadedOnly = {
-					viewModel.isDownloadedOnly.value = !viewModel.isDownloadedOnly.value
-					},
-				),
-				onReaderInteraction = { scrollTimer.onUserInteraction() },
-				onGridTap = { area ->
-					if (composeReaderController.closeChrome()) {
-						setUiIsVisible(false)
-					} else {
-						onGridTouch(area)
-					}
-				},
-				onGridLongTap = ::onGridLongTouch,
-				onBackPressed = ::onReaderBackPressed,
-				onPrimaryDestination = { destination ->
-					when (destination) {
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.NAVIGATION -> {
-							if (!onPagesButtonClick()) composeReaderController.toggleChapters()
-						}
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY -> openMenu()
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> onTranslateClick()
-						org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.CHAPTERS_PANEL -> {
-							composeReaderController.toggleChapters()
-						}
-					}
-				},
-				onPrimaryDestinationLongPress = { destination ->
-					if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION) {
-						onTranslateLongClick()
-					}
-				},
+                options = ComposeReaderOptionsCallbacks(
+                    onModeChanged = { mode ->
+                        composeReaderController.updateOptions { copy(mode = mode) }
+                        onReaderModeChanged(mode)
+                    },
+                    onAnimationChanged = { animation ->
+                        settings.readerAnimation = animation
+                        composeReaderController.updateOptions { copy(animation = animation) }
+                    },
+                    onDoublePageChanged = { enabled ->
+                        settings.isReaderDoubleOnLandscape = enabled
+                        composeReaderController.updateOptions { copy(doublePage = enabled) }
+                        onDoubleModeChanged(enabled)
+                    },
+                    onDoublePageFoldableChanged = { enabled ->
+                        settings.isReaderDoubleOnFoldable = enabled
+                        composeReaderController.updateOptions { copy(doublePageFoldable = enabled) }
+                        onDoubleModeChanged(settings.isReaderDoubleOnLandscape)
+                    },
+                    onDoublePageCoverChanged = { enabled ->
+                        settings.isReaderDoubleCoverPage = enabled
+                        composeReaderController.updateOptions { copy(doublePageCover = enabled) }
+                    },
+                    onSplitPagesChanged = { enabled ->
+                        settings.isReaderSplitPagesEnabled = enabled
+                        composeReaderController.updateOptions { copy(splitPages = enabled) }
+                        onSplitModeChanged(enabled)
+                    },
+                    onDoublePageSensitivityChanged = { value ->
+                        settings.readerDoublePagesSensitivity = value
+                        composeReaderController.updateOptions { copy(doublePageSensitivity = value) }
+                    },
+                    onSuperResolutionChanged = { enabled ->
+                        settings.isReaderSuperResolutionEnabled = enabled
+                        composeReaderController.updateOptions { copy(superResolution = enabled) }
+                        viewModel.reload()
+                        composeReaderController.refreshAppearancePreview()
+                    },
+                    onBackgroundChanged = { background ->
+                        settings.readerBackground = background
+                        composeReaderController.updateOptions { copy(background = background) }
+                    },
+                    onImageServerChanged = ::updateImageServer,
+                    onSavePage = ::onSavePageClick,
+                    onPreviousChapter = { switchChapterBy(-1) },
+                    onNextChapter = { switchChapterBy(1) },
+                    onPages = { composeReaderController.toggleChapters() },
+                    onBookmark = ::onBookmarkClick,
+                    onDownload = ::onDownloadClick,
+                    onRotate = ::toggleScreenOrientation,
+                    onAutoScroll = { onScrollTimerClick(false) },
+                    onTranslation = ::onTranslateClick,
+                    onOpenSettings = router::openReaderSettings,
+                    onColorFilterChanged = { colorFilter ->
+                        composeReaderController.updateOptions { copy(colorFilter = colorFilter) }
+                    },
+                    onSaveColorFilterForManga = { colorFilter ->
+                        val manga = viewModel.getContentOrNull()
+                        if (manga != null) {
+                            lifecycleScope.launch {
+                                contentDataRepository.saveColorFilter(manga, colorFilter)
+                                viewModel.reload()
+                            }
+                        }
+                    },
+                    onSaveColorFilterGlobally = { colorFilter ->
+                        lifecycleScope.launch {
+                            settings.readerColorFilter = colorFilter
+                            contentDataRepository.resetColorFilters()
+                            viewModel.reload()
+                        }
+                    },
+                    onOpenBrowser = ::openCurrentChapterInBrowser,
+                    onTranslationSettings = router::openTranslationSettings,
+                    onRetranslatePage = viewModel::retranslateCurrent,
+                    onRetryFailedTranslations = viewModel::retranslateFailedInCurrentChapter,
+                    onRetranslateChapter = viewModel::retranslateCurrentChapter,
+                ),
+                chapterPanel = ReaderChapterPanelCallbacks(
+                    onTabSelected = { tabId -> composeReaderController.selectChaptersTab(tabId) },
+                    onSearchToggle = { composeReaderController.toggleChapterSearch() },
+                    onSearchQueryChange = { query -> viewModel.performChapterSearch(query) },
+                    onToggleChaptersReversed = {
+                    viewModel.setChaptersReversed(!viewModel.isChaptersReversed.value)
+                },
+                    onToggleChaptersGrid = {
+                    viewModel.setChaptersInGridView(!viewModel.isChaptersInGridView.value)
+                },
+                    onToggleHideReadChapters = {
+                    viewModel.setHideReadChapters(!viewModel.isHideReadChapters.value)
+                },
+                    onToggleMergeRepeatedChapters = {
+                    viewModel.setMergeRepeatedChapters(!viewModel.isMergeRepeatedChapters.value)
+                },
+                    onToggleDownloadedOnly = {
+                    viewModel.isDownloadedOnly.value = !viewModel.isDownloadedOnly.value
+                    },
+                ),
+                onReaderInteraction = { scrollTimer.onUserInteraction() },
+                onGridTap = { area ->
+                    if (composeReaderController.closeChrome()) {
+                        setUiIsVisible(false)
+                    } else {
+                        onGridTouch(area)
+                    }
+                },
+                onGridLongTap = ::onGridLongTouch,
+                onBackPressed = ::onReaderBackPressed,
+                onPrimaryDestination = { destination ->
+                    when (destination) {
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.NAVIGATION -> {
+                            if (!onPagesButtonClick()) composeReaderController.toggleChapters()
+                        }
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.DISPLAY -> openMenu()
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TOOLS -> composeReaderController.showTools()
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION -> onTranslateClick()
+                        org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.CHAPTERS_PANEL -> {
+                            composeReaderController.toggleChapters()
+                        }
+                    }
+                },
+                onPrimaryDestinationLongPress = { destination ->
+                    if (destination == org.skepsun.kototoro.reader.ui.compose.design.ReaderControlDestination.TRANSLATION) {
+                        onTranslateLongClick()
+                    }
+                },
             ),
         )
         composeReaderController.updateActions {
@@ -492,50 +492,50 @@ class ReaderActivity :
                 translateContextualVisible = translationShortcutVisibleForSession,
             )
         }
-		viewModel.readerControls
-			.onEach { controls -> composeReaderController.updateActions { copy(controls = controls) } }
-			.launchIn(lifecycleScope)
-		viewModel.chapterQuery
-			.onEach { query -> composeReaderController.updateChapterPanel { copy(searchQuery = query) } }
-			.launchIn(lifecycleScope)
-		viewModel.emptyReason
-			.onEach { reason -> composeReaderController.updateChapterPanel { copy(searchEnabled = reason == null) } }
-			.launchIn(lifecycleScope)
-		viewModel.isChaptersReversed
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersReversed = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.isChaptersInGridView
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersInGridView = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.isHideReadChapters
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(hideReadChapters = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.isMergeRepeatedChapters
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(mergeRepeatedChapters = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.showMergeRepeatedChapters
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(showMergeRepeatedChapters = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.isDownloadedOnly
-			.onEach { value -> composeReaderController.updateChapterPanel { copy(downloadedOnly = value) } }
-			.launchIn(lifecycleScope)
-		viewModel.mangaDetails
-			.onEach { details ->
-				composeReaderController.updateChapterPanel {
-					copy(downloadedFilterVisible = details?.local != null)
-				}
-			}
-			.launchIn(lifecycleScope)
-		composeReaderController.updateAutoScroll {
-			copy(
-				speed = settings.readerAutoscrollSpeed,
-				fabVisible = settings.isReaderAutoscrollFabVisible,
-				pauseOnUi = settings.isReaderAutoscrollPauseOnUi,
-			)
-		}
-		composeReaderController.setChromeEnabled(true)
-		systemUiController = SystemUiController(window)
-		systemUiController.setSystemUiVisible(true)
+        viewModel.readerControls
+            .onEach { controls -> composeReaderController.updateActions { copy(controls = controls) } }
+            .launchIn(lifecycleScope)
+        viewModel.chapterQuery
+            .onEach { query -> composeReaderController.updateChapterPanel { copy(searchQuery = query) } }
+            .launchIn(lifecycleScope)
+        viewModel.emptyReason
+            .onEach { reason -> composeReaderController.updateChapterPanel { copy(searchEnabled = reason == null) } }
+            .launchIn(lifecycleScope)
+        viewModel.isChaptersReversed
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersReversed = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.isChaptersInGridView
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(chaptersInGridView = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.isHideReadChapters
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(hideReadChapters = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.isMergeRepeatedChapters
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(mergeRepeatedChapters = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.showMergeRepeatedChapters
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(showMergeRepeatedChapters = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.isDownloadedOnly
+            .onEach { value -> composeReaderController.updateChapterPanel { copy(downloadedOnly = value) } }
+            .launchIn(lifecycleScope)
+        viewModel.mangaDetails
+            .onEach { details ->
+                composeReaderController.updateChapterPanel {
+                    copy(downloadedFilterVisible = details?.local != null)
+                }
+            }
+            .launchIn(lifecycleScope)
+        composeReaderController.updateAutoScroll {
+            copy(
+                speed = settings.readerAutoscrollSpeed,
+                fabVisible = settings.isReaderAutoscrollFabVisible,
+                pauseOnUi = settings.isReaderAutoscrollPauseOnUi,
+            )
+        }
+        composeReaderController.setChromeEnabled(true)
+        systemUiController = SystemUiController(window)
+        systemUiController.setSystemUiVisible(true)
         scrollTimer = scrollTimerFactory.create(resources, this, this)
         pageSaveHelper = pageSaveHelperFactory.create(this)
         controlDelegate = ReaderControlDelegate(resources, settings, tapGridSettings, this)
@@ -549,37 +549,37 @@ class ReaderActivity :
             },
         )
         spaceSwitcherDelegate.setControlsVisible(areControlsVisible)
-		setComposeContent {
-			val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
-				isReaderControlLabelsEnabled
-			}
-			Box(modifier = Modifier.fillMaxSize()) {
-				composeReaderController.Content(showFloatingControlLabels = showFloatingControlLabels)
-				spaceSwitcherDelegate.Fab(
-					modifier = Modifier.fillMaxSize(),
-				)
-				loadingError?.let { error ->
-					ReaderLoadingErrorDialog(
-						message = error.getDisplayMessage(resources),
-						resolveActionStringId = exceptionResolver.getResolveStringId(error),
-						onDismiss = ::dismissLoadingError,
-						onResolve = { resolveLoadingError(error) },
-					)
-				}
-				pendingIncognitoDialog?.let { dialog ->
-					IncognitoModeDialog(
-						dontAskAgain = dialog.dontAskAgain,
-						onDismissRequest = ::dismissIncognitoModeDialog,
-						onDontAskAgainChange = { checked ->
-							pendingIncognitoDialog = dialog.copy(dontAskAgain = checked)
-						},
-						onIncognitoModeSelected = { consumeIncognitoMode(true) },
-						onDisabledSelected = { consumeIncognitoMode(false) },
-					)
-				}
-				spaceSwitcherDelegate.Overlays()
-			}
-		}
+        setComposeContent {
+            val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
+                isReaderControlLabelsEnabled
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
+                composeReaderController.Content(showFloatingControlLabels = showFloatingControlLabels)
+                spaceSwitcherDelegate.Fab(
+                    modifier = Modifier.fillMaxSize(),
+                )
+                loadingError?.let { error ->
+                    ReaderLoadingErrorDialog(
+                        message = error.getDisplayMessage(resources),
+                        resolveActionStringId = exceptionResolver.getResolveStringId(error),
+                        onDismiss = ::dismissLoadingError,
+                        onResolve = { resolveLoadingError(error) },
+                    )
+                }
+                pendingIncognitoDialog?.let { dialog ->
+                    IncognitoModeDialog(
+                        dontAskAgain = dialog.dontAskAgain,
+                        onDismissRequest = ::dismissIncognitoModeDialog,
+                        onDontAskAgainChange = { checked ->
+                            pendingIncognitoDialog = dialog.copy(dontAskAgain = checked)
+                        },
+                        onIncognitoModeSelected = { consumeIncognitoMode(true) },
+                        onDisabledSelected = { consumeIncognitoMode(false) },
+                    )
+                }
+                spaceSwitcherDelegate.Overlays()
+            }
+        }
         idlingDetector.bindToLifecycle(this)
         screenOrientationHelper.applySettings()
         viewModel.isBookmarkAdded.observe(this) {
@@ -592,7 +592,7 @@ class ReaderActivity :
         scrollTimer.isManuallyPaused.observe(this) {
             composeReaderController.updateAutoScroll { copy(manuallyPaused = it) }
         }
-		viewModel.onLoadingError.observeEvent(this) { error ->
+        viewModel.onLoadingError.observeEvent(this) { error ->
             val cf = error.findCloudFlareException()
             val source = cf?.source
             val autoDisabled = source != null && SourceSettings(this@ReaderActivity, source).isCaptchaAutoResolveDisabled
@@ -601,12 +601,12 @@ class ReaderActivity :
                 if (resolved) {
                     viewModel.reload()
                 } else {
-					loadingError = error
-				}
-			} else {
-				loadingError = error
-			}
-		}
+                    loadingError = error
+                }
+            } else {
+                loadingError = error
+            }
+        }
         val errorSnackbar = SnackbarErrorObserver(
             host = window.decorView,
             resolver = exceptionResolver,
@@ -640,18 +640,18 @@ class ReaderActivity :
         }
         viewModel.readerMode.observe(this, Lifecycle.State.STARTED, this::onInitReader)
         viewModel.onPageSaved.observeEvent(this) { pages ->
-			val message = when (pages.size) {
-				0 -> R.string.nothing_found
-				1 -> R.string.page_saved
-				else -> R.string.pages_saved
-			}
-			val page = pages.singleOrNull()
-			composeReaderController.showMessage(
-				text = getString(message),
-				actionLabel = page?.let { getString(R.string.share) },
-				onAction = page?.let { uri -> { ShareHelper(this).shareImage(uri) } },
-			)
-		}
+            val message = when (pages.size) {
+                0 -> R.string.nothing_found
+                1 -> R.string.page_saved
+                else -> R.string.pages_saved
+            }
+            val page = pages.singleOrNull()
+            composeReaderController.showMessage(
+                text = getString(message),
+                actionLabel = page?.let { getString(R.string.share) },
+                onAction = page?.let { uri -> { ShareHelper(this).shareImage(uri) } },
+            )
+        }
         viewModel.uiState.zipWithPrevious().observe(this, this::onUiStateChanged)
         combine(
             viewModel.isLoading,
@@ -670,7 +670,7 @@ class ReaderActivity :
             if (msgId == R.string.bookmark_added || msgId == R.string.bookmark_removed) {
                 window.decorView.performConfirmHapticFeedback()
             }
-			composeReaderController.showMessage(getString(msgId), TOAST_DURATION)
+            composeReaderController.showMessage(getString(msgId), TOAST_DURATION)
         }
         viewModel.readerSettingsProducer.observe(this) {
             composeReaderController.updateInfoBar {
@@ -699,20 +699,20 @@ class ReaderActivity :
             updateTranslationToggleButton()
             viewModel.refreshTranslationDisplay()
         }.launchIn(lifecycleScope)
-		settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
-			.onEach { enabled ->
-				if (!enabled) eInkRefreshPolicy.reset()
-				composeReaderController.setEInkModeEnabled(enabled)
-			}
-			.launchIn(lifecycleScope)
-		settings.observeAsFlow(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }
-			.onEach { enabled ->
-				if (!enabled) {
-					eInkRefreshPolicy.reset()
-					composeReaderController.clearEInkRefresh()
-				}
-			}
-			.launchIn(lifecycleScope)
+        settings.observeAsFlow(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }
+            .onEach { enabled ->
+                if (!enabled) eInkRefreshPolicy.reset()
+                composeReaderController.setEInkModeEnabled(enabled)
+            }
+            .launchIn(lifecycleScope)
+        settings.observeAsFlow(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }
+            .onEach { enabled ->
+                if (!enabled) {
+                    eInkRefreshPolicy.reset()
+                    composeReaderController.clearEInkRefresh()
+                }
+            }
+            .launchIn(lifecycleScope)
         viewModel.translationLayerState.onEach {
             currentTranslationLayerState = it
             updateTranslationToggleButton()
@@ -824,23 +824,23 @@ class ReaderActivity :
         val showLoadingLayout = isLoading && !hasPages
         composeReaderController.setLoadingVisible(showLoadingLayout)
         if (isLoading && hasPages) {
-			composeReaderController.hideMessage()
+            composeReaderController.hideMessage()
         }
         invalidateOptionsMenu()
     }
 
-	private fun onGridTouch(area: TapGridArea) {
-		if (isReaderResumed()) controlDelegate.onGridTouch(area)
-	}
+    private fun onGridTouch(area: TapGridArea) {
+        if (isReaderResumed()) controlDelegate.onGridTouch(area)
+    }
 
-	private fun onReaderBackPressed() {
-		if (composeReaderController.closeExpandedPanel()) return
-		if (composeReaderController.isChromeControlsVisible) {
-			setUiIsVisible(false)
-		} else {
-			dispatchNavigateUp()
-		}
-	}
+    private fun onReaderBackPressed() {
+        if (composeReaderController.closeExpandedPanel()) return
+        if (composeReaderController.isChromeControlsVisible) {
+            setUiIsVisible(false)
+        } else {
+            dispatchNavigateUp()
+        }
+    }
 
     private fun onGridLongTouch(area: TapGridArea, position: androidx.compose.ui.geometry.Offset, size: androidx.compose.ui.unit.IntSize) {
         if (isReaderResumed()) {
@@ -1001,11 +1001,11 @@ class ReaderActivity :
     }
 
     private fun setUiIsVisible(isUiVisible: Boolean) {
-		areControlsVisible = isUiVisible
+        areControlsVisible = isUiVisible
         viewModel.isMenuVisible.value = isUiVisible
         composeReaderController.setControlsVisible(isUiVisible)
-		val isFullscreen = settings.isReaderFullscreenEnabled
-		systemUiController.setSystemUiVisible(isUiVisible || !isFullscreen)
+        val isFullscreen = settings.isReaderFullscreenEnabled
+        systemUiController.setSystemUiVisible(isUiVisible || !isFullscreen)
         spaceSwitcherDelegate.setControlsVisible(
             visible = isUiVisible,
             hideWithControlsTransition = !isUiVisible && isAnimationsEnabled,
@@ -1028,63 +1028,63 @@ class ReaderActivity :
     override fun openMenu() {
         setUiIsVisible(true)
         viewModel.saveCurrentState(composeReaderController.getCurrentState())
-		composeReaderController.showOptions(
-			ComposeReaderOptionsState(
-				mode = composeReaderController.readerMode,
-				animation = settings.readerAnimation,
-				doublePage = settings.isReaderDoubleOnLandscape,
-				doublePageFoldable = settings.isReaderDoubleOnFoldable,
-				doublePageCover = settings.isReaderDoubleCoverPage,
-				splitPages = settings.isReaderSplitPagesEnabled,
-				doublePageSensitivity = settings.readerDoublePagesSensitivity,
-				superResolution = settings.isReaderSuperResolutionEnabled,
-				background = settings.readerBackground,
-				colorFilter = viewModel.readerSettingsProducer.value.colorFilter,
-			),
-		)
-		loadImageServerOptions()
+        composeReaderController.showOptions(
+            ComposeReaderOptionsState(
+                mode = composeReaderController.readerMode,
+                animation = settings.readerAnimation,
+                doublePage = settings.isReaderDoubleOnLandscape,
+                doublePageFoldable = settings.isReaderDoubleOnFoldable,
+                doublePageCover = settings.isReaderDoubleCoverPage,
+                splitPages = settings.isReaderSplitPagesEnabled,
+                doublePageSensitivity = settings.readerDoublePagesSensitivity,
+                superResolution = settings.isReaderSuperResolutionEnabled,
+                background = settings.readerBackground,
+                colorFilter = viewModel.readerSettingsProducer.value.colorFilter,
+            ),
+        )
+        loadImageServerOptions()
     }
 
-	private fun loadImageServerOptions() {
-		val source = viewModel.getContentOrNull()?.source ?: return
-		lifecycleScope.launch {
-			val options = ImageServerDelegate(mangaRepositoryFactory, source).loadOptions()
-			composeReaderController.updateOptions { copy(imageServer = options) }
-		}
-	}
+    private fun loadImageServerOptions() {
+        val source = viewModel.getContentOrNull()?.source ?: return
+        lifecycleScope.launch {
+            val options = ImageServerDelegate(mangaRepositoryFactory, source).loadOptions()
+            composeReaderController.updateOptions { copy(imageServer = options) }
+        }
+    }
 
-	private fun updateImageServer(value: String?) {
-		val source = viewModel.getContentOrNull()?.source ?: return
-		lifecycleScope.launch {
-			val changed = ImageServerDelegate(mangaRepositoryFactory, source).select(value)
-			if (changed) {
-				composeReaderController.updateOptions {
-					copy(imageServer = imageServer?.copy(selectedValue = value))
-				}
-				viewModel.reload()
-			}
-		}
-	}
+    private fun updateImageServer(value: String?) {
+        val source = viewModel.getContentOrNull()?.source ?: return
+        lifecycleScope.launch {
+            val changed = ImageServerDelegate(mangaRepositoryFactory, source).select(value)
+            if (changed) {
+                composeReaderController.updateOptions {
+                    copy(imageServer = imageServer?.copy(selectedValue = value))
+                }
+                viewModel.reload()
+            }
+        }
+    }
 
-	private fun openCurrentChapterInBrowser() {
-		val manga = viewModel.getContentOrNull() ?: return
-		val chapter = viewModel.uiState.value?.chapter
-		if (chapter == null) {
-			router.openBrowser(manga)
-			return
-		}
-		val chapterUrl = runCatching {
-			when {
-				chapter.url.startsWith("http", ignoreCase = true) -> chapter.url
-				manga.publicUrl.startsWith("http", ignoreCase = true) ->
-					java.net.URL(java.net.URL(manga.publicUrl), chapter.url).toString()
-				else -> null
-			}
-		}.getOrNull()
-		val url = chapterUrl?.takeIf { it.startsWith("http", ignoreCase = true) }
-			?: manga.publicUrl.takeIf { it.startsWith("http", ignoreCase = true) }
-		if (url != null) router.openBrowser(url, manga.source, chapter.title) else router.openBrowser(manga)
-	}
+    private fun openCurrentChapterInBrowser() {
+        val manga = viewModel.getContentOrNull() ?: return
+        val chapter = viewModel.uiState.value?.chapter
+        if (chapter == null) {
+            router.openBrowser(manga)
+            return
+        }
+        val chapterUrl = runCatching {
+            when {
+                chapter.url.startsWith("http", ignoreCase = true) -> chapter.url
+                manga.publicUrl.startsWith("http", ignoreCase = true) ->
+                    java.net.URL(java.net.URL(manga.publicUrl), chapter.url).toString()
+                else -> null
+            }
+        }.getOrNull()
+        val url = chapterUrl?.takeIf { it.startsWith("http", ignoreCase = true) }
+            ?: manga.publicUrl.takeIf { it.startsWith("http", ignoreCase = true) }
+        if (url != null) router.openBrowser(url, manga.source, chapter.title) else router.openBrowser(manga)
+    }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
         return composeReaderController.scrollBy(delta, smooth)
@@ -1094,7 +1094,7 @@ class ReaderActivity :
         if (!areControlsVisible) {
             if (scrollTimer.isActive.value && settings.isReaderAutoscrollPauseOnUi && !scrollTimer.isManuallyPaused.value) {
                 scrollTimer.setManuallyPaused(true)
-				composeReaderController.updateAutoScroll { copy(visible = true) }
+                composeReaderController.updateAutoScroll { copy(visible = true) }
                 return
             }
         }
@@ -1121,11 +1121,11 @@ class ReaderActivity :
         if (isLongClick) {
             scrollTimer.setActive(!scrollTimer.isActive.value)
         } else {
-			composeReaderController.updateAutoScroll {
-				copy(active = scrollTimer.isActive.value, manuallyPaused = scrollTimer.isManuallyPaused.value)
-			}
-			composeReaderController.toggleAutoScroll()
-		}
+            composeReaderController.updateAutoScroll {
+                copy(active = scrollTimer.isActive.value, manuallyPaused = scrollTimer.isManuallyPaused.value)
+            }
+            composeReaderController.toggleAutoScroll()
+        }
     }
 
     override fun onTranslateClick() {
@@ -1139,16 +1139,16 @@ class ReaderActivity :
 
     override fun toggleScreenOrientation() {
         if (screenOrientationHelper.toggleScreenOrientation()) {
-			composeReaderController.showMessage(
-				getString(
-					if (screenOrientationHelper.isLocked) {
-						R.string.screen_rotation_locked
-					} else {
-						R.string.screen_rotation_unlocked
-					},
-				),
-				TOAST_DURATION,
-			)
+            composeReaderController.showMessage(
+                getString(
+                    if (screenOrientationHelper.isLocked) {
+                        R.string.screen_rotation_locked
+                    } else {
+                        R.string.screen_rotation_unlocked
+                    },
+                ),
+                TOAST_DURATION,
+            )
         }
     }
 
@@ -1185,19 +1185,19 @@ class ReaderActivity :
         ) {
             composeReaderController.showMessage(chapterTitle, TOAST_DURATION)
         }
-		val shouldRefreshEInk = eInkRefreshPolicy.shouldRefresh(
-			enabled = settings.isEInkModeEnabled && settings.isEInkRefreshEnabled,
-			isPagedMode = viewModel.readerMode.value?.let { it != ReaderMode.WEBTOON } == true,
-			previous = previous?.let { EInkPageIdentity(it.chapter.id, it.currentPage) },
-			current = EInkPageIdentity(uiState.chapter.id, uiState.currentPage),
-			interval = settings.eInkRefreshEveryPages,
-		)
-		if (shouldRefreshEInk) {
-			composeReaderController.showEInkRefresh(
-				durationMillis = settings.eInkRefreshDurationMillis,
-				colorArgb = settings.eInkRefreshColor.colorInt,
-			)
-		}
+        val shouldRefreshEInk = eInkRefreshPolicy.shouldRefresh(
+            enabled = settings.isEInkModeEnabled && settings.isEInkRefreshEnabled,
+            isPagedMode = viewModel.readerMode.value?.let { it != ReaderMode.WEBTOON } == true,
+            previous = previous?.let { EInkPageIdentity(it.chapter.id, it.currentPage) },
+            current = EInkPageIdentity(uiState.chapter.id, uiState.currentPage),
+            interval = settings.eInkRefreshEveryPages,
+        )
+        if (shouldRefreshEInk) {
+            composeReaderController.showEInkRefresh(
+                durationMillis = settings.eInkRefreshDurationMillis,
+                colorArgb = settings.eInkRefreshColor.colorInt,
+            )
+        }
         composeReaderController.updateActions {
             copy(
                 sliderValue = if (uiState.isSliderAvailable()) uiState.currentPage.toFloat() else 0f,
@@ -1260,23 +1260,23 @@ class ReaderActivity :
     }
 
     private fun toggleTranslationLayer() {
-		if (!viewModel.hasTranslationEngineConfigured()) {
-			enableTranslationAfterSetup = true
-			router.openTranslationSettings()
-			return
-		}
-		viewModel.getTranslationBypassHint(this)?.let { hint ->
-			composeReaderController.showMessage(hint, 2000L)
-			return
-		}
-		translationShortcutVisibleForSession = true
-		if (settings.isReaderTranslationEnabled) {
-			settings.isReaderTranslationShowTranslated = !settings.isReaderTranslationShowTranslated
-		} else {
-			settings.isReaderTranslationShowTranslated = true
-			settings.isReaderTranslationEnabled = true
-			composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
-		}
+        if (!viewModel.hasTranslationEngineConfigured()) {
+            enableTranslationAfterSetup = true
+            router.openTranslationSettings()
+            return
+        }
+        viewModel.getTranslationBypassHint(this)?.let { hint ->
+            composeReaderController.showMessage(hint, 2000L)
+            return
+        }
+        translationShortcutVisibleForSession = true
+        if (settings.isReaderTranslationEnabled) {
+            settings.isReaderTranslationShowTranslated = !settings.isReaderTranslationShowTranslated
+        } else {
+            settings.isReaderTranslationShowTranslated = true
+            settings.isReaderTranslationEnabled = true
+            composeReaderController.showMessage(getString(R.string.reader_translation_long_press_hint), 2500L)
+        }
     }
 
     private fun onChapterTranslationProgressChanged(progress: ReaderViewModel.ChapterTranslationProgress?) {
@@ -1289,9 +1289,9 @@ class ReaderActivity :
         if (!settings.isReaderTranslationEnabled) {
             return
         }
-		composeReaderController.updateInfoBar {
-			copy(text = getString(R.string.reader_translation_status_compact, progress.readyCount, progress.totalCount))
-		}
+        composeReaderController.updateInfoBar {
+            copy(text = getString(R.string.reader_translation_status_compact, progress.readyCount, progress.totalCount))
+        }
     }
 
     private fun showTranslationLanguageQuickActions() {
@@ -1366,29 +1366,29 @@ class ReaderActivity :
         val source = settings.readerTranslationSourceLanguage
         val target = settings.readerTranslationTargetLanguage
         if (isAutoReaderTranslationLanguage(source)) {
-			composeReaderController.showMessage(
-				getString(R.string.reader_translation_swap_auto_unsupported),
-				TOAST_DURATION,
-			)
+            composeReaderController.showMessage(
+                getString(R.string.reader_translation_swap_auto_unsupported),
+                TOAST_DURATION,
+            )
             return
         }
         settings.readerTranslationSourceLanguage = target
         settings.readerTranslationTargetLanguage = source
-		composeReaderController.showMessage(
-			getString(
+        composeReaderController.showMessage(
+            getString(
                 R.string.reader_translation_languages_swapped,
                 displayTranslationLanguage(target, isSource = true),
                 displayTranslationLanguage(source, isSource = false),
             ),
-			TOAST_DURATION,
-		)
+            TOAST_DURATION,
+        )
     }
 
     private fun showTranslationLanguageChangedMessage(messageRes: Int, value: String, isSource: Boolean) {
-		composeReaderController.showMessage(
-			getString(messageRes, displayTranslationLanguage(value, isSource)),
-			TOAST_DURATION,
-		)
+        composeReaderController.showMessage(
+            getString(messageRes, displayTranslationLanguage(value, isSource)),
+            TOAST_DURATION,
+        )
     }
 
     private fun displayTranslationLanguage(value: String, isSource: Boolean): String {
@@ -1408,18 +1408,18 @@ class ReaderActivity :
         return if (index in labels.indices) labels[index] else value
     }
 
-	private fun dispatchNavigateUp() {
-		if (intent.getBooleanExtra(AppRouter.EXTRA_HAS_IN_APP_CALLER, false)) {
-			finishAfterTransition()
-			return
-		}
-		val upIntent = parentActivityIntent
-		if (upIntent != null) {
-			if (!navigateUpTo(upIntent)) startActivity(upIntent)
-		} else {
-			finishAfterTransition()
-		}
-	}
+    private fun dispatchNavigateUp() {
+        if (intent.getBooleanExtra(AppRouter.EXTRA_HAS_IN_APP_CALLER, false)) {
+            finishAfterTransition()
+            return
+        }
+        val upIntent = parentActivityIntent
+        if (upIntent != null) {
+            if (!navigateUpTo(upIntent)) startActivity(upIntent)
+        } else {
+            finishAfterTransition()
+        }
+    }
 
     // Observe foldable window layout to auto-enable double-page if configured
     private fun observeWindowLayout() {

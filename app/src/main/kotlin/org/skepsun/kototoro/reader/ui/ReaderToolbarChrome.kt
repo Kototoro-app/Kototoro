@@ -23,46 +23,46 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
 @Composable
 fun ReaderToolbarChrome(
-	modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier,
 ) {
-	val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
-	val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
 
-	Box(modifier = modifier.fillMaxWidth().height(96.dp)) {
-			Box(
-				modifier = Modifier
-					.fillMaxWidth()
-					.height(96.dp)
-					.drawWithCache {
-						val brush = Brush.verticalGradient(
-							colorStops = arrayOf(
-								0f to immersiveBaseColor.copy(alpha = 0.30f),
-								0.36f to immersiveBaseColor.copy(alpha = 0.22f),
-								0.68f to immersiveBaseColor.copy(alpha = 0.12f),
-								0.88f to immersiveBaseColor.copy(alpha = 0.04f),
-								1f to Color.Transparent,
-							),
-							startY = 0f,
-					endY = 96.dp.toPx(),
-						)
-						onDrawBehind { drawRect(brush) }
-					},
-			)
-			GlassSurface(
-				modifier = if (isIosStyle) {
-					Modifier
-						.fillMaxWidth()
-						.statusBarsPadding()
-						.padding(horizontal = 14.dp, vertical = 4.dp)
-						.height(64.dp)
-				} else {
-					Modifier.fillMaxWidth().height(96.dp)
-				},
-				shape = if (isIosStyle) RoundedRectangle(25.dp) else RoundedRectangle(0.dp),
-				style = GlassDefaults.topBarChromeStyle(),
-				// Floating reader top chrome (rounded bar inset from the screen
-				// edges) is pill chrome, not an edge-to-edge bar panel.
-				componentRole = GlassComponentRole.PillControl,
-			) { }
-	}
+    Box(modifier = modifier.fillMaxWidth().height(96.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .drawWithCache {
+                        val brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0f to immersiveBaseColor.copy(alpha = 0.30f),
+                                0.36f to immersiveBaseColor.copy(alpha = 0.22f),
+                                0.68f to immersiveBaseColor.copy(alpha = 0.12f),
+                                0.88f to immersiveBaseColor.copy(alpha = 0.04f),
+                                1f to Color.Transparent,
+                            ),
+                            startY = 0f,
+                    endY = 96.dp.toPx(),
+                        )
+                        onDrawBehind { drawRect(brush) }
+                    },
+            )
+            GlassSurface(
+                modifier = if (isIosStyle) {
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                        .height(64.dp)
+                } else {
+                    Modifier.fillMaxWidth().height(96.dp)
+                },
+                shape = if (isIosStyle) RoundedRectangle(25.dp) else RoundedRectangle(0.dp),
+                style = GlassDefaults.topBarChromeStyle(),
+                // Floating reader top chrome (rounded bar inset from the screen
+                // edges) is pill chrome, not an edge-to-edge bar panel.
+                componentRole = GlassComponentRole.PillControl,
+            ) { }
+    }
 }

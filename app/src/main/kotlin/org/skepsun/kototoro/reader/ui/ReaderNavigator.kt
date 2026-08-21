@@ -1,17 +1,17 @@
 package org.skepsun.kototoro.reader.ui
 
 interface ReaderNavigator {
-	val isReaderResumed: Boolean
+    val isReaderResumed: Boolean
 
-	fun switchPageBy(delta: Int)
+    fun switchPageBy(delta: Int)
 
-	fun switchPageTo(position: Int, smooth: Boolean)
+    fun switchPageTo(position: Int, smooth: Boolean)
 
-	fun scrollBy(delta: Int, smooth: Boolean): Boolean
+    fun scrollBy(delta: Int, smooth: Boolean): Boolean
 
-	fun getCurrentState(): ReaderState?
+    fun getCurrentState(): ReaderState?
 
-	fun onZoomIn()
+    fun onZoomIn()
 
-	fun onZoomOut()
+    fun onZoomOut()
 }

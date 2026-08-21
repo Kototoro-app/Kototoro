@@ -185,12 +185,12 @@ class NovelContentLoader @Inject constructor(
         return sb.toString()
     }
 
-	private suspend fun loadLocalEpubChapter(chapter: ContentChapter): String? = withContext(Dispatchers.IO) {
-		val reference = parseEpubChapterReference(chapter.url) ?: return@withContext null
-		val epubFile = resolveEpubFile(appContext, reference.fileReference) ?: return@withContext null
-		val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile, epubContentCache)
-		parser.getChapterContent(reference.chapterIndex)?.let(::htmlToPlainText)
-	}
+    private suspend fun loadLocalEpubChapter(chapter: ContentChapter): String? = withContext(Dispatchers.IO) {
+        val reference = parseEpubChapterReference(chapter.url) ?: return@withContext null
+        val epubFile = resolveEpubFile(appContext, reference.fileReference) ?: return@withContext null
+        val parser = org.skepsun.kototoro.local.epub.LocalEpubParser(epubFile, epubContentCache)
+        parser.getChapterContent(reference.chapterIndex)?.let(::htmlToPlainText)
+    }
 
     /**
      * 检查章节是否已缓存
@@ -304,74 +304,74 @@ class NovelContentLoader @Inject constructor(
         }
     }
 
-	private suspend fun loadLocalHtmlViaPages(
-		repository: ContentRepository,
-		chapter: ContentChapter,
-		prefetchedPages: List<ContentPage>?,
-	): String? {
-		return runCatching {
-			val pages = prefetchedPages ?: repository.getPages(chapter)
-			android.util.Log.d(
-				"NovelContentLoader",
-				"loadLocalHtmlViaPages: id=${chapter.id}, prefetched=${prefetchedPages != null}, pages=${pages.size}",
-			)
-			if (pages.isEmpty()) return null
-			
-			// 如果第一页是图片，说明这是插图章节，生成合成HTML显示所有图片
-			val firstUrl = pages.first().url
-			if (firstUrl.isImageName()) {
-				android.util.Log.d("NovelContentLoader", "Detected image-only chapter, generating synthetic HTML")
-				val syntheticHtml = pages.joinToString("\n") { p -> 
-					// 使用 fragment (entry name) 或者完整 URL
-					val entryName = java.net.URI(p.url).fragment?.removePrefix("/") ?: p.url
-					"<img src=\"$entryName\">" 
-				}
-				// 即使是合成HTML也经过转换，确保渲染器能正确处理占位符
-				return htmlToPlainText(syntheticHtml)
-			}
+    private suspend fun loadLocalHtmlViaPages(
+        repository: ContentRepository,
+        chapter: ContentChapter,
+        prefetchedPages: List<ContentPage>?,
+    ): String? {
+        return runCatching {
+            val pages = prefetchedPages ?: repository.getPages(chapter)
+            android.util.Log.d(
+                "NovelContentLoader",
+                "loadLocalHtmlViaPages: id=${chapter.id}, prefetched=${prefetchedPages != null}, pages=${pages.size}",
+            )
+            if (pages.isEmpty()) return null
+            
+            // 如果第一页是图片，说明这是插图章节，生成合成HTML显示所有图片
+            val firstUrl = pages.first().url
+            if (firstUrl.isImageName()) {
+                android.util.Log.d("NovelContentLoader", "Detected image-only chapter, generating synthetic HTML")
+                val syntheticHtml = pages.joinToString("\n") { p -> 
+                    // 使用 fragment (entry name) 或者完整 URL
+                    val entryName = java.net.URI(p.url).fragment?.removePrefix("/") ?: p.url
+                    "<img src=\"$entryName\">" 
+                }
+                // 即使是合成HTML也经过转换，确保渲染器能正确处理占位符
+                return htmlToPlainText(syntheticHtml)
+            }
 
-			htmlToPlainText(concatPagesHtml(pages))
+            htmlToPlainText(concatPagesHtml(pages))
         }.getOrNull()
     }
 
     private fun readLocalHtmlFromUri(uri: java.net.URI): String? {
-		return runCatching {
-			when {
-				uri.scheme.equals("file", ignoreCase = true) -> {
-					val file = File(uri.path) // Use path to avoid fragment issues
-					if (file.exists()) file.readText() else null
-				}
+        return runCatching {
+            when {
+                uri.scheme.equals("file", ignoreCase = true) -> {
+                    val file = File(uri.path) // Use path to avoid fragment issues
+                    if (file.exists()) file.readText() else null
+                }
 
-				uri.scheme.equals("data", ignoreCase = true) -> {
-					val data = uri.schemeSpecificPart
-					val comma = data.indexOf(',')
-					if (comma <= 0) return null
-					val meta = data.substring(0, comma)
-					val contentPart = data.substring(comma + 1)
-					val isBase64 = meta.contains(";base64", ignoreCase = true)
-					if (isBase64) {
-						String(android.util.Base64.decode(contentPart, android.util.Base64.DEFAULT))
-					} else {
-						java.net.URLDecoder.decode(contentPart, "UTF-8")
-					}
-				}
+                uri.scheme.equals("data", ignoreCase = true) -> {
+                    val data = uri.schemeSpecificPart
+                    val comma = data.indexOf(',')
+                    if (comma <= 0) return null
+                    val meta = data.substring(0, comma)
+                    val contentPart = data.substring(comma + 1)
+                    val isBase64 = meta.contains(";base64", ignoreCase = true)
+                    if (isBase64) {
+                        String(android.util.Base64.decode(contentPart, android.util.Base64.DEFAULT))
+                    } else {
+                        java.net.URLDecoder.decode(contentPart, "UTF-8")
+                    }
+                }
 
-				uri.scheme.equals(URI_SCHEME_ZIP, ignoreCase = true) ||
-					uri.scheme.equals("zip", ignoreCase = true) ||
-					uri.scheme.equals("cbz", ignoreCase = true) -> {
-					val zipPath = uri.schemeSpecificPart.substringBefore('#').removePrefix("///").let { 
-						if (it.startsWith("/")) it else "/$it" 
-					}
-					val entryPath = uri.fragment?.removePrefix("/") ?: return null
-					ZipFile(zipPath).use { zip ->
-						val entry = zip.getEntry(entryPath) ?: return null
-						zip.getInputStream(entry).bufferedReader().use { it.readText() }
-					}
-				}
+                uri.scheme.equals(URI_SCHEME_ZIP, ignoreCase = true) ||
+                    uri.scheme.equals("zip", ignoreCase = true) ||
+                    uri.scheme.equals("cbz", ignoreCase = true) -> {
+                    val zipPath = uri.schemeSpecificPart.substringBefore('#').removePrefix("///").let { 
+                        if (it.startsWith("/")) it else "/$it" 
+                    }
+                    val entryPath = uri.fragment?.removePrefix("/") ?: return null
+                    ZipFile(zipPath).use { zip ->
+                        val entry = zip.getEntry(entryPath) ?: return null
+                        zip.getInputStream(entry).bufferedReader().use { it.readText() }
+                    }
+                }
 
-				else -> null
-			}
-		}.getOrNull()
+                else -> null
+            }
+        }.getOrNull()
     }
 
     private fun rewriteLocalImageSrc(html: String, uri: java.net.URI): String {
@@ -382,136 +382,136 @@ class NovelContentLoader @Inject constructor(
                 if (base != null) rewriteLocalImageSrc(html, base) else html
             }
 
-			uri.scheme.equals(URI_SCHEME_ZIP, ignoreCase = true) ||
-				uri.scheme.equals("zip", ignoreCase = true) ||
-				uri.scheme.equals("cbz", ignoreCase = true) -> {
-				val zipPath = uri.schemeSpecificPart
-				val base = uri.fragment.orEmpty().substringBeforeLast("/", "")
-				val nameToEntry = HashMap<String, String>()
-				val chapterImages = HashMap<String, String>()
-				val imageEntries = runCatching {
-					ZipFile(zipPath).use { zip ->
-						// 1) 读取 index.json 映射。针对 MULTIPLE_CBZ，索引文件在 ZIP 同级目录下
-						val zipFile = File(zipPath)
-						val indexContent = zip.getEntry("index.json")?.let { entry ->
-							zip.getInputStream(entry).bufferedReader().use { it.readText() }
-						} ?: File(zipFile.parentFile, "index.json").takeIf { it.exists() }?.readText()
+            uri.scheme.equals(URI_SCHEME_ZIP, ignoreCase = true) ||
+                uri.scheme.equals("zip", ignoreCase = true) ||
+                uri.scheme.equals("cbz", ignoreCase = true) -> {
+                val zipPath = uri.schemeSpecificPart
+                val base = uri.fragment.orEmpty().substringBeforeLast("/", "")
+                val nameToEntry = HashMap<String, String>()
+                val chapterImages = HashMap<String, String>()
+                val imageEntries = runCatching {
+                    ZipFile(zipPath).use { zip ->
+                        // 1) 读取 index.json 映射。针对 MULTIPLE_CBZ，索引文件在 ZIP 同级目录下
+                        val zipFile = File(zipPath)
+                        val indexContent = zip.getEntry("index.json")?.let { entry ->
+                            zip.getInputStream(entry).bufferedReader().use { it.readText() }
+                        } ?: File(zipFile.parentFile, "index.json").takeIf { it.exists() }?.readText()
 
-						indexContent?.let { json ->
-							val rootObj = org.json.JSONObject(json)
-							val chaptersObj = rootObj.optJSONObject("chapters")
-							val zipName = zipFile.name
-							val htmlInside = uri.fragment?.removePrefix("/")
+                        indexContent?.let { json ->
+                            val rootObj = org.json.JSONObject(json)
+                            val chaptersObj = rootObj.optJSONObject("chapters")
+                            val zipName = zipFile.name
+                            val htmlInside = uri.fragment?.removePrefix("/")
 
-							val matched = chaptersObj?.keys()?.asSequence()?.any { id ->
-								val chapterObj = chaptersObj.optJSONObject(id) ?: return@any false
-								val fileName = chapterObj.optString("file")
-								// 匹配逻辑：
-								// 1. 如果 filename 匹配 ZIP 文件名（MULTIPLE_CBZ）
-								// 2. 或者 filename 匹配内部 HTML（旧逻辑或 SINGLE_CBZ 兜底）
-								if (fileName != zipName && fileName != htmlInside) return@any false
+                            val matched = chaptersObj?.keys()?.asSequence()?.any { id ->
+                                val chapterObj = chaptersObj.optJSONObject(id) ?: return@any false
+                                val fileName = chapterObj.optString("file")
+                                // 匹配逻辑：
+                                // 1. 如果 filename 匹配 ZIP 文件名（MULTIPLE_CBZ）
+                                // 2. 或者 filename 匹配内部 HTML（旧逻辑或 SINGLE_CBZ 兜底）
+                                if (fileName != zipName && fileName != htmlInside) return@any false
 
-								chapterObj.optJSONArray("images")?.let { arr ->
-									for (i in 0 until arr.length()) {
-										val o = arr.optJSONObject(i) ?: continue
-										val remote = o.optString("remote")
-										val local = o.optString("local")
-										if (remote.isNotBlank() && local.isNotBlank()) {
-											chapterImages.putIfAbsent(remote, local)
-										}
-									}
-								}
-								true
-							} ?: false
+                                chapterObj.optJSONArray("images")?.let { arr ->
+                                    for (i in 0 until arr.length()) {
+                                        val o = arr.optJSONObject(i) ?: continue
+                                        val remote = o.optString("remote")
+                                        val local = o.optString("local")
+                                        if (remote.isNotBlank() && local.isNotBlank()) {
+                                            chapterImages.putIfAbsent(remote, local)
+                                        }
+                                    }
+                                }
+                                true
+                            } ?: false
 
-							android.util.Log.d(
-								"NovelContentLoader",
-								"index.json hit: zip=$zipName, html=$htmlInside, matched=$matched, images=${chapterImages.size}",
-							)
+                            android.util.Log.d(
+                                "NovelContentLoader",
+                                "index.json hit: zip=$zipName, html=$htmlInside, matched=$matched, images=${chapterImages.size}",
+                            )
 
-							if (!matched) {
-								chaptersObj?.keys()?.forEach { id ->
-									val chapterObj = chaptersObj.optJSONObject(id) ?: return@forEach
-									chapterObj.optJSONArray("images")?.let { arr ->
-										for (i in 0 until arr.length()) {
-											val o = arr.optJSONObject(i) ?: continue
-											val remote = o.optString("remote")
-											val local = o.optString("local")
-											if (remote.isNotBlank() && local.isNotBlank()) {
-												chapterImages.putIfAbsent(remote, local)
-											}
-										}
-									}
-								}
-							}
-						}
+                            if (!matched) {
+                                chaptersObj?.keys()?.forEach { id ->
+                                    val chapterObj = chaptersObj.optJSONObject(id) ?: return@forEach
+                                    chapterObj.optJSONArray("images")?.let { arr ->
+                                        for (i in 0 until arr.length()) {
+                                            val o = arr.optJSONObject(i) ?: continue
+                                            val remote = o.optString("remote")
+                                            val local = o.optString("local")
+                                            if (remote.isNotBlank() && local.isNotBlank()) {
+                                                chapterImages.putIfAbsent(remote, local)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-						// 2) 枚举图片 entries，按文件名建立映射并记录顺序
-						val acc = mutableListOf<String>()
-						val iter = zip.entries().asIterator()
-						while (iter.hasNext()) {
-							val entry = iter.next()
-							if (!entry.isDirectory && entry.name.isImageName()) {
-								acc.add(entry.name)
-								val name = entry.name.substringAfterLast('/')
-								nameToEntry.putIfAbsent(name, entry.name)
-							}
-						}
-						android.util.Log.d(
-							"NovelContentLoader",
-							"zip entries collected: images=${acc.size}, nameToEntry=${nameToEntry.size}",
-						)
-						acc.sorted()
-					}
-				}.getOrDefault(emptyList())
-				var fallbackIndex = 0
-				runCatching {
-					val doc = org.jsoup.Jsoup.parse(html)
-					doc.select("img").forEach { img ->
+                        // 2) 枚举图片 entries，按文件名建立映射并记录顺序
+                        val acc = mutableListOf<String>()
+                        val iter = zip.entries().asIterator()
+                        while (iter.hasNext()) {
+                            val entry = iter.next()
+                            if (!entry.isDirectory && entry.name.isImageName()) {
+                                acc.add(entry.name)
+                                val name = entry.name.substringAfterLast('/')
+                                nameToEntry.putIfAbsent(name, entry.name)
+                            }
+                        }
+                        android.util.Log.d(
+                            "NovelContentLoader",
+                            "zip entries collected: images=${acc.size}, nameToEntry=${nameToEntry.size}",
+                        )
+                        acc.sorted()
+                    }
+                }.getOrDefault(emptyList())
+                var fallbackIndex = 0
+                runCatching {
+                    val doc = org.jsoup.Jsoup.parse(html)
+                    doc.select("img").forEach { img ->
                         val src = (img.attr("data-src").ifBlank { img.attr("src") }).trim()
                         if (src.isBlank()) return@forEach
                         // 先用 index.json 中记录的映射
                         var entryPath: String? = chapterImages[src]
-						if (entryPath != null) {
-							android.util.Log.d("NovelContentLoader", "image map hit: $src -> $entryPath")
-						}
+                        if (entryPath != null) {
+                            android.util.Log.d("NovelContentLoader", "image map hit: $src -> $entryPath")
+                        }
                         if (src.startsWith("http", true) || src.startsWith("file", true)) {
                             val key = src.substringAfterLast('/')
                             entryPath = entryPath ?: nameToEntry[key]
-							if (entryPath != null) {
-								android.util.Log.d("NovelContentLoader", "image name hit: $src -> $entryPath")
-							}
+                            if (entryPath != null) {
+                                android.util.Log.d("NovelContentLoader", "image name hit: $src -> $entryPath")
+                            }
                         } else {
                             entryPath = entryPath ?: normalizeZipPath(base, src)?.takeIf { it in imageEntries }
-							if (entryPath != null) {
-								android.util.Log.d("NovelContentLoader", "image relative hit: $src -> $entryPath")
-							}
+                            if (entryPath != null) {
+                                android.util.Log.d("NovelContentLoader", "image relative hit: $src -> $entryPath")
+                            }
                         }
                         if (entryPath == null && fallbackIndex < imageEntries.size) {
                             entryPath = imageEntries[fallbackIndex++]
-							android.util.Log.d("NovelContentLoader", "image fallback: $src -> $entryPath")
+                            android.util.Log.d("NovelContentLoader", "image fallback: $src -> $entryPath")
                         }
-						if (entryPath == null) {
-								android.util.Log.d("NovelContentLoader", "image unresolved, keeping remote source")
-						}
+                        if (entryPath == null) {
+                                android.util.Log.d("NovelContentLoader", "image unresolved, keeping remote source")
+                        }
                         if (entryPath != null) {
-							val absolute = "$URI_SCHEME_ZIP://$zipPath#$entryPath"
-							img.attr("src", absolute)
-							img.removeAttr("data-src")
-						}
-					}
-					doc.outerHtml()
-				}.getOrDefault(html)
-			}
+                            val absolute = "$URI_SCHEME_ZIP://$zipPath#$entryPath"
+                            img.attr("src", absolute)
+                            img.removeAttr("data-src")
+                        }
+                    }
+                    doc.outerHtml()
+                }.getOrDefault(html)
+            }
 
-			else -> html
-		}
-	}
+            else -> html
+        }
+    }
 
-	private fun String.isImageName(): Boolean {
-		val ext = substringAfterLast('.', missingDelimiterValue = "").lowercase()
-		return ext in setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "bmp")
-	}
+    private fun String.isImageName(): Boolean {
+        val ext = substringAfterLast('.', missingDelimiterValue = "").lowercase()
+        return ext in setOf("jpg", "jpeg", "png", "webp", "gif", "avif", "bmp")
+    }
 
     private fun normalizeZipPath(base: String, src: String): String {
         val clean = src.removePrefix("./").removePrefix("/")

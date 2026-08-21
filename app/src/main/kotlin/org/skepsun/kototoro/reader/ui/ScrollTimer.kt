@@ -34,145 +34,145 @@ private const val INTERACTION_SKIP_MS = 2_000L
 private const val SPEED_FACTOR_DELTA = 0.02f
 
 internal fun autoScrollSpeedMultiplier(speed: Float): Float {
-	return MIN_SPEED_MULTIPLIER + speed.coerceIn(0f, 1f) * SPEED_MULTIPLIER_RANGE
+    return MIN_SPEED_MULTIPLIER + speed.coerceIn(0f, 1f) * SPEED_MULTIPLIER_RANGE
 }
 
 internal fun autoScrollDelayMs(speed: Float): Long {
-	return (BASE_SCROLL_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
+    return (BASE_SCROLL_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
 }
 
 internal fun autoPageSwitchDelayMs(speed: Float): Long {
-	return (BASE_PAGE_SWITCH_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
+    return (BASE_PAGE_SWITCH_DELAY_MS / autoScrollSpeedMultiplier(speed)).roundToLong().coerceAtLeast(1L)
 }
 
 class ScrollTimer @AssistedInject constructor(
-	@Assisted resources: Resources,
-	@Assisted private val listener: ReaderControlDelegate.OnInteractionListener,
-	@Assisted lifecycleOwner: LifecycleOwner,
-	settings: AppSettings,
+    @Assisted resources: Resources,
+    @Assisted private val listener: ReaderControlDelegate.OnInteractionListener,
+    @Assisted lifecycleOwner: LifecycleOwner,
+    settings: AppSettings,
 ) {
 
-	private val coroutineScope = lifecycleOwner.lifecycleScope
-	private var job: Job? = null
-	private var delayMs: Long = 10L
-	var pageSwitchDelay: Long = 100L
-		private set
-	private var resumeAt = 0L
-	private var isTouchDown = MutableStateFlow(false)
-	private val isRunning = MutableStateFlow(false)
-	private val _isManuallyPaused = MutableStateFlow(false)
-	val isManuallyPaused: StateFlow<Boolean> get() = _isManuallyPaused
-	private val scrollDelta = resources.resolveDp(1)
+    private val coroutineScope = lifecycleOwner.lifecycleScope
+    private var job: Job? = null
+    private var delayMs: Long = 10L
+    var pageSwitchDelay: Long = 100L
+        private set
+    private var resumeAt = 0L
+    private var isTouchDown = MutableStateFlow(false)
+    private val isRunning = MutableStateFlow(false)
+    private val _isManuallyPaused = MutableStateFlow(false)
+    val isManuallyPaused: StateFlow<Boolean> get() = _isManuallyPaused
+    private val scrollDelta = resources.resolveDp(1)
 
-	val isActive: StateFlow<Boolean>
-		get() = isRunning
+    val isActive: StateFlow<Boolean>
+        get() = isRunning
 
-	init {
-		settings.observeAsFlow(AppSettings.KEY_READER_AUTOSCROLL_SPEED) {
-			readerAutoscrollSpeed
-		}.flowOn(Dispatchers.Default)
-			.onEach {
-				onSpeedChanged(it)
-			}.launchIn(coroutineScope)
-	}
+    init {
+        settings.observeAsFlow(AppSettings.KEY_READER_AUTOSCROLL_SPEED) {
+            readerAutoscrollSpeed
+        }.flowOn(Dispatchers.Default)
+            .onEach {
+                onSpeedChanged(it)
+            }.launchIn(coroutineScope)
+    }
 
-	fun setManuallyPaused(paused: Boolean) {
-		_isManuallyPaused.value = paused
-	}
+    fun setManuallyPaused(paused: Boolean) {
+        _isManuallyPaused.value = paused
+    }
 
-	fun setActive(value: Boolean) {
-		if (isRunning.value != value) {
-			isRunning.value = value
-			if (!value) _isManuallyPaused.value = false
-			restartJob()
-		}
-	}
+    fun setActive(value: Boolean) {
+        if (isRunning.value != value) {
+            isRunning.value = value
+            if (!value) _isManuallyPaused.value = false
+            restartJob()
+        }
+    }
 
-	fun onUserInteraction() {
-		resumeAt = SystemClock.elapsedRealtime() + INTERACTION_SKIP_MS
-	}
+    fun onUserInteraction() {
+        resumeAt = SystemClock.elapsedRealtime() + INTERACTION_SKIP_MS
+    }
 
-	fun onTouchEvent(event: MotionEvent) {
-		when (event.actionMasked) {
-			MotionEvent.ACTION_DOWN -> {
-				isTouchDown.value = true
-			}
+    fun onTouchEvent(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                isTouchDown.value = true
+            }
 
-			MotionEvent.ACTION_UP,
-			MotionEvent.ACTION_CANCEL -> {
-				isTouchDown.value = false
-			}
-		}
-	}
+            MotionEvent.ACTION_UP,
+            MotionEvent.ACTION_CANCEL -> {
+                isTouchDown.value = false
+            }
+        }
+    }
 
-	private fun onSpeedChanged(speed: Float) {
-		delayMs = autoScrollDelayMs(speed)
-		pageSwitchDelay = autoPageSwitchDelayMs(speed)
-	}
+    private fun onSpeedChanged(speed: Float) {
+        delayMs = autoScrollDelayMs(speed)
+        pageSwitchDelay = autoPageSwitchDelayMs(speed)
+    }
 
-	private fun restartJob() {
-		job?.cancel()
-		resumeAt = 0L
-		if (!isRunning.value || delayMs == 0L) {
-			job = null
-			return
-		}
-		job = coroutineScope.launch {
-			var accumulator = 0L
-			var speedFactor = 1f
-			while (isActive) {
-				if (isPaused()) {
-					speedFactor = (speedFactor - SPEED_FACTOR_DELTA).coerceAtLeast(0f)
-				} else if (speedFactor < 1f) {
-					speedFactor = (speedFactor + SPEED_FACTOR_DELTA).coerceAtMost(1f)
-				}
-				if (speedFactor == 1f) {
-					delay(delayMs)
-				} else if (speedFactor == 0f) {
-					delayUntilResumed()
-					continue
-				} else {
-					delay((delayMs * (1f + speedFactor * 2)).toLong())
-				}
-				if (!listener.isReaderResumed()) {
-					continue
-				}
-				if (!listener.scrollBy(scrollDelta, false)) {
-					accumulator += delayMs
-				}
-				if (accumulator >= pageSwitchDelay) {
-					listener.switchPageBy(1)
-					accumulator -= pageSwitchDelay
-				}
-			}
-		}
-	}
+    private fun restartJob() {
+        job?.cancel()
+        resumeAt = 0L
+        if (!isRunning.value || delayMs == 0L) {
+            job = null
+            return
+        }
+        job = coroutineScope.launch {
+            var accumulator = 0L
+            var speedFactor = 1f
+            while (isActive) {
+                if (isPaused()) {
+                    speedFactor = (speedFactor - SPEED_FACTOR_DELTA).coerceAtLeast(0f)
+                } else if (speedFactor < 1f) {
+                    speedFactor = (speedFactor + SPEED_FACTOR_DELTA).coerceAtMost(1f)
+                }
+                if (speedFactor == 1f) {
+                    delay(delayMs)
+                } else if (speedFactor == 0f) {
+                    delayUntilResumed()
+                    continue
+                } else {
+                    delay((delayMs * (1f + speedFactor * 2)).toLong())
+                }
+                if (!listener.isReaderResumed()) {
+                    continue
+                }
+                if (!listener.scrollBy(scrollDelta, false)) {
+                    accumulator += delayMs
+                }
+                if (accumulator >= pageSwitchDelay) {
+                    listener.switchPageBy(1)
+                    accumulator -= pageSwitchDelay
+                }
+            }
+        }
+    }
 
-	private fun isPaused(): Boolean {
-		return isTouchDown.value || resumeAt > SystemClock.elapsedRealtime() || _isManuallyPaused.value
-	}
+    private fun isPaused(): Boolean {
+        return isTouchDown.value || resumeAt > SystemClock.elapsedRealtime() || _isManuallyPaused.value
+    }
 
-	private suspend fun delayUntilResumed() {
-		while (isPaused()) {
-			val delayTime = resumeAt - SystemClock.elapsedRealtime()
-			if (delayTime > 0) {
-				delay(delayTime)
-			} else {
-				yield()
-			}
-			combine(isTouchDown, _isManuallyPaused) { touch, manualBtn ->
-				touch || manualBtn
-			}.first { !it }
-		}
-	}
+    private suspend fun delayUntilResumed() {
+        while (isPaused()) {
+            val delayTime = resumeAt - SystemClock.elapsedRealtime()
+            if (delayTime > 0) {
+                delay(delayTime)
+            } else {
+                yield()
+            }
+            combine(isTouchDown, _isManuallyPaused) { touch, manualBtn ->
+                touch || manualBtn
+            }.first { !it }
+        }
+    }
 
-	@AssistedFactory
-	interface Factory {
+    @AssistedFactory
+    interface Factory {
 
-		fun create(
-			resources: Resources,
-			lifecycleOwner: LifecycleOwner,
-			listener: ReaderControlDelegate.OnInteractionListener,
-		): ScrollTimer
-	}
+        fun create(
+            resources: Resources,
+            lifecycleOwner: LifecycleOwner,
+            listener: ReaderControlDelegate.OnInteractionListener,
+        ): ScrollTimer
+    }
 }

@@ -297,11 +297,11 @@ class ReaderViewModel @Inject constructor(
         observeMergeRepeatedChapters()
         observeWebtoonBoundaryMode()
         loadImpl()
-		launchJob(Dispatchers.Default) {
-			val mangaId = manga.filterNotNull().first().id
-			if (!isIncognitoMode.firstNotNull()) {
-				appShortcutManager.notifyContentOpened(mangaId)
-			}
+        launchJob(Dispatchers.Default) {
+            val mangaId = manga.filterNotNull().first().id
+            if (!isIncognitoMode.firstNotNull()) {
+                appShortcutManager.notifyContentOpened(mangaId)
+            }
         }
     }
 

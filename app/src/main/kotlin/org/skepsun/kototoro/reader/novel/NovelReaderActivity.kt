@@ -205,7 +205,7 @@ class NovelReaderActivity :
             
             lifecycleScope.launch {
                 ttsService?.getState()?.collect { state ->
-					composeReaderViewModel.publishTtsState(state)
+                    composeReaderViewModel.publishTtsState(state)
                     
                     if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.PLAYING) {
                         // TODO string sync highlighting
@@ -226,7 +226,7 @@ class NovelReaderActivity :
             lifecycleScope.launch {
                 ttsService?.getPlayingTokenIndex()?.collectLatest { index ->
                     val range = index?.let { ttsService?.getToken(it)?.range }
-					composeReaderViewModel.publishTtsHighlight(range)
+                    composeReaderViewModel.publishTtsHighlight(range)
                 }
             }
         }
@@ -564,10 +564,10 @@ class NovelReaderActivity :
                                     )
                                 }
                             },
-							onLongPress = {
-								showConfigSheet()
-								setUiVisible(true)
-							},
+                            onLongPress = {
+                                showConfigSheet()
+                                setUiVisible(true)
+                            },
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(readerBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier),
@@ -884,10 +884,10 @@ class NovelReaderActivity :
      * 获取当前章节的原始文本内容（用于翻译）
      */
     private fun getCurrentChapterContent(): String? {
-		return composeReaderViewModel.uiState.value.continuousChapters
-			.firstOrNull { it.chapterIndex == currentChapterIndex }
-			?.content
-			?: composeReaderViewModel.uiState.value.content
+        return composeReaderViewModel.uiState.value.continuousChapters
+            .firstOrNull { it.chapterIndex == currentChapterIndex }
+            ?.content
+            ?: composeReaderViewModel.uiState.value.content
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean = false
@@ -1071,7 +1071,7 @@ class NovelReaderActivity :
     }
 
     private fun onTtsClick() {
-		composeReaderViewModel.showTtsControls()
+        composeReaderViewModel.showTtsControls()
         val state = ttsService?.getState()?.value
         if (state == org.skepsun.kototoro.reader.novel.tts.TtsState.IDLE) {
             onTtsPlayPauseClicked()
@@ -1620,8 +1620,8 @@ class NovelReaderActivity :
         
         preloadJob = lifecycleScope.launch(Dispatchers.IO + org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.BACKGROUND)) {
             try {
-				// Paged navigation reaches the boundary quickly, so start warming the next chapter earlier.
-				kotlinx.coroutines.delay(if (readerSettings.readingMode == ReadingMode.PAGED) 350L else 2000L)
+                // Paged navigation reaches the boundary quickly, so start warming the next chapter earlier.
+                kotlinx.coroutines.delay(if (readerSettings.readingMode == ReadingMode.PAGED) 350L else 2000L)
                 
                 if (novelContentLoader.isCached(nextChapter)) return@launch
                 
@@ -2143,16 +2143,16 @@ class NovelReaderActivity :
         )
     }
     private fun showLoading(loading: Boolean) {
-		composeReaderViewModel.setLoading(loading)
+        composeReaderViewModel.setLoading(loading)
     }
 
     private fun showError(message: String) {
-		showReaderMessage(message, 3000L)
+        showReaderMessage(message, 3000L)
     }
 
-	private fun showReaderMessage(message: String, durationMillis: Long) {
-		composeReaderViewModel.showMessage(message, durationMillis)
-	}
+    private fun showReaderMessage(message: String, durationMillis: Long) {
+        composeReaderViewModel.showMessage(message, durationMillis)
+    }
 
     private fun decodeChapterHtml(url: String): String {
         if (url.startsWith("data:", ignoreCase = true)) {
@@ -2254,14 +2254,14 @@ class NovelReaderActivity :
             android.util.Log.d("NovelReaderActivity", "  Chapter[$index]: title='${chapter.title}', url='${chapter.url.takeLast(15)}'")
         }
 
-		composeReaderViewModel.showChapters(chapters, currentChapterIndex)
+        composeReaderViewModel.showChapters(chapters, currentChapterIndex)
     }
 
     /**
      * 显示设置面板
      */
     private fun showConfigSheet() {
-		composeReaderViewModel.showSettings(readerSettings)
+        composeReaderViewModel.showSettings(readerSettings)
     }
 
     private fun applyInitialUiVisibility() {
@@ -2667,8 +2667,8 @@ class NovelReaderActivity :
         updateSystemBarsColors()
     }
 
-	private fun applyNovelReaderSettings(settings: NovelReaderSettings) {
-		settings.save(this)
+    private fun applyNovelReaderSettings(settings: NovelReaderSettings) {
+        settings.save(this)
         try {
             android.util.Log.d("NovelReaderActivity", "Settings changed: fontSize=${settings.fontSizeSp}")
             val previousSettings = readerSettings
@@ -2753,7 +2753,7 @@ class NovelReaderActivity :
                                 epubFile = loadResult.epubFile,
                                 chapterPath = loadResult.chapterHref
                             )
-							publishComposeBoundary(data)
+                            publishComposeBoundary(data)
                             if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                         }
                     }.onFailure {
@@ -2768,7 +2768,7 @@ class NovelReaderActivity :
                     val content = novelContentLoader.loadChapterContent(chapterRepo, chapter)
                     withContext(Dispatchers.Main) {
                         val data = NovelChapterData(index, content, null, null)
-						publishComposeBoundary(data)
+                        publishComposeBoundary(data)
                         if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                     }
                     return@launch
@@ -2788,7 +2788,7 @@ class NovelReaderActivity :
                 
                 withContext(Dispatchers.Main) {
                     val data = NovelChapterData(index, fullText, null, null)
-					publishComposeBoundary(data)
+                    publishComposeBoundary(data)
                     if (isPrevious) isLoadingPrevious = false else isLoadingNext = false
                 }
             } catch (e: CancellationException) {
@@ -2801,64 +2801,64 @@ class NovelReaderActivity :
         }
     }
 
-	private fun publishComposeBoundary(data: NovelChapterData) {
-		val chapter = chapters.getOrNull(data.chapterIndex) ?: return
-		composeReaderViewModel.publishAdjacentChapter(
-			NovelComposeChapterContent(
-				chapterId = chapter.id,
-				chapterIndex = data.chapterIndex,
-				chapterTitle = chapter.title.orEmpty(),
-				content = data.content,
-				translation = chapterTranslations[data.chapterIndex],
-				imageContext = NovelComposeImageContext(
-					epubFilePath = data.epubFile?.absolutePath,
-					chapterPath = data.chapterPath,
-				),
-			),
-		)
-	}
+    private fun publishComposeBoundary(data: NovelChapterData) {
+        val chapter = chapters.getOrNull(data.chapterIndex) ?: return
+        composeReaderViewModel.publishAdjacentChapter(
+            NovelComposeChapterContent(
+                chapterId = chapter.id,
+                chapterIndex = data.chapterIndex,
+                chapterTitle = chapter.title.orEmpty(),
+                content = data.content,
+                translation = chapterTranslations[data.chapterIndex],
+                imageContext = NovelComposeImageContext(
+                    epubFilePath = data.epubFile?.absolutePath,
+                    chapterPath = data.chapterPath,
+                ),
+            ),
+        )
+    }
 
-	private fun requestPreviousComposeChapter() {
-		if (isLoadingPrevious) return
-		val firstIndex = composeReaderViewModel.uiState.value.continuousChapters
-			.firstOrNull()?.chapterIndex ?: currentChapterIndex
-		if (firstIndex > 0) preloadContinuousBoundary(firstIndex - 1, isPrevious = true)
-	}
+    private fun requestPreviousComposeChapter() {
+        if (isLoadingPrevious) return
+        val firstIndex = composeReaderViewModel.uiState.value.continuousChapters
+            .firstOrNull()?.chapterIndex ?: currentChapterIndex
+        if (firstIndex > 0) preloadContinuousBoundary(firstIndex - 1, isPrevious = true)
+    }
 
-	private fun requestNextComposeChapter() {
-		if (isLoadingNext) return
-		val lastIndex = composeReaderViewModel.uiState.value.continuousChapters
-			.lastOrNull()?.chapterIndex ?: currentChapterIndex
-		if (lastIndex < chapters.lastIndex) preloadContinuousBoundary(lastIndex + 1, isPrevious = false)
-	}
+    private fun requestNextComposeChapter() {
+        if (isLoadingNext) return
+        val lastIndex = composeReaderViewModel.uiState.value.continuousChapters
+            .lastOrNull()?.chapterIndex ?: currentChapterIndex
+        if (lastIndex < chapters.lastIndex) preloadContinuousBoundary(lastIndex + 1, isPrevious = false)
+    }
 
-	private fun onComposeVisibleChapterChanged(index: Int) {
-		if (index !in chapters.indices || index == currentChapterIndex) return
-		currentChapterIndex = index
-		updateNavigationButtons()
-		updateHistory(0, 1)
-	}
+    private fun onComposeVisibleChapterChanged(index: Int) {
+        if (index !in chapters.indices || index == currentChapterIndex) return
+        currentChapterIndex = index
+        updateNavigationButtons()
+        updateHistory(0, 1)
+    }
 
-	private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
-		if (chapterIndex !in chapters.indices || blockCount <= 0) return
-		val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
-		composeReaderViewModel.publishPosition(
-			NovelReadingPosition(
-				chapterId = chapters[chapterIndex].id,
-				page = blockIndex,
-				pageCount = blockCount,
-				chapterProgress = chapterProgress,
-			),
-		)
-		val ratio = ((chapterIndex + chapterProgress) / chapters.size.toFloat()).coerceIn(0f, 1f)
-		val sliderMax = (chapters.size * 100).coerceAtLeast(1)
-		composeReaderViewModel.publishProgress(
-			value = blockIndex.toFloat(),
-			max = (blockCount - 1).coerceAtLeast(0).toFloat(),
-			label = "${blockIndex + 1} / ${blockCount.coerceAtLeast(1)}",
-		)
-		updateReadingStatus(blockIndex, blockCount)
-	}
+    private fun onComposeVisibleProgress(chapterIndex: Int, blockIndex: Int, blockCount: Int) {
+        if (chapterIndex !in chapters.indices || blockCount <= 0) return
+        val chapterProgress = ((blockIndex + 0.5f) / blockCount).coerceIn(0f, 1f)
+        composeReaderViewModel.publishPosition(
+            NovelReadingPosition(
+                chapterId = chapters[chapterIndex].id,
+                page = blockIndex,
+                pageCount = blockCount,
+                chapterProgress = chapterProgress,
+            ),
+        )
+        val ratio = ((chapterIndex + chapterProgress) / chapters.size.toFloat()).coerceIn(0f, 1f)
+        val sliderMax = (chapters.size * 100).coerceAtLeast(1)
+        composeReaderViewModel.publishProgress(
+            value = blockIndex.toFloat(),
+            max = (blockCount - 1).coerceAtLeast(0).toFloat(),
+            label = "${blockIndex + 1} / ${blockCount.coerceAtLeast(1)}",
+        )
+        updateReadingStatus(blockIndex, blockCount)
+    }
 
     private var isToolbarFloating = true
     
