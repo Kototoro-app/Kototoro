@@ -10,9 +10,9 @@ import org.skepsun.kototoro.parsers.model.Content
 
 class PageImagePickContract : ActivityResultContract<Content?, Uri?>() {
 
-	override fun createIntent(context: Context, input: Content?): Intent =
-		Intent(context, PageImagePickActivity::class.java)
-			.putExtra(AppRouter.KEY_MANGA, input?.let { ParcelableContent(it) })
+    override fun createIntent(context: Context, input: Content?): Intent =
+        Intent(context, PageImagePickActivity::class.java)
+            .putExtra(AppRouter.KEY_MANGA, input?.let { ParcelableContent(it) })
 
-	override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent?.data
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = intent?.data
 }
