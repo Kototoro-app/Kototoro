@@ -231,7 +231,6 @@ fun MainShellScene(
                             MainShellTopLevelEntryContent(
                                 key = key,
                                 mainNavState = mainNavState,
-                                mainActivity = mainActivity,
                                 appRouter = appRouter,
                                 rootView = rootView,
                                 contentPadding = contentPadding,
@@ -268,7 +267,6 @@ fun MainShellScene(
 private fun MainShellTopLevelEntryContent(
     key: MainNavKey,
     mainNavState: MainNavState,
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     rootView: android.view.View,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
@@ -302,7 +300,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.DiscoverNavKey -> BrowseTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             mainNavigator = mainNavigator,
@@ -313,7 +310,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.HistoryNavKey -> HistoryTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             rootView = rootView,
             contentPadding = contentPadding,
@@ -327,7 +323,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.FavoritesNavKey -> FavoritesTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
@@ -337,7 +332,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.ExploreNavKey -> BrowseTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             mainNavigator = mainNavigator,
@@ -348,7 +342,6 @@ private fun MainShellTopLevelEntryContent(
         )
         org.skepsun.kototoro.main.ui.navigation3.FeedNavKey -> FeedTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
-            mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             mainNavigator = mainNavigator,
@@ -372,7 +365,6 @@ private fun MainShellTopLevelEntryContent(
             navigateToDetailsWithContent = navigateToDetailsWithContent,
         )
         org.skepsun.kototoro.main.ui.navigation3.BookmarksNavKey -> BookmarksTopLevelRouteContent(
-            mainActivity = mainActivity,
             appRouter = appRouter,
             contentPadding = contentPadding,
             pageSaveHelper = requireNotNull(pageSaveHelper) {
@@ -605,7 +597,6 @@ private fun MainShellTopLevelEntryContent(
 @Composable
 internal fun BrowseTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     mainNavigator: MainNavigator,
@@ -654,7 +645,7 @@ internal fun BrowseTopLevelRouteContent(
     }
 
     val mainChromeController = LocalMainChromeController.current
-    DisposableEffect(mainActivity, exploreViewModel, selectedGroupTab, selectedSourceTags) {
+    DisposableEffect(exploreViewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
@@ -703,7 +694,6 @@ internal fun BrowseTopLevelRouteContent(
 @Composable
 internal fun FeedTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     mainNavigator: MainNavigator,
@@ -722,7 +712,7 @@ internal fun FeedTopLevelRouteContent(
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
     val mainChromeController = LocalMainChromeController.current
-    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+    DisposableEffect(viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
@@ -1057,7 +1047,6 @@ internal fun SuggestionsTopLevelRouteContent(
 
 @Composable
 internal fun BookmarksTopLevelRouteContent(
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
@@ -1067,7 +1056,7 @@ internal fun BookmarksTopLevelRouteContent(
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
 
     val mainChromeController = LocalMainChromeController.current
-    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+    DisposableEffect(viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
@@ -1172,7 +1161,6 @@ internal fun UpdatedTopLevelRouteContent(
 @Composable
 internal fun HistoryTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     rootView: android.view.View,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
@@ -1329,7 +1317,7 @@ internal fun HistoryTopLevelRouteContent(
     }
 
     val mainChromeController = LocalMainChromeController.current
-    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+    DisposableEffect(viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun getSelectedContentType(): BrowseGroupTab = selectedGroupTab
 
@@ -1499,7 +1487,6 @@ internal fun HistoryTopLevelRouteContent(
 @Composable
 internal fun FavoritesTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
-    mainActivity: MainActivity?,
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
@@ -1737,7 +1724,7 @@ internal fun FavoritesTopLevelRouteContent(
     }
 
     val mainChromeController = LocalMainChromeController.current
-    DisposableEffect(mainActivity, viewModel, selectedGroupTab, selectedSourceTags) {
+    DisposableEffect(viewModel, selectedGroupTab, selectedSourceTags) {
         val callback = object : SearchBarFilterCallback {
             override fun isSourceTagFilterVisible(): Boolean = true
 
