@@ -361,84 +361,78 @@ internal fun Modifier.renderChromeInSharedTransitionOverlay(
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun KototoroApp(
-    appSettings: AppSettings,
-    navStateFlow: StateFlow<BottomNavState>,
-    pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
-    lastReadContent: Content? = null,
-    query: String = "",
-    suggestions: List<SearchSuggestionItem> = emptyList(),
-    onQueryChanged: (String) -> Unit = {},
-    onSearch: (String) -> Unit = {},
-    initialSearchKind: SearchKind = SearchKind.SIMPLE,
-    initialSearchSourceTypes: Set<SourceType> = emptySet(),
-    initialSearchContentKinds: Set<SearchContentKind> = emptySet(),
-    onSearchWithOptions: (
-        query: String,
-        kind: SearchKind,
-        sourceTypes: Set<SourceType>,
-        contentKinds: Set<SearchContentKind>,
-        advancedQuery: AdvancedSearchParams?,
-        pinnedOnly: Boolean,
-        hideEmpty: Boolean,
-    ) -> Unit = { _, _, _, _, _, _, _ -> },
-    onSearchOverlaySourceTypesChange: (Set<SourceType>) -> Unit = {},
-    onSearchOverlayContentKindsChange: (Set<SearchContentKind>) -> Unit = {},
-    onSearchOverlayDismiss: () -> Unit = {},
-    onContentSuggestionClick: (Content) -> Unit = {},
-    onLocalEntitySuggestionClick: (LocalEntitySuggestion) -> Unit = {},
-    onTrackingEntitySuggestionClick: (TrackingEntity) -> Unit = {},
-    onTagSuggestionClick: (ContentTag) -> Unit = {},
-    onSourceSuggestionClick: (ContentSource) -> Unit = {},
-    onAuthorSuggestionClick: (String) -> Unit = {},
-    onDeleteQuery: (String) -> Unit = {},
-    onVoiceInput: () -> Unit = {},
-    onOpenListOptions: () -> Unit = {},
-    onSettingsClick: () -> Unit = {},
-    onHelpClick: () -> Unit = {},
-    onSourceSettingsClick: () -> Unit = {},
-    onManageSourcesClick: () -> Unit = onSourceSettingsClick,
-    onGlobalTagBlacklistClick: () -> Unit = {},
-    onTrackingAccountsClick: () -> Unit = {},
-    isAppUpdateAvailable: Boolean = false,
-    onAppUpdateClick: () -> Unit = {},
-    isIncognitoModeEnabled: Boolean = false,
-    onIncognitoToggle: () -> Unit = {},
-    isLanguagePresetFilterVisible: Boolean = false,
-    languagePresetEntries: List<SourcePreset> = emptyList(),
-    onLanguagePresetSelected: (Long) -> Unit = {},
-    onManageLanguagePresets: () -> Unit = {},
-    selectedContentType: ContentType? = null,
-    enabledContentTypes: Set<ContentType> = setOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO),
-    isContentTypeFilterVisible: Boolean = true,
-    onContentTypeSelected: (ContentType?) -> Unit = {},
-    selectedSourceTags: Set<SourceTag> = emptySet(),
-    sourceTagEntries: List<SourceTag> = SourceTag.quickFilterEntries,
-    enabledSourceTags: Set<SourceTag> = sourceTagEntries.toSet(),
-    isSourceTagFilterVisible: Boolean = true,
-    onSourceTagFilterClick: (android.view.View?) -> Boolean = { false },
-    onSourceTagSelected: (SourceTag?) -> Unit = {},
-    onTopBarHeightChanged: (Int) -> Unit = {},
-    onBottomNavHeightChanged: (Int) -> Unit = {},
-    onContentInsetsChanged: (Int, Int) -> Unit = { _, _ -> },
-    onNavDestinationChanged: (Int) -> Unit = {},
-    pendingSearchNavigation: SearchNavigationRequest? = null,
-    onSearchNavigationHandled: () -> Unit = {},
-    onFeedRefresh: () -> Unit = {},
-    isResumeEnabled: Boolean = false,
-    onResumeClick: () -> Unit = {},
-    spaceUiState: SpaceUiState = SpaceUiState(),
-    spaceTransitionState: SpaceTransitionState = SpaceTransitionState(),
-    onSpaceTransitionCovered: suspend (SpaceId) -> Unit = {},
-    onSpaceCurtainCoverFinished: (SpaceId) -> Unit = {},
-    onSpaceCurtainRevealFinished: (SpaceId) -> Unit = {},
-    onSpaceAction: (SpaceAction) -> Unit = {},
-    spaceNavigationSessionUiState: SpaceNavigationSessionUiState = SpaceNavigationSessionUiState(),
-    onSpaceSessionChanged: (SpaceSessionSnapshot) -> Unit = {},
-    spaceTransitionSuppressionTarget: SpaceId? = null,
-    onSpaceTransitionSuppressionConsumed: (SpaceId) -> Unit = {},
-    spaceResumeUiState: SpaceResumeUiState = SpaceResumeUiState(),
-    onSpaceResume: (SpaceId) -> Unit = {},
+    mainAppState: MainAppState,
 ) {
+    val appSettings = mainAppState.appSettings
+    val navStateFlow = mainAppState.navStateFlow
+    val pageSaveHelper = mainAppState.pageSaveHelper
+    val lastReadContent = mainAppState.lastReadContent
+    val query = mainAppState.query
+    val suggestions = mainAppState.suggestions
+    val onQueryChanged = mainAppState.onQueryChanged
+    val onSearch = mainAppState.onSearch
+    val initialSearchKind = mainAppState.initialSearchKind
+    val initialSearchSourceTypes = mainAppState.initialSearchSourceTypes
+    val initialSearchContentKinds = mainAppState.initialSearchContentKinds
+    val onSearchWithOptions = mainAppState.onSearchWithOptions
+    val onSearchOverlaySourceTypesChange = mainAppState.onSearchOverlaySourceTypesChange
+    val onSearchOverlayContentKindsChange = mainAppState.onSearchOverlayContentKindsChange
+    val onSearchOverlayDismiss = mainAppState.onSearchOverlayDismiss
+    val onContentSuggestionClick = mainAppState.onContentSuggestionClick
+    val onLocalEntitySuggestionClick = mainAppState.onLocalEntitySuggestionClick
+    val onTrackingEntitySuggestionClick = mainAppState.onTrackingEntitySuggestionClick
+    val onTagSuggestionClick = mainAppState.onTagSuggestionClick
+    val onSourceSuggestionClick = mainAppState.onSourceSuggestionClick
+    val onAuthorSuggestionClick = mainAppState.onAuthorSuggestionClick
+    val onDeleteQuery = mainAppState.onDeleteQuery
+    val onVoiceInput = mainAppState.onVoiceInput
+    val onOpenListOptions = mainAppState.onOpenListOptions
+    val onSettingsClick = mainAppState.onSettingsClick
+    val onHelpClick = mainAppState.onHelpClick
+    val onSourceSettingsClick = mainAppState.onSourceSettingsClick
+    val onManageSourcesClick = mainAppState.onManageSourcesClick
+    val onGlobalTagBlacklistClick = mainAppState.onGlobalTagBlacklistClick
+    val onTrackingAccountsClick = mainAppState.onTrackingAccountsClick
+    val isAppUpdateAvailable = mainAppState.isAppUpdateAvailable
+    val onAppUpdateClick = mainAppState.onAppUpdateClick
+    val isIncognitoModeEnabled = mainAppState.isIncognitoModeEnabled
+    val onIncognitoToggle = mainAppState.onIncognitoToggle
+    val isLanguagePresetFilterVisible = mainAppState.isLanguagePresetFilterVisible
+    val languagePresetEntries = mainAppState.languagePresetEntries
+    val onLanguagePresetSelected = mainAppState.onLanguagePresetSelected
+    val onManageLanguagePresets = mainAppState.onManageLanguagePresets
+    val selectedContentType = mainAppState.selectedContentType
+    val enabledContentTypes = mainAppState.enabledContentTypes
+    val isContentTypeFilterVisible = mainAppState.isContentTypeFilterVisible
+    val onContentTypeSelected = mainAppState.onContentTypeSelected
+    val selectedSourceTags = mainAppState.selectedSourceTags
+    val sourceTagEntries = mainAppState.sourceTagEntries
+    val enabledSourceTags = mainAppState.enabledSourceTags
+    val isSourceTagFilterVisible = mainAppState.isSourceTagFilterVisible
+    val onSourceTagFilterClick = mainAppState.onSourceTagFilterClick
+    val onSourceTagSelected = mainAppState.onSourceTagSelected
+    val onTopBarHeightChanged = mainAppState.onTopBarHeightChanged
+    val onBottomNavHeightChanged = mainAppState.onBottomNavHeightChanged
+    val onContentInsetsChanged = mainAppState.onContentInsetsChanged
+    val onNavDestinationChanged = mainAppState.onNavDestinationChanged
+    val pendingSearchNavigation = mainAppState.pendingSearchNavigation
+    val onSearchNavigationHandled = mainAppState.onSearchNavigationHandled
+    val onFeedRefresh = mainAppState.onFeedRefresh
+    val isResumeEnabled = mainAppState.isResumeEnabled
+    val onResumeClick = mainAppState.onResumeClick
+    val spaceUiState = mainAppState.spaceUiState
+    val spaceTransitionState = mainAppState.spaceTransitionState
+    val onSpaceTransitionCovered = mainAppState.onSpaceTransitionCovered
+    val onSpaceCurtainCoverFinished = mainAppState.onSpaceCurtainCoverFinished
+    val onSpaceCurtainRevealFinished = mainAppState.onSpaceCurtainRevealFinished
+    val onSpaceAction = mainAppState.onSpaceAction
+    val spaceNavigationSessionUiState = mainAppState.spaceNavigationSessionUiState
+    val onSpaceSessionChanged = mainAppState.onSpaceSessionChanged
+    val spaceTransitionSuppressionTarget = mainAppState.spaceTransitionSuppressionTarget
+    val onSpaceTransitionSuppressionConsumed = mainAppState.onSpaceTransitionSuppressionConsumed
+    val spaceResumeUiState = mainAppState.spaceResumeUiState
+    val onSpaceResume = mainAppState.onSpaceResume
+
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val prefs = rememberKototoroAppPrefs(appSettings)

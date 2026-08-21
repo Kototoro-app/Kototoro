@@ -52,6 +52,7 @@ import org.skepsun.kototoro.local.ui.LocalIndexUpdateService
 import org.skepsun.kototoro.local.ui.LocalStorageCleanupWorker
 import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
 import org.skepsun.kototoro.main.ui.compose.KototoroApp
+import org.skepsun.kototoro.main.ui.compose.MainAppState
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
@@ -297,222 +298,224 @@ class MainActivity : BaseComposeActivity() {
                 .mainTransitionSuppressionTarget
                 .collectAsStateWithLifecycle()
             KototoroApp(
-                appSettings = settings,
-                navStateFlow = navStateFlow,
-                pageSaveHelper = pageSaveHelper,
-                lastReadContent = lastReadContent,
-                suggestions = suggestions,
-                onQueryChanged = ::updateSearchQuery,
-                onSearch = { query -> submitSearch(query) },
-                initialSearchKind = SearchKind.SIMPLE,
-                initialSearchSourceTypes = searchSuggestionViewModel.getSourceTypes(),
-                initialSearchContentKinds = searchSuggestionViewModel.getContentKinds(),
-                onSearchWithOptions = ::submitSearchWithOptions,
-                onSearchOverlaySourceTypesChange = searchSuggestionViewModel::setSourceTypes,
-                onSearchOverlayContentKindsChange = searchSuggestionViewModel::setContentKinds,
-                onSearchOverlayDismiss = ::syncSearchSuggestionFilters,
-                query = searchQuery,
-                onFeedRefresh = trackWorkerScheduler::startNow,
-                isResumeEnabled = isResumeEnabled,
-                onResumeClick = viewModel::openLastReader,
-                spaceUiState = spaceUiState,
-                spaceTransitionState = spaceTransitionState,
-                onSpaceTransitionCovered = spaceTransitionCurtainController::reveal,
-                onSpaceCurtainCoverFinished = spaceTransitionCurtainController::markCovered,
-                onSpaceCurtainRevealFinished = spaceTransitionCurtainController::markRevealFinished,
-                onSpaceAction = if (spaceEnabled) {
-                    { action ->
-                        when (action) {
-                            SpaceAction.OpenSwitcher,
-                            SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
-                            is SpaceAction.SelectSpace -> {
-                                selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                mainAppState = MainAppState(
+                    appSettings = settings,
+                    navStateFlow = navStateFlow,
+                    pageSaveHelper = pageSaveHelper,
+                    lastReadContent = lastReadContent,
+                    suggestions = suggestions,
+                    onQueryChanged = ::updateSearchQuery,
+                    onSearch = { query -> submitSearch(query) },
+                    initialSearchKind = SearchKind.SIMPLE,
+                    initialSearchSourceTypes = searchSuggestionViewModel.getSourceTypes(),
+                    initialSearchContentKinds = searchSuggestionViewModel.getContentKinds(),
+                    onSearchWithOptions = ::submitSearchWithOptions,
+                    onSearchOverlaySourceTypesChange = searchSuggestionViewModel::setSourceTypes,
+                    onSearchOverlayContentKindsChange = searchSuggestionViewModel::setContentKinds,
+                    onSearchOverlayDismiss = ::syncSearchSuggestionFilters,
+                    query = searchQuery,
+                    onFeedRefresh = trackWorkerScheduler::startNow,
+                    isResumeEnabled = isResumeEnabled,
+                    onResumeClick = viewModel::openLastReader,
+                    spaceUiState = spaceUiState,
+                    spaceTransitionState = spaceTransitionState,
+                    onSpaceTransitionCovered = spaceTransitionCurtainController::reveal,
+                    onSpaceCurtainCoverFinished = spaceTransitionCurtainController::markCovered,
+                    onSpaceCurtainRevealFinished = spaceTransitionCurtainController::markRevealFinished,
+                    onSpaceAction = if (spaceEnabled) {
+                        { action ->
+                            when (action) {
+                                SpaceAction.OpenSwitcher,
+                                SpaceAction.DismissSwitcher -> spaceViewModel.onAction(action)
+                                is SpaceAction.SelectSpace -> {
+                                    selectSpaceAndRestoreImmersiveSession(action.spaceId)
+                                }
                             }
                         }
-                    }
-                } else {
-                    {}
-                },
-                spaceNavigationSessionUiState = spaceNavigationSessionUiState,
-                onSpaceSessionChanged = if (spaceEnabled) {
-                    { snapshot: SpaceSessionSnapshot -> spaceNavigationSessionViewModel.save(snapshot) }
-                } else {
-                    { _: SpaceSessionSnapshot -> }
-                },
-                spaceTransitionSuppressionTarget = mainTransitionSuppressionTarget,
-                onSpaceTransitionSuppressionConsumed =
-                    immersiveSpaceSessionRegistry::completeMainTransitionSuppression,
-                spaceResumeUiState = spaceResumeUiState,
-                onSpaceResume = if (spaceEnabled) {
-                    { spaceId ->
-                        spaceViewModel.onAction(SpaceAction.DismissSwitcher)
-                        if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
-                            selectSpaceAndRestoreImmersiveSession(spaceId)
-                        } else {
-                            spaceResumeViewModel.resume(spaceId)
-                        }
-                    }
-                } else {
-                    {}
-                },
-                onContentSuggestionClick = { content ->
-                    resolveDetailsOriginForContent(content) { origin ->
-                        when (origin) {
-                            is DetailsOrigin.EntityGraph -> {
-                                router.openEntityDetails(
-                                    entityId = origin.entityId,
-                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                )
+                    } else {
+                        {}
+                    },
+                    spaceNavigationSessionUiState = spaceNavigationSessionUiState,
+                    onSpaceSessionChanged = if (spaceEnabled) {
+                        { snapshot: SpaceSessionSnapshot -> spaceNavigationSessionViewModel.save(snapshot) }
+                    } else {
+                        { _: SpaceSessionSnapshot -> }
+                    },
+                    spaceTransitionSuppressionTarget = mainTransitionSuppressionTarget,
+                    onSpaceTransitionSuppressionConsumed =
+                        immersiveSpaceSessionRegistry::completeMainTransitionSuppression,
+                    spaceResumeUiState = spaceResumeUiState,
+                    onSpaceResume = if (spaceEnabled) {
+                        { spaceId ->
+                            spaceViewModel.onAction(SpaceAction.DismissSwitcher)
+                            if (immersiveSpaceSessionRegistry.hasActiveSession(spaceId)) {
+                                selectSpaceAndRestoreImmersiveSession(spaceId)
+                            } else {
+                                spaceResumeViewModel.resume(spaceId)
                             }
-                            else -> router.openResolvedDetails(content)
                         }
-                    }
-                },
-                onLocalEntitySuggestionClick = { suggestion ->
-                    suggestion.entityId?.let { entityId ->
-                        openEntityDetailsWithPreferredProjection(
-                            entityId = entityId,
-                            fallbackLocalMangaId = suggestion.representative.id,
-                        )
-                    } ?: resolveDetailsOriginForContent(suggestion.representative) { origin ->
-                        when (origin) {
-                            is DetailsOrigin.EntityGraph -> {
-                                router.openEntityDetails(
-                                    entityId = origin.entityId,
-                                    initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                )
+                    } else {
+                        {}
+                    },
+                    onContentSuggestionClick = { content ->
+                        resolveDetailsOriginForContent(content) { origin ->
+                            when (origin) {
+                                is DetailsOrigin.EntityGraph -> {
+                                    router.openEntityDetails(
+                                        entityId = origin.entityId,
+                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                    )
+                                }
+                                else -> router.openResolvedDetails(content)
                             }
-                            else -> router.openResolvedDetails(suggestion.representative)
                         }
-                    }
-                },
-                onTrackingEntitySuggestionClick = { entity ->
-                    when (entity.entityType) {
-                        EntityType.WORK -> router.openTrackingSiteDetails(
-                            service = entity.service,
-                            remoteId = entity.remoteId,
-                            url = entity.url,
-                        )
-                        EntityType.PERSON,
-                        EntityType.CHARACTER,
-                        EntityType.ORGANIZATION,
-                        -> router.openTrackingEntityDetails(
-                            service = entity.service,
-                            entityType = entity.entityType,
-                            remoteId = entity.remoteId,
-                            name = entity.name,
-                            altName = entity.altName,
-                            coverUrl = entity.coverUrl,
-                            url = entity.url,
-                        )
-                    }
-                },
-                onTagSuggestionClick = { tag ->
-                    submitSearch(tag.title, SearchKind.TAG)
-                },
-                onSourceSuggestionClick = { source ->
-                    this.router.openList(source, null, null)
-                },
-                onAuthorSuggestionClick = { author ->
-                    submitSearch(author, SearchKind.AUTHOR)
-                },
-                onDeleteQuery = searchSuggestionViewModel::deleteQuery,
-                onVoiceInput = {
-                    try {
-                        voiceInputLauncher.launch(null)
-                    } catch (e: Exception) {
-                        android.widget.Toast.makeText(this@MainActivity, R.string.voice_search, android.widget.Toast.LENGTH_SHORT).show()
-                        e.printStackTrace()
-                    }
-                },
-                onOpenListOptions = {
-                    this.router.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.General)
-                },
-                onSettingsClick = {
-                    this.router.openSettings()
-                },
-                onHelpClick = {
-                    this.router.openAbout()
-                },
-                onSourceSettingsClick = {
-                    this.router.openSourcesSettings()
-                },
-                onManageSourcesClick = {
-                    this.router.openManageSources()
-                },
-                onGlobalTagBlacklistClick = {
-                    this.router.openGlobalTagBlacklist()
-                },
-                onTrackingAccountsClick = {
-                    this.router.openTrackingAccountsSettings()
-                },
-                isAppUpdateAvailable = appUpdate != null,
-                onAppUpdateClick = {
-                    this.router.openAppUpdate()
-                },
-                isIncognitoModeEnabled = isIncognitoModeEnabled,
-                onIncognitoToggle = {
-                    viewModel.setIncognitoMode(!isIncognitoModeEnabled)
-                },
-                onTopBarHeightChanged = { height ->
-                    if (topBarHeightPx != height) {
-                        topBarHeightPx = height
-                        viewModel.setTopBarHeightPx(height)
-                    }
-                },
-                onBottomNavHeightChanged = { height ->
-                    if (bottomNavHeightPx != height) {
-                        bottomNavHeightPx = height
-                        viewModel.setBottomNavHeightPx(height)
-                    }
-                },
-                onContentInsetsChanged = { topInset, bottomInset ->
-                    if (containerTopInsetPx != topInset || containerBottomInsetPx != bottomInset) {
-                        containerTopInsetPx = topInset
-                        containerBottomInsetPx = bottomInset
-                        viewModel.setContentInsetsPx(topInset, bottomInset)
-                    }
-                },
-                onNavDestinationChanged = { itemId ->
-                    composeNavBarDelegator.syncSelectedItem(itemId)
-                },
-                pendingSearchNavigation = searchNavigationRequest,
-                onSearchNavigationHandled = {
-                    clearSearchQuery()
-                    searchNavigationRequest = null
-                },
-                isLanguagePresetFilterVisible = isLanguagePresetFilterVisible,
-                languagePresetEntries = sourcePresets,
-                onLanguagePresetSelected = { presetId ->
-                    settings.activeSourcePresetId = presetId
-                },
-                onManageLanguagePresets = router::openSourcePresets,
-                selectedContentType = activeFilterContentType,
-                enabledContentTypes = enabledContentTypes,
-                isContentTypeFilterVisible = isContentTypeFilterVisible,
-                onContentTypeSelected = { type ->
-                    if (type == null || type in enabledContentTypes) {
-                        val tab = when (type) {
-                            ContentType.NOVEL -> BrowseGroupTab.Novel
-                            ContentType.VIDEO -> BrowseGroupTab.Video
-                            ContentType.MANGA -> BrowseGroupTab.Content
-                            else -> BrowseGroupTab.All
+                    },
+                    onLocalEntitySuggestionClick = { suggestion ->
+                        suggestion.entityId?.let { entityId ->
+                            openEntityDetailsWithPreferredProjection(
+                                entityId = entityId,
+                                fallbackLocalMangaId = suggestion.representative.id,
+                            )
+                        } ?: resolveDetailsOriginForContent(suggestion.representative) { origin ->
+                            when (origin) {
+                                is DetailsOrigin.EntityGraph -> {
+                                    router.openEntityDetails(
+                                        entityId = origin.entityId,
+                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
+                                    )
+                                }
+                                else -> router.openResolvedDetails(suggestion.representative)
+                            }
                         }
-                        currentFilterCallback?.onContentTypeSelected(tab)
-                        refreshFilters()
-                    }
-                },
-                selectedSourceTags = activeFilterSourceTags,
-                sourceTagEntries = availableSourceTags,
-                enabledSourceTags = enabledSourceTags,
-                isSourceTagFilterVisible = isSourceTagFilterVisible,
-                onSourceTagFilterClick = ::onSourceTagFilterClick,
-                onSourceTagSelected = { tag ->
-                    if (tag == null || tag in enabledSourceTags) {
-                        currentFilterCallback?.onSourceTagSelected(tag)
-                        refreshFilters()
-                    }
-                },
+                    },
+                    onTrackingEntitySuggestionClick = { entity ->
+                        when (entity.entityType) {
+                            EntityType.WORK -> router.openTrackingSiteDetails(
+                                service = entity.service,
+                                remoteId = entity.remoteId,
+                                url = entity.url,
+                            )
+                            EntityType.PERSON,
+                            EntityType.CHARACTER,
+                            EntityType.ORGANIZATION,
+                            -> router.openTrackingEntityDetails(
+                                service = entity.service,
+                                entityType = entity.entityType,
+                                remoteId = entity.remoteId,
+                                name = entity.name,
+                                altName = entity.altName,
+                                coverUrl = entity.coverUrl,
+                                url = entity.url,
+                            )
+                        }
+                    },
+                    onTagSuggestionClick = { tag ->
+                        submitSearch(tag.title, SearchKind.TAG)
+                    },
+                    onSourceSuggestionClick = { source ->
+                        this.router.openList(source, null, null)
+                    },
+                    onAuthorSuggestionClick = { author ->
+                        submitSearch(author, SearchKind.AUTHOR)
+                    },
+                    onDeleteQuery = searchSuggestionViewModel::deleteQuery,
+                    onVoiceInput = {
+                        try {
+                            voiceInputLauncher.launch(null)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(this@MainActivity, R.string.voice_search, android.widget.Toast.LENGTH_SHORT).show()
+                            e.printStackTrace()
+                        }
+                    },
+                    onOpenListOptions = {
+                        this.router.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.General)
+                    },
+                    onSettingsClick = {
+                        this.router.openSettings()
+                    },
+                    onHelpClick = {
+                        this.router.openAbout()
+                    },
+                    onSourceSettingsClick = {
+                        this.router.openSourcesSettings()
+                    },
+                    onManageSourcesClick = {
+                        this.router.openManageSources()
+                    },
+                    onGlobalTagBlacklistClick = {
+                        this.router.openGlobalTagBlacklist()
+                    },
+                    onTrackingAccountsClick = {
+                        this.router.openTrackingAccountsSettings()
+                    },
+                    isAppUpdateAvailable = appUpdate != null,
+                    onAppUpdateClick = {
+                        this.router.openAppUpdate()
+                    },
+                    isIncognitoModeEnabled = isIncognitoModeEnabled,
+                    onIncognitoToggle = {
+                        viewModel.setIncognitoMode(!isIncognitoModeEnabled)
+                    },
+                    onTopBarHeightChanged = { height ->
+                        if (topBarHeightPx != height) {
+                            topBarHeightPx = height
+                            viewModel.setTopBarHeightPx(height)
+                        }
+                    },
+                    onBottomNavHeightChanged = { height ->
+                        if (bottomNavHeightPx != height) {
+                            bottomNavHeightPx = height
+                            viewModel.setBottomNavHeightPx(height)
+                        }
+                    },
+                    onContentInsetsChanged = { topInset, bottomInset ->
+                        if (containerTopInsetPx != topInset || containerBottomInsetPx != bottomInset) {
+                            containerTopInsetPx = topInset
+                            containerBottomInsetPx = bottomInset
+                            viewModel.setContentInsetsPx(topInset, bottomInset)
+                        }
+                    },
+                    onNavDestinationChanged = { itemId ->
+                        composeNavBarDelegator.syncSelectedItem(itemId)
+                    },
+                    pendingSearchNavigation = searchNavigationRequest,
+                    onSearchNavigationHandled = {
+                        clearSearchQuery()
+                        searchNavigationRequest = null
+                    },
+                    isLanguagePresetFilterVisible = isLanguagePresetFilterVisible,
+                    languagePresetEntries = sourcePresets,
+                    onLanguagePresetSelected = { presetId ->
+                        settings.activeSourcePresetId = presetId
+                    },
+                    onManageLanguagePresets = router::openSourcePresets,
+                    selectedContentType = activeFilterContentType,
+                    enabledContentTypes = enabledContentTypes,
+                    isContentTypeFilterVisible = isContentTypeFilterVisible,
+                    onContentTypeSelected = { type ->
+                        if (type == null || type in enabledContentTypes) {
+                            val tab = when (type) {
+                                ContentType.NOVEL -> BrowseGroupTab.Novel
+                                ContentType.VIDEO -> BrowseGroupTab.Video
+                                ContentType.MANGA -> BrowseGroupTab.Content
+                                else -> BrowseGroupTab.All
+                            }
+                            currentFilterCallback?.onContentTypeSelected(tab)
+                            refreshFilters()
+                        }
+                    },
+                    selectedSourceTags = activeFilterSourceTags,
+                    sourceTagEntries = availableSourceTags,
+                    enabledSourceTags = enabledSourceTags,
+                    isSourceTagFilterVisible = isSourceTagFilterVisible,
+                    onSourceTagFilterClick = ::onSourceTagFilterClick,
+                    onSourceTagSelected = { tag ->
+                        if (tag == null || tag in enabledSourceTags) {
+                            currentFilterCallback?.onSourceTagSelected(tag)
+                            refreshFilters()
+                        }
+                    },
+                ),
             )
         }
 

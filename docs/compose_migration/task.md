@@ -141,7 +141,7 @@
 - [x] `ChaptersScreen` / `PagesScreen` / `BookmarksScreen` 滚动条组件升级（5/1：从 modifier 改独立 `VerticalScrollbar` composable；新增 `activeDetailsPaneState` 优化 pane 联动）
 - [x] `ChaptersScreen` 章节标签中文化（5/1：`fastScrollLabels` 生成"第N章"格式标签）
 - [ ] 抽 `ContentHeroBackdropCarousel` 通用组件（Home/Explore/Discover 共用，~300 行清理）
-- [ ] `KototoroApp` 参数聚合为 `MainAppState` data class（30+ 参数坏味）
+- [x] `KototoroApp` 参数聚合为 `MainAppState` data class（30+ 参数坏味）
 - [ ] `AppNavGraph` 内联路由拆为独立 `AppXxxRoute` 文件
 - [ ] `as? MainActivity` 静默 no-op → 改用 `CompositionLocal`
 - [ ] `ReadButtonDelegate`（ViewBinding）与 Compose `ReadDock` 双按钮去重
