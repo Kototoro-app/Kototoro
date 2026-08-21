@@ -37,9 +37,9 @@ class UnifiedSourcesGroupingTest : FunSpec({
 		header.sourceCount shouldBe 3
 		header.collapsed shouldBe false
 		header.members shouldBe members
-		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(members[0])
-		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(members[1])
-		rows[3] shouldBe UnifiedSourceDisplayRow.SourceItem(members[2])
+		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(members[0], "pkg:multilang")
+		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(members[1], "pkg:multilang")
+		rows[3] shouldBe UnifiedSourceDisplayRow.SourceItem(members[2], "pkg:multilang")
 	}
 
 	test("collapsed multi-source package hides members") {
@@ -65,8 +65,8 @@ class UnifiedSourcesGroupingTest : FunSpec({
 
 		rows shouldHaveSize 5
 		rows[0].shouldBeTypeOf<UnifiedSourceDisplayRow.PackageHeader>().members shouldBe listOf(a1, a2)
-		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(a1)
-		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(a2)
+		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(a1, "pkg:multilang")
+		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(a2, "pkg:multilang")
 		rows[3] shouldBe UnifiedSourceDisplayRow.SourceItem(single)
 		rows[4] shouldBe UnifiedSourceDisplayRow.SourceItem(b)
 	}
@@ -80,8 +80,8 @@ class UnifiedSourcesGroupingTest : FunSpec({
 
 		rows shouldHaveSize 4
 		rows[0].shouldBeInstanceOf<UnifiedSourceDisplayRow.PackageHeader>().packageId shouldBe "pkg:p1"
-		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(a1)
-		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(a2)
+		rows[1] shouldBe UnifiedSourceDisplayRow.SourceItem(a1, "pkg:p1")
+		rows[2] shouldBe UnifiedSourceDisplayRow.SourceItem(a2, "pkg:p1")
 		// pkg:p2 has exactly one source, so it stays a flat single-source row
 		rows[3] shouldBe UnifiedSourceDisplayRow.SourceItem(b1)
 	}

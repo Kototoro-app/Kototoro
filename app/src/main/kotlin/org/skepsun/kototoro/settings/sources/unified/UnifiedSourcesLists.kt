@@ -4,6 +4,7 @@ package org.skepsun.kototoro.settings.sources.unified
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -122,6 +124,7 @@ internal fun UnifiedSourceList(
 							item = item,
 							isSelectionMode = selectedSourceIds.isNotEmpty(),
 							isSelected = isSelected,
+							groupColor = rememberPackageGroupColor(row.groupPackageId),
 							onSelectionToggle = {
 								onSourceSelectionChange(selectedSourceIds.toggle(item.id))
 							},
@@ -146,6 +149,7 @@ internal fun UnifiedSourceList(
 							collapsed = row.collapsed,
 							isSelectionMode = selectedSourceIds.isNotEmpty(),
 							isChecked = allMembersSelected,
+							groupColor = rememberPackageGroupColor(row.packageId),
 							onClick = {
 								if (selectedSourceIds.isNotEmpty()) {
 									val updated = selectedSourceIds.toMutableSet().apply {
@@ -217,7 +221,10 @@ internal sealed interface UnifiedSourceDisplayRow {
 		override val key: String get() = "pkg:$packageId"
 	}
 
-	data class SourceItem(val item: UnifiedSourceItem) : UnifiedSourceDisplayRow {
+	data class SourceItem(
+		val item: UnifiedSourceItem,
+		val groupPackageId: String? = null,
+	) : UnifiedSourceDisplayRow {
 		override val key: String get() = item.id
 	}
 }
@@ -260,7 +267,7 @@ internal fun buildGroupedUnifiedSourceRows(
 						),
 					)
 					if (packageId !in collapsedPackageIds) {
-						members.forEach { add(UnifiedSourceDisplayRow.SourceItem(it)) }
+						members.forEach { add(UnifiedSourceDisplayRow.SourceItem(it, packageId)) }
 					}
 				}
 			} else {
@@ -273,6 +280,42 @@ internal fun buildGroupedUnifiedSourceRows(
 private fun togglePackageCollapsed(current: Set<String>, packageId: String): Set<String> =
 	if (packageId in current) current - packageId else current + packageId
 
+/**
+ * Soft container palette for multi-source package groups. Each package is assigned a stable
+ * hue derived from its id, so every group keeps one distinct color (light + dark variants).
+ */
+private val packageGroupPaletteLight = listOf(
+	Color(0xFFE7F0FA), // soft blue
+	Color(0xFFE4F2E4), // soft green
+	Color(0xFFFAEEDD), // soft amber
+	Color(0xFFEEE7F7), // soft violet
+	Color(0xFFFAE8EE), // soft pink
+	Color(0xFFE0F2EF), // soft teal
+	Color(0xFFF7F1DC), // soft yellow
+	Color(0xFFE8EDF2), // soft blue-grey
+)
+
+private val packageGroupPaletteDark = listOf(
+	Color(0xFF223343), // deep blue
+	Color(0xFF203124), // deep green
+	Color(0xFF372C1F), // deep amber-brown
+	Color(0xFF312740), // deep violet
+	Color(0xFF3A2830), // deep pink-plum
+	Color(0xFF1F3230), // deep teal
+	Color(0xFF373320), // deep olive-yellow
+	Color(0xFF2A303B), // deep blue-grey
+)
+
+internal fun packageGroupColorIndex(packageId: String): Int =
+	(packageId.hashCode() and 0x7fffffff) % packageGroupPaletteLight.size
+
+@Composable
+internal fun rememberPackageGroupColor(packageId: String?): Color? {
+	if (packageId == null) return null
+	val palette = if (isSystemInDarkTheme()) packageGroupPaletteDark else packageGroupPaletteLight
+	return palette[packageGroupColorIndex(packageId)]
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun UnifiedSourcePackageHeader(
@@ -282,15 +325,22 @@ private fun UnifiedSourcePackageHeader(
 	collapsed: Boolean,
 	isSelectionMode: Boolean,
 	isChecked: Boolean,
+	groupColor: Color?,
 	onClick: () -> Unit,
 	onLongClick: () -> Unit,
 	onToggleCollapse: () -> Unit,
 ) {
 	val style = rememberUnifiedSourcesVisualStyle()
-	val containerColor = if (collapsed) {
+	val containerColor = groupColor ?: if (collapsed) {
 		MaterialTheme.colorScheme.surfaceContainerHigh
 	} else {
 		MaterialTheme.colorScheme.surfaceContainer
+	}
+	val groupIconContainer = groupColor ?: MaterialTheme.colorScheme.tertiaryContainer
+	val groupIconTint = if (groupColor != null) {
+		MaterialTheme.colorScheme.onSurfaceVariant
+	} else {
+		MaterialTheme.colorScheme.onTertiaryContainer
 	}
 	Row(
 		modifier = Modifier
@@ -308,14 +358,14 @@ private fun UnifiedSourcePackageHeader(
 		Box(
 			modifier = Modifier
 				.size(34.dp)
-				.background(MaterialTheme.colorScheme.tertiaryContainer, style.iconShape),
+				.background(groupIconContainer, style.iconShape),
 			contentAlignment = Alignment.Center,
 		) {
 			Icon(
 				painter = rememberSafePainter(kind.packageIconRes()),
 				contentDescription = null,
 				modifier = Modifier.size(18.dp),
-				tint = MaterialTheme.colorScheme.onTertiaryContainer,
+				tint = groupIconTint,
 			)
 		}
 		Spacer(modifier = Modifier.width(12.dp))
@@ -368,6 +418,7 @@ private fun UnifiedSourceRow(
 	item: UnifiedSourceItem,
 	isSelectionMode: Boolean,
 	isSelected: Boolean,
+	groupColor: Color?,
 	onSelectionToggle: () -> Unit,
 	onBrowseSource: (UnifiedSourceItem) -> Unit,
 	onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
@@ -380,6 +431,7 @@ private fun UnifiedSourceRow(
 	val style = rememberUnifiedSourcesVisualStyle()
 	val rowContainerColor = when {
 		isSelected -> MaterialTheme.colorScheme.secondaryContainer
+		groupColor != null -> groupColor
 		expressive -> MaterialTheme.colorScheme.surfaceContainerLow
 		else -> MaterialTheme.colorScheme.background
 	}
@@ -411,7 +463,7 @@ private fun UnifiedSourceRow(
 			Box(
 				modifier = Modifier
 					.size(36.dp)
-					.background(MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
+					.background(groupColor ?: MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
 				contentAlignment = Alignment.Center,
 			) {
 				UnifiedSourceIcon(
