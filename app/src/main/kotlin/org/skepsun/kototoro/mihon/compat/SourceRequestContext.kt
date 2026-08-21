@@ -11,7 +11,7 @@ data class SourceRequestContext(
     val source: ContentSource,
     val allowedBrowserOrigins: Set<String> = emptySet(),
 ) {
-	fun allowsBrowserRequest(url: String): Boolean = url.toHttpsOrigin() in allowedBrowserOrigins
+    fun allowsBrowserRequest(url: String): Boolean = url.toHttpsOrigin() in allowedBrowserOrigins
 
     companion object {
         fun from(source: ContentSource): SourceRequestContext {
@@ -24,10 +24,10 @@ data class SourceRequestContext(
             )
         }
 
-		fun from(source: ContentSource, declaredBaseUrl: String): SourceRequestContext = SourceRequestContext(
-			source = source,
-			allowedBrowserOrigins = declaredBaseUrl.toHttpsOrigin()?.let(::setOf).orEmpty(),
-		)
+        fun from(source: ContentSource, declaredBaseUrl: String): SourceRequestContext = SourceRequestContext(
+            source = source,
+            allowedBrowserOrigins = declaredBaseUrl.toHttpsOrigin()?.let(::setOf).orEmpty(),
+        )
     }
 }
 

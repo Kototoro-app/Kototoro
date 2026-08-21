@@ -33,7 +33,7 @@ fun SManga.toKotoContent(
     chapters: List<ContentChapter>? = null,
     publicUrl: String = "",
 ): Content {
-	val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
+    val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
     // Get baseUrl from source if available to resolve relative URLs
     val baseUrl = (source.catalogueSource as? HttpSource)?.baseUrl ?: ""
     
@@ -151,9 +151,9 @@ fun SManga.toKotoContent(
         },
         description = safeDescription,
         chapters = chapters,
-		source = source,
-		sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
-	)
+        source = source,
+        sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
+    )
 }
 
 /**
@@ -219,11 +219,11 @@ fun Content.toMihonManga(): SManga {
             else -> SManga.UNKNOWN
         }
         this.thumbnail_url = this@toMihonManga.coverUrl
-		this.initialized = true
-		this@toMihonManga.sourceData
-			?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
-			?.let { this.memo = it }
-		try {
+        this.initialized = true
+        this@toMihonManga.sourceData
+            ?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
+            ?.let { this.memo = it }
+        try {
             this.genres = this@toMihonManga.tags.map { it.title }
             this.altTitles = this@toMihonManga.altTitles.toList()
             this.banner = this@toMihonManga.largeCoverUrl
@@ -249,7 +249,7 @@ fun SChapter.toKotoChapter(
     overrideNumber: Float? = null,
     parentUrl: String? = null,
 ): ContentChapter {
-	val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
+    val safeMemo = runCatching { memo }.getOrDefault(JsonObject(emptyMap()))
     val chapterId = generateChapterId(url, source.name, parentUrl)
     val finalNumber = overrideNumber ?: try {
         number?.toFloatOrNullCompat() ?: (if (chapter_number >= 0) chapter_number else 0f)
@@ -280,9 +280,9 @@ fun SChapter.toKotoChapter(
         scanlator = finalScanlator,
         uploadDate = date_upload,
         branch = finalScanlator, // Use scanlator as branch for grouping
-		source = source,
-		sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
-	)
+        source = source,
+        sourceData = safeMemo.takeIf { it.isNotEmpty() }?.toString(),
+    )
 }
 
 /**
@@ -295,17 +295,17 @@ fun ContentChapter.toMihonChapter(): SChapter {
         this.chapter_number = this@toMihonChapter.number
         this.date_upload = this@toMihonChapter.uploadDate
         this.scanlator = this@toMihonChapter.scanlator
-		try {
-			this.number = this@toMihonChapter.number.toString()
+        try {
+            this.number = this@toMihonChapter.number.toString()
             this.volume = this@toMihonChapter.volume.takeIf { it > 0 }?.toString()
             this.scanlators = this@toMihonChapter.scanlator?.let { listOf(it) } ?: emptyList()
-		} catch (e: NoSuchMethodError) {
-			// Fallback
-		}
-		this@toMihonChapter.sourceData
-			?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
-			?.let { this.memo = it }
-	}
+        } catch (e: NoSuchMethodError) {
+            // Fallback
+        }
+        this@toMihonChapter.sourceData
+            ?.let { sourceData -> runCatching { Json.parseToJsonElement(sourceData).jsonObject }.getOrNull() }
+            ?.let { this.memo = it }
+    }
 }
 
 // ============ Page <-> ContentPage ============

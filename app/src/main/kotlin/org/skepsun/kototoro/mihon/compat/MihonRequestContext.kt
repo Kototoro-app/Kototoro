@@ -13,22 +13,22 @@ import java.util.concurrent.ConcurrentHashMap
 object MihonRequestContext {
 
     private val currentSource = ThreadLocal<ContentSource?>()
-	private val registeredSources = ConcurrentHashMap<String, ContentSource>()
+    private val registeredSources = ConcurrentHashMap<String, ContentSource>()
 
     fun currentSource(): ContentSource? = currentSource.get()
 
-	/** Legacy hint only; callers must still validate the resulting SourceRequestContext origin. */
-	fun sourceForHost(host: String): ContentSource? = registeredSources[host.lowercase()]
+    /** Legacy hint only; callers must still validate the resulting SourceRequestContext origin. */
+    fun sourceForHost(host: String): ContentSource? = registeredSources[host.lowercase()]
 
-	fun registerSource(source: ContentSource) {
-		val mihonSource = source as? MihonMangaSource ?: return
-		val host = (mihonSource.catalogueSource as? eu.kanade.tachiyomi.source.online.HttpSource)
-			?.baseUrl?.toHttpUrlOrNull()?.host?.lowercase() ?: return
-		registeredSources[host] = source
-	}
+    fun registerSource(source: ContentSource) {
+        val mihonSource = source as? MihonMangaSource ?: return
+        val host = (mihonSource.catalogueSource as? eu.kanade.tachiyomi.source.online.HttpSource)
+            ?.baseUrl?.toHttpUrlOrNull()?.host?.lowercase() ?: return
+        registeredSources[host] = source
+    }
 
     fun <T> withSourceBlocking(source: ContentSource, block: () -> T): T {
-		registerSource(source)
+        registerSource(source)
         val previous = currentSource.get()
         currentSource.set(source)
         return try {
@@ -43,7 +43,7 @@ object MihonRequestContext {
     }
 
     suspend fun <T> withSource(source: ContentSource, block: suspend () -> T): T {
-		registerSource(source)
+        registerSource(source)
         return withContext(currentSource.asContextElement(source)) {
             block()
         }

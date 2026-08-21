@@ -98,7 +98,7 @@ class KotoNetworkHelper(
         // This adapter only enriches the challenge with source/request context for the shared resolver.
         builder.addInterceptor { chain ->
             val originalRequest = chain.request()
-				.withSourceRequestContext()
+                .withSourceRequestContext()
                 .withCloudflareUserAgent()
             val request = enrichApiRequestHeadersIfNeeded(originalRequest)
             val response = chain.proceed(request)
@@ -115,20 +115,20 @@ class KotoNetworkHelper(
                 CloudFlareHelper.PROTECTION_BLOCKED -> response.closeThrowing(
                     CloudFlareBlockedException(
                         url = challengeUrl,
-						source = request.tag(SourceRequestContext::class.java)?.source,
+                        source = request.tag(SourceRequestContext::class.java)?.source,
                     ),
                 )
 
                 CloudFlareHelper.PROTECTION_CAPTCHA -> {
-					val requestContext = request.tag(SourceRequestContext::class.java)
-					val requestSource = requestContext?.source
+                    val requestContext = request.tag(SourceRequestContext::class.java)
+                    val requestSource = requestContext?.source
                     val error = CloudFlareProtectedException(
                         url = request.toBrowserChallengeUrlForSource(),
                         source = requestSource,
                         headers = request.headers,
                         method = request.method,
                         body = request.replayableUtf8Body(),
-						contentType = request.header("Content-Type"),
+                        contentType = request.header("Content-Type"),
                         originalUrl = request.url.toString(),
                     )
                     resolveByStrategy(chain, request, response, error)
@@ -147,10 +147,10 @@ class KotoNetworkHelper(
             android.util.Log.d(
                 "MihonNetwork",
                 "RequestMeta: host=${request.url.host}, ua=${maskUserAgent(request.header("User-Agent"))}, " +
-					"uaFingerprint=${sensitiveValueFingerprint(request.header("User-Agent"))}, " +
-					"referer=${request.header("Referer")}, origin=${request.header("Origin")}, " +
-					"hasCfClearance=${cfClearanceCookie != null}, " +
-					"cfClearanceFingerprint=${sensitiveValueFingerprint(cfClearanceCookie)}, cookies=[$cookieNames]",
+                    "uaFingerprint=${sensitiveValueFingerprint(request.header("User-Agent"))}, " +
+                    "referer=${request.header("Referer")}, origin=${request.header("Origin")}, " +
+                    "hasCfClearance=${cfClearanceCookie != null}, " +
+                    "cfClearanceFingerprint=${sensitiveValueFingerprint(cfClearanceCookie)}, cookies=[$cookieNames]",
             )
             android.util.Log.d("MihonNetwork", "Request: ${request.method} ${request.url}")
             
@@ -273,22 +273,22 @@ class KotoNetworkHelper(
             )
             return null
         }
-		val requestContext = request.tag(SourceRequestContext::class.java)
-		if (requestContext == null) {
-			android.util.Log.w(
-				"MihonNetwork",
-				"Browser transport denied: missing SourceRequestContext; url=${request.url} " +
-					"contentSourceTag=${request.tag(ContentSource::class.java)?.name}",
-			)
-			return null
-		}
-		if (!requestContext.allowsBrowserRequest(request.url.toString())) {
-			android.util.Log.w(
-				"MihonNetwork",
-				"Browser transport denied by source origin policy: source=${requestContext.source.name}, url=${request.url}",
-			)
-			return null
-		}
+        val requestContext = request.tag(SourceRequestContext::class.java)
+        if (requestContext == null) {
+            android.util.Log.w(
+                "MihonNetwork",
+                "Browser transport denied: missing SourceRequestContext; url=${request.url} " +
+                    "contentSourceTag=${request.tag(ContentSource::class.java)?.name}",
+            )
+            return null
+        }
+        if (!requestContext.allowsBrowserRequest(request.url.toString())) {
+            android.util.Log.w(
+                "MihonNetwork",
+                "Browser transport denied by source origin policy: source=${requestContext.source.name}, url=${request.url}",
+            )
+            return null
+        }
         if (request.method != "GET" && request.method != "POST") return null
         val accept = request.header("Accept")?.lowercase()
         if (accept != null && BINARY_MEDIA_TYPES.any(accept::contains)) return null
@@ -309,35 +309,35 @@ class KotoNetworkHelper(
                     method = request.method,
                     body = requestBody,
                     userAgent = request.header("User-Agent"),
-					headers = request.browserTransportHeaders(),
-					allowedOrigins = requestContext.allowedBrowserOrigins,
-					allowInteractiveChallenge = false,
+                    headers = request.browserTransportHeaders(),
+                    allowedOrigins = requestContext.allowedBrowserOrigins,
+                    allowInteractiveChallenge = false,
                     timeoutMs = BROWSER_TRANSPORT_TIMEOUT_MS,
                 )
             }
-		}.onFailure { error ->
-			android.util.Log.w("MihonNetwork", "Browser transport failed: ${request.url}", error)
-		}.getOrNull() ?: return null
-		if (browserResult.status !in 100..599) {
-			android.util.Log.w(
-				"MihonNetwork",
-				"Browser transport rejected invalid HTTP status: status=${browserResult.status}, url=${request.url}",
-			)
-			return null
-		}
-		val browserProtection = browserResult.toOkHttpResponse(request).use { response ->
+        }.onFailure { error ->
+            android.util.Log.w("MihonNetwork", "Browser transport failed: ${request.url}", error)
+        }.getOrNull() ?: return null
+        if (browserResult.status !in 100..599) {
+            android.util.Log.w(
+                "MihonNetwork",
+                "Browser transport rejected invalid HTTP status: status=${browserResult.status}, url=${request.url}",
+            )
+            return null
+        }
+        val browserProtection = browserResult.toOkHttpResponse(request).use { response ->
             CloudFlareHelper.checkResponseForProtection(response)
         }
-		if (browserProtection != CloudFlareHelper.PROTECTION_NOT_DETECTED) {
-			android.util.Log.w(
-				"MihonNetwork",
-				"Browser transport exhausted same-session challenge: url=${request.url}, status=${browserResult.status}",
-			)
-			// Return null so the caller surfaces CloudFlareProtectedException, which drives the
-			// CF verification actions (verify / open in browser). The coordinator's cooldown and
-			// escalation chain prevent the legacy resolver loop.
-			return null
-		}
+        if (browserProtection != CloudFlareHelper.PROTECTION_NOT_DETECTED) {
+            android.util.Log.w(
+                "MihonNetwork",
+                "Browser transport exhausted same-session challenge: url=${request.url}, status=${browserResult.status}",
+            )
+            // Return null so the caller surfaces CloudFlareProtectedException, which drives the
+            // CF verification actions (verify / open in browser). The coordinator's cooldown and
+            // escalation chain prevent the legacy resolver loop.
+            return null
+        }
         android.util.Log.i(
             "MihonNetwork",
             "Browser transport accepted: method=${request.method}, status=${browserResult.status}, " +
@@ -360,7 +360,7 @@ class KotoNetworkHelper(
         return Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)
-			.code(status)
+            .code(status)
             .message(statusText.ifBlank { "Browser Transport" })
             .headers(responseHeaders.build())
             .body(body.toResponseBody(mediaType))
@@ -379,21 +379,21 @@ class KotoNetworkHelper(
         return CloudFlareHelper.getBrowserChallengeUrl(url.toString())
     }
 
-	private fun Request.withSourceRequestContext(): Request {
-		tag(SourceRequestContext::class.java)?.let { return this }
-		val legacySource = tag(ContentSource::class.java)
-			?: MihonRequestContext.currentSource()
-			?: MihonRequestContext.sourceForHost(url.host)
-			?: return this
-		android.util.Log.d(
-			"MihonNetwork",
-			"Recovered source request context: host=${url.host}, source=${legacySource.name}",
-		)
-		return newBuilder()
-			.tag(ContentSource::class.java, legacySource)
-			.tag(SourceRequestContext::class.java, SourceRequestContext.from(legacySource))
-			.build()
-	}
+    private fun Request.withSourceRequestContext(): Request {
+        tag(SourceRequestContext::class.java)?.let { return this }
+        val legacySource = tag(ContentSource::class.java)
+            ?: MihonRequestContext.currentSource()
+            ?: MihonRequestContext.sourceForHost(url.host)
+            ?: return this
+        android.util.Log.d(
+            "MihonNetwork",
+            "Recovered source request context: host=${url.host}, source=${legacySource.name}",
+        )
+        return newBuilder()
+            .tag(ContentSource::class.java, legacySource)
+            .tag(SourceRequestContext::class.java, SourceRequestContext.from(legacySource))
+            .build()
+    }
 
     private fun Request.withCloudflareUserAgent(): Request {
         val currentUserAgent = header("User-Agent")?.takeIf { it.isNotBlank() }
@@ -543,7 +543,7 @@ class KotoNetworkHelper(
     companion object {
         const val WEBVIEW_FINAL_URL_HEADER = "X-Kototoro-WebView-Final-Url"
         private const val MAX_BROWSER_REQUEST_BODY_BYTES = 2L * 1024L * 1024L
-		private const val BROWSER_TRANSPORT_TIMEOUT_MS = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS
+        private const val BROWSER_TRANSPORT_TIMEOUT_MS = WebViewExecutor.DEFAULT_CAPTCHA_TIMEOUT_MS
         private val BINARY_MEDIA_TYPES = setOf("image/", "audio/", "video/", "application/octet-stream")
         private val acceptedCloudflareUserAgents = ConcurrentHashMap<String, String>()
 
