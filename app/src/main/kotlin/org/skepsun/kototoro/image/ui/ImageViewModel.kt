@@ -24,28 +24,28 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ImageViewModel @Inject constructor(
-	@ApplicationContext private val context: Context,
-	private val savedStateHandle: SavedStateHandle,
-	private val coil: ImageLoader,
+    @ApplicationContext private val context: Context,
+    private val savedStateHandle: SavedStateHandle,
+    private val coil: ImageLoader,
 ) : BaseViewModel() {
 
-	val onImageSaved = MutableEventFlow<Uri>()
+    val onImageSaved = MutableEventFlow<Uri>()
 
-	fun saveImage(destination: Uri) {
-		launchLoadingJob(Dispatchers.Default) {
-			val request = ImageRequest.Builder(context)
-				.memoryCachePolicy(CachePolicy.READ_ONLY)
-				.data(savedStateHandle.require<Uri>(AppRouter.KEY_DATA))
-				.memoryCachePolicy(CachePolicy.DISABLED)
-				.mangaSourceExtra(ContentSource(savedStateHandle[AppRouter.KEY_SOURCE]))
-				.build()
-			val bitmap = coil.execute(request).getDrawableOrThrow().toBitmap()
-			runInterruptible(Dispatchers.IO) {
-				context.contentResolver.openOutputStream(destination)?.use { output ->
-					check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
-				} ?: error("Cannot open output stream")
-			}
-			onImageSaved.call(destination)
-		}
-	}
+    fun saveImage(destination: Uri) {
+        launchLoadingJob(Dispatchers.Default) {
+            val request = ImageRequest.Builder(context)
+                .memoryCachePolicy(CachePolicy.READ_ONLY)
+                .data(savedStateHandle.require<Uri>(AppRouter.KEY_DATA))
+                .memoryCachePolicy(CachePolicy.DISABLED)
+                .mangaSourceExtra(ContentSource(savedStateHandle[AppRouter.KEY_SOURCE]))
+                .build()
+            val bitmap = coil.execute(request).getDrawableOrThrow().toBitmap()
+            runInterruptible(Dispatchers.IO) {
+                context.contentResolver.openOutputStream(destination)?.use { output ->
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
+                } ?: error("Cannot open output stream")
+            }
+            onImageSaved.call(destination)
+        }
+    }
 }

@@ -15,54 +15,54 @@ import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 
 class ImageMenuProvider(
-	private val activity: ComponentActivity,
-	private val snackbarHost: View,
-	private val viewModel: ImageViewModel,
+    private val activity: ComponentActivity,
+    private val snackbarHost: View,
+    private val viewModel: ImageViewModel,
 ) : MenuProvider {
 
-	private val permissionLauncher = activity.registerForActivityResult(
-		ActivityResultContracts.RequestPermission(),
-	) { isGranted ->
-		if (isGranted) {
-			saveImage()
-		}
-	}
+    private val permissionLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            saveImage()
+        }
+    }
 
-	private val saveLauncher = activity.registerForActivityResult(
-		ActivityResultContracts.CreateDocument("image/png"),
-	) { uri ->
-		if (uri != null) {
-			viewModel.saveImage(uri)
-		}
-	}
+    private val saveLauncher = activity.registerForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        if (uri != null) {
+            viewModel.saveImage(uri)
+        }
+    }
 
-	override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-		menuInflater.inflate(R.menu.opt_image, menu)
-	}
+    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+        menuInflater.inflate(R.menu.opt_image, menu)
+    }
 
-	override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
-		R.id.action_save -> {
-			if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-				permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-			} else {
-				saveImage()
-			}
-			true
-		}
+    override fun onMenuItemSelected(menuItem: MenuItem): Boolean = when (menuItem.itemId) {
+        R.id.action_save -> {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                permissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            } else {
+                saveImage()
+            }
+            true
+        }
 
-		else -> false
-	}
+        else -> false
+    }
 
-	private fun saveImage() {
-		val name = activity.intent.data?.let {
-			if (it.isZipUri()) {
-				it.fragment
-			} else {
-				it.lastPathSegment
-			}?.substringBeforeLast('.')?.plus(".png")
-		}
-		if (name == null || !saveLauncher.tryLaunch(name)) {
-			Snackbar.make(snackbarHost, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
-		}
-	}
+    private fun saveImage() {
+        val name = activity.intent.data?.let {
+            if (it.isZipUri()) {
+                it.fragment
+            } else {
+                it.lastPathSegment
+            }?.substringBeforeLast('.')?.plus(".png")
+        }
+        if (name == null || !saveLauncher.tryLaunch(name)) {
+            Snackbar.make(snackbarHost, R.string.operation_not_supported, Snackbar.LENGTH_SHORT).show()
+        }
+    }
 }
