@@ -15,68 +15,68 @@ import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
 class FavoritesListQuickFilter @AssistedInject constructor(
-	@Assisted private val categoryId: Long,
-	private val settings: AppSettings,
-	private val repository: FavouritesRepository,
-	networkState: NetworkState,
-	private val globalFilterState: GlobalFavoritesState,
+    @Assisted private val categoryId: Long,
+    private val settings: AppSettings,
+    private val repository: FavouritesRepository,
+    networkState: NetworkState,
+    private val globalFilterState: GlobalFavoritesState,
 ) : ContentListQuickFilter(settings) {
 
-	init {
-		// Sync initial state if needed, or rely on global state.
-		// Note: ContentListQuickFilter sets 'Downloaded' based on network in init.
-		// We might want to apply that to global state ONLY if it's the first init?
-		// Or just let user control.
-		// For now, let's keep the network logic but apply it to global state
-		globalFilterState.setFilterOption(ListFilterOption.Downloaded, !networkState.value)
-	}
+    init {
+        // Sync initial state if needed, or rely on global state.
+        // Note: ContentListQuickFilter sets 'Downloaded' based on network in init.
+        // We might want to apply that to global state ONLY if it's the first init?
+        // Or just let user control.
+        // For now, let's keep the network logic but apply it to global state
+        globalFilterState.setFilterOption(ListFilterOption.Downloaded, !networkState.value)
+    }
 
-	override val appliedOptions = globalFilterState.appliedFilter
+    override val appliedOptions = globalFilterState.appliedFilter
 
-	override fun setFilterOption(option: ListFilterOption, isApplied: Boolean) {
-		globalFilterState.setFilterOption(option, isApplied)
-	}
+    override fun setFilterOption(option: ListFilterOption, isApplied: Boolean) {
+        globalFilterState.setFilterOption(option, isApplied)
+    }
 
-	override fun toggleFilterOption(option: ListFilterOption) {
-		globalFilterState.toggleFilterOption(option)
-	}
+    override fun toggleFilterOption(option: ListFilterOption) {
+        globalFilterState.toggleFilterOption(option)
+    }
 
-	override fun clearFilter() {
-		globalFilterState.clearFilter()
-	}
+    override fun clearFilter() {
+        globalFilterState.clearFilter()
+    }
 
-	override fun createFilterModel(chips: List<ChipModel>): QuickFilter =
-		buildFavoritesQuickFilter(chips)
+    override fun createFilterModel(chips: List<ChipModel>): QuickFilter =
+        buildFavoritesQuickFilter(chips)
 
-	override suspend fun getAvailableFilterOptions(): List<ListFilterOption> = buildList {
-		add(ListFilterOption.Downloaded)
-		if (!settings.isFavouritesExcludeNsfw) {
-			add(ListFilterOption.SFW)          // 全年龄
-			add(ListFilterOption.Macro.NSFW)   // R18
-		}
-		if (settings.isTrackerEnabled) {
-			add(ListFilterOption.Macro.NEW_CHAPTERS)
-		}
-		add(ListFilterOption.Macro.MULTI_PROJECTION)
-		add(ListFilterOption.Macro.BROKEN_PROJECTION)
-		ScrobblingStatus.entries.mapTo(this) { ListFilterOption.ReadingStatus(it) }
-		ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
-		val hideNsfw = settings.isFavouritesExcludeNsfw
-		try {
-			repository.findPopularTags(categoryId, 3)
-				.mapTo(this) { ListFilterOption.Tag(it) }
+    override suspend fun getAvailableFilterOptions(): List<ListFilterOption> = buildList {
+        add(ListFilterOption.Downloaded)
+        if (!settings.isFavouritesExcludeNsfw) {
+            add(ListFilterOption.SFW)          // 全年龄
+            add(ListFilterOption.Macro.NSFW)   // R18
+        }
+        if (settings.isTrackerEnabled) {
+            add(ListFilterOption.Macro.NEW_CHAPTERS)
+        }
+        add(ListFilterOption.Macro.MULTI_PROJECTION)
+        add(ListFilterOption.Macro.BROKEN_PROJECTION)
+        ScrobblingStatus.entries.mapTo(this) { ListFilterOption.ReadingStatus(it) }
+        ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
+        val hideNsfw = settings.isFavouritesExcludeNsfw
+        try {
+            repository.findPopularTags(categoryId, 3)
+                .mapTo(this) { ListFilterOption.Tag(it) }
             repository.findPopularSources(categoryId, Int.MAX_VALUE)
                 .filterNot { hideNsfw && it.isNsfw() }
                 .mapTo(this) { ListFilterOption.Source(it) }
-		} catch (e: CancellationException) {
-			throw e
-		} catch (_: Exception) {
-		}
-	}
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
 
-	@AssistedFactory
-	interface Factory {
+    @AssistedFactory
+    interface Factory {
 
-		fun create(categoryId: Long): FavoritesListQuickFilter
-	}
+        fun create(categoryId: Long): FavoritesListQuickFilter
+    }
 }

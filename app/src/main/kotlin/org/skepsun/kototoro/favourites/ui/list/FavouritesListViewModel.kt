@@ -106,16 +106,16 @@ class FavouritesListViewModel @AssistedInject constructor(
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     private val activeSpaceScope = spaceBinding.spaceId
 
-	private data class PagingParams(
-		val order: ListSortOrder,
-		val filters: Set<ListFilterOption>,
-		val mode: ListMode,
-		val groupTab: BrowseGroupTab,
-		val sourceTags: Set<SourceTag>,
-		val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
-		val categoryIds: Set<Long>,
-		val spaceId: SpaceId?,
-	)
+    private data class PagingParams(
+        val order: ListSortOrder,
+        val filters: Set<ListFilterOption>,
+        val mode: ListMode,
+        val groupTab: BrowseGroupTab,
+        val sourceTags: Set<SourceTag>,
+        val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
+        val categoryIds: Set<Long>,
+        val spaceId: SpaceId?,
+    )
 
     @Volatile
     private var groupedFavoriteIds: Map<Long, Set<Long>> = emptyMap()
@@ -207,43 +207,43 @@ class FavouritesListViewModel @AssistedInject constructor(
     override val content = flowOf(listOf<ListModel>(LoadingState))
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(LoadingState))
 
-	override val pagingContent = combine(
-		sortOrder.filterNotNull(),
-		quickFilter.appliedOptions,
-		listMode,
-		currentGroupTab,
-		currentSourceTags,
-		activeSourcePreset,
-		selectedCategoryIds,
-		activeSpaceScope,
-	) { values: Array<Any?> ->
-		@Suppress("UNCHECKED_CAST")
-		PagingParams(
-			order = values[0] as ListSortOrder,
-			filters = values[1] as Set<ListFilterOption>,
-			mode = values[2] as ListMode,
-			groupTab = values[3] as BrowseGroupTab,
-			sourceTags = values[4] as Set<SourceTag>,
-			preset = values[5] as? org.skepsun.kototoro.explore.data.SourcePreset,
-			categoryIds = values[6] as Set<Long>,
-			spaceId = values[7] as? SpaceId,
-		)
-	}.flatMapLatest { params ->
-		Pager(
-			config = FavouriteLibraryPagingConfig,
-			pagingSourceFactory = {
-				val aggregateSource = workAggregateRepository.createFavouritePagingSource(
-					categoryId = categoryId,
-					order = params.order,
-					filterOptions = params.filters,
-					spaceId = params.spaceId,
-				)
-				BatchMappingPagingSource(aggregateSource, diagnosticLabel = "favourites-ui") { aggregates ->
-					mapFavouritePage(aggregates, params)
-				}
-			},
-		).flow
-	}.cachedIn(viewModelScope)
+    override val pagingContent = combine(
+        sortOrder.filterNotNull(),
+        quickFilter.appliedOptions,
+        listMode,
+        currentGroupTab,
+        currentSourceTags,
+        activeSourcePreset,
+        selectedCategoryIds,
+        activeSpaceScope,
+    ) { values: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        PagingParams(
+            order = values[0] as ListSortOrder,
+            filters = values[1] as Set<ListFilterOption>,
+            mode = values[2] as ListMode,
+            groupTab = values[3] as BrowseGroupTab,
+            sourceTags = values[4] as Set<SourceTag>,
+            preset = values[5] as? org.skepsun.kototoro.explore.data.SourcePreset,
+            categoryIds = values[6] as Set<Long>,
+            spaceId = values[7] as? SpaceId,
+        )
+    }.flatMapLatest { params ->
+        Pager(
+            config = FavouriteLibraryPagingConfig,
+            pagingSourceFactory = {
+                val aggregateSource = workAggregateRepository.createFavouritePagingSource(
+                    categoryId = categoryId,
+                    order = params.order,
+                    filterOptions = params.filters,
+                    spaceId = params.spaceId,
+                )
+                BatchMappingPagingSource(aggregateSource, diagnosticLabel = "favourites-ui") { aggregates ->
+                    mapFavouritePage(aggregates, params)
+                }
+            },
+        ).flow
+    }.cachedIn(viewModelScope)
 
     override val hasMoreItems = MutableStateFlow(false)
 
@@ -329,81 +329,81 @@ class FavouritesListViewModel @AssistedInject constructor(
         // Paging prefetches from LazyPagingItems access.
     }
 
-	private suspend fun mapFavouritePage(
-		aggregates: List<WorkAggregate>,
-		params: PagingParams,
-	): List<ListModel> {
-		val hideAdult = settings.isFavouritesExcludeNsfw
-		val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
-		val groups = aggregates.mapNotNull { aggregate ->
-			val representative = aggregate.displayProjection ?: return@mapNotNull null
-			if (params.preset != null && representative.source.name !in params.preset.sources) return@mapNotNull null
-			if (params.categoryIds.isNotEmpty() && aggregate.categories.none { it.id in params.categoryIds }) {
-				return@mapNotNull null
-			}
-			val contentGroup = sourceGroupManager.getContentGroup(representative.source)
-			val originGroup = sourceGroupManager.getOriginGroup(representative.source)
-			// The persisted content type is authoritative; the source-group heuristic
-			// can mislabel local/anonymous projections, so accept the aggregate type too.
-			val typeMatches = aggregate.contentType?.let(params.groupTab::matchesContentType) == true
-			if ((!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) && !typeMatches) {
-				return@mapNotNull null
-			}
-			if (params.sourceTags.isNotEmpty() && params.sourceTags.none { it.matches(contentGroup, originGroup) }) {
-				return@mapNotNull null
-			}
-			if ((hideAdult && representative.isNsfw()) || representative in globalTagBlacklist) return@mapNotNull null
-			val entityId = aggregate.identity.entityId ?: return@mapNotNull null
-			VisibleFavouriteGroup(
-				uiId = entityId.toUiGroupId(representative.source.contentType.ordinal),
-				entityId = entityId,
-				preferredLocalMangaId = aggregate.identity.preferredMangaId ?: representative.id,
-				metadataSourceSelection = null,
-				representative = representative,
-				mangaIds = aggregate.projections.mapTo(LinkedHashSet()) { it.id }.ifEmpty { setOf(representative.id) },
-				projectionCount = aggregate.projections.size.coerceAtLeast(1),
-			)
-		}
-		if (groups.isEmpty()) return emptyList()
-		val metadataByEntity = dataRepository.getEntityMetadataSourceSelections(groups.mapNotNull { it.entityId })
-		val overridesByMangaId = dataRepository.getOverridesForWorkItems(
-			groups.associate { group -> group.representative.id to requireNotNull(group.entityId) },
-		)
-		val requests = groups.map { group ->
-			val selection = group.entityId?.let(metadataByEntity::get)
-			ContentListMapper.ListModelRequest(
-				manga = group.representative,
-				metadataSelectionOverride = selection,
-				useMetadataSelectionOverride = true,
-				manualOverride = overridesByMangaId[group.representative.id],
-				useManualOverride = true,
-			)
-		}
-		val models = mangaListMapper.toRequestedListModelList(
-			requests = requests,
-			mode = params.mode,
-			flags = ContentListMapper.NO_FAVORITE,
-			pinnedIds = groups.filter { group ->
-				aggregates.firstOrNull { it.identity.entityId == group.entityId }?.favourite?.isPinned == true
-			}.mapTo(LinkedHashSet()) { it.preferredLocalMangaId ?: it.representative.id },
-		)
-		val entityIds = groups.associate { it.uiId to requireNotNull(it.entityId) }
-		val preferredIds = groups.associate { it.uiId to (it.preferredLocalMangaId ?: it.representative.id) }
-		val favouriteIds = groups.associate { it.uiId to it.mangaIds }
-		groupedEntityIds = groupedEntityIds + entityIds
-		groupedPreferredLocalIds = groupedPreferredLocalIds + preferredIds
-		groupedFavoriteIds = groupedFavoriteIds + favouriteIds
-		return groups.mapIndexed { index, group ->
-			val aggregate = aggregates.first { it.identity.entityId == group.entityId }
-			val progress = aggregate.toReadingProgress() ?: models[index].progressOrNull()
-			models[index].toGroupedListModel(
-				group = group,
-				isPinned = aggregate.favourite?.isPinned == true,
-				progress = progress,
-				counter = if (progress?.isCompleted() == true) 0 else aggregate.tracking?.newChapters ?: models[index].counter,
-			)
-		}
-	}
+    private suspend fun mapFavouritePage(
+        aggregates: List<WorkAggregate>,
+        params: PagingParams,
+    ): List<ListModel> {
+        val hideAdult = settings.isFavouritesExcludeNsfw
+        val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
+        val groups = aggregates.mapNotNull { aggregate ->
+            val representative = aggregate.displayProjection ?: return@mapNotNull null
+            if (params.preset != null && representative.source.name !in params.preset.sources) return@mapNotNull null
+            if (params.categoryIds.isNotEmpty() && aggregate.categories.none { it.id in params.categoryIds }) {
+                return@mapNotNull null
+            }
+            val contentGroup = sourceGroupManager.getContentGroup(representative.source)
+            val originGroup = sourceGroupManager.getOriginGroup(representative.source)
+            // The persisted content type is authoritative; the source-group heuristic
+            // can mislabel local/anonymous projections, so accept the aggregate type too.
+            val typeMatches = aggregate.contentType?.let(params.groupTab::matchesContentType) == true
+            if ((!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) && !typeMatches) {
+                return@mapNotNull null
+            }
+            if (params.sourceTags.isNotEmpty() && params.sourceTags.none { it.matches(contentGroup, originGroup) }) {
+                return@mapNotNull null
+            }
+            if ((hideAdult && representative.isNsfw()) || representative in globalTagBlacklist) return@mapNotNull null
+            val entityId = aggregate.identity.entityId ?: return@mapNotNull null
+            VisibleFavouriteGroup(
+                uiId = entityId.toUiGroupId(representative.source.contentType.ordinal),
+                entityId = entityId,
+                preferredLocalMangaId = aggregate.identity.preferredMangaId ?: representative.id,
+                metadataSourceSelection = null,
+                representative = representative,
+                mangaIds = aggregate.projections.mapTo(LinkedHashSet()) { it.id }.ifEmpty { setOf(representative.id) },
+                projectionCount = aggregate.projections.size.coerceAtLeast(1),
+            )
+        }
+        if (groups.isEmpty()) return emptyList()
+        val metadataByEntity = dataRepository.getEntityMetadataSourceSelections(groups.mapNotNull { it.entityId })
+        val overridesByMangaId = dataRepository.getOverridesForWorkItems(
+            groups.associate { group -> group.representative.id to requireNotNull(group.entityId) },
+        )
+        val requests = groups.map { group ->
+            val selection = group.entityId?.let(metadataByEntity::get)
+            ContentListMapper.ListModelRequest(
+                manga = group.representative,
+                metadataSelectionOverride = selection,
+                useMetadataSelectionOverride = true,
+                manualOverride = overridesByMangaId[group.representative.id],
+                useManualOverride = true,
+            )
+        }
+        val models = mangaListMapper.toRequestedListModelList(
+            requests = requests,
+            mode = params.mode,
+            flags = ContentListMapper.NO_FAVORITE,
+            pinnedIds = groups.filter { group ->
+                aggregates.firstOrNull { it.identity.entityId == group.entityId }?.favourite?.isPinned == true
+            }.mapTo(LinkedHashSet()) { it.preferredLocalMangaId ?: it.representative.id },
+        )
+        val entityIds = groups.associate { it.uiId to requireNotNull(it.entityId) }
+        val preferredIds = groups.associate { it.uiId to (it.preferredLocalMangaId ?: it.representative.id) }
+        val favouriteIds = groups.associate { it.uiId to it.mangaIds }
+        groupedEntityIds = groupedEntityIds + entityIds
+        groupedPreferredLocalIds = groupedPreferredLocalIds + preferredIds
+        groupedFavoriteIds = groupedFavoriteIds + favouriteIds
+        return groups.mapIndexed { index, group ->
+            val aggregate = aggregates.first { it.identity.entityId == group.entityId }
+            val progress = aggregate.toReadingProgress() ?: models[index].progressOrNull()
+            models[index].toGroupedListModel(
+                group = group,
+                isPinned = aggregate.favourite?.isPinned == true,
+                progress = progress,
+                counter = if (progress?.isCompleted() == true) 0 else aggregate.tracking?.newChapters ?: models[index].counter,
+            )
+        }
+    }
 
     private suspend fun prepareGroups(
         list: List<Content>,

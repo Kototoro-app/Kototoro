@@ -82,415 +82,415 @@ import org.skepsun.kototoro.list.ui.model.LoadingState
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 internal fun FavouriteCategoriesScreen(
-	items: List<ListModel>,
-	selectedIds: Set<Long>,
-	onSelectionChanged: (Set<Long>) -> Unit,
-	onAdd: () -> Unit,
-	onOpenAll: () -> Unit,
-	onOpenCategory: (FavouriteCategory) -> Unit,
-	onEditCategory: (FavouriteCategory) -> Unit,
-	onShowAllChanged: (Boolean) -> Unit,
-	onSetVisible: (Set<Long>, Boolean) -> Unit,
-	onDelete: (Set<Long>) -> Unit,
-	onSaveOrder: (List<ListModel>) -> Unit,
+    items: List<ListModel>,
+    selectedIds: Set<Long>,
+    onSelectionChanged: (Set<Long>) -> Unit,
+    onAdd: () -> Unit,
+    onOpenAll: () -> Unit,
+    onOpenCategory: (FavouriteCategory) -> Unit,
+    onEditCategory: (FavouriteCategory) -> Unit,
+    onShowAllChanged: (Boolean) -> Unit,
+    onSetVisible: (Set<Long>, Boolean) -> Unit,
+    onDelete: (Set<Long>) -> Unit,
+    onSaveOrder: (List<ListModel>) -> Unit,
 ) {
-	val localItems = remember { mutableStateListOf<ListModel>() }
-	val listState = rememberLazyListState()
-	var pendingDelete by remember { mutableStateOf(false) }
-	var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
+    val localItems = remember { mutableStateListOf<ListModel>() }
+    val listState = rememberLazyListState()
+    var pendingDelete by remember { mutableStateOf(false) }
+    var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
 
-	LaunchedEffect(items) {
-		localItems.clear()
-		localItems.addAll(items)
-	}
-	BackHandler(enabled = selectedIds.isNotEmpty()) {
-		onSelectionChanged(emptySet())
-	}
+    LaunchedEffect(items) {
+        localItems.clear()
+        localItems.addAll(items)
+    }
+    BackHandler(enabled = selectedIds.isNotEmpty()) {
+        onSelectionChanged(emptySet())
+    }
 
-	val selectedCategories = items.filterIsInstance<CategoryListModel>()
-		.filter { it.category.id in selectedIds }
-	val canShow = selectedCategories.isNotEmpty() && selectedCategories.all { !it.category.isVisibleInLibrary }
-	val canHide = selectedCategories.isNotEmpty() && selectedCategories.all { it.category.isVisibleInLibrary }
+    val selectedCategories = items.filterIsInstance<CategoryListModel>()
+        .filter { it.category.id in selectedIds }
+    val canShow = selectedCategories.isNotEmpty() && selectedCategories.all { !it.category.isVisibleInLibrary }
+    val canHide = selectedCategories.isNotEmpty() && selectedCategories.all { it.category.isVisibleInLibrary }
 
-	Scaffold(
-		modifier = Modifier.fillMaxSize(),
-		contentWindowInsets = WindowInsets(0, 0, 0, 0),
-		topBar = {
-			TopAppBar(
-				modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal)),
-				title = {
-					Text(
-						if (selectedIds.isEmpty()) stringResource(R.string.manage_categories) else selectedIds.size.toString(),
-					)
-				},
-				navigationIcon = {
-					IconButton(onClick = {
-						if (selectedIds.isEmpty()) onOpenAll() else onSelectionChanged(emptySet())
-					}) {
-						Icon(
-							painter = painterResource(
-								if (selectedIds.isEmpty()) R.drawable.ic_arrow_forward else R.drawable.ic_clear_all,
-							),
-							contentDescription = null,
-						)
-					}
-				},
-				actions = {
-					if (canShow) {
-						IconButton(onClick = {
-							onSetVisible(selectedIds, true)
-							onSelectionChanged(emptySet())
-						}) {
-							Icon(painterResource(R.drawable.ic_eye), stringResource(R.string.show))
-						}
-					} else if (canHide) {
-						IconButton(onClick = {
-							onSetVisible(selectedIds, false)
-							onSelectionChanged(emptySet())
-						}) {
-							Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide))
-						}
-					}
-					if (selectedIds.isNotEmpty()) {
-						IconButton(onClick = { pendingDelete = true }) {
-							Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.remove))
-						}
-					}
-				},
-				colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-			)
-		},
-		floatingActionButton = {
-				if (selectedIds.isEmpty()) {
-					FloatingActionButton(
-						onClick = onAdd,
-						modifier = Modifier
-							.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
-							.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
-					) {
-						Icon(painterResource(R.drawable.ic_add), stringResource(R.string.add_new_category))
-					}
-				}
-		},
-		containerColor = MaterialTheme.colorScheme.background,
-	) { contentPadding ->
-		LazyColumn(
-			state = listState,
-			modifier = Modifier
-				.fillMaxSize()
-				.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
-				.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
-			contentPadding = PaddingValues(
-				top = contentPadding.calculateTopPadding() + dimensionResource(R.dimen.list_spacing_normal),
-				bottom = contentPadding.calculateBottomPadding() + dimensionResource(R.dimen.list_spacing_normal),
-				start = dimensionResource(R.dimen.list_spacing_normal),
-				end = dimensionResource(R.dimen.list_spacing_normal),
-			),
-			verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.list_spacing_normal)),
-		) {
-			itemsIndexed(
-				items = localItems,
-				key = { _, item -> itemKey(item) },
-				contentType = { _, item -> item::class },
-			) { _, item ->
-				when (item) {
-					LoadingState -> Unit
-					is EmptyState -> EmptyCategoryState(item)
-					is AllCategoriesListModel -> AllCategoriesRow(
-						item = item,
-						onClick = { if (selectedIds.isEmpty()) onOpenAll() },
-						onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
-					)
-					is CategoryListModel -> CategoryRow(
-						modifier = Modifier
-							.then(
-								if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
-							)
-							.zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
-						item = item,
-						isSelected = item.category.id in selectedIds,
-						isDragging = draggedCategoryId == item.category.id,
-						actionsEnabled = selectedIds.isEmpty() && item.isActionsEnabled,
-						onClick = {
-							if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-						},
-						onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
-						onEdit = {
-							if (selectedIds.isEmpty()) onEditCategory(item.category)
-							else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-						},
-						onMove = { targetIndex ->
-							val currentIndex = localItems.indexOfFirst {
-								(it as? CategoryListModel)?.category?.id == item.category.id
-							}
-							selectedIds.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
-						},
-						onDragStateChanged = { isDragging ->
-							draggedCategoryId = item.category.id.takeIf { isDragging }
-						},
-						onDragFinished = { moved ->
-							draggedCategoryId = null
-							if (moved) onSaveOrder(localItems.toList())
-						},
-						listState = listState,
-					)
-				}
-			}
-		}
-	}
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal)),
+                title = {
+                    Text(
+                        if (selectedIds.isEmpty()) stringResource(R.string.manage_categories) else selectedIds.size.toString(),
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (selectedIds.isEmpty()) onOpenAll() else onSelectionChanged(emptySet())
+                    }) {
+                        Icon(
+                            painter = painterResource(
+                                if (selectedIds.isEmpty()) R.drawable.ic_arrow_forward else R.drawable.ic_clear_all,
+                            ),
+                            contentDescription = null,
+                        )
+                    }
+                },
+                actions = {
+                    if (canShow) {
+                        IconButton(onClick = {
+                            onSetVisible(selectedIds, true)
+                            onSelectionChanged(emptySet())
+                        }) {
+                            Icon(painterResource(R.drawable.ic_eye), stringResource(R.string.show))
+                        }
+                    } else if (canHide) {
+                        IconButton(onClick = {
+                            onSetVisible(selectedIds, false)
+                            onSelectionChanged(emptySet())
+                        }) {
+                            Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide))
+                        }
+                    }
+                    if (selectedIds.isNotEmpty()) {
+                        IconButton(onClick = { pendingDelete = true }) {
+                            Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.remove))
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+            )
+        },
+        floatingActionButton = {
+                if (selectedIds.isEmpty()) {
+                    FloatingActionButton(
+                        onClick = onAdd,
+                        modifier = Modifier
+                            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                            .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+                    ) {
+                        Icon(painterResource(R.drawable.ic_add), stringResource(R.string.add_new_category))
+                    }
+                }
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+    ) { contentPadding ->
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding() + dimensionResource(R.dimen.list_spacing_normal),
+                bottom = contentPadding.calculateBottomPadding() + dimensionResource(R.dimen.list_spacing_normal),
+                start = dimensionResource(R.dimen.list_spacing_normal),
+                end = dimensionResource(R.dimen.list_spacing_normal),
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.list_spacing_normal)),
+        ) {
+            itemsIndexed(
+                items = localItems,
+                key = { _, item -> itemKey(item) },
+                contentType = { _, item -> item::class },
+            ) { _, item ->
+                when (item) {
+                    LoadingState -> Unit
+                    is EmptyState -> EmptyCategoryState(item)
+                    is AllCategoriesListModel -> AllCategoriesRow(
+                        item = item,
+                        onClick = { if (selectedIds.isEmpty()) onOpenAll() },
+                        onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
+                    )
+                    is CategoryListModel -> CategoryRow(
+                        modifier = Modifier
+                            .then(
+                                if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
+                            )
+                            .zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
+                        item = item,
+                        isSelected = item.category.id in selectedIds,
+                        isDragging = draggedCategoryId == item.category.id,
+                        actionsEnabled = selectedIds.isEmpty() && item.isActionsEnabled,
+                        onClick = {
+                            if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                        },
+                        onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
+                        onEdit = {
+                            if (selectedIds.isEmpty()) onEditCategory(item.category)
+                            else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                        },
+                        onMove = { targetIndex ->
+                            val currentIndex = localItems.indexOfFirst {
+                                (it as? CategoryListModel)?.category?.id == item.category.id
+                            }
+                            selectedIds.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
+                        },
+                        onDragStateChanged = { isDragging ->
+                            draggedCategoryId = item.category.id.takeIf { isDragging }
+                        },
+                        onDragFinished = { moved ->
+                            draggedCategoryId = null
+                            if (moved) onSaveOrder(localItems.toList())
+                        },
+                        listState = listState,
+                    )
+                }
+            }
+        }
+    }
 
-	if (pendingDelete) {
-		AlertDialog(
-			onDismissRequest = { pendingDelete = false },
-			title = { Text(stringResource(R.string.remove_category)) },
-			text = { Text(stringResource(R.string.categories_delete_confirm)) },
-			confirmButton = {
-				TextButton(onClick = {
-					pendingDelete = false
-					onDelete(selectedIds)
-					onSelectionChanged(emptySet())
-				}) { Text(stringResource(R.string.remove)) }
-			},
-			dismissButton = {
-				TextButton(onClick = { pendingDelete = false }) {
-					Text(stringResource(android.R.string.cancel))
-				}
-			},
-		)
-	}
+    if (pendingDelete) {
+        AlertDialog(
+            onDismissRequest = { pendingDelete = false },
+            title = { Text(stringResource(R.string.remove_category)) },
+            text = { Text(stringResource(R.string.categories_delete_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = false
+                    onDelete(selectedIds)
+                    onSelectionChanged(emptySet())
+                }) { Text(stringResource(R.string.remove)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+        )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CategoryRow(
-	modifier: Modifier = Modifier,
-	item: CategoryListModel,
-	isSelected: Boolean,
-	isDragging: Boolean,
-	actionsEnabled: Boolean,
-	onClick: () -> Unit,
-	onLongClick: () -> Unit,
-	onEdit: () -> Unit,
-	onMove: (Int) -> Boolean,
-	onDragStateChanged: (Boolean) -> Unit,
-	onDragFinished: (Boolean) -> Unit,
-	listState: LazyListState,
+    modifier: Modifier = Modifier,
+    item: CategoryListModel,
+    isSelected: Boolean,
+    isDragging: Boolean,
+    actionsEnabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onEdit: () -> Unit,
+    onMove: (Int) -> Boolean,
+    onDragStateChanged: (Boolean) -> Unit,
+    onDragFinished: (Boolean) -> Unit,
+    listState: LazyListState,
 ) {
-	val shape = RoundedCornerShape(dimensionResource(R.dimen.list_selector_corner))
-	val hapticFeedback = LocalHapticFeedback.current
-	val density = LocalDensity.current
-	var dragOffsetY by remember(item.category.id) { mutableFloatStateOf(0f) }
-	val backgroundColor by animateColorAsState(
-		targetValue = when {
-			isDragging -> MaterialTheme.colorScheme.secondaryContainer
-			isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-			else -> Color.Transparent
-		},
-		label = "categoryDragBackground",
-	)
-	val rowModifier = modifier
-		.fillMaxWidth()
-		.graphicsLayer {
-			val scale = if (isDragging) 1.02f else 1f
-			scaleX = scale
-			scaleY = scale
-			translationY = if (isDragging) dragOffsetY else 0f
-			shadowElevation = if (isDragging) with(density) { 8.dp.toPx() } else 0f
-			this.shape = shape
-			clip = false
-		}
-		.clip(shape)
-		.background(backgroundColor)
-		.combinedClickable(onClick = onClick, onLongClick = onLongClick)
-		.padding(start = dimensionResource(androidx.appcompat.R.dimen.abc_action_bar_content_inset_material), top = 4.dp, bottom = 4.dp)
+    val shape = RoundedCornerShape(dimensionResource(R.dimen.list_selector_corner))
+    val hapticFeedback = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    var dragOffsetY by remember(item.category.id) { mutableFloatStateOf(0f) }
+    val backgroundColor by animateColorAsState(
+        targetValue = when {
+            isDragging -> MaterialTheme.colorScheme.secondaryContainer
+            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            else -> Color.Transparent
+        },
+        label = "categoryDragBackground",
+    )
+    val rowModifier = modifier
+        .fillMaxWidth()
+        .graphicsLayer {
+            val scale = if (isDragging) 1.02f else 1f
+            scaleX = scale
+            scaleY = scale
+            translationY = if (isDragging) dragOffsetY else 0f
+            shadowElevation = if (isDragging) with(density) { 8.dp.toPx() } else 0f
+            this.shape = shape
+            clip = false
+        }
+        .clip(shape)
+        .background(backgroundColor)
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+        .padding(start = dimensionResource(androidx.appcompat.R.dimen.abc_action_bar_content_inset_material), top = 4.dp, bottom = 4.dp)
 
-	Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
-		CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
-		Column(
-			modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
-			verticalArrangement = Arrangement.spacedBy(4.dp),
-		) {
-			Text(item.category.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-			Row(verticalAlignment = Alignment.CenterVertically) {
-				Text(
-					text = if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
-					style = MaterialTheme.typography.bodySmall,
-					maxLines = 1,
-					modifier = Modifier.weight(1f, fill = false),
-				)
-				if (item.category.isTrackingEnabled) Icon(painterResource(R.drawable.ic_notification), stringResource(R.string.check_for_new_chapters), Modifier.padding(horizontal = 4.dp).size(16.dp))
-				if (!item.category.isVisibleInLibrary) Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide_from_main_screen), Modifier.size(16.dp))
-			}
-		}
-		if (actionsEnabled) {
-			IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
-			Icon(
-				painter = painterResource(R.drawable.ic_reorder_handle),
-				contentDescription = stringResource(R.string.reorder),
-				modifier = Modifier
-					.size(48.dp)
-					.pointerInput(item.category.id) {
-						var dragStarted = false
-						var hasMoved = false
-						detectDragGestures(
-							onDragStart = {
-								dragStarted = listState.layoutInfo.visibleItemsInfo.any { it.key == itemKey(item) }
-								dragOffsetY = 0f
-								if (dragStarted) {
-									onDragStateChanged(true)
-									hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-								}
-							},
-							onDrag = { change, dragAmount ->
-								change.consume()
-								if (!dragStarted) return@detectDragGestures
-								dragOffsetY += dragAmount.y
-								val currentItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey(item) }
-									?: return@detectDragGestures
-								val center = currentItem.offset + currentItem.size / 2 + dragOffsetY.toInt()
-								val targetItem = listState.layoutInfo.visibleItemsInfo.minByOrNull {
-									kotlin.math.abs(it.offset + it.size / 2 - center)
-								} ?: return@detectDragGestures
-								if (targetItem.index != currentItem.index && targetItem.index > 0) {
-									if (onMove(targetItem.index)) {
-										dragOffsetY += currentItem.offset - targetItem.offset
-										hasMoved = true
-										hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-									}
-								}
-							},
-							onDragCancel = {
-								dragOffsetY = 0f
-								onDragStateChanged(false)
-								onDragFinished(hasMoved)
-							},
-							onDragEnd = {
-								dragOffsetY = 0f
-								onDragStateChanged(false)
-								onDragFinished(hasMoved)
-							},
-						)
-					}
-			)
-		}
-	}
+    Row(modifier = rowModifier, verticalAlignment = Alignment.CenterVertically) {
+        CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
+        Column(
+            modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal), end = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(item.category.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (item.category.isTrackingEnabled) Icon(painterResource(R.drawable.ic_notification), stringResource(R.string.check_for_new_chapters), Modifier.padding(horizontal = 4.dp).size(16.dp))
+                if (!item.category.isVisibleInLibrary) Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide_from_main_screen), Modifier.size(16.dp))
+            }
+        }
+        if (actionsEnabled) {
+            IconButton(onClick = onEdit) { Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.edit)) }
+            Icon(
+                painter = painterResource(R.drawable.ic_reorder_handle),
+                contentDescription = stringResource(R.string.reorder),
+                modifier = Modifier
+                    .size(48.dp)
+                    .pointerInput(item.category.id) {
+                        var dragStarted = false
+                        var hasMoved = false
+                        detectDragGestures(
+                            onDragStart = {
+                                dragStarted = listState.layoutInfo.visibleItemsInfo.any { it.key == itemKey(item) }
+                                dragOffsetY = 0f
+                                if (dragStarted) {
+                                    onDragStateChanged(true)
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                if (!dragStarted) return@detectDragGestures
+                                dragOffsetY += dragAmount.y
+                                val currentItem = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == itemKey(item) }
+                                    ?: return@detectDragGestures
+                                val center = currentItem.offset + currentItem.size / 2 + dragOffsetY.toInt()
+                                val targetItem = listState.layoutInfo.visibleItemsInfo.minByOrNull {
+                                    kotlin.math.abs(it.offset + it.size / 2 - center)
+                                } ?: return@detectDragGestures
+                                if (targetItem.index != currentItem.index && targetItem.index > 0) {
+                                    if (onMove(targetItem.index)) {
+                                        dragOffsetY += currentItem.offset - targetItem.offset
+                                        hasMoved = true
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    }
+                                }
+                            },
+                            onDragCancel = {
+                                dragOffsetY = 0f
+                                onDragStateChanged(false)
+                                onDragFinished(hasMoved)
+                            },
+                            onDragEnd = {
+                                dragOffsetY = 0f
+                                onDragStateChanged(false)
+                                onDragFinished(hasMoved)
+                            },
+                        )
+                    }
+            )
+        }
+    }
 }
 
 @Composable
 private fun AllCategoriesRow(
-	item: AllCategoriesListModel,
-	onClick: () -> Unit,
-	onVisibilityChanged: () -> Unit,
+    item: AllCategoriesListModel,
+    onClick: () -> Unit,
+    onVisibilityChanged: () -> Unit,
 ) {
-	Row(
-		modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
-		verticalAlignment = Alignment.CenterVertically,
-	) {
-		CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
-		Column(modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal))) {
-			Text(stringResource(R.string.all_favourites), style = MaterialTheme.typography.bodyLarge)
-			Text(
-				if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
-				style = MaterialTheme.typography.bodySmall,
-				modifier = Modifier.padding(top = 4.dp),
-			)
-		}
-		if (item.isActionsEnabled) {
-			IconButton(onClick = onVisibilityChanged) {
-				Icon(painterResource(if (item.isVisible) R.drawable.ic_eye else R.drawable.ic_eye_off), stringResource(R.string.show_all))
-			}
-		}
-	}
+    Row(
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick).padding(start = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverStack(item.covers, Modifier.height(dimensionResource(R.dimen.category_covers_height)).aspectRatio(13f / 18f))
+        Column(modifier = Modifier.weight(1f).padding(start = dimensionResource(R.dimen.margin_normal))) {
+            Text(stringResource(R.string.all_favourites), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                if (item.mangaCount == 0) stringResource(R.string.empty) else pluralStringResource(R.plurals.items, item.mangaCount, item.mangaCount),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (item.isActionsEnabled) {
+            IconButton(onClick = onVisibilityChanged) {
+                Icon(painterResource(if (item.isVisible) R.drawable.ic_eye else R.drawable.ic_eye_off), stringResource(R.string.show_all))
+            }
+        }
+    }
 }
 
 @Composable
 private fun CoverStack(covers: List<Cover>, modifier: Modifier) {
-	Box(modifier = modifier) {
-		StackCover(
-			cover = covers.getOrNull(2),
-			modifier = Modifier.fillMaxSize().padding(start = 24.dp, bottom = 12.dp).alpha(0.6f),
-		)
-		StackCover(
-			cover = covers.getOrNull(1),
-			modifier = Modifier.fillMaxSize().padding(start = 12.dp).alpha(0.3f),
-		)
-		StackCover(
-			cover = covers.getOrNull(0),
-			modifier = Modifier.fillMaxSize().padding(top = 12.dp),
-		)
-	}
+    Box(modifier = modifier) {
+        StackCover(
+            cover = covers.getOrNull(2),
+            modifier = Modifier.fillMaxSize().padding(start = 24.dp, bottom = 12.dp).alpha(0.6f),
+        )
+        StackCover(
+            cover = covers.getOrNull(1),
+            modifier = Modifier.fillMaxSize().padding(start = 12.dp).alpha(0.3f),
+        )
+        StackCover(
+            cover = covers.getOrNull(0),
+            modifier = Modifier.fillMaxSize().padding(top = 12.dp),
+        )
+    }
 }
 
 @Composable
 private fun StackCover(cover: Cover?, modifier: Modifier) {
-	if (cover == null) {
-		return
-	}
-	val context = LocalContext.current
-	val request = remember(cover.url, cover.source) {
-		ImageRequest.Builder(context)
-			.data(cover.url)
-			.mangaSourceExtra(cover.mangaSource)
-			.build()
-	}
-	AsyncImage(
-		model = request,
-		contentDescription = null,
-		contentScale = ContentScale.Crop,
-		modifier = modifier
-			.clip(RoundedCornerShape(4.dp))
-			.background(MaterialTheme.colorScheme.secondaryContainer),
-	)
+    if (cover == null) {
+        return
+    }
+    val context = LocalContext.current
+    val request = remember(cover.url, cover.source) {
+        ImageRequest.Builder(context)
+            .data(cover.url)
+            .mangaSourceExtra(cover.mangaSource)
+            .build()
+    }
+    AsyncImage(
+        model = request,
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer),
+    )
 }
 
 @Composable
 private fun EmptyCategoryState(item: EmptyState) {
-	Column(
-		modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 32.dp),
-		horizontalAlignment = Alignment.CenterHorizontally,
-		verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.margin_normal)),
-	) {
-		Icon(painterResource(item.icon), null, Modifier.size(96.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-		Text(item.textPrimaryText?.toString() ?: stringResource(item.textPrimary), style = MaterialTheme.typography.titleLarge)
-		if (item.textSecondary != 0 || item.textSecondaryText != null) {
-			Text(item.textSecondaryText?.toString() ?: stringResource(item.textSecondary), style = MaterialTheme.typography.bodyMedium)
-		}
-	}
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.margin_normal)),
+    ) {
+        Icon(painterResource(item.icon), null, Modifier.size(96.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(item.textPrimaryText?.toString() ?: stringResource(item.textPrimary), style = MaterialTheme.typography.titleLarge)
+        if (item.textSecondary != 0 || item.textSecondaryText != null) {
+            Text(item.textSecondaryText?.toString() ?: stringResource(item.textSecondary), style = MaterialTheme.typography.bodyMedium)
+        }
+    }
 }
 
 private fun toggleSelection(id: Long, selectedIds: Set<Long>, onSelectionChanged: (Set<Long>) -> Unit) {
-	onSelectionChanged(if (id in selectedIds) selectedIds - id else selectedIds + id)
+    onSelectionChanged(if (id in selectedIds) selectedIds - id else selectedIds + id)
 }
 
 private fun moveItem(items: MutableList<ListModel>, from: Int, to: Int): Boolean {
-	if (from == to || from !in items.indices || to !in items.indices || items[from] !is CategoryListModel || items[to] !is CategoryListModel) return false
-	val item = items.removeAt(from)
-	items.add(to, item)
-	return true
+    if (from == to || from !in items.indices || to !in items.indices || items[from] !is CategoryListModel || items[to] !is CategoryListModel) return false
+    val item = items.removeAt(from)
+    items.add(to, item)
+    return true
 }
 
 private fun itemKey(item: ListModel): String = when (item) {
-	LoadingState -> "loading"
-	is EmptyState -> "empty"
-	is AllCategoriesListModel -> "all"
-	is CategoryListModel -> "category:${item.category.id}"
-	else -> item.hashCode().toString()
+    LoadingState -> "loading"
+    is EmptyState -> "empty"
+    is AllCategoriesListModel -> "all"
+    is CategoryListModel -> "category:${item.category.id}"
+    else -> item.hashCode().toString()
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun FavouriteCategoriesScreenPreview() {
-		FavouriteCategoriesScreen(
-			items = emptyList(),
-			selectedIds = emptySet(),
-			onSelectionChanged = {},
-			onAdd = {},
-			onOpenAll = {},
-			onOpenCategory = {},
-			onEditCategory = {},
-			onShowAllChanged = {},
-			onSetVisible = { _, _ -> },
-			onDelete = {},
-			onSaveOrder = {},
-		)
+        FavouriteCategoriesScreen(
+            items = emptyList(),
+            selectedIds = emptySet(),
+            onSelectionChanged = {},
+            onAdd = {},
+            onOpenAll = {},
+            onOpenCategory = {},
+            onEditCategory = {},
+            onShowAllChanged = {},
+            onSetVisible = { _, _ -> },
+            onDelete = {},
+            onSaveOrder = {},
+        )
 }

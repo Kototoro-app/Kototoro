@@ -6,20 +6,20 @@ import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
 
 data class ContentCategoryItem(
-	val category: FavouriteCategory,
-	@CheckedState val checkedState: Int,
-	val isTrackerEnabled: Boolean,
+    val category: FavouriteCategory,
+    @CheckedState val checkedState: Int,
+    val isTrackerEnabled: Boolean,
 ) : ListModel {
 
-	override fun areItemsTheSame(other: ListModel): Boolean {
-		return other is ContentCategoryItem && other.category.id == category.id
-	}
+    override fun areItemsTheSame(other: ListModel): Boolean {
+        return other is ContentCategoryItem && other.category.id == category.id
+    }
 
-	override fun getChangePayload(previousState: ListModel): Any? {
-		return if (previousState is ContentCategoryItem && previousState.checkedState != checkedState) {
-			ListModelDiffCallback.PAYLOAD_CHECKED_CHANGED
-		} else {
-			super.getChangePayload(previousState)
-		}
-	}
+    override fun getChangePayload(previousState: ListModel): Any? {
+        return if (previousState is ContentCategoryItem && previousState.checkedState != checkedState) {
+            ListModelDiffCallback.PAYLOAD_CHECKED_CHANGED
+        } else {
+            super.getChangePayload(previousState)
+        }
+    }
 }

@@ -22,44 +22,44 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FavouritesCategoryEditViewModel @Inject constructor(
-	savedStateHandle: SavedStateHandle,
-	private val repository: FavouritesRepository,
-	private val settings: AppSettings,
+    savedStateHandle: SavedStateHandle,
+    private val repository: FavouritesRepository,
+    private val settings: AppSettings,
 ) : BaseViewModel() {
 
-	private val categoryId = savedStateHandle[AppRouter.KEY_ID] ?: NO_ID
+    private val categoryId = savedStateHandle[AppRouter.KEY_ID] ?: NO_ID
 
-	val onSaved = MutableEventFlow<Unit>()
-	val category = MutableStateFlow<FavouriteCategory?>(null)
+    val onSaved = MutableEventFlow<Unit>()
+    val category = MutableStateFlow<FavouriteCategory?>(null)
 
-	val isTrackerEnabled = flow {
-		emit(settings.isTrackerEnabled && AppSettings.TRACK_FAVOURITES in settings.trackSources)
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
+    val isTrackerEnabled = flow {
+        emit(settings.isTrackerEnabled && AppSettings.TRACK_FAVOURITES in settings.trackSources)
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
 
-	init {
-		launchLoadingJob(Dispatchers.Default) {
-			category.value = if (categoryId != NO_ID) {
-				repository.getCategory(categoryId)
-			} else {
-				null
-			}
-		}
-	}
+    init {
+        launchLoadingJob(Dispatchers.Default) {
+            category.value = if (categoryId != NO_ID) {
+                repository.getCategory(categoryId)
+            } else {
+                null
+            }
+        }
+    }
 
-	fun save(
-		title: String,
-		sortOrder: ListSortOrder,
-		isTrackerEnabled: Boolean,
-		isVisibleOnShelf: Boolean,
-	) {
-		launchLoadingJob(Dispatchers.Default) {
-			check(title.isNotEmpty())
-			if (categoryId == NO_ID) {
-				repository.createCategory(title, sortOrder, isTrackerEnabled, isVisibleOnShelf)
-			} else {
-				repository.updateCategory(categoryId, title, sortOrder, isTrackerEnabled, isVisibleOnShelf)
-			}
-			onSaved.call(Unit)
-		}
-	}
+    fun save(
+        title: String,
+        sortOrder: ListSortOrder,
+        isTrackerEnabled: Boolean,
+        isVisibleOnShelf: Boolean,
+    ) {
+        launchLoadingJob(Dispatchers.Default) {
+            check(title.isNotEmpty())
+            if (categoryId == NO_ID) {
+                repository.createCategory(title, sortOrder, isTrackerEnabled, isVisibleOnShelf)
+            } else {
+                repository.updateCategory(categoryId, title, sortOrder, isTrackerEnabled, isVisibleOnShelf)
+            }
+            onSaved.call(Unit)
+        }
+    }
 }

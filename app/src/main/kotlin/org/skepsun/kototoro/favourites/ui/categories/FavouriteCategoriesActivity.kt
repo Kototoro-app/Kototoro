@@ -15,28 +15,28 @@ import org.skepsun.kototoro.favourites.ui.categories.compose.FavouriteCategories
 
 @AndroidEntryPoint
 class FavouriteCategoriesActivity :
-	BaseComposeActivity() {
+    BaseComposeActivity() {
 
-	private val viewModel by viewModels<FavouritesCategoriesViewModel>()
-	private var selectedIds by mutableStateOf<Set<Long>>(emptySet())
+    private val viewModel by viewModels<FavouritesCategoriesViewModel>()
+    private var selectedIds by mutableStateOf<Set<Long>>(emptySet())
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, exceptionResolver, null))
-		setComposeContent {
-			FavouriteCategoriesScreen(
-				items = viewModel.content.collectAsStateWithLifecycle().value,
-				selectedIds = selectedIds,
-				onSelectionChanged = { selectedIds = it },
-				onAdd = { router.openFavoriteCategoryCreate() },
-				onOpenAll = { router.openFavorites() },
-				onOpenCategory = { router.openFavorites(it) },
-				onEditCategory = { router.openFavoriteCategoryEdit(it.id) },
-				onShowAllChanged = viewModel::setAllCategoriesVisible,
-				onSetVisible = viewModel::setIsVisible,
-				onDelete = viewModel::deleteCategories,
-				onSaveOrder = viewModel::saveOrder,
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        viewModel.onError.observeEvent(this, SnackbarErrorObserver(window.decorView, exceptionResolver, null))
+        setComposeContent {
+            FavouriteCategoriesScreen(
+                items = viewModel.content.collectAsStateWithLifecycle().value,
+                selectedIds = selectedIds,
+                onSelectionChanged = { selectedIds = it },
+                onAdd = { router.openFavoriteCategoryCreate() },
+                onOpenAll = { router.openFavorites() },
+                onOpenCategory = { router.openFavorites(it) },
+                onEditCategory = { router.openFavoriteCategoryEdit(it.id) },
+                onShowAllChanged = viewModel::setAllCategoriesVisible,
+                onSetVisible = viewModel::setIsVisible,
+                onDelete = viewModel::deleteCategories,
+                onSaveOrder = viewModel::saveOrder,
+            )
+        }
+    }
 }
