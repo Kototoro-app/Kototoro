@@ -19,41 +19,41 @@ import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.cancellation.CancellationException
 
 val processLifecycleScope: CoroutineScope
-	get() = ProcessLifecycleOwner.get().lifecycleScope + AcraCoroutineErrorHandler()
+    get() = ProcessLifecycleOwner.get().lifecycleScope + AcraCoroutineErrorHandler()
 
 val RetainedLifecycle.lifecycleScope: RetainedLifecycleCoroutineScope
-	inline get() = RetainedLifecycleCoroutineScope(this)
+    inline get() = RetainedLifecycleCoroutineScope(this)
 
 fun <T> Deferred<T>.getCompletionResultOrNull(): Result<T>? = if (isCompleted) {
-	getCompletionExceptionOrNull()?.let { error ->
-		Result.failure(error)
-	} ?: Result.success(getCompleted())
+    getCompletionExceptionOrNull()?.let { error ->
+        Result.failure(error)
+    } ?: Result.success(getCompleted())
 } else {
-	null
+    null
 }
 
 fun <T> Deferred<T>.peek(): T? = if (isCompleted) {
-	runCatchingCancellable {
-		getCompleted()
-	}.getOrNull()
+    runCatchingCancellable {
+        getCompleted()
+    }.getOrNull()
 } else {
-	null
+    null
 }
 
 @Suppress("SuspendFunctionOnCoroutineScope")
 suspend fun CoroutineScope.cancelChildrenAndJoin(cause: CancellationException? = null) {
-	val jobs = coroutineContext[Job]?.children?.toList() ?: return
-	jobs.cancelAll(cause)
-	jobs.joinAll()
+    val jobs = coroutineContext[Job]?.children?.toList() ?: return
+    jobs.cancelAll(cause)
+    jobs.joinAll()
 }
 
 fun BroadcastReceiver.goAsync(context: CoroutineContext = EmptyCoroutineContext, block: suspend () -> Unit) {
-	val pendingResult = goAsync()
-	processLifecycleScope.launch(context) {
-		try {
-			block()
-		} finally {
-			pendingResult.finish()
-		}
-	}
+    val pendingResult = goAsync()
+    processLifecycleScope.launch(context) {
+        try {
+            block()
+        } finally {
+            pendingResult.finish()
+        }
+    }
 }

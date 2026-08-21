@@ -9,18 +9,18 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
 class RetainedLifecycleCoroutineScope(
-	val lifecycle: RetainedLifecycle,
+    val lifecycle: RetainedLifecycle,
 ) : CoroutineScope, RetainedLifecycle.OnClearedListener {
 
-	override val coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Main.immediate
+    override val coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Main.immediate
 
-	init {
-		launch(Dispatchers.Main.immediate) {
-			lifecycle.addOnClearedListener(this@RetainedLifecycleCoroutineScope)
-		}
-	}
+    init {
+        launch(Dispatchers.Main.immediate) {
+            lifecycle.addOnClearedListener(this@RetainedLifecycleCoroutineScope)
+        }
+    }
 
-	override fun onCleared() {
-		coroutineContext.cancel()
-	}
+    override fun onCleared() {
+        coroutineContext.cancel()
+    }
 }

@@ -22,26 +22,26 @@ fun Resources.resolveSp(sp: Float) = TypedValueCompat.spToPx(sp, displayMetrics)
 
 @SuppressLint("DiscouragedApi")
 fun Context.getSystemBoolean(resName: String, fallback: Boolean): Boolean {
-	val id = Resources.getSystem().getIdentifier(resName, "bool", "android")
-	return if (id != 0) {
-		createPackageContext("android", 0).resources.getBoolean(id)
-	} else {
-		fallback
-	}
+    val id = Resources.getSystem().getIdentifier(resName, "bool", "android")
+    return if (id != 0) {
+        createPackageContext("android", 0).resources.getBoolean(id)
+    } else {
+        fallback
+    }
 }
 
 fun Resources.getQuantityStringSafe(@PluralsRes resId: Int, quantity: Int, vararg formatArgs: Any): String = try {
-	getQuantityString(resId, quantity, *formatArgs)
+    getQuantityString(resId, quantity, *formatArgs)
 } catch (e: Resources.NotFoundException) {
-	if (Build.VERSION.SDK_INT == Build.VERSION_CODES.VANILLA_ICE_CREAM) { // known issue
-		e.printStackTraceDebug()
-		formatArgs.firstOrNull()?.toString() ?: quantity.toString()
-	} else {
-		throw e
-	}
+    if (Build.VERSION.SDK_INT == Build.VERSION_CODES.VANILLA_ICE_CREAM) { // known issue
+        e.printStackTraceDebug()
+        formatArgs.firstOrNull()?.toString() ?: quantity.toString()
+    } else {
+        throw e
+    }
 }
 
 fun Resources.getNotificationIconSize() = Size(
-	getDimensionPixelSize(androidxR.dimen.compat_notification_large_icon_max_width),
-	getDimensionPixelSize(androidxR.dimen.compat_notification_large_icon_max_height),
+    getDimensionPixelSize(androidxR.dimen.compat_notification_large_icon_max_width),
+    getDimensionPixelSize(androidxR.dimen.compat_notification_large_icon_max_height),
 )

@@ -14,44 +14,44 @@ private const val URI_SCHEME_LEGACY_CBZ = "cbz"
 private const val URI_SCHEME_LEGACY_ZIP = "zip"
 
 fun Uri.isZipUri() = scheme.let {
-	it == URI_SCHEME_ZIP || it == URI_SCHEME_LEGACY_CBZ || it == URI_SCHEME_LEGACY_ZIP
+    it == URI_SCHEME_ZIP || it == URI_SCHEME_LEGACY_CBZ || it == URI_SCHEME_LEGACY_ZIP
 }
 
 fun Uri.isContentZipUri() = scheme == URI_SCHEME_CONTENT_ZIP
 
 fun Uri.toUnderlyingZipUri(): Uri = if (isContentZipUri()) {
-	buildUpon().scheme("content").fragment(null).build()
+    buildUpon().scheme("content").fragment(null).build()
 } else {
-	this
+    this
 }
 
 fun Uri.toZipUri(entryPath: String): Uri = if (scheme == "content") {
-	buildUpon().scheme(URI_SCHEME_CONTENT_ZIP).fragment(entryPath).build()
+    buildUpon().scheme(URI_SCHEME_CONTENT_ZIP).fragment(entryPath).build()
 } else {
-	File(requireNotNull(path) { "File URI path is null: $this" }).toZipUri(entryPath)
+    File(requireNotNull(path) { "File URI path is null: $this" }).toZipUri(entryPath)
 }
 
 fun Uri.isFileUri() = scheme == URI_SCHEME_FILE
 
 fun Uri.withFragmentFrom(other: Uri): Uri = buildUpon()
-	.encodedFragment(other.encodedFragment)
-	.build()
+    .encodedFragment(other.encodedFragment)
+    .build()
 
 fun Uri.isNetworkUri() = scheme.let {
-	it == URI_SCHEME_HTTP || it == URI_SCHEME_HTTPS
+    it == URI_SCHEME_HTTP || it == URI_SCHEME_HTTPS
 }
 
 fun File.toZipUri(entryPath: String): Uri = "$URI_SCHEME_ZIP://$absolutePath#$entryPath".toUri()
 
 fun File.toZipUri(entryPath: Path?): Uri =
-	toZipUri(entryPath?.toString()?.removePrefix(Path.DIRECTORY_SEPARATOR).orEmpty())
+    toZipUri(entryPath?.toString()?.removePrefix(Path.DIRECTORY_SEPARATOR).orEmpty())
 
 fun String.toUriOrNull() = if (isEmpty()) null else this.toUri()
 
 fun File.toUri(fragment: String?): Uri = toUri().run {
-	if (fragment != null) {
-		buildUpon().fragment(fragment).build()
-	} else {
-		this
-	}
+    if (fragment != null) {
+        buildUpon().fragment(fragment).build()
+    } else {
+        this
+    }
 }

@@ -10,44 +10,44 @@ import okio.Source
 import okio.buffer
 
 class ProgressResponseBody(
-	private val delegate: ResponseBody,
-	private val progressState: MutableStateFlow<Float>,
+    private val delegate: ResponseBody,
+    private val progressState: MutableStateFlow<Float>,
 ) : ResponseBody() {
 
-	private var bufferedSource: BufferedSource? = null
+    private var bufferedSource: BufferedSource? = null
 
-	override fun close() {
-		super.close()
-		delegate.close()
-	}
+    override fun close() {
+        super.close()
+        delegate.close()
+    }
 
-	override fun contentLength(): Long = delegate.contentLength()
+    override fun contentLength(): Long = delegate.contentLength()
 
-	override fun contentType(): MediaType? = delegate.contentType()
+    override fun contentType(): MediaType? = delegate.contentType()
 
-	override fun source(): BufferedSource {
-		return bufferedSource ?: synchronized(this) {
-			bufferedSource ?: ProgressSource(delegate.source(), contentLength(), progressState).buffer().also {
-				bufferedSource = it
-			}
-		}
-	}
+    override fun source(): BufferedSource {
+        return bufferedSource ?: synchronized(this) {
+            bufferedSource ?: ProgressSource(delegate.source(), contentLength(), progressState).buffer().also {
+                bufferedSource = it
+            }
+        }
+    }
 
-	private class ProgressSource(
-		delegate: Source,
-		private val contentLength: Long,
-		private val progressState: MutableStateFlow<Float>,
-	) : ForwardingSource(delegate) {
+    private class ProgressSource(
+        delegate: Source,
+        private val contentLength: Long,
+        private val progressState: MutableStateFlow<Float>,
+    ) : ForwardingSource(delegate) {
 
-		private var totalBytesRead = 0L
+        private var totalBytesRead = 0L
 
-		override fun read(sink: Buffer, byteCount: Long): Long {
-			val bytesRead = super.read(sink, byteCount)
-			if (contentLength > 0) {
-				totalBytesRead += if (bytesRead != -1L) bytesRead else 0
-				progressState.value = (totalBytesRead.toDouble() / contentLength.toDouble()).toFloat()
-			}
-			return bytesRead
-		}
-	}
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            val bytesRead = super.read(sink, byteCount)
+            if (contentLength > 0) {
+                totalBytesRead += if (bytesRead != -1L) bytesRead else 0
+                progressState.value = (totalBytesRead.toDouble() / contentLength.toDouble()).toFloat()
+            }
+            return bytesRead
+        }
+    }
 }

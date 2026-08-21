@@ -12,31 +12,31 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.core.util.Event
 
 fun <T> Flow<T>.observe(owner: LifecycleOwner, collector: FlowCollector<T>) {
-	val start = if (this is StateFlow) CoroutineStart.UNDISPATCHED else CoroutineStart.DEFAULT
-	owner.lifecycleScope.launch(start = start) {
-		collect(collector)
-	}
+    val start = if (this is StateFlow) CoroutineStart.UNDISPATCHED else CoroutineStart.DEFAULT
+    owner.lifecycleScope.launch(start = start) {
+        collect(collector)
+    }
 }
 
 fun <T> Flow<T>.observe(owner: LifecycleOwner, minState: Lifecycle.State, collector: FlowCollector<T>) {
-	owner.lifecycleScope.launch {
-		owner.lifecycle.repeatOnLifecycle(minState) {
-			collect(collector)
-		}
-	}
+    owner.lifecycleScope.launch {
+        owner.lifecycle.repeatOnLifecycle(minState) {
+            collect(collector)
+        }
+    }
 }
 
 fun <T> Flow<Event<T>?>.observeEvent(owner: LifecycleOwner, collector: FlowCollector<T>) {
-	observeEvent(owner, Lifecycle.State.STARTED, collector)
+    observeEvent(owner, Lifecycle.State.STARTED, collector)
 }
 
 fun <T> Flow<Event<T>?>.observeEvent(owner: LifecycleOwner, minState: Lifecycle.State, collector: FlowCollector<T>) {
-	owner.lifecycleScope.launch {
-		owner.repeatOnLifecycle(minState) {
-			collect {
-				it?.consume(collector)
-			}
-		}
-	}
+    owner.lifecycleScope.launch {
+        owner.repeatOnLifecycle(minState) {
+            collect {
+                it?.consume(collector)
+            }
+        }
+    }
 }
 

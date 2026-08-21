@@ -6,7 +6,7 @@ import org.skepsun.kototoro.R
 
 class IntPercentLabelFormatter(context: Context) : LabelFormatter {
 
-	private val pattern = context.getString(R.string.percent_string_pattern)
+    private val pattern = context.getString(R.string.percent_string_pattern)
 
-	override fun getFormattedValue(value: Float) = pattern.format(value.toInt().toString())
+    override fun getFormattedValue(value: Float) = pattern.format(value.toInt().toString())
 }

@@ -24,48 +24,48 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 fun ImageRequest.Builder.enqueueWith(loader: ImageLoader) = loader.enqueue(build())
 
 fun ImageResult.getDrawableOrThrow() = when (this) {
-	is SuccessResult -> image.asDrawable(request.context.resources)
-	is ErrorResult -> throw throwable
+    is SuccessResult -> image.asDrawable(request.context.resources)
+    is ErrorResult -> throw throwable
 }
 
 val ImageResult.drawable: Drawable?
-	get() = image?.asDrawable(request.context.resources)
+    get() = image?.asDrawable(request.context.resources)
 
 fun ImageResult.toBitmapOrNull() = when (this) {
-	is SuccessResult -> try {
-		image.toBitmap(image.width, image.height, request.bitmapConfig)
-	} catch (_: Throwable) {
-		null
-	}
+    is SuccessResult -> try {
+        image.toBitmap(image.width, image.height, request.bitmapConfig)
+    } catch (_: Throwable) {
+        null
+    }
 
-	is ErrorResult -> null
+    is ErrorResult -> null
 }
 
 fun ImageRequest.Builder.decodeRegion(
-	scroll: Int = RegionBitmapDecoder.SCROLL_UNDEFINED,
+    scroll: Int = RegionBitmapDecoder.SCROLL_UNDEFINED,
 ): ImageRequest.Builder = apply {
-	decoderFactory(RegionBitmapDecoder.Factory)
-	extras[RegionBitmapDecoder.regionScrollKey] = scroll
+    decoderFactory(RegionBitmapDecoder.Factory)
+    extras[RegionBitmapDecoder.regionScrollKey] = scroll
 }
 
 fun ImageRequest.Builder.mangaSourceExtra(source: ContentSource?): ImageRequest.Builder = apply {
-	extras[mangaSourceKey] = source
+    extras[mangaSourceKey] = source
 }
 
 fun ImageRequest.Builder.mangaExtra(manga: Content?): ImageRequest.Builder = apply {
-	extras[mangaKey] = manga
-	mangaSourceExtra(manga?.source)
+    extras[mangaKey] = manga
+    mangaSourceExtra(manga?.source)
 }
 
 fun ImageRequest.Builder.bookmarkExtra(bookmark: Bookmark): ImageRequest.Builder = apply {
-	extras[bookmarkKey] = bookmark
-	mangaSourceExtra(bookmark.manga.source)
+    extras[bookmarkKey] = bookmark
+    mangaSourceExtra(bookmark.manga.source)
 }
 
 suspend fun ImageLoader.fetch(data: Any, options: Options): FetchResult? {
-	val mappedData = components.map(data, options)
-	val fetcher = components.newFetcher(mappedData, options, this)?.first
-	return fetcher?.fetch()
+    val mappedData = components.map(data, options)
+    val fetcher = components.newFetcher(mappedData, options, this)?.first
+    return fetcher?.fetch()
 }
 
 val mangaKey = Extras.Key<Content?>(null)
@@ -74,11 +74,11 @@ val mangaSourceKey = Extras.Key<ContentSource?>(null)
 
 @CheckResult
 fun SourceFetchResult.copyWithNewSource(): SourceFetchResult = SourceFetchResult(
-	source = ImageSource(
-		source = source.fileSystem.source(source.file()).buffer(),
-		fileSystem = source.fileSystem,
-		metadata = source.metadata,
-	),
-	mimeType = mimeType,
-	dataSource = dataSource,
+    source = ImageSource(
+        source = source.fileSystem.source(source.file()).buffer(),
+        fileSystem = source.fileSystem,
+        metadata = source.metadata,
+    ),
+    mimeType = mimeType,
+    dataSource = dataSource,
 )

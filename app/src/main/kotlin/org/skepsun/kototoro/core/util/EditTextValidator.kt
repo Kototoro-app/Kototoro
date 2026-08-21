@@ -10,41 +10,41 @@ import java.lang.ref.WeakReference
 
 abstract class EditTextValidator : DefaultTextWatcher {
 
-	private var editTextRef: WeakReference<EditText>? = null
+    private var editTextRef: WeakReference<EditText>? = null
 
-	protected val context: Context
-		get() = checkNotNull(editTextRef?.get()?.context) {
-			"EditTextValidator is not attached to EditText"
-		}
+    protected val context: Context
+        get() = checkNotNull(editTextRef?.get()?.context) {
+            "EditTextValidator is not attached to EditText"
+        }
 
-	@CallSuper
-	override fun afterTextChanged(s: Editable?) {
-		val editText = editTextRef?.get() ?: return
-		val newText = s?.toString().orEmpty()
-		val result = runCatching {
-			validate(newText)
-		}.getOrElse { e ->
-			ValidationResult.Failed(e.getDisplayMessage(editText.resources))
-		}
-		editText.error = when (result) {
-			is ValidationResult.Failed -> result.message
-			ValidationResult.Success -> null
-		}
-	}
+    @CallSuper
+    override fun afterTextChanged(s: Editable?) {
+        val editText = editTextRef?.get() ?: return
+        val newText = s?.toString().orEmpty()
+        val result = runCatching {
+            validate(newText)
+        }.getOrElse { e ->
+            ValidationResult.Failed(e.getDisplayMessage(editText.resources))
+        }
+        editText.error = when (result) {
+            is ValidationResult.Failed -> result.message
+            ValidationResult.Success -> null
+        }
+    }
 
-	fun attachToEditText(editText: EditText) {
-		editTextRef = WeakReference(editText)
-		editText.removeTextChangedListener(this)
-		editText.addTextChangedListener(this)
-		afterTextChanged(editText.text)
-	}
+    fun attachToEditText(editText: EditText) {
+        editTextRef = WeakReference(editText)
+        editText.removeTextChangedListener(this)
+        editText.addTextChangedListener(this)
+        afterTextChanged(editText.text)
+    }
 
-	abstract fun validate(text: String): ValidationResult
+    abstract fun validate(text: String): ValidationResult
 
-	sealed class ValidationResult {
+    sealed class ValidationResult {
 
-		object Success : ValidationResult()
+        object Success : ValidationResult()
 
-		class Failed(val message: CharSequence) : ValidationResult()
-	}
+        class Failed(val message: CharSequence) : ValidationResult()
+    }
 }

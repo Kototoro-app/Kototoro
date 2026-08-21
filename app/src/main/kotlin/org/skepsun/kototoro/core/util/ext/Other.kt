@@ -5,30 +5,30 @@ import java.io.ObjectOutputStream
 
 @Suppress("UNCHECKED_CAST")
 fun <T> Class<T>.castOrNull(obj: Any?): T? {
-	if (obj == null || !isInstance(obj)) {
-		return null
-	}
-	return obj as T
+    if (obj == null || !isInstance(obj)) {
+        return null
+    }
+    return obj as T
 }
 
 fun Any.isSerializable() = runCatching {
-	val oos = ObjectOutputStream(NullOutputStream())
-	oos.writeObject(this)
-	oos.flush()
+    val oos = ObjectOutputStream(NullOutputStream())
+    oos.writeObject(this)
+    oos.flush()
 }.isSuccess
 
 fun Throwable.toSerializableThrowable(): Throwable {
-	if (isSerializable()) return this
+    if (isSerializable()) return this
 
-	return RuntimeException(
-		buildString {
-			append(this@toSerializableThrowable.javaClass.name)
-			this@toSerializableThrowable.message?.let {
-				append(": ")
-				append(it)
-			}
-		},
-	).also { serializableError ->
-		serializableError.stackTrace = stackTrace
-	}
+    return RuntimeException(
+        buildString {
+            append(this@toSerializableThrowable.javaClass.name)
+            this@toSerializableThrowable.message?.let {
+                append(": ")
+                append(it)
+            }
+        },
+    ).also { serializableError ->
+        serializableError.stackTrace = stackTrace
+    }
 }

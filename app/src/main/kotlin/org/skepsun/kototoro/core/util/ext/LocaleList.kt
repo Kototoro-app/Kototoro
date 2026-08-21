@@ -12,11 +12,11 @@ operator fun LocaleListCompat.iterator(): ListIterator<Locale> = LocaleListCompa
 fun LocaleListCompat.toList(): List<Locale> = List(size()) { i -> getOrThrow(i) }
 
 inline fun <T> LocaleListCompat.map(block: (Locale) -> T): List<T> {
-	return List(size()) { i -> block(getOrThrow(i)) }
+    return List(size()) { i -> block(getOrThrow(i)) }
 }
 
 inline fun <T> LocaleListCompat.mapToSet(block: (Locale) -> T): Set<T> {
-	return Set(size()) { i -> block(getOrThrow(i)) }
+    return Set(size()) { i -> block(getOrThrow(i)) }
 }
 
 fun LocaleListCompat.getOrThrow(index: Int) = get(index) ?: throw NoSuchElementException()
@@ -24,30 +24,30 @@ fun LocaleListCompat.getOrThrow(index: Int) = get(index) ?: throw NoSuchElementE
 fun String.toLocale(): Locale = Locale.forLanguageTag(this)
 
 fun String.toLocaleOrNull() = if (isEmpty()) {
-	null
+    null
 } else {
-	toLocale().takeUnless { it.displayName == this }
+    toLocale().takeUnless { it.displayName == this }
 }
 
 fun Locale?.getDisplayName(context: Context): String = when (this) {
-	null -> context.getString(R.string.all_languages)
-	Locale.ROOT -> context.getString(R.string.various_languages)
-	else -> getDisplayLanguage(this).toTitleCase(this)
+    null -> context.getString(R.string.all_languages)
+    Locale.ROOT -> context.getString(R.string.various_languages)
+    else -> getDisplayLanguage(this).toTitleCase(this)
 }
 
 private class LocaleListCompatIterator(private val list: LocaleListCompat) : ListIterator<Locale> {
 
-	private var index = 0
+    private var index = 0
 
-	override fun hasNext() = index < list.size()
+    override fun hasNext() = index < list.size()
 
-	override fun hasPrevious() = index > 0
+    override fun hasPrevious() = index > 0
 
-	override fun next() = list.get(index++) ?: throw NoSuchElementException()
+    override fun next() = list.get(index++) ?: throw NoSuchElementException()
 
-	override fun nextIndex() = index
+    override fun nextIndex() = index
 
-	override fun previous() = list.get(--index) ?: throw NoSuchElementException()
+    override fun previous() = list.get(--index) ?: throw NoSuchElementException()
 
-	override fun previousIndex() = index - 1
+    override fun previousIndex() = index - 1
 }

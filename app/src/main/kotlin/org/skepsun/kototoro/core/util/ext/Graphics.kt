@@ -6,20 +6,20 @@ import android.graphics.Rect
 import kotlin.math.roundToInt
 
 fun Rect.scale(factor: Double) {
-	val newWidth = (width() * factor).roundToInt()
-	val newHeight = (height() * factor).roundToInt()
-	inset(
-		(width() - newWidth) / 2,
-		(height() - newHeight) / 2,
-	)
+    val newWidth = (width() * factor).roundToInt()
+    val newHeight = (height() * factor).roundToInt()
+    inset(
+        (width() - newWidth) / 2,
+        (height() - newHeight) / 2,
+    )
 }
 
 inline fun <R> Bitmap.use(block: (Bitmap) -> R) = try {
-	block(this)
+    block(this)
 } finally {
-	recycle()
+    recycle()
 }
 
 fun ColorStateList.hasFocusStateSpecified(): Boolean {
-	return getColorForState(intArrayOf(android.R.attr.state_focused), defaultColor) != defaultColor
+    return getColorForState(intArrayOf(android.R.attr.state_focused), defaultColor) != defaultColor
 }

@@ -3,22 +3,22 @@ package org.skepsun.kototoro.core.util
 import android.os.SystemClock
 
 class Throttler(
-	private val timeoutMs: Long,
+    private val timeoutMs: Long,
 ) {
 
-	private var lastTick = 0L
+    private var lastTick = 0L
 
-	fun throttle(): Boolean {
-		val now = SystemClock.elapsedRealtime()
-		return if (lastTick + timeoutMs <= now) {
-			lastTick = now
-			true
-		} else {
-			false
-		}
-	}
+    fun throttle(): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        return if (lastTick + timeoutMs <= now) {
+            lastTick = now
+            true
+        } else {
+            false
+        }
+    }
 
-	fun reset() {
-		lastTick = 0L
-	}
+    fun reset() {
+        lastTick = 0L
+    }
 }

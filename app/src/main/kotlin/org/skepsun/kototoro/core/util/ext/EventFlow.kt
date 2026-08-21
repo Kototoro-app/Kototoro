@@ -14,5 +14,5 @@ typealias MutableEventFlow<T> = MutableStateFlow<Event<T>?>
 
 @AnyThread
 fun <T> MutableEventFlow<T>.call(data: T) {
-	value = Event(data)
+    value = Event(data)
 }

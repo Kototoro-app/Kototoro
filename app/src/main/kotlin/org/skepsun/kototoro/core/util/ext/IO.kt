@@ -23,46 +23,46 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 
 fun ResponseBody.withProgress(progressState: MutableStateFlow<Float>): ResponseBody {
-	return ProgressResponseBody(this, progressState)
+    return ProgressResponseBody(this, progressState)
 }
 
 suspend fun Source.cancellable(): Source {
-	val job = currentCoroutineContext()[Job]
-	return CancellableSource(job, this)
+    val job = currentCoroutineContext()[Job]
+    return CancellableSource(job, this)
 }
 
 suspend fun BufferedSink.writeAllCancellable(source: Source) = withContext(Dispatchers.IO) {
-	writeAll(source.cancellable())
+    writeAll(source.cancellable())
 }
 
 fun BufferedSource.readByteBuffer(): ByteBuffer {
-	val bytes = readByteArray()
-	return ByteBuffer.allocateDirect(bytes.size)
-		.put(bytes)
-		.rewind() as ByteBuffer
+    val bytes = readByteArray()
+    return ByteBuffer.allocateDirect(bytes.size)
+        .put(bytes)
+        .rewind() as ByteBuffer
 }
 
 @Deprecated("")
 fun InputStream.toByteBuffer(): ByteBuffer {
-	val outStream = ByteArrayOutputStream(available())
-	copyTo(outStream)
-	val bytes = outStream.toByteArray()
-	return ByteBuffer.allocateDirect(bytes.size).put(bytes).position(0) as ByteBuffer
+    val outStream = ByteArrayOutputStream(available())
+    copyTo(outStream)
+    val bytes = outStream.toByteArray()
+    return ByteBuffer.allocateDirect(bytes.size).put(bytes).position(0) as ByteBuffer
 }
 
 fun FileSystem.isDirectory(path: Path) = try {
-	metadataOrNull(path)?.isDirectory == true
+    metadataOrNull(path)?.isDirectory == true
 } catch (_: IOException) {
-	false
+    false
 }
 
 fun FileSystem.isRegularFile(path: Path) = try {
-	metadataOrNull(path)?.isRegularFile == true
+    metadataOrNull(path)?.isRegularFile == true
 } catch (_: IOException) {
-	false
+    false
 }
 
 @CheckResult
 fun ContentResolver.openSource(uri: Uri): Source = checkNotNull(openInputStream(uri)) {
-	"Cannot open input stream from $uri"
+    "Cannot open input stream from $uri"
 }.source()

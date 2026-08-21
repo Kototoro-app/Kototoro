@@ -8,26 +8,26 @@ private val REGEX_MIME = Regex("^\\w+/([-+.\\w]+|\\*)$", RegexOption.IGNORE_CASE
 @JvmInline
 value class MimeType(private val value: String) {
 
-	val type: String?
-		get() = value.substringBefore('/', "").takeIfSpecified()
+    val type: String?
+        get() = value.substringBefore('/', "").takeIfSpecified()
 
-	val subtype: String?
-		get() = value.substringAfterLast('/', "").takeIfSpecified()
+    val subtype: String?
+        get() = value.substringAfterLast('/', "").takeIfSpecified()
 
-	private fun String.takeIfSpecified(): String? = takeUnless {
-		it.isEmpty() || it == "*"
-	}
+    private fun String.takeIfSpecified(): String? = takeUnless {
+        it.isEmpty() || it == "*"
+    }
 
-	override fun toString(): String = value
+    override fun toString(): String = value
 }
 
 fun MediaType.toMimeType(): MimeType = MimeType("$type/$subtype")
 
 fun String.toMimeTypeOrNull(): MimeType? = if (REGEX_MIME.matches(this)) {
-	MimeType(lowercase())
+    MimeType(lowercase())
 } else {
-	null
+    null
 }
 
 val MimeType.isImage: Boolean
-	get() = type == TYPE_IMAGE
+    get() = type == TYPE_IMAGE
