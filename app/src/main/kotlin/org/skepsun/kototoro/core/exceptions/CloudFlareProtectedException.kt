@@ -6,14 +6,14 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 
 class CloudFlareProtectedException(
-	override val url: String,
-	source: ContentSource?,
-	@Transient val headers: Headers,
-	@Transient val method: String = "GET",
-	@Transient val body: String? = null,
-	@Transient val contentType: String? = headers["Content-Type"],
-	val originalUrl: String = url,
+    override val url: String,
+    source: ContentSource?,
+    @Transient val headers: Headers,
+    @Transient val method: String = "GET",
+    @Transient val body: String? = null,
+    @Transient val contentType: String? = headers["Content-Type"],
+    val originalUrl: String = url,
 ) : CloudFlareException("Protected by CloudFlare", CloudFlareHelper.PROTECTION_CAPTCHA) {
 
-	override val source: ContentSource = source ?: UnknownContentSource
+    override val source: ContentSource = source ?: UnknownContentSource
 }

@@ -132,15 +132,15 @@ class ExceptionResolver private constructor(
     }
 
     private suspend fun resolveCF(e: CloudFlareProtectedException, tryAutoResolve: Boolean): Boolean {
-		if (!tryAutoResolve) {
-			return resolveBrowserAction(
-				InteractiveActionRequiredException(
-					source = e.source,
-					url = CloudFlareHelper.getChallengeUrl(e.url),
-					userAgent = e.headers[org.skepsun.kototoro.core.network.CommonHeaders.USER_AGENT],
-				),
-			)
-		}
+        if (!tryAutoResolve) {
+            return resolveBrowserAction(
+                InteractiveActionRequiredException(
+                    source = e.source,
+                    url = CloudFlareHelper.getChallengeUrl(e.url),
+                    userAgent = e.headers[org.skepsun.kototoro.core.network.CommonHeaders.USER_AGENT],
+                ),
+            )
+        }
         val autoResolveEnabled = tryAutoResolve &&
             (host.context?.let { !SourceSettings(it, e.source).isCaptchaAutoResolveDisabled } ?: true)
         return captchaAutoResolveCoordinator.resolve(

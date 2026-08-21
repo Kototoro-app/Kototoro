@@ -237,14 +237,14 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
         val launcher = foregroundActivityHolder.current
         val resultDeferred = CompletableDeferred<Boolean>()
         pendingActivityResult[resolveKey] = resultDeferred
-		val intent = AppRouter.cloudFlareResolveIntent(context, exception).apply {
-			putExtra(BrowserActivity.EXTRA_CF_RESOLVE_KEY, resolveKey)
-		}
-		android.util.Log.i(
-			TAG,
-			"Launching manual Cloudflare browser: source=${source.name} " +
-				"url=${intent.dataString}",
-		)
+        val intent = AppRouter.cloudFlareResolveIntent(context, exception).apply {
+            putExtra(BrowserActivity.EXTRA_CF_RESOLVE_KEY, resolveKey)
+        }
+        android.util.Log.i(
+            TAG,
+            "Launching manual Cloudflare browser: source=${source.name} " +
+                "url=${intent.dataString}",
+        )
         launcher?.startActivity(intent) ?: run {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)

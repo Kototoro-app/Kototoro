@@ -5,9 +5,9 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 
 class CloudFlareBlockedException(
-	override val url: String,
-	source: ContentSource?,
+    override val url: String,
+    source: ContentSource?,
 ) : CloudFlareException("Blocked by CloudFlare", CloudFlareHelper.PROTECTION_BLOCKED) {
 
-	override val source: ContentSource = source ?: UnknownContentSource
+    override val source: ContentSource = source ?: UnknownContentSource
 }

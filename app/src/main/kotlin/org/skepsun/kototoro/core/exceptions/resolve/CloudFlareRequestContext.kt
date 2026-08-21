@@ -9,39 +9,39 @@ import java.net.URI
  * [challengeUrl] 用于 WebView 导航，[originalRequestUrl] 用于求解后的真实 probe 复验。
  */
 internal data class CloudFlareRequestContext(
-	val source: ContentSource,
-	val host: String,
-	val challengeUrl: String,
-	val originalRequestUrl: String,
-	val userAgent: String?,
-	val headers: Map<String, String>,
-	val method: String,
-	val body: String?,
+    val source: ContentSource,
+    val host: String,
+    val challengeUrl: String,
+    val originalRequestUrl: String,
+    val userAgent: String?,
+    val headers: Map<String, String>,
+    val method: String,
+    val body: String?,
 ) {
-	companion object {
-		fun from(exception: CloudFlareProtectedException): CloudFlareRequestContext {
-			val headers = buildMap {
-				for (i in 0 until exception.headers.size) {
-					val name = exception.headers.name(i)
-					if (name !in this) {
-						put(name, exception.headers.value(i))
-					}
-				}
-			}
-			return CloudFlareRequestContext(
-				source = exception.source,
-				host = resolveHost(exception.url),
-				challengeUrl = exception.url,
-				originalRequestUrl = exception.originalUrl,
-				userAgent = exception.headers["User-Agent"],
-				headers = headers,
-				method = exception.method,
-				body = exception.body,
-			)
-		}
+    companion object {
+        fun from(exception: CloudFlareProtectedException): CloudFlareRequestContext {
+            val headers = buildMap {
+                for (i in 0 until exception.headers.size) {
+                    val name = exception.headers.name(i)
+                    if (name !in this) {
+                        put(name, exception.headers.value(i))
+                    }
+                }
+            }
+            return CloudFlareRequestContext(
+                source = exception.source,
+                host = resolveHost(exception.url),
+                challengeUrl = exception.url,
+                originalRequestUrl = exception.originalUrl,
+                userAgent = exception.headers["User-Agent"],
+                headers = headers,
+                method = exception.method,
+                body = exception.body,
+            )
+        }
 
-		private fun resolveHost(url: String): String = runCatching {
-			URI(url).host?.lowercase()
-		}.getOrNull().orEmpty().ifBlank { url }
-	}
+        private fun resolveHost(url: String): String = runCatching {
+            URI(url).host?.lowercase()
+        }.getOrNull().orEmpty().ifBlank { url }
+    }
 }

@@ -4,11 +4,11 @@ import okio.IOException
 import org.skepsun.kototoro.parsers.model.ContentSource
 
 abstract class CloudFlareException(
-	message: String,
-	val state: Int,
+    message: String,
+    val state: Int,
 ) : IOException(message) {
 
-	abstract val url: String
+    abstract val url: String
 
-	abstract val source: ContentSource
+    abstract val source: ContentSource
 }
