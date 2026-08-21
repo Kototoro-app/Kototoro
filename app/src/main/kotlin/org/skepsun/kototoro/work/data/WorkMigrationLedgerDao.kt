@@ -7,46 +7,46 @@ import androidx.room.Upsert
 @Dao
 interface WorkMigrationLedgerDao {
 
-	@Query(
-		"""
+    @Query(
+        """
 		SELECT * FROM work_migration_ledger
 		WHERE legacy_table = :legacyTable
 			AND legacy_key = :legacyKey
 			AND migration_version = :migrationVersion
 		LIMIT 1
-		""",
-	)
-	suspend fun find(
-		legacyTable: String,
-		legacyKey: String,
-		migrationVersion: Int,
-	): WorkMigrationLedgerEntity?
+        """,
+    )
+    suspend fun find(
+        legacyTable: String,
+        legacyKey: String,
+        migrationVersion: Int,
+    ): WorkMigrationLedgerEntity?
 
-	@Query(
-		"""
+    @Query(
+        """
 		SELECT * FROM work_migration_ledger
 		WHERE target_entity_id = :entityId
 		ORDER BY migrated_at DESC
-		""",
-	)
-	suspend fun findByTargetEntityId(entityId: Long): List<WorkMigrationLedgerEntity>
+        """,
+    )
+    suspend fun findByTargetEntityId(entityId: Long): List<WorkMigrationLedgerEntity>
 
-	@Query(
-		"""
+    @Query(
+        """
 		SELECT * FROM work_migration_ledger
 		WHERE legacy_table = :legacyTable
 			AND legacy_key = :legacyKey
 		ORDER BY migrated_at DESC
 		LIMIT 1
-		""",
-	)
-	suspend fun findLatest(
-		legacyTable: String,
-		legacyKey: String,
-	): WorkMigrationLedgerEntity?
+        """,
+    )
+    suspend fun findLatest(
+        legacyTable: String,
+        legacyKey: String,
+    ): WorkMigrationLedgerEntity?
 
-	@Query(
-		"""
+    @Query(
+        """
 		SELECT EXISTS(
 			SELECT 1 FROM work_migration_ledger
 			WHERE legacy_table = :legacyTable
@@ -54,15 +54,15 @@ interface WorkMigrationLedgerDao {
 				AND migration_version = :migrationVersion
 				AND status = :status
 		)
-		""",
-	)
-	suspend fun existsWithStatus(
-		legacyTable: String,
-		legacyKey: String,
-		migrationVersion: Int,
-		status: String,
-	): Boolean
+        """,
+    )
+    suspend fun existsWithStatus(
+        legacyTable: String,
+        legacyKey: String,
+        migrationVersion: Int,
+        status: String,
+    ): Boolean
 
-	@Upsert
-	suspend fun upsert(entity: WorkMigrationLedgerEntity)
+    @Upsert
+    suspend fun upsert(entity: WorkMigrationLedgerEntity)
 }

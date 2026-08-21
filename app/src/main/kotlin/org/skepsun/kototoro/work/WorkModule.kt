@@ -12,9 +12,9 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 interface WorkModule {
 
-	@Binds
-	@Singleton
-	fun bindWorkResolver(
-		impl: DefaultWorkResolver,
-	): WorkResolver
+    @Binds
+    @Singleton
+    fun bindWorkResolver(
+        impl: DefaultWorkResolver,
+    ): WorkResolver
 }
