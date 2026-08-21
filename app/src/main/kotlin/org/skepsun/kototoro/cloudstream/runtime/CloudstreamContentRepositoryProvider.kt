@@ -11,22 +11,22 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import javax.inject.Inject
 
 class CloudstreamContentRepositoryProvider @Inject constructor(
-	private val contentCache: MemoryContentCache,
-	private val webViewExecutor: WebViewExecutor,
-	private val cookieJar: MutableCookieJar,
-	private val settings: AppSettings,
+    private val contentCache: MemoryContentCache,
+    private val webViewExecutor: WebViewExecutor,
+    private val cookieJar: MutableCookieJar,
+    private val settings: AppSettings,
 ) : ContentRepositoryProvider {
 
-	override fun supports(source: ContentSource): Boolean = source is CloudstreamSource
+    override fun supports(source: ContentSource): Boolean = source is CloudstreamSource
 
-	override fun create(source: ContentSource): ContentRepository? {
-		if (source !is CloudstreamSource) return null
-		return CloudstreamContentRepository(
-			source = source,
-			cache = contentCache,
-			webViewExecutor = webViewExecutor,
-			cookieJar = cookieJar,
-			settings = settings,
-		)
-	}
+    override fun create(source: ContentSource): ContentRepository? {
+        if (source !is CloudstreamSource) return null
+        return CloudstreamContentRepository(
+            source = source,
+            cache = contentCache,
+            webViewExecutor = webViewExecutor,
+            cookieJar = cookieJar,
+            settings = settings,
+        )
+    }
 }
