@@ -38,55 +38,55 @@ import org.skepsun.kototoro.settings.compose.settingsContentTopInset
 
 @Composable
 fun ChangelogRoute(
-	viewModel: ChangelogViewModel,
-	modifier: Modifier = Modifier,
+    viewModel: ChangelogViewModel,
+    modifier: Modifier = Modifier,
 ) {
-	val context = LocalContext.current
-	val markwon = remember(context) { Markwon.create(context) }
-	val changelog by viewModel.changelog.collectAsStateWithLifecycle()
-	val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val markwon = remember(context) { Markwon.create(context) }
+    val changelog by viewModel.changelog.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-	LaunchedEffect(viewModel) {
-		viewModel.loadIfNeeded()
-	}
+    LaunchedEffect(viewModel) {
+        viewModel.loadIfNeeded()
+    }
 
-	Surface(
-		modifier = modifier,
-		color = MaterialTheme.colorScheme.background,
-	) {
-		Box(modifier = Modifier.fillMaxSize()) {
-			AndroidView(
-				factory = { viewContext ->
-					SelectableTextView(viewContext).apply {
-						TextViewCompat.setTextAppearance(
-							this,
-							com.google.android.material.R.style.TextAppearance_Material3_BodyMedium,
-						)
-						setTextIsSelectable(true)
-					}
-				},
-				modifier = Modifier
-					.fillMaxWidth()
-					.verticalScroll(rememberScrollState())
-					.padding(
-						PaddingValues(
-							start = 20.dp,
-							top = settingsContentTopInset(20.dp),
-							end = 20.dp,
-							bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
-						),
-					),
-				update = { textView ->
-					markwon.setMarkdown(textView, changelog.orEmpty())
-				},
-			)
-			if (isLoading) {
-				LinearProgressIndicator(
-					modifier = Modifier
-						.fillMaxWidth()
-						.align(Alignment.TopCenter),
-				)
-			}
-		}
-	}
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(
+                factory = { viewContext ->
+                    SelectableTextView(viewContext).apply {
+                        TextViewCompat.setTextAppearance(
+                            this,
+                            com.google.android.material.R.style.TextAppearance_Material3_BodyMedium,
+                        )
+                        setTextIsSelectable(true)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        PaddingValues(
+                            start = 20.dp,
+                            top = settingsContentTopInset(20.dp),
+                            end = 20.dp,
+                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+                        ),
+                    ),
+                update = { textView ->
+                    markwon.setMarkdown(textView, changelog.orEmpty())
+                },
+            )
+            if (isLoading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter),
+                )
+            }
+        }
+    }
 }

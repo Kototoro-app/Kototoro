@@ -15,25 +15,25 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AboutSettingsViewModel @Inject constructor(
-	private val appUpdateRepository: AppUpdateRepository,
+    private val appUpdateRepository: AppUpdateRepository,
 ) : BaseViewModel() {
 
-	val isUpdateSupported = flow {
-		emit(appUpdateRepository.isUpdateSupported())
-	}.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val isUpdateSupported = flow {
+        emit(appUpdateRepository.isUpdateSupported())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-	val isUpdateAvailable = appUpdateRepository.observeAvailableUpdate()
-		.map(::shouldShowUpdateBadge)
-		.stateIn(viewModelScope, SharingStarted.Eagerly, appUpdateRepository.isUpdateAvailable)
+    val isUpdateAvailable = appUpdateRepository.observeAvailableUpdate()
+        .map(::shouldShowUpdateBadge)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, appUpdateRepository.isUpdateAvailable)
 
-	val onUpdateAvailable = MutableEventFlow<AppVersion?>()
+    val onUpdateAvailable = MutableEventFlow<AppVersion?>()
 
-	fun checkForUpdates() {
-		launchLoadingJob {
-			val update = appUpdateRepository.fetchUpdate()
-			onUpdateAvailable.call(update)
-		}
-	}
+    fun checkForUpdates() {
+        launchLoadingJob {
+            val update = appUpdateRepository.fetchUpdate()
+            onUpdateAvailable.call(update)
+        }
+    }
 }
 
 internal fun shouldShowUpdateBadge(update: AppVersion?): Boolean = update != null

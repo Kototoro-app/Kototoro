@@ -4,9 +4,9 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.extensions.repo.toInstalledPackageName
 
 internal fun ExternalExtensionType.normalizePackageNameForMatching(packageName: String): String {
-	return toInstalledPackageName(packageName)
+    return toInstalledPackageName(packageName)
 }
 
 internal fun String.toInstalledIReaderPackageName(): String {
-	return ExternalExtensionType.IREADER.toInstalledPackageName(this)
+    return ExternalExtensionType.IREADER.toInstalledPackageName(this)
 }

@@ -27,114 +27,114 @@ import javax.inject.Inject
 
 @HiltViewModel
 class NavConfigViewModel @Inject constructor(
-	private val settings: AppSettings,
-	private val activityRecreationHandle: ActivityRecreationHandle,
+    private val settings: AppSettings,
+    private val activityRecreationHandle: ActivityRecreationHandle,
 ) : BaseViewModel() {
 
-	private val items = MutableStateFlow(settings.mainNavItems)
+    private val items = MutableStateFlow(settings.mainNavItems)
 
-	val configuredItems: StateFlow<List<NavItemConfigModel>> = items.map { snapshot ->
-		snapshot.map {
-			NavItemConfigModel(it, getUnavailabilityHint(it))
-		}
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.WhileSubscribed(5000),
-		items.value.map { NavItemConfigModel(it, getUnavailabilityHint(it)) },
-	)
+    val configuredItems: StateFlow<List<NavItemConfigModel>> = items.map { snapshot ->
+        snapshot.map {
+            NavItemConfigModel(it, getUnavailabilityHint(it))
+        }
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.WhileSubscribed(5000),
+        items.value.map { NavItemConfigModel(it, getUnavailabilityHint(it)) },
+    )
 
-	val availableItems: StateFlow<List<NavItem>> = items.map { snapshot ->
-		NavItem.entries.filterNot { item -> item in snapshot || item == NavItem.DISCOVER }
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.WhileSubscribed(5000),
-		NavItem.entries.filterNot { item -> item in items.value || item == NavItem.DISCOVER },
-	)
+    val availableItems: StateFlow<List<NavItem>> = items.map { snapshot ->
+        NavItem.entries.filterNot { item -> item in snapshot || item == NavItem.DISCOVER }
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.WhileSubscribed(5000),
+        NavItem.entries.filterNot { item -> item in items.value || item == NavItem.DISCOVER },
+    )
 
-	val canShowAddAction: StateFlow<Boolean> = items.map { snapshot ->
-		snapshot.size < NavItem.entries.size
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.WhileSubscribed(5000),
-		items.value.size < NavItem.entries.size,
-	)
+    val canShowAddAction: StateFlow<Boolean> = items.map { snapshot ->
+        snapshot.size < NavItem.entries.size
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.WhileSubscribed(5000),
+        items.value.size < NavItem.entries.size,
+    )
 
-	val canAddAction: StateFlow<Boolean> = items.map { snapshot ->
-		snapshot.size < MAX_MAIN_NAV_ITEM_COUNT
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.WhileSubscribed(5000),
-		items.value.size < MAX_MAIN_NAV_ITEM_COUNT,
-	)
+    val canAddAction: StateFlow<Boolean> = items.map { snapshot ->
+        snapshot.size < MAX_MAIN_NAV_ITEM_COUNT
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.WhileSubscribed(5000),
+        items.value.size < MAX_MAIN_NAV_ITEM_COUNT,
+    )
 
-	val content: StateFlow<List<ListModel>> = items.map { snapshot ->
-		buildContent(snapshot)
-	}.stateIn(
-		viewModelScope + Dispatchers.Default,
-		SharingStarted.WhileSubscribed(5000),
-		buildContent(items.value),
-	)
+    val content: StateFlow<List<ListModel>> = items.map { snapshot ->
+        buildContent(snapshot)
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.WhileSubscribed(5000),
+        buildContent(items.value),
+    )
 
-	private var commitJob: Job? = null
+    private var commitJob: Job? = null
 
-	fun reorder(fromPos: Int, toPos: Int) {
-		items.value = items.value.toMutableList().apply {
-			move(fromPos, toPos)
-			commit(this)
-		}
-	}
+    fun reorder(fromPos: Int, toPos: Int) {
+        items.value = items.value.toMutableList().apply {
+            move(fromPos, toPos)
+            commit(this)
+        }
+    }
 
-	fun moveUp(index: Int) {
-		if (index <= 0) return
-		reorder(index, index - 1)
-	}
+    fun moveUp(index: Int) {
+        if (index <= 0) return
+        reorder(index, index - 1)
+    }
 
-	fun moveDown(index: Int) {
-		if (index >= items.value.lastIndex) return
-		reorder(index, index + 1)
-	}
+    fun moveDown(index: Int) {
+        if (index >= items.value.lastIndex) return
+        reorder(index, index + 1)
+    }
 
-	fun addItem(item: NavItem) {
-		if (items.value.size >= MAX_MAIN_NAV_ITEM_COUNT || item in items.value) return
-		items.value = items.value.plus(item).also {
-			commit(it)
-		}
-	}
+    fun addItem(item: NavItem) {
+        if (items.value.size >= MAX_MAIN_NAV_ITEM_COUNT || item in items.value) return
+        items.value = items.value.plus(item).also {
+            commit(it)
+        }
+    }
 
-	fun removeItem(item: NavItem) {
-		val newList = items.value.toMutableList()
-		newList.remove(item)
-		if (newList.isEmpty()) {
-			newList.add(NavItem.HOME)
-		}
-		items.value = newList
-		commit(newList)
-	}
+    fun removeItem(item: NavItem) {
+        val newList = items.value.toMutableList()
+        newList.remove(item)
+        if (newList.isEmpty()) {
+            newList.add(NavItem.HOME)
+        }
+        items.value = newList
+        commit(newList)
+    }
 
-	private fun commit(value: List<NavItem>) {
-		val prevJob = commitJob
-		commitJob = launchJob {
-			prevJob?.cancelAndJoin()
-			delay(500)
-			settings.mainNavItems = value
-			activityRecreationHandle.recreate(MainActivity::class.java)
-		}
-	}
+    private fun commit(value: List<NavItem>) {
+        val prevJob = commitJob
+        commitJob = launchJob {
+            prevJob?.cancelAndJoin()
+            delay(500)
+            settings.mainNavItems = value
+            activityRecreationHandle.recreate(MainActivity::class.java)
+        }
+    }
 
-	private fun getUnavailabilityHint(item: NavItem) = if (item.isAvailable(settings)) {
-		0
-	} else when (item) {
-		NavItem.FEED -> R.string.check_for_new_chapters_disabled
-		NavItem.SUGGESTIONS -> R.string.suggestions_unavailable_text
-		else -> 0
-	}
+    private fun getUnavailabilityHint(item: NavItem) = if (item.isAvailable(settings)) {
+        0
+    } else when (item) {
+        NavItem.FEED -> R.string.check_for_new_chapters_disabled
+        NavItem.SUGGESTIONS -> R.string.suggestions_unavailable_text
+        else -> 0
+    }
 
-	private fun buildContent(snapshot: List<NavItem>): List<ListModel> = buildList(snapshot.size + 1) {
-		snapshot.mapTo(this) {
-			NavItemConfigModel(it, getUnavailabilityHint(it))
-		}
-		if (size < NavItem.entries.size) {
-			add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
-		}
-	}
+    private fun buildContent(snapshot: List<NavItem>): List<ListModel> = buildList(snapshot.size + 1) {
+        snapshot.mapTo(this) {
+            NavItemConfigModel(it, getUnavailabilityHint(it))
+        }
+        if (size < NavItem.entries.size) {
+            add(NavItemAddModel(size < MAX_MAIN_NAV_ITEM_COUNT))
+        }
+    }
 }

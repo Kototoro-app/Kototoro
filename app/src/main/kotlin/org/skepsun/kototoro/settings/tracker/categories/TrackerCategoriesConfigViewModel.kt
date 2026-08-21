@@ -15,25 +15,25 @@ import javax.inject.Inject
 
 @HiltViewModel
 class TrackerCategoriesConfigViewModel @Inject constructor(
-	private val favouritesRepository: FavouritesRepository,
+    private val favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
-	val content = favouritesRepository.observeCategories()
-		.map { categories -> TrackerCategoriesUiState(isLoading = false, categories = categories) }
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, TrackerCategoriesUiState())
+    val content = favouritesRepository.observeCategories()
+        .map { categories -> TrackerCategoriesUiState(isLoading = false, categories = categories) }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, TrackerCategoriesUiState())
 
-	private var updateJob: Job? = null
+    private var updateJob: Job? = null
 
-	fun toggleItem(category: FavouriteCategory) {
-		val prevJob = updateJob
-		updateJob = launchJob(Dispatchers.Default) {
-			prevJob?.join()
-			favouritesRepository.updateCategoryTracking(category.id, !category.isTrackingEnabled)
-		}
-	}
+    fun toggleItem(category: FavouriteCategory) {
+        val prevJob = updateJob
+        updateJob = launchJob(Dispatchers.Default) {
+            prevJob?.join()
+            favouritesRepository.updateCategoryTracking(category.id, !category.isTrackingEnabled)
+        }
+    }
 }
 
 data class TrackerCategoriesUiState(
-	val isLoading: Boolean = true,
-	val categories: List<FavouriteCategory> = emptyList(),
+    val isLoading: Boolean = true,
+    val categories: List<FavouriteCategory> = emptyList(),
 )

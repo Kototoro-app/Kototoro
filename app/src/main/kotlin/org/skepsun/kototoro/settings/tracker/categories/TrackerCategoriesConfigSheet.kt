@@ -41,131 +41,131 @@ import org.skepsun.kototoro.list.domain.ListSortOrder
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrackerCategoriesConfigRoute(
-	onDismissRequest: () -> Unit,
-	viewModel: TrackerCategoriesConfigViewModel = hiltViewModel(),
+    onDismissRequest: () -> Unit,
+    viewModel: TrackerCategoriesConfigViewModel = hiltViewModel(),
 ) {
-	val uiState by viewModel.content.collectAsStateWithLifecycle()
-	val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val uiState by viewModel.content.collectAsStateWithLifecycle()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-	ModalBottomSheet(
-		onDismissRequest = onDismissRequest,
-		sheetState = sheetState,
-		modifier = Modifier.fillMaxHeight(),
-	) {
-		KototoroTheme {
-			TrackerCategoriesConfigContent(
-				categories = uiState.categories,
-				isLoading = uiState.isLoading,
-				onCategoryClick = viewModel::toggleItem,
-			)
-		}
-	}
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        modifier = Modifier.fillMaxHeight(),
+    ) {
+        KototoroTheme {
+            TrackerCategoriesConfigContent(
+                categories = uiState.categories,
+                isLoading = uiState.isLoading,
+                onCategoryClick = viewModel::toggleItem,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrackerCategoriesConfigContent(
-	categories: List<FavouriteCategory>,
-	isLoading: Boolean,
-	onCategoryClick: (FavouriteCategory) -> Unit,
-	modifier: Modifier = Modifier,
+    categories: List<FavouriteCategory>,
+    isLoading: Boolean,
+    onCategoryClick: (FavouriteCategory) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	Scaffold(
-		modifier = modifier.fillMaxSize(),
-		containerColor = MaterialTheme.colorScheme.background,
-		contentWindowInsets = WindowInsets(0, 0, 0, 0),
-		topBar = {
-			Column {
-				TopAppBar(
-					title = { Text(text = stringResource(R.string.favourites_categories)) },
-					windowInsets = WindowInsets(0, 0, 0, 0),
-					colors = TopAppBarDefaults.topAppBarColors(
-						containerColor = MaterialTheme.colorScheme.background,
-					),
-				)
-				if (isLoading) {
-					LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-				}
-			}
-		},
-	) { contentPadding ->
-		LazyColumn(
-			modifier = Modifier.fillMaxSize(),
-			contentPadding = PaddingValues(
-				top = contentPadding.calculateTopPadding(),
-				bottom = contentPadding.calculateBottomPadding(),
-			),
-		) {
-			items(
-				items = categories,
-				key = { it.id },
-				contentType = { "tracker_category" },
-			) { category ->
-				TrackerCategoryRow(
-					category = category,
-					onClick = { onCategoryClick(category) },
-				)
-			}
-		}
-	}
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            Column {
+                TopAppBar(
+                    title = { Text(text = stringResource(R.string.favourites_categories)) },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ),
+                )
+                if (isLoading) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
+    ) { contentPadding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding(),
+            ),
+        ) {
+            items(
+                items = categories,
+                key = { it.id },
+                contentType = { "tracker_category" },
+            ) { category ->
+                TrackerCategoryRow(
+                    category = category,
+                    onClick = { onCategoryClick(category) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
 private fun TrackerCategoryRow(
-	category: FavouriteCategory,
-	onClick: () -> Unit,
+    category: FavouriteCategory,
+    onClick: () -> Unit,
 ) {
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.heightIn(min = dimensionResource(R.dimen.chapter_list_item_height))
-			.toggleable(
-				value = category.isTrackingEnabled,
-				role = Role.Checkbox,
-				onValueChange = { onClick() },
-			)
-			.padding(horizontal = dimensionResource(R.dimen.screen_padding)),
-		verticalAlignment = Alignment.CenterVertically,
-	) {
-		Text(
-			text = category.title,
-			style = MaterialTheme.typography.bodyLarge,
-			modifier = Modifier.weight(1f),
-		)
-		Checkbox(
-			checked = category.isTrackingEnabled,
-			onCheckedChange = null,
-		)
-	}
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = dimensionResource(R.dimen.chapter_list_item_height))
+            .toggleable(
+                value = category.isTrackingEnabled,
+                role = Role.Checkbox,
+                onValueChange = { onClick() },
+            )
+            .padding(horizontal = dimensionResource(R.dimen.screen_padding)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = category.title,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Checkbox(
+            checked = category.isTrackingEnabled,
+            onCheckedChange = null,
+        )
+    }
 }
 
 @Preview(showBackground = true, widthDp = 360, heightDp = 640)
 @Composable
 private fun TrackerCategoriesConfigContentPreview() {
-	KototoroTheme {
-		TrackerCategoriesConfigContent(
-			categories = listOf(
-				FavouriteCategory(
-					id = 1L,
-					title = "Reading",
-					sortKey = 0,
-					order = ListSortOrder.NEWEST,
-					createdAt = Instant.EPOCH,
-					isTrackingEnabled = true,
-					isVisibleInLibrary = true,
-				),
-				FavouriteCategory(
-					id = 2L,
-					title = "Plan to read",
-					sortKey = 1,
-					order = ListSortOrder.NEWEST,
-					createdAt = Instant.EPOCH,
-					isTrackingEnabled = false,
-					isVisibleInLibrary = true,
-				),
-			),
-			isLoading = false,
-			onCategoryClick = {},
-		)
-	}
+    KototoroTheme {
+        TrackerCategoriesConfigContent(
+            categories = listOf(
+                FavouriteCategory(
+                    id = 1L,
+                    title = "Reading",
+                    sortKey = 0,
+                    order = ListSortOrder.NEWEST,
+                    createdAt = Instant.EPOCH,
+                    isTrackingEnabled = true,
+                    isVisibleInLibrary = true,
+                ),
+                FavouriteCategory(
+                    id = 2L,
+                    title = "Plan to read",
+                    sortKey = 1,
+                    order = ListSortOrder.NEWEST,
+                    createdAt = Instant.EPOCH,
+                    isTrackingEnabled = false,
+                    isVisibleInLibrary = true,
+                ),
+            ),
+            isLoading = false,
+            onCategoryClick = {},
+        )
+    }
 }

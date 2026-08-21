@@ -8,55 +8,55 @@ import androidx.core.view.MenuProvider
 import org.skepsun.kototoro.R
 
 class SettingsSearchMenuProvider(
-	private val viewModel: SettingsSearchViewModel,
+    private val viewModel: SettingsSearchViewModel,
     private val isVisible: () -> Boolean = { true },
 ) : MenuProvider, MenuItem.OnActionExpandListener, SearchView.OnQueryTextListener {
 
-	override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-		menuInflater.inflate(R.menu.opt_search, menu)
-		val menuItem = menu.findItem(R.id.action_search)
-		menuItem.setOnActionExpandListener(this)
-		val searchView = menuItem.actionView as SearchView
-		searchView.setOnQueryTextListener(this)
-		searchView.queryHint = menuItem.title
-	}
+    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+        menuInflater.inflate(R.menu.opt_search, menu)
+        val menuItem = menu.findItem(R.id.action_search)
+        menuItem.setOnActionExpandListener(this)
+        val searchView = menuItem.actionView as SearchView
+        searchView.setOnQueryTextListener(this)
+        searchView.queryHint = menuItem.title
+    }
 
-	override fun onPrepareMenu(menu: Menu) {
-		super.onPrepareMenu(menu)
-		val menuItem = menu.findItem(R.id.action_search)
-		val visible = isVisible()
-		menuItem.isVisible = visible
-		if (!visible) {
-			if (menuItem.isActionViewExpanded) {
-				menuItem.collapseActionView()
-			}
-			return
-		}
-		if (viewModel.isSearchActive.value) {
-			menuItem.expandActionView()
-			val searchView = menuItem.actionView as SearchView
-			searchView.setQuery(viewModel.currentQuery, false)
-		}
-	}
+    override fun onPrepareMenu(menu: Menu) {
+        super.onPrepareMenu(menu)
+        val menuItem = menu.findItem(R.id.action_search)
+        val visible = isVisible()
+        menuItem.isVisible = visible
+        if (!visible) {
+            if (menuItem.isActionViewExpanded) {
+                menuItem.collapseActionView()
+            }
+            return
+        }
+        if (viewModel.isSearchActive.value) {
+            menuItem.expandActionView()
+            val searchView = menuItem.actionView as SearchView
+            searchView.setQuery(viewModel.currentQuery, false)
+        }
+    }
 
-	override fun onMenuItemSelected(menuItem: MenuItem): Boolean = false
+    override fun onMenuItemSelected(menuItem: MenuItem): Boolean = false
 
-	override fun onMenuItemActionExpand(item: MenuItem): Boolean {
-		viewModel.startSearch()
-		return true
-	}
+    override fun onMenuItemActionExpand(item: MenuItem): Boolean {
+        viewModel.startSearch()
+        return true
+    }
 
-	override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
-		viewModel.discardSearch()
-		return true
-	}
+    override fun onMenuItemActionCollapse(item: MenuItem): Boolean {
+        viewModel.discardSearch()
+        return true
+    }
 
-	override fun onQueryTextSubmit(query: String?): Boolean {
-		return true
-	}
+    override fun onQueryTextSubmit(query: String?): Boolean {
+        return true
+    }
 
-	override fun onQueryTextChange(newText: String?): Boolean {
-		viewModel.onQueryChanged(newText.orEmpty())
-		return true
-	}
+    override fun onQueryTextChange(newText: String?): Boolean {
+        viewModel.onQueryChanged(newText.orEmpty())
+        return true
+    }
 }

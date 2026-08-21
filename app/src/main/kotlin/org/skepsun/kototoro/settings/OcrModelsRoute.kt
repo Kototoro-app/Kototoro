@@ -46,7 +46,7 @@ internal val READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS = linkedSetOf(
 @Composable
 fun OcrModelsRoute(
     onnxModelManager: OnnxModelManager,
-	settings: AppSettings,
+    settings: AppSettings,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -102,10 +102,10 @@ fun OcrModelsRoute(
             buildSection(
                 title = context.getString(R.string.reader_translation_ocr_detector_models_title),
                 category = OnnxModelCategory.OCR_DETECTOR,
-				visibleModelIds = setOf(
-					ComicTextDetectorOnnx.MODEL_ID,
-					DefaultDbNetTextDetector.MODEL_ID,
-				),
+                visibleModelIds = setOf(
+                    ComicTextDetectorOnnx.MODEL_ID,
+                    DefaultDbNetTextDetector.MODEL_ID,
+                ),
             ),
             buildSection(
                 title = context.getString(R.string.reader_translation_ocr_recognizer_models_title),
@@ -118,24 +118,24 @@ fun OcrModelsRoute(
             ),
         )
     }
-	val detectorOptions = listOf(
-		ComicTextDetectorOnnx.MODEL_ID,
-		DefaultDbNetTextDetector.MODEL_ID,
-	).mapNotNull(OnnxOfficialModelCatalog::findById).map { model ->
-		SettingsChoiceOption(model.id, model.title)
-	}
-	val recognizerOptions = buildList {
-		add(SettingsChoiceOption("AUTO", context.getString(R.string.reader_translation_ocr_rec_model_auto)))
-		READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS
-			.mapNotNull(OnnxOfficialModelCatalog::findById)
-			.forEach { model -> add(SettingsChoiceOption(model.id, model.title)) }
-	}
-	val selectedDetector = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID) {
-		settings.readerTranslationAdvancedDetModelId
-	}.value
-	val selectedRecognizer = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID) {
-		settings.readerTranslationAdvancedRecModelId
-	}.value
+    val detectorOptions = listOf(
+        ComicTextDetectorOnnx.MODEL_ID,
+        DefaultDbNetTextDetector.MODEL_ID,
+    ).mapNotNull(OnnxOfficialModelCatalog::findById).map { model ->
+        SettingsChoiceOption(model.id, model.title)
+    }
+    val recognizerOptions = buildList {
+        add(SettingsChoiceOption("AUTO", context.getString(R.string.reader_translation_ocr_rec_model_auto)))
+        READER_TRANSLATION_VISIBLE_RECOGNIZER_MODEL_IDS
+            .mapNotNull(OnnxOfficialModelCatalog::findById)
+            .forEach { model -> add(SettingsChoiceOption(model.id, model.title)) }
+    }
+    val selectedDetector = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID) {
+        settings.readerTranslationAdvancedDetModelId
+    }.value
+    val selectedRecognizer = settings.observeAsState(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID) {
+        settings.readerTranslationAdvancedRecModelId
+    }.value
 
     fun handleModelClick(modelId: String) {
         val model = OnnxOfficialModelCatalog.findById(modelId) ?: return
@@ -149,16 +149,16 @@ fun OcrModelsRoute(
 
     OcrModelsSettingsScreen(
         sections = sections,
-		detectorOptions = detectorOptions,
-		recognizerOptions = recognizerOptions,
-		selectedDetector = selectedDetector,
-		selectedRecognizer = selectedRecognizer,
-		onDetectorChange = { modelId ->
-			settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, modelId) }
-		},
-		onRecognizerChange = { modelId ->
-			settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, modelId) }
-		},
+        detectorOptions = detectorOptions,
+        recognizerOptions = recognizerOptions,
+        selectedDetector = selectedDetector,
+        selectedRecognizer = selectedRecognizer,
+        onDetectorChange = { modelId ->
+            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_DET_MODEL_ID, modelId) }
+        },
+        onRecognizerChange = { modelId ->
+            settings.prefs.edit { putString(AppSettings.KEY_READER_TRANSLATION_PADDLE_OFFICIAL_MODEL_ID, modelId) }
+        },
         onModelClick = ::handleModelClick,
         modifier = modifier,
     )

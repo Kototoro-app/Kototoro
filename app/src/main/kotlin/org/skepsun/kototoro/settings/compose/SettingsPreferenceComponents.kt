@@ -412,8 +412,8 @@ fun <T> SettingsChoicePreference(
     styleHint: String? = null,
     @DrawableRes iconRes: Int? = null,
     enabled: Boolean = true,
-	onSettingsClick: (() -> Unit)? = null,
-	settingsContentDescription: String? = null,
+    onSettingsClick: (() -> Unit)? = null,
+    settingsContentDescription: String? = null,
     onValueChange: (T) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
@@ -464,15 +464,15 @@ fun <T> SettingsChoicePreference(
             }
         }
         Spacer(modifier = Modifier.width(8.dp))
-		if (onSettingsClick != null) {
-			IconButton(onClick = onSettingsClick, enabled = enabled) {
-				Icon(
-					imageVector = Icons.Filled.Settings,
-					contentDescription = settingsContentDescription,
-					tint = MaterialTheme.colorScheme.onSurfaceVariant,
-				)
-			}
-		}
+        if (onSettingsClick != null) {
+            IconButton(onClick = onSettingsClick, enabled = enabled) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = settingsContentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = null,

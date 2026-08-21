@@ -9,18 +9,18 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 @AndroidEntryPoint
 class ReaderTapGridConfigActivity : BaseComposeActivity() {
 
-	private val viewModel: ReaderTapGridConfigViewModel by viewModels()
+    private val viewModel: ReaderTapGridConfigViewModel by viewModels()
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setComposeContent {
-			ReaderTapGridConfigScreen(
-				content = viewModel.content.collectAsStateWithLifecycle().value,
-				onNavigateUp = ::finishAfterTransition,
-				onSetTapAction = viewModel::setTapAction,
-				onReset = viewModel::reset,
-				onDisableAll = viewModel::disableAll,
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setComposeContent {
+            ReaderTapGridConfigScreen(
+                content = viewModel.content.collectAsStateWithLifecycle().value,
+                onNavigateUp = ::finishAfterTransition,
+                onSetTapAction = viewModel::setTapAction,
+                onReset = viewModel::reset,
+                onDisableAll = viewModel::disableAll,
+            )
+        }
+    }
 }

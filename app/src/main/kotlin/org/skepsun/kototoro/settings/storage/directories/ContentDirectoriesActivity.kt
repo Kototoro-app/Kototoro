@@ -18,45 +18,45 @@ import org.skepsun.kototoro.local.data.StorageContentKind
 @AndroidEntryPoint
 class ContentDirectoriesActivity : BaseComposeActivity() {
 
-	private val viewModel: ContentDirectoriesViewModel by viewModels()
-	private var pendingDirectoryKind = StorageContentKind.MANGA
-	private val pickFileTreeLauncher = OpenDocumentTreeHelper(
-		activityResultCaller = this,
-		flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-			or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-			or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
-	) {
-		if (it != null) viewModel.onCustomDirectoryPicked(it, pendingDirectoryKind)
-	}
+    private val viewModel: ContentDirectoriesViewModel by viewModels()
+    private var pendingDirectoryKind = StorageContentKind.MANGA
+    private val pickFileTreeLauncher = OpenDocumentTreeHelper(
+        activityResultCaller = this,
+        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION,
+    ) {
+        if (it != null) viewModel.onCustomDirectoryPicked(it, pendingDirectoryKind)
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		viewModel.onError.observeEvent(
-			this,
-			SnackbarErrorObserver(window.decorView, exceptionResolver) {
-				if (it) viewModel.updateList()
-			},
-		)
-		setComposeContent {
-			val isInitialLoading = viewModel.isInitialLoading.collectAsStateWithLifecycle().value
-			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
-			ContentDirectoriesScreen(
-				mangaItems = viewModel.mangaItems.collectAsStateWithLifecycle().value,
-				novelItems = viewModel.novelItems.collectAsStateWithLifecycle().value,
-				videoItems = viewModel.videoItems.collectAsStateWithLifecycle().value,
-				isLoading = isInitialLoading || isLoading,
-				onBack = ::finish,
-				onAddDirectory = { kind ->
-					pendingDirectoryKind = kind
-					if (!pickFileTreeLauncher.tryLaunch(null)) {
-						lifecycleScope.launch {
-							snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
-						}
-					}
-				},
-				onRemoveDirectory = viewModel::onRemoveClick,
-				onDefaultDirectory = viewModel::onDefaultClick,
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        viewModel.onError.observeEvent(
+            this,
+            SnackbarErrorObserver(window.decorView, exceptionResolver) {
+                if (it) viewModel.updateList()
+            },
+        )
+        setComposeContent {
+            val isInitialLoading = viewModel.isInitialLoading.collectAsStateWithLifecycle().value
+            val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+            ContentDirectoriesScreen(
+                mangaItems = viewModel.mangaItems.collectAsStateWithLifecycle().value,
+                novelItems = viewModel.novelItems.collectAsStateWithLifecycle().value,
+                videoItems = viewModel.videoItems.collectAsStateWithLifecycle().value,
+                isLoading = isInitialLoading || isLoading,
+                onBack = ::finish,
+                onAddDirectory = { kind ->
+                    pendingDirectoryKind = kind
+                    if (!pickFileTreeLauncher.tryLaunch(null)) {
+                        lifecycleScope.launch {
+                            snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
+                        }
+                    }
+                },
+                onRemoveDirectory = viewModel::onRemoveClick,
+                onDefaultDirectory = viewModel::onDefaultClick,
+            )
+        }
+    }
 }

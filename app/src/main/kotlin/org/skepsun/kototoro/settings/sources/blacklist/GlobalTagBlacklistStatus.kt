@@ -17,44 +17,44 @@ import org.skepsun.kototoro.R
 
 @Composable
 fun GlobalTagBlacklistStatus(
-	blacklistedTagCount: Int,
-	onClick: () -> Unit,
-	modifier: Modifier = Modifier,
+    blacklistedTagCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	Surface(
-		modifier = modifier.fillMaxWidth(),
-		shape = MaterialTheme.shapes.medium,
-		color = MaterialTheme.colorScheme.surfaceContainerLow,
-	) {
-		Row(
-			modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-			verticalAlignment = Alignment.CenterVertically,
-		) {
-			Column(modifier = Modifier.weight(1f)) {
-				Text(
-					text = stringResource(R.string.blacklisted_tags),
-					style = MaterialTheme.typography.titleSmall,
-				)
-				Text(
-					text = if (blacklistedTagCount > 0) {
-						stringResource(R.string.global_tag_blacklist_active, blacklistedTagCount)
-					} else {
-						stringResource(R.string.global_tag_blacklist_inactive)
-					},
-					style = MaterialTheme.typography.bodySmall,
-					color = if (blacklistedTagCount > 0) {
-						MaterialTheme.colorScheme.primary
-					} else {
-						MaterialTheme.colorScheme.onSurfaceVariant
-					},
-				)
-			}
-			TextButton(
-				onClick = onClick,
-				modifier = Modifier.padding(start = 8.dp),
-			) {
-				Text(stringResource(R.string.manage))
-			}
-		}
-	}
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.blacklisted_tags),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Text(
+                    text = if (blacklistedTagCount > 0) {
+                        stringResource(R.string.global_tag_blacklist_active, blacklistedTagCount)
+                    } else {
+                        stringResource(R.string.global_tag_blacklist_inactive)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (blacklistedTagCount > 0) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            TextButton(
+                onClick = onClick,
+                modifier = Modifier.padding(start = 8.dp),
+            ) {
+                Text(stringResource(R.string.manage))
+            }
+        }
+    }
 }

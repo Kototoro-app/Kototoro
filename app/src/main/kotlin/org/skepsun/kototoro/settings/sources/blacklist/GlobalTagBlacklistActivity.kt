@@ -11,24 +11,24 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 @AndroidEntryPoint
 class GlobalTagBlacklistActivity : BaseComposeActivity() {
 
-	private val viewModel by viewModels<GlobalTagBlacklistViewModel>()
+    private val viewModel by viewModels<GlobalTagBlacklistViewModel>()
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		setComposeContent {
-			GlobalTagBlacklistScreen(
-				state = viewModel.uiState.collectAsStateWithLifecycle().value,
-				query = viewModel.searchQuery.collectAsStateWithLifecycle().value,
-				onQueryChange = { viewModel.searchQuery.value = it },
-				onAddQuery = viewModel::addQuery,
-				onToggleTag = viewModel::toggleTag,
-				onClear = viewModel::clear,
-				onNavigateUp = ::finishAfterTransition,
-			)
-		}
-	}
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setComposeContent {
+            GlobalTagBlacklistScreen(
+                state = viewModel.uiState.collectAsStateWithLifecycle().value,
+                query = viewModel.searchQuery.collectAsStateWithLifecycle().value,
+                onQueryChange = { viewModel.searchQuery.value = it },
+                onAddQuery = viewModel::addQuery,
+                onToggleTag = viewModel::toggleTag,
+                onClear = viewModel::clear,
+                onNavigateUp = ::finishAfterTransition,
+            )
+        }
+    }
 
-	companion object {
-		fun newIntent(context: Context): Intent = Intent(context, GlobalTagBlacklistActivity::class.java)
-	}
+    companion object {
+        fun newIntent(context: Context): Intent = Intent(context, GlobalTagBlacklistActivity::class.java)
+    }
 }

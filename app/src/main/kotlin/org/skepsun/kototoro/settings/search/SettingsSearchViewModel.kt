@@ -15,53 +15,53 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsSearchViewModel @Inject constructor(
-	private val searchHelper: SettingsSearchHelper,
+    private val searchHelper: SettingsSearchHelper,
 ) : BaseViewModel() {
 
-	private val query = MutableStateFlow<String?>(null)
-	private val allSettings by lazy {
-		searchHelper.inflatePreferences()
-	}
+    private val query = MutableStateFlow<String?>(null)
+    private val allSettings by lazy {
+        searchHelper.inflatePreferences()
+    }
 
-	val content = query.map { q ->
-		if (q == null) {
-			emptyList()
-		} else {
-			allSettings.filter { it.title.contains(q, ignoreCase = true) }
-		}
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
+    val content = query.map { q ->
+        if (q == null) {
+            emptyList()
+        } else {
+            allSettings.filter { it.title.contains(q, ignoreCase = true) }
+        }
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, emptyList())
 
-	val queryText = query.map { it.orEmpty() }
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, query.value.orEmpty())
+    val queryText = query.map { it.orEmpty() }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, query.value.orEmpty())
 
-	val isSearchActive = query.map {
-		it != null
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, query.value != null)
+    val isSearchActive = query.map {
+        it != null
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, query.value != null)
 
-	val onNavigateToPreference = MutableEventFlow<SettingsItem>()
-	val currentQuery: String
-		get() = query.value.orEmpty()
+    val onNavigateToPreference = MutableEventFlow<SettingsItem>()
+    val currentQuery: String
+        get() = query.value.orEmpty()
 
-	fun onQueryChanged(value: String) {
-		if (query.value != null) {
-			query.value = value
-		}
-	}
+    fun onQueryChanged(value: String) {
+        if (query.value != null) {
+            query.value = value
+        }
+    }
 
-	fun setSearchQuery(value: String) {
-		query.value = value.trim().takeIf { it.isNotEmpty() }
-	}
+    fun setSearchQuery(value: String) {
+        query.value = value.trim().takeIf { it.isNotEmpty() }
+    }
 
-	fun discardSearch() {
-		query.value = null
-	}
+    fun discardSearch() {
+        query.value = null
+    }
 
-	fun startSearch() {
-		query.value = query.value.orEmpty()
-	}
+    fun startSearch() {
+        query.value = query.value.orEmpty()
+    }
 
-	fun navigateToPreference(item: SettingsItem) {
-		discardSearch()
-		onNavigateToPreference.call(item)
-	}
+    fun navigateToPreference(item: SettingsItem) {
+        discardSearch()
+        onNavigateToPreference.call(item)
+    }
 }

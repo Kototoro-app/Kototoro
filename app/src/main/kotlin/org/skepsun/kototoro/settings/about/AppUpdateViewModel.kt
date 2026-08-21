@@ -26,133 +26,133 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AppUpdateViewModel @Inject constructor(
-	private val repository: AppUpdateRepository,
-	private val settings: AppSettings,
-	@ApplicationContext private val context: Context,
+    private val repository: AppUpdateRepository,
+    private val settings: AppSettings,
+    @ApplicationContext private val context: Context,
 ) : BaseViewModel() {
 
-	val nextVersion = repository.observeAvailableUpdate()
-	val selectedSource = MutableStateFlow(repository.defaultSource)
-	val sourceProbes = MutableStateFlow<Map<AppUpdateSource, AppUpdateSourceProbe>>(emptyMap())
-	val selectedMirror = MutableStateFlow(settings.gitHubMirror)
-	val downloadProgress = MutableStateFlow(-1f)
-	val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
-	val installIntent = MutableStateFlow<Intent?>(null)
-	val updateMessage = MutableStateFlow<String?>(null)
-	val onDownloadDone = MutableEventFlow<Intent>()
+    val nextVersion = repository.observeAvailableUpdate()
+    val selectedSource = MutableStateFlow(repository.defaultSource)
+    val sourceProbes = MutableStateFlow<Map<AppUpdateSource, AppUpdateSourceProbe>>(emptyMap())
+    val selectedMirror = MutableStateFlow(settings.gitHubMirror)
+    val downloadProgress = MutableStateFlow(-1f)
+    val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
+    val installIntent = MutableStateFlow<Intent?>(null)
+    val updateMessage = MutableStateFlow<String?>(null)
+    val onDownloadDone = MutableEventFlow<Intent>()
 
-	private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-	private val appName = context.getString(R.string.app_name)
-	private var sourceLoadJob: Job? = null
+    private val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+    private val appName = context.getString(R.string.app_name)
+    private var sourceLoadJob: Job? = null
 
-	init {
-		launchJob(Dispatchers.IO) {
-			sourceProbes.value = repository.probeUpdateSources()
-		}
-		if (nextVersion.value == null) {
-			loadSource(selectedSource.value, showEmptyMessage = false)
-		}
-	}
+    init {
+        launchJob(Dispatchers.IO) {
+            sourceProbes.value = repository.probeUpdateSources()
+        }
+        if (nextVersion.value == null) {
+            loadSource(selectedSource.value, showEmptyMessage = false)
+        }
+    }
 
-	fun setSource(source: AppUpdateSource) {
-		if (source == selectedSource.value) {
-			return
-		}
-		settings.appUpdateSource = source
-		selectedSource.value = source
-		loadSource(source, showEmptyMessage = true)
-	}
+    fun setSource(source: AppUpdateSource) {
+        if (source == selectedSource.value) {
+            return
+        }
+        settings.appUpdateSource = source
+        selectedSource.value = source
+        loadSource(source, showEmptyMessage = true)
+    }
 
-	fun startDownload() {
-		launchLoadingJob(Dispatchers.Default) {
-			val version = nextVersion.requireValue()
-			val url = applyMirror(version.apkUrl).toUri()
-			val title = "$appName v${version.name}"
-			val request = DownloadManager.Request(url)
-				.setTitle(title)
-				.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, url.lastPathSegment)
-				.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-				.setMimeType("application/vnd.android.package-archive")
-			val downloadId = downloadManager.enqueue(request)
-			observeDownload(downloadId)
-		}
-	}
+    fun startDownload() {
+        launchLoadingJob(Dispatchers.Default) {
+            val version = nextVersion.requireValue()
+            val url = applyMirror(version.apkUrl).toUri()
+            val title = "$appName v${version.name}"
+            val request = DownloadManager.Request(url)
+                .setTitle(title)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, url.lastPathSegment)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setMimeType("application/vnd.android.package-archive")
+            val downloadId = downloadManager.enqueue(request)
+            observeDownload(downloadId)
+        }
+    }
 
-	fun setMirror(mirror: AppSettings.GitHubMirror) {
-		settings.gitHubMirror = mirror
-		selectedMirror.value = mirror
-	}
+    fun setMirror(mirror: AppSettings.GitHubMirror) {
+        settings.gitHubMirror = mirror
+        selectedMirror.value = mirror
+    }
 
-	private fun loadSource(source: AppUpdateSource, showEmptyMessage: Boolean) {
-		sourceLoadJob?.cancel()
-		updateMessage.value = null
-		sourceLoadJob = launchLoadingJob(Dispatchers.Default) {
-			val update = repository.fetchUpdate(source)
-			if (showEmptyMessage && update == null) {
-				updateMessage.value = context.getString(R.string.app_update_source_no_release)
-			}
-		}
-	}
+    private fun loadSource(source: AppUpdateSource, showEmptyMessage: Boolean) {
+        sourceLoadJob?.cancel()
+        updateMessage.value = null
+        sourceLoadJob = launchLoadingJob(Dispatchers.Default) {
+            val update = repository.fetchUpdate(source)
+            if (showEmptyMessage && update == null) {
+                updateMessage.value = context.getString(R.string.app_update_source_no_release)
+            }
+        }
+    }
 
-	fun getReleasePageUrl(): String? {
-		return nextVersion.value?.url?.let(::applyMirror)
-	}
+    fun getReleasePageUrl(): String? {
+        return nextVersion.value?.url?.let(::applyMirror)
+    }
 
-	fun onDownloadComplete(intent: Intent) {
-		launchLoadingJob(Dispatchers.Default) {
-			val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0L)
-			if (downloadId == 0L) {
-				return@launchLoadingJob
-			}
-			val uri = downloadManager.getUriForDownloadedFile(downloadId) ?: return@launchLoadingJob
-			
-			val installUri = uri
+    fun onDownloadComplete(intent: Intent) {
+        launchLoadingJob(Dispatchers.Default) {
+            val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0L)
+            if (downloadId == 0L) {
+                return@launchLoadingJob
+            }
+            val uri = downloadManager.getUriForDownloadedFile(downloadId) ?: return@launchLoadingJob
+            
+            val installUri = uri
 
-			@Suppress("DEPRECATION")
-			val installerIntent = Intent(Intent.ACTION_INSTALL_PACKAGE)
-			installerIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-			installerIntent.setDataAndType(installUri, "application/vnd.android.package-archive")
-			installerIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
-			installIntent.value = installerIntent
-			onDownloadDone.call(installerIntent)
-		}
-	}
+            @Suppress("DEPRECATION")
+            val installerIntent = Intent(Intent.ACTION_INSTALL_PACKAGE)
+            installerIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            installerIntent.setDataAndType(installUri, "application/vnd.android.package-archive")
+            installerIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            installIntent.value = installerIntent
+            onDownloadDone.call(installerIntent)
+        }
+    }
 
-	private suspend fun observeDownload(id: Long) {
-		val query = DownloadManager.Query()
-		query.setFilterById(id)
-		while (currentCoroutineContext().isActive) {
-			downloadManager.query(query).use { cursor ->
-				if (cursor.moveToFirst()) {
-					val bytesDownloaded = cursor.getLong(
-						cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
-					)
-					val bytesTotal = cursor.getLong(
-						cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES),
-					)
-					downloadProgress.value = bytesDownloaded.toFloat() / bytesTotal
-					val state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-					downloadState.value = state
-					if (state == DownloadManager.STATUS_SUCCESSFUL || state == DownloadManager.STATUS_FAILED) {
-						return
-					}
-				}
-			}
-			delay(100)
-		}
-	}
+    private suspend fun observeDownload(id: Long) {
+        val query = DownloadManager.Query()
+        query.setFilterById(id)
+        while (currentCoroutineContext().isActive) {
+            downloadManager.query(query).use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val bytesDownloaded = cursor.getLong(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR),
+                    )
+                    val bytesTotal = cursor.getLong(
+                        cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES),
+                    )
+                    downloadProgress.value = bytesDownloaded.toFloat() / bytesTotal
+                    val state = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    downloadState.value = state
+                    if (state == DownloadManager.STATUS_SUCCESSFUL || state == DownloadManager.STATUS_FAILED) {
+                        return
+                    }
+                }
+            }
+            delay(100)
+        }
+    }
 
-	private fun applyMirror(url: String): String {
-		if (!url.startsWith("https://github.com/") && !url.startsWith("https://raw.githubusercontent.com/")) {
-			return url
-		}
-		return when (selectedMirror.value) {
-			AppSettings.GitHubMirror.NATIVE -> url
-			AppSettings.GitHubMirror.KKGITHUB -> url
-				.replace("https://raw.githubusercontent.com/", "https://raw.kkgithub.com/")
-				.replace("https://github.com/", "https://kkgithub.com/")
-			AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
-			AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
-		}
-	}
+    private fun applyMirror(url: String): String {
+        if (!url.startsWith("https://github.com/") && !url.startsWith("https://raw.githubusercontent.com/")) {
+            return url
+        }
+        return when (selectedMirror.value) {
+            AppSettings.GitHubMirror.NATIVE -> url
+            AppSettings.GitHubMirror.KKGITHUB -> url
+                .replace("https://raw.githubusercontent.com/", "https://raw.kkgithub.com/")
+                .replace("https://github.com/", "https://kkgithub.com/")
+            AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
+            AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
+        }
+    }
 }

@@ -15,23 +15,23 @@ import org.skepsun.kototoro.settings.compose.NavConfigScreen
 
 @Composable
 fun NavConfigRoute(
-	viewModel: NavConfigViewModel,
-	modifier: Modifier = Modifier,
+    viewModel: NavConfigViewModel,
+    modifier: Modifier = Modifier,
 ) {
-	val configuredItems = viewModel.configuredItems.collectAsStateWithLifecycle().value
-	val availableItems = viewModel.availableItems.collectAsStateWithLifecycle().value
-	val canShowAddAction = viewModel.canShowAddAction.collectAsStateWithLifecycle().value
-	val canAddAction = viewModel.canAddAction.collectAsStateWithLifecycle().value
+    val configuredItems = viewModel.configuredItems.collectAsStateWithLifecycle().value
+    val availableItems = viewModel.availableItems.collectAsStateWithLifecycle().value
+    val canShowAddAction = viewModel.canShowAddAction.collectAsStateWithLifecycle().value
+    val canAddAction = viewModel.canAddAction.collectAsStateWithLifecycle().value
 
-	NavConfigScreen(
-		configuredItems = configuredItems,
-		availableItems = availableItems,
-		canShowAddAction = canShowAddAction,
-		canAddAction = canAddAction,
-		onAddItem = viewModel::addItem,
-		onRemoveItem = viewModel::removeItem,
-		onMoveUp = viewModel::moveUp,
-		onMoveDown = viewModel::moveDown,
-		modifier = modifier,
-	)
+    NavConfigScreen(
+        configuredItems = configuredItems,
+        availableItems = availableItems,
+        canShowAddAction = canShowAddAction,
+        canAddAction = canAddAction,
+        onAddItem = viewModel::addItem,
+        onRemoveItem = viewModel::removeItem,
+        onMoveUp = viewModel::moveUp,
+        onMoveDown = viewModel::moveDown,
+        modifier = modifier,
+    )
 }

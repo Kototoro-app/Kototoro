@@ -47,8 +47,8 @@ class DataCleanupSettingsViewModel @Inject constructor(
     private val deleteReadChaptersUseCase: DeleteReadChaptersUseCase,
     private val localContentRepository: LocalMangaRepository,
     private val mangaDataRepositoryProvider: Provider<ContentDataRepository>,
-	    private val coil: ImageLoader,
-	    private val torrentStreamService: TorrentStreamService,
+        private val coil: ImageLoader,
+        private val torrentStreamService: TorrentStreamService,
 ) : BaseViewModel() {
 
     data class LocalContentCleanupResult(

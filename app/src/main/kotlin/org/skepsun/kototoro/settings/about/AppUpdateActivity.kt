@@ -30,121 +30,121 @@ import org.skepsun.kototoro.core.nav.router
 @AndroidEntryPoint
 class AppUpdateActivity : BaseComposeActivity() {
 
-	private val viewModel: AppUpdateViewModel by viewModels()
-	private lateinit var downloadReceiver: UpdateDownloadReceiver
-	private var operationErrorMessage by mutableStateOf<String?>(null)
+    private val viewModel: AppUpdateViewModel by viewModels()
+    private lateinit var downloadReceiver: UpdateDownloadReceiver
+    private var operationErrorMessage by mutableStateOf<String?>(null)
 
-	private val permissionRequest = registerForActivityResult(
-		ActivityResultContracts.RequestPermission(),
-	) {
-		if (it) {
-			viewModel.startDownload()
-		} else {
-			openInBrowser()
-		}
-	}
+    private val permissionRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        if (it) {
+            viewModel.startDownload()
+        } else {
+            openInBrowser()
+        }
+    }
 
-	override fun onCreate(savedInstanceState: Bundle?) {
-		super.onCreate(savedInstanceState)
-		downloadReceiver = UpdateDownloadReceiver(viewModel)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        downloadReceiver = UpdateDownloadReceiver(viewModel)
 
-		ContextCompat.registerReceiver(
-			this,
-			downloadReceiver,
-			IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-			ContextCompat.RECEIVER_EXPORTED,
-		)
+        ContextCompat.registerReceiver(
+            this,
+            downloadReceiver,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
 
-		viewModel.onError.observeEvent(this) {
-			operationErrorMessage = it.getDisplayMessage(resources)
-		}
-		viewModel.onDownloadDone.observeEvent(this) { intent ->
-			try {
-				startActivity(intent)
-			} catch (e: ActivityNotFoundException) {
-				e.printStackTraceDebug()
-			}
-		}
+        viewModel.onError.observeEvent(this) {
+            operationErrorMessage = it.getDisplayMessage(resources)
+        }
+        viewModel.onDownloadDone.observeEvent(this) { intent ->
+            try {
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                e.printStackTraceDebug()
+            }
+        }
 
-		setComposeContent {
-			val nextVersion = viewModel.nextVersion.collectAsStateWithLifecycle().value
-			val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
-			val downloadProgress = viewModel.downloadProgress.collectAsStateWithLifecycle().value
-			val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
-			val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
-			val selectedSource = viewModel.selectedSource.collectAsStateWithLifecycle().value
-			val sourceProbes = viewModel.sourceProbes.collectAsStateWithLifecycle().value
-			val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
+        setComposeContent {
+            val nextVersion = viewModel.nextVersion.collectAsStateWithLifecycle().value
+            val isLoading = viewModel.isLoading.collectAsStateWithLifecycle().value
+            val downloadProgress = viewModel.downloadProgress.collectAsStateWithLifecycle().value
+            val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
+            val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
+            val selectedSource = viewModel.selectedSource.collectAsStateWithLifecycle().value
+            val sourceProbes = viewModel.sourceProbes.collectAsStateWithLifecycle().value
+            val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
 
-			AppUpdateScreen(
-				version = nextVersion,
-				isLoading = isLoading,
-				downloadProgress = downloadProgress,
-				downloadState = downloadState,
-				updateMessage = updateMessage,
-				operationErrorMessage = operationErrorMessage,
-				mirrorOptions = rememberMirrorOptions(),
-				selectedMirror = selectedMirror,
-				selectedSource = selectedSource,
-				sourceProbes = sourceProbes,
-				onSourceSelected = viewModel::setSource,
-				onMirrorSelected = viewModel::setMirror,
-				onCancel = ::finishAfterTransition,
-				onUpdate = ::doUpdate,
-			)
-		}
-	}
+            AppUpdateScreen(
+                version = nextVersion,
+                isLoading = isLoading,
+                downloadProgress = downloadProgress,
+                downloadState = downloadState,
+                updateMessage = updateMessage,
+                operationErrorMessage = operationErrorMessage,
+                mirrorOptions = rememberMirrorOptions(),
+                selectedMirror = selectedMirror,
+                selectedSource = selectedSource,
+                sourceProbes = sourceProbes,
+                onSourceSelected = viewModel::setSource,
+                onMirrorSelected = viewModel::setMirror,
+                onCancel = ::finishAfterTransition,
+                onUpdate = ::doUpdate,
+            )
+        }
+    }
 
-	override fun onDestroy() {
-		unregisterReceiver(downloadReceiver)
-		super.onDestroy()
-	}
+    override fun onDestroy() {
+        unregisterReceiver(downloadReceiver)
+        super.onDestroy()
+    }
 
-	private fun rememberMirrorOptions(): List<AppUpdateMirrorOption> {
-		val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
-		val values = resources.getStringArray(R.array.pref_github_mirror_values)
-		return values.mapIndexedNotNull { index, value ->
-			AppUpdateMirrorOption(
-				mirror = AppSettings.GitHubMirror.fromValue(value),
-				label = labels.getOrNull(index).orEmpty(),
-			)
-		}
-	}
+    private fun rememberMirrorOptions(): List<AppUpdateMirrorOption> {
+        val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
+        val values = resources.getStringArray(R.array.pref_github_mirror_values)
+        return values.mapIndexedNotNull { index, value ->
+            AppUpdateMirrorOption(
+                mirror = AppSettings.GitHubMirror.fromValue(value),
+                label = labels.getOrNull(index).orEmpty(),
+            )
+        }
+    }
 
-	private fun doUpdate() {
-		operationErrorMessage = null
-		viewModel.installIntent.value?.let { intent ->
-			try {
-				startActivity(intent)
-			} catch (e: Exception) {
-				operationErrorMessage = e.getDisplayMessage(resources)
-			}
-			return
-		}
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-			permissionRequest.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-		} else {
-			viewModel.startDownload()
-		}
-	}
+    private fun doUpdate() {
+        operationErrorMessage = null
+        viewModel.installIntent.value?.let { intent ->
+            try {
+                startActivity(intent)
+            } catch (e: Exception) {
+                operationErrorMessage = e.getDisplayMessage(resources)
+            }
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            permissionRequest.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            viewModel.startDownload()
+        }
+    }
 
-	private fun openInBrowser() {
-		val url = viewModel.getReleasePageUrl() ?: return
-		if (!router.openExternalBrowser(url, getString(R.string.open_in_browser))) {
-			lifecycleScope.launch {
-				snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
-			}
-		}
-	}
+    private fun openInBrowser() {
+        val url = viewModel.getReleasePageUrl() ?: return
+        if (!router.openExternalBrowser(url, getString(R.string.open_in_browser))) {
+            lifecycleScope.launch {
+                snackbarHostState.showSnackbar(getString(R.string.operation_not_supported))
+            }
+        }
+    }
 
-	private class UpdateDownloadReceiver(
-		private val viewModel: AppUpdateViewModel,
-	) : BroadcastReceiver() {
+    private class UpdateDownloadReceiver(
+        private val viewModel: AppUpdateViewModel,
+    ) : BroadcastReceiver() {
 
-		override fun onReceive(context: Context, intent: Intent) {
-			if (intent.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
-				viewModel.onDownloadComplete(intent)
-			}
-		}
-	}
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
+                viewModel.onDownloadComplete(intent)
+            }
+        }
+    }
 }

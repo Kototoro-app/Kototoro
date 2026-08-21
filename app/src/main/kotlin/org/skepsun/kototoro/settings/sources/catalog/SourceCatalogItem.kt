@@ -7,23 +7,23 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 
 sealed interface SourceCatalogItem : ListModel {
 
-	data class Source(
-		val source: ContentSource,
-	) : SourceCatalogItem {
+    data class Source(
+        val source: ContentSource,
+    ) : SourceCatalogItem {
 
-		override fun areItemsTheSame(other: ListModel): Boolean {
-			return other is Source && other.source == source
-		}
-	}
+        override fun areItemsTheSame(other: ListModel): Boolean {
+            return other is Source && other.source == source
+        }
+    }
 
-	data class Hint(
-		@DrawableRes val icon: Int,
-		@StringRes val title: Int,
-		@StringRes val text: Int,
-	) : SourceCatalogItem {
+    data class Hint(
+        @DrawableRes val icon: Int,
+        @StringRes val title: Int,
+        @StringRes val text: Int,
+    ) : SourceCatalogItem {
 
-		override fun areItemsTheSame(other: ListModel): Boolean {
-			return other is Hint && other.title == title
-		}
-	}
+        override fun areItemsTheSame(other: ListModel): Boolean {
+            return other is Hint && other.title == title
+        }
+    }
 }
