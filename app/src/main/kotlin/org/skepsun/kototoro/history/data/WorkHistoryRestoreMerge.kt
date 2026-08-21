@@ -10,12 +10,12 @@ package org.skepsun.kototoro.history.data
  * `anchor_manga_id`; `created_at` takes the earliest of the two.
  */
 fun mergeRestoredWorkHistory(
-	base: WorkHistoryEntity,
-	other: WorkHistoryEntity,
+    base: WorkHistoryEntity,
+    other: WorkHistoryEntity,
 ): WorkHistoryEntity {
-	val newest = if (base.updatedAt >= other.updatedAt) base else other
-	return newest.copy(
-		entityId = base.entityId,
-		createdAt = minOf(base.createdAt, other.createdAt),
-	)
+    val newest = if (base.updatedAt >= other.updatedAt) base else other
+    return newest.copy(
+        entityId = base.entityId,
+        createdAt = minOf(base.createdAt, other.createdAt),
+    )
 }

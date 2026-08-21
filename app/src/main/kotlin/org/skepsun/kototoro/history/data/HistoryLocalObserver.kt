@@ -10,17 +10,17 @@ import javax.inject.Inject
 
 @Reusable
 class HistoryLocalObserver @Inject constructor(
-	localContentIndex: LocalContentIndex,
+    localContentIndex: LocalContentIndex,
 ) : LocalObserveMapper<ContentWithHistory, ContentWithHistory>(localContentIndex) {
 
-	fun observe(source: Flow<Collection<ContentWithHistory>>) = source.mapToLocal()
+    fun observe(source: Flow<Collection<ContentWithHistory>>) = source.mapToLocal()
 
-	override fun toContent(e: ContentWithHistory) = e.manga
+    override fun toContent(e: ContentWithHistory) = e.manga
 
-	override fun toResult(e: ContentWithHistory, manga: Content) = ContentWithHistory(
-		manga = manga,
-		history = e.history,
-		entityId = e.entityId,
-		preferredLocalMangaId = e.preferredLocalMangaId,
-	)
+    override fun toResult(e: ContentWithHistory, manga: Content) = ContentWithHistory(
+        manga = manga,
+        history = e.history,
+        entityId = e.entityId,
+        preferredLocalMangaId = e.preferredLocalMangaId,
+    )
 }
