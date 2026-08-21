@@ -80,218 +80,218 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 interface AppModule {
 
-	@Binds
-	fun bindContentLoaderContext(mangaLoaderContextImpl: ContentLoaderContextImpl): ContentLoaderContext
+    @Binds
+    fun bindContentLoaderContext(mangaLoaderContextImpl: ContentLoaderContextImpl): ContentLoaderContext
 
-	@Binds
-	fun bindImageGetter(coilImageGetter: CoilImageGetter): Html.ImageGetter
+    @Binds
+    fun bindImageGetter(coilImageGetter: CoilImageGetter): Html.ImageGetter
 
-	companion object {
+    companion object {
 
-		@Provides
-		@LocalizedAppContext
-		fun provideLocalizedContext(
-			@ApplicationContext context: Context,
-		): Context = ContextCompat.getContextForLanguage(context)
+        @Provides
+        @LocalizedAppContext
+        fun provideLocalizedContext(
+            @ApplicationContext context: Context,
+        ): Context = ContextCompat.getContextForLanguage(context)
 
-		@Provides
-		@Singleton
-		fun provideNetworkState(
-			@ApplicationContext context: Context,
-			settings: AppSettings,
-		) = NetworkState(context.connectivityManager, settings)
+        @Provides
+        @Singleton
+        fun provideNetworkState(
+            @ApplicationContext context: Context,
+            settings: AppSettings,
+        ) = NetworkState(context.connectivityManager, settings)
 
-		@Provides
-		@Singleton
-		fun provideMangaDatabase(
-			@ApplicationContext context: Context,
-		): MangaDatabase = MangaDatabase(context)
+        @Provides
+        @Singleton
+        fun provideMangaDatabase(
+            @ApplicationContext context: Context,
+        ): MangaDatabase = MangaDatabase(context)
 
-		@Provides
-		@Singleton
-		fun provideJsonSourceDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.JsonSourceDao {
-			return database.getJsonSourceDao()
-		}
+        @Provides
+        @Singleton
+        fun provideJsonSourceDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.JsonSourceDao {
+            return database.getJsonSourceDao()
+        }
 
-		@Provides
-		@Singleton
-		fun provideExternalExtensionRepoDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.ExternalExtensionRepoDao {
-			return database.getExternalExtensionRepoDao()
-		}
+        @Provides
+        @Singleton
+        fun provideExternalExtensionRepoDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.ExternalExtensionRepoDao {
+            return database.getExternalExtensionRepoDao()
+        }
 
-		@Provides
-		@Singleton
-		fun provideJson(): kotlinx.serialization.json.Json = kotlinx.serialization.json.Json {
-			ignoreUnknownKeys = true
-			isLenient = true
-			encodeDefaults = true
-			prettyPrint = true
-			coerceInputValues = true
-		}
+        @Provides
+        @Singleton
+        fun provideJson(): kotlinx.serialization.json.Json = kotlinx.serialization.json.Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            encodeDefaults = true
+            prettyPrint = true
+            coerceInputValues = true
+        }
 
-		@Provides
-		@Singleton
-		fun provideCoil(
-			@LocalizedAppContext context: Context,
-			@ContentHttpClient okHttpClientProvider: Provider<OkHttpClient>,
-			faviconFetcherFactory: FaviconFetcher.Factory,
-			imageProxyInterceptor: ImageProxyInterceptor,
-			pageFetcherFactory: ContentPageFetcher.Factory,
-			coverFetcherFactory: org.skepsun.kototoro.core.image.ContentCoverFetcher.Factory,
-			tvBoxSearchCoverFetcherFactory: TVBoxSearchCoverFetcher.Factory,
-			coverRestoreInterceptor: CoverRestoreInterceptor,
-			networkStateProvider: Provider<NetworkState>,
-			captchaHandler: CaptchaHandler,
-			settings: AppSettings,
-		): ImageLoader {
-			val diskCacheFactory = {
-				val rootDir = context.externalCacheDir ?: context.cacheDir
-				DiskCache.Builder()
-					.directory(rootDir.resolve(CacheDir.THUMBS.dir))
-					.maxSizeBytes(FileSize.MEGABYTES.convert(settings.thumbsCacheSizeMb.toLong(), FileSize.BYTES))
-					.build()
-			}
-			val okHttpClientLazy = lazy {
-				okHttpClientProvider.get().newBuilder().cache(null).build()
-			}
-			return ImageLoader.Builder(context)
-				.interceptorCoroutineContext(Dispatchers.Default)
-				.diskCache(diskCacheFactory)
-				.logger(if (BuildConfig.DEBUG) SuppressingCoilLogger() else null)
-				.allowRgb565(context.isLowRamDevice())
-				.eventListener(captchaHandler)
-				.components {
-					add(ImageFailureSuppressingInterceptor())
-					add(tvBoxSearchCoverFetcherFactory)
-					// Register our custom cover fetcher before OkHttpNetworkFetcherFactory so it can intercept string URLs for Mihon sources
-					add(coverFetcherFactory)
-					add(
-						OkHttpNetworkFetcherFactory(
-							callFactory = okHttpClientLazy::value,
-							connectivityChecker = { networkStateProvider.get() },
-						),
-					)
-					if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-						add(AnimatedImageDecoder.Factory())
-					} else {
-						add(GifDecoder.Factory())
-					}
-					add(SvgDecoder.Factory())
-					add(CbzFetcher.Factory())
-					add(AvifImageDecoder.Factory())
-					add(faviconFetcherFactory)
-					add(ContentPageKeyer())
-					add(pageFetcherFactory)
-					add(imageProxyInterceptor)
-					add(coverRestoreInterceptor)
-					add(ContentSourceHeaderInterceptor())
-					add(org.skepsun.kototoro.cloudstream.runtime.CloudstreamArtworkHeadersInterceptor())
-				}.build()
-		}
+        @Provides
+        @Singleton
+        fun provideCoil(
+            @LocalizedAppContext context: Context,
+            @ContentHttpClient okHttpClientProvider: Provider<OkHttpClient>,
+            faviconFetcherFactory: FaviconFetcher.Factory,
+            imageProxyInterceptor: ImageProxyInterceptor,
+            pageFetcherFactory: ContentPageFetcher.Factory,
+            coverFetcherFactory: org.skepsun.kototoro.core.image.ContentCoverFetcher.Factory,
+            tvBoxSearchCoverFetcherFactory: TVBoxSearchCoverFetcher.Factory,
+            coverRestoreInterceptor: CoverRestoreInterceptor,
+            networkStateProvider: Provider<NetworkState>,
+            captchaHandler: CaptchaHandler,
+            settings: AppSettings,
+        ): ImageLoader {
+            val diskCacheFactory = {
+                val rootDir = context.externalCacheDir ?: context.cacheDir
+                DiskCache.Builder()
+                    .directory(rootDir.resolve(CacheDir.THUMBS.dir))
+                    .maxSizeBytes(FileSize.MEGABYTES.convert(settings.thumbsCacheSizeMb.toLong(), FileSize.BYTES))
+                    .build()
+            }
+            val okHttpClientLazy = lazy {
+                okHttpClientProvider.get().newBuilder().cache(null).build()
+            }
+            return ImageLoader.Builder(context)
+                .interceptorCoroutineContext(Dispatchers.Default)
+                .diskCache(diskCacheFactory)
+                .logger(if (BuildConfig.DEBUG) SuppressingCoilLogger() else null)
+                .allowRgb565(context.isLowRamDevice())
+                .eventListener(captchaHandler)
+                .components {
+                    add(ImageFailureSuppressingInterceptor())
+                    add(tvBoxSearchCoverFetcherFactory)
+                    // Register our custom cover fetcher before OkHttpNetworkFetcherFactory so it can intercept string URLs for Mihon sources
+                    add(coverFetcherFactory)
+                    add(
+                        OkHttpNetworkFetcherFactory(
+                            callFactory = okHttpClientLazy::value,
+                            connectivityChecker = { networkStateProvider.get() },
+                        ),
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        add(AnimatedImageDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                    add(SvgDecoder.Factory())
+                    add(CbzFetcher.Factory())
+                    add(AvifImageDecoder.Factory())
+                    add(faviconFetcherFactory)
+                    add(ContentPageKeyer())
+                    add(pageFetcherFactory)
+                    add(imageProxyInterceptor)
+                    add(coverRestoreInterceptor)
+                    add(ContentSourceHeaderInterceptor())
+                    add(org.skepsun.kototoro.cloudstream.runtime.CloudstreamArtworkHeadersInterceptor())
+                }.build()
+        }
 
-		@Provides
-		fun provideSearchSuggestions(
-			@ApplicationContext context: Context,
-		): SearchRecentSuggestions = ContentSuggestionsProvider.createSuggestions(context)
+        @Provides
+        fun provideSearchSuggestions(
+            @ApplicationContext context: Context,
+        ): SearchRecentSuggestions = ContentSuggestionsProvider.createSuggestions(context)
 
-		@Provides
-		@ElementsIntoSet
-		fun provideDatabaseObservers(
-			widgetUpdater: WidgetUpdater,
-			appShortcutManager: AppShortcutManager,
-			backupObserver: BackupObserver,
-			syncController: SyncController,
-		): Set<@JvmSuppressWildcards InvalidationTracker.Observer> = arraySetOf(
-			widgetUpdater,
-			appShortcutManager,
-			backupObserver,
-			syncController,
-		)
+        @Provides
+        @ElementsIntoSet
+        fun provideDatabaseObservers(
+            widgetUpdater: WidgetUpdater,
+            appShortcutManager: AppShortcutManager,
+            backupObserver: BackupObserver,
+            syncController: SyncController,
+        ): Set<@JvmSuppressWildcards InvalidationTracker.Observer> = arraySetOf(
+            widgetUpdater,
+            appShortcutManager,
+            backupObserver,
+            syncController,
+        )
 
-		@Provides
-		@ElementsIntoSet
-		fun provideActivityLifecycleCallbacks(
-			appProtectHelper: AppProtectHelper,
-			activityRecreationHandle: ActivityRecreationHandle,
-			acraScreenLogger: AcraScreenLogger,
-			screenshotPolicyHelper: ScreenshotPolicyHelper,
-			foregroundActivityHolder: ForegroundActivityHolder,
-			tvBoxActivityLifecycleCallbacks: TVBoxActivityLifecycleCallbacks,
-		): Set<@JvmSuppressWildcards Application.ActivityLifecycleCallbacks> = arraySetOf(
-			appProtectHelper,
-			activityRecreationHandle,
-			acraScreenLogger,
-			screenshotPolicyHelper,
-			foregroundActivityHolder,
-			tvBoxActivityLifecycleCallbacks,
-		)
+        @Provides
+        @ElementsIntoSet
+        fun provideActivityLifecycleCallbacks(
+            appProtectHelper: AppProtectHelper,
+            activityRecreationHandle: ActivityRecreationHandle,
+            acraScreenLogger: AcraScreenLogger,
+            screenshotPolicyHelper: ScreenshotPolicyHelper,
+            foregroundActivityHolder: ForegroundActivityHolder,
+            tvBoxActivityLifecycleCallbacks: TVBoxActivityLifecycleCallbacks,
+        ): Set<@JvmSuppressWildcards Application.ActivityLifecycleCallbacks> = arraySetOf(
+            appProtectHelper,
+            activityRecreationHandle,
+            acraScreenLogger,
+            screenshotPolicyHelper,
+            foregroundActivityHolder,
+            tvBoxActivityLifecycleCallbacks,
+        )
 
-		@Provides
-		@Singleton
-		@LocalStorageChanges
-		fun provideMutableLocalStorageChangesFlow(): MutableSharedFlow<LocalContent?> = MutableSharedFlow()
+        @Provides
+        @Singleton
+        @LocalStorageChanges
+        fun provideMutableLocalStorageChangesFlow(): MutableSharedFlow<LocalContent?> = MutableSharedFlow()
 
-		@Provides
-		@LocalStorageChanges
-		fun provideLocalStorageChangesFlow(
-			@LocalStorageChanges flow: MutableSharedFlow<LocalContent?>,
-		): SharedFlow<LocalContent?> = flow.asSharedFlow()
+        @Provides
+        @LocalStorageChanges
+        fun provideLocalStorageChangesFlow(
+            @LocalStorageChanges flow: MutableSharedFlow<LocalContent?>,
+        ): SharedFlow<LocalContent?> = flow.asSharedFlow()
 
-		@Provides
-		fun provideWorkManager(
-			@ApplicationContext context: Context,
-			workerFactory: HiltWorkerFactory,
-		): WorkManager {
-			return runCatching {
-				WorkManager.getInstance(context)
-			}.getOrElse {
-				WorkManager.initialize(
-					context,
-					Configuration.Builder()
-						.setWorkerFactory(workerFactory)
-						.build(),
-				)
-				WorkManager.getInstance(context)
-			}
-		}
+        @Provides
+        fun provideWorkManager(
+            @ApplicationContext context: Context,
+            workerFactory: HiltWorkerFactory,
+        ): WorkManager {
+            return runCatching {
+                WorkManager.getInstance(context)
+            }.getOrElse {
+                WorkManager.initialize(
+                    context,
+                    Configuration.Builder()
+                        .setWorkerFactory(workerFactory)
+                        .build(),
+                )
+                WorkManager.getInstance(context)
+            }
+        }
 
-		@Provides
-		@Singleton
-		@PageCache
-		fun providePageCache(
-			@ApplicationContext context: Context,
-			settings: AppSettings,
-		) = LocalStorageCache(
-			context = context,
-			dir = CacheDir.PAGES,
-			defaultSize = FileSize.MEGABYTES.convert(settings.pagesCacheSizeMb.toLong(), FileSize.BYTES),
-			minSize = FileSize.MEGABYTES.convert(20, FileSize.BYTES),
-		)
+        @Provides
+        @Singleton
+        @PageCache
+        fun providePageCache(
+            @ApplicationContext context: Context,
+            settings: AppSettings,
+        ) = LocalStorageCache(
+            context = context,
+            dir = CacheDir.PAGES,
+            defaultSize = FileSize.MEGABYTES.convert(settings.pagesCacheSizeMb.toLong(), FileSize.BYTES),
+            minSize = FileSize.MEGABYTES.convert(20, FileSize.BYTES),
+        )
 
-		@Provides
-		@Singleton
-		@FaviconCache
-		fun provideFaviconCache(
-			@ApplicationContext context: Context,
-			settings: AppSettings,
-		) = LocalStorageCache(
-			context = context,
-			dir = CacheDir.FAVICONS,
-			defaultSize = FileSize.MEGABYTES.convert(settings.faviconCacheSizeMb.toLong(), FileSize.BYTES),
-			minSize = FileSize.MEGABYTES.convert(2, FileSize.BYTES),
-		)
+        @Provides
+        @Singleton
+        @FaviconCache
+        fun provideFaviconCache(
+            @ApplicationContext context: Context,
+            settings: AppSettings,
+        ) = LocalStorageCache(
+            context = context,
+            dir = CacheDir.FAVICONS,
+            defaultSize = FileSize.MEGABYTES.convert(settings.faviconCacheSizeMb.toLong(), FileSize.BYTES),
+            minSize = FileSize.MEGABYTES.convert(2, FileSize.BYTES),
+        )
 
-		@Provides
-		@Singleton
-		@NovelCache
-		fun provideNovelCache(
-			@ApplicationContext context: Context,
-			settings: AppSettings,
-		) = LocalStorageCache(
-			context = context,
-			dir = CacheDir.NOVELS,
-			defaultSize = FileSize.MEGABYTES.convert(settings.novelCacheSizeMb.toLong(), FileSize.BYTES),
-			minSize = FileSize.MEGABYTES.convert(10, FileSize.BYTES),
-		)
-	}
+        @Provides
+        @Singleton
+        @NovelCache
+        fun provideNovelCache(
+            @ApplicationContext context: Context,
+            settings: AppSettings,
+        ) = LocalStorageCache(
+            context = context,
+            dir = CacheDir.NOVELS,
+            defaultSize = FileSize.MEGABYTES.convert(settings.novelCacheSizeMb.toLong(), FileSize.BYTES),
+            minSize = FileSize.MEGABYTES.convert(10, FileSize.BYTES),
+        )
+    }
 }

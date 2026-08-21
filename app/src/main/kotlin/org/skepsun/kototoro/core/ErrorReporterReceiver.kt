@@ -17,64 +17,64 @@ import org.skepsun.kototoro.core.util.ext.report
 
 class ErrorReporterReceiver : BroadcastReceiver() {
 
-	override fun onReceive(context: Context?, intent: Intent?) {
-		val e = intent?.getSerializableExtraCompat<Throwable>(AppRouter.KEY_ERROR) ?: return
-		val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
-		if (notificationId != 0 && context != null) {
-			val notificationTag = intent.getStringExtra(EXTRA_NOTIFICATION_TAG)
-			NotificationManagerCompat.from(context).cancel(notificationTag, notificationId)
-		}
-		e.report()
-	}
+    override fun onReceive(context: Context?, intent: Intent?) {
+        val e = intent?.getSerializableExtraCompat<Throwable>(AppRouter.KEY_ERROR) ?: return
+        val notificationId = intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0)
+        if (notificationId != 0 && context != null) {
+            val notificationTag = intent.getStringExtra(EXTRA_NOTIFICATION_TAG)
+            NotificationManagerCompat.from(context).cancel(notificationTag, notificationId)
+        }
+        e.report()
+    }
 
-	companion object {
+    companion object {
 
-		private const val ACTION_REPORT = "${BuildConfig.APPLICATION_ID}.action.REPORT_ERROR"
-		private const val EXTRA_NOTIFICATION_ID = "notify.id"
-		private const val EXTRA_NOTIFICATION_TAG = "notify.tag"
+        private const val ACTION_REPORT = "${BuildConfig.APPLICATION_ID}.action.REPORT_ERROR"
+        private const val EXTRA_NOTIFICATION_ID = "notify.id"
+        private const val EXTRA_NOTIFICATION_TAG = "notify.tag"
 
-		fun getPendingIntent(context: Context, e: Throwable): PendingIntent? = getPendingIntentInternal(
-			context = context,
-			e = e,
-			notificationId = 0,
-			notificationTag = null,
-		)
+        fun getPendingIntent(context: Context, e: Throwable): PendingIntent? = getPendingIntentInternal(
+            context = context,
+            e = e,
+            notificationId = 0,
+            notificationTag = null,
+        )
 
-		fun getNotificationAction(
-			context: Context,
-			e: Throwable,
-			notificationId: Int,
-			notificationTag: String?,
-		): NotificationCompat.Action? {
-			val intent = getPendingIntentInternal(
-				context = context,
-				e = e,
-				notificationId = notificationId,
-				notificationTag = notificationTag,
-			) ?: return null
-			return NotificationCompat.Action(
-				R.drawable.ic_alert_outline,
-				context.getString(R.string.report),
-				intent,
-			)
-		}
+        fun getNotificationAction(
+            context: Context,
+            e: Throwable,
+            notificationId: Int,
+            notificationTag: String?,
+        ): NotificationCompat.Action? {
+            val intent = getPendingIntentInternal(
+                context = context,
+                e = e,
+                notificationId = notificationId,
+                notificationTag = notificationTag,
+            ) ?: return null
+            return NotificationCompat.Action(
+                R.drawable.ic_alert_outline,
+                context.getString(R.string.report),
+                intent,
+            )
+        }
 
-		private fun getPendingIntentInternal(
-			context: Context,
-			e: Throwable,
-			notificationId: Int,
-			notificationTag: String?,
-		): PendingIntent? = runCatching {
-			val intent = Intent(context, ErrorReporterReceiver::class.java)
-			intent.setAction(ACTION_REPORT)
-			intent.setData("err://${e.hashCode()}".toUri())
-			intent.putExtra(AppRouter.KEY_ERROR, e)
-			intent.putExtra(EXTRA_NOTIFICATION_ID, notificationId)
-			intent.putExtra(EXTRA_NOTIFICATION_TAG, notificationTag)
-			PendingIntentCompat.getBroadcast(context, 0, intent, 0, false)
-		}.onFailure { e ->
-			// probably cannot write exception as serializable
-			e.printStackTraceDebug()
-		}.getOrNull()
-	}
+        private fun getPendingIntentInternal(
+            context: Context,
+            e: Throwable,
+            notificationId: Int,
+            notificationTag: String?,
+        ): PendingIntent? = runCatching {
+            val intent = Intent(context, ErrorReporterReceiver::class.java)
+            intent.setAction(ACTION_REPORT)
+            intent.setData("err://${e.hashCode()}".toUri())
+            intent.putExtra(AppRouter.KEY_ERROR, e)
+            intent.putExtra(EXTRA_NOTIFICATION_ID, notificationId)
+            intent.putExtra(EXTRA_NOTIFICATION_TAG, notificationTag)
+            PendingIntentCompat.getBroadcast(context, 0, intent, 0, false)
+        }.onFailure { e ->
+            // probably cannot write exception as serializable
+            e.printStackTraceDebug()
+        }.getOrNull()
+    }
 }

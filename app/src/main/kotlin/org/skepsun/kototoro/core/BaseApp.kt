@@ -51,185 +51,185 @@ import javax.inject.Provider
 
 open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory {
 
-	private val entryPoint: BaseAppEntryPoint by lazy(LazyThreadSafetyMode.NONE) {
-		EntryPointAccessors.fromApplication(this, BaseAppEntryPoint::class.java)
-	}
+    private val entryPoint: BaseAppEntryPoint by lazy(LazyThreadSafetyMode.NONE) {
+        EntryPointAccessors.fromApplication(this, BaseAppEntryPoint::class.java)
+    }
 
-	override val workManagerConfiguration: Configuration
-		get() = Configuration.Builder()
-			.setWorkerFactory(entryPoint.workerFactory())
-			.build()
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(entryPoint.workerFactory())
+            .build()
 
-	override fun newImageLoader(context: Context): ImageLoader {
-		return entryPoint.imageLoader()
-	}
+    override fun newImageLoader(context: Context): ImageLoader {
+        return entryPoint.imageLoader()
+    }
 
-	override fun onCreate() {
-		super.onCreate()
-		try {
-			OkHttp.initialize(this)
-		} catch (e: Throwable) {
-			// Ignore initialization errors
-		}
-		if (ACRA.isACRASenderServiceProcess()) {
-			return
-		}
-		entryPoint.settings().reconcileAfterAppUpgrade(BuildConfig.VERSION_CODE)
-		AppCompatDelegate.setDefaultNightMode(entryPoint.settings().theme)
-		// TLS 1.3 support for Android < 10
-		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-			try {
-				Security.insertProviderAt(Conscrypt.newProvider(), 1)
-			} catch (e: Throwable) {
-				// Ignore
-			}
-		}
-		setupActivityLifecycleCallbacks()
-		processLifecycleScope.launch {
-			runCatching {
-				ACRA.errorReporter.putCustomData("isOriginalApp", entryPoint.appValidator().isOriginalApp.getOrNull().toString())
-				ACRA.errorReporter.putCustomData("isMiui", RomCompat.isMiui.getOrNull().toString())
-			}
-		}
-		if (!entryPoint.settings().isEntityGraphMigrated ||
-			!entryPoint.settings().isLegacyFavouriteProjectionMigrationCompleted
-		) {
-			val request = OneTimeWorkRequestBuilder<org.skepsun.kototoro.entitygraph.work.EntityGraphMigrationWorker>().build()
-			WorkManager.getInstance(this).enqueue(request)
-			entryPoint.settings().isEntityGraphMigrated = true
-		}
-		if (!entryPoint.settings().isLegacyEntityNameCollisionRepairCompleted) {
-			val request = OneTimeWorkRequestBuilder<
-				org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker,
-			>().build()
-			WorkManager.getInstance(this).enqueueUniqueWork(
-				org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker.UNIQUE_WORK_NAME,
-				ExistingWorkPolicy.KEEP,
-				request,
-			)
-		}
-		processLifecycleScope.launch(Dispatchers.Default) {
-			runCatching {
-				if (entryPoint.settings().requiresWorkMigrationNormalization) {
-					entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
-					entryPoint.historyRepository().normalizeWorkHistoryIfNeeded()
-					entryPoint.settings().requiresWorkMigrationNormalization = false
-				}
-				setupDatabaseObservers()
-				entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
-			}
-		}
-		try {
-			entryPoint.workScheduleManager().init()
-		} catch (e: Throwable) {
-			e.printStackTrace()
-		}
-		try {
-			entryPoint.mihonExtensionManager().initialize()
-		} catch (e: Throwable) {
-			e.printStackTrace()
-		}
-		try {
-			entryPoint.aniyomiExtensionManager().initialize()
-		} catch (e: Throwable) {
-			e.printStackTrace()
-		}
-		try {
-			entryPoint.ireaderExtensionManager().initialize()
-		} catch (e: Throwable) {
-			e.printStackTrace()
-		}
-		processLifecycleScope.launch(Dispatchers.IO) {
-			try {
-				BaseAppHolder.setCloudstreamRuntimeManager(entryPoint.cloudstreamRuntimeManager())
-				entryPoint.cloudstreamRuntimeManager().initialize()
-			} catch (e: Throwable) {
-				e.printStackTrace()
-			}
-			try {
-				org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(this@BaseApp)
-			} catch (e: Throwable) {
-				e.printStackTrace()
-			}
-		}
-	}
+    override fun onCreate() {
+        super.onCreate()
+        try {
+            OkHttp.initialize(this)
+        } catch (e: Throwable) {
+            // Ignore initialization errors
+        }
+        if (ACRA.isACRASenderServiceProcess()) {
+            return
+        }
+        entryPoint.settings().reconcileAfterAppUpgrade(BuildConfig.VERSION_CODE)
+        AppCompatDelegate.setDefaultNightMode(entryPoint.settings().theme)
+        // TLS 1.3 support for Android < 10
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            try {
+                Security.insertProviderAt(Conscrypt.newProvider(), 1)
+            } catch (e: Throwable) {
+                // Ignore
+            }
+        }
+        setupActivityLifecycleCallbacks()
+        processLifecycleScope.launch {
+            runCatching {
+                ACRA.errorReporter.putCustomData("isOriginalApp", entryPoint.appValidator().isOriginalApp.getOrNull().toString())
+                ACRA.errorReporter.putCustomData("isMiui", RomCompat.isMiui.getOrNull().toString())
+            }
+        }
+        if (!entryPoint.settings().isEntityGraphMigrated ||
+            !entryPoint.settings().isLegacyFavouriteProjectionMigrationCompleted
+        ) {
+            val request = OneTimeWorkRequestBuilder<org.skepsun.kototoro.entitygraph.work.EntityGraphMigrationWorker>().build()
+            WorkManager.getInstance(this).enqueue(request)
+            entryPoint.settings().isEntityGraphMigrated = true
+        }
+        if (!entryPoint.settings().isLegacyEntityNameCollisionRepairCompleted) {
+            val request = OneTimeWorkRequestBuilder<
+                org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker,
+            >().build()
+            WorkManager.getInstance(this).enqueueUniqueWork(
+                org.skepsun.kototoro.entitygraph.work.EntityNameCollisionRepairWorker.UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
+        }
+        processLifecycleScope.launch(Dispatchers.Default) {
+            runCatching {
+                if (entryPoint.settings().requiresWorkMigrationNormalization) {
+                    entryPoint.favouritesRepository().normalizeWorkFavouritesIfNeeded()
+                    entryPoint.historyRepository().normalizeWorkHistoryIfNeeded()
+                    entryPoint.settings().requiresWorkMigrationNormalization = false
+                }
+                setupDatabaseObservers()
+                entryPoint.localStorageChanges().collect(entryPoint.localContentIndexProvider().get())
+            }
+        }
+        try {
+            entryPoint.workScheduleManager().init()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        try {
+            entryPoint.mihonExtensionManager().initialize()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        try {
+            entryPoint.aniyomiExtensionManager().initialize()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        try {
+            entryPoint.ireaderExtensionManager().initialize()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+        processLifecycleScope.launch(Dispatchers.IO) {
+            try {
+                BaseAppHolder.setCloudstreamRuntimeManager(entryPoint.cloudstreamRuntimeManager())
+                entryPoint.cloudstreamRuntimeManager().initialize()
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+            try {
+                org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(this@BaseApp)
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+        }
+    }
 
-	override fun attachBaseContext(base: Context) {
-		super.attachBaseContext(base)
-		if (ACRA.isACRASenderServiceProcess()) {
-			return
-		}
-		initAcra {
-			buildConfigClass = BuildConfig::class.java
-			reportFormat = StringFormat.JSON
-			httpSender {
-				uri = getString(R.string.url_error_report)
-				basicAuthLogin = getString(R.string.acra_login)
-				basicAuthPassword = getString(R.string.acra_password)
-				httpMethod = HttpSender.Method.POST
-			}
-			reportContent = listOf(
-				ReportField.PACKAGE_NAME,
-				ReportField.INSTALLATION_ID,
-				ReportField.APP_VERSION_CODE,
-				ReportField.APP_VERSION_NAME,
-				ReportField.ANDROID_VERSION,
-				ReportField.PHONE_MODEL,
-				ReportField.STACK_TRACE,
-				ReportField.CRASH_CONFIGURATION,
-				ReportField.CUSTOM_DATA,
-			)
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        if (ACRA.isACRASenderServiceProcess()) {
+            return
+        }
+        initAcra {
+            buildConfigClass = BuildConfig::class.java
+            reportFormat = StringFormat.JSON
+            httpSender {
+                uri = getString(R.string.url_error_report)
+                basicAuthLogin = getString(R.string.acra_login)
+                basicAuthPassword = getString(R.string.acra_password)
+                httpMethod = HttpSender.Method.POST
+            }
+            reportContent = listOf(
+                ReportField.PACKAGE_NAME,
+                ReportField.INSTALLATION_ID,
+                ReportField.APP_VERSION_CODE,
+                ReportField.APP_VERSION_NAME,
+                ReportField.ANDROID_VERSION,
+                ReportField.PHONE_MODEL,
+                ReportField.STACK_TRACE,
+                ReportField.CRASH_CONFIGURATION,
+                ReportField.CUSTOM_DATA,
+            )
 
-			dialog {
-				text = getString(R.string.crash_text)
-				title = getString(R.string.error_occurred)
-				positiveButtonText = getString(R.string.send)
-				resIcon = R.drawable.ic_alert_outline
-				resTheme = android.R.style.Theme_Material_Light_Dialog_Alert
-			}
-		}
-		org.skepsun.kototoro.core.logs.CrashLogWriter.install(this)
-	}
+            dialog {
+                text = getString(R.string.crash_text)
+                title = getString(R.string.error_occurred)
+                positiveButtonText = getString(R.string.send)
+                resIcon = R.drawable.ic_alert_outline
+                resTheme = android.R.style.Theme_Material_Light_Dialog_Alert
+            }
+        }
+        org.skepsun.kototoro.core.logs.CrashLogWriter.install(this)
+    }
 
-	@WorkerThread
-	private fun setupDatabaseObservers() {
-		val tracker = entryPoint.database().get().invalidationTracker
-		entryPoint.databaseObserversProvider().get().forEach {
-			tracker.addObserver(it)
-		}
-	}
+    @WorkerThread
+    private fun setupDatabaseObservers() {
+        val tracker = entryPoint.database().get().invalidationTracker
+        entryPoint.databaseObserversProvider().get().forEach {
+            tracker.addObserver(it)
+        }
+    }
 
-	private fun setupActivityLifecycleCallbacks() {
-		entryPoint.activityLifecycleCallbacks().forEach {
-			registerActivityLifecycleCallbacks(it)
-		}
-	}
+    private fun setupActivityLifecycleCallbacks() {
+        entryPoint.activityLifecycleCallbacks().forEach {
+            registerActivityLifecycleCallbacks(it)
+        }
+    }
 
-	@EntryPoint
-	@InstallIn(SingletonComponent::class)
-	interface BaseAppEntryPoint {
-		fun databaseObserversProvider(): Provider<Set<@JvmSuppressWildcards InvalidationTracker.Observer>>
-		fun activityLifecycleCallbacks(): Set<@JvmSuppressWildcards ActivityLifecycleCallbacks>
-		fun database(): Provider<MangaDatabase>
-		fun settings(): AppSettings
-		fun workerFactory(): HiltWorkerFactory
-		fun appValidator(): AppValidator
-		fun workScheduleManager(): WorkScheduleManager
-		fun localContentIndexProvider(): Provider<LocalContentIndex>
-		@LocalStorageChanges
-		fun localStorageChanges(): MutableSharedFlow<LocalContent?>
-		fun mihonExtensionManager(): MihonExtensionManager
-		fun aniyomiExtensionManager(): AniyomiExtensionManager
-		fun ireaderExtensionManager(): IReaderExtensionManager
-		fun captchaAutoResolveCoordinator(): org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
-		fun cloudstreamRuntimeManager(): org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
-		fun jsonSourceManager(): org.skepsun.kototoro.core.jsonsource.JsonSourceManager
-		fun externalExtensionRepoRepository(): org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
-		fun extensionInstallService(): org.skepsun.kototoro.extensions.install.ExtensionInstallService
-		fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
-		fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
-		fun historyRepository(): org.skepsun.kototoro.history.data.HistoryRepository
-		fun workResolver(): org.skepsun.kototoro.work.domain.WorkResolver
-		fun imageLoader(): ImageLoader
-	}
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface BaseAppEntryPoint {
+        fun databaseObserversProvider(): Provider<Set<@JvmSuppressWildcards InvalidationTracker.Observer>>
+        fun activityLifecycleCallbacks(): Set<@JvmSuppressWildcards ActivityLifecycleCallbacks>
+        fun database(): Provider<MangaDatabase>
+        fun settings(): AppSettings
+        fun workerFactory(): HiltWorkerFactory
+        fun appValidator(): AppValidator
+        fun workScheduleManager(): WorkScheduleManager
+        fun localContentIndexProvider(): Provider<LocalContentIndex>
+        @LocalStorageChanges
+        fun localStorageChanges(): MutableSharedFlow<LocalContent?>
+        fun mihonExtensionManager(): MihonExtensionManager
+        fun aniyomiExtensionManager(): AniyomiExtensionManager
+        fun ireaderExtensionManager(): IReaderExtensionManager
+        fun captchaAutoResolveCoordinator(): org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
+        fun cloudstreamRuntimeManager(): org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
+        fun jsonSourceManager(): org.skepsun.kototoro.core.jsonsource.JsonSourceManager
+        fun externalExtensionRepoRepository(): org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
+        fun extensionInstallService(): org.skepsun.kototoro.extensions.install.ExtensionInstallService
+        fun contentSourcesRepository(): org.skepsun.kototoro.explore.data.ContentSourcesRepository
+        fun favouritesRepository(): org.skepsun.kototoro.favourites.domain.FavouritesRepository
+        fun historyRepository(): org.skepsun.kototoro.history.data.HistoryRepository
+        fun workResolver(): org.skepsun.kototoro.work.domain.WorkResolver
+        fun imageLoader(): ImageLoader
+    }
 }
