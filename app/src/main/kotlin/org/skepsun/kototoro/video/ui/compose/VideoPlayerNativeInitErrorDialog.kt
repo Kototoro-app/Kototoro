@@ -9,14 +9,14 @@ import org.skepsun.kototoro.R
 
 @Composable
 internal fun VideoPlayerNativeInitErrorDialog(onDismissRequest: () -> Unit) {
-	AlertDialog(
-		onDismissRequest = onDismissRequest,
-		title = { Text(stringResource(R.string.error_occurred)) },
-		text = { Text(stringResource(R.string.video_player_native_init_failed)) },
-		confirmButton = {
-			TextButton(onClick = onDismissRequest) {
-				Text(stringResource(android.R.string.ok))
-			}
-		},
-	)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(stringResource(R.string.error_occurred)) },
+        text = { Text(stringResource(R.string.video_player_native_init_failed)) },
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(android.R.string.ok))
+            }
+        },
+    )
 }

@@ -12,13 +12,13 @@ import io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory
 @UnstableApi
 internal class CloudStreamCompatibleRenderersFactory(context: Context) : NextRenderersFactory(context) {
 
-	override fun buildTextRenderers(
-		context: Context,
-		output: TextOutput,
-		outputLooper: Looper,
-		extensionRendererMode: Int,
-		out: ArrayList<Renderer>,
-	) {
-		out.add(TextRenderer(output, outputLooper))
-	}
+    override fun buildTextRenderers(
+        context: Context,
+        output: TextOutput,
+        outputLooper: Looper,
+        extensionRendererMode: Int,
+        out: ArrayList<Renderer>,
+    ) {
+        out.add(TextRenderer(output, outputLooper))
+    }
 }

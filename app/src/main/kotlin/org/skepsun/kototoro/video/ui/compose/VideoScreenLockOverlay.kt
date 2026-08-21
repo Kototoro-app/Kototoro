@@ -23,27 +23,27 @@ import org.skepsun.kototoro.R
 
 @Composable
 internal fun VideoScreenLockOverlay(
-	locked: Boolean,
-	unlockButtonVisible: Boolean,
-	onLockedAreaClick: () -> Unit,
-	onUnlockClick: () -> Unit,
+    locked: Boolean,
+    unlockButtonVisible: Boolean,
+    onLockedAreaClick: () -> Unit,
+    onUnlockClick: () -> Unit,
 ) {
-	if (!locked) return
-	Box(
-		contentAlignment = Alignment.Center,
-		modifier = Modifier.fillMaxSize().clickable(onClick = onLockedAreaClick),
-	) {
-		AnimatedVisibility(visible = unlockButtonVisible, enter = fadeIn(), exit = fadeOut()) {
-			IconButton(
-				onClick = onUnlockClick,
-				modifier = Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.58f), CircleShape),
-			) {
-				Icon(
-					imageVector = Icons.Filled.LockOpen,
-					contentDescription = stringResource(R.string.video_screen_unlock),
-					tint = Color.White,
-				)
-			}
-		}
-	}
+    if (!locked) return
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize().clickable(onClick = onLockedAreaClick),
+    ) {
+        AnimatedVisibility(visible = unlockButtonVisible, enter = fadeIn(), exit = fadeOut()) {
+            IconButton(
+                onClick = onUnlockClick,
+                modifier = Modifier.size(64.dp).background(Color.Black.copy(alpha = 0.58f), CircleShape),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.LockOpen,
+                    contentDescription = stringResource(R.string.video_screen_unlock),
+                    tint = Color.White,
+                )
+            }
+        }
+    }
 }

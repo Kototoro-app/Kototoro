@@ -508,12 +508,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
     // 定期保存播放进度（每5秒）
     private val progressSaveIntervalMs = 5000L
-	private val progressSaveRunnable = object : Runnable {
-		override fun run() {
-			savePlaybackProgress()
-			playerRoot.postDelayed(this, progressSaveIntervalMs)
-		}
-	}
+    private val progressSaveRunnable = object : Runnable {
+        override fun run() {
+            savePlaybackProgress()
+            playerRoot.postDelayed(this, progressSaveIntervalMs)
+        }
+    }
     // 长按持续快进/快退配置与状?
     private val longSeekIntervalMs = 200
     private val longSeekStepMs = 2000
@@ -1029,7 +1029,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         // 首次进入默认显示 UI（标题与底栏控件），之后按超时自动隐?
         setUiIsVisible(true)
-		applyControlsAlpha()
+        applyControlsAlpha()
 
         // 初始化音量与亮度上下?
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -4205,13 +4205,13 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         }) {
             // 先确保漫画详情含章节
             // 防御性拦截：如果 mangaSeed ?URL 是本地文件协议，绝对不能交给在线解析器，否则必定抛错
-	            val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
-	                if (mangaSeed.url.startsWith("file://")) {
-	                    android.util.Log.d("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
-	                    val dbContent = contentDataRepository.findPreferredLocalContentById(mangaSeed.id, withChapters = true)
-	                        ?: contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
-	                    dbContent ?: mangaSeed
-	                } else {
+                val manga = if (mangaSeed.chapters.isNullOrEmpty()) {
+                    if (mangaSeed.url.startsWith("file://")) {
+                        android.util.Log.d("VideoPlayer", "Cannot load details from source for local file URL: ${mangaSeed.url}")
+                        val dbContent = contentDataRepository.findPreferredLocalContentById(mangaSeed.id, withChapters = true)
+                            ?: contentDataRepository.findContentById(mangaSeed.id, withChapters = true)
+                        dbContent ?: mangaSeed
+                    } else {
                     val repo = mangaRepositoryFactory.create(mangaSeed.source)
                     runCatching { repo.getDetails(mangaSeed) }.getOrDefault(mangaSeed)
                 }
@@ -4555,30 +4555,30 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         onChapterSelected(targetChapter)
     }
 
-	private fun maybeAutoPlayNext(ignoreRatio: Boolean = false) {
-		if (!appSettings.videoAutoNextEnabled || autoNextTriggered) return
-		val duration = videoPlayer?.durationMs ?: 0L
-		val position = videoPlayer?.positionMs ?: 0L
-		if (duration <= 0L) {
-			android.util.Log.d("VideoPlayer", "AutoNext skipped: duration=0")
-			return
-		}
-		val ratio = position.toDouble() / duration.toDouble()
-		if (!ignoreRatio && ratio < 0.98) {
-			android.util.Log.d("VideoPlayer", "AutoNext skipped: ratio=$ratio pos=$position dur=$duration")
-			return
-		}
-		val manga = currentMangaContent() ?: return
-		val chapters = manga.chapters ?: return
-		if (chapters.isEmpty()) return
-		val currentId = readerState?.chapterId ?: chapters.first().id
-		val currentIndex = chapters.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: return
-		if (currentIndex < chapters.lastIndex) {
-			android.util.Log.i("VideoPlayerActivity", "AutoNext successfully triggered. Navigating to index ${currentIndex + 1}.")
-			autoNextTriggered = true
-			navigateChapter(+1)
-		}
-	}
+    private fun maybeAutoPlayNext(ignoreRatio: Boolean = false) {
+        if (!appSettings.videoAutoNextEnabled || autoNextTriggered) return
+        val duration = videoPlayer?.durationMs ?: 0L
+        val position = videoPlayer?.positionMs ?: 0L
+        if (duration <= 0L) {
+            android.util.Log.d("VideoPlayer", "AutoNext skipped: duration=0")
+            return
+        }
+        val ratio = position.toDouble() / duration.toDouble()
+        if (!ignoreRatio && ratio < 0.98) {
+            android.util.Log.d("VideoPlayer", "AutoNext skipped: ratio=$ratio pos=$position dur=$duration")
+            return
+        }
+        val manga = currentMangaContent() ?: return
+        val chapters = manga.chapters ?: return
+        if (chapters.isEmpty()) return
+        val currentId = readerState?.chapterId ?: chapters.first().id
+        val currentIndex = chapters.indexOfFirst { it.id == currentId }.takeIf { it >= 0 } ?: return
+        if (currentIndex < chapters.lastIndex) {
+            android.util.Log.i("VideoPlayerActivity", "AutoNext successfully triggered. Navigating to index ${currentIndex + 1}.")
+            autoNextTriggered = true
+            navigateChapter(+1)
+        }
+    }
 
     override fun onBookmarkSelected(bookmark: Bookmark): Boolean {
         // Video player doesn't support bookmarks

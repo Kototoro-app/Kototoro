@@ -19,32 +19,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 internal data class VideoSeekFeedbackState(
-	val text: String,
-	val progress: Float,
+    val text: String,
+    val progress: Float,
 )
 
 @Composable
 internal fun VideoSeekFeedback(state: VideoSeekFeedbackState) {
-	Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-		Column(
-			horizontalAlignment = Alignment.CenterHorizontally,
-			modifier = Modifier
-				.width(200.dp)
-				.background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(6.dp))
-				.padding(16.dp),
-		) {
-			Text(
-				text = state.text,
-				color = Color.White,
-				style = MaterialTheme.typography.titleMedium,
-				textAlign = TextAlign.Center,
-			)
-			LinearProgressIndicator(
-				progress = { state.progress.coerceIn(0f, 1f) },
-				color = MaterialTheme.colorScheme.tertiary,
-				trackColor = Color.White.copy(alpha = 0.27f),
-				modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-			)
-		}
-	}
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .width(200.dp)
+                .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(6.dp))
+                .padding(16.dp),
+        ) {
+            Text(
+                text = state.text,
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+            )
+            LinearProgressIndicator(
+                progress = { state.progress.coerceIn(0f, 1f) },
+                color = MaterialTheme.colorScheme.tertiary,
+                trackColor = Color.White.copy(alpha = 0.27f),
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+            )
+        }
+    }
 }

@@ -26,57 +26,57 @@ import org.skepsun.kototoro.R
 
 @Composable
 internal fun VideoPlayerInfoDialog(
-	details: String,
-	onDismissRequest: () -> Unit,
+    details: String,
+    onDismissRequest: () -> Unit,
 ) {
-	val dialogShape = RoundedCornerShape(18.dp)
-	AlertDialog(
-		onDismissRequest = onDismissRequest,
-		title = {
-			Row(
-				verticalAlignment = Alignment.CenterVertically,
-				modifier = Modifier.fillMaxWidth(),
-			) {
-				Text(
-					text = stringResource(R.string.video_detail),
-					color = Color.White,
-					modifier = Modifier.weight(1f),
-				)
-				IconButton(
-					onClick = onDismissRequest,
-					modifier = Modifier.size(40.dp),
-				) {
-					Icon(
-						imageVector = Icons.Default.Close,
-						contentDescription = stringResource(R.string.close),
-						tint = Color.White,
-					)
-				}
-			}
-		},
-		text = {
-			SelectionContainer {
-				Text(
-					text = details,
-					fontFamily = FontFamily.Monospace,
-					color = Color.White.copy(alpha = 0.82f),
-					modifier = Modifier
-						.fillMaxWidth()
-						.heightIn(max = 480.dp)
-						.verticalScroll(rememberScrollState()),
-				)
-			}
-		},
-		confirmButton = {},
-		shape = dialogShape,
-		containerColor = Color.Black.copy(alpha = 0.86f),
-		titleContentColor = Color.White,
-		textContentColor = Color.White.copy(alpha = 0.82f),
-		tonalElevation = 0.dp,
-		modifier = Modifier.border(
-			width = 1.dp,
-			color = Color.White.copy(alpha = 0.16f),
-			shape = dialogShape,
-		),
-	)
+    val dialogShape = RoundedCornerShape(18.dp)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.video_detail),
+                    color = Color.White,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    onClick = onDismissRequest,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.close),
+                        tint = Color.White,
+                    )
+                }
+            }
+        },
+        text = {
+            SelectionContainer {
+                Text(
+                    text = details,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.White.copy(alpha = 0.82f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 480.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+        },
+        confirmButton = {},
+        shape = dialogShape,
+        containerColor = Color.Black.copy(alpha = 0.86f),
+        titleContentColor = Color.White,
+        textContentColor = Color.White.copy(alpha = 0.82f),
+        tonalElevation = 0.dp,
+        modifier = Modifier.border(
+            width = 1.dp,
+            color = Color.White.copy(alpha = 0.16f),
+            shape = dialogShape,
+        ),
+    )
 }

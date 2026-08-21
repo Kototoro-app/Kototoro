@@ -21,58 +21,58 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.video.dlna.DlnaDevice
 
 internal sealed interface DlnaDeviceDialogState {
-	data object Loading : DlnaDeviceDialogState
-	data class Devices(val devices: List<DlnaDevice>) : DlnaDeviceDialogState
-	data class Casting(val device: DlnaDevice) : DlnaDeviceDialogState
+    data object Loading : DlnaDeviceDialogState
+    data class Devices(val devices: List<DlnaDevice>) : DlnaDeviceDialogState
+    data class Casting(val device: DlnaDevice) : DlnaDeviceDialogState
 }
 
 @Composable
 internal fun DlnaDeviceDialog(
-	state: DlnaDeviceDialogState,
-	onDismissRequest: () -> Unit,
-	onDeviceSelected: (DlnaDevice) -> Unit,
+    state: DlnaDeviceDialogState,
+    onDismissRequest: () -> Unit,
+    onDeviceSelected: (DlnaDevice) -> Unit,
 ) {
-	AlertDialog(
-		onDismissRequest = onDismissRequest,
-		title = { Text(stringResource(R.string.cast_to_device)) },
-		text = {
-			when (state) {
-				DlnaDeviceDialogState.Loading -> LoadingContent()
-				is DlnaDeviceDialogState.Casting -> LoadingContent(state.device.name)
-				is DlnaDeviceDialogState.Devices -> {
-					if (state.devices.isEmpty()) {
-						Text(stringResource(R.string.no_dlna_devices_found))
-					} else {
-						LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
-							items(state.devices, key = DlnaDevice::location) { device ->
-								Text(
-									text = device.name,
-									modifier = Modifier
-										.fillMaxWidth()
-										.clickable { onDeviceSelected(device) }
-										.padding(vertical = 14.dp),
-								)
-							}
-						}
-					}
-				}
-			}
-		},
-		confirmButton = {},
-		dismissButton = {
-			TextButton(onClick = onDismissRequest) {
-				Text(stringResource(android.R.string.cancel))
-			}
-		},
-	)
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text(stringResource(R.string.cast_to_device)) },
+        text = {
+            when (state) {
+                DlnaDeviceDialogState.Loading -> LoadingContent()
+                is DlnaDeviceDialogState.Casting -> LoadingContent(state.device.name)
+                is DlnaDeviceDialogState.Devices -> {
+                    if (state.devices.isEmpty()) {
+                        Text(stringResource(R.string.no_dlna_devices_found))
+                    } else {
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                            items(state.devices, key = DlnaDevice::location) { device ->
+                                Text(
+                                    text = device.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onDeviceSelected(device) }
+                                        .padding(vertical = 14.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
 }
 
 @Composable
 private fun LoadingContent(label: String? = null) {
-	Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-		Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
-			CircularProgressIndicator()
-		}
-		label?.let { Text(it) }
-	}
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        label?.let { Text(it) }
+    }
 }
