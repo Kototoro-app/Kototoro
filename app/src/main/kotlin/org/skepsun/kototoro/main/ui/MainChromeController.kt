@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui
 
 import android.view.View
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +23,7 @@ import org.skepsun.kototoro.search.ui.suggestion.SearchSuggestionViewModel
  * active [SearchBarFilterCallback]. [MainActivity] keeps a thin delegating surface for
  * external callers and still performs navigation/persistence.
  */
+@Stable
 class MainChromeController(
     private val settings: AppSettings,
     private val searchSuggestionViewModel: SearchSuggestionViewModel,
@@ -33,22 +35,33 @@ class MainChromeController(
     var containerBottomInsetPx = 0
 
     var searchQuery by mutableStateOf("")
+        private set
     var searchNavigationRequest by mutableStateOf<SearchNavigationRequest?>(null)
-    var nextSearchRequestId = 0L
+        private set
+    private var nextSearchRequestId = 0L
 
     private val activeFilterCallbacks = LinkedHashSet<SearchBarFilterCallback>()
     var currentFilterCallback: SearchBarFilterCallback? = null
+        private set
 
     // Highlights the states MainActivity feeds into the shell (kept as plain
     // properties; the shell reads them as Compose state through these vars).
     var activeFilterContentType by mutableStateOf<ContentType?>(null)
+        private set
     var activeFilterSourceTags by mutableStateOf<Set<SourceTag>>(emptySet())
+        private set
     var isLanguagePresetFilterVisible by mutableStateOf(false)
+        private set
     var isContentTypeFilterVisible by mutableStateOf(true)
+        private set
     var isSourceTagFilterVisible by mutableStateOf(true)
+        private set
     var availableSourceTags by mutableStateOf(SourceTag.quickFilterEntries)
+        private set
     var enabledSourceTags by mutableStateOf(SourceTag.quickFilterEntries.toSet())
+        private set
     var enabledContentTypes by mutableStateOf(allTopBarContentTypes())
+        private set
 
     fun setActiveFilterCallback(callback: SearchBarFilterCallback) {
         activeFilterCallbacks.remove(callback)
@@ -134,6 +147,15 @@ class MainChromeController(
     fun consumeSearchNavigation() {
         clearSearchQuery()
         searchNavigationRequest = null
+    }
+
+    fun restoreSearchQuery(value: String) {
+        searchQuery = value
+    }
+
+    fun requestSearchNavigation(request: SearchNavigationRequest) {
+        nextSearchRequestId += 1
+        searchNavigationRequest = request.copy(requestId = nextSearchRequestId)
     }
 
     fun syncSearchSuggestionFilters() {

@@ -164,7 +164,7 @@ class MainActivity : BaseComposeActivity() {
             searchSuggestionViewModel = searchSuggestionViewModel,
             decorViewProvider = { window.decorView },
         )
-        topBarController.searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
+        topBarController.restoreSearchQuery(savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty())
         topBarController.applyConfiguredLanguagePreset()
 
         composeNavBarDelegator = ComposeAppNavBarDelegator(navStateFlow)
@@ -733,23 +733,24 @@ class MainActivity : BaseComposeActivity() {
         pinnedOnly: Boolean = false,
         hideEmpty: Boolean = false,
     ) {
-        topBarController.nextSearchRequestId += 1
-        topBarController.searchNavigationRequest = SearchNavigationRequest(
-            query = query,
-            kind = kind,
-            sourceTypes = sourceTypes,
-            contentKinds = contentKinds,
-            advancedQuery = AdvancedSearchParams(
+        topBarController.requestSearchNavigation(
+            SearchNavigationRequest(
                 query = query,
-                title = advancedTitle.orEmpty(),
-                tags = advancedTags.orEmpty(),
-                author = advancedAuthor.orEmpty(),
-            ).takeIf {
-                it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank()
-            },
-            pinnedOnly = pinnedOnly,
-            hideEmpty = hideEmpty,
-            requestId = topBarController.nextSearchRequestId,
+                kind = kind,
+                sourceTypes = sourceTypes,
+                contentKinds = contentKinds,
+                advancedQuery = AdvancedSearchParams(
+                    query = query,
+                    title = advancedTitle.orEmpty(),
+                    tags = advancedTags.orEmpty(),
+                    author = advancedAuthor.orEmpty(),
+                ).takeIf {
+                    it.title.isNotBlank() || it.tags.isNotBlank() || it.author.isNotBlank()
+                },
+                pinnedOnly = pinnedOnly,
+                hideEmpty = hideEmpty,
+                requestId = 0L,
+            ),
         )
     }
 
