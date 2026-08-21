@@ -7,12 +7,12 @@ import org.skepsun.kototoro.core.db.TABLE_SOURCE_PRESETS
 
 @Entity(tableName = TABLE_SOURCE_PRESETS)
 data class SourcePresetEntity(
-	@PrimaryKey(autoGenerate = true)
-	@ColumnInfo(name = "preset_id") val presetId: Long,
-	@ColumnInfo(name = "title") val title: String,
-	@ColumnInfo(name = "languages") val languages: String,
-	@ColumnInfo(name = "sources") val sources: String,
-	@ColumnInfo(name = "created_at") val createdAt: Long,
-	@ColumnInfo(name = "sort_key") val sortKey: Int,
-	@ColumnInfo(name = "deleted_at") val deletedAt: Long,
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "preset_id") val presetId: Long,
+    @ColumnInfo(name = "title") val title: String,
+    @ColumnInfo(name = "languages") val languages: String,
+    @ColumnInfo(name = "sources") val sources: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "sort_key") val sortKey: Int,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long,
 )

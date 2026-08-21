@@ -19,37 +19,37 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SourcePresetListViewModel @Inject constructor(
-	private val presetsRepository: SourcePresetsRepository,
-	private val settings: AppSettings,
-	private val sourcesRepository: ContentSourcesRepository,
+    private val presetsRepository: SourcePresetsRepository,
+    private val settings: AppSettings,
+    private val sourcesRepository: ContentSourcesRepository,
 ) : BaseViewModel() {
 
-	val presets: StateFlow<List<SourcePreset>> = presetsRepository.observeAll()
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+    val presets: StateFlow<List<SourcePreset>> = presetsRepository.observeAll()
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
-	val onPresetDeleted = MutableEventFlow<Unit>()
+    val onPresetDeleted = MutableEventFlow<Unit>()
 
-	val activePresetId: StateFlow<Long> = settings.observeAsStateFlow(
-		scope = viewModelScope + Dispatchers.Default,
-		key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
-		valueProducer = { activeSourcePresetId },
-	)
+    val activePresetId: StateFlow<Long> = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID,
+        valueProducer = { activeSourcePresetId },
+    )
 
-	fun setActivePreset(presetId: Long) {
-		settings.activeSourcePresetId = presetId
-	}
+    fun setActivePreset(presetId: Long) {
+        settings.activeSourcePresetId = presetId
+    }
 
-	fun countSourcesForPreset(preset: SourcePreset): Int {
-		return preset.sources.size
-	}
+    fun countSourcesForPreset(preset: SourcePreset): Int {
+        return preset.sources.size
+    }
 
-	fun deletePreset(presetId: Long) {
-		launchJob(Dispatchers.Default) {
-			if (settings.activeSourcePresetId == presetId) {
-				settings.activeSourcePresetId = -1L
-			}
-			presetsRepository.deletePreset(presetId)
-			onPresetDeleted.call(Unit)
-		}
-	}
+    fun deletePreset(presetId: Long) {
+        launchJob(Dispatchers.Default) {
+            if (settings.activeSourcePresetId == presetId) {
+                settings.activeSourcePresetId = -1L
+            }
+            presetsRepository.deletePreset(presetId)
+            onPresetDeleted.call(Unit)
+        }
+    }
 }
