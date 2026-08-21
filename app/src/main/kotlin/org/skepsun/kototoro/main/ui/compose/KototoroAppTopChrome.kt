@@ -40,6 +40,8 @@ import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -333,3 +335,16 @@ private fun MainSelectionTopChrome(
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun FeedDisplayOptionsContentPreview() {
+    KototoroTheme {
+        FeedDisplayOptionsContent(
+            showAllUpdates = true,
+            onShowAllUpdatesChanged = {},
+            feedLimit = 100,
+            onFeedLimitChanged = {},
+            onFeedRefresh = {},
+        )
+    }
+}

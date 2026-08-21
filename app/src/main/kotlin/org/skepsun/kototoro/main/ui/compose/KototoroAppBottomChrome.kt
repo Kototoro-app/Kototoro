@@ -39,6 +39,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
+import androidx.compose.ui.tooling.preview.Preview
+import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 
 @Composable
 internal fun ContinueReadingFab(
@@ -203,3 +205,14 @@ internal fun BoxScope.MainBottomChrome(
     }
 }
 
+@Preview(showBackground = true)
+@Composable
+private fun ContinueReadingFabPreview() {
+    KototoroTheme {
+        ContinueReadingFab(
+            onClick = {},
+            action = MainResumeAction.READ,
+            coverModel = null,
+        )
+    }
+}
