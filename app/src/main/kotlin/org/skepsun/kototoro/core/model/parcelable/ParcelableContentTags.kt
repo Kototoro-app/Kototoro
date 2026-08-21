@@ -9,17 +9,17 @@ import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 
 object ContentTagParceler : Parceler<ContentTag> {
-	override fun create(parcel: Parcel) = ContentTag(
-		title = requireNotNull(parcel.readString()),
-		key = requireNotNull(parcel.readString()),
-		source = ContentSource(parcel.readString()),
-	)
+    override fun create(parcel: Parcel) = ContentTag(
+        title = requireNotNull(parcel.readString()),
+        key = requireNotNull(parcel.readString()),
+        source = ContentSource(parcel.readString()),
+    )
 
-	override fun ContentTag.write(parcel: Parcel, flags: Int) {
-		parcel.writeString(title)
-		parcel.writeString(key)
-		parcel.writeString(source.name)
-	}
+    override fun ContentTag.write(parcel: Parcel, flags: Int) {
+        parcel.writeString(title)
+        parcel.writeString(key)
+        parcel.writeString(source.name)
+    }
 }
 
 @Parcelize

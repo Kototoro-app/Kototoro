@@ -6,54 +6,54 @@ import java.util.Locale
 private val TRADITIONAL_CHINESE_REGIONS = setOf("HK", "MO", "TW")
 
 private fun Locale.usesTraditionalChinese(): Boolean =
-	language == Locale.CHINESE.language &&
-		(script.equals("Hant", ignoreCase = true) || country.uppercase(Locale.ROOT) in TRADITIONAL_CHINESE_REGIONS)
+    language == Locale.CHINESE.language &&
+        (script.equals("Hant", ignoreCase = true) || country.uppercase(Locale.ROOT) in TRADITIONAL_CHINESE_REGIONS)
 
 enum class TaxonomyCategory(val id: String, val englishLabel: String, val chineseLabel: String) {
-	GENRE("genre", "Genre", "题材"),
-	THEME("theme", "Theme", "主题"),
-	SETTING("setting", "Setting", "设定"),
-	CHARACTER("character", "Character", "角色"),
-	RELATIONSHIP("relationship", "Relationship", "人物关系"),
-	NARRATIVE("narrative", "Narrative", "叙事"),
-	ELEMENT("element", "Element", "元素"),
-	TONE("tone", "Tone", "氛围"),
-	FORMAT("format", "Format", "作品形式"),
-	AUDIENCE("audience", "Audience", "受众"),
-	WARNING("warning", "Content warning", "内容提示"),
-	RAW("raw", "Source tags", "来源标签"),
-	;
+    GENRE("genre", "Genre", "题材"),
+    THEME("theme", "Theme", "主题"),
+    SETTING("setting", "Setting", "设定"),
+    CHARACTER("character", "Character", "角色"),
+    RELATIONSHIP("relationship", "Relationship", "人物关系"),
+    NARRATIVE("narrative", "Narrative", "叙事"),
+    ELEMENT("element", "Element", "元素"),
+    TONE("tone", "Tone", "氛围"),
+    FORMAT("format", "Format", "作品形式"),
+    AUDIENCE("audience", "Audience", "受众"),
+    WARNING("warning", "Content warning", "内容提示"),
+    RAW("raw", "Source tags", "来源标签"),
+    ;
 
-	val traditionalChineseLabel: String by lazy { ChineseConverter.s2t(chineseLabel) }
+    val traditionalChineseLabel: String by lazy { ChineseConverter.s2t(chineseLabel) }
 
-	fun displayName(locale: Locale = Locale.getDefault()): String = when {
-		locale.usesTraditionalChinese() -> traditionalChineseLabel
-		locale.language == Locale.CHINESE.language -> chineseLabel
-		else -> englishLabel
-	}
+    fun displayName(locale: Locale = Locale.getDefault()): String = when {
+        locale.usesTraditionalChinese() -> traditionalChineseLabel
+        locale.language == Locale.CHINESE.language -> chineseLabel
+        else -> englishLabel
+    }
 
-	companion object {
-		fun fromTagId(id: String): TaxonomyCategory? =
-			entries.firstOrNull { id.startsWith("${it.id}.") }
-	}
+    companion object {
+        fun fromTagId(id: String): TaxonomyCategory? =
+            entries.firstOrNull { id.startsWith("${it.id}.") }
+    }
 }
 
 data class TaxonomyTag(
-	val id: String,
-	val category: TaxonomyCategory,
-	val englishLabel: String,
-	val chineseLabel: String,
-	val traditionalChineseLabel: String = ChineseConverter.s2t(chineseLabel),
-	val aliases: Set<String> = emptySet(),
-	val adult: Boolean = false,
-	val sensitive: Boolean = category == TaxonomyCategory.WARNING,
-	val deprecated: Boolean = false,
+    val id: String,
+    val category: TaxonomyCategory,
+    val englishLabel: String,
+    val chineseLabel: String,
+    val traditionalChineseLabel: String = ChineseConverter.s2t(chineseLabel),
+    val aliases: Set<String> = emptySet(),
+    val adult: Boolean = false,
+    val sensitive: Boolean = category == TaxonomyCategory.WARNING,
+    val deprecated: Boolean = false,
 ) {
-	fun displayName(locale: Locale = Locale.getDefault()): String = when {
-		locale.usesTraditionalChinese() -> traditionalChineseLabel
-		locale.language == Locale.CHINESE.language -> chineseLabel
-		else -> englishLabel
-	}
+    fun displayName(locale: Locale = Locale.getDefault()): String = when {
+        locale.usesTraditionalChinese() -> traditionalChineseLabel
+        locale.language == Locale.CHINESE.language -> chineseLabel
+        else -> englishLabel
+    }
 }
 
 /**
@@ -64,198 +64,198 @@ data class TaxonomyTag(
  */
 object KototoroTaxonomy {
 
-	val tags: List<TaxonomyTag> by lazy {
-		TAXONOMY_DATA.lineSequence()
-			.filter(String::isNotBlank)
-			.map { row ->
-				val (id, chineseLabel) = row.split('|', limit = 2)
-				val category = requireNotNull(TaxonomyCategory.fromTagId(id)) { "Unknown taxonomy category: $id" }
-				TaxonomyTag(
-					id = id,
-					category = category,
-					englishLabel = id.substringAfter('.').toEnglishLabel(),
-					chineseLabel = chineseLabel,
-					aliases = CURATED_ALIASES.filterValues { id in it }.keys,
-					adult = id == "genre.erotica" || id == "audience.adult",
-				)
-			}
-			.toList()
-	}
+    val tags: List<TaxonomyTag> by lazy {
+        TAXONOMY_DATA.lineSequence()
+            .filter(String::isNotBlank)
+            .map { row ->
+                val (id, chineseLabel) = row.split('|', limit = 2)
+                val category = requireNotNull(TaxonomyCategory.fromTagId(id)) { "Unknown taxonomy category: $id" }
+                TaxonomyTag(
+                    id = id,
+                    category = category,
+                    englishLabel = id.substringAfter('.').toEnglishLabel(),
+                    chineseLabel = chineseLabel,
+                    aliases = CURATED_ALIASES.filterValues { id in it }.keys,
+                    adult = id == "genre.erotica" || id == "audience.adult",
+                )
+            }
+            .toList()
+    }
 
-	private val tagsById: Map<String, TaxonomyTag> by lazy { tags.associateBy(TaxonomyTag::id) }
+    private val tagsById: Map<String, TaxonomyTag> by lazy { tags.associateBy(TaxonomyTag::id) }
 
-	private val idsByAlias: Map<String, Set<String>> by lazy {
-		buildMap<String, MutableSet<String>> {
-			fun add(alias: String, id: String) {
-				getOrPut(normalize(alias), ::LinkedHashSet) += id
-			}
-			tags.forEach { tag ->
-				add(tag.id, tag.id)
-				add(tag.id.substringAfter('.'), tag.id)
-				add(tag.englishLabel, tag.id)
-				add(tag.chineseLabel, tag.id)
-				add(tag.traditionalChineseLabel, tag.id)
-				tag.aliases.forEach { add(it, tag.id) }
-			}
-			CURATED_ALIASES.forEach { (alias, ids) ->
-				ids.forEach { id ->
-					require(id in tagsById) { "Unknown taxonomy ID in alias mapping: $id" }
-					add(alias, id)
-				}
-			}
-		}.mapValues { it.value.toSet() }
-	}
+    private val idsByAlias: Map<String, Set<String>> by lazy {
+        buildMap<String, MutableSet<String>> {
+            fun add(alias: String, id: String) {
+                getOrPut(normalize(alias), ::LinkedHashSet) += id
+            }
+            tags.forEach { tag ->
+                add(tag.id, tag.id)
+                add(tag.id.substringAfter('.'), tag.id)
+                add(tag.englishLabel, tag.id)
+                add(tag.chineseLabel, tag.id)
+                add(tag.traditionalChineseLabel, tag.id)
+                tag.aliases.forEach { add(it, tag.id) }
+            }
+            CURATED_ALIASES.forEach { (alias, ids) ->
+                ids.forEach { id ->
+                    require(id in tagsById) { "Unknown taxonomy ID in alias mapping: $id" }
+                    add(alias, id)
+                }
+            }
+        }.mapValues { it.value.toSet() }
+    }
 
-	fun find(id: String): TaxonomyTag? = tagsById[id]
+    fun find(id: String): TaxonomyTag? = tagsById[id]
 
-	val knownSourceTags: List<String> by lazy {
-		FUTON_SOURCE_TAGS.lineSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
-	}
+    val knownSourceTags: List<String> by lazy {
+        FUTON_SOURCE_TAGS.lineSequence().map(String::trim).filter(String::isNotEmpty).distinct().toList()
+    }
 
-	fun resolve(rawTag: String): Set<TaxonomyTag> =
-		idsByAlias[normalize(rawTag)].orEmpty().mapNotNullTo(LinkedHashSet(), tagsById::get)
+    fun resolve(rawTag: String): Set<TaxonomyTag> =
+        idsByAlias[normalize(rawTag)].orEmpty().mapNotNullTo(LinkedHashSet(), tagsById::get)
 
-	fun search(tag: TaxonomyTag, query: String): Boolean {
-		val normalizedQuery = normalize(query)
-		return normalizedQuery.isEmpty() ||
-			normalize(tag.id).contains(normalizedQuery) ||
-			normalize(tag.englishLabel).contains(normalizedQuery) ||
-			normalize(tag.chineseLabel).contains(normalizedQuery) ||
-			normalize(tag.traditionalChineseLabel).contains(normalizedQuery) ||
-			tag.aliases.any { normalize(it).contains(normalizedQuery) }
-	}
+    fun search(tag: TaxonomyTag, query: String): Boolean {
+        val normalizedQuery = normalize(query)
+        return normalizedQuery.isEmpty() ||
+            normalize(tag.id).contains(normalizedQuery) ||
+            normalize(tag.englishLabel).contains(normalizedQuery) ||
+            normalize(tag.chineseLabel).contains(normalizedQuery) ||
+            normalize(tag.traditionalChineseLabel).contains(normalizedQuery) ||
+            tag.aliases.any { normalize(it).contains(normalizedQuery) }
+    }
 
-	internal fun normalize(value: String): String = value.trim().lowercase(Locale.ROOT)
+    internal fun normalize(value: String): String = value.trim().lowercase(Locale.ROOT)
 
-	private fun String.toEnglishLabel(): String = split('-').joinToString(" ") { word ->
-		word.replaceFirstChar { it.titlecase(Locale.ENGLISH) }
-	}
+    private fun String.toEnglishLabel(): String = split('-').joinToString(" ") { word ->
+        word.replaceFirstChar { it.titlecase(Locale.ENGLISH) }
+    }
 
-	private val CURATED_ALIASES = mapOf(
-		"sci-fi" to setOf("genre.science-fiction"),
-		"science fiction" to setOf("genre.science-fiction"),
-		"school life" to setOf("setting.academy"),
-		"office workers" to setOf("setting.office"),
-		"isekai" to setOf("setting.other-world"),
-		"异世界题材" to setOf("setting.other-world"),
-		"murim" to setOf("setting.martial-arts-world"),
-		"武林" to setOf("setting.martial-arts-world"),
-		"cultivation world" to setOf("setting.cultivation-world"),
-		"修真" to setOf("element.cultivation", "setting.cultivation-world"),
-		"virtual reality" to setOf("element.virtual-reality", "setting.virtual-world"),
-		"bl" to setOf("relationship.boys-love"),
-		"boylove" to setOf("relationship.boys-love"),
-		"boys love" to setOf("relationship.boys-love"),
-		"boys' love" to setOf("relationship.boys-love"),
-		"yaoi" to setOf("relationship.boys-love"),
-		"soft yaoi" to setOf("relationship.boys-love"),
-		"shounen ai" to setOf("relationship.boys-love"),
-		"gl" to setOf("relationship.girls-love"),
-		"girl love" to setOf("relationship.girls-love"),
-		"girls love" to setOf("relationship.girls-love"),
-		"girls' love" to setOf("relationship.girls-love"),
-		"yuri" to setOf("relationship.girls-love"),
-		"soft yuri" to setOf("relationship.girls-love"),
-		"shoujo ai" to setOf("relationship.girls-love"),
-		"vengeance" to setOf("theme.revenge"),
-		"复仇题材" to setOf("theme.revenge"),
-		"ecc" to setOf("genre.ecchi"),
-		"ecchi" to setOf("genre.ecchi"),
-		"anime" to setOf("format.anime-series"),
-		"anthropomorphic" to setOf("element.anthropomorphic-animals"),
-		"biography" to setOf("genre.biographical"),
-		"dungeons" to setOf("setting.dungeon"),
-		"gender bender" to setOf("narrative.gender-swap"),
-		"heartwarming" to setOf("tone.wholesome"),
-		"hentai" to setOf("audience.adult", "warning.explicit-sexual-content"),
-		"idol" to setOf("character.performer", "theme.show-business"),
-		"mafia" to setOf("genre.crime"),
-		"magical girls" to setOf("character.magical-girl"),
-		"mature" to setOf("audience.adult"),
-		"medical" to setOf("theme.medicine"),
-		"monster girl" to setOf("character.monster"),
-		"nsfw" to setOf("audience.adult"),
-		"overpower" to setOf("character.overpowered-protagonist"),
-		"political" to setOf("theme.politics"),
-		"religious" to setOf("theme.religion"),
-		"romcom" to setOf("genre.romance", "genre.comedy"),
-		"rpg" to setOf("setting.game-world", "narrative.game-mechanics"),
-		"school" to setOf("setting.academy"),
-		"smut" to setOf("genre.erotica"),
-		"spy" to setOf("theme.espionage"),
-		"suspense" to setOf("genre.thriller", "tone.suspenseful"),
-		"tragedy" to setOf("tone.tragic"),
-		"video games" to setOf("setting.game-world", "narrative.game-mechanics"),
-		"wuxia" to setOf("genre.martial-arts", "setting.martial-arts-world"),
-		"yakuza" to setOf("genre.crime"),
-		"acao" to setOf("genre.action"),
-		"aksiyon" to setOf("genre.action"),
-		"aventura" to setOf("genre.adventure"),
-		"comedia" to setOf("genre.comedy"),
-		"komedi" to setOf("genre.comedy"),
-		"fantasia" to setOf("genre.fantasy"),
-		"ficcao" to setOf("genre.science-fiction"),
-		"misterio" to setOf("genre.mystery"),
-		"psicologico" to setOf("genre.psychological"),
-		"historico" to setOf("genre.historical"),
-		"magia" to setOf("element.magic"),
-		"medico" to setOf("theme.medicine"),
-		"militar" to setOf("theme.military"),
-		"mitologia" to setOf("element.mythology"),
-		"musica" to setOf("genre.music"),
-		"sobrenatural" to setOf("genre.supernatural"),
-		"deportes" to setOf("genre.sports"),
-		"esporte" to setOf("genre.sports"),
-		"recuentos de la vida" to setOf("genre.slice-of-life"),
-		"artes marciais" to setOf("genre.martial-arts"),
-		"artes marciales" to setOf("genre.martial-arts"),
-		"culinaria" to setOf("theme.cooking"),
-		"vinganca" to setOf("theme.revenge"),
-		"policia" to setOf("genre.crime", "theme.detective-work"),
-		"tragedia" to setOf("tone.tragic"),
-		"sobrevivencia" to setOf("theme.survival"),
-		"supervivencia" to setOf("theme.survival"),
-		"escolar" to setOf("setting.academy"),
-		"escritorio" to setOf("setting.office"),
-		"reencarnacao" to setOf("narrative.reincarnation"),
-		"regressao" to setOf("narrative.regression"),
-		"retorno" to setOf("narrative.second-chance"),
-		"viagem no tempo" to setOf("narrative.time-travel"),
-		"sistema" to setOf("narrative.system-mechanics"),
-		"poderes" to setOf("element.superpowers"),
-		"demonios" to setOf("element.demons"),
-		"fantasma" to setOf("element.ghosts"),
-		"monstros" to setOf("element.monsters"),
-		"vampiros" to setOf("element.vampires"),
-		"zumbi" to setOf("element.zombies"),
-		"zombie" to setOf("element.zombies"),
-		"vampire" to setOf("element.vampires"),
-		"ghost" to setOf("element.ghosts"),
-		"robot" to setOf("element.robots"),
-		"alien" to setOf("element.aliens"),
-		"monster" to setOf("element.monsters"),
-		"webtoons" to setOf("format.webtoon"),
-		"web comic" to setOf("format.webtoon"),
-		"webcomic" to setOf("format.webtoon"),
-		"graphic novels" to setOf("format.graphic-novel"),
-		"one shot" to setOf("format.one-shot"),
-		"oneshot" to setOf("format.one-shot"),
-		"live action" to setOf("format.live-action-series", "format.live-action-film"),
-		"yonkoma" to setOf("format.comic-strip"),
-		"monster girls" to setOf("character.monster"),
-		"leading ladies" to setOf("character.female-protagonist"),
-		"sport" to setOf("genre.sports"),
-		"postapocalypse" to setOf("setting.post-apocalyptic"),
-		"dark fantasy" to setOf("genre.fantasy", "tone.dark"),
-		"second chance" to setOf("narrative.second-chance"),
-		"time manipulation" to setOf("narrative.time-travel"),
-		"reincarnated in another world" to setOf(
-			"narrative.reincarnation",
-			"setting.other-world",
-		),
-	)
+    private val CURATED_ALIASES = mapOf(
+        "sci-fi" to setOf("genre.science-fiction"),
+        "science fiction" to setOf("genre.science-fiction"),
+        "school life" to setOf("setting.academy"),
+        "office workers" to setOf("setting.office"),
+        "isekai" to setOf("setting.other-world"),
+        "异世界题材" to setOf("setting.other-world"),
+        "murim" to setOf("setting.martial-arts-world"),
+        "武林" to setOf("setting.martial-arts-world"),
+        "cultivation world" to setOf("setting.cultivation-world"),
+        "修真" to setOf("element.cultivation", "setting.cultivation-world"),
+        "virtual reality" to setOf("element.virtual-reality", "setting.virtual-world"),
+        "bl" to setOf("relationship.boys-love"),
+        "boylove" to setOf("relationship.boys-love"),
+        "boys love" to setOf("relationship.boys-love"),
+        "boys' love" to setOf("relationship.boys-love"),
+        "yaoi" to setOf("relationship.boys-love"),
+        "soft yaoi" to setOf("relationship.boys-love"),
+        "shounen ai" to setOf("relationship.boys-love"),
+        "gl" to setOf("relationship.girls-love"),
+        "girl love" to setOf("relationship.girls-love"),
+        "girls love" to setOf("relationship.girls-love"),
+        "girls' love" to setOf("relationship.girls-love"),
+        "yuri" to setOf("relationship.girls-love"),
+        "soft yuri" to setOf("relationship.girls-love"),
+        "shoujo ai" to setOf("relationship.girls-love"),
+        "vengeance" to setOf("theme.revenge"),
+        "复仇题材" to setOf("theme.revenge"),
+        "ecc" to setOf("genre.ecchi"),
+        "ecchi" to setOf("genre.ecchi"),
+        "anime" to setOf("format.anime-series"),
+        "anthropomorphic" to setOf("element.anthropomorphic-animals"),
+        "biography" to setOf("genre.biographical"),
+        "dungeons" to setOf("setting.dungeon"),
+        "gender bender" to setOf("narrative.gender-swap"),
+        "heartwarming" to setOf("tone.wholesome"),
+        "hentai" to setOf("audience.adult", "warning.explicit-sexual-content"),
+        "idol" to setOf("character.performer", "theme.show-business"),
+        "mafia" to setOf("genre.crime"),
+        "magical girls" to setOf("character.magical-girl"),
+        "mature" to setOf("audience.adult"),
+        "medical" to setOf("theme.medicine"),
+        "monster girl" to setOf("character.monster"),
+        "nsfw" to setOf("audience.adult"),
+        "overpower" to setOf("character.overpowered-protagonist"),
+        "political" to setOf("theme.politics"),
+        "religious" to setOf("theme.religion"),
+        "romcom" to setOf("genre.romance", "genre.comedy"),
+        "rpg" to setOf("setting.game-world", "narrative.game-mechanics"),
+        "school" to setOf("setting.academy"),
+        "smut" to setOf("genre.erotica"),
+        "spy" to setOf("theme.espionage"),
+        "suspense" to setOf("genre.thriller", "tone.suspenseful"),
+        "tragedy" to setOf("tone.tragic"),
+        "video games" to setOf("setting.game-world", "narrative.game-mechanics"),
+        "wuxia" to setOf("genre.martial-arts", "setting.martial-arts-world"),
+        "yakuza" to setOf("genre.crime"),
+        "acao" to setOf("genre.action"),
+        "aksiyon" to setOf("genre.action"),
+        "aventura" to setOf("genre.adventure"),
+        "comedia" to setOf("genre.comedy"),
+        "komedi" to setOf("genre.comedy"),
+        "fantasia" to setOf("genre.fantasy"),
+        "ficcao" to setOf("genre.science-fiction"),
+        "misterio" to setOf("genre.mystery"),
+        "psicologico" to setOf("genre.psychological"),
+        "historico" to setOf("genre.historical"),
+        "magia" to setOf("element.magic"),
+        "medico" to setOf("theme.medicine"),
+        "militar" to setOf("theme.military"),
+        "mitologia" to setOf("element.mythology"),
+        "musica" to setOf("genre.music"),
+        "sobrenatural" to setOf("genre.supernatural"),
+        "deportes" to setOf("genre.sports"),
+        "esporte" to setOf("genre.sports"),
+        "recuentos de la vida" to setOf("genre.slice-of-life"),
+        "artes marciais" to setOf("genre.martial-arts"),
+        "artes marciales" to setOf("genre.martial-arts"),
+        "culinaria" to setOf("theme.cooking"),
+        "vinganca" to setOf("theme.revenge"),
+        "policia" to setOf("genre.crime", "theme.detective-work"),
+        "tragedia" to setOf("tone.tragic"),
+        "sobrevivencia" to setOf("theme.survival"),
+        "supervivencia" to setOf("theme.survival"),
+        "escolar" to setOf("setting.academy"),
+        "escritorio" to setOf("setting.office"),
+        "reencarnacao" to setOf("narrative.reincarnation"),
+        "regressao" to setOf("narrative.regression"),
+        "retorno" to setOf("narrative.second-chance"),
+        "viagem no tempo" to setOf("narrative.time-travel"),
+        "sistema" to setOf("narrative.system-mechanics"),
+        "poderes" to setOf("element.superpowers"),
+        "demonios" to setOf("element.demons"),
+        "fantasma" to setOf("element.ghosts"),
+        "monstros" to setOf("element.monsters"),
+        "vampiros" to setOf("element.vampires"),
+        "zumbi" to setOf("element.zombies"),
+        "zombie" to setOf("element.zombies"),
+        "vampire" to setOf("element.vampires"),
+        "ghost" to setOf("element.ghosts"),
+        "robot" to setOf("element.robots"),
+        "alien" to setOf("element.aliens"),
+        "monster" to setOf("element.monsters"),
+        "webtoons" to setOf("format.webtoon"),
+        "web comic" to setOf("format.webtoon"),
+        "webcomic" to setOf("format.webtoon"),
+        "graphic novels" to setOf("format.graphic-novel"),
+        "one shot" to setOf("format.one-shot"),
+        "oneshot" to setOf("format.one-shot"),
+        "live action" to setOf("format.live-action-series", "format.live-action-film"),
+        "yonkoma" to setOf("format.comic-strip"),
+        "monster girls" to setOf("character.monster"),
+        "leading ladies" to setOf("character.female-protagonist"),
+        "sport" to setOf("genre.sports"),
+        "postapocalypse" to setOf("setting.post-apocalyptic"),
+        "dark fantasy" to setOf("genre.fantasy", "tone.dark"),
+        "second chance" to setOf("narrative.second-chance"),
+        "time manipulation" to setOf("narrative.time-travel"),
+        "reincarnated in another world" to setOf(
+            "narrative.reincarnation",
+            "setting.other-world",
+        ),
+    )
 
-	private const val TAXONOMY_DATA = """
+    private const val TAXONOMY_DATA = """
 genre.action|动作
 genre.adventure|冒险
 genre.comedy|喜剧
@@ -592,7 +592,7 @@ warning.flashing-lights|闪烁画面
 warning.jump-scares|突发惊吓
 """
 
-	private const val FUTON_SOURCE_TAGS = """
+    private const val FUTON_SOURCE_TAGS = """
 aboo
 acao
 act

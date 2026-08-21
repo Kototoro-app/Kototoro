@@ -13,27 +13,27 @@ package org.skepsun.kototoro.core.model
  */
 object SourceNsfwOverrides {
 
-	@Volatile
-	private var nsfwNames: Set<String> = emptySet()
+    @Volatile
+    private var nsfwNames: Set<String> = emptySet()
 
-	@Volatile
-	private var sfwNames: Set<String> = emptySet()
+    @Volatile
+    private var sfwNames: Set<String> = emptySet()
 
-	/**
-	 * Replaces the current override snapshot.
-	 */
-	fun update(nsfw: Set<String>, sfw: Set<String>) {
-		nsfwNames = nsfw.toSet()
-		sfwNames = sfw.toSet()
-	}
+    /**
+     * Replaces the current override snapshot.
+     */
+    fun update(nsfw: Set<String>, sfw: Set<String>) {
+        nsfwNames = nsfw.toSet()
+        sfwNames = sfw.toSet()
+    }
 
-	/**
-	 * Returns true when the source is forced NSFW, false when it is forced SFW,
-	 * or null when there is no override and the source metadata should be used.
-	 */
-	fun resolve(sourceName: String): Boolean? = when {
-		sourceName in sfwNames -> false
-		sourceName in nsfwNames -> true
-		else -> null
-	}
+    /**
+     * Returns true when the source is forced NSFW, false when it is forced SFW,
+     * or null when there is no override and the source metadata should be used.
+     */
+    fun resolve(sourceName: String): Boolean? = when {
+        sourceName in sfwNames -> false
+        sourceName in nsfwNames -> true
+        else -> null
+    }
 }

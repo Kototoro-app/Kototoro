@@ -9,14 +9,14 @@ import kotlinx.serialization.json.JsonElement
  */
 @Serializable
 data class TVBoxConfig(
-	val sites: List<TVBoxSite> = emptyList(),
-	val spider: String? = null,
-	val wallpaper: String? = null,
-	val lives: List<TVBoxLive>? = null,
-	val parses: List<TVBoxParse>? = null,
-	val flags: List<String>? = null,
-	val ijk: List<TVBoxIjk>? = null,
-	val ads: List<String>? = null,
+    val sites: List<TVBoxSite> = emptyList(),
+    val spider: String? = null,
+    val wallpaper: String? = null,
+    val lives: List<TVBoxLive>? = null,
+    val parses: List<TVBoxParse>? = null,
+    val flags: List<String>? = null,
+    val ijk: List<TVBoxIjk>? = null,
+    val ads: List<String>? = null,
 )
 
 /**
@@ -25,17 +25,17 @@ data class TVBoxConfig(
  */
 @Serializable
 data class TVBoxSite(
-	val key: String,
-	val name: String,
-	val type: Int,                     // 0=XML, 1=JSON, 3=Spider, 4=JS
-	val api: String,
-	val searchable: Int? = null,       // 0=不可搜索, 1=可搜索
-	val quickSearch: Int? = null,      // 0=不支持快速搜索, 1=支持快速搜索
-	val filterable: Int? = null,       // 0=不支持筛选, 1=支持筛选
-	val ext: JsonElement? = null,      // 扩展配置，可以是字符串或对象
-	val jar: String? = null,
-	val playUrl: String? = null,
-	val categories: List<String>? = null,
+    val key: String,
+    val name: String,
+    val type: Int,                     // 0=XML, 1=JSON, 3=Spider, 4=JS
+    val api: String,
+    val searchable: Int? = null,       // 0=不可搜索, 1=可搜索
+    val quickSearch: Int? = null,      // 0=不支持快速搜索, 1=支持快速搜索
+    val filterable: Int? = null,       // 0=不支持筛选, 1=支持筛选
+    val ext: JsonElement? = null,      // 扩展配置，可以是字符串或对象
+    val jar: String? = null,
+    val playUrl: String? = null,
+    val categories: List<String>? = null,
 )
 
 /**
@@ -43,11 +43,11 @@ data class TVBoxSite(
  */
 @Serializable
 data class TVBoxLive(
-	val name: String,
-	val type: Int,
-	val url: String,
-	val epg: String? = null,
-	val logo: String? = null,
+    val name: String,
+    val type: Int,
+    val url: String,
+    val epg: String? = null,
+    val logo: String? = null,
 )
 
 /**
@@ -55,11 +55,11 @@ data class TVBoxLive(
  */
 @Serializable
 data class TVBoxParse(
-	val name: String,
-	val type: Int,
-	val url: String,
-	val ext: JsonElement? = null,
-	val header: Map<String, String>? = null,
+    val name: String,
+    val type: Int,
+    val url: String,
+    val ext: JsonElement? = null,
+    val header: Map<String, String>? = null,
 )
 
 /**
@@ -67,8 +67,8 @@ data class TVBoxParse(
  */
 @Serializable
 data class TVBoxIjk(
-	val group: String,
-	val options: List<TVBoxIjkOption>,
+    val group: String,
+    val options: List<TVBoxIjkOption>,
 )
 
 /**
@@ -76,7 +76,7 @@ data class TVBoxIjk(
  */
 @Serializable
 data class TVBoxIjkOption(
-	val category: Int,
-	val name: String,
-	val value: String,
+    val category: Int,
+    val name: String,
+    val value: String,
 )

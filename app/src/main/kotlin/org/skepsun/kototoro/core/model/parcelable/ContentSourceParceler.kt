@@ -7,9 +7,9 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 
 class ContentSourceParceler : Parceler<ContentSource> {
 
-	override fun create(parcel: Parcel): ContentSource = ContentSource(parcel.readString())
+    override fun create(parcel: Parcel): ContentSource = ContentSource(parcel.readString())
 
-	override fun ContentSource.write(parcel: Parcel, flags: Int) {
-		parcel.writeString(name)
-	}
+    override fun ContentSource.write(parcel: Parcel, flags: Int) {
+        parcel.writeString(name)
+    }
 }
