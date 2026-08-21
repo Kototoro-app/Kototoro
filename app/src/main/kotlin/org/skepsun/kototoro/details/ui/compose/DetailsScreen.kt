@@ -249,6 +249,26 @@ private fun DetailsScreenContent(
     onActionClick: (DetailsAction) -> Unit = {},
     isTemporaryReadOnly: Boolean = false,
 ) {
+    val detailsScreenState = rememberDetailsScreenState()
+    var showDeleteLocalDialog by detailsScreenState.showDeleteLocalDialog
+    var showShareOptions by detailsScreenState.showShareOptions
+    var pendingAuthorSearch by detailsScreenState.pendingAuthorSearch
+    var pendingTagSearch by detailsScreenState.pendingTagSearch
+    var showFavoriteDialog by detailsScreenState.showFavoriteDialog
+    var showDownloadDialog by detailsScreenState.showDownloadDialog
+    var showReadingRecordSheet by detailsScreenState.showReadingRecordSheet
+    var showCommentsDialog by detailsScreenState.showCommentsDialog
+    var showReviewsDialog by detailsScreenState.showReviewsDialog
+    var selectedSupplementalRelationItem by detailsScreenState.selectedSupplementalRelationItem
+    var showMetadataSourceDialog by detailsScreenState.showMetadataSourceDialog
+    var showReadingSourceDialog by detailsScreenState.showReadingSourceDialog
+    var isModernDockCompact by detailsScreenState.isModernDockCompact
+    var toolbarBottomPx by detailsScreenState.toolbarBottomPx
+    var lastToolbarBottomPx by detailsScreenState.lastToolbarBottomPx
+    var infoCardTopPx by detailsScreenState.infoCardTopPx
+    var infoCardMidPx by detailsScreenState.infoCardMidPx
+    var initialInfoCardTopPx by detailsScreenState.initialInfoCardTopPx
+    var initialInfoCardMidPx by detailsScreenState.initialInfoCardMidPx
     val interfaceStyleTokens = LocalInterfaceStyleTokens.current
     val detailsPrimaryUiState by viewModel.detailsPrimaryUiState.collectAsStateWithLifecycle()
     val localSize by viewModel.localSize.collectAsStateWithLifecycle()
@@ -398,18 +418,6 @@ private fun DetailsScreenContent(
     val configuration = LocalConfiguration.current
     val scrollState = rememberScrollState()
     val landscapeLeftScrollState = rememberScrollState()
-    var showDeleteLocalDialog by remember { mutableStateOf(false) }
-    var showShareOptions by remember { mutableStateOf(false) }
-    var pendingAuthorSearch by remember { mutableStateOf<PendingAuthorSearch?>(null) }
-    var pendingTagSearch by remember { mutableStateOf<ContentTag?>(null) }
-    var showFavoriteDialog by remember { mutableStateOf(false) }
-    var showDownloadDialog by remember { mutableStateOf(false) }
-    var showReadingRecordSheet by remember { mutableStateOf(false) }
-    var showCommentsDialog by remember { mutableStateOf(false) }
-    var showReviewsDialog by remember { mutableStateOf(false) }
-    var selectedSupplementalRelationItem by remember { mutableStateOf<EntityRelationItem?>(null) }
-    var showMetadataSourceDialog by rememberSaveable { mutableStateOf(false) }
-    var showReadingSourceDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(activeSpaceId) {
         viewModel.setSpaceContext(activeSpaceId)
     }
@@ -461,7 +469,6 @@ private fun DetailsScreenContent(
     val sheetTabSelection = remember(detailsPaneState.selectedTabId, availableTabIds) {
         detailsPaneState.resolvedSelectedTabId(availableTabIds)
     }
-    var isModernDockCompact by rememberSaveable { mutableStateOf(false) }
     val modernDockCollapseThresholdPx = with(density) { 32.dp.roundToPx() }
     val modernDockExpandThresholdPx = with(density) { 16.dp.roundToPx() }
     LaunchedEffect(
@@ -515,12 +522,6 @@ private fun DetailsScreenContent(
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val toolbarGapPx = with(density) { 12.dp.toPx() }
-    var toolbarBottomPx by remember { mutableFloatStateOf(Float.NaN) }
-    var lastToolbarBottomPx by remember { mutableFloatStateOf(Float.NaN) }
-    var infoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
-    var infoCardMidPx by remember { mutableFloatStateOf(Float.NaN) }
-    var initialInfoCardTopPx by remember { mutableFloatStateOf(Float.NaN) }
-    var initialInfoCardMidPx by remember { mutableFloatStateOf(Float.NaN) }
 
     LaunchedEffect(availableTabIds) {
         detailsPaneState.syncSelectedTabs(
