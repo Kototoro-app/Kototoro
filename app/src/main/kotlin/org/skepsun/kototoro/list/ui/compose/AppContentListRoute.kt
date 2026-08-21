@@ -189,10 +189,15 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         mutableStateOf(initialRetainedPagingSnapshot)
     }
     val quickFilter = remember(items) { items.firstOrNull { it is QuickFilter } as? QuickFilter }
-    val initialLiveAnchorIndex = initialRetainedPagingSnapshot?.anchorItemId?.let(loadedPagingItems::contentIndexOf)
-        ?.takeIf { it >= 0 }
+    // 首次 composition 渲染的是保留的快照（useRetainedPagingSnapshot=true 期间
+    // displayedItems = items + snapshot.items），因此初始滚动位置必须取快照内记录
+    // 的 firstVisibleItemIndex：metadata source 切换（如改为 AniList 追踪）会让收藏
+    // 分页源失效重载，新旧数据内容/排序错位时，若用【新加载数据】里 anchor 的 index
+    // 换算成布局位置去定位旧快照，会先显示错误页面、之后再被下方的
+    // requestScrollToItem 兜底拉回（可见闪跳）。待切到真实新数据时，下方
+    // LaunchedEffect 会用 anchor item 在新数据里重新对齐到目标位置。
     val restoredViewportIndex = initialRetainedPagingSnapshot?.let { retained ->
-        initialLiveAnchorIndex?.let { items.size + it } ?: retained.firstVisibleItemIndex
+        retained.firstVisibleItemIndex
     } ?: 0
     val restoredViewportOffset = initialRetainedPagingSnapshot?.firstVisibleItemScrollOffset ?: 0
     val restoreGridViewport = initialRetainedPagingSnapshot?.listMode == ListMode.GRID ||
