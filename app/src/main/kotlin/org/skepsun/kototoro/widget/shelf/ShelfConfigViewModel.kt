@@ -16,26 +16,26 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ShelfConfigViewModel @Inject constructor(
-	favouritesRepository: FavouritesRepository,
+    favouritesRepository: FavouritesRepository,
 ) : BaseViewModel() {
 
-	private val selectedCategoryId = MutableStateFlow(0L)
+    private val selectedCategoryId = MutableStateFlow(0L)
 
-	val content: StateFlow<List<CategoryItem>> = combine(
-		favouritesRepository.observeCategories(),
-		selectedCategoryId,
-	) { categories, selectedId ->
-		val list = ArrayList<CategoryItem>(categories.size + 1)
-		list += CategoryItem(0L, null, selectedId == 0L)
-		categories.mapTo(list) {
-			CategoryItem(it.id, it.title, selectedId == it.id)
-		}
-		list
-	}.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+    val content: StateFlow<List<CategoryItem>> = combine(
+        favouritesRepository.observeCategories(),
+        selectedCategoryId,
+    ) { categories, selectedId ->
+        val list = ArrayList<CategoryItem>(categories.size + 1)
+        list += CategoryItem(0L, null, selectedId == 0L)
+        categories.mapTo(list) {
+            CategoryItem(it.id, it.title, selectedId == it.id)
+        }
+        list
+    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
-	var checkedId: Long
-		get() = selectedCategoryId.value
-		set(value) {
-			selectedCategoryId.value = value
-		}
+    var checkedId: Long
+        get() = selectedCategoryId.value
+        set(value) {
+            selectedCategoryId.value = value
+        }
 }

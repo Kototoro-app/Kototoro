@@ -43,97 +43,97 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RecentWidgetConfigScreen(
-	initialHasBackground: Boolean,
-	onNavigateUp: () -> Unit,
-	onDone: (Boolean) -> Unit,
+    initialHasBackground: Boolean,
+    onNavigateUp: () -> Unit,
+    onDone: (Boolean) -> Unit,
 ) {
-	var hasBackground by rememberSaveable(initialHasBackground) { mutableStateOf(initialHasBackground) }
+    var hasBackground by rememberSaveable(initialHasBackground) { mutableStateOf(initialHasBackground) }
 
-	Scaffold(
-		modifier = Modifier.fillMaxSize(),
-		containerColor = MaterialTheme.colorScheme.background,
-		contentWindowInsets = WindowInsets(0, 0, 0, 0),
-		topBar = {
-			TopAppBar(
-				modifier = Modifier.windowInsetsPadding(
-					WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
-				),
-				title = { Text(stringResource(R.string.recent_manga)) },
-				navigationIcon = {
-					IconButton(onClick = onNavigateUp) {
-						Icon(
-							imageVector = Icons.Default.Close,
-							contentDescription = stringResource(R.string.close),
-						)
-					}
-				},
-				actions = {
-					Button(
-						onClick = { onDone(hasBackground) },
-						modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.toolbar_button_margin)),
-					) {
-						Text(stringResource(R.string.done))
-					}
-				},
-				windowInsets = WindowInsets.statusBars,
-				colors = TopAppBarDefaults.topAppBarColors(
-					containerColor = MaterialTheme.colorScheme.background,
-				),
-			)
-		},
-	) { contentPadding ->
-		Column(
-			modifier = Modifier
-				.fillMaxSize()
-				.padding(contentPadding)
-				.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
-				.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
-		) {
-			RowSwitch(
-				checked = hasBackground,
-				onCheckedChange = { hasBackground = it },
-			)
-		}
-	}
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                modifier = Modifier.windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
+                ),
+                title = { Text(stringResource(R.string.recent_manga)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                        )
+                    }
+                },
+                actions = {
+                    Button(
+                        onClick = { onDone(hasBackground) },
+                        modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.toolbar_button_margin)),
+                    ) {
+                        Text(stringResource(R.string.done))
+                    }
+                },
+                windowInsets = WindowInsets.statusBars,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
+    ) { contentPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding)
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+        ) {
+            RowSwitch(
+                checked = hasBackground,
+                onCheckedChange = { hasBackground = it },
+            )
+        }
+    }
 }
 
 @Composable
 private fun RowSwitch(
-	checked: Boolean,
-	onCheckedChange: (Boolean) -> Unit,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(top = dimensionResource(R.dimen.list_spacing_large))
-			.toggleable(
-				value = checked,
-				role = Role.Switch,
-				onValueChange = onCheckedChange,
-			)
-			.padding(horizontal = dimensionResource(R.dimen.screen_padding)),
-		verticalAlignment = Alignment.CenterVertically,
-	) {
-		Text(
-			text = stringResource(R.string.background),
-			style = MaterialTheme.typography.bodyMedium,
-			modifier = Modifier.weight(1f),
-		)
-		Switch(
-			checked = checked,
-			onCheckedChange = null,
-		)
-	}
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = dimensionResource(R.dimen.list_spacing_large))
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .padding(horizontal = dimensionResource(R.dimen.screen_padding)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.background),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun RecentWidgetConfigScreenPreview() {
-	KototoroTheme {
-		RecentWidgetConfigScreen(
-			initialHasBackground = true,
-			onNavigateUp = {},
-			onDone = {},
-		)
-	}
+    KototoroTheme {
+        RecentWidgetConfigScreen(
+            initialHasBackground = true,
+            onNavigateUp = {},
+            onDone = {},
+        )
+    }
 }

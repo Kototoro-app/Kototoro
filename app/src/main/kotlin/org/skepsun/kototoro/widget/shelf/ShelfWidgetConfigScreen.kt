@@ -47,157 +47,157 @@ import org.skepsun.kototoro.widget.shelf.model.CategoryItem
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ShelfWidgetConfigScreen(
-	categories: List<CategoryItem>,
-	hasBackground: Boolean,
-	onBackgroundChanged: (Boolean) -> Unit,
-	onCategorySelected: (Long) -> Unit,
-	onNavigateUp: () -> Unit,
-	onDone: () -> Unit,
+    categories: List<CategoryItem>,
+    hasBackground: Boolean,
+    onBackgroundChanged: (Boolean) -> Unit,
+    onCategorySelected: (Long) -> Unit,
+    onNavigateUp: () -> Unit,
+    onDone: () -> Unit,
 ) {
-	Scaffold(
-		modifier = Modifier.fillMaxSize(),
-		containerColor = MaterialTheme.colorScheme.background,
-		contentWindowInsets = WindowInsets(0, 0, 0, 0),
-		topBar = {
-			TopAppBar(
-				modifier = Modifier.windowInsetsPadding(
-					WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
-				),
-				title = { Text(stringResource(R.string.manga_shelf)) },
-				navigationIcon = {
-					IconButton(onClick = onNavigateUp) {
-						Icon(
-							imageVector = Icons.Default.Close,
-							contentDescription = stringResource(R.string.close),
-						)
-					}
-				},
-				actions = {
-					Button(
-						onClick = onDone,
-						modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.toolbar_button_margin)),
-					) {
-						Text(stringResource(R.string.done))
-					}
-				},
-				windowInsets = WindowInsets.statusBars,
-				colors = TopAppBarDefaults.topAppBarColors(
-					containerColor = MaterialTheme.colorScheme.background,
-				),
-			)
-		},
-	) { contentPadding ->
-		LazyColumn(
-			modifier = Modifier
-				.fillMaxSize()
-				.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
-				.windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
-			contentPadding = PaddingValues(
-				top = contentPadding.calculateTopPadding(),
-				bottom = contentPadding.calculateBottomPadding() + dimensionResource(R.dimen.list_spacing_normal),
-			),
-		) {
-			item(key = "background") {
-				Row(
-					modifier = Modifier
-						.fillMaxWidth()
-						.padding(
-							top = dimensionResource(R.dimen.list_spacing_large),
-							start = dimensionResource(R.dimen.screen_padding),
-							end = dimensionResource(R.dimen.screen_padding),
-						)
-						.toggleable(
-							value = hasBackground,
-							onValueChange = onBackgroundChanged,
-							role = Role.Switch,
-						),
-					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = Arrangement.SpaceBetween,
-				) {
-					Text(
-						text = stringResource(R.string.background),
-						style = MaterialTheme.typography.bodyMedium,
-						modifier = Modifier.weight(1f),
-					)
-					Switch(
-						checked = hasBackground,
-						onCheckedChange = null,
-					)
-				}
-			}
-			item(key = "categories-title") {
-				Text(
-					text = stringResource(R.string.favourites_categories),
-					style = MaterialTheme.typography.titleSmall,
-					maxLines = 1,
-					overflow = TextOverflow.Clip,
-					modifier = Modifier
-						.fillMaxWidth()
-						.padding(
-							start = dimensionResource(R.dimen.screen_padding),
-							top = dimensionResource(R.dimen.list_spacing_small),
-							end = dimensionResource(R.dimen.screen_padding),
-						),
-				)
-			}
-			item(key = "categories-spacing") {
-				Spacer(modifier = Modifier.height(dimensionResource(R.dimen.list_spacing_normal)))
-			}
-			items(
-				items = categories,
-				key = { it.id },
-			) { category ->
-				CategoryRow(
-					item = category,
-					onClick = { onCategorySelected(category.id) },
-				)
-			}
-		}
-	}
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                modifier = Modifier.windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Horizontal),
+                ),
+                title = { Text(stringResource(R.string.manga_shelf)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateUp) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                        )
+                    }
+                },
+                actions = {
+                    Button(
+                        onClick = onDone,
+                        modifier = Modifier.padding(horizontal = dimensionResource(R.dimen.toolbar_button_margin)),
+                    ) {
+                        Text(stringResource(R.string.done))
+                    }
+                },
+                windowInsets = WindowInsets.statusBars,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
+            )
+        },
+    ) { contentPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Bottom)),
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding() + dimensionResource(R.dimen.list_spacing_normal),
+            ),
+        ) {
+            item(key = "background") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            top = dimensionResource(R.dimen.list_spacing_large),
+                            start = dimensionResource(R.dimen.screen_padding),
+                            end = dimensionResource(R.dimen.screen_padding),
+                        )
+                        .toggleable(
+                            value = hasBackground,
+                            onValueChange = onBackgroundChanged,
+                            role = Role.Switch,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.background),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = hasBackground,
+                        onCheckedChange = null,
+                    )
+                }
+            }
+            item(key = "categories-title") {
+                Text(
+                    text = stringResource(R.string.favourites_categories),
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = dimensionResource(R.dimen.screen_padding),
+                            top = dimensionResource(R.dimen.list_spacing_small),
+                            end = dimensionResource(R.dimen.screen_padding),
+                        ),
+                )
+            }
+            item(key = "categories-spacing") {
+                Spacer(modifier = Modifier.height(dimensionResource(R.dimen.list_spacing_normal)))
+            }
+            items(
+                items = categories,
+                key = { it.id },
+            ) { category ->
+                CategoryRow(
+                    item = category,
+                    onClick = { onCategorySelected(category.id) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
 private fun CategoryRow(
-	item: CategoryItem,
-	onClick: () -> Unit,
+    item: CategoryItem,
+    onClick: () -> Unit,
 ) {
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.selectable(
-				selected = item.isSelected,
-				onClick = onClick,
-				role = Role.RadioButton,
-			)
-			.padding(horizontal = dimensionResource(R.dimen.screen_padding)),
-		verticalAlignment = Alignment.CenterVertically,
-	) {
-		Text(
-			text = item.name ?: stringResource(R.string.all_favourites),
-			style = MaterialTheme.typography.bodyLarge,
-			modifier = Modifier.weight(1f),
-		)
-		RadioButton(
-			selected = item.isSelected,
-			onClick = null,
-		)
-	}
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(
+                selected = item.isSelected,
+                onClick = onClick,
+                role = Role.RadioButton,
+            )
+            .padding(horizontal = dimensionResource(R.dimen.screen_padding)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = item.name ?: stringResource(R.string.all_favourites),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        RadioButton(
+            selected = item.isSelected,
+            onClick = null,
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun ShelfWidgetConfigScreenPreview() {
-	KototoroTheme {
-		ShelfWidgetConfigScreen(
-			categories = listOf(
-				CategoryItem(0L, null, true),
-				CategoryItem(1L, "Reading", false),
-			),
-			hasBackground = true,
-			onBackgroundChanged = {},
-			onCategorySelected = {},
-			onNavigateUp = {},
-			onDone = {},
-		)
-	}
+    KototoroTheme {
+        ShelfWidgetConfigScreen(
+            categories = listOf(
+                CategoryItem(0L, null, true),
+                CategoryItem(1L, "Reading", false),
+            ),
+            hasBackground = true,
+            onBackgroundChanged = {},
+            onCategorySelected = {},
+            onNavigateUp = {},
+            onDone = {},
+        )
+    }
 }
