@@ -532,19 +532,19 @@ fun KototoroApp(
     var bottomNavOffset by chromeScrollState.bottomNavOffset
     var isLandscapeRailInteracting by remember { mutableStateOf(false) }
     val chromeState = rememberKototoroAppChromeState()
-    var isSearchOverlayVisible by chromeState.isSearchOverlayVisible
-    var isSearchOverlayMounted by chromeState.isSearchOverlayMounted
-    var searchOverlayInitialQuery by chromeState.searchOverlayInitialQuery
-    var isSearchOverlayQueryCommitted by chromeState.isSearchOverlayQueryCommitted
-    var isDetailsChromeTransitionPending by chromeState.isDetailsChromeTransitionPending
-    var detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
-    var detailsBottomObstruction by chromeState.detailsBottomObstruction
-    var detailsBottomPanelRoute by chromeState.detailsBottomPanelRoute
-    var materialTopBarScrollEnabled by chromeState.materialTopBarScrollEnabled
-    var lastChromeTopBarOwnerKey by chromeState.lastChromeTopBarOwnerKey
-    var lastHeroTransitionStartedAtMs by chromeState.lastHeroTransitionStartedAtMs
-    var heroTransitionPhase by chromeState.heroTransitionPhase
-    var chromeSharedTransitionScope by chromeState.chromeSharedTransitionScope
+    val isSearchOverlayVisible by chromeState.isSearchOverlayVisible
+    val isSearchOverlayMounted by chromeState.isSearchOverlayMounted
+    val searchOverlayInitialQuery by chromeState.searchOverlayInitialQuery
+    val isSearchOverlayQueryCommitted by chromeState.isSearchOverlayQueryCommitted
+    val isDetailsChromeTransitionPending by chromeState.isDetailsChromeTransitionPending
+    val detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
+    val detailsBottomObstruction by chromeState.detailsBottomObstruction
+    val detailsBottomPanelRoute by chromeState.detailsBottomPanelRoute
+    val materialTopBarScrollEnabled by chromeState.materialTopBarScrollEnabled
+    val lastChromeTopBarOwnerKey by chromeState.lastChromeTopBarOwnerKey
+    val lastHeroTransitionStartedAtMs by chromeState.lastHeroTransitionStartedAtMs
+    val heroTransitionPhase by chromeState.heroTransitionPhase
+    val chromeSharedTransitionScope by chromeState.chromeSharedTransitionScope
     var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var keepTabsExpandedByScrollDirection by chromeScrollState.keepTabsExpandedByScrollDirection
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
@@ -737,7 +737,7 @@ fun KototoroApp(
             if (clearPendingRestore) {
                 pendingChromeRestoreFromDetails = false
             }
-            isDetailsChromeTransitionPending = false
+            chromeState.setDetailsChromeTransitionPending(false)
         }
         when {
             shouldHideChromeForEnteringDetails -> {
@@ -751,7 +751,7 @@ fun KototoroApp(
                     return@LaunchedEffect
                 }
                 delay(MainNavigationMotion.ChromeEnterExitDelayMillis)
-                isDetailsChromeTransitionPending = false
+                chromeState.setDetailsChromeTransitionPending(false)
             }
             !shouldShowChrome -> {
                 isChromeVisible = false
@@ -796,7 +796,7 @@ fun KototoroApp(
         heroTransitionInProgress && heroTransitionPhase == HeroTransitionPhase.ReturningFromDetails
     LaunchedEffect(heroTransitionInProgress) {
         if (!heroTransitionInProgress && heroTransitionPhase != HeroTransitionPhase.Idle) {
-            heroTransitionPhase = HeroTransitionPhase.Idle
+            chromeState.setHeroTransitionPhase(HeroTransitionPhase.Idle)
         }
     }
     val showBrowseSourceSettingsEntry = chromeTopLevelKey == ExploreNavKey || chromeTopLevelKey == DiscoverNavKey
@@ -1102,10 +1102,10 @@ fun KototoroApp(
                         query = query,
                         titleRes = chromeTopLevelKey.titleRes(),
                         onSearchClick = {
-                            searchOverlayInitialQuery = query
-                            isSearchOverlayQueryCommitted = false
-                            isSearchOverlayMounted = true
-                            isSearchOverlayVisible = true
+                            chromeState.setSearchOverlayInitialQuery(query)
+                            chromeState.setSearchOverlayQueryCommitted(false)
+                            chromeState.setSearchOverlayMounted(true)
+                            chromeState.setSearchOverlayVisible(true)
                         },
                         onOpenListOptions = onOpenListOptions,
                         onSettingsClick = onSettingsClick,
@@ -1244,11 +1244,13 @@ fun KototoroApp(
                 ) {
                     SharedTransitionLayout {
                     SideEffect {
-                        chromeSharedTransitionScope = if (effectiveSharedElementTransitionsEnabled) {
-                            this@SharedTransitionLayout
-                        } else {
-                            null
-                        }
+                        chromeState.setChromeSharedTransitionScope(
+                            if (effectiveSharedElementTransitionsEnabled) {
+                                this@SharedTransitionLayout
+                            } else {
+                                null
+                            },
+                        )
                     }
                     CompositionLocalProvider(
                         LocalHeroTransitionInProgress provides false,
@@ -1281,15 +1283,15 @@ fun KototoroApp(
                                         bottomBarHeightPx = bottomNavHeightPx,
                                         pageSaveHelper = pageSaveHelper,
                                         onDetailsTransitionRequested = {
-                                            isDetailsChromeTransitionPending = true
-                                            heroTransitionPhase = HeroTransitionPhase.EnteringDetails
-                                            lastHeroTransitionStartedAtMs = heroTransitionTimestampMs()
+                                            chromeState.setDetailsChromeTransitionPending(true)
+                                            chromeState.setHeroTransitionPhase(HeroTransitionPhase.EnteringDetails)
+                                            chromeState.setLastHeroTransitionStartedAtMs(heroTransitionTimestampMs())
                                         },
                                         onDetailsBottomPanelStateChanged = { expansion, obstruction ->
                                             if (renderedSpaceId == navigationSpaceId) {
-                                                detailsBottomPanelRoute = currentDestinationRoute
-                                                detailsBottomPanelExpansion = expansion
-                                                detailsBottomObstruction = obstruction
+                                                chromeState.setDetailsBottomPanelRoute(currentDestinationRoute)
+                                                chromeState.setDetailsBottomPanelExpansion(expansion)
+                                                chromeState.setDetailsBottomObstruction(obstruction)
                                             }
                                         },
                                         onExploreSourceSelectionTopBarChanged = { overrideState ->
@@ -1399,12 +1401,12 @@ fun KototoroApp(
                         blacklistedTagCount = globalTagBlacklist.size,
                         onQueryChanged = onQueryChanged,
                         onSearch = {
-                            isSearchOverlayQueryCommitted = true
+                            chromeState.setSearchOverlayQueryCommitted(true)
                             onSearch(it)
-                            isSearchOverlayVisible = false
+                            chromeState.setSearchOverlayVisible(false)
                         },
                         onSearchWithOptions = { searchQuery, kind, sourceTypes, contentKinds, advancedQuery, pinnedOnly, hideEmpty ->
-                            isSearchOverlayQueryCommitted = true
+                            chromeState.setSearchOverlayQueryCommitted(true)
                             onSearchWithOptions(
                                 searchQuery,
                                 kind,
@@ -1414,9 +1416,9 @@ fun KototoroApp(
                                 pinnedOnly,
                                 hideEmpty,
                             )
-                            isSearchOverlayVisible = false
+                            chromeState.setSearchOverlayVisible(false)
                         },
-                        onDismissRequest = { isSearchOverlayVisible = false },
+                        onDismissRequest = { chromeState.setSearchOverlayVisible(false) },
                         onLanguagePresetSelected = onLanguagePresetSelected,
                         onManageLanguagePresets = onManageLanguagePresets,
                         onOpenGlobalTagBlacklist = {
@@ -1427,7 +1429,7 @@ fun KototoroApp(
                                 if (!isSearchOverlayQueryCommitted) {
                                     onQueryChanged(searchOverlayInitialQuery)
                                 }
-                                isSearchOverlayMounted = false
+                                chromeState.setSearchOverlayMounted(false)
                                 onSearchOverlayDismiss()
                             }
                         },
@@ -1444,15 +1446,15 @@ fun KototoroApp(
                         },
                         onTagSuggestionClick = {
                             onTagSuggestionClick(it)
-                            isSearchOverlayVisible = false
+                            chromeState.setSearchOverlayVisible(false)
                         },
                         onSourceSuggestionClick = {
                             onSourceSuggestionClick(it)
-                            isSearchOverlayVisible = false
+                            chromeState.setSearchOverlayVisible(false)
                         },
                         onAuthorSuggestionClick = {
                             onAuthorSuggestionClick(it)
-                            isSearchOverlayVisible = false
+                            chromeState.setSearchOverlayVisible(false)
                         },
                         onDeleteQuery = onDeleteQuery,
                         onVoiceInput = onVoiceInput,
@@ -1693,17 +1695,17 @@ private fun KototoroAppChromeEffects(
     val isSearchOverlayMounted by chromeState.isSearchOverlayMounted
     val isSearchOverlayVisible by chromeState.isSearchOverlayVisible
     val isDetailsChromeTransitionPending by chromeState.isDetailsChromeTransitionPending
-    var materialTopBarScrollEnabled by chromeState.materialTopBarScrollEnabled
-    var lastChromeTopBarOwnerKey by chromeState.lastChromeTopBarOwnerKey
+    val materialTopBarScrollEnabled by chromeState.materialTopBarScrollEnabled
+    val lastChromeTopBarOwnerKey by chromeState.lastChromeTopBarOwnerKey
     var topAppBarState = chromeScrollState.topAppBarState
     var topBarHeightPx by chromeScrollState.topBarHeightPx
     var bottomNavOffset by chromeScrollState.bottomNavOffset
     var keepTabsExpandedByScrollDirection by chromeScrollState.keepTabsExpandedByScrollDirection
     var offsetDestinationRoute by chromeScrollState.offsetDestinationRoute
     var offsetDestinationOwnerKey by chromeScrollState.offsetDestinationOwnerKey
-    var detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
-    var detailsBottomObstruction by chromeState.detailsBottomObstruction
-    var detailsBottomPanelRoute by chromeState.detailsBottomPanelRoute
+    val detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
+    val detailsBottomObstruction by chromeState.detailsBottomObstruction
+    val detailsBottomPanelRoute by chromeState.detailsBottomPanelRoute
     LaunchedEffect(isSearchOverlayMounted) {
         if (isSearchOverlayMounted) {
             topAppBarState.heightOffset = 0f
@@ -1722,13 +1724,13 @@ private fun KototoroAppChromeEffects(
     }
     LaunchedEffect(currentDestinationRoute) {
         if (isDetailsRoute) {
-            detailsBottomPanelExpansion = 0f
-            detailsBottomObstruction = 0.dp
-            detailsBottomPanelRoute = null
+            chromeState.setDetailsBottomPanelExpansion(0f)
+            chromeState.setDetailsBottomObstruction(0.dp)
+            chromeState.setDetailsBottomPanelRoute(null)
         } else if (!isContentListRoute) {
-            detailsBottomPanelExpansion = 0f
-            detailsBottomObstruction = 0.dp
-            detailsBottomPanelRoute = null
+            chromeState.setDetailsBottomPanelExpansion(0f)
+            chromeState.setDetailsBottomObstruction(0.dp)
+            chromeState.setDetailsBottomPanelRoute(null)
         }
     }
     LaunchedEffect(shouldShowChrome, navigationSpaceId, isLandscapeNavigation) {
@@ -1768,11 +1770,11 @@ private fun KototoroAppChromeEffects(
     }
     LaunchedEffect(currentTopBarOwnerKey) {
         if (currentTopBarOwnerKey != null) {
-            lastChromeTopBarOwnerKey = currentTopBarOwnerKey
+            chromeState.setLastChromeTopBarOwnerKey(currentTopBarOwnerKey)
         }
     }
     LaunchedEffect(shouldUseMaterialTopBarScroll, topAppBarState) {
-        materialTopBarScrollEnabled = shouldUseMaterialTopBarScroll
+        chromeState.setMaterialTopBarScrollEnabled(shouldUseMaterialTopBarScroll)
         if (!shouldUseMaterialTopBarScroll) {
             topAppBarState.heightOffset = 0f
         }
