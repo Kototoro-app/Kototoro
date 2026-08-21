@@ -120,8 +120,8 @@
 
 ## Phase 4：主壳深化
 
-- [ ] 将 `MainActivity` 从 `ActivityMainBinding` + `setContentViewWebViewSafe` 迁到直接 Compose host
-- [ ] 收敛 Activity 里的顶栏、过滤器、insets 等 `mutableStateOf` 状态
+- [x] 将 `MainActivity` 从 `ActivityMainBinding` + `setContentViewWebViewSafe` 迁到直接 Compose host（BaseComposeActivity + setComposeContent）
+- [x] 收敛 Activity 里的顶栏、过滤器、insets 等 `mutableStateOf` 状态（MainChromeController）
 - [ ] 视需要为主壳引入更清晰的 app state/controller 边界，减少 `KototoroApp(...)` 参数面继续膨胀
 
 **Critical files**

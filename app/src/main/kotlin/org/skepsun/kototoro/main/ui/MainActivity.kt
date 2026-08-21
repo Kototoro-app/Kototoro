@@ -142,7 +142,7 @@ class MainActivity : BaseComposeActivity() {
     private val voiceInputLauncher = registerForActivityResult(VoiceInputContract()) { result ->
         val query = result?.trim().orEmpty()
         if (query.isNotEmpty()) {
-            updateSearchQuery(query)
+            topBarController.updateSearchQuery(query)
         }
     }
 
@@ -151,96 +151,32 @@ class MainActivity : BaseComposeActivity() {
     private val navStateFlow = MutableStateFlow(BottomNavState())
     private lateinit var composeNavBarDelegator: ComposeAppNavBarDelegator
 
-    private var topBarHeightPx = 0
-    private var bottomNavHeightPx = 0
-    private var containerTopInsetPx = 0
-    private var containerBottomInsetPx = 0
-    private var searchNavigationRequest by mutableStateOf<SearchNavigationRequest?>(null)
-    private var nextSearchRequestId = 0L
-    private var searchQuery by mutableStateOf("")
-    private val activeFilterCallbacks = LinkedHashSet<SearchBarFilterCallback>()
-    private var currentFilterCallback: SearchBarFilterCallback? = null
-    private var activeFilterContentType by mutableStateOf<ContentType?>(null)
-    private var activeFilterSourceTags by mutableStateOf<Set<SourceTag>>(emptySet())
-    private var isLanguagePresetFilterVisible by mutableStateOf(false)
-    private var isContentTypeFilterVisible by mutableStateOf(true)
-    private var isSourceTagFilterVisible by mutableStateOf(true)
-    private var availableSourceTags by mutableStateOf(SourceTag.quickFilterEntries)
-    private var enabledSourceTags by mutableStateOf(SourceTag.quickFilterEntries.toSet())
-    private var enabledContentTypes by mutableStateOf(allTopBarContentTypes())
-
+    private lateinit var topBarController: MainChromeController
 
     fun setActiveFilterCallback(callback: SearchBarFilterCallback) {
-        activeFilterCallbacks.remove(callback)
-        activeFilterCallbacks.add(callback)
-        currentFilterCallback = callback
-        refreshFilters()
+        topBarController.setActiveFilterCallback(callback)
     }
 
     fun clearActiveFilterCallback(callback: SearchBarFilterCallback) {
-        activeFilterCallbacks.remove(callback)
-        currentFilterCallback = activeFilterCallbacks.lastOrNull()
-        if (currentFilterCallback != null) {
-            refreshFilters()
-        } else {
-            clearActiveFilters()
-        }
+        topBarController.clearActiveFilterCallback(callback)
     }
 
     fun refreshFilters() {
-        val callback = currentFilterCallback ?: return
-        val sourceTagEntries = callback.getSourceTagEntries()
-        availableSourceTags = sourceTagEntries
-        isLanguagePresetFilterVisible = callback.isLanguagePresetFilterVisible() && settings.isShowLanguagePresetFilter
-        isContentTypeFilterVisible = callback.isContentTypeFilterVisible() && settings.isShowContentTypeFilter
-        isSourceTagFilterVisible = callback.isSourceTagFilterVisible() &&
-            settings.isShowSourceTagFilter &&
-            sourceTagEntries.isNotEmpty()
-        applyConfiguredLanguagePreset()
-
-        val selectedTab = if (isContentTypeFilterVisible) {
-            callback.getSelectedContentType()
-        } else {
-            settings.hiddenContentType.toBrowseGroupTab()
-        }
-        if (!isContentTypeFilterVisible) {
-            callback.applyContentTypeSelection(selectedTab)
-        }
-        activeFilterContentType = selectedTab.toContentTypeOrNull()
-
-        val selectedSourceTags = if (isSourceTagFilterVisible) {
-            callback.getSelectedSourceTags()
-        } else {
-            settings.hiddenSourceTag.toSourceTagSelection()
-        }
-        if (!isSourceTagFilterVisible) {
-            callback.applySourceTagSelection(selectedSourceTags)
-        }
-        activeFilterSourceTags = selectedSourceTags
-
-        enabledSourceTags = sourceTagEntries.filterTo(linkedSetOf()) { tag ->
-            callback.isSourceTagEnabled(tag)
-        }
-        enabledContentTypes = buildSet {
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Content)) {
-                add(ContentType.MANGA)
-            }
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Novel)) {
-                add(ContentType.NOVEL)
-            }
-            if (callback.isContentTypeEnabled(BrowseGroupTab.Video)) {
-                add(ContentType.VIDEO)
-            }
-        }
-        syncSearchSuggestionFilters()
+        topBarController.refreshFilters()
     }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         syncSpaceRuntime()
         pageSaveHelper = pageSaveHelperFactory.create(this)
-        searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
-        applyConfiguredLanguagePreset()
+        topBarController = MainChromeController(
+            settings = settings,
+            searchSuggestionViewModel = searchSuggestionViewModel,
+            decorViewProvider = { window.decorView },
+        )
+        topBarController.searchQuery = savedInstanceState?.getString(STATE_TOP_BAR_QUERY).orEmpty()
+        topBarController.applyConfiguredLanguagePreset()
 
         composeNavBarDelegator = ComposeAppNavBarDelegator(navStateFlow)
 
@@ -304,7 +240,7 @@ class MainActivity : BaseComposeActivity() {
                     pageSaveHelper = pageSaveHelper,
                     lastReadContent = lastReadContent,
                     suggestions = suggestions,
-                    onQueryChanged = ::updateSearchQuery,
+                    onQueryChanged = topBarController::updateSearchQuery,
                     onSearch = { query -> submitSearch(query) },
                     initialSearchKind = SearchKind.SIMPLE,
                     initialSearchSourceTypes = searchSuggestionViewModel.getSourceTypes(),
@@ -312,8 +248,8 @@ class MainActivity : BaseComposeActivity() {
                     onSearchWithOptions = ::submitSearchWithOptions,
                     onSearchOverlaySourceTypesChange = searchSuggestionViewModel::setSourceTypes,
                     onSearchOverlayContentKindsChange = searchSuggestionViewModel::setContentKinds,
-                    onSearchOverlayDismiss = ::syncSearchSuggestionFilters,
-                    query = searchQuery,
+                    onSearchOverlayDismiss = topBarController::syncSearchSuggestionFilters,
+                    query = topBarController.searchQuery,
                     onFeedRefresh = trackWorkerScheduler::startNow,
                     isResumeEnabled = isResumeEnabled,
                     onResumeClick = viewModel::openLastReader,
@@ -457,62 +393,59 @@ class MainActivity : BaseComposeActivity() {
                         viewModel.setIncognitoMode(!isIncognitoModeEnabled)
                     },
                     onTopBarHeightChanged = { height ->
-                        if (topBarHeightPx != height) {
-                            topBarHeightPx = height
+                        if (topBarController.topBarHeightPx != height) {
+                            topBarController.topBarHeightPx = height
                             viewModel.setTopBarHeightPx(height)
                         }
                     },
                     onBottomNavHeightChanged = { height ->
-                        if (bottomNavHeightPx != height) {
-                            bottomNavHeightPx = height
+                        if (topBarController.bottomNavHeightPx != height) {
+                            topBarController.bottomNavHeightPx = height
                             viewModel.setBottomNavHeightPx(height)
                         }
                     },
                     onContentInsetsChanged = { topInset, bottomInset ->
-                        if (containerTopInsetPx != topInset || containerBottomInsetPx != bottomInset) {
-                            containerTopInsetPx = topInset
-                            containerBottomInsetPx = bottomInset
+                        if (topBarController.containerTopInsetPx != topInset || topBarController.containerBottomInsetPx != bottomInset) {
+                            topBarController.containerTopInsetPx = topInset
+                            topBarController.containerBottomInsetPx = bottomInset
                             viewModel.setContentInsetsPx(topInset, bottomInset)
                         }
                     },
                     onNavDestinationChanged = { itemId ->
                         composeNavBarDelegator.syncSelectedItem(itemId)
                     },
-                    pendingSearchNavigation = searchNavigationRequest,
-                    onSearchNavigationHandled = {
-                        clearSearchQuery()
-                        searchNavigationRequest = null
-                    },
-                    isLanguagePresetFilterVisible = isLanguagePresetFilterVisible,
+                    pendingSearchNavigation = topBarController.searchNavigationRequest,
+                    onSearchNavigationHandled = topBarController::consumeSearchNavigation,
+                    isLanguagePresetFilterVisible = topBarController.isLanguagePresetFilterVisible,
                     languagePresetEntries = sourcePresets,
                     onLanguagePresetSelected = { presetId ->
                         settings.activeSourcePresetId = presetId
                     },
                     onManageLanguagePresets = router::openSourcePresets,
-                    selectedContentType = activeFilterContentType,
-                    enabledContentTypes = enabledContentTypes,
-                    isContentTypeFilterVisible = isContentTypeFilterVisible,
+                    selectedContentType = topBarController.activeFilterContentType,
+                    enabledContentTypes = topBarController.enabledContentTypes,
+                    isContentTypeFilterVisible = topBarController.isContentTypeFilterVisible,
                     onContentTypeSelected = { type ->
-                        if (type == null || type in enabledContentTypes) {
+                        if (type == null || type in topBarController.enabledContentTypes) {
                             val tab = when (type) {
                                 ContentType.NOVEL -> BrowseGroupTab.Novel
                                 ContentType.VIDEO -> BrowseGroupTab.Video
                                 ContentType.MANGA -> BrowseGroupTab.Content
                                 else -> BrowseGroupTab.All
                             }
-                            currentFilterCallback?.onContentTypeSelected(tab)
-                            refreshFilters()
+                            topBarController.currentFilterCallback?.onContentTypeSelected(tab)
+                            topBarController.refreshFilters()
                         }
                     },
-                    selectedSourceTags = activeFilterSourceTags,
-                    sourceTagEntries = availableSourceTags,
-                    enabledSourceTags = enabledSourceTags,
-                    isSourceTagFilterVisible = isSourceTagFilterVisible,
-                    onSourceTagFilterClick = ::onSourceTagFilterClick,
+                    selectedSourceTags = topBarController.activeFilterSourceTags,
+                    sourceTagEntries = topBarController.availableSourceTags,
+                    enabledSourceTags = topBarController.enabledSourceTags,
+                    isSourceTagFilterVisible = topBarController.isSourceTagFilterVisible,
+                    onSourceTagFilterClick = topBarController::onSourceTagFilterClick,
                     onSourceTagSelected = { tag ->
-                        if (tag == null || tag in enabledSourceTags) {
-                            currentFilterCallback?.onSourceTagSelected(tag)
-                            refreshFilters()
+                        if (tag == null || tag in topBarController.enabledSourceTags) {
+                            topBarController.currentFilterCallback?.onSourceTagSelected(tag)
+                            topBarController.refreshFilters()
                         }
                     },
                 ),
@@ -690,16 +623,16 @@ class MainActivity : BaseComposeActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString(STATE_TOP_BAR_QUERY, searchQuery)
+        outState.putString(STATE_TOP_BAR_QUERY, topBarController.searchQuery)
     }
 
     override fun onResume() {
         super.onResume()
         syncSpaceRuntime()
-        if (currentFilterCallback != null) {
-            refreshFilters()
+        if (topBarController.currentFilterCallback != null) {
+            topBarController.refreshFilters()
         } else {
-            clearActiveFilters()
+            topBarController.clearActiveFilters()
         }
     }
 
@@ -745,7 +678,7 @@ class MainActivity : BaseComposeActivity() {
             return
         }
         if (kind == SearchKind.SIMPLE && ContentLinkResolver.isValidLink(trimmedQuery)) {
-            clearSearchQuery()
+            topBarController.clearSearchQuery()
             this.router.openDetails(trimmedQuery.toUri())
             return
         }
@@ -809,8 +742,8 @@ class MainActivity : BaseComposeActivity() {
         pinnedOnly: Boolean = false,
         hideEmpty: Boolean = false,
     ) {
-        nextSearchRequestId += 1
-        searchNavigationRequest = SearchNavigationRequest(
+        topBarController.nextSearchRequestId += 1
+        topBarController.searchNavigationRequest = SearchNavigationRequest(
             query = query,
             kind = kind,
             sourceTypes = sourceTypes,
@@ -825,56 +758,8 @@ class MainActivity : BaseComposeActivity() {
             },
             pinnedOnly = pinnedOnly,
             hideEmpty = hideEmpty,
-            requestId = nextSearchRequestId,
+            requestId = topBarController.nextSearchRequestId,
         )
-    }
-
-    private fun syncSearchSuggestionFilters() {
-        searchSuggestionViewModel.setSourceTypes(sourceTypesFromTags(activeFilterSourceTags))
-        searchSuggestionViewModel.setContentKinds(activeFilterContentType.toSearchContentKinds())
-    }
-
-    private fun updateSearchQuery(query: String) {
-        if (searchQuery != query) {
-            searchQuery = query
-        }
-        searchSuggestionViewModel.onQueryChanged(query)
-    }
-
-    private fun clearSearchQuery() {
-        updateSearchQuery("")
-    }
-
-    private fun clearActiveFilters() {
-        activeFilterCallbacks.clear()
-        currentFilterCallback = null
-        activeFilterContentType = if (settings.isShowContentTypeFilter) {
-            null
-        } else {
-            settings.hiddenContentType.toBrowseGroupTab().toContentTypeOrNull()
-        }
-        activeFilterSourceTags = if (settings.isShowSourceTagFilter) {
-            emptySet()
-        } else {
-            settings.hiddenSourceTag.toSourceTagSelection()
-        }
-        isLanguagePresetFilterVisible = settings.isShowLanguagePresetFilter
-        isContentTypeFilterVisible = settings.isShowContentTypeFilter
-        isSourceTagFilterVisible = settings.isShowSourceTagFilter
-        availableSourceTags = SourceTag.quickFilterEntries
-        enabledSourceTags = SourceTag.quickFilterEntries.toSet()
-        enabledContentTypes = allTopBarContentTypes()
-        applyConfiguredLanguagePreset()
-        syncSearchSuggestionFilters()
-    }
-
-    private fun applyConfiguredLanguagePreset() {
-        if (!settings.isShowLanguagePresetFilter) {
-            val presetId = settings.hiddenLanguagePreset.toPresetId()
-            if (settings.activeSourcePresetId != presetId) {
-                settings.activeSourcePresetId = presetId
-            }
-        }
     }
 
     private fun onFirstStart() = try {
@@ -912,10 +797,6 @@ class MainActivity : BaseComposeActivity() {
 
     private fun setNavbarPinned(isPinned: Boolean) = Unit
 
-    private fun onSourceTagFilterClick(anchorView: View?): Boolean {
-        val anchor = anchorView ?: window.decorView
-        return currentFilterCallback?.onFilterIconClicked(anchor) == true
-    }
 
     private fun observeFoldableState() {
         val foldableState = FoldableUtils.observeFoldableState(this, this)
@@ -938,46 +819,5 @@ internal fun shouldRestoreImmersiveSessionFromMain(
     hasActiveSession: Boolean,
     transitionSuppressionTarget: SpaceId?,
 ): Boolean = immersiveSwitchEnabled && hasActiveSession && transitionSuppressionTarget == null
-
-private fun ContentType?.toSearchContentKinds(): Set<SearchContentKind> = when (this) {
-    ContentType.MANGA -> setOf(SearchContentKind.MANGA)
-    ContentType.NOVEL, ContentType.HENTAI_NOVEL -> setOf(SearchContentKind.NOVEL)
-    ContentType.VIDEO, ContentType.HENTAI_VIDEO -> setOf(SearchContentKind.VIDEO)
-    else -> ALL_SEARCH_CONTENT_KINDS
-}
-
-private fun BrowseGroupTab.toContentTypeOrNull(): ContentType? = when (this) {
-    BrowseGroupTab.Content -> ContentType.MANGA
-    BrowseGroupTab.Novel -> ContentType.NOVEL
-    BrowseGroupTab.Video -> ContentType.VIDEO
-    BrowseGroupTab.All -> null
-}
-
-private fun String?.toBrowseGroupTab(): BrowseGroupTab = BrowseGroupTab.fromId(this ?: BrowseGroupTab.All.id)
-
-private fun String?.toSourceTagSelection(): Set<SourceTag> {
-    if (this.isNullOrBlank() || this == "all") {
-        return emptySet()
-    }
-    return SourceTag.sanitizeQuickFilterSelection(
-        split(',')
-            .asSequence()
-            .map(String::trim)
-            .filter { it.isNotEmpty() && it != "all" }
-            .mapNotNull { raw ->
-                runCatching { SourceTag.valueOf(raw) }.getOrNull()
-                    ?: SourceTag.entries.firstOrNull { it.id == raw }
-            }
-            .toSet(),
-    )
-}
-
-private fun String?.toPresetId(): Long = this?.toLongOrNull()?.takeIf { it > 0L } ?: -1L
-
-private fun allTopBarContentTypes(): Set<ContentType> = setOf(
-    ContentType.MANGA,
-    ContentType.NOVEL,
-    ContentType.VIDEO,
-)
 
 private const val STATE_TOP_BAR_QUERY = "main_activity.top_bar_query"
