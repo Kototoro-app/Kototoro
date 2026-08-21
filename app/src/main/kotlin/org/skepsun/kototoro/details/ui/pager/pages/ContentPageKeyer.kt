@@ -6,5 +6,5 @@ import org.skepsun.kototoro.parsers.model.ContentPage
 
 class ContentPageKeyer : Keyer<ContentPage> {
 
-	override fun key(data: ContentPage, options: Options) = data.url
+    override fun key(data: ContentPage, options: Options) = data.url
 }

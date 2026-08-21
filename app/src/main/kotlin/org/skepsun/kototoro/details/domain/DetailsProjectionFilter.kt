@@ -9,10 +9,10 @@ import org.skepsun.kototoro.work.domain.isWorkContentTypeCompatibleWith
  * Unknown types are rejected so legacy data cannot widen the result set.
  */
 internal fun isDetailsProjectionAllowed(
-	currentType: ContentType?,
-	projectionType: ContentType?,
-	spaceAllowedTypes: Set<ContentType>?,
+    currentType: ContentType?,
+    projectionType: ContentType?,
+    spaceAllowedTypes: Set<ContentType>?,
 ): Boolean {
-	return currentType.isWorkContentTypeCompatibleWith(projectionType) &&
-		(spaceAllowedTypes == null || projectionType in spaceAllowedTypes)
+    return currentType.isWorkContentTypeCompatibleWith(projectionType) &&
+        (spaceAllowedTypes == null || projectionType in spaceAllowedTypes)
 }

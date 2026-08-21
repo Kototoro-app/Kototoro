@@ -5,12 +5,12 @@ import org.skepsun.kototoro.core.model.resolvedContentTypeForSnapshot
 import org.skepsun.kototoro.parsers.model.ContentSource
 
 internal fun selectResolvedDetailsSource(
-	original: ContentSource,
-	enabledSources: List<ContentSourceInfo>,
-	pipelineResolved: ContentSource,
+    original: ContentSource,
+    enabledSources: List<ContentSourceInfo>,
+    pipelineResolved: ContentSource,
 ): ContentSource {
-	enabledSources.firstOrNull { it.mangaSource.name == original.name }?.mangaSource?.let { return it }
-	return pipelineResolved.takeIf {
-		it.resolvedContentTypeForSnapshot() != null || it.locale.isNotBlank()
-	} ?: original
+    enabledSources.firstOrNull { it.mangaSource.name == original.name }?.mangaSource?.let { return it }
+    return pipelineResolved.takeIf {
+        it.resolvedContentTypeForSnapshot() != null || it.locale.isNotBlank()
+    } ?: original
 }

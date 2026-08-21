@@ -32,78 +32,78 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryServi
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface ScrobblingInfoSheetEntryPoint {
-	fun trackingSiteDiscoveryService(): TrackingSiteDiscoveryService
+    fun trackingSiteDiscoveryService(): TrackingSiteDiscoveryService
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScrobblingInfoSheetRoute(
-	scrobblerServiceId: Int,
-	onDismissRequest: () -> Unit,
-	viewModel: DetailsViewModel = hiltViewModel(),
+    scrobblerServiceId: Int,
+    onDismissRequest: () -> Unit,
+    viewModel: DetailsViewModel = hiltViewModel(),
 ) {
-	val context = LocalContext.current
-	val anchor = LocalView.current
-	val activity = context.findActivity() as? FragmentActivity
-	val router = remember(activity) { activity?.let(::AppRouter) }
-	val discoveryService = remember(context) {
-		EntryPointAccessors.fromApplication<ScrobblingInfoSheetEntryPoint>(
-			context.applicationContext,
-		).trackingSiteDiscoveryService()
-	}
-	val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-	val scrobblingItems by viewModel.scrobblingInfo.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val anchor = LocalView.current
+    val activity = context.findActivity() as? FragmentActivity
+    val router = remember(activity) { activity?.let(::AppRouter) }
+    val discoveryService = remember(context) {
+        EntryPointAccessors.fromApplication<ScrobblingInfoSheetEntryPoint>(
+            context.applicationContext,
+        ).trackingSiteDiscoveryService()
+    }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrobblingItems by viewModel.scrobblingInfo.collectAsStateWithLifecycle()
 
-	LaunchedEffect(scrobblingItems, scrobblerServiceId) {
-		if (scrobblingItems.isNotEmpty() && scrobblingItems.none { it.scrobbler.id == scrobblerServiceId }) {
-			onDismissRequest()
-		}
-	}
+    LaunchedEffect(scrobblingItems, scrobblerServiceId) {
+        if (scrobblingItems.isNotEmpty() && scrobblingItems.none { it.scrobbler.id == scrobblerServiceId }) {
+            onDismissRequest()
+        }
+    }
 
-	KototoroTheme {
-		ModalBottomSheet(
-			onDismissRequest = onDismissRequest,
-			sheetState = sheetState,
-			modifier = Modifier.fillMaxHeight(0.9f),
-		) {
-			if (scrobblingItems.isEmpty()) {
-				Box(
-					modifier = Modifier.fillMaxSize(),
-					contentAlignment = Alignment.Center,
-				) {
-					CircularProgressIndicator()
-				}
-			} else {
-				ScrobblingInfoSheetContent(
-					viewModel = viewModel,
-					scrobblerServiceId = scrobblerServiceId,
-					discoveryService = discoveryService,
-					onDismissRequest = onDismissRequest,
-					onOpenCover = { info ->
-						router?.openImage(
-							url = info.coverUrl,
-							source = null,
-							anchor = anchor,
-						)
-					},
-					onOpenBrowser = { url ->
-						router?.openExternalBrowser(url, context.getString(R.string.open_in_browser)) ?: false
-					},
-					onEdit = { service ->
-						viewModel.manga.value?.let { manga ->
-							onDismissRequest()
-							router?.showScrobblingSelectorSheet(manga, service)
-						}
-					},
-					onUnregister = {
-						viewModel.unregisterScrobbling(scrobblerServiceId)
-						onDismissRequest()
-					},
-					onUpdate = { rating, status ->
-						viewModel.updateScrobbling(scrobblerServiceId, rating, status)
-					},
-				)
-			}
-		}
-	}
+    KototoroTheme {
+        ModalBottomSheet(
+            onDismissRequest = onDismissRequest,
+            sheetState = sheetState,
+            modifier = Modifier.fillMaxHeight(0.9f),
+        ) {
+            if (scrobblingItems.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                ScrobblingInfoSheetContent(
+                    viewModel = viewModel,
+                    scrobblerServiceId = scrobblerServiceId,
+                    discoveryService = discoveryService,
+                    onDismissRequest = onDismissRequest,
+                    onOpenCover = { info ->
+                        router?.openImage(
+                            url = info.coverUrl,
+                            source = null,
+                            anchor = anchor,
+                        )
+                    },
+                    onOpenBrowser = { url ->
+                        router?.openExternalBrowser(url, context.getString(R.string.open_in_browser)) ?: false
+                    },
+                    onEdit = { service ->
+                        viewModel.manga.value?.let { manga ->
+                            onDismissRequest()
+                            router?.showScrobblingSelectorSheet(manga, service)
+                        }
+                    },
+                    onUnregister = {
+                        viewModel.unregisterScrobbling(scrobblerServiceId)
+                        onDismissRequest()
+                    },
+                    onUpdate = { rating, status ->
+                        viewModel.updateScrobbling(scrobblerServiceId, rating, status)
+                    },
+                )
+            }
+        }
+    }
 }

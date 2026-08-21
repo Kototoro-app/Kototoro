@@ -80,364 +80,364 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ScrobblingInfoSheetContent(
-	viewModel: DetailsViewModel,
-	scrobblerServiceId: Int,
-	discoveryService: TrackingSiteDiscoveryService,
-	onDismissRequest: () -> Unit,
-	onOpenCover: (ScrobblingInfo) -> Unit,
-	onOpenBrowser: (String) -> Boolean,
-	onEdit: (ScrobblerService) -> Unit,
-	onUnregister: () -> Unit,
-	onUpdate: (Float, ScrobblingStatus?) -> Unit,
+    viewModel: DetailsViewModel,
+    scrobblerServiceId: Int,
+    discoveryService: TrackingSiteDiscoveryService,
+    onDismissRequest: () -> Unit,
+    onOpenCover: (ScrobblingInfo) -> Unit,
+    onOpenBrowser: (String) -> Boolean,
+    onEdit: (ScrobblerService) -> Unit,
+    onUnregister: () -> Unit,
+    onUpdate: (Float, ScrobblingStatus?) -> Unit,
 ) {
-	val scrobblingItems by viewModel.scrobblingInfo.collectAsStateWithLifecycle()
-	val scrobbling = scrobblingItems.firstOrNull { it.scrobbler.id == scrobblerServiceId }
-	var details by remember { mutableStateOf<TrackingSiteItemDetails?>(null) }
-	var isLoadingDetails by remember { mutableStateOf(false) }
+    val scrobblingItems by viewModel.scrobblingInfo.collectAsStateWithLifecycle()
+    val scrobbling = scrobblingItems.firstOrNull { it.scrobbler.id == scrobblerServiceId }
+    var details by remember { mutableStateOf<TrackingSiteItemDetails?>(null) }
+    var isLoadingDetails by remember { mutableStateOf(false) }
 
-	LaunchedEffect(scrobbling?.scrobbler, scrobbling?.targetId) {
-		val current = scrobbling ?: return@LaunchedEffect
-		isLoadingDetails = true
-		details = null
-		try {
-			details = withContext(Dispatchers.IO) {
-				discoveryService.getDetails(current.scrobbler, current.targetId)
-			}
-		} catch (error: Exception) {
-			if (error is CancellationException) throw error
-		} finally {
-			isLoadingDetails = false
-		}
-	}
+    LaunchedEffect(scrobbling?.scrobbler, scrobbling?.targetId) {
+        val current = scrobbling ?: return@LaunchedEffect
+        isLoadingDetails = true
+        details = null
+        try {
+            details = withContext(Dispatchers.IO) {
+                discoveryService.getDetails(current.scrobbler, current.targetId)
+            }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+        } finally {
+            isLoadingDetails = false
+        }
+    }
 
-	val snackbarHostState = remember { SnackbarHostState() }
-	val coroutineScope = rememberCoroutineScope()
-	val unsupportedMessage = stringResource(R.string.operation_not_supported)
-	ScrobblingInfoSheetLayout(
-		scrobbler = scrobbling,
-		details = details,
-		isLoadingDetails = isLoadingDetails,
-		snackbarHostState = snackbarHostState,
-		onDismissRequest = onDismissRequest,
-		onOpenCover = onOpenCover,
-		onOpenBrowser = { url ->
-			if (!onOpenBrowser(url)) {
-				coroutineScope.launch {
-					snackbarHostState.showSnackbar(unsupportedMessage)
-				}
-			}
-		},
-		onEdit = onEdit,
-		onUnregister = onUnregister,
-		onUpdate = onUpdate,
-	)
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val unsupportedMessage = stringResource(R.string.operation_not_supported)
+    ScrobblingInfoSheetLayout(
+        scrobbler = scrobbling,
+        details = details,
+        isLoadingDetails = isLoadingDetails,
+        snackbarHostState = snackbarHostState,
+        onDismissRequest = onDismissRequest,
+        onOpenCover = onOpenCover,
+        onOpenBrowser = { url ->
+            if (!onOpenBrowser(url)) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar(unsupportedMessage)
+                }
+            }
+        },
+        onEdit = onEdit,
+        onUnregister = onUnregister,
+        onUpdate = onUpdate,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun ScrobblingInfoSheetLayout(
-	scrobbler: ScrobblingInfo?,
-	details: TrackingSiteItemDetails?,
-	isLoadingDetails: Boolean,
-	snackbarHostState: SnackbarHostState,
-	onDismissRequest: () -> Unit,
-	onOpenCover: (ScrobblingInfo) -> Unit,
-	onOpenBrowser: (String) -> Unit,
-	onEdit: (ScrobblerService) -> Unit,
-	onUnregister: () -> Unit,
-	onUpdate: (Float, ScrobblingStatus?) -> Unit,
+    scrobbler: ScrobblingInfo?,
+    details: TrackingSiteItemDetails?,
+    isLoadingDetails: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onDismissRequest: () -> Unit,
+    onOpenCover: (ScrobblingInfo) -> Unit,
+    onOpenBrowser: (String) -> Unit,
+    onEdit: (ScrobblerService) -> Unit,
+    onUnregister: () -> Unit,
+    onUpdate: (Float, ScrobblingStatus?) -> Unit,
 ) {
-	if (scrobbler == null) {
-		return
-	}
+    if (scrobbler == null) {
+        return
+    }
 
-	Box(modifier = Modifier.fillMaxSize()) {
-		Scaffold(
-			topBar = {
-				ScrobblingTopBar(
-					onDismissRequest = onDismissRequest,
-					onOpenBrowser = { onOpenBrowser(scrobbler.externalUrl) },
-					onEdit = { onEdit(scrobbler.scrobbler) },
-					onUnregister = onUnregister,
-				)
-			},
-			snackbarHost = { SnackbarHost(snackbarHostState) },
-		) { contentPadding ->
-			Column(
-				modifier = Modifier
-					.fillMaxWidth()
-					.verticalScroll(rememberScrollState())
-					.padding(contentPadding)
-					.padding(bottom = 16.dp),
-			) {
-				ScrobblingHeader(
-					scrobbler = scrobbler,
-					onOpenCover = { onOpenCover(scrobbler) },
-					onUpdate = onUpdate,
-				)
-				val description = scrobbler.description?.toString()?.takeIf { it.isNotBlank() }
-					?: details?.description?.takeIf { it.isNotBlank() }
-				if (!description.isNullOrBlank()) {
-					RichDescription(description)
-				}
-				val comment = scrobbler.comment
-				if (!comment.isNullOrBlank()) {
-					Text(
-						text = comment,
-						style = MaterialTheme.typography.bodyMedium,
-						modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-					)
-				}
-				if (isLoadingDetails) {
-					LinearProgressIndicator(
-						modifier = Modifier
-							.fillMaxWidth()
-							.padding(horizontal = 16.dp, vertical = 8.dp),
-					)
-				}
-				details?.let { trackingDetails ->
-					TrackingDetails(
-						details = trackingDetails,
-						fallbackDescriptionShown = !description.isNullOrBlank(),
-					)
-				}
-			}
-		}
-	}
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                ScrobblingTopBar(
+                    onDismissRequest = onDismissRequest,
+                    onOpenBrowser = { onOpenBrowser(scrobbler.externalUrl) },
+                    onEdit = { onEdit(scrobbler.scrobbler) },
+                    onUnregister = onUnregister,
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+        ) { contentPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(contentPadding)
+                    .padding(bottom = 16.dp),
+            ) {
+                ScrobblingHeader(
+                    scrobbler = scrobbler,
+                    onOpenCover = { onOpenCover(scrobbler) },
+                    onUpdate = onUpdate,
+                )
+                val description = scrobbler.description?.toString()?.takeIf { it.isNotBlank() }
+                    ?: details?.description?.takeIf { it.isNotBlank() }
+                if (!description.isNullOrBlank()) {
+                    RichDescription(description)
+                }
+                val comment = scrobbler.comment
+                if (!comment.isNullOrBlank()) {
+                    Text(
+                        text = comment,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                if (isLoadingDetails) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+                details?.let { trackingDetails ->
+                    TrackingDetails(
+                        details = trackingDetails,
+                        fallbackDescriptionShown = !description.isNullOrBlank(),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ScrobblingTopBar(
-	onDismissRequest: () -> Unit,
-	onOpenBrowser: () -> Unit,
-	onEdit: () -> Unit,
-	onUnregister: () -> Unit,
+    onDismissRequest: () -> Unit,
+    onOpenBrowser: () -> Unit,
+    onEdit: () -> Unit,
+    onUnregister: () -> Unit,
 ) {
-	var isMenuExpanded by remember { mutableStateOf(false) }
-	TopAppBar(
-		title = { Text(stringResource(R.string.tracking)) },
-		navigationIcon = {
-			IconButton(onClick = onDismissRequest) {
-				Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
-			}
-		},
-		actions = {
-			Box {
-				IconButton(onClick = { isMenuExpanded = true }) {
-					Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_in_browser))
-				}
-				DropdownMenu(
-					expanded = isMenuExpanded,
-					onDismissRequest = { isMenuExpanded = false },
-				) {
-					DropdownMenuItem(
-						text = { Text(stringResource(R.string.open_in_browser)) },
-						onClick = { isMenuExpanded = false; onOpenBrowser() },
-					)
-					DropdownMenuItem(
-						text = { Text(stringResource(R.string.edit)) },
-						onClick = { isMenuExpanded = false; onEdit() },
-					)
-					DropdownMenuItem(
-						text = { Text(stringResource(R.string.remove)) },
-						onClick = { isMenuExpanded = false; onUnregister() },
-					)
-				}
-			}
-		},
-	)
+    var isMenuExpanded by remember { mutableStateOf(false) }
+    TopAppBar(
+        title = { Text(stringResource(R.string.tracking)) },
+        navigationIcon = {
+            IconButton(onClick = onDismissRequest) {
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.close))
+            }
+        },
+        actions = {
+            Box {
+                IconButton(onClick = { isMenuExpanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.open_in_browser))
+                }
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = { isMenuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.open_in_browser)) },
+                        onClick = { isMenuExpanded = false; onOpenBrowser() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit)) },
+                        onClick = { isMenuExpanded = false; onEdit() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.remove)) },
+                        onClick = { isMenuExpanded = false; onUnregister() },
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable
 private fun ScrobblingHeader(
-	scrobbler: ScrobblingInfo,
-	onOpenCover: () -> Unit,
-	onUpdate: (Float, ScrobblingStatus?) -> Unit,
+    scrobbler: ScrobblingInfo,
+    onOpenCover: () -> Unit,
+    onUpdate: (Float, ScrobblingStatus?) -> Unit,
 ) {
-	val context = LocalContext.current
-	val currentStatusOrdinal by rememberUpdatedState(scrobbler.status?.ordinal ?: -1)
-	val currentRating by rememberUpdatedState(scrobbler.rating)
-	Row(
-		modifier = Modifier
-			.fillMaxWidth()
-			.padding(horizontal = 16.dp),
-		verticalAlignment = Alignment.Top,
-	) {
-		Box(
-			modifier = Modifier
-			.weight(0.36f)
-			.aspectRatio(13f / 18f)
-			.clip(ContentCoverShape),
-		) {
-			AsyncImage(
-				model = ImageRequest.Builder(context)
-					.data(scrobbler.coverUrl.takeIfUsableImageUri())
-					.crossfade(true)
-					.build(),
-				contentDescription = scrobbler.title,
-				contentScale = ContentScale.Crop,
-				placeholder = rememberSafePainter(R.drawable.ic_placeholder),
-				error = rememberSafePainter(R.drawable.ic_placeholder),
-				modifier = Modifier
-					.fillMaxSize()
-					.clip(ContentCoverShape),
-			)
-			IconButton(
-				onClick = onOpenCover,
-				modifier = Modifier.fillMaxSize(),
-			) { }
-			Box(
-				modifier = Modifier
-					.align(Alignment.BottomEnd)
-					.padding(8.dp)
-					.size(32.dp),
-				contentAlignment = Alignment.Center,
-			) {
-				Icon(
-					painter = rememberSafePainter(scrobbler.scrobbler.iconResId),
-					contentDescription = stringResource(scrobbler.scrobbler.titleResId),
-					tint = MaterialTheme.colorScheme.onSecondary,
-					modifier = Modifier
-						.size(32.dp)
-						.padding(4.dp),
-				)
-			}
-		}
-		Spacer(Modifier.size(16.dp))
-		Column(modifier = Modifier.weight(0.64f)) {
-			Text(
-				text = scrobbler.title,
-				style = MaterialTheme.typography.headlineSmall,
-				maxLines = 2,
-				overflow = TextOverflow.Ellipsis,
-			)
-			AndroidView(
-				factory = {
-					RatingBar(it).apply {
-						numStars = 5
-						stepSize = 0.5f
-						setOnRatingBarChangeListener { _, rating, fromUser ->
-							if (fromUser) onUpdate(rating / 5f, ScrobblingStatus.entries.getOrNull(currentStatusOrdinal))
-						}
-					}
-				},
-				update = { it.rating = currentRating * it.numStars },
-				modifier = Modifier.padding(top = 6.dp),
-			)
-			AndroidView(
-				factory = {
-					Spinner(it).apply {
-						adapter = ArrayAdapter.createFromResource(
-							context,
-							R.array.scrobbling_statuses,
-							android.R.layout.simple_spinner_item,
-						).also { arrayAdapter ->
-							arrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-						}
-						setOnItemSelectedListener(object : AdapterView.OnItemSelectedListener {
-							var ignoreInitialSelection = true
+    val context = LocalContext.current
+    val currentStatusOrdinal by rememberUpdatedState(scrobbler.status?.ordinal ?: -1)
+    val currentRating by rememberUpdatedState(scrobbler.rating)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier
+            .weight(0.36f)
+            .aspectRatio(13f / 18f)
+            .clip(ContentCoverShape),
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(scrobbler.coverUrl.takeIfUsableImageUri())
+                    .crossfade(true)
+                    .build(),
+                contentDescription = scrobbler.title,
+                contentScale = ContentScale.Crop,
+                placeholder = rememberSafePainter(R.drawable.ic_placeholder),
+                error = rememberSafePainter(R.drawable.ic_placeholder),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(ContentCoverShape),
+            )
+            IconButton(
+                onClick = onOpenCover,
+                modifier = Modifier.fillMaxSize(),
+            ) { }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(8.dp)
+                    .size(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = rememberSafePainter(scrobbler.scrobbler.iconResId),
+                    contentDescription = stringResource(scrobbler.scrobbler.titleResId),
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(4.dp),
+                )
+            }
+        }
+        Spacer(Modifier.size(16.dp))
+        Column(modifier = Modifier.weight(0.64f)) {
+            Text(
+                text = scrobbler.title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            AndroidView(
+                factory = {
+                    RatingBar(it).apply {
+                        numStars = 5
+                        stepSize = 0.5f
+                        setOnRatingBarChangeListener { _, rating, fromUser ->
+                            if (fromUser) onUpdate(rating / 5f, ScrobblingStatus.entries.getOrNull(currentStatusOrdinal))
+                        }
+                    }
+                },
+                update = { it.rating = currentRating * it.numStars },
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            AndroidView(
+                factory = {
+                    Spinner(it).apply {
+                        adapter = ArrayAdapter.createFromResource(
+                            context,
+                            R.array.scrobbling_statuses,
+                            android.R.layout.simple_spinner_item,
+                        ).also { arrayAdapter ->
+                            arrayAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                        }
+                        setOnItemSelectedListener(object : AdapterView.OnItemSelectedListener {
+                            var ignoreInitialSelection = true
 
-							override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-								if (ignoreInitialSelection) {
-									ignoreInitialSelection = false
-								} else if (position != currentStatusOrdinal) {
-									onUpdate(currentRating, ScrobblingStatus.entries.getOrNull(position))
-								}
-							}
+                            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                                if (ignoreInitialSelection) {
+                                    ignoreInitialSelection = false
+                                } else if (position != currentStatusOrdinal) {
+                                    onUpdate(currentRating, ScrobblingStatus.entries.getOrNull(position))
+                                }
+                            }
 
-							override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-						})
-					}
-				},
-				update = { spinner ->
-					if (currentStatusOrdinal >= 0 && spinner.selectedItemPosition != currentStatusOrdinal) {
-						spinner.setSelection(currentStatusOrdinal)
-					}
-				},
-				modifier = Modifier
-					.fillMaxWidth()
-					.padding(top = 6.dp),
-			)
-		}
-	}
+                            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                        })
+                    }
+                },
+                update = { spinner ->
+                    if (currentStatusOrdinal >= 0 && spinner.selectedItemPosition != currentStatusOrdinal) {
+                        spinner.setSelection(currentStatusOrdinal)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+            )
+        }
+    }
 }
 
 @Composable
 private fun RichDescription(description: String) {
-	AndroidView(
-		factory = {
-			SelectableTextView(it).apply {
-				movementMethod = LinkMovementMethod.getInstance()
-				setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
-			}
-		},
-		update = { it.text = renderDescription(description) },
-		modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
-	)
+    AndroidView(
+        factory = {
+            SelectableTextView(it).apply {
+                movementMethod = LinkMovementMethod.getInstance()
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
+            }
+        },
+        update = { it.text = renderDescription(description) },
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TrackingDetails(
-	details: TrackingSiteItemDetails,
-	fallbackDescriptionShown: Boolean,
+    details: TrackingSiteItemDetails,
+    fallbackDescriptionShown: Boolean,
 ) {
-	val rows = buildList {
-		details.score?.let { add(stringResource(R.string.rating) to stringResource(R.string.discover_score, it)) }
-		details.rank?.let { add(stringResource(R.string.rank) to stringResource(R.string.discover_rank_value, it)) }
-		details.year?.let { add(stringResource(R.string.year) to it.toString()) }
-		details.totalEpisodes?.let { add(stringResource(R.string.discover_total_episodes) to it.toString()) }
-		if (details.authors.isNotEmpty()) add(stringResource(R.string.authors) to details.authors.joinToString())
-	}
-	if (rows.isNotEmpty()) {
-		Card(
-			colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-			modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-		) {
-			Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-				rows.forEach { (label, value) ->
-					Row(modifier = Modifier.fillMaxWidth()) {
-						Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-						Text(value, style = MaterialTheme.typography.bodyMedium)
-					}
-				}
-			}
-		}
-	}
-	if (details.tags.isNotEmpty()) {
-		FlowRow(
-			modifier = Modifier.padding(horizontal = 16.dp),
-			horizontalArrangement = Arrangement.spacedBy(4.dp),
-			verticalArrangement = Arrangement.spacedBy(4.dp),
-		) {
-			details.tags.forEach { tag ->
-				AssistChip(onClick = {}, label = { Text(tag) })
-			}
-		}
-	}
-	if (details.infoboxProperties.isNotEmpty()) {
-		Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-			Text(stringResource(R.string.work_info), style = MaterialTheme.typography.titleSmall)
-						details.infoboxProperties.forEach { (key, value) ->
-								Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-									Text(
-										key,
-										style = MaterialTheme.typography.titleSmall,
-										modifier = Modifier.widthIn(min = 80.dp).padding(end = 8.dp),
-									)
-					Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-				}
-			}
-		}
-	}
-	if (!fallbackDescriptionShown && !details.description.isNullOrBlank()) {
-		RichDescription(details.description)
-	}
+    val rows = buildList {
+        details.score?.let { add(stringResource(R.string.rating) to stringResource(R.string.discover_score, it)) }
+        details.rank?.let { add(stringResource(R.string.rank) to stringResource(R.string.discover_rank_value, it)) }
+        details.year?.let { add(stringResource(R.string.year) to it.toString()) }
+        details.totalEpisodes?.let { add(stringResource(R.string.discover_total_episodes) to it.toString()) }
+        if (details.authors.isNotEmpty()) add(stringResource(R.string.authors) to details.authors.joinToString())
+    }
+    if (rows.isNotEmpty()) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                rows.forEach { (label, value) ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text(label, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        Text(value, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+    }
+    if (details.tags.isNotEmpty()) {
+        FlowRow(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            details.tags.forEach { tag ->
+                AssistChip(onClick = {}, label = { Text(tag) })
+            }
+        }
+    }
+    if (details.infoboxProperties.isNotEmpty()) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(stringResource(R.string.work_info), style = MaterialTheme.typography.titleSmall)
+                        details.infoboxProperties.forEach { (key, value) ->
+                                Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                    Text(
+                                        key,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        modifier = Modifier.widthIn(min = 80.dp).padding(end = 8.dp),
+                                    )
+                    Text(value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+    if (!fallbackDescriptionShown && !details.description.isNullOrBlank()) {
+        RichDescription(details.description)
+    }
 }
 
 private fun renderDescription(raw: String): CharSequence {
-		return runCatching {
-			raw.parseAsHtml().sanitize()
-		}.getOrElse { raw.sanitize() }
+        return runCatching {
+            raw.parseAsHtml().sanitize()
+        }.getOrElse { raw.sanitize() }
 }

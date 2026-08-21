@@ -46,139 +46,139 @@ private const val PageThumbnailAspectRatioMax = 1f
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PageThumbnailCard(
-	thumbnail: PageThumbnail,
-	isSelected: Boolean,
-	fitPreview: Boolean,
-	aspectRatio: Float,
-	onClick: () -> Unit,
-	onLongClick: () -> Unit,
-	modifier: Modifier = Modifier,
+    thumbnail: PageThumbnail,
+    isSelected: Boolean,
+    fitPreview: Boolean,
+    aspectRatio: Float,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	Card(
-		modifier = modifier
-			.fillMaxWidth()
-			.aspectRatio(aspectRatio)
-			.combinedClickable(
-				onClick = onClick,
-				onLongClick = onLongClick,
-			),
-		shape = RoundedCornerShape(8.dp),
-		colors = CardDefaults.cardColors(
-			containerColor = MaterialTheme.colorScheme.surfaceVariant,
-		),
-		border = if (isSelected) BorderStroke(4.dp, MaterialTheme.colorScheme.primary) else null,
-	) {
-		Box(modifier = Modifier.fillMaxSize()) {
-			val context = LocalContext.current
-			val model = remember(thumbnail.page) {
-				ImageRequest.Builder(context)
-					.data(thumbnail.page.toContentPage())
-					.mangaSourceExtra(thumbnail.page.source)
-					.build()
-			}
-			AsyncImage(
-				model = model,
-				contentDescription = "Page Thumbnail",
-				contentScale = if (fitPreview) ContentScale.Fit else ContentScale.Crop,
-				modifier = Modifier.fillMaxSize(),
-			)
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(aspectRatio)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+        border = if (isSelected) BorderStroke(4.dp, MaterialTheme.colorScheme.primary) else null,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val context = LocalContext.current
+            val model = remember(thumbnail.page) {
+                ImageRequest.Builder(context)
+                    .data(thumbnail.page.toContentPage())
+                    .mangaSourceExtra(thumbnail.page.source)
+                    .build()
+            }
+            AsyncImage(
+                model = model,
+                contentDescription = "Page Thumbnail",
+                contentScale = if (fitPreview) ContentScale.Fit else ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
 
-			Surface(
-				modifier = Modifier
-					.align(Alignment.BottomEnd)
-					.padding(6.dp),
-				shape = RoundedCornerShape(4.dp),
-				color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-			) {
-				Text(
-					text = "${thumbnail.number}",
-					style = MaterialTheme.typography.labelSmall,
-					modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-				)
-			}
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp),
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+            ) {
+                Text(
+                    text = "${thumbnail.number}",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
 
-			if (thumbnail.isCurrent) {
-				Surface(
-					modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-					shape = RoundedCornerShape(4.dp),
-					color = MaterialTheme.colorScheme.primaryContainer,
-				) {
-					Icon(
-						painter = painterResource(id = R.drawable.ic_current_chapter),
-						contentDescription = "Current Page",
-						tint = MaterialTheme.colorScheme.onPrimaryContainer,
-						modifier = Modifier.size(16.dp).padding(2.dp),
-					)
-				}
-			}
+            if (thumbnail.isCurrent) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_current_chapter),
+                        contentDescription = "Current Page",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(16.dp).padding(2.dp),
+                    )
+                }
+            }
 
-			if (isSelected) {
-				Surface(
-					modifier = Modifier.fillMaxSize(),
-					color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-				) {
-					Icon(
-						imageVector = Icons.Default.CheckCircle,
-						contentDescription = "Selected",
-						tint = MaterialTheme.colorScheme.primaryContainer,
-						modifier = Modifier
-							.align(Alignment.Center)
-							.size(48.dp),
-					)
-				}
-			}
-		}
-	}
+            if (isSelected) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(48.dp),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun PageThumbnailPlaceholderCard(
-	aspectRatio: Float,
-	modifier: Modifier = Modifier,
+    aspectRatio: Float,
+    modifier: Modifier = Modifier,
 ) {
-	Card(
-		modifier = modifier
-			.fillMaxWidth()
-			.aspectRatio(aspectRatio),
-		shape = RoundedCornerShape(8.dp),
-		colors = CardDefaults.cardColors(
-			containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-		),
-		border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-	) {
-		Box(
-			modifier = Modifier
-				.fillMaxSize()
-				.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-			contentAlignment = Alignment.Center,
-		) {
-			Icon(
-				painter = painterResource(id = R.drawable.ic_images),
-				contentDescription = null,
-				tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-				modifier = Modifier.size(32.dp),
-			)
-		}
-	}
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(aspectRatio),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_images),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier.size(32.dp),
+            )
+        }
+    }
 }
 
 @Composable
 fun PagesScreen(
-	items: List<org.skepsun.kototoro.list.ui.model.ListModel>,
-	gridColumns: Int,
-	selectedItemIds: Set<Long>,
-	fitPreview: Boolean = false,
-	thumbnailAspectRatio: Float = 0.7f,
-	emptyMessageResId: Int?,
-	isLoading: Boolean,
-	detailsPaneState: DetailsPaneState? = null,
-	onLoadPrevious: () -> Unit = {},
-	onLoadNext: () -> Unit = {},
-	onVisiblePlaceholder: (Long) -> Unit = {},
-	onItemClick: (PageThumbnail) -> Unit,
-	onItemLongClick: (PageThumbnail) -> Unit,
-	onSelectionActionClick: (Int) -> Unit,
-	onClearSelection: () -> Unit,
+    items: List<org.skepsun.kototoro.list.ui.model.ListModel>,
+    gridColumns: Int,
+    selectedItemIds: Set<Long>,
+    fitPreview: Boolean = false,
+    thumbnailAspectRatio: Float = 0.7f,
+    emptyMessageResId: Int?,
+    isLoading: Boolean,
+    detailsPaneState: DetailsPaneState? = null,
+    onLoadPrevious: () -> Unit = {},
+    onLoadNext: () -> Unit = {},
+    onVisiblePlaceholder: (Long) -> Unit = {},
+    onItemClick: (PageThumbnail) -> Unit,
+    onItemLongClick: (PageThumbnail) -> Unit,
+    onSelectionActionClick: (Int) -> Unit,
+    onClearSelection: () -> Unit,
 ) {
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
@@ -194,11 +194,11 @@ fun PagesScreen(
             Modifier
         }
     }
-	val cardAspectRatio = thumbnailAspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
-	Box(modifier = Modifier.fillMaxSize()) {
-		if (isLoading) {
-			CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-		} else if (items.isEmpty()) {
+    val cardAspectRatio = thumbnailAspectRatio.coerceIn(PageThumbnailAspectRatioMin, PageThumbnailAspectRatioMax)
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        } else if (items.isEmpty()) {
             emptyMessageResId?.let {
                 Text(
                     text = stringResource(it),
@@ -209,59 +209,59 @@ fun PagesScreen(
                         .padding(16.dp),
                 )
             }
-		} else {
-			LaunchedEffect(items) {
-				val currentIndex = items.indexOfFirst { item ->
+        } else {
+            LaunchedEffect(items) {
+                val currentIndex = items.indexOfFirst { item ->
                     item is PageThumbnail && item.isCurrent
                 }
-				if (currentIndex >= 0 && listState.firstVisibleItemIndex == 0) {
-					listState.scrollToItem(currentIndex)
-				}
-			}
+                if (currentIndex >= 0 && listState.firstVisibleItemIndex == 0) {
+                    listState.scrollToItem(currentIndex)
+                }
+            }
 
-			LaunchedEffect(items, isLoading) {
-				snapshotFlow {
-					if (isLoading) {
-						VisibleLoadRequest()
-					} else {
-						val layoutInfo = listState.layoutInfo
-						val visibleItems = layoutInfo.visibleItemsInfo
-						val firstIndex = visibleItems.firstOrNull()?.index ?: return@snapshotFlow VisibleLoadRequest()
-						val lastIndex = visibleItems.lastOrNull()?.index ?: return@snapshotFlow VisibleLoadRequest()
-						val placeholderChapterId = visibleItems
-							.asSequence()
-							.mapNotNull { info -> items.getOrNull(info.index) as? PageThumbnailPlaceholder }
-							.firstOrNull()
-							?.chapterId
-						VisibleLoadRequest(
-							loadPrevious = firstIndex <= LOAD_MORE_THRESHOLD,
-							loadNext = lastIndex >= layoutInfo.totalItemsCount - LOAD_MORE_THRESHOLD - 1,
-							placeholderChapterId = placeholderChapterId,
-						)
-					}
-				}.distinctUntilChanged().collect { request ->
-					if (request.loadPrevious) {
-						onLoadPrevious()
-					}
-					if (request.loadNext) {
-						onLoadNext()
-					}
-					if (request.placeholderChapterId != null) {
-						onVisiblePlaceholder(request.placeholderChapterId)
-					}
-				}
-			}
+            LaunchedEffect(items, isLoading) {
+                snapshotFlow {
+                    if (isLoading) {
+                        VisibleLoadRequest()
+                    } else {
+                        val layoutInfo = listState.layoutInfo
+                        val visibleItems = layoutInfo.visibleItemsInfo
+                        val firstIndex = visibleItems.firstOrNull()?.index ?: return@snapshotFlow VisibleLoadRequest()
+                        val lastIndex = visibleItems.lastOrNull()?.index ?: return@snapshotFlow VisibleLoadRequest()
+                        val placeholderChapterId = visibleItems
+                            .asSequence()
+                            .mapNotNull { info -> items.getOrNull(info.index) as? PageThumbnailPlaceholder }
+                            .firstOrNull()
+                            ?.chapterId
+                        VisibleLoadRequest(
+                            loadPrevious = firstIndex <= LOAD_MORE_THRESHOLD,
+                            loadNext = lastIndex >= layoutInfo.totalItemsCount - LOAD_MORE_THRESHOLD - 1,
+                            placeholderChapterId = placeholderChapterId,
+                        )
+                    }
+                }.distinctUntilChanged().collect { request ->
+                    if (request.loadPrevious) {
+                        onLoadPrevious()
+                    }
+                    if (request.loadNext) {
+                        onLoadNext()
+                    }
+                    if (request.placeholderChapterId != null) {
+                        onVisiblePlaceholder(request.placeholderChapterId)
+                    }
+                }
+            }
 
-			LazyVerticalGrid(
-				state = listState,
-				columns = GridCells.Fixed(gridColumns.coerceIn(2, 6)),
-				contentPadding = PaddingValues(16.dp),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				verticalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier
+            LazyVerticalGrid(
+                state = listState,
+                columns = GridCells.Fixed(gridColumns.coerceIn(2, 6)),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
                     .fillMaxSize()
                     .then(paneNestedScrollModifier),
-			) {
+            ) {
                 items(
                     count = items.size,
                     key = { index ->
@@ -318,60 +318,60 @@ fun PagesScreen(
                 state = listState,
                 labelProvider = { index -> "${index + 1}" },
             )
-		}
+        }
 
-		androidx.compose.animation.AnimatedVisibility(
-			visible = selectedItemIds.isNotEmpty(),
-			enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
-			exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
-			modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-		) {
-			Surface(
-				shape = RoundedCornerShape(16.dp),
-				color = MaterialTheme.colorScheme.inverseSurface,
-				contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-				modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
-			) {
-				Row(
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = Arrangement.SpaceBetween,
-				) {
-					Row(verticalAlignment = Alignment.CenterVertically) {
-						IconButton(onClick = onClearSelection) {
-							Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-						}
-						Text(
-							text = "${selectedItemIds.size}",
-							style = MaterialTheme.typography.titleMedium,
-							modifier = Modifier.padding(start = 8.dp),
-						)
-					}
-					Row {
-						IconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
-							Icon(painter = painterResource(id = R.drawable.ic_save_ok), contentDescription = "Save Page")
-						}
-					}
-				}
-			}
-		}
-	}
+        androidx.compose.animation.AnimatedVisibility(
+            visible = selectedItemIds.isNotEmpty(),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onClearSelection) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                        }
+                        Text(
+                            text = "${selectedItemIds.size}",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                    Row {
+                        IconButton(onClick = { onSelectionActionClick(R.id.action_save) }) {
+                            Icon(painter = painterResource(id = R.drawable.ic_save_ok), contentDescription = "Save Page")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fun pagePreviewGridColumns(gridScale: Float): Int {
-	return when {
-		gridScale <= 0.6f -> 6
-		gridScale <= 0.8f -> 5
-		gridScale < 1f -> 4
-		gridScale <= 1.2f -> 3
-		else -> 2
-	}
+    return when {
+        gridScale <= 0.6f -> 6
+        gridScale <= 0.8f -> 5
+        gridScale < 1f -> 4
+        gridScale <= 1.2f -> 3
+        else -> 2
+    }
 }
 
 private data class VisibleLoadRequest(
-	val loadPrevious: Boolean = false,
-	val loadNext: Boolean = false,
-	val placeholderChapterId: Long? = null,
+    val loadPrevious: Boolean = false,
+    val loadNext: Boolean = false,
+    val placeholderChapterId: Long? = null,
 )
 
 private const val LOAD_MORE_THRESHOLD = 6

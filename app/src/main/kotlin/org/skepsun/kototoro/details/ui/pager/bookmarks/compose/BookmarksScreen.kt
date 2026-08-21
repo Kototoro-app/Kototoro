@@ -46,89 +46,89 @@ import org.skepsun.kototoro.list.ui.model.ListHeader
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun BookmarkCard(
-	bookmark: Bookmark,
-	isSelected: Boolean,
-	onClick: () -> Unit,
-	onLongClick: () -> Unit,
-	modifier: Modifier = Modifier,
+    bookmark: Bookmark,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-	Card(
-		modifier = modifier
-			.fillMaxWidth()
-			.aspectRatio(0.7f)
-			.combinedClickable(
-				onClick = onClick,
-				onLongClick = onLongClick,
-			),
-		shape = RoundedCornerShape(8.dp),
-		colors = CardDefaults.cardColors(
-			containerColor = MaterialTheme.colorScheme.surfaceVariant,
-		),
-		border = if (isSelected) BorderStroke(4.dp, MaterialTheme.colorScheme.primary) else null,
-	) {
-		Box(modifier = Modifier.fillMaxSize()) {
-			AsyncImage(
-				model = bookmark.toContentPage() ?: bookmark.imageUrl,
-				contentDescription = "Bookmark Thumbnail",
-				contentScale = ContentScale.Crop,
-				modifier = Modifier.fillMaxSize(),
-			)
-			if (bookmark.percent > 0) {
-				CircularProgressIndicator(
-					progress = { bookmark.percent },
-					modifier = Modifier
-						.align(Alignment.BottomEnd)
-						.padding(8.dp)
-						.size(24.dp),
-					color = MaterialTheme.colorScheme.primary,
-					trackColor = Color.Black.copy(alpha = 0.5f),
-				)
-			}
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .aspectRatio(0.7f)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+        border = if (isSelected) BorderStroke(4.dp, MaterialTheme.colorScheme.primary) else null,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = bookmark.toContentPage() ?: bookmark.imageUrl,
+                contentDescription = "Bookmark Thumbnail",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (bookmark.percent > 0) {
+                CircularProgressIndicator(
+                    progress = { bookmark.percent },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(24.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = Color.Black.copy(alpha = 0.5f),
+                )
+            }
 
-			Surface(
-				modifier = Modifier
-					.align(Alignment.BottomStart)
-					.padding(4.dp),
-				shape = RoundedCornerShape(4.dp),
-				color = Color.Black.copy(alpha = 0.6f),
-			) {
-				Text(
-					text = "P.${bookmark.page + 1}",
-					style = MaterialTheme.typography.labelSmall,
-					color = Color.White,
-					modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-				)
-			}
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(4.dp),
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.6f),
+            ) {
+                Text(
+                    text = "P.${bookmark.page + 1}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
 
-			if (isSelected) {
-				Surface(
-					modifier = Modifier.fillMaxSize(),
-					color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
-				) {
-					Icon(
-						imageVector = Icons.Default.CheckCircle,
-						contentDescription = "Selected",
-						tint = MaterialTheme.colorScheme.primaryContainer,
-						modifier = Modifier
-							.align(Alignment.Center)
-							.size(48.dp),
-					)
-				}
-			}
-		}
-	}
+            if (isSelected) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(48.dp),
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun BookmarksScreen(
-	items: List<org.skepsun.kototoro.list.ui.model.ListModel>,
-	gridMinSize: Dp,
-	selectedItemIds: Set<Long>,
-	detailsPaneState: DetailsPaneState? = null,
-	onItemClick: (Bookmark) -> Unit,
-	onItemLongClick: (Bookmark) -> Unit,
-	onSelectionActionClick: (Int) -> Unit,
-	onClearSelection: () -> Unit,
+    items: List<org.skepsun.kototoro.list.ui.model.ListModel>,
+    gridMinSize: Dp,
+    selectedItemIds: Set<Long>,
+    detailsPaneState: DetailsPaneState? = null,
+    onItemClick: (Bookmark) -> Unit,
+    onItemLongClick: (Bookmark) -> Unit,
+    onSelectionActionClick: (Int) -> Unit,
+    onClearSelection: () -> Unit,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -144,96 +144,96 @@ fun BookmarksScreen(
             Modifier
         }
     }
-	Box(modifier = Modifier.fillMaxSize()) {
-		if (items.isEmpty()) {
-			Text(
-				text = "No bookmarks",
-				style = MaterialTheme.typography.bodyLarge,
-				color = MaterialTheme.colorScheme.onSurfaceVariant,
-				modifier = Modifier.align(Alignment.Center),
-			)
-		} else {
-			LazyVerticalGrid(
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (items.isEmpty()) {
+            Text(
+                text = "No bookmarks",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else {
+            LazyVerticalGrid(
                 state = gridState,
-				columns = GridCells.Adaptive(minSize = gridMinSize),
-				contentPadding = PaddingValues(16.dp),
-				horizontalArrangement = Arrangement.spacedBy(8.dp),
-				verticalArrangement = Arrangement.spacedBy(8.dp),
-				modifier = Modifier
+                columns = GridCells.Adaptive(minSize = gridMinSize),
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
                     .fillMaxSize()
                     .then(paneNestedScrollModifier),
-			) {
-				items.forEach { item ->
-					when (item) {
-						is ListHeader -> {
-							item(
-								key = "header_${item.hashCode()}",
-								span = { GridItemSpan(maxLineSpan) },
-							) {
-								val context = LocalContext.current
-								Text(
-									text = item.getText(context)?.toString().orEmpty(),
-									style = MaterialTheme.typography.titleSmall,
-									color = MaterialTheme.colorScheme.primary,
-									modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-								)
-							}
-						}
-						is Bookmark -> {
-							item(key = item.pageId) {
-								BookmarkCard(
-									bookmark = item,
-									isSelected = selectedItemIds.contains(item.pageId),
-									onClick = {
+            ) {
+                items.forEach { item ->
+                    when (item) {
+                        is ListHeader -> {
+                            item(
+                                key = "header_${item.hashCode()}",
+                                span = { GridItemSpan(maxLineSpan) },
+                            ) {
+                                val context = LocalContext.current
+                                Text(
+                                    text = item.getText(context)?.toString().orEmpty(),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                )
+                            }
+                        }
+                        is Bookmark -> {
+                            item(key = item.pageId) {
+                                BookmarkCard(
+                                    bookmark = item,
+                                    isSelected = selectedItemIds.contains(item.pageId),
+                                    onClick = {
                                         if (selectedItemIds.isNotEmpty()) {
                                             hapticFeedback.performSelectionHapticFeedback()
                                         }
                                         onItemClick(item)
                                     },
-									onLongClick = { onItemLongClick(item) },
-								)
-							}
-						}
-						else -> {}
-					}
-				}
-			}
-		}
+                                    onLongClick = { onItemLongClick(item) },
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        }
 
-		androidx.compose.animation.AnimatedVisibility(
-			visible = selectedItemIds.isNotEmpty(),
-			enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
-			exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
-			modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-		) {
-			Surface(
-				shape = RoundedCornerShape(16.dp),
-				color = MaterialTheme.colorScheme.inverseSurface,
-				contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-				modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
-			) {
-				Row(
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = Arrangement.SpaceBetween,
-				) {
-					Row(verticalAlignment = Alignment.CenterVertically) {
-						IconButton(onClick = onClearSelection) {
-							Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
-						}
-						Text(
-							text = "${selectedItemIds.size}",
-							style = MaterialTheme.typography.titleMedium,
-							modifier = Modifier.padding(start = 8.dp),
-						)
-					}
-					Row {
-						IconButton(onClick = { onSelectionActionClick(R.id.action_delete) }) {
-							Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
-						}
-					}
-				}
-			}
-		}
-	}
+        androidx.compose.animation.AnimatedVisibility(
+            visible = selectedItemIds.isNotEmpty(),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.inverseSurface,
+                contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                modifier = Modifier.padding(16.dp).windowInsetsPadding(WindowInsets.safeDrawing),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onClearSelection) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                        }
+                        Text(
+                            text = "${selectedItemIds.size}",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                    Row {
+                        IconButton(onClick = { onSelectionActionClick(R.id.action_delete) }) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

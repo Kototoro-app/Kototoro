@@ -33,77 +33,77 @@ import javax.inject.Inject
 
 @HiltViewModel
 class BookmarksViewModel @Inject constructor(
-	private val bookmarksRepository: BookmarksRepository,
-	settings: AppSettings,
+    private val bookmarksRepository: BookmarksRepository,
+    settings: AppSettings,
 ) : BaseViewModel(), FlowCollector<ContentDetails?> {
 
-	private val manga = MutableStateFlow<Content?>(null)
-	val onActionDone = MutableEventFlow<ReversibleAction>()
+    private val manga = MutableStateFlow<Content?>(null)
+    val onActionDone = MutableEventFlow<ReversibleAction>()
 
-	val gridScale = settings.observeAsStateFlow(
-		scope = viewModelScope + Dispatchers.Default,
-		key = AppSettings.KEY_GRID_SIZE_PAGES,
-		valueProducer = { gridSizePages / 100f },
-	)
+    val gridScale = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_GRID_SIZE_PAGES,
+        valueProducer = { gridSizePages / 100f },
+    )
 
-	val content: StateFlow<List<ListModel>> = manga.filterNotNull().flatMapLatest { m ->
-		bookmarksRepository.observeBookmarks(m)
-			.map { mapList(m, it) }
-	}.withErrorHandling()
-		.filterNotNull()
-		.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, listOf(LoadingState))
+    val content: StateFlow<List<ListModel>> = manga.filterNotNull().flatMapLatest { m ->
+        bookmarksRepository.observeBookmarks(m)
+            .map { mapList(m, it) }
+    }.withErrorHandling()
+        .filterNotNull()
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Lazily, listOf(LoadingState))
 
-	override suspend fun emit(value: ContentDetails?) {
-		manga.value = value?.toContent()
-	}
+    override suspend fun emit(value: ContentDetails?) {
+        manga.value = value?.toContent()
+    }
 
-	fun removeBookmarks(ids: Set<Long>) {
-		launchJob(Dispatchers.Default) {
-			val handle = bookmarksRepository.removeBookmarks(ids)
-			onActionDone.call(ReversibleAction(R.string.bookmarks_removed, handle))
-		}
-	}
+    fun removeBookmarks(ids: Set<Long>) {
+        launchJob(Dispatchers.Default) {
+            val handle = bookmarksRepository.removeBookmarks(ids)
+            onActionDone.call(ReversibleAction(R.string.bookmarks_removed, handle))
+        }
+    }
 
-	fun savePages(pageSaveHelper: PageSaveHelper, ids: Set<Long>) {
-		launchLoadingJob(Dispatchers.Default) {
-			val m = manga.requireValue()
-			val tasks = content.value.mapNotNull {
-				if (it !is Bookmark || it.pageId !in ids) return@mapNotNull null
-				PageSaveHelper.Task(
-					manga = m,
-					chapterId = it.chapterId,
-					pageNumber = it.page + 1,
-					page = it.toContentPage(),
-				)
-			}
-			val dest = pageSaveHelper.save(tasks)
-			val msg = if (dest.size == 1) R.string.page_saved else R.string.pages_saved
-			onActionDone.call(ReversibleAction(msg, null))
-		}
-	}
+    fun savePages(pageSaveHelper: PageSaveHelper, ids: Set<Long>) {
+        launchLoadingJob(Dispatchers.Default) {
+            val m = manga.requireValue()
+            val tasks = content.value.mapNotNull {
+                if (it !is Bookmark || it.pageId !in ids) return@mapNotNull null
+                PageSaveHelper.Task(
+                    manga = m,
+                    chapterId = it.chapterId,
+                    pageNumber = it.page + 1,
+                    page = it.toContentPage(),
+                )
+            }
+            val dest = pageSaveHelper.save(tasks)
+            val msg = if (dest.size == 1) R.string.page_saved else R.string.pages_saved
+            onActionDone.call(ReversibleAction(msg, null))
+        }
+    }
 
-	private fun mapList(manga: Content, bookmarks: List<Bookmark>): List<ListModel>? {
-		val chapters = manga.chapters ?: return null
-		val bookmarksMap = bookmarks.groupBy { it.chapterId }
-		val result = ArrayList<ListModel>(bookmarks.size + bookmarksMap.size)
-		for (chapter in chapters) {
-			val b = bookmarksMap[chapter.id]
-			if (b.isNullOrEmpty()) {
-				continue
-			}
-			result += ListHeader(chapter)
-			result.addAll(b)
-		}
-		if (result.isEmpty()) {
-			result.add(
-				EmptyState(
-					icon = 0,
-					textPrimary = R.string.no_bookmarks_yet,
-					textSecondary = R.string.no_bookmarks_summary,
-					actionStringRes = 0,
-				),
-			)
-		}
-		return result
-	}
+    private fun mapList(manga: Content, bookmarks: List<Bookmark>): List<ListModel>? {
+        val chapters = manga.chapters ?: return null
+        val bookmarksMap = bookmarks.groupBy { it.chapterId }
+        val result = ArrayList<ListModel>(bookmarks.size + bookmarksMap.size)
+        for (chapter in chapters) {
+            val b = bookmarksMap[chapter.id]
+            if (b.isNullOrEmpty()) {
+                continue
+            }
+            result += ListHeader(chapter)
+            result.addAll(b)
+        }
+        if (result.isEmpty()) {
+            result.add(
+                EmptyState(
+                    icon = 0,
+                    textPrimary = R.string.no_bookmarks_yet,
+                    textSecondary = R.string.no_bookmarks_summary,
+                    actionStringRes = 0,
+                ),
+            )
+        }
+        return result
+    }
 }

@@ -104,38 +104,38 @@ fun MetadataSourceSheet(
         }
     }
     val context = LocalContext.current
-	    DetailsSourceOverlayDialog(
-	        onDismissRequest = onDismissRequest,
-	    ) { panelDragModifier ->
-	        Column(
-	            modifier = Modifier
-	                .fillMaxWidth()
-	                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-	            verticalArrangement = Arrangement.spacedBy(12.dp),
-	        ) {
-	            Column(
-	                modifier = panelDragModifier.fillMaxWidth(),
-	                verticalArrangement = Arrangement.spacedBy(10.dp),
-	            ) {
-	                Text(
-	                    text = stringResource(R.string.details_entity_metadata),
-	                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-	                    color = MaterialTheme.colorScheme.onSurface,
-	                )
+        DetailsSourceOverlayDialog(
+            onDismissRequest = onDismissRequest,
+        ) { panelDragModifier ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(
+                    modifier = panelDragModifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.details_entity_metadata),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                     Text(
                         text = stringResource(R.string.details_entity_metadata_sheet_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-	                if (currentOptions.isNotEmpty()) {
-	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-	                    itemsIndexed(
-	                        items = currentOptions,
-	                        key = { index, option -> "${option.key}:$index" },
-	                    ) { _, option ->
-	                            val linked = option.trackingService?.let { svc ->
-	                                linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
-	                            }
+                    if (currentOptions.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(
+                            items = currentOptions,
+                            key = { index, option -> "${option.key}:$index" },
+                        ) { _, option ->
+                                val linked = option.trackingService?.let { svc ->
+                                    linkedTrackingItems.firstOrNull { it.service == svc && it.remoteId == option.remoteId }
+                                }
                             var showMenu by remember(option.key) { mutableStateOf(false) }
                             var menuAnchorBounds by remember(option.key) { mutableStateOf<Rect?>(null) }
                             Box(
@@ -181,28 +181,28 @@ fun MetadataSourceSheet(
                                     )
                                 }
                             }
-	                        }
-	                    }
-	                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-	                }
-	                SourceSearchField(
-	                    value = searchQuery,
-	                    onValueChange = onSearchQueryChange,
-	                    onSearch = onSearch,
-	                )
-	                searchServices
-	                    .filter { it !in authorizedServices }
-	                    .takeIf { it.isNotEmpty() }
-	                    ?.let {
-	                        Text(
-	                            text = stringResource(R.string.details_metadata_source_login_hint),
-	                            style = MaterialTheme.typography.bodySmall,
-	                            color = MaterialTheme.colorScheme.onSurface,
-	                        )
-	                    }
-	            }
-	            Box(
-	                modifier = Modifier
+                            }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    }
+                    SourceSearchField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        onSearch = onSearch,
+                    )
+                    searchServices
+                        .filter { it !in authorizedServices }
+                        .takeIf { it.isNotEmpty() }
+                        ?.let {
+                            Text(
+                                text = stringResource(R.string.details_metadata_source_login_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                }
+                Box(
+                    modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = true),
             ) {
@@ -224,17 +224,17 @@ fun MetadataSourceSheet(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
-	                            itemsIndexed(
-	                                items = visibleSections,
-	                                key = { index, section -> "metadata_section:${section.service.id}:$index" },
-	                            ) { _, section ->
+                                itemsIndexed(
+                                    items = visibleSections,
+                                    key = { index, section -> "metadata_section:${section.service.id}:$index" },
+                                ) { _, section ->
                                 MetadataSearchSection(
                                     section = section,
                                     isAuthorized = section.service in authorizedServices,
-	                                    hasSearched = hasSearched,
-	                                    onItemClick = { item ->
-	                                        onOpenResult(item)
-	                                    },
+                                        hasSearched = hasSearched,
+                                        onItemClick = { item ->
+                                            onOpenResult(item)
+                                        },
                                     onBindClick = { item -> pendingBindTarget = item },
                                 )
                             }
@@ -354,24 +354,24 @@ fun ReadingSourceSheet(
     var showUnavailableSources by rememberSaveable(errorSections.map { it.source.mangaSource.name }) {
         mutableStateOf(false)
     }
-	    DetailsSourceOverlayDialog(
-	        onDismissRequest = onDismissRequest,
-	    ) { panelDragModifier ->
-	            Column(
-	                modifier = Modifier
-	                    .fillMaxWidth()
-	                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
-	            verticalArrangement = Arrangement.spacedBy(12.dp),
-	        ) {
-	            Column(
-	                modifier = panelDragModifier.fillMaxWidth(),
-	                verticalArrangement = Arrangement.spacedBy(10.dp),
-	            ) {
-	                Text(
-	                    text = stringResource(R.string.details_current_projection),
-	                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-	                    color = MaterialTheme.colorScheme.onSurface,
-	                )
+        DetailsSourceOverlayDialog(
+            onDismissRequest = onDismissRequest,
+        ) { panelDragModifier ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(
+                    modifier = panelDragModifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.details_current_projection),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
                     Text(
                         text = buildString {
                             append(stringResource(R.string.details_current_projection_sheet_hint, label))
@@ -398,12 +398,12 @@ fun ReadingSourceSheet(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
-	                if (currentOptions.isNotEmpty()) {
-	                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-	                    itemsIndexed(
-	                        items = currentOptions,
-	                        key = { index, option -> "${option.key}:$index" },
-	                    ) { _, option ->
+                    if (currentOptions.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(
+                            items = currentOptions,
+                            key = { index, option -> "${option.key}:$index" },
+                        ) { _, option ->
                             val isTemporaryProjection =
                                 option.targetMangaId != null &&
                                     entityChapterSourceInfo?.currentReadingProjectionMangaId == option.targetMangaId &&
@@ -473,21 +473,21 @@ fun ReadingSourceSheet(
                                     )
                                 }
                             }
-	                        }
-	                    }
-	                }
-	                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-	                    SourceSearchField(
-	                        value = searchQuery,
-	                        onValueChange = onSearchQueryChange,
-	                        onSearch = onSearch,
+                        SourceSearchField(
+                            value = searchQuery,
+                            onValueChange = onSearchQueryChange,
+                            onSearch = onSearch,
                             modifier = Modifier.weight(1f),
-	                    )
+                        )
                         FilledTonalButton(
                             onClick = onSearch,
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -513,9 +513,9 @@ fun ReadingSourceSheet(
                             }
                         }
                     }
-	            }
-	            Box(
-	                modifier = Modifier
+                }
+                Box(
+                    modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = true),
             ) {
@@ -692,7 +692,7 @@ fun ReadingSourceSheet(
                 }
             },
         )
-	}
+    }
 
     if (showFilterSheet) {
         SearchFilterSheet(

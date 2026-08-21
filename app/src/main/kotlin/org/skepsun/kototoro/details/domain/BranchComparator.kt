@@ -5,7 +5,7 @@ import org.skepsun.kototoro.details.ui.model.ContentBranch
 
 class BranchComparator : Comparator<ContentBranch> {
 
-	private val delegate = LocaleStringComparator()
+    private val delegate = LocaleStringComparator()
 
-	override fun compare(o1: ContentBranch, o2: ContentBranch): Int = delegate.compare(o1.name, o2.name)
+    override fun compare(o1: ContentBranch, o2: ContentBranch): Int = delegate.compare(o1.name, o2.name)
 }

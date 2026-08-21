@@ -25,109 +25,109 @@ import org.skepsun.kototoro.reader.ui.ReaderNavigationCallback
 
 @Composable
 fun PagesScreenRoot(
-	activityViewModel: ChaptersPagesViewModel,
-	router: AppRouter,
-	context: Context,
-	pageSaveHelper: PageSaveHelper,
-	viewForSnackbar: View,
-	lifecycleOwner: LifecycleOwner,
-	viewModel: PagesViewModel,
-	detailsPaneState: DetailsPaneState? = null,
-	thumbnailAspectRatio: Float = 0.7f,
+    activityViewModel: ChaptersPagesViewModel,
+    router: AppRouter,
+    context: Context,
+    pageSaveHelper: PageSaveHelper,
+    viewForSnackbar: View,
+    lifecycleOwner: LifecycleOwner,
+    viewModel: PagesViewModel,
+    detailsPaneState: DetailsPaneState? = null,
+    thumbnailAspectRatio: Float = 0.7f,
 ) {
-	val thumbnails by viewModel.thumbnails.collectAsStateWithLifecycle(initialValue = emptyList())
-	val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
-	val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)
-	val fitPreview by viewModel.fitPreview.collectAsStateWithLifecycle(initialValue = false)
-	val selectedItemIds = remember { mutableStateListOf<Long>() }
-	val selectedIds = remember(selectedItemIds.toList()) {
-		selectedItemIds.toSet()
-	}
+    val thumbnails by viewModel.thumbnails.collectAsStateWithLifecycle(initialValue = emptyList())
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle(initialValue = false)
+    val gridScale by viewModel.gridScale.collectAsStateWithLifecycle(initialValue = 1f)
+    val fitPreview by viewModel.fitPreview.collectAsStateWithLifecycle(initialValue = false)
+    val selectedItemIds = remember { mutableStateListOf<Long>() }
+    val selectedIds = remember(selectedItemIds.toList()) {
+        selectedItemIds.toSet()
+    }
 
-	val mangaDetails by activityViewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
-	val readingState by activityViewModel.readingState.collectAsStateWithLifecycle(initialValue = null)
-	val selectedBranch by activityViewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
+    val mangaDetails by activityViewModel.mangaDetails.collectAsStateWithLifecycle(initialValue = null)
+    val readingState by activityViewModel.readingState.collectAsStateWithLifecycle(initialValue = null)
+    val selectedBranch by activityViewModel.selectedBranch.collectAsStateWithLifecycle(initialValue = null)
 
-	LaunchedEffect(mangaDetails, readingState, selectedBranch) {
-		if (mangaDetails != null) {
-			viewModel.updateState(PagesViewModel.State(mangaDetails!!, readingState, selectedBranch))
-		}
-	}
+    LaunchedEffect(mangaDetails, readingState, selectedBranch) {
+        if (mangaDetails != null) {
+            viewModel.updateState(PagesViewModel.State(mangaDetails!!, readingState, selectedBranch))
+        }
+    }
 
-	DisposableEffect(Unit) {
-		viewModel.onPageSaved.observeEvent(lifecycleOwner) { uris ->
-			if (uris.isEmpty()) return@observeEvent
-			if (uris.size == 1) {
-				Snackbar.make(viewForSnackbar, R.string.page_saved, Snackbar.LENGTH_LONG).show()
-			} else {
-				Snackbar.make(
-					viewForSnackbar,
-					context.getString(R.string.pages_saved),
-					Snackbar.LENGTH_LONG,
-				).show()
-			}
-		}
-		onDispose {}
-	}
+    DisposableEffect(Unit) {
+        viewModel.onPageSaved.observeEvent(lifecycleOwner) { uris ->
+            if (uris.isEmpty()) return@observeEvent
+            if (uris.size == 1) {
+                Snackbar.make(viewForSnackbar, R.string.page_saved, Snackbar.LENGTH_LONG).show()
+            } else {
+                Snackbar.make(
+                    viewForSnackbar,
+                    context.getString(R.string.pages_saved),
+                    Snackbar.LENGTH_LONG,
+                ).show()
+            }
+        }
+        onDispose {}
+    }
 
-	PagesScreen(
-		items = thumbnails,
-		gridColumns = pagePreviewGridColumns(gridScale),
-		selectedItemIds = selectedIds,
-		fitPreview = fitPreview,
-		thumbnailAspectRatio = thumbnailAspectRatio,
-		emptyMessageResId = null,
-		isLoading = isLoading,
-		detailsPaneState = detailsPaneState,
-		onLoadPrevious = viewModel::loadPrevChapter,
-		onLoadNext = viewModel::loadNextChapter,
-		onVisiblePlaceholder = viewModel::loadTowardsChapter,
-		onItemClick = { item ->
-			val thumbnail = item as PageThumbnail
-			if (selectedItemIds.isNotEmpty()) {
-				if (selectedItemIds.contains(thumbnail.page.id)) {
-					selectedItemIds.remove(thumbnail.page.id)
-				} else {
-					selectedItemIds.add(thumbnail.page.id)
-				}
-			} else {
-				val navigationCallback = (context as? ReaderNavigationCallback)
-					?: (context.findActivity() as? ReaderNavigationCallback)
-				if (navigationCallback?.onPageSelected(thumbnail.page) == true) {
-					return@PagesScreen
-				}
-				val manga = activityViewModel.getContentOrNull() ?: return@PagesScreen
-				val targetState = org.skepsun.kototoro.reader.ui.ReaderState(thumbnail.page.chapterId, thumbnail.page.index, 0)
-				(activityViewModel as? DetailsViewModel)?.recordDetailsJump(targetState, "detail_page")
-				router.openReader(
-					org.skepsun.kototoro.core.nav.ReaderIntent.Builder(context)
-						.manga(manga)
-						.state(targetState)
-						.build(),
-				)
-			}
-		},
-		onItemLongClick = { item ->
-			val thumbnail = item as PageThumbnail
-			if (selectedItemIds.contains(thumbnail.page.id)) {
-				selectedItemIds.remove(thumbnail.page.id)
-			} else {
-				selectedItemIds.add(thumbnail.page.id)
-			}
-		},
-		onSelectionActionClick = { actionId ->
-			if (selectedIds.isEmpty()) return@PagesScreen
-			when (actionId) {
-				R.id.action_save -> {
-					val snapshot = thumbnails.filterIsInstance<PageThumbnail>()
-						.filter { it.page.id in selectedIds }
-						.map { it.page }
-						.toSet()
-					viewModel.savePages(pageSaveHelper, snapshot)
-				}
-			}
-			selectedItemIds.clear()
-		},
-		onClearSelection = { selectedItemIds.clear() },
-	)
+    PagesScreen(
+        items = thumbnails,
+        gridColumns = pagePreviewGridColumns(gridScale),
+        selectedItemIds = selectedIds,
+        fitPreview = fitPreview,
+        thumbnailAspectRatio = thumbnailAspectRatio,
+        emptyMessageResId = null,
+        isLoading = isLoading,
+        detailsPaneState = detailsPaneState,
+        onLoadPrevious = viewModel::loadPrevChapter,
+        onLoadNext = viewModel::loadNextChapter,
+        onVisiblePlaceholder = viewModel::loadTowardsChapter,
+        onItemClick = { item ->
+            val thumbnail = item as PageThumbnail
+            if (selectedItemIds.isNotEmpty()) {
+                if (selectedItemIds.contains(thumbnail.page.id)) {
+                    selectedItemIds.remove(thumbnail.page.id)
+                } else {
+                    selectedItemIds.add(thumbnail.page.id)
+                }
+            } else {
+                val navigationCallback = (context as? ReaderNavigationCallback)
+                    ?: (context.findActivity() as? ReaderNavigationCallback)
+                if (navigationCallback?.onPageSelected(thumbnail.page) == true) {
+                    return@PagesScreen
+                }
+                val manga = activityViewModel.getContentOrNull() ?: return@PagesScreen
+                val targetState = org.skepsun.kototoro.reader.ui.ReaderState(thumbnail.page.chapterId, thumbnail.page.index, 0)
+                (activityViewModel as? DetailsViewModel)?.recordDetailsJump(targetState, "detail_page")
+                router.openReader(
+                    org.skepsun.kototoro.core.nav.ReaderIntent.Builder(context)
+                        .manga(manga)
+                        .state(targetState)
+                        .build(),
+                )
+            }
+        },
+        onItemLongClick = { item ->
+            val thumbnail = item as PageThumbnail
+            if (selectedItemIds.contains(thumbnail.page.id)) {
+                selectedItemIds.remove(thumbnail.page.id)
+            } else {
+                selectedItemIds.add(thumbnail.page.id)
+            }
+        },
+        onSelectionActionClick = { actionId ->
+            if (selectedIds.isEmpty()) return@PagesScreen
+            when (actionId) {
+                R.id.action_save -> {
+                    val snapshot = thumbnails.filterIsInstance<PageThumbnail>()
+                        .filter { it.page.id in selectedIds }
+                        .map { it.page }
+                        .toSet()
+                    viewModel.savePages(pageSaveHelper, snapshot)
+                }
+            }
+            selectedItemIds.clear()
+        },
+        onClearSelection = { selectedItemIds.clear() },
+    )
 }
