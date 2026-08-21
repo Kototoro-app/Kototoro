@@ -95,8 +95,8 @@ class FilterCoordinator @Inject constructor(
     val isFilterApplied: Boolean
         get() = currentListFilter.value.isNotEmpty()
 
-	val query: StateFlow<String?> = currentListFilter.map { it.query }
-		.stateIn(coroutineScope, SharingStarted.Eagerly, null)
+    val query: StateFlow<String?> = currentListFilter.map { it.query }
+        .stateIn(coroutineScope, SharingStarted.Eagerly, null)
 
     val globalTagBlacklist: StateFlow<Set<String>> = settings
         .observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { this.globalTagBlacklist }
