@@ -1467,6 +1467,11 @@ class NovelReaderActivity :
             return
         }
 
+        // 第一时间把完整章节列表与当前索引同步给 Compose 状态，
+        // 否则底栏章节切换按钮会因状态里 chapters 为空/索引为 0 而一直不可点，
+        // 直到用户打开章节面板切换过章节。
+        composeReaderViewModel.publishChapterLibrary(chapters, index)
+
         chapterLoadJob?.cancel()
         chapterLoadJob = lifecycleScope.launch(org.skepsun.kototoro.core.parser.legado.RequestPriority(org.skepsun.kototoro.core.parser.legado.RequestPriority.FOREGROUND)) {
             try {

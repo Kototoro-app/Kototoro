@@ -155,6 +155,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
         _uiState.value = _uiState.value.copy(
             chapterId = chapterId,
             chapterIndex = chapterIndex,
+            currentChapterIndex = chapterIndex,
             chapterTitle = chapterTitle,
             content = content,
             settings = settings,
@@ -282,6 +283,7 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
         _uiState.value = state.copy(
             chapterId = chapter.chapterId,
             chapterIndex = chapter.chapterIndex,
+            currentChapterIndex = chapter.chapterIndex,
             chapterTitle = chapter.chapterTitle,
             content = chapter.content,
             translation = chapter.translation,
@@ -330,6 +332,19 @@ class NovelComposeReaderViewModel @Inject constructor() : ViewModel() {
 
     fun publishSettings(settings: NovelReaderSettings) {
         _uiState.value = _uiState.value.copy(settings = settings)
+    }
+
+    /**
+     * 预先把完整章节列表与当前章节索引同步到状态，保证底栏章节切换按钮
+     * 在首次进入时就按真实章数可用，而不是要等打开章节面板后才生效。
+     */
+    fun publishChapterLibrary(chapters: List<ContentChapter>, currentChapterIndex: Int) {
+        if (chapters.isEmpty()) return
+        val state = _uiState.value
+        _uiState.value = state.copy(
+            chapters = chapters,
+            currentChapterIndex = currentChapterIndex.coerceIn(chapters.indices),
+        )
     }
 
     fun showChapters(chapters: List<ContentChapter>, currentChapterIndex: Int) {

@@ -319,6 +319,20 @@ private data class NovelComposeWindowBlock(
     val chapterBlockCount: Int,
 )
 
+private fun buildNovelComposeWindowBlocks(chapters: List<NovelComposeChapterContent>): List<NovelComposeWindowBlock> {
+    return chapters.flatMap { chapter ->
+        val chapterBlocks = buildNovelComposeDocument(chapter.content, chapter.translation)
+        chapterBlocks.mapIndexed { index, block ->
+            NovelComposeWindowBlock(
+                chapter = chapter,
+                block = block,
+                chapterBlockIndex = index,
+                chapterBlockCount = chapterBlocks.size,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ComposeNovelChapterWindow(
@@ -339,17 +353,7 @@ private fun ComposeNovelChapterWindow(
     val palette = novelReaderPalette(settings.themePreset, isSystemInDarkTheme())
     val contentColor = Color(palette.textColor)
     val blocks = androidx.compose.runtime.remember(chapters) {
-        chapters.flatMap { chapter ->
-            val chapterBlocks = buildNovelComposeDocument(chapter.content, chapter.translation)
-            chapterBlocks.mapIndexed { index, block ->
-                NovelComposeWindowBlock(
-                    chapter = chapter,
-                    block = block,
-                    chapterBlockIndex = index,
-                    chapterBlockCount = chapterBlocks.size,
-                )
-            }
-        }
+        buildNovelComposeWindowBlocks(chapters)
     }
     val direction = if (settings.textDirection == NovelTextDirection.RTL) TextDirection.Rtl else TextDirection.Ltr
     val alignment = if (direction == TextDirection.Rtl) TextAlign.Right else TextAlign.Start
@@ -536,15 +540,52 @@ fun ComposeNovelReaderRoute(
                 modifier = modifier,
             )
         } else {
-            val blocks = androidx.compose.runtime.remember(state.content, state.translation) {
-                buildNovelComposeDocument(state.content, state.translation)
+            // 整窗块列表：既用于把归一化进度换算成窗口内的初始块索引，
+            // 也用于给跨章节窗口的滚动位置做正确的边界裁剪。
+            val windowBlocks = androidx.compose.runtime.remember(
+                state.content,
+                state.translation,
+                state.continuousChapters,
+            ) {
+                val chapters = state.continuousChapters.ifEmpty {
+                    listOf(
+                        NovelComposeChapterContent(
+                            chapterId = state.chapterId,
+                            chapterIndex = state.chapterIndex,
+                            chapterTitle = state.chapterTitle,
+                            content = state.content,
+                            translation = state.translation,
+                        ),
+                    )
+                }
+                buildNovelComposeWindowBlocks(chapters)
             }
             key("continuous") {
+            // 切换阅读模式（分页→滚动）时没有可用的滚动位置，就按当前章节的
+            // 归一化进度换算成窗口内块索引，避免进度被重置回章节开头。
+            val initialScrollIndex = state.scrollPosition
+                ?.firstVisibleBlock
+                ?.coerceIn(0, windowBlocks.lastIndex.coerceAtLeast(0))
+                ?: state.position
+                    ?.takeIf { it.chapterId == state.chapterId && windowBlocks.isNotEmpty() }
+                    ?.let { position ->
+                        val chapterStart = windowBlocks.indexOfFirst {
+                            it.chapter.chapterIndex == state.chapterIndex
+                        }
+                        if (chapterStart < 0) {
+                            null
+                        } else {
+                            val chapterBlockCount = windowBlocks.count {
+                                it.chapter.chapterIndex == state.chapterIndex
+                            }
+                            chapterStart +
+                                (position.normalizedChapterProgress * chapterBlockCount.coerceAtLeast(1)).toInt()
+                                    .coerceIn(0, (chapterBlockCount - 1).coerceAtLeast(0))
+                        }
+                    }
+                ?: 0
             val listState = rememberLazyListState(
-                initialFirstVisibleItemIndex = state.scrollPosition
-                    ?.firstVisibleBlock
-                    ?.coerceIn(0, blocks.lastIndex.coerceAtLeast(0))
-                    ?: 0,
+                initialFirstVisibleItemIndex = initialScrollIndex,
                 initialFirstVisibleItemScrollOffset = state.scrollPosition?.firstVisibleBlockOffsetPx ?: 0,
             )
             LaunchedEffect(listState, state.chapterIndex) {
@@ -686,10 +727,11 @@ private data class NovelPaginationChapter(
 )
 
 private data class NovelPaginationLayoutKey(
-    val settings: NovelReaderSettings,
     val style: androidx.compose.ui.text.TextStyle,
     val widthPx: Int,
     val heightPx: Int,
+    val paragraphSpacingLines: Int,
+    val paragraphIndentEnabled: Boolean,
 )
 
 private class NovelPaginationRequest(
@@ -864,17 +906,19 @@ private fun ComposeNovelPagedChapter(
         }
         val paginationRequest = androidx.compose.runtime.remember(
             paginationChapters,
-            settings,
+            style,
             contentWidthPx,
             contentHeightPx,
-            style,
+            settings.paragraphSpacingLines,
+            settings.enableParagraphIndent,
         ) {
             NovelPaginationRequest(
                 NovelPaginationLayoutKey(
-                    settings = settings,
                     style = style,
                     widthPx = contentWidthPx,
                     heightPx = contentHeightPx,
+                    paragraphSpacingLines = settings.paragraphSpacingLines,
+                    paragraphIndentEnabled = settings.enableParagraphIndent,
                 ),
             )
         }
@@ -907,7 +951,17 @@ private fun ComposeNovelPagedChapter(
                     it.chapterId == state.chapterId && it.chapterIndex == state.chapterIndex
                 }
         }
-        val displayedResult = exactResult ?: compatibleResult
+        // While a new pagination is being computed, keep showing the last completed result
+        // that still contains the current chapter. Without this fallback the pager state
+        // below would leave composition during the loading gap and reading progress
+        // (settled page) would reset to the start of the window.
+        val fallbackResult = paginationResult?.takeIf { result ->
+            result.request !== paginationRequest &&
+                result.pages.any {
+                    it.chapterId == state.chapterId && it.chapterIndex == state.chapterIndex
+                }
+        }
+        val displayedResult = exactResult ?: compatibleResult ?: fallbackResult
             val pages = displayedResult?.pages
             if (pages == null) {
                 if (!state.loading) {
@@ -916,7 +970,29 @@ private fun ComposeNovelPagedChapter(
                 return@BoxWithConstraints
         }
         if (pages.isEmpty()) return@BoxWithConstraints
+        // 首次创建分页器（冷启动或从滚动模式切回）时，用当前章节的归一化进度定位，
+        // 避免进度被重置回章节第一页。rememberPagerState 只读取一次 initialPage，
+        // 后续由 settledPageKey / pageRequest 机制接管。
+        val initialPage = remember(displayedResult, state.chapterId, state.position) {
+            val chapterStart = pages.indexOfFirst {
+                it.chapterId == state.chapterId && it.chapterIndex == state.chapterIndex
+            }
+            if (chapterStart < 0) {
+                0
+            } else {
+                val chapterPages = pages.count {
+                    it.chapterId == state.chapterId && it.chapterIndex == state.chapterIndex
+                }
+                val progress = state.position
+                    ?.takeIf { it.chapterId == state.chapterId }
+                    ?.normalizedChapterProgress
+                    ?: 0f
+                chapterStart + (progress * chapterPages.coerceAtLeast(1)).toInt()
+                    .coerceIn(0, (chapterPages - 1).coerceAtLeast(0))
+            }
+        }.coerceIn(pages.indices)
         val pagerState = rememberPagerState(
+            initialPage = initialPage,
             pageCount = pages::size,
         )
         var settledPageKey by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
