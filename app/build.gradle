@@ -49,8 +49,8 @@ android {
 		// Phase E: targetSdk 37. Large-screen orientation locks are skipped in
 		// ScreenOrientationHelper to match Android 17 behavior.
 		targetSdk = 37
-		versionCode = 1212
-		versionName = '1.9.9'
+		versionCode = 1213
+		versionName = '2.0.0'
 		manifestPlaceholders = [
 			appClassName: 'org.skepsun.kototoro.KototoroApp'
 		]
