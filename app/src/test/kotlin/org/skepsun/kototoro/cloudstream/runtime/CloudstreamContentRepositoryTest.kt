@@ -36,6 +36,28 @@ class CloudstreamContentRepositoryTest {
 	}
 
 	@Test
+	fun `known cloudstream chapter locators always resolve through the plugin`() {
+		assertTrue(
+			shouldResolveCloudstreamPlaybackLocator(
+				value = "hls:https://video.test/live.m3u8",
+				isKnownChapterLocator = true,
+			),
+		)
+		assertTrue(
+			shouldResolveCloudstreamPlaybackLocator(
+				value = "[{\"fileUrl\":\"https://video.test/live.m3u8\"}]",
+				isKnownChapterLocator = false,
+			),
+		)
+		assertFalse(
+			shouldResolveCloudstreamPlaybackLocator(
+				value = "https://video.test/live.m3u8",
+				isKnownChapterLocator = false,
+			),
+		)
+	}
+
+	@Test
 	fun `missing plugin urls reject stringified null values`() {
 		assertTrue("".isMissingCloudstreamUrl())
 		assertTrue(" null ".isMissingCloudstreamUrl())

@@ -59,8 +59,8 @@ import org.skepsun.kototoro.parsers.model.ContentSource as ParsersContentSource
 import org.skepsun.kototoro.cloudstream.model.CloudstreamSource
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamContentRepository
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPlaybackEvent
-import org.skepsun.kototoro.cloudstream.runtime.isCloudstreamStructuredLocator
 import org.skepsun.kototoro.cloudstream.runtime.resolveCloudstreamEpisodeTitle
+import org.skepsun.kototoro.cloudstream.runtime.shouldResolveCloudstreamPlaybackLocator
 import javax.inject.Inject
 import org.skepsun.kototoro.reader.ui.ScreenOrientationHelper
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -1361,16 +1361,19 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
         val manga = currentMangaContent()
+        val isCloudstreamChapterLocator = manga?.source is CloudstreamSource && manga.chapters.orEmpty().any { chapter ->
+            TVBoxPlayback.normalizeLocator(chapter.url) == normalizedUrl
+        }
         val requiresCloudstreamResolution =
             (source is CloudstreamSource || manga?.source is CloudstreamSource) &&
-                isCloudstreamStructuredLocator(normalizedUrl)
+                shouldResolveCloudstreamPlaybackLocator(
+                    value = normalizedUrl,
+                    isKnownChapterLocator = isCloudstreamChapterLocator,
+                )
         val lastSegment = runCatching { Uri.parse(normalizedUrl).lastPathSegment }.getOrNull() ?: normalizedUrl
         val lowerUrl = normalizedUrl.lowercase()
         val isHttpLike = lowerUrl.startsWith("http://") || lowerUrl.startsWith("https://")
         val isHtmlPlaybackPage = isHttpLike && TVBoxPlayback.looksLikeHtmlPlaybackPage(normalizedUrl)
-        val isCloudstreamChapterPage = manga?.source is CloudstreamSource && manga.chapters.orEmpty().any { chapter ->
-            TVBoxPlayback.normalizeLocator(chapter.url) == normalizedUrl
-        }
         val isDirectPlaybackUrl = !requiresCloudstreamResolution &&
             TVBoxPlayback.looksLikeDirectPlaybackUrl(normalizedUrl)
         val isDirectStream = !requiresCloudstreamResolution && (
@@ -1445,7 +1448,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         android.util.Log.d("VideoPlayer", "prepareAndPlay: url=$normalizedUrl, manga=${manga?.title}, chapters=${manga?.chapters?.size}, state=$currentState, isDirectStream=$isDirectStream")
 
-        if (isHtmlPlaybackPage && !isCloudstreamChapterPage) {
+        if (isHtmlPlaybackPage && !isCloudstreamChapterLocator) {
             resolvePlaybackPageAndPlay(
                 url = normalizedUrl,
                 source = source,

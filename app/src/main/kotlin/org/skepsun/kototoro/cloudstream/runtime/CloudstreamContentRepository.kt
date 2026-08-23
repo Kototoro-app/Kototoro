@@ -976,6 +976,13 @@ internal fun isCloudstreamStructuredLocator(value: String): Boolean {
     return value.trimStart().let { it.startsWith('[') || it.startsWith('{') }
 }
 
+internal fun shouldResolveCloudstreamPlaybackLocator(
+    value: String,
+    isKnownChapterLocator: Boolean,
+): Boolean {
+    return isKnownChapterLocator || isCloudstreamStructuredLocator(value)
+}
+
 internal fun String.isMissingCloudstreamUrl(): Boolean {
     val normalized = trim()
     return normalized.isEmpty() ||
