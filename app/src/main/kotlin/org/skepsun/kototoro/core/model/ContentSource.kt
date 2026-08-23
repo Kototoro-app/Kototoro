@@ -273,6 +273,7 @@ fun ContentSource.getTitle(context: Context): String {
         is org.skepsun.kototoro.mihon.model.MihonMangaSource -> source.displayName
         is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource -> source.displayName
         is org.skepsun.kototoro.ireader.model.IReaderMangaSource -> source.displayName
+        is org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource -> source.displayName
         is org.skepsun.kototoro.cloudstream.model.CloudstreamSource -> source.displayName
         else -> {
             // Try to handle anonymous wrappers for JSON, Mihon, or Aniyomi sources

@@ -621,7 +621,8 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         val repositoryUrl = when (type) {
             ExternalExtensionType.CLOUDSTREAM -> baseUrl
             ExternalExtensionType.MIHON,
-            ExternalExtensionType.ANIYOMI -> if (baseUrl.endsWith("/index.pb", ignoreCase = true)) {
+            ExternalExtensionType.ANIYOMI,
+            ExternalExtensionType.TSUNDOKU -> if (baseUrl.endsWith("/index.pb", ignoreCase = true)) {
                 baseUrl
             } else {
                 "$baseUrl/index.min.json"

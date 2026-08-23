@@ -98,6 +98,46 @@ class UnifiedSourceCatalogRepositoryTest : FunSpec({
         item.url shouldBe KEIYOUSHI_PROTOBUF_URL
     }
 
+    test("tsundoku protobuf repository keeps its index url") {
+        val repository = testRepository()
+        val item = repository.invokeToUnifiedRepositoryItem(
+            ExternalExtensionRepo(
+                type = ExternalExtensionType.TSUNDOKU,
+                baseUrl = NOVELSOURCERY_PROTOBUF_URL,
+                name = "NovelSourcery",
+                shortName = null,
+                website = "https://github.com/NovelSourcery",
+                signingKeyFingerprint = "fingerprint",
+                createdAt = 1L,
+                updatedAt = 1L,
+                lastSuccessAt = 1L,
+                lastError = null,
+            ),
+        )
+
+        item.url shouldBe NOVELSOURCERY_PROTOBUF_URL
+    }
+
+    test("tsundoku repository without a protobuf index gets the min.json suffix") {
+        val repository = testRepository()
+        val item = repository.invokeToUnifiedRepositoryItem(
+            ExternalExtensionRepo(
+                type = ExternalExtensionType.TSUNDOKU,
+                baseUrl = "https://github.com/example/novels/raw/repo",
+                name = "ExampleNovels",
+                shortName = null,
+                website = "https://github.com/example/novels",
+                signingKeyFingerprint = "fingerprint",
+                createdAt = 1L,
+                updatedAt = 1L,
+                lastSuccessAt = 1L,
+                lastError = null,
+            ),
+        )
+
+        item.url shouldBe "https://github.com/example/novels/raw/repo/index.min.json"
+    }
+
     test("preset merge replaces legacy json url and removes duplicate repository ids") {
         val repository = testRepository()
         val legacyItem = unifiedKeiyoushiRepositoryItem(
@@ -238,3 +278,5 @@ private fun unifiedKeiyoushiRepositoryItem(
 
 private const val KEIYOUSHI_PROTOBUF_URL = "https://github.com/keiyoushi/extensions/raw/repo/index.pb"
 private const val KEIYOUSHI_REPOSITORY_ID = "repo:MIHON:https://github.com/keiyoushi/extensions/raw"
+
+private const val NOVELSOURCERY_PROTOBUF_URL = "https://github.com/NovelSourcery/extensions/raw/repo/index.pb"

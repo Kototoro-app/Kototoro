@@ -193,6 +193,19 @@ class UnifiedSourcesViewModel @Inject constructor(
         launchJob(Dispatchers.IO) {
             recoveryCoordinator.refresh()
         }
+        // Re-derive recovery status whenever any APK ecosystem manager reloads. The initial
+        // refresh() above can race the asynchronous extension scans (esp. Tsundoku on a cold
+        // start), so without this the per-source status would stay SIDELOAD_REQUIRED forever
+        // even after the package is fully installed.
+        launchJob(Dispatchers.IO) {
+            combine(
+                mihonExtensionManager.changes,
+                aniyomiExtensionManager.changes,
+                ireaderExtensionManager.changes,
+                tsundokuExtensionManager.changes,
+            ) { _, _, _, _ -> Unit }
+                .collect { recoveryCoordinator.refresh() }
+        }
     }
 
     /** Flips the recovery (missing-only) filter; applies to the sources list. */

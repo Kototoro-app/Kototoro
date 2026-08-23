@@ -1370,6 +1370,11 @@ class ContentSourcesRepository @Inject constructor(
             ireaderExtensionManager.getIReaderMangaSources().find { it.name == this }?.let { return it }
         }
 
+        // Try Tsundoku sources
+        if (startsWith("TSUNDOKU_")) {
+            tsundokuExtensionManager.getTsundokuNovelSources().find { it.name == this }?.let { return it }
+        }
+
         // Try JSON sources
         if (startsWith("JSON_")) {
             // This is a bit expensive but necessary for pinning/top sources to work correctly

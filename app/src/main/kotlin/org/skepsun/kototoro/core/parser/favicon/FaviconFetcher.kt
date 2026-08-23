@@ -149,6 +149,8 @@ class FaviconFetcher(
 
             is org.skepsun.kototoro.ireader.IReaderMangaRepository -> fetchIReaderIcon(repo)
 
+            is org.skepsun.kototoro.tsundoku.TsundokuNovelRepository -> fetchTsundokuIcon(repo)
+
             is CloudstreamContentRepository -> fetchCloudstreamIcon(repo)
 
             // JS sources: try to derive favicon from config; fallback to neutral
@@ -313,6 +315,47 @@ class FaviconFetcher(
             )
         } else {
             logExtensionIcon("mihon_fallback", repository.source.name, pkgName)
+            imageLoader.fetch(R.drawable.ic_storage, options)!!
+        }
+    }
+
+    private suspend fun fetchTsundokuIcon(repository: org.skepsun.kototoro.tsundoku.TsundokuNovelRepository): FetchResult {
+        val pm = options.context.packageManager
+        val pkgName = repository.source.pkgName
+        logExtensionIcon("tsundoku_start", repository.source.name, pkgName)
+
+        try {
+            val availableExtensions = repoRepository.getAvailableExtensions(ExternalExtensionType.TSUNDOKU)
+            val repoExt = availableExtensions.find { it.pkgName == pkgName }
+            if (repoExt != null && repoExt.iconUrl.isNotBlank()) {
+                val remoteIcon = imageLoader.fetch(repoExt.iconUrl, options)
+                if (remoteIcon != null) {
+                    logExtensionIcon("tsundoku_remote_hit", repository.source.name, pkgName, repoExt.iconUrl)
+                    return remoteIcon
+                }
+                logExtensionIcon("tsundoku_remote_null", repository.source.name, pkgName, repoExt.iconUrl)
+            }
+        } catch (e: Exception) {
+            logExtensionIcon("tsundoku_remote_error", repository.source.name, pkgName, error = e)
+            e.printStackTraceDebug()
+        }
+
+        val icon = runInterruptible {
+            try {
+                pm.getApplicationIcon(pkgName)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        return if (icon != null) {
+            logExtensionIcon("tsundoku_package_icon", repository.source.name, pkgName)
+            ImageFetchResult(
+                image = icon.nonAdaptive().asImage(),
+                isSampled = false,
+                dataSource = DataSource.DISK,
+            )
+        } else {
+            logExtensionIcon("tsundoku_fallback", repository.source.name, pkgName)
             imageLoader.fetch(R.drawable.ic_storage, options)!!
         }
     }

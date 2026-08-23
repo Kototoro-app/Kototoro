@@ -52,7 +52,7 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
     val name = source.name
     if (!name.startsWith("MIHON_") && !name.startsWith("ANIYOMI_") &&
         !name.startsWith("IREADER_") && !name.startsWith("CLOUDSTREAM_") &&
-        !name.startsWith("JSON_")
+        !name.startsWith("TSUNDOKU_") && !name.startsWith("JSON_")
     ) {
         return source
     }
@@ -66,6 +66,7 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
     val mihonChanges by entryPoint.mihonExtensionManager().changes.collectAsStateWithLifecycle()
     val aniyomiChanges by entryPoint.aniyomiExtensionManager().changes.collectAsStateWithLifecycle()
     val ireaderChanges by entryPoint.ireaderExtensionManager().changes.collectAsStateWithLifecycle()
+    val tsundokuChanges by entryPoint.tsundokuExtensionManager().changes.collectAsStateWithLifecycle()
     val jsonKey = remember(name) {
         name.takeIf { it.startsWith("JSON_") }
     }
@@ -79,6 +80,7 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
         mihonChanges,
         aniyomiChanges,
         ireaderChanges,
+        tsundokuChanges,
         resolvedJsonSource?.name,
         resolvedJsonSource?.javaClass?.name,
     ) {
@@ -339,6 +341,9 @@ private fun ContentSource.sourceIconIdentity(): String = when (this) {
     is org.skepsun.kototoro.ireader.model.IReaderMangaSource ->
         "ireader:$pkgName:${catalogueSource.name}"
 
+    is org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource ->
+        "tsundoku:$pkgName:${upstreamSource.name}"
+
     else -> name
 }
 
@@ -402,6 +407,7 @@ private fun resolveDynamicContentSource(
     source.name.startsWith("MIHON_") -> entryPoint.mihonExtensionManager().getMihonMangaSourceByName(source.name)
     source.name.startsWith("ANIYOMI_") -> entryPoint.aniyomiExtensionManager().getAniyomiAnimeSourceByName(source.name)
     source.name.startsWith("IREADER_") -> entryPoint.ireaderExtensionManager().getIReaderMangaSourceByName(source.name)
+    source.name.startsWith("TSUNDOKU_") -> entryPoint.tsundokuExtensionManager().resolveSource(source.name)
     source.name.startsWith("CLOUDSTREAM_") -> BaseAppHolder.get()?.findSourceByName(source.name)
     else -> null
 }
