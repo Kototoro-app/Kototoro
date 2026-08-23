@@ -101,7 +101,9 @@ private fun SettingsSinglePaneContent(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
+            ),
     ) {
         saveableStateHolder.SaveableStateProvider(destinationKey(destination)) {
             destinationContent(destination)
@@ -121,7 +123,9 @@ private fun SettingsTwoPaneShell(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(SettingsListPaneWidth)
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)),
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Bottom),
+                ),
         ) {
             rootContent(Modifier.fillMaxSize())
         }
@@ -135,7 +139,9 @@ private fun SettingsTwoPaneShell(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.End)),
+                .windowInsetsPadding(
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.End + WindowInsetsSides.Bottom),
+                ),
         ) {
             if (destination == SettingsDestination.Root) {
                 Box(
