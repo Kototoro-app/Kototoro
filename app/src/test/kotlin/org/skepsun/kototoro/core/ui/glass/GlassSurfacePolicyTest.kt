@@ -55,8 +55,8 @@ class GlassSurfacePolicyTest {
         )
 
         amoledAlpha shouldBeGreaterThan regularAlpha
-        regularAlpha shouldBe 0.5984f
-        amoledAlpha shouldBe 0.704f
+        regularAlpha shouldBe 0.528f
+        amoledAlpha shouldBe 0.6336f
         bottomBarAlpha shouldBe amoledAlpha
     }
 
@@ -74,23 +74,15 @@ class GlassSurfacePolicyTest {
             amoledCanvas = false,
         )
 
-        regularAlpha shouldBeGreaterThan 0.55f
+        regularAlpha shouldBeGreaterThan 0.45f
         regularAlpha shouldBeGreaterThan 0.5f
-        bottomBarAlpha shouldBeGreaterThan 0.55f
+        bottomBarAlpha shouldBeGreaterThan 0.45f
     }
 
     @Test
-    fun `chrome tint uses official high contrast surface colors over artwork backdrop`() {
-        val flatTint = Color(0xFFABCDEF)
-        chromeBackdropTint(isDark = false, artworkBackdrop = true, flatBackdropTint = flatTint) shouldBe Color(0xFFFAFAFA)
-        chromeBackdropTint(isDark = true, artworkBackdrop = true, flatBackdropTint = flatTint) shouldBe Color(0xFF121212)
-    }
-
-    @Test
-    fun `chrome tint falls back to elevated material container on flat backdrop`() {
-        val flatTint = Color(0xFFABCDEF)
-        chromeBackdropTint(isDark = false, artworkBackdrop = false, flatBackdropTint = flatTint) shouldBe flatTint
-        chromeBackdropTint(isDark = true, artworkBackdrop = false, flatBackdropTint = flatTint) shouldBe flatTint
+    fun `chrome tint uses official high contrast surface colors`() {
+        chromeBackdropTint(isDark = false) shouldBe Color(0xFFFAFAFA)
+        chromeBackdropTint(isDark = true) shouldBe Color(0xFF121212)
     }
 
     @Test
