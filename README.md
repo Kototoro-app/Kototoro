@@ -133,6 +133,11 @@ limitations under the License.
 - [legado-with-MD3](https://github.com/HapeLee/legado-with-MD3)
 - [RealCUGAN-ncnn-Android](https://github.com/omeshi1/RealCUGAN-ncnn-Android)
 - [manga-translator-ui](https://github.com/hgmzhn/manga-translator-ui)
+- [kotatsu-redo](https://github.com/Kotatsu-Redo/Kotatsu-Redo) for the e-ink reading mode
+- [BiliPai](https://github.com/jay3-yy/BiliPai) for inspiring the ExoPlayer/Media3-based video super-resolution
+- [DropSauce](https://github.com/HuzaifaKhalid1311/DropSauce) for inspiring the Google Drive sync feature
+- [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) for the liquid glass (backdrop) effect
+- [Futon](https://github.com/AppFuton/Futon) for inspiring the global tag blacklist feature
 
 ## Contact / 联系方式
 - 欢迎通过 [爱发电](https://www.ifdian.net/a/kototoro) 支持本项目。
