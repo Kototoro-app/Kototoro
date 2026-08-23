@@ -25,6 +25,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,6 +78,7 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
+import org.skepsun.kototoro.extensions.recovery.RecoveryActionCoordinator
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -223,6 +225,9 @@ class SettingsActivity :
 
     @Inject
     lateinit var onnxModelManager: OnnxModelManager
+
+    @Inject
+    lateinit var recoveryCoordinator: RecoveryActionCoordinator
 
     private val isMasterDetails
         get() = FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
@@ -1429,6 +1434,15 @@ class SettingsActivity :
         val searchResults by viewModel.content.collectAsStateWithLifecycle()
         val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
         val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
+        // Missing-source badge on the source-management entry: observed directly from the
+        // app-scoped recovery coordinator so it is populated when the settings root is
+        // opened, without having to visit the extension-management screen first.
+        val recoverySnapshot by recoveryCoordinator.snapshot.collectAsStateWithLifecycle()
+        // Re-derive recovery status once so the count is fresh on first open (the unified
+        // sources ViewModel already does the same when its own screen is opened).
+        LaunchedEffect(Unit) {
+            withContext(Dispatchers.IO) { recoveryCoordinator.refresh() }
+        }
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         SettingsTopBarScaffold(
             title = getString(R.string.settings),
@@ -1459,6 +1473,7 @@ class SettingsActivity :
                     onOpenDestination = { composeDestination ->
                         openDestination(composeDestination, null, true)
                     },
+                    recoveryMissingCount = recoverySnapshot.missingCount,
                 ),
                 searchQuery = searchQuery,
                 searchResults = searchResults,
