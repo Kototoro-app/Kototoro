@@ -5,6 +5,7 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.util.ext.getQuantityStringSafe
 import org.skepsun.kototoro.settings.SettingsDestination
+import org.skepsun.kototoro.settings.sources.unified.RecoveryBadgeProvider
 
 fun buildSettingsRootSections(
     context: Context,
@@ -16,6 +17,15 @@ fun buildSettingsRootSections(
         context.getString(R.string.enabled_d_of_d, enabledSourcesCount, totalSourcesCount)
     } else {
         context.resources.getQuantityStringSafe(R.plurals.items, totalSourcesCount, totalSourcesCount)
+    }
+    // T5.3: recovery badge on the source-management entry. The count is a process-wide cache
+    // refreshed by `UnifiedSourcesViewModel` (see RecoveryBadgeProvider); recomputed whenever
+    // the settings root re-composes (e.g. after returning from the unified sources screen).
+    val recoveryMissingCount = RecoveryBadgeProvider.count()
+    val extensionManagementSummary = if (recoveryMissingCount > 0) {
+        context.getString(R.string.recovery_root_badge_summary, recoveryMissingCount)
+    } else {
+        context.getString(R.string.extension_management_summary)
     }
 
     val readingInterfaceSection = SettingsRootSection(
@@ -72,7 +82,7 @@ fun buildSettingsRootSections(
                 iconRes = R.drawable.ic_extension,
                 iosIconColor = SettingsRootIconColor.INDIGO,
                 title = context.getString(R.string.extension_management),
-                summary = context.getString(R.string.extension_management_summary),
+                summary = extensionManagementSummary,
                 onClick = { onOpenDestination(SettingsDestination.UnifiedSources()) },
             ),
             settingsRootItem(

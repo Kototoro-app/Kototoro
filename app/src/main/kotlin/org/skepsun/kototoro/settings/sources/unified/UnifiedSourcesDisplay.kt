@@ -12,14 +12,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.util.ext.getDisplayName
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
+import org.skepsun.kototoro.extensions.recovery.SourceRecoveryStatus
 import org.skepsun.kototoro.extensions.runtime.getExternalExtensionLanguageDisplayName
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
@@ -349,5 +352,92 @@ private val topBarContentTypes = linkedSetOf(
 
 private fun Set<ContentType>.primaryContentType(): ContentType? {
     return singleOrNull { it in topBarContentTypes }
+}
+
+// --- Source recovery (T5.1 / T5.4 / T5.6) --------------------------------------------------
+//
+// Colors follow the package-group palette approach: fixed light/dark pairs so the badge
+// stays readable in both themes without fighting the Material role system.
+
+/** Per-status badge label. */
+internal fun SourceRecoveryStatus.recoveryLabelRes(): Int {
+    return when (this) {
+        SourceRecoveryStatus.RESOLVED -> R.string.recovery_status_resolved
+        SourceRecoveryStatus.MISSING -> R.string.recovery_status_missing
+        SourceRecoveryStatus.REPOSITORY_REQUIRED -> R.string.recovery_status_repository
+        SourceRecoveryStatus.SIDELOAD_REQUIRED -> R.string.recovery_status_sideload
+        SourceRecoveryStatus.REIMPORT_REQUIRED -> R.string.recovery_status_reimport
+        SourceRecoveryStatus.SIGNATURE_CONFIRMATION_REQUIRED -> R.string.recovery_status_signature
+    }
+}
+
+/** Label for the per-source recovery action button. */
+internal fun SourceRecoveryStatus.recoveryActionLabelRes(): Int {
+    return when (this) {
+        SourceRecoveryStatus.REPOSITORY_REQUIRED,
+        SourceRecoveryStatus.MISSING -> R.string.recovery_action
+        SourceRecoveryStatus.SIDELOAD_REQUIRED -> R.string.recovery_action_sideload
+        SourceRecoveryStatus.REIMPORT_REQUIRED -> R.string.recovery_action_reimport
+        SourceRecoveryStatus.SIGNATURE_CONFIRMATION_REQUIRED -> R.string.recovery_action_confirm
+        SourceRecoveryStatus.RESOLVED -> R.string.recovery_action
+    }
+}
+
+/** Container/content color pair for the recovery badge, adapted to the current theme. */
+@Composable
+internal fun SourceRecoveryStatus.recoveryTagColors(): Pair<Color, Color> {
+    val dark = isSystemInDarkTheme()
+    return when (this) {
+        SourceRecoveryStatus.MISSING -> if (dark) {
+            Color(0xFF4A2422) to Color(0xFFF3C6C4)
+        } else {
+            Color(0xFFF9DEDC) to Color(0xFF7D1F1C)
+        }
+        SourceRecoveryStatus.REPOSITORY_REQUIRED -> if (dark) {
+            Color(0xFF4A3A24) to Color(0xFFF2D8B6)
+        } else {
+            Color(0xFFFAE7C9) to Color(0xFF7D5216)
+        }
+        SourceRecoveryStatus.SIDELOAD_REQUIRED -> if (dark) {
+            Color(0xFF23384E) to Color(0xFFBBD7F5)
+        } else {
+            Color(0xFFD9EBFA) to Color(0xFF1E5090)
+        }
+        SourceRecoveryStatus.REIMPORT_REQUIRED -> if (dark) {
+            Color(0xFF213A36) to Color(0xFFB3DDD3)
+        } else {
+            Color(0xFFD7EFE9) to Color(0xFF1F6B5C)
+        }
+        SourceRecoveryStatus.SIGNATURE_CONFIRMATION_REQUIRED -> if (dark) {
+            Color(0xFF382A4D) to Color(0xFFD7C2F0)
+        } else {
+            Color(0xFFEBDEF9) to Color(0xFF5A3A8C)
+        }
+        SourceRecoveryStatus.RESOLVED ->
+            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+    }
+}
+
+/** Small colored badge shown on a source row when its origin is not fully resolved. */
+@Composable
+internal fun RecoveryStatusTag(
+    status: SourceRecoveryStatus,
+    modifier: Modifier = Modifier,
+) {
+    val (containerColor, contentColor) = status.recoveryTagColors()
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(4.dp),
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Text(
+            text = stringResource(status.recoveryLabelRes()),
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 

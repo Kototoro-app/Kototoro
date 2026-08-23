@@ -73,6 +73,7 @@ fun SourcesSettingsScreen(
     onAdultContentFilterTargetsChange: (Set<AdultContentFilterTarget>) -> Unit,
     onIncognitoModeForNsfwChange: (TriStateOption) -> Unit,
     onGlobalTagBlacklistClick: () -> Unit,
+    onRecoveryClick: () -> Unit = {},
     onTagsWarningsEnabledChange: (Boolean) -> Unit,
     onMirrorSwitchingChange: (Boolean) -> Unit,
     onHandleLinksEnabledChange: (Boolean) -> Unit,
@@ -156,6 +157,12 @@ fun SourcesSettingsScreen(
                         checked = state.isShowBrokenSources,
                         summary = stringResource(R.string.show_broken_sources_summary),
                         onCheckedChange = onShowBrokenSourcesChange,
+                    ) }
+                    item { SettingsActionPreference(
+                        title = stringResource(R.string.recovery_sources_entry_title),
+                        summary = stringResource(R.string.recovery_sources_entry_summary),
+                        iconRes = R.drawable.ic_error_small,
+                        onClick = onRecoveryClick,
                     ) }
                 }
             }

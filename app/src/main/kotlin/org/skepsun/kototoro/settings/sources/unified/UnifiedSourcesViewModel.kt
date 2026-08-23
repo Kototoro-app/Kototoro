@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -55,6 +57,10 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.data.SourceAvailabilityRepository
+import org.skepsun.kototoro.extensions.recovery.RecoveryActionCoordinator
+import org.skepsun.kototoro.extensions.recovery.SourceMigrationPreselection
+import org.skepsun.kototoro.extensions.recovery.SourceRecoveryStatus
+import org.skepsun.kototoro.extensions.recovery.isMissing
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import org.skepsun.kototoro.extensions.install.ExtensionInstallDownloadState
 import org.skepsun.kototoro.extensions.install.ExtensionInstallMode
@@ -85,6 +91,21 @@ private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
 private const val SOURCE_TEST_TIMEOUT_MS = 45_000L
 private const val SOURCE_TEST_MAX_PARALLELISM = 3
 
+/**
+ * SavedState keys written by the Activity/UI agent for process restoration of a source
+ * recovery deep link (T5.2). Read in [UnifiedSourcesViewModel.init].
+ */
+const val DL_SAVED_STATE_TAB = "dl_initialTab"
+const val DL_SAVED_STATE_PACKAGE = "dl_package"
+const val DL_SAVED_STATE_SOURCE_KEY = "dl_sourceKey"
+
+/**
+ * Tab token that selects the recovery (missing-sources) view. Compared case-insensitively
+ * against the deep link's `initialTab` value (kept as a string so any 5A tab representation
+ * that stringifies to one of these works).
+ */
+const val RECOVERY_TAB_TOKEN = "recovery"
+
 @HiltViewModel
 class UnifiedSourcesViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -103,6 +124,8 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val ireaderExtensionManager: IReaderExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
+    private val recoveryCoordinator: RecoveryActionCoordinator,
+    private val savedStateHandle: SavedStateHandle,
 ) : BaseViewModel() {
 
     private val availableExternalExtensions = MutableStateFlow<List<RepoAvailableExtension>>(emptyList())
@@ -128,18 +151,142 @@ class UnifiedSourcesViewModel @Inject constructor(
     val events: SharedFlow<UnifiedSourcesEvent> = _events.asSharedFlow()
     val updateAllInProgress: StateFlow<Boolean> = batchUpdateState.inProgress
 
+    // --- Source recovery (T5.1 / T5.2) ---------------------------------------------------
+
+    private val _recoveryFilterActive = MutableStateFlow(false)
+    private val _highlightedSourceKey = MutableStateFlow<String?>(null)
+
+    /** Source key the recovery deep link asked to highlight / act on (null when none). */
+    val highlightedSourceKey: StateFlow<String?> = _highlightedSourceKey.asStateFlow()
+
+    /** Projected recovery UI state; `recoveryFilterActive` is owned here, the rest comes
+     *  from [RecoveryActionCoordinator.snapshot]. */
+    val recoveryState: StateFlow<RecoveryUiState> = combine(
+        recoveryCoordinator.snapshot,
+        _recoveryFilterActive,
+    ) { snapshot, filterActive ->
+        snapshot.copy(recoveryFilterActive = filterActive)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = recoveryCoordinator.snapshot.value,
+    )
+
+    init {
+        // Process restoration of a recovery deep link (T5.2): 5A writes these keys into
+        // saved state before the ViewModel is recreated.
+        savedStateHandle.get<String>(DL_SAVED_STATE_PACKAGE)
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::setSearchQuery)
+        savedStateHandle.get<String>(DL_SAVED_STATE_SOURCE_KEY)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { _highlightedSourceKey.value = it }
+        if (savedStateHandle.get<String>(DL_SAVED_STATE_TAB).isRecoveryTabToken()) {
+            _recoveryFilterActive.value = true
+        }
+        launchJob(Dispatchers.Default) {
+            recoveryCoordinator.snapshot.collect(RecoveryBadgeProvider::refreshFrom)
+        }
+        // Seed counts before the first action so the badge is populated at startup.
+        launchJob(Dispatchers.IO) {
+            recoveryCoordinator.refresh()
+        }
+    }
+
+    /** Flips the recovery (missing-only) filter; applies to the sources list. */
+    fun toggleRecoveryFilter() {
+        _recoveryFilterActive.update { !it }
+    }
+
+    /** Sets the recovery filter explicitly (used by the recovery deep link). */
+    fun setRecoveryFilterActive(active: Boolean) {
+        _recoveryFilterActive.value = active
+    }
+
+    /**
+     * Applies a source-management deep link (parsed by the UI agent's
+     * `UnifiedSourcesDeepLinkParser`): package filter → search query, source key → highlight,
+     * recovery tab → recovery filter.
+     */
+    fun applyDeepLink(link: UnifiedSourcesDeepLink) {
+        link.packageFilter
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::setSearchQuery)
+        link.sourceKey
+            ?.takeIf { it.isNotBlank() }
+            ?.let { _highlightedSourceKey.value = it }
+        if (link.initialTab.isRecoveryTabToken()) {
+            _recoveryFilterActive.value = true
+        }
+    }
+
+    /** Runs the automatic recovery action for [sourceKey] (derive → plan → execute → re-derive). */
+    fun runRecoveryAction(sourceKey: String) {
+        launchJob(Dispatchers.IO) {
+            recoveryCoordinator.run(sourceKey)
+        }
+    }
+
+    /** Runs the recovery action for the source highlighted by the deep link, if any. */
+    fun runHighlightedRecoveryAction() {
+        _highlightedSourceKey.value?.let(::runRecoveryAction)
+    }
+
+    /** Forward a picked side-load file to the recovery coordinator (null = picker dismissed). */
+    fun onSideloadPicked(sourceKey: String, uri: Uri?) {
+        launchJob(Dispatchers.IO) {
+            recoveryCoordinator.sideLoad(sourceKey, uri)
+        }
+    }
+
+    /** Explicitly confirm the installed package's signature for [sourceKey]. */
+    fun confirmSignature(sourceKey: String) {
+        launchJob(Dispatchers.IO) {
+            recoveryCoordinator.confirmSignature(sourceKey)
+        }
+    }
+
+    /** Reject the signature change for [sourceKey] (origin stays unassociated). */
+    fun rejectSignature(sourceKey: String) {
+        launchJob(Dispatchers.IO) {
+            recoveryCoordinator.rejectSignature(sourceKey)
+        }
+    }
+
+    /** Re-scans all installed sources; reports how many previously-missing origins resolved. */
+    fun runRescanAll() {
+        launchJob(Dispatchers.IO) {
+            val resolved = recoveryCoordinator.rescanAll()
+            emitMessage("Source rescan finished: $resolved source(s) recovered")
+        }
+    }
+
+    /**
+     * T5.5 — computes the works affected by a missing [sourceKey] so the caller can seed the
+     * SourceMigration workbench (`SourceMigrationPanel(initialSelectedContentIds = ...)`).
+     * [worksBySource] maps sourceKey -> local manga ids (built from the favourites catalog).
+     */
+    fun migrateAffected(sourceKey: String, worksBySource: Map<String, List<Long>>): List<Long> {
+        return SourceMigrationPreselection.preselectAffectedWorks(sourceKey, worksBySource)
+    }
+
     val uiState: StateFlow<UnifiedSourcesUiState> = combine(
-        catalogRepository.observeState(),
-        availableExternalExtensions,
-        installService.downloadStates,
-        filterState,
-        lnReaderPackageSnapshot,
-    ) { catalog, availableExtensions, downloadStates, filters, lnReaderSnapshot ->
-        catalog
-            .withAvailableExternalPackages(availableExtensions, downloadStates)
-            .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
-            .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
-            .toUiState(filters)
+        combine(
+            catalogRepository.observeState(),
+            availableExternalExtensions,
+            installService.downloadStates,
+            filterState,
+            lnReaderPackageSnapshot,
+        ) { catalog, availableExtensions, downloadStates, filters, lnReaderSnapshot ->
+            catalog
+                .withAvailableExternalPackages(availableExtensions, downloadStates)
+                .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
+                .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages) to filters
+        },
+        recoveryCoordinator.snapshot,
+        _recoveryFilterActive,
+    ) { (enrichedCatalog, filters), recovery, filterActive ->
+        enrichedCatalog.toUiState(filters, recovery.perSource, filterActive)
     }.flowOn(Dispatchers.Default).stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -1643,7 +1790,11 @@ class UnifiedSourcesViewModel @Inject constructor(
         )
     }
 
-    private fun UnifiedSourceCatalogState.toUiState(filters: UnifiedSourcesFilterState): UnifiedSourcesUiState.Ready {
+    private fun UnifiedSourceCatalogState.toUiState(
+        filters: UnifiedSourcesFilterState,
+        recoveryStatusByKey: Map<String, SourceRecoveryStatus>,
+        recoveryFilterActive: Boolean,
+    ): UnifiedSourcesUiState.Ready {
         val repositoriesById = repositories.associateBy { it.id }
         val enrichedPackages = packages.withUniquePackageIds().enrichWithSourceCoverage(sources)
         val packagesById = enrichedPackages.associateBy { it.id }
@@ -1656,7 +1807,9 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
         val visibleRepositories = repositories.filterBy(filters)
         val visiblePackages = enrichedPackages.filterBy(filters, repositoriesById)
-        val visibleSources = enrichedSources.filterBy(filters, repositoriesById, packagesById)
+        val visibleSources = enrichedSources
+            .filterBy(filters, repositoriesById, packagesById)
+            .filterRecoveryStatus(recoveryStatusByKey, recoveryFilterActive)
         val availableLanguages = (
             enrichedPackages.mapNotNull { it.language } + enrichedSources.mapNotNull { it.language }
         )
@@ -1800,12 +1953,61 @@ class UnifiedSourcesViewModel @Inject constructor(
             .sortedWith(compareByDescending<UnifiedSourceItem> { it.isPinned }.thenBy { it.title.lowercase() })
             .toList()
     }
+
+    /**
+     * Recovery (missing-only) filter: when [active], keeps only sources whose strict source
+     * key (`UnifiedSourceItem.id`) has a missing recovery status. Composes after all other
+     * filters so a pinned / available source that is missing still shows.
+     */
+    private fun List<UnifiedSourceItem>.filterRecoveryStatus(
+        statusByKey: Map<String, SourceRecoveryStatus>,
+        active: Boolean,
+    ): List<UnifiedSourceItem> {
+        if (!active) {
+            return this
+        }
+        return filter { item ->
+            val status = statusByKey[item.id]
+            status != null && status.isMissing
+        }
+    }
 }
 
 
 
 internal fun <T> Set<T>.toggle(value: T): Set<T> {
     return if (value in this) this - value else this + value
+}
+
+/**
+ * Process-wide memory cache of the missing-source badge count (T5.1). The
+ * [UnifiedSourcesViewModel] refreshes it from the recovery coordinator snapshot on every
+ * change and at startup; the navigation/UI agent reads [RecoveryBadgeProvider.count] to
+ * draw the badge without holding a ViewModel reference.
+ */
+object RecoveryBadgeProvider {
+
+    @Volatile
+    private var cachedMissingCount: Int = 0
+
+    /** Current missing-source count (0 when no ViewModel has refreshed it yet). */
+    fun count(): Int = cachedMissingCount
+
+    /** Refresh the cached count from a coordinator [RecoveryUiState]. */
+    fun refreshFrom(state: RecoveryUiState) {
+        cachedMissingCount = state.missingCount
+    }
+
+    /** Direct override — primarily for tests / synthetic updates. */
+    fun updateMissingCount(count: Int) {
+        cachedMissingCount = count
+    }
+}
+
+/** Normalizes a deep-link tab value (any type) and matches the recovery tab token. */
+private fun Any?.isRecoveryTabToken(): Boolean {
+    val token = this?.toString().orEmpty().trim().lowercase()
+    return token == RECOVERY_TAB_TOKEN || token == "missing" || token == "missing-sources"
 }
 
 private fun UnifiedSourceRepositoryItem.matchesQuery(query: String): Boolean {

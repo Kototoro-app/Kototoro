@@ -134,6 +134,9 @@ import org.skepsun.kototoro.settings.sources.SourceSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsRoute
 import org.skepsun.kototoro.settings.sources.SourcesSettingsViewModel
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesDeepLink
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesDeepLinkParser
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesToolbarActions
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesSearchTopBar
 import org.skepsun.kototoro.settings.sources.unified.UnifiedToolbarFilterPanel
@@ -280,6 +283,7 @@ class SettingsActivity :
     private var pendingExternalBackupApp: ExternalBackupApp? = null
     private var pendingUnifiedSourcesFileImportKind: UnifiedSourceKind? = null
     private var pendingUnifiedSourcesFileImportEnabled = true
+    private var pendingUnifiedSourcesRecoverySideloadSourceKey: String? = null
     private var unifiedSourcesSearchActive by mutableStateOf(false)
     private var unifiedSourcesActivePanel by mutableStateOf<UnifiedToolbarFilterPanel?>(null)
     private var isLegacyTopBarVisible = false
@@ -410,6 +414,17 @@ class SettingsActivity :
         if (uri == null) return@registerForActivityResult
         persistReadPermission(uri)
         unifiedSourcesViewModel.importLocalJar(uri)
+    }
+
+    private val openUnifiedSourcesRecoverySideload = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val sourceKey = pendingUnifiedSourcesRecoverySideloadSourceKey ?: return@registerForActivityResult
+        pendingUnifiedSourcesRecoverySideloadSourceKey = null
+        if (uri != null) {
+            persistReadPermission(uri)
+            unifiedSourcesViewModel.onSideloadPicked(sourceKey, uri)
+        }
     }
 
     private val unifiedSourcesInstallLauncher = registerForActivityResult(
@@ -1335,6 +1350,7 @@ class SettingsActivity :
                             ),
                         )
                     },
+                    onRecoveryClick = ::openSourceRecovery,
                 )
             }
             is SettingsDestination.UnifiedSources -> {
@@ -1383,6 +1399,7 @@ class SettingsActivity :
                         onActivePanelChange = { unifiedSourcesActivePanel = it },
                         initialAddRepositoryKind = destination.initialRepositoryKind,
                         initialAddRepositoryUrl = destination.initialRepositoryUrl,
+                        onOpenSideloadPicker = ::openUnifiedSourcesRecoverySideloadPicker,
                         viewModel = unifiedSourcesViewModel,
                         onBrowseSource = { item -> router.openList(item.source, null, null) },
                         onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
@@ -1839,6 +1856,28 @@ class SettingsActivity :
                 "application/java-archive",
                 "application/zip",
                 "*/*",
+            ),
+        )
+    }
+
+    private fun openUnifiedSourcesRecoverySideloadPicker(sourceKey: String) {
+        pendingUnifiedSourcesRecoverySideloadSourceKey = sourceKey
+        openUnifiedSourcesRecoverySideload.launch(
+            arrayOf(
+                "application/vnd.android.package-archive",
+                "application/java-archive",
+                "application/zip",
+                "*/*",
+            ),
+        )
+    }
+
+    /** Opens the standalone unified-sources screen with the recovery deep link (T5.3 placeholder). */
+    private fun openSourceRecovery() {
+        startActivity(
+            UnifiedSourcesActivity.newDeepLinkIntent(
+                this,
+                UnifiedSourcesDeepLink(initialTab = UnifiedSourcesDeepLinkParser.TAB_RECOVERY),
             ),
         )
     }

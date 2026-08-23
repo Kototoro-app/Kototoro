@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
@@ -30,6 +31,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.Text
@@ -41,10 +43,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
@@ -93,6 +97,9 @@ fun UnifiedSourcesScreen(
     onPackageCancelInstall: (String) -> Unit,
     onImportLocalJar: () -> Unit,
     onPullRefresh: (Int) -> Unit,
+    recoveryState: RecoveryUiState? = null,
+    onToggleRecoveryFilter: () -> Unit = {},
+    onRunRecoveryAction: (UnifiedSourceItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val readyState = state as? UnifiedSourcesUiState.Ready
@@ -150,6 +157,9 @@ fun UnifiedSourcesScreen(
                         state = readyState,
                         onContentTypeClick = onContentTypeClick,
                         onKindClick = onKindClick,
+                        recoveryMissingCount = recoveryState?.missingCount ?: 0,
+                        recoveryFilterActive = recoveryState?.recoveryFilterActive == true,
+                        onToggleRecoveryFilter = onToggleRecoveryFilter,
                     )
                 }
             }
@@ -169,6 +179,15 @@ fun UnifiedSourcesScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                 ) {
+                    val activeRecovery = recoveryState?.takeIf { it.missingCount > 0 }
+                    if (activeRecovery != null) {
+                        UnifiedRecoveryMissingSummaryBar(
+                            missingCount = activeRecovery.missingCount,
+                            totalCount = activeRecovery.total,
+                            filterActive = activeRecovery.recoveryFilterActive,
+                            onToggleFilter = onToggleRecoveryFilter,
+                        )
+                    }
                     SecondaryTabRow(
                         selectedTabIndex = selectedTab,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -251,6 +270,9 @@ fun UnifiedSourcesScreen(
                                     selectedSourceIds = activeSelectedSourceIds,
                                     onSourceSelectionChange = onSourceSelectionChange,
                                     onSourcePinnedChange = onSourcePinnedChange,
+                                    recoveryStatusByKey = recoveryState?.perSource.orEmpty(),
+                                    inFlightSourceKeys = recoveryState?.inFlightSourceKeys.orEmpty(),
+                                    onRunRecoveryAction = onRunRecoveryAction,
                                 )
                                 UNIFIED_SOURCES_TAB_REPOSITORIES -> UnifiedRepositoryList(
                                     modifier = Modifier.fillMaxSize(),
@@ -286,6 +308,9 @@ private fun UnifiedSourcesFilterTabs(
     state: UnifiedSourcesUiState.Ready,
     onContentTypeClick: (ContentType?) -> Unit,
     onKindClick: (UnifiedSourceKind?) -> Unit,
+    recoveryMissingCount: Int = 0,
+    recoveryFilterActive: Boolean = false,
+    onToggleRecoveryFilter: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 4.dp),
@@ -327,6 +352,20 @@ private fun UnifiedSourcesFilterTabs(
                     onClick = { onKindClick(kind) },
                     text = kind.displayLabel(),
                 )
+            }
+        }
+        if (recoveryMissingCount > 0) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(horizontal = 1.dp),
+            ) {
+                item(key = "recovery_filter") {
+                    CompactFilterChip(
+                        selected = recoveryFilterActive,
+                        onClick = onToggleRecoveryFilter,
+                        text = stringResource(R.string.recovery_filter) + " · $recoveryMissingCount",
+                    )
+                }
             }
         }
     }
@@ -373,6 +412,48 @@ internal fun CompactFilterChip(
             )
         },
     )
+}
+
+@Composable
+private fun UnifiedRecoveryMissingSummaryBar(
+    missingCount: Int,
+    totalCount: Int,
+    filterActive: Boolean,
+    onToggleFilter: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_error_small),
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = stringResource(R.string.recovery_missing_sources_summary, missingCount, totalCount),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            CompactActionChip(
+                onClick = onToggleFilter,
+                label = {
+                    Text(stringResource(if (filterActive) R.string.recovery_hide else R.string.recovery_show))
+                },
+            )
+        }
+    }
 }
 
 @Composable

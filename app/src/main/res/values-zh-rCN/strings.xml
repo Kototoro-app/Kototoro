@@ -3353,4 +3353,34 @@ SHA-256 指纹:
     <string name="reading_status_completed">已读完</string>
     <string name="reading_status_on_hold">搁置</string>
     <string name="reading_status_dropped">弃读</string>
+    <!-- Source recovery (Tsundoku Phase 5) -->
+    <string name="recovery_filter">恢复</string>
+    <string name="recovery_missing_sources_summary">%1$d / %2$d 个来源需要处理</string>
+    <string name="recovery_show">显示</string>
+    <string name="recovery_hide">隐藏</string>
+    <string name="recovery_action">恢复</string>
+    <string name="recovery_action_sideload">侧载</string>
+    <string name="recovery_action_reimport">重新导入</string>
+    <string name="recovery_action_confirm">确认</string>
+    <string name="recovery_status_resolved">正常</string>
+    <string name="recovery_status_missing">缺失</string>
+    <string name="recovery_status_repository">需仓库</string>
+    <string name="recovery_status_sideload">需侧载</string>
+    <string name="recovery_status_reimport">需重导</string>
+    <string name="recovery_status_signature">签名已变更</string>
+    <string name="recovery_result_success_title">来源已恢复</string>
+    <string name="recovery_result_failure_title">恢复失败</string>
+    <string name="recovery_result_success_message">%1$s 已成功恢复。</string>
+    <string name="recovery_result_failure_message">无法恢复 %1$s。请检查仓库、安装包或网络后重试。</string>
+    <string name="recovery_result_retry">重试</string>
+    <string name="recovery_signature_title">签名已变更</string>
+    <string name="recovery_signature_message">%1$s 的签名证书与上次关联时不同。重新关联并继续使用？</string>
+    <string name="recovery_signature_confirm">重新关联</string>
+    <string name="recovery_signature_reject">保持未关联</string>
+    <string name="recovery_sideload_title">侧载安装包</string>
+    <string name="recovery_sideload_message">选择提供 %1$s 的安装包（APK / JAR）。</string>
+    <string name="recovery_sideload_pick">选择文件</string>
+    <string name="recovery_root_badge_summary">%1$d 个来源需要处理</string>
+    <string name="recovery_sources_entry_title">来源恢复</string>
+    <string name="recovery_sources_entry_summary">恢复缺失的来源（扩展、侧载、仓库）</string>
 </resources>

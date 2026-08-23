@@ -24,6 +24,8 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
     private val viewModel by viewModels<UnifiedSourcesViewModel>()
     private var pendingFileImportKind: UnifiedSourceKind? = null
     private var pendingFileImportEnabled = true
+    private var pendingRecoverySideloadSourceKey: String? = null
+    private var activeDeepLink: UnifiedSourcesDeepLink? = null
 
     private val openRepositoryFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@registerForActivityResult
@@ -39,6 +41,15 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         viewModel.importLocalJar(uri)
     }
 
+    private val openRecoverySideload = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val sourceKey = pendingRecoverySideloadSourceKey ?: return@registerForActivityResult
+        pendingRecoverySideloadSourceKey = null
+        if (uri != null) {
+            persistReadPermission(uri)
+            viewModel.onSideloadPicked(sourceKey, uri)
+        }
+    }
+
     private val installLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.onInstallerActivityReturned()
     }
@@ -51,19 +62,53 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         super.onCreate(savedInstanceState)
         val initialKind = intent.resolveInitialRepositoryKind()
         val initialUrl = intent.resolveInitialRepositoryUrl()
+        val deepLink = resolveDeepLink(intent, savedInstanceState)
+        activeDeepLink = deepLink
+        // T5.2: apply the deep link (parsed from the intent Uri and/or extras; restored from
+        // saved state on process recreation so the target tab / filter survives a kill).
+        viewModel.applyDeepLink(deepLink)
         setComposeContent {
             UnifiedSourcesContent(
                 initialAddRepositoryKind = initialKind,
                 initialAddRepositoryUrl = initialUrl,
+                onOpenSideloadPicker = ::openRecoverySideloadPicker,
                 modifier = Modifier.fillMaxSize(),
             )
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        // Persist the resolved deep link under the parser's extra keys so a recreated
+        // `onCreate(savedInstanceState != null)` can re-apply it (T5.2 process restoration).
+        activeDeepLink?.let { link ->
+            link.initialTab?.let { outState.putString(EXTRA_INITIAL_TAB, it) }
+            link.packageFilter?.let { outState.putString(EXTRA_PACKAGE_FILTER, it) }
+            link.sourceKey?.let { outState.putString(EXTRA_SOURCE_KEY, it) }
+        }
+    }
+
+    /**
+     * Resolves the [UnifiedSourcesDeepLink] for this launch: on process recreation the saved
+     * state Bundle (written by [onSaveInstanceState]) wins; otherwise the intent's Uri query
+     * parameters and extras are merged with Uri taking precedence (see
+     * [UnifiedSourcesDeepLinkParser.merge]).
+     */
+    private fun resolveDeepLink(intent: Intent, savedInstanceState: Bundle?): UnifiedSourcesDeepLink {
+        val restored = savedInstanceState?.let(UnifiedSourcesDeepLinkParser::fromExtras)
+        if (restored != null && restored != UnifiedSourcesDeepLink()) {
+            return restored
+        }
+        val uriLink = intent.data?.let(UnifiedSourcesDeepLinkParser::fromUri) ?: UnifiedSourcesDeepLink()
+        val extrasLink = UnifiedSourcesDeepLinkParser.fromExtras(intent.extras)
+        return UnifiedSourcesDeepLinkParser.merge(uriLink, extrasLink)
     }
 
     @Composable
     fun UnifiedSourcesContent(
         initialAddRepositoryKind: UnifiedSourceKind? = null,
         initialAddRepositoryUrl: String? = null,
+        onOpenSideloadPicker: (String) -> Unit = {},
         modifier: Modifier = Modifier,
     ) {
         var searchActive by remember { mutableStateOf(false) }
@@ -75,6 +120,7 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
             onActivePanelChange = { activePanel = it },
             initialAddRepositoryKind = initialAddRepositoryKind,
             initialAddRepositoryUrl = initialAddRepositoryUrl,
+            onOpenSideloadPicker = onOpenSideloadPicker,
             viewModel = viewModel,
             onBrowseSource = { item -> router.openList(item.source, null, null) },
             onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
@@ -119,6 +165,19 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         )
     }
 
+    /** Launches the system document picker for a recovery side-load (APK/JAR/zip). */
+    private fun openRecoverySideloadPicker(sourceKey: String) {
+        pendingRecoverySideloadSourceKey = sourceKey
+        openRecoverySideload.launch(
+            arrayOf(
+                "application/vnd.android.package-archive",
+                "application/java-archive",
+                "application/zip",
+                "*/*",
+            ),
+        )
+    }
+
     private fun persistReadPermission(uri: Uri) {
         runCatching {
             contentResolver.takePersistableUriPermission(
@@ -132,6 +191,9 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
 
         const val EXTRA_INITIAL_REPOSITORY_KIND = "initial_repository_kind"
         const val EXTRA_INITIAL_REPOSITORY_URL = "initial_repository_url"
+        const val EXTRA_INITIAL_TAB = UnifiedSourcesDeepLinkParser.EXTRA_INITIAL_TAB
+        const val EXTRA_PACKAGE_FILTER = UnifiedSourcesDeepLinkParser.EXTRA_PACKAGE_FILTER
+        const val EXTRA_SOURCE_KEY = UnifiedSourcesDeepLinkParser.EXTRA_SOURCE_KEY
         private const val HOST_ADD_REPO = "add-repo"
 
         fun newIntent(
@@ -146,6 +208,25 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
                 if (initialRepositoryUrl != null) {
                     putExtra(EXTRA_INITIAL_REPOSITORY_URL, initialRepositoryUrl)
                 }
+            }
+        }
+
+        /**
+         * Deep-link intent (T5.2): carries both the parser extras (consumed by this Activity)
+         * and the `dl_*` keys read directly by [UnifiedSourcesViewModel]'s SavedStateHandle,
+         * so the link also survives process death.
+         */
+        fun newDeepLinkIntent(
+            context: Context,
+            link: UnifiedSourcesDeepLink,
+        ): Intent {
+            return Intent(context, UnifiedSourcesActivity::class.java).apply {
+                link.initialTab?.let { putExtra(EXTRA_INITIAL_TAB, it) }
+                link.packageFilter?.let { putExtra(EXTRA_PACKAGE_FILTER, it) }
+                link.sourceKey?.let { putExtra(EXTRA_SOURCE_KEY, it) }
+                link.initialTab?.let { putExtra(DL_SAVED_STATE_TAB, it) }
+                link.packageFilter?.let { putExtra(DL_SAVED_STATE_PACKAGE, it) }
+                link.sourceKey?.let { putExtra(DL_SAVED_STATE_SOURCE_KEY, it) }
             }
         }
 

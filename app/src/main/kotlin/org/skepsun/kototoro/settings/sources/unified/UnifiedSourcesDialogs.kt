@@ -514,3 +514,130 @@ internal fun UnifiedLanguageFilterDialog(
     )
 }
 
+// --- Source recovery dialogs (T5.4 / T5.6) ------------------------------------------------
+
+/**
+ * Outcome dialog for a finished recovery action: success shows a confirmation, failure shows
+ * the reason with "Retry" / "Close" actions. Both actions keep the last result enqueued so a
+ * retry only starts when the user asks for it; dismissal is handled by the caller locally.
+ */
+@Composable
+internal fun UnifiedRecoveryResultDialog(
+    sourceKey: String,
+    ok: Boolean,
+    message: String?,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    SettingsAlertDialog(
+        title = stringResource(
+            if (ok) {
+                R.string.recovery_result_success_title
+            } else {
+                R.string.recovery_result_failure_title
+            },
+        ),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(if (ok) R.string.close else R.string.recovery_result_retry),
+                onClick = if (ok) onDismiss else onRetry,
+            )
+        },
+        dismissButton = {
+            if (!ok) {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.close),
+                    onClick = onDismiss,
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val defaultMessage = stringResource(
+                    if (ok) {
+                        R.string.recovery_result_success_message
+                    } else {
+                        R.string.recovery_result_failure_message
+                    },
+                    sourceKey,
+                )
+                Text(
+                    text = message?.takeIf { it.isNotBlank() } ?: defaultMessage,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                )
+            }
+        },
+    )
+}
+
+/**
+ * Signature-change confirmation (T5.6): the installed package's signing digest differs from
+ * the recorded origin, so the user must explicitly re-associate (confirm) — or keep the
+ * origin unassociated (reject).
+ */
+@Composable
+internal fun UnifiedSignatureConfirmationDialog(
+    sourceKey: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    onReject: () -> Unit,
+) {
+    SettingsAlertDialog(
+        title = stringResource(R.string.recovery_signature_title),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(R.string.recovery_signature_confirm),
+                onClick = onConfirm,
+            )
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.recovery_signature_reject),
+                    onClick = onReject,
+                )
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = onDismiss,
+                )
+            }
+        },
+        text = {
+            Text(stringResource(R.string.recovery_signature_message, sourceKey))
+        },
+    )
+}
+
+/** Side-load picker dialog: asks for the APK/JAR that provides [sourceKey]. */
+@Composable
+internal fun UnifiedRecoverySideloadDialog(
+    sourceKey: String,
+    onDismiss: () -> Unit,
+    onPickFile: () -> Unit,
+) {
+    SettingsAlertDialog(
+        title = stringResource(R.string.recovery_sideload_title),
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(R.string.recovery_sideload_pick),
+                onClick = onPickFile,
+            )
+        },
+        dismissButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+            )
+        },
+        text = {
+            Text(stringResource(R.string.recovery_sideload_message, sourceKey))
+        },
+    )
+}
+
