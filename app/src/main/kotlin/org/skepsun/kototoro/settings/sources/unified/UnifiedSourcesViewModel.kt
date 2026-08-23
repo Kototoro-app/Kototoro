@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -137,6 +138,12 @@ class UnifiedSourcesViewModel @Inject constructor(
             languages = settings.extensionLanguages.normalizeLanguageCodes(),
         ),
     )
+    /**
+     * Optimistic enabled-state overrides keyed by source id, merged into [uiState] on
+     * every emission so the enable/disable switch never waits for the catalog rebuild.
+     * Each entry is retired once the authoritative rebuild reports the same value.
+     */
+    private val _enabledOverrides = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     private val _events = MutableSharedFlow<UnifiedSourcesEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<UnifiedSourcesEvent> = _events.asSharedFlow()
     val updateAllInProgress: StateFlow<Boolean> = batchUpdateState.inProgress
@@ -159,7 +166,12 @@ class UnifiedSourcesViewModel @Inject constructor(
             ?.let(::setSearchQuery)
     }
 
-    val uiState: StateFlow<UnifiedSourcesUiState> = combine(
+    /**
+     * Heavy catalog pipeline (rebuilds on every Room invalidation / runtime change).
+     * Kept separate from [uiState] so toggle feedback — which only needs the enabled
+     * state — never waits for this potentially multi-second rebuild.
+     */
+    private val baseSourcesUiState: Flow<UnifiedSourcesUiState.Ready> = combine(
         catalogRepository.observeState(),
         availableExternalExtensions,
         installService.downloadStates,
@@ -171,7 +183,14 @@ class UnifiedSourcesViewModel @Inject constructor(
             .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
             .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
             .toUiState(filters)
-    }.flowOn(Dispatchers.Default).stateIn(
+    }.flowOn(Dispatchers.Default)
+
+    val uiState: StateFlow<UnifiedSourcesUiState> = combine(
+        baseSourcesUiState,
+        _enabledOverrides,
+    ) { state, enabledOverrides ->
+        state.withEnabledOverrides(enabledOverrides)
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = UnifiedSourcesUiState.Loading,
@@ -779,12 +798,33 @@ class UnifiedSourcesViewModel @Inject constructor(
         if (sourceItems.isEmpty()) {
             return
         }
+        // Optimistic, instant feedback: the switch stops depending on the full catalog
+        // rebuild. The authoritative DB write happens in the background and overrides are
+        // retired as soon as the rebuild reports the same value.
+        _enabledOverrides.update { overrides ->
+            overrides + sourceItems.associate { it.id to enabled }
+        }
         viewModelScope.launch(Dispatchers.Default) {
             if (!enabled && settings.isAllSourcesEnabled) {
-                contentSourcesRepository.setSourcesEnabled(ready.allSources.map { it.source }, true)
+                // Materialize the sources that stay enabled WITHOUT resurrecting the one
+                // being disabled, then drop the global flag.
+                val rest = ready.allSources.filter { it.id !in sourceIds }
+                if (rest.isNotEmpty()) {
+                    contentSourcesRepository.setSourcesEnabled(rest.map { it.source }, true)
+                }
                 settings.isAllSourcesEnabled = false
             }
-            contentSourcesRepository.setSourcesEnabled(sourceItems.map { it.source }, enabled)
+            runCatching {
+                contentSourcesRepository.setSourcesEnabled(sourceItems.map { it.source }, enabled)
+            }
+            // Reconcile: drop overrides that authoritative state now agrees on.
+            val authoritative = (uiState.value as? UnifiedSourcesUiState.Ready)
+                ?.allSources
+                .orEmpty()
+                .associate { it.id to it.isEnabled }
+            _enabledOverrides.update { overrides ->
+                overrides.filterNot { (id, value) -> authoritative[id] == value }
+            }
         }
     }
 
@@ -2162,4 +2202,27 @@ private fun resolveRepositoryLocationTypeForAction(locator: String): UnifiedRepo
         locator.startsWith("https://", ignoreCase = true) -> UnifiedRepositoryLocationType.REMOTE_URL
         else -> UnifiedRepositoryLocationType.INLINE_IMPORT
     }
+}
+
+/**
+ * Merges optimistic enabled-state overrides into a ready state so toggle feedback does
+ * not depend on the catalog rebuild. See [UnifiedSourcesViewModel._enabledOverrides].
+ */
+internal fun UnifiedSourcesUiState.Ready.withEnabledOverrides(
+    overrides: Map<String, Boolean>,
+): UnifiedSourcesUiState.Ready {
+    if (overrides.isEmpty()) {
+        return this
+    }
+    return copy(
+        allSources = allSources.withEnabledOverrides(overrides),
+        sources = sources.withEnabledOverrides(overrides),
+    )
+}
+
+internal fun List<UnifiedSourceItem>.withEnabledOverrides(
+    overrides: Map<String, Boolean>,
+): List<UnifiedSourceItem> = map { item ->
+    val value = overrides[item.id] ?: return@map item
+    if (item.isEnabled == value) item else item.copy(isEnabled = value)
 }
