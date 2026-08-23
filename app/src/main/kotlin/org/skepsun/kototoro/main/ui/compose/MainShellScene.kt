@@ -122,6 +122,12 @@ private data class FavoritesSelectionDialogState(
     val candidates: List<org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel.ImportSource>,
     val selectedIndices: Set<Int>,
 )
+
+internal fun shouldApplyLandscapeNavigationInset(
+    isLandscapeNavigation: Boolean,
+    isMainShellRouteVisible: Boolean,
+): Boolean = isLandscapeNavigation && isMainShellRouteVisible
+
 @Composable
 private fun MainRouteScene(
     landscapeStartPadding: androidx.compose.ui.unit.Dp,
@@ -177,7 +183,12 @@ fun MainShellScene(
     val rootView = LocalView.current
     val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey
     val density = LocalDensity.current
-    val landscapeStartPadding = if (isLandscapeNavigation) {
+    val landscapeStartPadding = if (
+        shouldApplyLandscapeNavigationInset(
+            isLandscapeNavigation = isLandscapeNavigation,
+            isMainShellRouteVisible = isMainShellRouteVisible,
+        )
+    ) {
         with(density) { bottomBarHeightPx.toDp() }
     } else {
         0.dp
