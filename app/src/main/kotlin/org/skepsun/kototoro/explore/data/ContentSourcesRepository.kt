@@ -95,6 +95,7 @@ class ContentSourcesRepository @Inject constructor(
     private val mihonExtensionManager: org.skepsun.kototoro.mihon.MihonExtensionManager,
     private val aniyomiExtensionManager: org.skepsun.kototoro.aniyomi.AniyomiExtensionManager,
     private val ireaderExtensionManager: org.skepsun.kototoro.ireader.IReaderExtensionManager,
+    private val tsundokuExtensionManager: org.skepsun.kototoro.tsundoku.TsundokuExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val sourceAvailabilityRepository: SourceAvailabilityRepository,
     private val projectionContentTypeBackfill: ProjectionContentTypeBackfill,
@@ -191,6 +192,7 @@ class ContentSourcesRepository @Inject constructor(
             addAll(getEnabledMihonSources())
             addAll(getEnabledAniyomiSources())
             addAll(getEnabledIReaderSources())
+            addAll(getEnabledTsundokuNovelSources())
         }
         val filteredCandidates = if (filterToActiveTvBoxRepository) {
             val selection = TVBoxRepositorySelector.resolve(
@@ -219,6 +221,7 @@ class ContentSourcesRepository @Inject constructor(
             addAll(getEnabledMihonSources())
             addAll(getEnabledAniyomiSources())
             addAll(getEnabledIReaderSources())
+            addAll(getEnabledTsundokuNovelSources())
         })
     }
 
@@ -236,6 +239,7 @@ class ContentSourcesRepository @Inject constructor(
                 val mihonSources = getEnabledMihonSources()
                 val aniyomiSources = getEnabledAniyomiSources()
                 val ireaderSources = getEnabledIReaderSources()
+                val tsundokuSources = getEnabledTsundokuNovelSources()
 
                 val list = ArrayList<ContentSource>()
                 enabledSources.mapTo(list) { it.mangaSource }
@@ -248,6 +252,9 @@ class ContentSourcesRepository @Inject constructor(
                     if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
                 }
                 ireaderSources.forEach {
+                    if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
+                }
+                tsundokuSources.forEach {
                     if (settings.isAllSourcesEnabled || it.name !in disabledNames) list.add(it)
                 }
 
@@ -313,6 +320,18 @@ class ContentSourcesRepository @Inject constructor(
      */
     private fun getEnabledIReaderSources(): List<org.skepsun.kototoro.ireader.model.IReaderMangaSource> {
         val allSources = ireaderExtensionManager.getIReaderMangaSources()
+        val isNsfwDisabled = settings.isNsfwContentDisabled
+        return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
+    }
+
+    /**
+     * Gets all enabled Tsundoku novel sources as TsundokuNovelSource instances.
+     *
+     * Mirrors [getEnabledMihonSources]: the NSFW content setting is the only filter applied
+     * (Tsundoku extensions declare no per-source language filter on Kototoro's side yet).
+     */
+    private fun getEnabledTsundokuNovelSources(): List<org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource> {
+        val allSources = tsundokuExtensionManager.getTsundokuNovelSources()
         val isNsfwDisabled = settings.isNsfwContentDisabled
         return allSources.filter { !isNsfwDisabled || !it.isNsfw() }
     }

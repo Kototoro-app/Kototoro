@@ -211,17 +211,17 @@ class ExtensionRepoServiceTest : FunSpec({
 
 	test("fetchRepoDetails follows legacy index_v2 protobuf url") {
 		runBlocking {
-			val index = MihonExtensionStoreIndex(
+			val index = ExtensionStoreIndex(
 				name = "Keiyoushi",
 				badgeLabel = "KEI",
 				signingKey = "AA:BB:CC",
-				contact = MihonExtensionStoreIndex.Contact(
+				contact = ExtensionStoreIndex.Contact(
 					website = "https://keiyoushi.github.io",
 				),
-				extensionList = MihonExtensionStoreIndex.ExtensionList(emptyList()),
+				extensionList = ExtensionStoreIndex.ExtensionList(emptyList()),
 			)
 			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
-				MihonExtensionStoreIndex.serializer(),
+				ExtensionStoreIndex.serializer(),
 				index,
 			).gzip()
 			val indexUrl = server.url("/mihon/index.pb").toString()
@@ -256,29 +256,29 @@ class ExtensionRepoServiceTest : FunSpec({
 
 	test("fetchRepoDetails and extensions parse gzipped protobuf index") {
 		runBlocking {
-			val index = MihonExtensionStoreIndex(
+			val index = ExtensionStoreIndex(
 				name = "Keiyoushi",
 				badgeLabel = "KEI",
 				signingKey = "AA:BB:CC",
-				contact = MihonExtensionStoreIndex.Contact(
+				contact = ExtensionStoreIndex.Contact(
 					website = "https://keiyoushi.github.io",
 					discord = "https://discord.example",
 				),
-				extensionList = MihonExtensionStoreIndex.ExtensionList(
+				extensionList = ExtensionStoreIndex.ExtensionList(
 					extensions = listOf(
-						MihonExtensionStoreIndex.Extension(
+						ExtensionStoreIndex.Extension(
 							name = "Asura Scans",
 							packageName = "ext.asura",
-							resources = MihonExtensionStoreIndex.Resources(
+							resources = ExtensionStoreIndex.Resources(
 								apkUrl = "https://cdn.example/asura.apk",
 								iconUrl = "https://cdn.example/asura.png",
 							),
 							extensionLib = "1.9",
 							versionCode = 2,
 							versionName = "1.9.0",
-							contentWarning = MihonExtensionStoreIndex.ContentWarning.MIXED,
+							contentWarning = ExtensionStoreIndex.ContentWarning.MIXED,
 							sources = listOf(
-								MihonExtensionStoreIndex.Source(
+								ExtensionStoreIndex.Source(
 									id = 1,
 									name = "Asura Scans",
 									language = "en",
@@ -290,7 +290,7 @@ class ExtensionRepoServiceTest : FunSpec({
 				),
 			)
 			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
-				MihonExtensionStoreIndex.serializer(),
+				ExtensionStoreIndex.serializer(),
 				index,
 			).gzip()
 			server.enqueue(MockResponse().setBody(okio.Buffer().write(encoded)))
@@ -319,33 +319,33 @@ class ExtensionRepoServiceTest : FunSpec({
 
 	test("fetchAvailableExtensions falls back from legacy json to protobuf index") {
 		runBlocking {
-			val index = MihonExtensionStoreIndex(
+			val index = ExtensionStoreIndex(
 				name = "Keiyoushi",
 				badgeLabel = "KEI",
 				signingKey = "AA:BB:CC",
-				contact = MihonExtensionStoreIndex.Contact("https://keiyoushi.github.io"),
-				extensionList = MihonExtensionStoreIndex.ExtensionList(
+				contact = ExtensionStoreIndex.Contact("https://keiyoushi.github.io"),
+				extensionList = ExtensionStoreIndex.ExtensionList(
 					listOf(
-						MihonExtensionStoreIndex.Extension(
+						ExtensionStoreIndex.Extension(
 							name = "Asura Scans",
 							packageName = "ext.asura",
-							resources = MihonExtensionStoreIndex.Resources(
+							resources = ExtensionStoreIndex.Resources(
 								apkUrl = "https://cdn.example/asura.apk",
 								iconUrl = "https://cdn.example/asura.png",
 							),
 							extensionLib = "1.9",
 							versionCode = 2,
 							versionName = "1.9.0",
-							contentWarning = MihonExtensionStoreIndex.ContentWarning.SAFE,
+							contentWarning = ExtensionStoreIndex.ContentWarning.SAFE,
 							sources = listOf(
-								MihonExtensionStoreIndex.Source(1, "Asura Scans", "en"),
+								ExtensionStoreIndex.Source(1, "Asura Scans", "en"),
 							),
 						),
 					),
 				),
 			)
 			val encoded = kotlinx.serialization.protobuf.ProtoBuf.encodeToByteArray(
-				MihonExtensionStoreIndex.serializer(),
+				ExtensionStoreIndex.serializer(),
 				index,
 			).gzip()
 			server.enqueue(MockResponse().setResponseCode(404))

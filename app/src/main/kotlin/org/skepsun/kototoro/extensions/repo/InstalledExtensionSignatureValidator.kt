@@ -24,6 +24,15 @@ class InstalledExtensionSignatureValidator @Inject constructor(
         return ExtensionFingerprintTrust.isTrusted(expectedFingerprint, getFingerprints(packageName))
     }
 
+    /**
+     * First SHA-256 fingerprint (hex) of the installed / managed extension for [packageName],
+     * or `null` when it cannot be determined. Used to record the `signing_digest` of a source
+     * origin (plan T3A.7); never guesses.
+     */
+    fun firstFingerprint(packageName: String): String? {
+        return getFingerprints(packageName).firstOrNull()
+    }
+
     private fun getFingerprints(packageName: String): Set<String> {
         return cache.getOrPut(packageName) {
             runCatching {
@@ -41,7 +50,7 @@ class InstalledExtensionSignatureValidator @Inject constructor(
     }
 
     private fun getManagedPackageInfo(packageName: String): PackageInfo? {
-        return listOf("mihon", "aniyomi", "ireader").firstNotNullOfOrNull { ecosystem ->
+        return listOf("mihon", "aniyomi", "ireader", "tsundoku").firstNotNullOfOrNull { ecosystem ->
             LocalApkExtensionSupport.getLocalArchivePackageInfoOrNull(
                 context = context,
                 pkgManager = context.packageManager,

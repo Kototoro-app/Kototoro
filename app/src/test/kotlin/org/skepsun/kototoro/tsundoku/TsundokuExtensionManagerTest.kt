@@ -33,6 +33,7 @@ class TsundokuExtensionManagerTest {
         val manager = TsundokuExtensionManager(
             context = mockk<Context>(relaxed = true),
             loader = loader,
+            originRecorder = mockk<TsundokuOriginRecorder>(relaxed = true),
         )
         manager.loadExtensions()
 
@@ -63,6 +64,7 @@ class TsundokuExtensionManagerTest {
         val manager = TsundokuExtensionManager(
             context = mockk<Context>(relaxed = true),
             loader = loader,
+            originRecorder = mockk<TsundokuOriginRecorder>(relaxed = true),
         )
         manager.loadExtensions()
 

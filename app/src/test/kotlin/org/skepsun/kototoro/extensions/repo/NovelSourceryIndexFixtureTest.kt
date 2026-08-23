@@ -40,7 +40,17 @@ class NovelSourceryIndexFixtureTest {
 		assertNull(source!!.message)
 	}
 
-	private fun decodeFixture(resource: String): MihonExtensionStoreIndex {
+	@Test
+	fun `ExtensionStoreIndex decodes NovelSourcery fixture into non empty store data`() {
+		val index: ExtensionStoreIndex = decodeFixture("/fixtures/novelsourcery-index.protobuf")
+
+		assertTrue(index.name.isNotBlank(), "store name must be present")
+		assertTrue(index.signingKey.isNotBlank(), "signing key must be present")
+		assertNotNull(index.extensionList)
+		assertTrue(index.extensionList!!.extensions.isNotEmpty(), "extension list must have content")
+	}
+
+	private fun decodeFixture(resource: String): ExtensionStoreIndex {
 		val bytes = NovelSourceryIndexFixtureTest::class.java.getResourceAsStream(resource)
 			?.use { it.readBytes() }
 			?: error("Missing fixture resource: $resource")
@@ -49,10 +59,10 @@ class NovelSourceryIndexFixtureTest {
 		} else {
 			bytes
 		}
-		return ProtoBuf.decodeFromByteArray(MihonExtensionStoreIndex.serializer(), raw)
+		return ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.serializer(), raw)
 	}
 
-	private fun assertIndex(index: MihonExtensionStoreIndex) {
+	private fun assertIndex(index: ExtensionStoreIndex) {
 		assertEquals("NovelSourcery Test", index.name)
 		assertEquals("novel", index.badgeLabel)
 		assertEquals("test-signing-key-hex", index.signingKey)
@@ -72,7 +82,7 @@ class NovelSourceryIndexFixtureTest {
 		assertEquals("1.6", extension.extensionLib)
 		assertEquals(12L, extension.versionCode)
 		assertEquals("1.6.12", extension.versionName)
-		assertEquals(MihonExtensionStoreIndex.ContentWarning.SAFE, extension.contentWarning)
+		assertEquals(ExtensionStoreIndex.ContentWarning.SAFE, extension.contentWarning)
 
 		assertEquals("https://repo.example.org/novel-example.apk", extension.resources.apkUrl)
 		assertTrue(extension.resources.apkUrl.startsWith("https://"), "apkUrl must be absolute")

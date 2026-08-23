@@ -159,7 +159,7 @@ class ExtensionRepoService @Inject constructor(
 
         if (isProtobufIndexUrl(baseUrl)) {
             val index = withTimeout(REPO_DETAILS_TIMEOUT_MS) {
-                fetchMihonExtensionStoreIndex(baseUrl)
+                fetchExtensionStoreIndex(baseUrl)
             }
             val now = System.currentTimeMillis()
             return ExternalExtensionRepo(
@@ -185,7 +185,13 @@ class ExtensionRepoService @Inject constructor(
                     response.body.string()
                 }
             }.getOrElse { error ->
-                if (type == ExternalExtensionType.MIHON || type == ExternalExtensionType.ANIYOMI) {
+                if (
+                    type == ExternalExtensionType.MIHON ||
+                    type == ExternalExtensionType.ANIYOMI ||
+                    type == ExternalExtensionType.TSUNDOKU
+                ) {
+                    // Tsundoku repos canonicalize to the protobuf index (index.pb); the
+                    // repo.json / index.min.json routes are legacy or bait-only.
                     return@withTimeout fetchRepoDetails("$baseUrl/index.pb", type)
                 }
                 throw error
@@ -287,7 +293,9 @@ class ExtensionRepoService @Inject constructor(
                 "fetchAvailableExtensions:failed type=${repo.type} baseUrl=${repo.baseUrl} elapsedMs=${System.currentTimeMillis() - startedAt} message=${error.message}",
                 error,
             )
-            if (repo.type == ExternalExtensionType.MIHON || repo.type == ExternalExtensionType.ANIYOMI) {
+            if (repo.type == ExternalExtensionType.MIHON || repo.type == ExternalExtensionType.ANIYOMI || repo.type == ExternalExtensionType.TSUNDOKU) {
+                // Third-party compatible protocols (NovelSourcery for Tsundoku) canonicalize
+                // to the protobuf index; fall back to it when the legacy JSON route fails.
                 return fetchProtobufExtensions(
                     repo = repo,
                     indexUrl = "${repo.baseUrl}/index.pb",
@@ -405,10 +413,10 @@ class ExtensionRepoService @Inject constructor(
         Log.d(TAG, "fetchAvailableExtensions:start type=${repo.type} urls=[$indexUrl]")
         return try {
             val extensions = withTimeout(CATALOG_TIMEOUT_MS) {
-                val index = fetchMihonExtensionStoreIndex(indexUrl)
+                val index = fetchExtensionStoreIndex(indexUrl)
                 val extensionList = index.extensionList ?: index.extensionListUrl?.let { listUrl ->
-                    fetchMihonExtensionList(pluginUrlFrom(indexUrl, listUrl))
-                } ?: error("Mihon extension store does not contain an extension list")
+                    fetchExtensionList(pluginUrlFrom(indexUrl, listUrl))
+                } ?: error("Extension store does not contain an extension list")
                 extensionList.extensions.mapNotNull { extension ->
                     extension.toAvailableExtension(repo)
                 }
@@ -430,21 +438,28 @@ class ExtensionRepoService @Inject constructor(
         }
     }
 
-    private suspend fun fetchMihonExtensionStoreIndex(indexUrl: String): MihonExtensionStoreIndex {
+    /**
+     * Fetches and decodes a repository `index.pb` protobuf index.
+     *
+     * The field layout, defined by Mihon's `index.proto`, is shared verbatim by Mihon-compatible
+     * stores and the NovelSourcery (Tsundoku novel) ecosystem, so this one code path serves both
+     * repository families (see [ExtensionStoreIndex]).
+     */
+    private suspend fun fetchExtensionStoreIndex(indexUrl: String): ExtensionStoreIndex {
         val bytes = httpClient.newCall(GET(applyMirror(indexUrl))).awaitSuccess().use { response ->
             response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
         }
-        return ProtoBuf.decodeFromByteArray(MihonExtensionStoreIndex.serializer(), bytes)
+        return ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.serializer(), bytes)
     }
 
-    private suspend fun fetchMihonExtensionList(listUrl: String): MihonExtensionStoreIndex.ExtensionList {
+    private suspend fun fetchExtensionList(listUrl: String): ExtensionStoreIndex.ExtensionList {
         val bytes = httpClient.newCall(GET(applyMirror(listUrl))).awaitSuccess().use { response ->
             response.body.source().decompressIfGzipped().use { source -> source.readByteArray() }
         }
-        return ProtoBuf.decodeFromByteArray(MihonExtensionStoreIndex.ExtensionList.serializer(), bytes)
+        return ProtoBuf.decodeFromByteArray(ExtensionStoreIndex.ExtensionList.serializer(), bytes)
     }
 
-    private fun MihonExtensionStoreIndex.Extension.toAvailableExtension(
+    private fun ExtensionStoreIndex.Extension.toAvailableExtension(
         repo: ExternalExtensionRepo,
     ): RepoAvailableExtension? {
         val libVersion = extensionLib.toDoubleOrNull() ?: return null
@@ -465,7 +480,7 @@ class ExtensionRepoService @Inject constructor(
             versionCode = versionCode,
             libVersion = libVersion,
             lang = languages.singleOrNull() ?: "all",
-            isNsfw = contentWarning >= MihonExtensionStoreIndex.ContentWarning.MIXED,
+            isNsfw = contentWarning >= ExtensionStoreIndex.ContentWarning.MIXED,
             sourceNames = sources.map { it.name },
             archiveName = archiveUrl.substringAfterLast('/').substringBefore('?').ifBlank { "$packageName.apk" },
             archiveUrl = archiveUrl,

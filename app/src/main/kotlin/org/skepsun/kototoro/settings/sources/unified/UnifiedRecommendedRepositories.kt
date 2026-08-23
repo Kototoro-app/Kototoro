@@ -493,6 +493,14 @@ object UnifiedRecommendedRepositories {
             capabilities = jsonRepoCapabilities,
             note = "苹果 CMS 采集接口，来自影视站长圈采集端口列表",
         ),
+        UnifiedRecommendedRepository(
+            kind = UnifiedSourceKind.TSUNDOKU,
+            name = "NovelSourcery (Tsundoku novels)",
+            url = "https://github.com/NovelSourcery/extensions/raw/repo/index.pb",
+            locationType = UnifiedRepositoryLocationType.REMOTE_URL,
+            capabilities = extensionRepoCapabilities,
+            note = "Tsundoku novel extensions; protobuf index (index.pb)",
+        ),
     )
 
     fun byKind(kind: UnifiedSourceKind): List<UnifiedRecommendedRepository> {

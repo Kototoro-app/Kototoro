@@ -22,6 +22,7 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
+import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 
 class UnifiedSourceCatalogRepositoryTest : FunSpec({
 
@@ -188,6 +189,7 @@ private fun testRepository(): UnifiedSourceCatalogRepository {
         mihonExtensionManager = mockk<MihonExtensionManager>(relaxed = true),
         aniyomiExtensionManager = mockk<AniyomiExtensionManager>(relaxed = true),
         ireaderExtensionManager = mockk<IReaderExtensionManager>(relaxed = true),
+        tsundokuExtensionManager = mockk<TsundokuExtensionManager>(relaxed = true),
         cloudstreamRuntimeManager = mockk<CloudstreamRuntimeManager>(relaxed = true),
         json = Json,
     )

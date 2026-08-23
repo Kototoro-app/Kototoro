@@ -117,6 +117,27 @@ class AppBackupAgent : BackupAgent() {
                         contentHttpClient = okhttp3.OkHttpClient(),
                         settings = appSettings,
                     ),
+                    tsundokuExtensionManager = org.skepsun.kototoro.tsundoku.TsundokuExtensionManager(
+                        context = applicationContext,
+                        loader = org.skepsun.kototoro.tsundoku.TsundokuExtensionLoader(
+                            applicationContext = applicationContext,
+                            injektBridge = dagger.Lazy {
+                                org.skepsun.kototoro.mihon.compat.KotoInjektBridge(
+                                    context = applicationContext,
+                                    httpClient = okhttp3.OkHttpClient(),
+                                    cookieJar = org.skepsun.kototoro.core.network.cookies.AndroidCookieJar(),
+                                )
+                            },
+                            accessors = org.skepsun.kototoro.tsundoku.DefaultTsundokuApkAccessors(),
+                        ),
+                        originRecorder = org.skepsun.kototoro.tsundoku.TsundokuOriginRecorder(
+                            originsDao = db.getSourceOriginsDao(),
+                            signatureValidator =
+                                org.skepsun.kototoro.extensions.repo.InstalledExtensionSignatureValidator(
+                                    applicationContext,
+                                ),
+                        ),
+                    ),
                     sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
                     projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),
                 ),
@@ -217,6 +238,27 @@ class AppBackupAgent : BackupAgent() {
                             context = applicationContext,
                             contentHttpClient = okhttp3.OkHttpClient(),
                             settings = appSettings,
+                        ),
+                        tsundokuExtensionManager = org.skepsun.kototoro.tsundoku.TsundokuExtensionManager(
+                            context = applicationContext,
+                            loader = org.skepsun.kototoro.tsundoku.TsundokuExtensionLoader(
+                                applicationContext = applicationContext,
+                                injektBridge = dagger.Lazy {
+                                    org.skepsun.kototoro.mihon.compat.KotoInjektBridge(
+                                        context = applicationContext,
+                                        httpClient = okhttp3.OkHttpClient(),
+                                        cookieJar = org.skepsun.kototoro.core.network.cookies.AndroidCookieJar(),
+                                    )
+                                },
+                                accessors = org.skepsun.kototoro.tsundoku.DefaultTsundokuApkAccessors(),
+                            ),
+                            originRecorder = org.skepsun.kototoro.tsundoku.TsundokuOriginRecorder(
+                                originsDao = db.getSourceOriginsDao(),
+                                signatureValidator =
+                                    org.skepsun.kototoro.extensions.repo.InstalledExtensionSignatureValidator(
+                                        applicationContext,
+                                    ),
+                            ),
                         ),
                         sourceAvailabilityRepository = SourceAvailabilityRepository(appSettings),
                         projectionContentTypeBackfill = org.skepsun.kototoro.space.data.ProjectionContentTypeBackfill(db),

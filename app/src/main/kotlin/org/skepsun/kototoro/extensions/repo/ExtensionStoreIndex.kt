@@ -3,8 +3,16 @@ package org.skepsun.kototoro.extensions.repo
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.protobuf.ProtoNumber
 
+/**
+ * Neutral protobuf index model for extension repositories.
+ *
+ * Decodes the `index.pb` protobuf format defined by Mihon's `index.proto`. The field numbers are
+ * shared verbatim by Mihon-compatible stores (Keiyoushi and forks) and the NovelSourcery novel
+ * ecosystem (Tsundoku), so this single model serves both repository families — see
+ * NovelSourceryIndexFixtureTest for the NovelSourcery binary fixtures.
+ */
 @Serializable
-internal data class MihonExtensionStoreIndex(
+internal data class ExtensionStoreIndex(
     @ProtoNumber(1)
     val name: String,
     @ProtoNumber(2)

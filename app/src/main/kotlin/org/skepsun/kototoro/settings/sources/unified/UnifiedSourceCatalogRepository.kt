@@ -53,6 +53,8 @@ import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
+import org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
 import org.skepsun.kototoro.settings.sources.extensions.selectExtensionLanguageCode
 import javax.inject.Inject
@@ -71,6 +73,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
     private val mihonExtensionManager: MihonExtensionManager,
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val ireaderExtensionManager: IReaderExtensionManager,
+    private val tsundokuExtensionManager: TsundokuExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val json: Json,
 ) {
@@ -369,7 +372,8 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             mihonExtensionManager.changes,
             aniyomiExtensionManager.changes,
             ireaderExtensionManager.changes,
-        ) { _, _, _ -> Unit }
+            tsundokuExtensionManager.changes,
+        ) { _, _, _, _ -> Unit }
         val jarChanges = combine(
             GlobalExtensionManager.mangaSources,
             GlobalExtensionManager.contentSources,
@@ -404,6 +408,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             "UnifiedSourceCatalog",
             "buildSourceItems available=${availableSources.size} installedApk=${installedApkSources.size} " +
                 "mihonWrapped=${mihonExtensionManager.getMihonMangaSources().size} " +
+                "tsundokuWrapped=${tsundokuExtensionManager.getTsundokuNovelSources().size} " +
                 "mihonInstalled=${mihonExtensionManager.installedExtensions.value.size} " +
                 "mihonItems=${items.count { it.kind == UnifiedSourceKind.MIHON }} total=${items.size}",
         )
@@ -421,7 +426,21 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             ireaderExtensionManager.getIReaderMangaSources().forEach { source ->
                 add(source)
             }
+            getTsundokuApkSources().forEach { source ->
+                add(source)
+            }
         }
+    }
+
+    /**
+     * Tsundoku novel sources currently loaded into the unified catalog's installed-APK pool
+     * (plan T3A.5). Internal seam (functionally identical to inlining the manager call in
+     * [getInstalledApkSources]) so unit tests can pin the Tsundoku wiring without going
+     * through the sibling APK managers, which are not mockable in this module's JVM test
+     * runtime (final methods fall through to real bodies).
+     */
+    internal fun getTsundokuApkSources(): List<TsundokuNovelSource> {
+        return tsundokuExtensionManager.getTsundokuNovelSources()
     }
 
     private fun ContentSource.toUnifiedSourceItem(
@@ -488,6 +507,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             is MihonMangaSource -> UnifiedSourceKind.MIHON
             is AniyomiAnimeSource -> UnifiedSourceKind.ANIYOMI
             is IReaderMangaSource -> UnifiedSourceKind.IREADER
+            is TsundokuNovelSource -> UnifiedSourceKind.TSUNDOKU
             is org.skepsun.kototoro.cloudstream.model.CloudstreamSource -> UnifiedSourceKind.CLOUDSTREAM
             is PluginContentSource -> UnifiedSourceKind.JAR
             is KotatsuParserSource -> if (delegate is PluginMangaSource) UnifiedSourceKind.JAR else UnifiedSourceKind.NATIVE
@@ -503,6 +523,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             is MihonMangaSource -> packageId(UnifiedSourceKind.MIHON, pkgName) to pkgName
             is AniyomiAnimeSource -> packageId(UnifiedSourceKind.ANIYOMI, pkgName) to pkgName
             is IReaderMangaSource -> packageId(UnifiedSourceKind.IREADER, pkgName) to pkgName
+            is TsundokuNovelSource -> packageId(UnifiedSourceKind.TSUNDOKU, pkgName) to pkgName
             is org.skepsun.kototoro.cloudstream.model.CloudstreamSource ->
                 packageId(UnifiedSourceKind.CLOUDSTREAM, pluginPackageName) to pluginPackageName
             is PluginContentSource -> {

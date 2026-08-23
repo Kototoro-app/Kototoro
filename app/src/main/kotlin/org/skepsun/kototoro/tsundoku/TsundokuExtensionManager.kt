@@ -24,6 +24,7 @@ import javax.inject.Singleton
 class TsundokuExtensionManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val loader: TsundokuExtensionLoader,
+    private val originRecorder: TsundokuOriginRecorder,
 ) {
     companion object {
         private const val TAG = "TsundokuExtensionManager"
@@ -45,7 +46,14 @@ class TsundokuExtensionManager @Inject constructor(
         logTag = TAG,
         ecosystem = "tsundoku",
         sourceNamePrefix = SOURCE_KEY_PREFIX,
-        loadResults = loader::loadExtensions,
+        // Every load path (initialize, explicit call, package broadcast reload) funnels
+        // through this lambda; side-effect origin recording (T3A.7) lives here so it fires
+        // on scan success regardless of entry point. Uninstall never deletes origins.
+        loadResults = { loadContext ->
+            loader.loadExtensions(loadContext).also { results ->
+                originRecorder.recordLoadResults(results)
+            }
+        },
         successOf = { it as? TsundokuLoadResult.Success },
         errorOf = { it as? TsundokuLoadResult.Error },
         untrustedPackageNameOf = { null },
