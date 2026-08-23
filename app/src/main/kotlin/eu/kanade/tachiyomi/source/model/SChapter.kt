@@ -46,6 +46,32 @@ interface SChapter : Serializable {
         get() = JsonObject(emptyMap())
         set(value) {}
 
+    // Tsundoku source-api additions (extensions-lib 1.4/1.6 novel ABI), all defaulted so
+    // existing Mihon-era implementations and 1.4-compiled extensions keep working unchanged.
+
+    /**
+     * Whether this chapter is locked (e.g. requires payment or external access).
+     */
+    var locked: Boolean
+        get() = false
+        set(value) {}
+
+    /**
+     * Local read state. Source implementations should NOT set this — it is populated
+     * by the app only when delivering SChapter instances to [SourceTracker] callbacks.
+     */
+    var read: Boolean
+        get() = false
+        set(value) {}
+
+    /**
+     * Local last-page-read position. Source implementations should NOT set this — it is
+     * populated by the app only when delivering SChapter instances to [SourceTracker] callbacks.
+     */
+    var last_page_read: Int
+        get() = 0
+        set(value) {}
+
     fun copyFrom(other: SChapter) {
         name = other.name
         url = other.url
@@ -58,6 +84,9 @@ interface SChapter : Serializable {
             scanlators = other.scanlators
             note = other.note
             memo = other.memo
+            locked = other.locked
+            read = other.read
+            last_page_read = other.last_page_read
         } catch (e: NoSuchMethodError) {
             // Fallback for compatibility
         }
@@ -117,6 +146,9 @@ class SChapterImpl : SChapter {
 
     override var note: String? = null
     override var memo: JsonObject = JsonObject(emptyMap())
+    override var locked: Boolean = false
+    override var read: Boolean = false
+    override var last_page_read: Int = 0
 }
 
 /**

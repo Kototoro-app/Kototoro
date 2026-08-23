@@ -26,7 +26,9 @@ class TachiyomiApkClassLoaderPolicyTest {
 
     @Test
     fun `host-owned novel ABI delegates to parent`() {
-        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.novel.NovelSource"))
+        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.NovelSource"))
+        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.SourceTracker"))
+        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.RateLimited"))
         assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.model.RefreshContext"))
     }
 

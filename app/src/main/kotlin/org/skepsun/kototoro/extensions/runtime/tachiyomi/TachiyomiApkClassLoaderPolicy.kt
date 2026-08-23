@@ -7,9 +7,11 @@ package org.skepsun.kototoro.extensions.runtime.tachiyomi
  * Classes whose package starts with one of [parentPackages] are always loaded by the host
  * (parent) classloader: language/stdlib/android/platform runtimes plus the host-owned ABI.
  * The host ABI includes the manga interfaces (`eu.kanade.tachiyomi.source.*`, .model/online)
- * as well as the novel ABI (`eu.kanade.tachiyomi.source.novel.*` and the shared model types),
- * so both manga and novel extensions resolve their interfaces against exactly the classes the
- * host provides (T2A.1). Everything else is loaded child-first from the extension APK.
+ * as well as the novel ABI (`eu.kanade.tachiyomi.source.NovelSource`,
+ * `eu.kanade.tachiyomi.source.SourceTracker`, `eu.kanade.tachiyomi.source.model.RefreshContext`,
+ * `Page.text` … — all inside the `source.`/`model.`/`online.` prefixes below), so both manga
+ * and novel extensions resolve their interfaces against exactly the classes the host provides
+ * (T2A.1). Everything else is loaded child-first from the extension APK.
  */
 internal object TachiyomiApkClassLoaderPolicy {
 
@@ -26,7 +28,6 @@ internal object TachiyomiApkClassLoaderPolicy {
         "okio.",
         "rx.",
         "eu.kanade.tachiyomi.source.",
-        "eu.kanade.tachiyomi.source.novel.",
         "eu.kanade.tachiyomi.source.model.",
         "eu.kanade.tachiyomi.source.online.",
         "eu.kanade.tachiyomi.network.",

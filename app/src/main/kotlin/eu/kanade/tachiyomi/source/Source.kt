@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.source
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.RefreshContext
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
@@ -26,6 +27,19 @@ interface Source {
 
     val lang: String
         get() = ""
+
+    /**
+     * Whether this source provides novel (text-based) content instead of manga (image-based).
+     * Novel sources should return text content via [fetchPageText].
+     *
+     * Defaulted (not abstract) so the same host class satisfies extensions compiled against
+     * extensions-lib 1.4 (which neither knows nor implements this property) and 1.6/tsundoku
+     * main (which reads it for novel detection).
+     *
+     * @since extensions-lib 1.5
+     */
+    val isNovelSource: Boolean
+        get() = false
 
     /**
      * Whether the source has support for latest updates.
@@ -94,6 +108,31 @@ interface Source {
     }
 
     /**
+     * Get all the available chapters for a manga with a [RefreshContext].
+     *
+     * Fork-only API from the real Tsundoku source-api (present in extensions-lib 1.4
+     * and tsundoku main). Sources can use the provided context to avoid redundant requests
+     * and implement intelligent delta refresh logic. The default implementation ignores the
+     * context and falls back to the plain [getChapterList], so 1.4-compiled extensions that
+     * override this keep working and everything else is unaffected.
+     *
+     * @since extensions-lib 1.6 (tsundoku fork only, superseded by [getMangaUpdate])
+     * @param manga the manga to update.
+     * @param context refresh context containing existing local state
+     * @return the chapters for the manga.
+     */
+    @Deprecated(
+        "Fork-only API superseded by upstream's getMangaUpdate, which now accepts existing chapters directly. " +
+            "Kept temporarily so already-published extensions keep working; migrate to getMangaUpdate.",
+        ReplaceWith("getMangaUpdate"),
+    )
+    @Suppress("DEPRECATION")
+    suspend fun getChapterList(manga: SManga, context: RefreshContext): List<SChapter> {
+        // Default implementation falls back to original method for backwards compatibility
+        return getChapterList(manga)
+    }
+
+    /**
      * Fetch updated manga details and/or chapters using the TachiyomiX 1.6 combined API.
      *
      * @since tachiyomix 1.6
@@ -121,6 +160,22 @@ interface Source {
     suspend fun getPageList(chapter: SChapter): List<Page> {
         return fetchPageList(chapter).toBlocking().first()
     }
+
+    /**
+     * Fetches the text content for a novel page. Only meaningful when [isNovelSource] is true;
+     * manga sources never call this. A novel chapter is a single [Page] whose text is returned
+     * here, so the one content fetch happens in this method.
+     *
+     * The default throws for non-novel sources, preserving manga behavior; novel extensions
+     * override this to return the chapter body. The default also keeps extensions compiled
+     * against extensions-lib 1.4 (which predates this member) fully compatible.
+     *
+     * @since extensions-lib 1.5
+     * @param page the page to fetch; use [Page.url] to make the request.
+     * @return the HTML or text content to display.
+     */
+    suspend fun fetchPageText(page: Page): String =
+        throw UnsupportedOperationException("Not a novel source")
 
     @Deprecated(
         "Use the non-RxJava API instead",

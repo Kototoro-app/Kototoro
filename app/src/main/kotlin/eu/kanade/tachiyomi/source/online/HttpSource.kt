@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
+import eu.kanade.tachiyomi.source.model.RefreshContext
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
@@ -327,6 +328,22 @@ abstract class HttpSource : CatalogueSource {
             request = { chapterListRequest(manga) },
             parser = ::chapterListParse,
         )
+    }
+
+    /**
+     * Get all the available chapters for a manga with refresh context.
+     * Default implementation ignores the context and falls back to the plain [getChapterList],
+     * so real 1.4/1.6 Tsundoku extensions that override this (or reference it via super) keep
+     * loading, and manga extensions are completely unaffected.
+     */
+    @Suppress("OVERRIDE_DEPRECATION", "DEPRECATION")
+    @Deprecated(
+        "Fork-only API superseded by upstream's getMangaUpdate, which now accepts existing chapters directly. " +
+            "Kept temporarily so already-published extensions keep working; migrate to getMangaUpdate.",
+        ReplaceWith("getMangaUpdate"),
+    )
+    override suspend fun getChapterList(manga: SManga, context: RefreshContext): List<SChapter> {
+        return getChapterList(manga)
     }
 
     protected open fun chapterListRequest(manga: SManga): Request {
