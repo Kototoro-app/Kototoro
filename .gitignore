@@ -63,6 +63,7 @@ pnpm-lock.yaml
 
 # Codex developer-local configuration
 /.agents/
+/skills-lock.json
 /.codex/agents/
 /.codex/config.toml
 
