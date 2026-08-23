@@ -57,10 +57,17 @@ include ':app', ':parser-api'
 // T0.3 offline self-built NovelSourcery/Tsundoku fixture APKs (plan Phase 0 / T0.3). Each
 // module compiles against :app:exportTachiyomiAbi (host ABI jar) with compileOnly and packs
 // the real manifest morphologies the host's strict classifier/loader must accept or reject.
-include ':fixtures:tsundoku-14-single'
-include ':fixtures:tsundoku-14-factory'
-include ':fixtures:tsundoku-16-suspend'
-include ':fixtures:tsundoku-ambiguous'
+//
+// These are dev-only application modules; they are gated behind `-PwithTsundokuFixtures`
+// (default OFF) so Android Studio's multi-module deployment and `installDebug` do not keep
+// reinstalling the fixture packages onto connected devices.
+def withTsundokuFixtures = providers.gradleProperty('withTsundokuFixtures').map { it != 'false' }.getOrElse(false)
+if (withTsundokuFixtures) {
+    include ':fixtures:tsundoku-14-single'
+    include ':fixtures:tsundoku-14-factory'
+    include ':fixtures:tsundoku-16-suspend'
+    include ':fixtures:tsundoku-ambiguous'
+}
 rootProject.name = "Kototoro"
 
 // 使用远程 DanmakuRenderEngine（本地工程 AGP 4.2.2 与当前 Gradle 不兼容）
