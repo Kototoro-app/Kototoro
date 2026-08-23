@@ -108,8 +108,26 @@ enum class GlassComponentRole {
 internal val ChromeTintLight = Color(0xFFFAFAFA)
 internal val ChromeTintDark = Color(0xFF121212)
 
-internal fun chromeBackdropTint(isDark: Boolean): Color =
+/**
+ * Base tint for navigation chrome (top/bottom bars, pill controls), adaptive
+ * to the background style.
+ *
+ * Over an artwork backdrop the official catalog's fixed high-luminance-contrast
+ * colors (near-white / near-black) keep the chrome readable on any art. On the
+ * default flat material backdrop those neutral colors match the surrounding
+ * surface tone (white-on-white / black-on-black) and become invisible, so the
+ * elevated container tone is used instead — it keeps a clear luminance gap from
+ * `background` in both light and dark themes.
+ */
+internal fun chromeBackdropTint(
+    isDark: Boolean,
+    artworkBackdrop: Boolean,
+    flatBackdropTint: Color,
+): Color = if (artworkBackdrop) {
     if (isDark) ChromeTintDark else ChromeTintLight
+} else {
+    flatBackdropTint
+}
 
 internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
     this == GlassComponentRole.ContentOverlay ||
@@ -138,12 +156,21 @@ object GlassDefaults {
     fun bottomBarChromeStyle() = GlassStyle(0.84f, 0.10f, 0.dp, navigationShadowElevation)
 
     /**
-     * High-luminance-contrast base tint for navigation chrome (top/bottom bars
-     * and pill controls), matching the official catalog's container color so
-     * the glass surface stays clearly recognizable over any backdrop.
+     * High-contrast base tint for navigation chrome (top/bottom bars and pill
+     * controls). Uses the official catalog container color over an artwork
+     * backdrop, and the elevated material container tone on the default flat
+     * backdrop where a neutral white/black veil would be invisible.
      */
     @Composable
-    fun chromeBackdropTint(): Color = chromeBackdropTint(MaterialTheme.colorScheme.isDarkTheme())
+    fun chromeBackdropTint(): Color {
+        val colors = MaterialTheme.colorScheme
+        val isDark = colors.isDarkTheme()
+        return if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+            if (isDark) ChromeTintDark else ChromeTintLight
+        } else {
+            colors.surfaceContainerHighest
+        }
+    }
 
     @Composable
     fun nestedCardColor(): Color {
@@ -277,14 +304,21 @@ fun LiquidGlassSurface(
         componentRole = componentRole,
         amoledCanvas = amoledCanvas,
     )
+    val artworkBackdrop = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
         GlassComponentRole.PillControl,
-        // Navigation chrome uses the official high-contrast container tint
-        // (near-white / near-black) instead of a low-chroma Material surface
-        // container; the higher alpha band keeps it readable over artwork.
-        -> chromeBackdropTint(isDark = isDark).copy(alpha = surfaceAlpha)
+        // Navigation chrome tint is adaptive to the background style: the
+        // official high-contrast near-white/near-black over artwork, the
+        // elevated material container tone over the default flat backdrop
+        // (where a neutral veil would blend into the surface). The raised
+        // alpha band keeps it clearly visible in both cases.
+        -> chromeBackdropTint(
+            isDark = isDark,
+            artworkBackdrop = artworkBackdrop,
+            flatBackdropTint = colors.surfaceContainerHighest,
+        ).copy(alpha = surfaceAlpha)
         else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
 
@@ -444,13 +478,13 @@ internal fun GlassStyle.backdropSurfaceAlpha(
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
         GlassComponentRole.PillControl,
-        // Raised chrome alpha band (previously 0.30-0.46 non-AMOLED): with the
-        // official high-contrast tint this keeps navigation chrome obviously
-        // visible while still letting the backdrop blur show through.
+        // Raised chrome alpha band (previously 0.30-0.46 non-AMOLED): together
+        // with the adaptive tint this keeps navigation chrome clearly visible
+        // on both artwork and flat backdrops while the blur still shows through.
         -> if (amoledCanvas) {
-            (materialDensity * 0.72f).coerceIn(0.58f, 0.66f)
+            (materialDensity * 0.80f).coerceIn(0.68f, 0.80f)
         } else {
-            (materialDensity * 0.60f).coerceIn(0.45f, 0.55f)
+            (materialDensity * 0.68f).coerceIn(0.58f, 0.68f)
         }
         GlassComponentRole.BottomPanel,
         GlassComponentRole.Sheet,
