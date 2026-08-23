@@ -42,7 +42,9 @@ import org.skepsun.kototoro.backups.data.model.ContentBackup
 import org.skepsun.kototoro.backups.data.model.ExtensionRepoBackup
 import org.skepsun.kototoro.backups.data.model.ScrobblingBackup
 import org.skepsun.kototoro.backups.data.model.SourceBackup
+import org.skepsun.kototoro.backups.data.model.SourceOriginBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
+import org.skepsun.kototoro.backups.domain.SourceOriginMaterializer
 import org.skepsun.kototoro.backups.data.model.TrackBackup
 import org.skepsun.kototoro.backups.data.model.TrackLogBackup
 import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
@@ -352,11 +354,11 @@ class BackupRepository @Inject constructor(
     ) {
 
         val isLegacySemanticSchema: Boolean
-            get() = semanticSchemaVersion < BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+            get() = semanticSchemaVersion < BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
 
         val isAuthoritativeWorkSchema: Boolean
             get() = transportGeneration >= BackupIndex.WRITER_GENERATION_V3 &&
-                semanticSchemaVersion >= BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+                semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
     }
 
     private fun dumpWorkProjectionSnapshots(): Flow<ContentBackup> = flow {
@@ -598,6 +600,12 @@ class BackupRepository @Inject constructor(
                     serializer = serializer(),
                 )
 
+                BackupSection.SOURCE_ORIGINS -> output.writeJsonArray(
+                    section = BackupSection.SOURCE_ORIGINS,
+                    data = materializeSourceOrigins(),
+                    serializer = serializer(),
+                )
+
                 BackupSection.EXTENSION_REPOS -> {
                     val repos = buildList {
                         for (type in org.skepsun.kototoro.extensions.repo.ExternalExtensionType.entries) {
@@ -756,6 +764,50 @@ class BackupRepository @Inject constructor(
         }
     }
 
+    /**
+     * Exported `SOURCE_ORIGINS` payload (plan §8.2): every persisted origin plus minimal
+     * materialized rows for source keys that the installed catalog or referenced works know
+     * about but that have no origin record yet. The origin registry is long-term: rows for
+     * since-uninstalled sources stay exported.
+     */
+    private suspend fun materializeSourceOrigins(): Flow<SourceOriginBackup> = flow {
+        val now = System.currentTimeMillis()
+        val existing = database.getSourceOriginsDao().findAll().associateBy { it.sourceKey }
+        val installedByName = mangaSourcesRepository.getAllAvailableSourcesUnfiltered()
+            .associateBy { it.name }
+        val keys = LinkedHashSet<String>()
+        keys += existing.keys
+        keys += database.getSourcesDao().findAll().map { it.source }
+        keys += installedByName.keys
+        keys += database.getMangaDao().distinctSources()
+        keys.sorted().forEach { key ->
+            val origin = existing[key]
+                ?: SourceOriginMaterializer.minimalOrigin(key, installedByName[key], now)
+            emit(SourceOriginBackup.fromEntity(origin))
+        }
+    }
+
+    /**
+     * Legacy fallback: upsert minimal origins (from restored `sources` registry + referenced
+     * works + installed catalog) only for keys that have no origin row yet. Additive only —
+     * never deletes or overwrites existing origins.
+     */
+    private suspend fun materializeSourceOriginsIntoDb() {
+        val now = System.currentTimeMillis()
+        val existing = database.getSourceOriginsDao().findAll().associateBy { it.sourceKey }
+        val installedByName = mangaSourcesRepository.getAllAvailableSourcesUnfiltered()
+            .associateBy { it.name }
+        val keys = LinkedHashSet<String>()
+        keys += database.getSourcesDao().findAll().map { it.source }
+        keys += database.getMangaDao().distinctSources()
+        keys -= existing.keys
+        keys.sorted().forEach { key ->
+            database.getSourceOriginsDao().upsert(
+                SourceOriginMaterializer.minimalOrigin(key, installedByName[key], now),
+            )
+        }
+    }
+
     suspend fun restoreBackup(
         input: ZipInputStream,
         sections: Set<BackupSection>,
@@ -875,6 +927,14 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.SOURCES -> sectionInput.readJsonArray<SourceBackup>(serializer()).restoreToDb("SOURCES") {
                     getSourcesDao().upsert(it.toEntity())
+                }
+
+                BackupSection.SOURCE_ORIGINS -> sectionInput.readJsonArray<SourceOriginBackup>(serializer()).restoreToDb(
+                    "SOURCE_ORIGINS",
+                ) {
+                    // MERGE: 按 source_key upsert（同一 key 幂等覆盖，不做来源猜测）。
+                    // SNAPSHOT_REPLACE 由 clearRestoreTargets 先清空该节所属表。
+                    getSourceOriginsDao().upsert(it.toEntity())
                 }
 
                 BackupSection.EXTENSION_REPOS -> sectionInput.readJsonArray<ExtensionRepoBackup>(serializer()).restoreToDb("EXTENSION_REPOS") {
@@ -1011,6 +1071,18 @@ class BackupRepository @Inject constructor(
                 "entityIdRemaps=${entityIdMapping.count { (oldId, newId) -> oldId != newId }}",
         )
         logMissingAuthoritativeWorkSections(effectiveSections, archiveSections, restoredSections)
+        val originMaterializationStartedAt = SystemClock.elapsedRealtime()
+        // 旧备份（schema ≤3 或外部格式）没有 source_origins 节：从已恢复的 sources 注册表
+        // 与作品引用补出最小 origin（已知稳定前缀→已知 kind，未知前缀→UNKNOWN），绝不猜测
+        // 包名/仓库。新备份该节被用户取消勾选时不补（archiveSections 已含该节）。
+        if (BackupSection.SOURCE_ORIGINS !in archiveSections && BackupSection.SOURCES in restoredSections) {
+            materializeSourceOriginsIntoDb()
+        }
+        Log.d(
+            TAG,
+            "restoreBackup: sourceOriginsMaterialization elapsedMs=" +
+                (SystemClock.elapsedRealtime() - originMaterializationStartedAt),
+        )
         val legacyJarReposImported = restoreLegacyJarRepositoriesIfNeeded(effectiveSections, archiveSections, restoredSections)
         Log.d(TAG, "restoreBackup: restoreLegacyJarRepositoriesIfNeeded elapsedMs=${SystemClock.elapsedRealtime() - legacyRepoStartedAt}")
         val contentTypeBackfillStartedAt = SystemClock.elapsedRealtime()
@@ -1177,6 +1249,9 @@ class BackupRepository @Inject constructor(
             }
             if (BackupSection.EXTENSION_REPOS in actOn) {
                 database.getExternalExtensionRepoDao().deleteAll()
+            }
+            if (BackupSection.SOURCE_ORIGINS in actOn) {
+                database.getSourceOriginsDao().deleteAll()
             }
             if (BackupSection.ENTITY_GRAPH_ENTITIES in actOn) {
                 database.getEntityGraphDao().deleteAllEntities()

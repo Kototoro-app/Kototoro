@@ -18,6 +18,7 @@ class BackupRestoreFormatTest {
 		assertFalse(format.supports(BackupSection.SCROBBLING))
 		assertFalse(format.supports(BackupSection.AUTH))
 		assertFalse(format.supports(BackupSection.EXTENSION_REPOS))
+		assertFalse(format.supports(BackupSection.SOURCE_ORIGINS))
 		assertTrue(format.supports(BackupSection.FAVOURITES))
 		assertEquals(
 			setOf(BackupSection.INDEX, BackupSection.FAVOURITES),

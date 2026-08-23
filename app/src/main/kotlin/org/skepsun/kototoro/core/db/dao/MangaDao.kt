@@ -47,6 +47,10 @@ abstract class MangaDao {
     @Query("SELECT * FROM manga WHERE source = :source")
     abstract suspend fun findAllBySource(source: String): List<MangaWithTags>
 
+    /** Distinct source keys referenced by any stored work (T2B.3 origin materialization). */
+    @Query("SELECT DISTINCT source FROM manga WHERE source IS NOT NULL AND source <> ''")
+    abstract suspend fun distinctSources(): List<String>
+
     @Transaction
     @Query("SELECT * FROM manga WHERE source IN (:sources)")
     abstract suspend fun findAllBySources(sources: Collection<String>): List<MangaWithTags>

@@ -93,10 +93,10 @@ object BackupPayloadGuard {
         val matches = when (expected) {
             BackupRestoreFormat.KOTOTORO_CURRENT ->
                 index.appId.isKototoroApplicationId() &&
-                    index.semanticSchemaVersion == BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+                    index.semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
 
             BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
-                index.semanticSchemaVersion < BackupIndex.CURRENT_SYNC_SCHEMA_VERSION
+                index.semanticSchemaVersion < BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
         }
         if (!matches) {
             throw UnexpectedBackupFormatException(

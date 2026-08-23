@@ -63,6 +63,22 @@ class BackupPayloadGuardTest {
 	}
 
 	@Test
+	fun `schema 4 backup is accepted as current and rejected as legacy`() {
+		val schema4 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 4)
+		val schema3 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 3)
+
+		assertDoesNotThrow {
+			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTOTORO_CURRENT)
+		}
+		assertDoesNotThrow {
+			BackupPayloadGuard.requireRestoreFormat(schema3, BackupRestoreFormat.KOTOTORO_CURRENT)
+		}
+		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
+			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+		}
+	}
+
+	@Test
 	fun `completed work history with unknown chapter count remains restorable`() {
 		val backup = backupFile(
 			BackupSection.CATEGORIES to "[]",

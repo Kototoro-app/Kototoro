@@ -121,6 +121,18 @@ interface AppModule {
 
         @Provides
         @Singleton
+        fun provideSourceOriginsDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.SourceOriginsDao {
+            return database.getSourceOriginsDao()
+        }
+
+        @Provides
+        @Singleton
+        fun provideSourceRefreshStateDao(database: MangaDatabase): org.skepsun.kototoro.core.db.dao.SourceRefreshStateDao {
+            return database.getSourceRefreshStateDao()
+        }
+
+        @Provides
+        @Singleton
         fun provideJson(): kotlinx.serialization.json.Json = kotlinx.serialization.json.Json {
             ignoreUnknownKeys = true
             isLenient = true

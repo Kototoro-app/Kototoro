@@ -33,10 +33,19 @@ class BackupIndex(
 
     companion object {
         const val CURRENT_BACKUP_FORMAT_VERSION = 2
-        const val CURRENT_SYNC_SCHEMA_VERSION = 3
+        const val CURRENT_SYNC_SCHEMA_VERSION = 4
         const val WRITER_GENERATION_V1 = 1
         const val WRITER_GENERATION_V2 = 2
         const val WRITER_GENERATION_V3 = 3
+
+        /**
+         * Lowest semantic schema version whose backups restore with current work-state
+         * semantics (schema 3 introduced the authoritative work sections). Schema 4 only
+         * ADDS the optional SOURCE_ORIGINS section; restore behavior for schema 3 must stay
+         * identical, so legacy boundaries compare against this constant instead of
+         * [CURRENT_SYNC_SCHEMA_VERSION].
+         */
+        const val LEGACY_SEMANTIC_SCHEMA_BOUNDARY = 3
 
         fun forKotatsuCompatibility(exportedAt: Long): BackupIndex = BackupIndex(
             appId = BuildConfig.APPLICATION_ID,

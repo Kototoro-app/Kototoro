@@ -20,6 +20,8 @@ import org.skepsun.kototoro.core.db.dao.JsonSourceDao
 import org.skepsun.kototoro.core.db.dao.MangaDao
 import org.skepsun.kototoro.core.db.dao.MangaSourcesDao
 import org.skepsun.kototoro.core.db.dao.PreferencesDao
+import org.skepsun.kototoro.core.db.dao.SourceOriginsDao
+import org.skepsun.kototoro.core.db.dao.SourceRefreshStateDao
 import org.skepsun.kototoro.core.db.dao.TagsDao
 import org.skepsun.kototoro.core.db.dao.TrackLogsDao
 import org.skepsun.kototoro.core.db.dao.TrackingSiteDao
@@ -34,6 +36,8 @@ import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointDao
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.db.entity.MangaTagsEntity
+import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
+import org.skepsun.kototoro.core.db.entity.SourceRefreshStateEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.db.entity.TrackingSiteItemEntity
 import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
@@ -83,6 +87,7 @@ import org.skepsun.kototoro.core.db.migrations.Migration73To74
 import org.skepsun.kototoro.core.db.migrations.Migration74To75
 import org.skepsun.kototoro.core.db.migrations.Migration75To76
 import org.skepsun.kototoro.core.db.migrations.Migration76To77
+import org.skepsun.kototoro.core.db.migrations.Migration77To78
 import org.skepsun.kototoro.core.db.migrations.Migration1To2
 import org.skepsun.kototoro.core.db.migrations.Migration20To21
 import org.skepsun.kototoro.core.db.migrations.Migration21To22
@@ -152,7 +157,7 @@ import org.skepsun.kototoro.space.data.SpaceDefinitionEntity
 import org.skepsun.kototoro.explore.data.SourcePresetEntity
 import org.skepsun.kototoro.explore.data.SourcePresetsDao
 
-const val DATABASE_VERSION = 77
+const val DATABASE_VERSION = 78
 
 @Database(
     entities = [
@@ -167,6 +172,7 @@ const val DATABASE_VERSION = 77
         ReadingRecordEntity::class, ReadingJumpPointEntity::class, RestoreCheckpointEntity::class,
         SpaceSessionEntity::class, SpaceNavigationEntryEntity::class, SpaceRoutePreferencesEntity::class,
         SpaceDefinitionEntity::class,
+        SourceOriginEntity::class, SourceRefreshStateEntity::class,
         // EpubChapterEntity::class,
     ],
     version = DATABASE_VERSION,
@@ -232,6 +238,10 @@ abstract class MangaDatabase : RoomDatabase() {
     abstract fun getSpaceDefinitionDao(): SpaceDefinitionDao
 
     abstract fun getRestoreCheckpointDao(): RestoreCheckpointDao
+
+    abstract fun getSourceOriginsDao(): SourceOriginsDao
+
+    abstract fun getSourceRefreshStateDao(): SourceRefreshStateDao
 
     // abstract fun getEpubChapterDao(): EpubChapterDao
 }
@@ -314,6 +324,7 @@ fun getDatabaseMigrations(context: Context): Array<Migration> = arrayOf(
     Migration74To75(),
     Migration75To76(),
     Migration76To77(),
+    Migration77To78(),
 )
 
 fun MangaDatabase(context: Context): MangaDatabase = Room

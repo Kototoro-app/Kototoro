@@ -23,6 +23,7 @@ data class BackupSectionModel(
                 BackupSection.SETTINGS_READER_GRID -> R.string.reader_actions
                 BackupSection.BOOKMARKS -> R.string.bookmarks
                 BackupSection.SOURCES -> R.string.remote_sources
+                BackupSection.SOURCE_ORIGINS -> R.string.source_origins
                 BackupSection.EXTENSION_REPOS -> R.string.manage_extension_repositories
                 BackupSection.SCROBBLING -> R.string.tracking
                 BackupSection.TRACKS -> R.string.feed
