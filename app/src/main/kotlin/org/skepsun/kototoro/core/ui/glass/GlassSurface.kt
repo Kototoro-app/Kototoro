@@ -99,6 +99,18 @@ enum class GlassComponentRole {
     Sheet,
 }
 
+/**
+ * Chrome surface tint following the upstream catalog's LiquidBottomTabs:
+ * a fixed high-luminance-contrast color (near-white in light, near-black in
+ * dark) instead of a low-chroma Material surface container, so the chrome
+ * always reads as a distinct surface over a busy backdrop.
+ */
+internal val ChromeTintLight = Color(0xFFFAFAFA)
+internal val ChromeTintDark = Color(0xFF121212)
+
+internal fun chromeBackdropTint(isDark: Boolean): Color =
+    if (isDark) ChromeTintDark else ChromeTintLight
+
 internal fun GlassComponentRole.allowsAmoledBackdrop(): Boolean =
     this == GlassComponentRole.ContentOverlay ||
         this == GlassComponentRole.TopBar ||
@@ -124,6 +136,14 @@ object GlassDefaults {
 
     @Composable
     fun bottomBarChromeStyle() = GlassStyle(0.84f, 0.10f, 0.dp, navigationShadowElevation)
+
+    /**
+     * High-luminance-contrast base tint for navigation chrome (top/bottom bars
+     * and pill controls), matching the official catalog's container color so
+     * the glass surface stays clearly recognizable over any backdrop.
+     */
+    @Composable
+    fun chromeBackdropTint(): Color = chromeBackdropTint(MaterialTheme.colorScheme.isDarkTheme())
 
     @Composable
     fun nestedCardColor(): Color {
@@ -261,7 +281,10 @@ fun LiquidGlassSurface(
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
         GlassComponentRole.PillControl,
-        -> colors.surfaceContainerHigh.copy(alpha = surfaceAlpha)
+        // Navigation chrome uses the official high-contrast container tint
+        // (near-white / near-black) instead of a low-chroma Material surface
+        // container; the higher alpha band keeps it readable over artwork.
+        -> chromeBackdropTint(isDark = isDark).copy(alpha = surfaceAlpha)
         else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
 
@@ -421,10 +444,13 @@ internal fun GlassStyle.backdropSurfaceAlpha(
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
         GlassComponentRole.PillControl,
+        // Raised chrome alpha band (previously 0.30-0.46 non-AMOLED): with the
+        // official high-contrast tint this keeps navigation chrome obviously
+        // visible while still letting the backdrop blur show through.
         -> if (amoledCanvas) {
-            (materialDensity * 0.66f).coerceIn(0.52f, 0.60f)
+            (materialDensity * 0.72f).coerceIn(0.58f, 0.66f)
         } else {
-            (materialDensity * 0.48f).coerceIn(0.30f, 0.46f)
+            (materialDensity * 0.60f).coerceIn(0.45f, 0.55f)
         }
         GlassComponentRole.BottomPanel,
         GlassComponentRole.Sheet,

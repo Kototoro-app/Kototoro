@@ -52,14 +52,12 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
-import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -443,11 +441,10 @@ private fun Modifier.mainNavBackdrop(
     surfaceTint: Color,
     pressProgress: () -> Float = { 0f },
 ): Modifier {
-    val blurRadius = if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
-        8.dp
-    } else {
-        4.dp
-    }
+    // Upstream LiquidBottomTabs uses a uniform 8dp blur on both the bar and
+    // the pill; the previous 4dp default on plain backgrounds made the glass
+    // separation noticeably weaker.
+    val blurRadius = 8.dp
     return then(if (enabled && backdrop != null) {
         Modifier.drawBackdrop(
             backdrop = backdrop,
@@ -560,7 +557,7 @@ private fun FloatingBottomNavRow(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val amoledCanvas = LocalAmoledTheme.current
     val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
-    val pillSurfaceTint = MaterialTheme.colorScheme.surfaceContainerHigh.copy(
+    val pillSurfaceTint = GlassDefaults.chromeBackdropTint().copy(
         alpha = GlassDefaults.bottomBarChromeStyle().backdropSurfaceAlpha(
             componentRole = GlassComponentRole.BottomBar,
             amoledCanvas = amoledCanvas,

@@ -32,9 +32,11 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
+import com.kyant.backdrop.drawBackdrop
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +76,7 @@ import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.compose.rememberAdaptiveBackdropContentColor
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -235,11 +238,42 @@ fun KototoroTopBar(
             }
             if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
                 val maxWidth = if (compactTabsState != null) 72.dp else 128.dp
+                // The compact top bar is deliberately borderless: the title
+                // floats directly over the content/artwork backdrop. On the
+                // iOS glass shell, sample the backdrop behind the title and
+                // flip between black/white so it stays readable on any
+                // backdrop; everywhere else keep the Material content color.
+                val topBarBackdrop = LocalLiquidGlassBackdrop.current
+                val adaptiveTitleColor =
+                    if (topBarBackdrop != null && LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+                        rememberAdaptiveBackdropContentColor(
+                            fallback = MaterialTheme.colorScheme.onSurface,
+                        )
+                    } else {
+                        null
+                    }
                 Text(
                     text = topBarTitle,
-                    modifier = Modifier.widthIn(max = maxWidth),
+                    modifier = Modifier
+                        .widthIn(max = maxWidth)
+                        .then(
+                            if (adaptiveTitleColor != null) {
+                                Modifier.drawBackdrop(
+                                    backdrop = topBarBackdrop,
+                                    shape = { RectangleShape },
+                                    effects = {},
+                                    highlight = null,
+                                    shadow = null,
+                                    onDrawBackdrop = { drawBackdrop ->
+                                        adaptiveTitleColor.record(this) { drawBackdrop() }
+                                    },
+                                )
+                            } else {
+                                Modifier
+                            },
+                        ),
                     style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = adaptiveTitleColor?.color ?: MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

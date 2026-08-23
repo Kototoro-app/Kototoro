@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.glass
 
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.floats.shouldBeGreaterThan
@@ -54,8 +55,34 @@ class GlassSurfacePolicyTest {
         )
 
         amoledAlpha shouldBeGreaterThan regularAlpha
-        amoledAlpha shouldBe 0.5808f
+        regularAlpha shouldBe 0.528f
+        amoledAlpha shouldBe 0.6336f
         bottomBarAlpha shouldBe amoledAlpha
+    }
+
+    @Test
+    fun `navigation chrome tint is within the raised readable alpha band`() {
+        val regularStyle = GlassStyle(0.88f, 0.20f, 0.dp, 4.dp)
+        val bottomBarStyle = GlassStyle(0.84f, 0.10f, 0.dp, 4.dp)
+
+        val regularAlpha = regularStyle.backdropSurfaceAlpha(
+            componentRole = GlassComponentRole.TopBar,
+            amoledCanvas = false,
+        )
+        val bottomBarAlpha = bottomBarStyle.backdropSurfaceAlpha(
+            componentRole = GlassComponentRole.BottomBar,
+            amoledCanvas = false,
+        )
+
+        regularAlpha shouldBeGreaterThan 0.45f
+        regularAlpha shouldBeGreaterThan 0.5f
+        bottomBarAlpha shouldBeGreaterThan 0.45f
+    }
+
+    @Test
+    fun `chrome tint uses official high contrast surface colors`() {
+        chromeBackdropTint(isDark = false) shouldBe Color(0xFFFAFAFA)
+        chromeBackdropTint(isDark = true) shouldBe Color(0xFF121212)
     }
 
     @Test
