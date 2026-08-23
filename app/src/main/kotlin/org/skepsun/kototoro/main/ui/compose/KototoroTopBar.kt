@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.foundation.shape.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
@@ -257,10 +256,10 @@ fun KototoroTopBar(
                     modifier = Modifier
                         .widthIn(max = maxWidth)
                         .then(
-                            if (adaptiveTitleColor != null) {
+                            if (adaptiveTitleColor != null && topBarBackdrop != null) {
                                 Modifier.drawBackdrop(
                                     backdrop = topBarBackdrop,
-                                    shape = { RectangleShape },
+                                    shape = { RoundedCornerShape(0) },
                                     effects = {},
                                     highlight = null,
                                     shadow = null,
