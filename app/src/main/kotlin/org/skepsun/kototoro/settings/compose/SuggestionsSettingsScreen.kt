@@ -390,5 +390,6 @@ private val SourceType.titleResId: Int
         SourceType.MIHON -> R.string.source_type_mihon
         SourceType.ANIYOMI -> R.string.source_type_aniyomi
         SourceType.IREADER -> R.string.source_type_ireader
+        SourceType.TSUNDOKU -> R.string.source_type_tsundoku
         SourceType.CLOUDSTREAM -> R.string.source_type_cloudstream
     }

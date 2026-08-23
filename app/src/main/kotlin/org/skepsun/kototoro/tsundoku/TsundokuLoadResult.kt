@@ -21,6 +21,8 @@ sealed class TsundokuLoadResult {
         val isNsfw: Boolean,
         val sources: List<Source>,
         val rejections: List<TachiyomiSourceRejection> = emptyList(),
+        /** True when the APK lives in the app-private managed-local store (sideload). */
+        val isManagedLocal: Boolean = false,
     ) : TsundokuLoadResult()
 
     /** Failed to load the extension, with the structured phase that failed. */

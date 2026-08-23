@@ -218,7 +218,7 @@ private fun UnifiedSourceKind.installBehaviorIconResId(): Int = when (this) {
     UnifiedSourceKind.MIHON -> R.drawable.ic_source_mihon
     UnifiedSourceKind.ANIYOMI -> R.drawable.ic_source_aniyomi
     UnifiedSourceKind.IREADER -> R.drawable.ic_source_ireader
-    UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_mihon
+    UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_tsundoku
     UnifiedSourceKind.CLOUDSTREAM -> R.drawable.ic_source_cloudstream
     UnifiedSourceKind.JAR,
     UnifiedSourceKind.NATIVE -> R.drawable.ic_extension

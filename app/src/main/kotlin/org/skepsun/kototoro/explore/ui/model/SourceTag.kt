@@ -27,6 +27,7 @@ enum class SourceTag(
     IREADER(R.string.source_type_ireader, R.drawable.ic_source_ireader, "ireader"),
     CLOUDSTREAM(R.string.source_type_cloudstream, R.drawable.ic_source_cloudstream, "cloudstream"),
     LNREADER(R.string.source_type_lnreader, R.drawable.ic_source_lnreader, "lnreader"),
+    TSUNDOKU(R.string.source_type_tsundoku, R.drawable.ic_source_tsundoku, "tsundoku"),
     PINNED(R.string.source_pinned, R.drawable.ic_pin, "pinned");
 
     /**
@@ -41,6 +42,7 @@ enum class SourceTag(
         IREADER -> originGroup == OriginGroup.IREADER
         CLOUDSTREAM -> originGroup == OriginGroup.CLOUDSTREAM
         LNREADER -> originGroup == OriginGroup.LNREADER_JSON
+        TSUNDOKU -> originGroup == OriginGroup.TSUNDOKU
         PINNED -> true
     }
 
@@ -56,6 +58,7 @@ enum class SourceTag(
         IREADER -> tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
         CLOUDSTREAM -> tab == BrowseGroupTab.Video || tab == BrowseGroupTab.All
         LNREADER -> tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
+        TSUNDOKU -> tab == BrowseGroupTab.Novel || tab == BrowseGroupTab.All
         PINNED -> true
     }
 
@@ -69,6 +72,7 @@ enum class SourceTag(
             IREADER,
             CLOUDSTREAM,
             LNREADER,
+            TSUNDOKU,
         )
 
         fun sanitizeQuickFilterSelection(tags: Set<SourceTag>): Set<SourceTag> =

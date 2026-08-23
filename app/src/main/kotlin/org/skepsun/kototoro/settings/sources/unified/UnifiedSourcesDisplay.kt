@@ -112,7 +112,7 @@ internal fun UnifiedSourceKind.packageIconRes(): Int {
             UnifiedSourceKind.MIHON -> R.drawable.ic_source_mihon
             UnifiedSourceKind.ANIYOMI -> R.drawable.ic_source_aniyomi
             UnifiedSourceKind.IREADER -> R.drawable.ic_source_ireader
-            UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_mihon
+            UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_tsundoku
         UnifiedSourceKind.LEGADO -> R.drawable.ic_source_legado
         UnifiedSourceKind.TVBOX -> R.drawable.ic_source_tvbox
         UnifiedSourceKind.JS -> R.drawable.ic_source_js
@@ -273,7 +273,8 @@ internal fun UnifiedSourceKind.isSideloadKind(): Boolean {
         return when (this) {
             UnifiedSourceKind.MIHON,
             UnifiedSourceKind.ANIYOMI,
-            UnifiedSourceKind.IREADER -> true
+            UnifiedSourceKind.IREADER,
+            UnifiedSourceKind.TSUNDOKU -> true
             else -> false
     }
 }

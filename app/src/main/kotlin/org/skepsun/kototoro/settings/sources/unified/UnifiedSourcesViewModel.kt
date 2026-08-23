@@ -79,6 +79,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.ireader.IReaderExtensionManager
+import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 import org.skepsun.kototoro.settings.sources.extensions.ExtensionBatchUpdateStateMachine
 import org.skepsun.kototoro.settings.sources.extensions.isNewerThanInstalled
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
@@ -123,6 +124,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val mihonExtensionManager: MihonExtensionManager,
     private val aniyomiExtensionManager: AniyomiExtensionManager,
     private val ireaderExtensionManager: IReaderExtensionManager,
+    private val tsundokuExtensionManager: TsundokuExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val recoveryCoordinator: RecoveryActionCoordinator,
     private val savedStateHandle: SavedStateHandle,
@@ -1630,6 +1632,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         mihonExtensionManager.loadExtensions()
         aniyomiExtensionManager.loadExtensions()
         ireaderExtensionManager.loadExtensions()
+        tsundokuExtensionManager.loadExtensions()
     }
 
     private fun UnifiedSourceCatalogState.withAvailableExternalPackages(
@@ -2066,6 +2069,7 @@ private fun UnifiedSourceKind.toExternalExtensionType(): ExternalExtensionType? 
         UnifiedSourceKind.ANIYOMI -> ExternalExtensionType.ANIYOMI
         UnifiedSourceKind.IREADER -> ExternalExtensionType.IREADER
         UnifiedSourceKind.JAR -> ExternalExtensionType.JAR
+        UnifiedSourceKind.TSUNDOKU -> ExternalExtensionType.TSUNDOKU
         else -> null
     }
 }
@@ -2179,6 +2183,7 @@ private fun externalExtensionTypes(): List<ExternalExtensionType> {
         ExternalExtensionType.MIHON,
         ExternalExtensionType.ANIYOMI,
         ExternalExtensionType.IREADER,
+        ExternalExtensionType.TSUNDOKU,
     )
 }
 

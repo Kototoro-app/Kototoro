@@ -427,6 +427,7 @@ fun ContentSource.iconResForUi(): Int = when {
     name.startsWith("MIHON_") -> R.drawable.ic_source_mihon
     name.startsWith("ANIYOMI_") -> R.drawable.ic_source_aniyomi
     name.startsWith("CLOUDSTREAM_") -> R.drawable.ic_source_cloudstream
+    name.startsWith("TSUNDOKU_") -> R.drawable.ic_source_tsundoku
     name.startsWith("JSON_TVBOX_") -> R.drawable.ic_source_tvbox
     name.startsWith("JSON_JS_") -> R.drawable.ic_source_js
     name.startsWith("JSON_LEGADO_") || name.startsWith("JSON_LEGADO_M_") -> R.drawable.ic_source_legado

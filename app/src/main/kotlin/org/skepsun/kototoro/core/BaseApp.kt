@@ -139,6 +139,11 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         } catch (e: Throwable) {
             e.printStackTrace()
         }
+        try {
+            entryPoint.tsundokuExtensionManager().initialize()
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
         processLifecycleScope.launch(Dispatchers.IO) {
             try {
                 BaseAppHolder.setCloudstreamRuntimeManager(entryPoint.cloudstreamRuntimeManager())
@@ -221,6 +226,7 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         fun mihonExtensionManager(): MihonExtensionManager
         fun aniyomiExtensionManager(): AniyomiExtensionManager
         fun ireaderExtensionManager(): IReaderExtensionManager
+        fun tsundokuExtensionManager(): org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
         fun captchaAutoResolveCoordinator(): org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
         fun cloudstreamRuntimeManager(): org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
         fun jsonSourceManager(): org.skepsun.kototoro.core.jsonsource.JsonSourceManager

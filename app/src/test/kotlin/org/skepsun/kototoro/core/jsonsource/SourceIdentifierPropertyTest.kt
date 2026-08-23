@@ -221,6 +221,7 @@ class SourceIdentifierPropertyTest : StringSpec({
 				SourceType.MIHON -> label shouldBe "Mihon 扩展"
 				SourceType.ANIYOMI -> label shouldBe "Aniyomi 扩展"
 				SourceType.IREADER -> label shouldBe "IReader 扩展"
+				SourceType.TSUNDOKU -> label shouldBe "Tsundoku 扩展"
 				SourceType.CLOUDSTREAM -> label shouldBe "Cloudstream 扩展"
 				SourceType.EXTERNAL -> label shouldBe "外部源"
 			}

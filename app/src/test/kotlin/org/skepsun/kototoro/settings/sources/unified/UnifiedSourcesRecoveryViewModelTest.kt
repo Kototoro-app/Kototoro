@@ -238,6 +238,7 @@ class UnifiedSourcesRecoveryViewModelTest {
             mihonExtensionManager = mockk<MihonExtensionManager>(relaxed = true),
             aniyomiExtensionManager = mockk<AniyomiExtensionManager>(relaxed = true),
             ireaderExtensionManager = mockk<IReaderExtensionManager>(relaxed = true),
+            tsundokuExtensionManager = mockk<org.skepsun.kototoro.tsundoku.TsundokuExtensionManager>(relaxed = true),
             cloudstreamRuntimeManager = mockk<CloudstreamRuntimeManager>(relaxed = true),
             recoveryCoordinator = coordinator,
             savedStateHandle = handle,

@@ -156,4 +156,26 @@ class ExternalExtensionMetadataSupportTest {
 		assertEquals(2, result?.contentWarning)
 		assertEquals(1.6, result?.libVersionOverride)
 	}
+
+	@Test
+	fun `float32 extensionLib metadata normalizes without float noise`() {
+		// Real NovelSourcery APKs declare tachiyomix.extensionLib as a float ("1.6");
+		// Bundle.get returns 1.6f whose toDouble() would be 1.600000023841858 and break the
+		// exact accepted-lib-version comparison. It must surface as the clean double 1.6.
+		val metaData = mockk<Bundle>()
+		every { metaData.containsKey(any()) } returns false
+		every { metaData.getString("source.class") } returns "org.example.Source"
+		every { metaData.getString("source.factory") } returns null
+		every { metaData.getInt("ext.nsfw", 0) } returns 0
+		every { metaData.containsKey("tachiyomix.extensionLib") } returns true
+		every { metaData.get("tachiyomix.extensionLib") } returns 1.6f
+
+		val result = ExternalExtensionMetadataSupport.getDeclaredSourceMetadataOrNull(
+			metaData = metaData,
+			sourceClassKey = "source.class",
+			sourceFactoryKey = "source.factory",
+			nsfwKey = "ext.nsfw",
+		)
+		assertEquals(1.6, result?.libVersionOverride)
+	}
 }

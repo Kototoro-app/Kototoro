@@ -66,7 +66,10 @@ object ExternalExtensionMetadataSupport {
             try {
                 val rawVal = metaData.get(libVersionKey)
                 when (rawVal) {
-                    is Number -> rawVal.toDouble()
+                    // `rawVal.toString()` yields the shortest unambiguous decimal ("1.6" for a
+                    // Float) instead of the float32→double artifact ("1.600000023841858") that
+                    // breaks the exact accepted-lib-version comparison.
+                    is Number -> rawVal.toString().toDoubleOrNull()
                     is String -> rawVal.toDoubleOrNull()
                     else -> null
                 }

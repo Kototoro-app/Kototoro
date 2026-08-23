@@ -94,13 +94,18 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 
     fun observeRepositories(): Flow<List<UnifiedSourceRepositoryItem>> {
         val externalRepos = combine(
-            extensionRepoRepository.observeByType(ExternalExtensionType.JAR),
-            extensionRepoRepository.observeByType(ExternalExtensionType.CLOUDSTREAM),
-            extensionRepoRepository.observeByType(ExternalExtensionType.MIHON),
-            extensionRepoRepository.observeByType(ExternalExtensionType.ANIYOMI),
-            extensionRepoRepository.observeByType(ExternalExtensionType.IREADER),
-        ) { jar, cloudstream, mihon, aniyomi, ireader ->
-            jar + cloudstream + mihon + aniyomi + ireader
+            combine(
+                extensionRepoRepository.observeByType(ExternalExtensionType.JAR),
+                extensionRepoRepository.observeByType(ExternalExtensionType.CLOUDSTREAM),
+                extensionRepoRepository.observeByType(ExternalExtensionType.MIHON),
+                extensionRepoRepository.observeByType(ExternalExtensionType.ANIYOMI),
+                extensionRepoRepository.observeByType(ExternalExtensionType.IREADER),
+            ) { jar, cloudstream, mihon, aniyomi, ireader ->
+                jar + cloudstream + mihon + aniyomi + ireader
+            },
+            extensionRepoRepository.observeByType(ExternalExtensionType.TSUNDOKU),
+        ) { existing, tsundoku ->
+            existing + tsundoku
         }
         val lnReaderRepos = settings.observeAsFlow(AppSettings.KEY_LNREADER_REPOS) {
             lnReaderRepoUrls
@@ -185,7 +190,8 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             mihonExtensionManager.installedExtensions,
             aniyomiExtensionManager.installedExtensions,
             ireaderExtensionManager.installedExtensions,
-        ) { mihon, aniyomi, ireader ->
+            tsundokuExtensionManager.installedExtensions,
+        ) { mihon, aniyomi, ireader, tsundoku ->
             buildList {
                 mihon.forEach { extension ->
                     add(
@@ -250,6 +256,31 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                             versionCode = extension.versionCode,
                             libVersion = extension.libVersion,
                             language = extension.sources.map { it.lang }.selectExtensionLanguageCode(),
+                            isInstalled = true,
+                            isNsfw = extension.isNsfw,
+                            sourceCount = extension.sources.size,
+                            sourceNames = extension.sources.map { it.name },
+                            installLocation = if (extension.isManagedLocal) {
+                                UnifiedSourcePackageInstallLocation.LOCAL_APK
+                            } else {
+                                UnifiedSourcePackageInstallLocation.SYSTEM
+                            },
+                        ),
+                    )
+                }
+                tsundoku.forEach { extension ->
+                    add(
+                        UnifiedSourcePackageItem(
+                            id = packageId(UnifiedSourceKind.TSUNDOKU, extension.pkgName),
+                            kind = UnifiedSourceKind.TSUNDOKU,
+                            name = extension.appName,
+                            packageName = extension.pkgName,
+                            repositoryId = null,
+                            repositoryName = null,
+                            versionName = extension.versionName,
+                            versionCode = extension.versionCode,
+                            libVersion = extension.libVersion,
+                            language = extension.lang.normalizeExtensionLanguageCode(),
                             isInstalled = true,
                             isNsfw = extension.isNsfw,
                             sourceCount = extension.sources.size,

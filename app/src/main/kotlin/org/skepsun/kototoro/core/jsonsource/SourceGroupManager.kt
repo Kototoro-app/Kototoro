@@ -159,6 +159,7 @@ class SourceGroupManager @Inject constructor(
             SourceType.MIHON -> OriginGroup.MIHON
             SourceType.ANIYOMI -> OriginGroup.ANIYOMI
             SourceType.IREADER -> OriginGroup.IREADER
+            SourceType.TSUNDOKU -> OriginGroup.TSUNDOKU
             SourceType.CLOUDSTREAM -> OriginGroup.CLOUDSTREAM
             SourceType.JSON_LNREADER -> OriginGroup.LNREADER_JSON
         }
@@ -181,6 +182,7 @@ class SourceGroupManager @Inject constructor(
             SourceType.MIHON -> OriginGroup.MIHON
             SourceType.ANIYOMI -> OriginGroup.ANIYOMI
             SourceType.IREADER -> OriginGroup.IREADER
+            SourceType.TSUNDOKU -> OriginGroup.TSUNDOKU
             SourceType.CLOUDSTREAM -> OriginGroup.CLOUDSTREAM
             SourceType.JSON_LNREADER -> OriginGroup.LNREADER_JSON
         }
@@ -317,7 +319,12 @@ enum class OriginGroup {
     /**
      * JSON sources using LNReader format
      */
-    LNREADER_JSON
+    LNREADER_JSON,
+
+    /**
+     * Tsundoku (Tachiyomi novel ABI) extension sources
+     */
+    TSUNDOKU,
 }
 
 /**

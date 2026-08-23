@@ -66,6 +66,7 @@ data class SourceGroupInfo(
                 OriginGroup.IREADER -> context.getString(R.string.source_type_ireader)
                 OriginGroup.CLOUDSTREAM -> context.getString(R.string.source_type_cloudstream)
                 OriginGroup.LNREADER_JSON -> context.getString(R.string.source_group_lnreader)
+                OriginGroup.TSUNDOKU -> context.getString(R.string.source_type_tsundoku)
             }
         }
     }

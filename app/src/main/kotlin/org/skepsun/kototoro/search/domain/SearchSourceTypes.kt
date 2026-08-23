@@ -15,6 +15,7 @@ val ALL_SOURCE_TYPES: Set<SourceType> = setOf(
     SourceType.IREADER,
     SourceType.CLOUDSTREAM,
     SourceType.JSON_LNREADER,
+    SourceType.TSUNDOKU,
 )
 
 data class SourceTypeOption(
@@ -32,6 +33,7 @@ val SOURCE_TYPE_OPTIONS: List<SourceTypeOption> = listOf(
     SourceTypeOption(SourceType.IREADER, R.string.source_type_ireader, R.drawable.ic_source_ireader),
     SourceTypeOption(SourceType.CLOUDSTREAM, R.string.source_type_cloudstream, R.drawable.ic_source_cloudstream),
     SourceTypeOption(SourceType.JSON_LNREADER, R.string.source_type_lnreader, R.drawable.ic_source_lnreader),
+    SourceTypeOption(SourceType.TSUNDOKU, R.string.source_type_tsundoku, R.drawable.ic_source_tsundoku),
 )
 
 fun sourceTypesFromTags(tags: Set<SourceTag>): Set<SourceType> {
@@ -50,6 +52,7 @@ fun sourceTypesFromTags(tags: Set<SourceTag>): Set<SourceType> {
             SourceTag.IREADER -> result.add(SourceType.IREADER)
             SourceTag.CLOUDSTREAM -> result.add(SourceType.CLOUDSTREAM)
             SourceTag.LNREADER -> result.add(SourceType.JSON_LNREADER)
+            SourceTag.TSUNDOKU -> result.add(SourceType.TSUNDOKU)
             SourceTag.PINNED -> result.addAll(ALL_SOURCE_TYPES)
         }
     }
