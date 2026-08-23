@@ -55,6 +55,14 @@ class ContentSourceTitleTest : FunSpec({
         anonymous.getTitle(context) shouldBe "Loading Tsundoku source..."
     }
 
+    test("anonymous TSUNDOKU_ wrapper resolves to a novel content type") {
+        // Without this the orphaned row reports "manga" (generic fallback) and lands in the
+        // wrong home category; Tsundoku is a novel-only ecosystem.
+        val anonymous = ContentSource("TSUNDOKU_1400001")
+
+        anonymous.getContentType() shouldBe org.skepsun.kototoro.parsers.model.ContentType.NOVEL
+    }
+
     test("anonymous IREADER_ wrapper shows a loading placeholder instead of the raw key") {
         val anonymous = ContentSource("IREADER_10")
 

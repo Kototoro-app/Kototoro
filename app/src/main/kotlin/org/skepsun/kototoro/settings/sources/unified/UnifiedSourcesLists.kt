@@ -486,6 +486,10 @@ private fun UnifiedSourceRow(
 ) {
     val context = LocalContext.current
     var menuExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
+    // Optimistic toggle: flip the switch on tap immediately and reconcile when the
+    // authoritative item state from the catalog lands (re-keys this remember once the DB
+    // round trip re-emits), so the UI never waits seconds for feedback.
+    var localEnabled by remember(item.id, item.isEnabled) { mutableStateOf(item.isEnabled) }
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val style = rememberUnifiedSourcesVisualStyle()
     val rowContainerColor = when {
@@ -623,8 +627,11 @@ private fun UnifiedSourceRow(
             }
         }
         Switch(
-            checked = item.isEnabled,
-            onCheckedChange = { onSourceEnabledChange(item.id, it) },
+            checked = localEnabled,
+            onCheckedChange = { newValue ->
+                localEnabled = newValue
+                onSourceEnabledChange(item.id, newValue)
+            },
         )
     }
 }
