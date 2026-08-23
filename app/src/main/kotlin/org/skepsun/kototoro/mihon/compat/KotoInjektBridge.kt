@@ -2,6 +2,9 @@ package org.skepsun.kototoro.mihon.compat
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
+import android.content.res.AssetManager
+import android.content.res.Resources
 import dagger.hilt.android.qualifiers.ApplicationContext
 import eu.kanade.tachiyomi.network.NetworkHelper
 import okhttp3.OkHttpClient
@@ -10,6 +13,7 @@ import org.skepsun.kototoro.core.network.UserAgentProvider
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.remapTachiyomiPreferenceKey
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
@@ -59,8 +63,12 @@ class KotoInjektBridge(
 
             Injekt.importModule(object : InjektModule {
                 override fun InjektRegistrar.registerInjectables() {
-                    // Application and Context
-                    addSingleton(application)
+                    // Application and Context. The Application singleton is a delegating wrapper
+                    // that remaps SharedPreferences names for Tsundoku sources (T3B.5); the
+                    // explicit Application typing keeps the Injekt registration keyed to the
+                    // `Application` type so `Injekt.get<Application>()` still resolves.
+                    val applicationProxy: Application = NamespacedApplication(application)
+                    addSingleton(applicationProxy)
                     addSingletonFactory<Context> { context.applicationContext }
 
                     // Network components
@@ -92,4 +100,46 @@ class KotoInjektBridge(
      * Check if Injekt has been initialized.
      */
     fun isInitialized(): Boolean = initialized
+}
+
+/**
+ * Delegating [Application] handed to Tachiyomi-ABI extension code through the Injekt registry.
+ *
+ * Extension code resolves source preferences with
+ * `Injekt.get<Application>().getSharedPreferences("source_${id}", MODE_PRIVATE)`, and all Mihon /
+ * Aniyomi / Tsundoku ecosystems share that single registry — hence a shared `source_<id>`
+ * namespace per numeric id, which lets a Tsundoku extension and a Mihon extension with the same
+ * id contaminate each other's preferences (T3B.5). This wrapper forwards every call to the real
+ * [real] application except `getSharedPreferences`, which remaps the preference name through
+ * [remapTachiyomiPreferenceKey] based on [MihonRequestContext.currentSource] before delegating.
+ *
+ * Why a plain subclass instead of `java.lang.reflect.Proxy`? `Proxy.newProxyInstance` only
+ * accepts *interfaces* and `Application` is a concrete class, so a dynamic proxy would require a
+ * bytecode-generation dependency (ByteBuddy/CGLIB) — out of scope (no new deps). And, contrary to
+ * the usual assumption, `ContextWrapper.getSharedPreferences(String, int)` is **not** `final` in
+ * the compileSdk 37 API surface, so overriding exactly that one method is legal. The rest of the
+ * class keeps ContextWrapper's inherited behavior, which would hit a null `mBase` (this wrapper
+ * is never attached by the system), so the context/resource accessors most likely to be touched by
+ * preference code — [getApplicationContext], [getBaseContext], [getAssets], [getResources] —
+ * explicitly forward to [real].
+ *
+ * This wrapper is only ever handed out to extension code through Injekt; the system never
+ * instantiates it. Non-TSUNDOKU sources are unaffected because the remap is a no-op for them.
+ */
+internal class NamespacedApplication(
+    private val real: Application,
+) : Application() {
+
+    override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+        val remapped = remapTachiyomiPreferenceKey(name, MihonRequestContext.currentSource())
+        return real.getSharedPreferences(remapped, mode)
+    }
+
+    override fun getApplicationContext(): Context = real.applicationContext
+
+    override fun getBaseContext(): Context = real
+
+    override fun getAssets(): AssetManager = real.assets
+
+    override fun getResources(): Resources = real.resources
 }

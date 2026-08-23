@@ -61,6 +61,7 @@ class ContentRepositoryFactoryTest {
 	private val mihonContentRepositoryProvider = mockk<MihonContentRepositoryProvider>()
 	private val aniyomiContentRepositoryProvider = mockk<AniyomiContentRepositoryProvider>()
 	private val ireaderContentRepositoryProvider = mockk<IReaderContentRepositoryProvider>()
+	private val tsundokuContentRepositoryProvider = mockk<TsundokuContentRepositoryProvider>()
 	private val jsonContentRepositoryProvider = mockk<JsonContentRepositoryProvider>()
 	private val trackingContentRepositoryProvider = mockk<TrackingContentRepositoryProvider>()
 
@@ -89,6 +90,7 @@ class ContentRepositoryFactoryTest {
 			mihonContentRepositoryProvider,
 			aniyomiContentRepositoryProvider,
 			ireaderContentRepositoryProvider,
+			tsundokuContentRepositoryProvider,
 			jsonContentRepositoryProvider,
 			trackingContentRepositoryProvider,
 		).forEach { provider ->
@@ -115,6 +117,7 @@ class ContentRepositoryFactoryTest {
 			mihonContentRepositoryProvider = mihonContentRepositoryProvider,
 			aniyomiContentRepositoryProvider = aniyomiContentRepositoryProvider,
 			ireaderContentRepositoryProvider = ireaderContentRepositoryProvider,
+			tsundokuContentRepositoryProvider = tsundokuContentRepositoryProvider,
 			jsonContentRepositoryProvider = jsonContentRepositoryProvider,
 			trackingContentRepositoryProvider = trackingContentRepositoryProvider,
 		)

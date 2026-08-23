@@ -58,7 +58,9 @@ import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.ext.observeChanges
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.remapTachiyomiPreferenceKey
 import org.skepsun.kototoro.mihon.MihonMangaRepository
+import org.skepsun.kototoro.mihon.compat.MihonRequestContext
 import org.skepsun.kototoro.parsers.ContentParserCredentialsAuthProvider
 import org.skepsun.kototoro.parsers.config.ConfigKey
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -72,6 +74,8 @@ import org.skepsun.kototoro.settings.compose.SourceSettingsSectionUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsSwitchRowUiState
 import org.skepsun.kototoro.settings.compose.SourceSettingsTextRowUiState
 import org.skepsun.kototoro.settings.utils.validation.DomainValidator
+import org.skepsun.kototoro.tsundoku.TsundokuNovelRepository
+import org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource
 import java.io.File
 import java.util.regex.Pattern
 
@@ -124,6 +128,11 @@ fun SourceSettingsRoute(
                     externalPreferenceScreenFlow.value = null
                 }
                 is MihonMangaRepository -> {
+                    configKeysFlow.value = emptyList()
+                    jsSettingsSchemaFlow.value = emptyList()
+                    externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
+                }
+                is TsundokuNovelRepository -> {
                     configKeysFlow.value = emptyList()
                     jsSettingsSchemaFlow.value = emptyList()
                     externalPreferenceScreenFlow.value = controller.buildExternalPreferenceScreen(repository)
@@ -335,6 +344,16 @@ private class SourceSettingsRouteController(
         return when (val repository = viewModel.repository) {
             is MihonMangaRepository -> "source_${repository.mihonSource.id}"
             is AniyomiAnimeRepository -> "source_${repository.aniyomiSource.id}"
+            is TsundokuNovelRepository -> {
+                val tsundokuSource = repository.source as? TsundokuNovelSource
+                if (tsundokuSource != null) {
+                    // Same managed key the Injekt proxy produces for this source, so the settings
+                    // UI binds to the extension's actual (ecosystem-isolated) preference file.
+                    remapTachiyomiPreferenceKey("source_${tsundokuSource.sourceId}", tsundokuSource)
+                } else {
+                    viewModel.source.name.replace(File.separatorChar, '$')
+                }
+            }
             else -> viewModel.source.name.replace(File.separatorChar, '$')
         }
     }
@@ -390,6 +409,26 @@ private class SourceSettingsRouteController(
             adapter.createScreen().also(aniyomiSource::setupPreferenceScreen)
         }.onFailure {
             android.util.Log.e("SourceComposeSettings", "Failed to setup Aniyomi preferences", it)
+        }.getOrNull()
+    }
+
+    fun buildExternalPreferenceScreen(repository: TsundokuNovelRepository): PreferenceScreen? {
+        val tsundokuSource = repository.source as? TsundokuNovelSource ?: return null
+        val configurableSource =
+            tsundokuSource.upstreamSource as? eu.kanade.tachiyomi.source.ConfigurableSource ?: return null
+        val adapter = ComposePreferenceAdapter(
+            context = context,
+            sharedPreferencesName = sourcePreferencesName,
+        )
+        return runCatching {
+            // Run inside the per-source request context so the extension's own
+            // `getSourcePreferences()` call resolves the current source and the Injekt proxy
+            // remaps `source_<id>` into the Tsundoku-isolated namespace (T3B.5).
+            MihonRequestContext.withSourceBlocking(tsundokuSource) {
+                adapter.createScreen().also(configurableSource::setupPreferenceScreen)
+            }
+        }.onFailure {
+            android.util.Log.e("SourceComposeSettings", "Failed to setup Tsundoku preferences", it)
         }.getOrNull()
     }
 
@@ -1349,4 +1388,5 @@ private fun ContentRepository.hasDynamicSettings(): Boolean =
         this is KotatsuParserRepository ||
         this is JsContentRepository ||
         this is MihonMangaRepository ||
-        this is AniyomiAnimeRepository
+        this is AniyomiAnimeRepository ||
+        this is TsundokuNovelRepository
