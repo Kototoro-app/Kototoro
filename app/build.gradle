@@ -165,7 +165,12 @@ android {
 	kotlin {
 		compilerOptions {
 			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+			// all: emit concrete interface default methods AND javac-style `-CC` bridge
+			// classes (e.g. NovelSource$-CC.$default$isNovelSource) that NovelSourcery /
+			// Tsundoku extensions reference; modern Mihon extensions compile against
+			// jvm-default=all source-api so they rely on the inline interface defaults.
 			freeCompilerArgs.addAll(
+				'-Xjvm-default=all',
 				'-opt-in=kotlin.ExperimentalStdlibApi',
 				'-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi',
 				'-opt-in=kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi',

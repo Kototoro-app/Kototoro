@@ -146,7 +146,7 @@ class TsundokuExtensionLoader @Inject constructor(
                 accessors.createClassLoader(dexPath, nativeLibDir, parent)
             },
             validateSource = { source ->
-                if (source.isNovelSource || source is NovelSource) {
+                if (source.isNovelSource() || source is NovelSource) {
                     null
                 } else {
                     "Not a novel source (isNovelSource=false)"
@@ -166,6 +166,13 @@ class TsundokuExtensionLoader @Inject constructor(
                 isNsfw = result.info.isNsfw,
                 sources = result.sources,
                 rejections = result.rejections,
+                isManagedLocal = runCatching {
+                    LocalApkExtensionSupport.isManagedLocalPackage(
+                        context,
+                        SPEC.ecosystemDir,
+                        pkgInfo.applicationInfo?.sourceDir.orEmpty(),
+                    )
+                }.getOrDefault(false),
             )
 
             is TachiyomiLoadResult.Error -> TsundokuLoadResult.Error(

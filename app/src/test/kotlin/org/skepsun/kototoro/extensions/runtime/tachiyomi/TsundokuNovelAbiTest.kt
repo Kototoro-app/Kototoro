@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.NovelSource
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.SourceTracker
 import eu.kanade.tachiyomi.source.SourceTrackerMethod
-import eu.kanade.tachiyomi.source.isNovelSource
 import eu.kanade.tachiyomi.source.isSourceTracker
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.RefreshContext
@@ -40,14 +39,14 @@ class TsundokuNovelAbiTest {
 
     /**
      * A fake Tsundoku novel source: exists purely in this test classpath (no real APK loading),
-     * declares itself a novel via the marker interface AND the [Source.isNovelSource] property,
+     * declares itself a novel via the marker interface AND the [Source.isNovelSource] default method,
      * and also acts as a [SourceTracker].
      */
     @Suppress("DEPRECATION")
     private class FakeNovelSource : NovelSource, SourceTracker {
         override val id: Long = 42L
         override val name: String = "fake-novel"
-        override val isNovelSource: Boolean = true
+        override fun isNovelSource(): Boolean = true
         override val supportsLatest: Boolean = true
         override val supportsChapterTracking: Boolean = true
         override val supportsFavoritesTracking: Boolean = true
@@ -60,7 +59,7 @@ class TsundokuNovelAbiTest {
     @Test
     fun `default Source novel markers are false`() {
         val source = DefaultSource()
-        assertFalse(source.isNovelSource)
+        assertFalse(source.isNovelSource())
         assertFalse(source.supportsLatest)
     }
 
@@ -72,7 +71,7 @@ class TsundokuNovelAbiTest {
         assertEquals("mock-source", mocked.name)
         // Unstubbed defaults on the relaxed mock coincide with the host interface defaults,
         // and the NovelSourceKt helper reads through the same property.
-        assertFalse(mocked.isNovelSource)
+        assertFalse(mocked.isNovelSource())
         assertFalse(mocked.supportsLatest)
         assertFalse(mocked.isNovelSource())
     }
@@ -169,7 +168,7 @@ class TsundokuNovelAbiTest {
     @Test
     fun `FakeNovelSource is both a Source and a SourceTracker`() {
         val fake = FakeNovelSource()
-        assertTrue(fake.isNovelSource)
+        assertTrue(fake.isNovelSource())
         assertTrue(fake.supportsLatest)
         assertTrue(fake.isSourceTracker())
         assertTrue(fake.sourceTrackerBoolean("supportsChapterTracking", false))

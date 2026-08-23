@@ -98,7 +98,7 @@ class TsundokuNovelRepository(
 
     /** Whether the wrapped source is a novel (text) source. */
     private val isNovelSource: Boolean
-        get() = upstreamSource.isNovelSource
+        get() = upstreamSource.isNovelSource()
 
     override val sortOrders: Set<SortOrder> = buildSet {
         add(SortOrder.POPULARITY)

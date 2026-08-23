@@ -38,5 +38,15 @@ internal object TachiyomiApkClassLoaderPolicy {
         "com.fleeksoft.",
     )
 
-    fun shouldDelegateToParent(className: String): Boolean = parentPackages.any(className::startsWith)
+    fun shouldDelegateToParent(className: String): Boolean {
+        // Bridge/compat classes (`-CC`, `DefaultImpls`) are D8 build artifacts that travel
+        // INSIDE the extension APK (e.g. NovelSourcery bundles `NovelSource$-CC` /
+        // `SourceTracker$-CC` and calls `$default$isNovelSource`). They have no host-side
+        // equivalent, so they must load child-first; only the *interfaces themselves*
+        // keep resolving against the host so ABI identity stays single.
+        if (className.endsWith("$-CC") || className.contains("\$DefaultImpls")) {
+            return false
+        }
+        return parentPackages.any(className::startsWith)
+    }
 }

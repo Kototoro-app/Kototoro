@@ -41,6 +41,21 @@ class TachiyomiApkClassLoaderPolicyTest {
     }
 
     @Test
+    fun `default-method bridge classes load child-first while their interfaces stay parent-bound`() {
+        // NovelSourcery/Tsundoku extensions bundle `-CC` and `DefaultImpls` bridge classes
+        // inside their own APK (produced by D8/javac default-method interop). The host has no
+        // equivalent, so they must resolve from the extension even though they live in the
+        // host-owned `eu.kanade.tachiyomi.source` package.
+        assertFalse(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.NovelSource$-CC"))
+        assertFalse(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.SourceTracker$-CC"))
+        assertFalse(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.NovelSource\$DefaultImpls"))
+        assertFalse(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.SourceTracker\$DefaultImpls"))
+        // The interfaces/bridges' target ABI classes themselves stay host-bound.
+        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.NovelSource"))
+        assertTrue(TachiyomiApkClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.SourceTracker"))
+    }
+
+    @Test
     fun `legacy alias still delegates through the shared policy`() {
         assertTrue(org.skepsun.kototoro.mihon.util.ChildFirstClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.source.Source"))
         assertFalse(org.skepsun.kototoro.mihon.util.ChildFirstClassLoaderPolicy.shouldDelegateToParent("eu.kanade.tachiyomi.extension.en.novel.ExampleNovel"))

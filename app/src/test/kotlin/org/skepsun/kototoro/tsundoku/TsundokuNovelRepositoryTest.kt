@@ -61,7 +61,7 @@ class TsundokuNovelRepositoryTest {
         every { upstream.id } returns upstreamId
         every { upstream.name } returns "Test Novel"
         every { upstream.lang } returns "en"
-        every { upstream.isNovelSource } returns isNovel
+        every { upstream.isNovelSource() } returns isNovel
         every { upstream.supportsLatest } returns false
         every { upstream.baseUrl } returns "https://example.org"
         return upstream
@@ -164,7 +164,7 @@ class TsundokuNovelRepositoryTest {
         every { upstream.id } returns upstreamId
         every { upstream.name } returns "Test Novel"
         every { upstream.lang } returns "en"
-        every { upstream.isNovelSource } returns true
+        every { upstream.isNovelSource() } returns true
         every { upstream.supportsLatest } returns false
         val repo = repository(newSource(upstream), mockk<SourceRefreshReporter>(relaxed = true))
 

@@ -24,7 +24,7 @@ import org.skepsun.kototoro.mihon.compat.KotoInjektBridge
 class FxNovelSource : Source {
     override val id: Long = 9001L
     override val name: String = "fx-novel"
-    override val isNovelSource: Boolean = true
+    override fun isNovelSource(): Boolean = true
 }
 
 class FxMangaSource : Source {

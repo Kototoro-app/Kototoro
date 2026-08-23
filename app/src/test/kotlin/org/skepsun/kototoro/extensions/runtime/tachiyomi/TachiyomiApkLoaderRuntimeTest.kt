@@ -20,13 +20,13 @@ import org.junit.jupiter.api.Test
 class FakeNovelSourceA : Source {
     override val id: Long = 101L
     override val name: String = "fake-novel-a"
-    override val isNovelSource: Boolean = true
+    override fun isNovelSource(): Boolean = true
 }
 
 class FakeNovelSourceB : Source {
     override val id: Long = 101L // deliberately duplicates A's id
     override val name: String = "fake-novel-b"
-    override val isNovelSource: Boolean = true
+    override fun isNovelSource(): Boolean = true
 }
 
 class FakeMangaSource : Source {
@@ -155,7 +155,7 @@ class TachiyomiApkLoaderRuntimeTest {
     fun `factory sources are filtered per source - manga object rejected while novel kept`() {
         val pkg = pkgInfo(versionName = "1.4.2", sourceClass = FakeNovelFactory::class.java.name)
         val result = TachiyomiApkLoaderRuntime.loadFromClass(info(pkg), testClassLoader) { source ->
-            if (source.isNovelSource) null else "Not a novel source (isNovelSource=false)"
+            if (source.isNovelSource()) null else "Not a novel source (isNovelSource=false)"
         }
         val success = result as TachiyomiLoadResult.Success
         assertEquals(listOf(101L), success.sources.map { it.id })
@@ -235,7 +235,7 @@ class TachiyomiApkLoaderRuntimeTest {
             parentClassLoader = testClassLoader,
             prepareApkPath = { _, sourcePath -> sourcePath },
             createClassLoader = { _, _, parent -> parent },
-            validateSource = { source -> if (source.isNovelSource) null else "not novel" },
+            validateSource = { source -> if (source.isNovelSource()) null else "not novel" },
             getAppLabel = { "Label" },
         )
         val success = result as TachiyomiLoadResult.Success
@@ -255,7 +255,7 @@ class TachiyomiApkLoaderRuntimeTest {
             parentClassLoader = testClassLoader,
             prepareApkPath = { _, sourcePath -> sourcePath },
             createClassLoader = { _, _, parent -> parent },
-            validateSource = { source -> if (source.isNovelSource) null else "Not a novel source (isNovelSource=false)" },
+            validateSource = { source -> if (source.isNovelSource()) null else "Not a novel source (isNovelSource=false)" },
             getAppLabel = { "Label" },
         )
         val success = result as TachiyomiLoadResult.Success

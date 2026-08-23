@@ -23,7 +23,7 @@ class TsundokuNovelSourceTest {
         every { upstream.id } returns 9001L
         every { upstream.name } returns "Ex Novel"
         every { upstream.lang } returns "en"
-        every { upstream.isNovelSource } returns true
+        every { upstream.isNovelSource() } returns true
     }
 
     private fun newSource(

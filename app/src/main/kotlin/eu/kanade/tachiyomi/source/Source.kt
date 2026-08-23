@@ -32,14 +32,14 @@ interface Source {
      * Whether this source provides novel (text-based) content instead of manga (image-based).
      * Novel sources should return text content via [fetchPageText].
      *
-     * Defaulted (not abstract) so the same host class satisfies extensions compiled against
-     * extensions-lib 1.4 (which neither knows nor implements this property) and 1.6/tsundoku
-     * main (which reads it for novel detection).
+     * Declared as a default *method* (not a property) so the host's `-Xjvm-default` bridges
+     * (`NovelSource$-CC.$default$isNovelSource`) match the real Tsundoku/NovelSourcery
+     * source-api, whose `NovelSource` interface carries `isNovelSource()` as a default method.
+     * This is what lets extensions compiled against extensions-lib 1.6/tsundoku link and load.
      *
      * @since extensions-lib 1.5
      */
-    val isNovelSource: Boolean
-        get() = false
+    fun isNovelSource(): Boolean = false
 
     /**
      * Whether the source has support for latest updates.
