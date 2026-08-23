@@ -289,7 +289,8 @@ class ExtensionsBrowserViewModel @Inject constructor(
                 ireaderExtensionManager.getIReaderMangaSources().filter { it.pkgName == lookupPkg || it.pkgName == pkgName }
             }
             ExternalExtensionType.JAR,
-            ExternalExtensionType.CLOUDSTREAM -> emptyList()
+            ExternalExtensionType.CLOUDSTREAM,
+            ExternalExtensionType.TSUNDOKU -> emptyList()
         }
     }
 

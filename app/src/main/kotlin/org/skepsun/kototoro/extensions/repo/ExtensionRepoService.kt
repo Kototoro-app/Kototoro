@@ -363,6 +363,7 @@ class ExtensionRepoService @Inject constructor(
         val supported = when (repo.type) {
             ExternalExtensionType.MIHON -> libVersion in MihonExtensionLoader.LIB_VERSION_MIN..MihonExtensionLoader.LIB_VERSION_MAX
             ExternalExtensionType.ANIYOMI -> libVersion in AniyomiExtensionLoader.LIB_VERSION_MIN..AniyomiExtensionLoader.LIB_VERSION_MAX
+            ExternalExtensionType.TSUNDOKU -> libVersion in listOf(1.4, 1.6)
             ExternalExtensionType.IREADER -> true
             ExternalExtensionType.JAR -> true
             ExternalExtensionType.CLOUDSTREAM -> true
@@ -371,6 +372,7 @@ class ExtensionRepoService @Inject constructor(
             ExternalExtensionType.MIHON -> name.removePrefix("Tachiyomi: ")
             ExternalExtensionType.ANIYOMI -> name.removePrefix("Aniyomi: ")
             ExternalExtensionType.IREADER -> name.removePrefix("IReader: ")
+            ExternalExtensionType.TSUNDOKU -> name.removePrefix("Tachiyomi: ")
             ExternalExtensionType.JAR -> name
             ExternalExtensionType.CLOUDSTREAM -> name
         }

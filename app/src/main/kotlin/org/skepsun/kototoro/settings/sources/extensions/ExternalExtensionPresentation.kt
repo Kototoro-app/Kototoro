@@ -87,7 +87,8 @@ internal fun observeInstalledExtensionInfoMap(
         )
 
         ExternalExtensionType.JAR,
-        ExternalExtensionType.CLOUDSTREAM -> kotlinx.coroutines.flow.flowOf(emptyMap()) // Unused by non-APK ecosystems right now
+        ExternalExtensionType.CLOUDSTREAM,
+        ExternalExtensionType.TSUNDOKU -> kotlinx.coroutines.flow.flowOf(emptyMap()) // Unused by non-APK ecosystems right now
     }
 }
 
@@ -157,6 +158,8 @@ internal fun observeInstalledExtensionEntries(
                     )
                 }
         }
+
+        ExternalExtensionType.TSUNDOKU -> kotlinx.coroutines.flow.flowOf(emptyList())
     }
 }
 

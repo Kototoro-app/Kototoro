@@ -202,6 +202,7 @@ private fun UnifiedSourceKind.installBehaviorTitleResId(): Int = when (this) {
     UnifiedSourceKind.MIHON -> R.string.source_type_mihon_apk
     UnifiedSourceKind.ANIYOMI -> R.string.source_type_aniyomi_apk
     UnifiedSourceKind.IREADER -> R.string.source_type_ireader_apk
+    UnifiedSourceKind.TSUNDOKU -> R.string.source_type_tsundoku_apk
     UnifiedSourceKind.JAR -> R.string.source_type_jar
     UnifiedSourceKind.CLOUDSTREAM -> R.string.source_type_cloudstream
     UnifiedSourceKind.NATIVE -> R.string.source_type_native
@@ -215,6 +216,7 @@ private fun UnifiedSourceKind.installBehaviorIconResId(): Int = when (this) {
     UnifiedSourceKind.MIHON -> R.drawable.ic_source_mihon
     UnifiedSourceKind.ANIYOMI -> R.drawable.ic_source_aniyomi
     UnifiedSourceKind.IREADER -> R.drawable.ic_source_ireader
+    UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_mihon
     UnifiedSourceKind.CLOUDSTREAM -> R.drawable.ic_source_cloudstream
     UnifiedSourceKind.JAR,
     UnifiedSourceKind.NATIVE -> R.drawable.ic_extension

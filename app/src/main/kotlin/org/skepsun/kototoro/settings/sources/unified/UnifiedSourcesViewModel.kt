@@ -538,7 +538,8 @@ class UnifiedSourcesViewModel @Inject constructor(
                 UnifiedSourceKind.MIHON,
                 UnifiedSourceKind.ANIYOMI,
                 UnifiedSourceKind.IREADER,
-                UnifiedSourceKind.JAR -> prepareExternalRepository(kind, cleanUrl)
+                UnifiedSourceKind.JAR,
+                UnifiedSourceKind.TSUNDOKU -> prepareExternalRepository(kind, cleanUrl)
                 UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
             }
         }
@@ -627,7 +628,8 @@ class UnifiedSourcesViewModel @Inject constructor(
                 UnifiedSourceKind.MIHON,
                 UnifiedSourceKind.ANIYOMI,
                 UnifiedSourceKind.IREADER,
-                UnifiedSourceKind.JAR -> refreshExternalRepository(repository)
+                UnifiedSourceKind.JAR,
+                UnifiedSourceKind.TSUNDOKU -> refreshExternalRepository(repository)
                 UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
             }
         }
@@ -672,7 +674,8 @@ class UnifiedSourcesViewModel @Inject constructor(
                 UnifiedSourceKind.MIHON,
                 UnifiedSourceKind.ANIYOMI,
                 UnifiedSourceKind.IREADER,
-                UnifiedSourceKind.JAR -> deleteExternalRepository(repository)
+                UnifiedSourceKind.JAR,
+                UnifiedSourceKind.TSUNDOKU -> deleteExternalRepository(repository)
                 UnifiedSourceKind.NATIVE -> emitMessage(appContext.getString(R.string.unified_sources_native_no_repository))
             }
         }
@@ -1872,6 +1875,7 @@ private fun ExternalExtensionType.toUnifiedKindForPackage(): UnifiedSourceKind {
         ExternalExtensionType.ANIYOMI -> UnifiedSourceKind.ANIYOMI
         ExternalExtensionType.IREADER -> UnifiedSourceKind.IREADER
         ExternalExtensionType.JAR -> UnifiedSourceKind.JAR
+        ExternalExtensionType.TSUNDOKU -> UnifiedSourceKind.TSUNDOKU
     }
 }
 
@@ -1881,7 +1885,8 @@ private fun UnifiedSourceKind.isExternalExtensionKind(): Boolean {
         UnifiedSourceKind.CLOUDSTREAM,
         UnifiedSourceKind.MIHON,
         UnifiedSourceKind.ANIYOMI,
-        UnifiedSourceKind.IREADER -> true
+        UnifiedSourceKind.IREADER,
+        UnifiedSourceKind.TSUNDOKU -> true
         else -> false
     }
 }
@@ -1891,6 +1896,7 @@ private fun UnifiedSourceKind.toLocalApkEcosystem(): String? {
         UnifiedSourceKind.MIHON -> "mihon"
         UnifiedSourceKind.ANIYOMI -> "aniyomi"
         UnifiedSourceKind.IREADER -> "ireader"
+        UnifiedSourceKind.TSUNDOKU -> "tsundoku"
         else -> null
     }
 }
@@ -2059,6 +2065,7 @@ private fun UnifiedSourceKind.displayNameForMessage(context: Context): String {
         UnifiedSourceKind.MIHON -> context.getString(R.string.source_type_mihon)
         UnifiedSourceKind.ANIYOMI -> context.getString(R.string.source_type_aniyomi)
         UnifiedSourceKind.IREADER -> context.getString(R.string.source_type_ireader)
+        UnifiedSourceKind.TSUNDOKU -> context.getString(R.string.source_type_tsundoku)
         UnifiedSourceKind.LEGADO -> context.getString(R.string.source_type_legado)
         UnifiedSourceKind.TVBOX -> context.getString(R.string.source_type_tvbox)
         UnifiedSourceKind.JS -> context.getString(R.string.source_type_js)

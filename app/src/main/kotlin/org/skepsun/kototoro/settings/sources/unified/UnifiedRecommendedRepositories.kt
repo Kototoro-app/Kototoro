@@ -507,6 +507,7 @@ object UnifiedRecommendedRepositories {
                 ExternalExtensionType.IREADER -> UnifiedSourceKind.IREADER
                 ExternalExtensionType.JAR -> UnifiedSourceKind.JAR
                 ExternalExtensionType.CLOUDSTREAM -> UnifiedSourceKind.CLOUDSTREAM
+                ExternalExtensionType.TSUNDOKU -> UnifiedSourceKind.TSUNDOKU
             },
         )
     }

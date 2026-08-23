@@ -6,4 +6,5 @@ enum class ExternalExtensionType {
     IREADER,
     JAR,
     CLOUDSTREAM,
+    TSUNDOKU,
 }

@@ -217,6 +217,7 @@ private fun ExternalExtensionType.toLocalApkEcosystem(): String? {
         ExternalExtensionType.MIHON -> "mihon"
         ExternalExtensionType.ANIYOMI -> "aniyomi"
         ExternalExtensionType.IREADER -> "ireader"
+        ExternalExtensionType.TSUNDOKU -> "tsundoku"
         ExternalExtensionType.JAR -> null
         ExternalExtensionType.CLOUDSTREAM -> null
     }

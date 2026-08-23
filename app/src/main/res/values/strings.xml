@@ -2604,6 +2604,7 @@
 		<string name="source_type_native">Built-in</string>
 		<string name="source_type_cloudstream">Cloudstream</string>
 		<string name="source_type_mihon">Mihon</string>
+	<string name="source_type_tsundoku">Tsundoku</string>
 	<string name="source_type_aniyomi">Aniyomi</string>
 	<string name="source_type_legado">Legado</string>
 	<string name="source_type_tvbox">TVBox</string>
@@ -2796,6 +2797,7 @@
     <string name="source_type_mihon_apk">Mihon APK</string>
     <string name="source_type_aniyomi_apk">Aniyomi APK</string>
     <string name="source_type_ireader_apk">IReader APK</string>
+    <string name="source_type_tsundoku_apk">Tsundoku APK</string>
     <string name="source_type_js_source">JS source</string>
     <string name="unified_sources_cannot_open_selected_jar">Cannot open selected JAR</string>
     <string name="unified_sources_imported_plugin">Imported plugin: %1$s</string>

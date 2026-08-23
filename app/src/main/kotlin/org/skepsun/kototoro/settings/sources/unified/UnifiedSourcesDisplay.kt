@@ -95,7 +95,8 @@ internal fun UnifiedSourcePackageItem.installedIconPackageName(): String? {
         return when (kind) {
             UnifiedSourceKind.CLOUDSTREAM -> packageName
             UnifiedSourceKind.MIHON,
-            UnifiedSourceKind.ANIYOMI -> packageName
+            UnifiedSourceKind.ANIYOMI,
+            UnifiedSourceKind.TSUNDOKU -> packageName
             UnifiedSourceKind.IREADER -> packageName?.toInstalledIReaderPackageName()
             else -> null
     }
@@ -108,6 +109,7 @@ internal fun UnifiedSourceKind.packageIconRes(): Int {
             UnifiedSourceKind.MIHON -> R.drawable.ic_source_mihon
             UnifiedSourceKind.ANIYOMI -> R.drawable.ic_source_aniyomi
             UnifiedSourceKind.IREADER -> R.drawable.ic_source_ireader
+            UnifiedSourceKind.TSUNDOKU -> R.drawable.ic_source_mihon
         UnifiedSourceKind.LEGADO -> R.drawable.ic_source_legado
         UnifiedSourceKind.TVBOX -> R.drawable.ic_source_tvbox
         UnifiedSourceKind.JS -> R.drawable.ic_source_js
@@ -221,6 +223,7 @@ internal fun UnifiedSourceKind.labelResId(): Int {
             UnifiedSourceKind.MIHON -> R.string.source_type_mihon
             UnifiedSourceKind.ANIYOMI -> R.string.source_type_aniyomi
             UnifiedSourceKind.IREADER -> R.string.source_type_ireader
+            UnifiedSourceKind.TSUNDOKU -> R.string.source_type_tsundoku
         UnifiedSourceKind.LEGADO -> R.string.source_type_legado
         UnifiedSourceKind.TVBOX -> R.string.source_type_tvbox
         UnifiedSourceKind.JS -> R.string.source_type_js
@@ -236,6 +239,7 @@ internal fun UnifiedSourceKind.dialogLabelResId(): Int {
             UnifiedSourceKind.MIHON -> R.string.source_type_mihon_apk
             UnifiedSourceKind.ANIYOMI -> R.string.source_type_aniyomi_apk
             UnifiedSourceKind.IREADER -> R.string.source_type_ireader_apk
+            UnifiedSourceKind.TSUNDOKU -> R.string.source_type_tsundoku_apk
         UnifiedSourceKind.LEGADO -> R.string.source_type_legado_json
         UnifiedSourceKind.TVBOX -> R.string.source_type_tvbox_json
         UnifiedSourceKind.JS -> R.string.source_type_js_source

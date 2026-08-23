@@ -17,6 +17,7 @@ enum class UnifiedSourceKind {
     TVBOX,
     JS,
     LNREADER,
+    TSUNDOKU,
 }
 
 enum class UnifiedRepositoryCapability {
