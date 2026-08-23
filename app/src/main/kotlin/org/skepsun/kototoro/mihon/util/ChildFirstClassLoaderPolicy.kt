@@ -1,27 +1,15 @@
 package org.skepsun.kototoro.mihon.util
 
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiApkClassLoaderPolicy
+
+/**
+ * Legacy alias for the shared [TachiyomiApkClassLoaderPolicy]. Kept under the original package
+ * so existing consumers ([ChildFirstPathClassLoader], tests) keep working while every
+ * Tachiyomi-ABI ecosystem shares one policy.
+ */
+@Deprecated("Use TachiyomiApkClassLoaderPolicy from extensions/runtime/tachiyomi instead")
 internal object ChildFirstClassLoaderPolicy {
 
-    private val parentPackages = setOf(
-        "java.",
-        "javax.",
-        "kotlin.",
-        "kotlinx.coroutines.",
-        "android.",
-        "androidx.",
-        "org.json.",
-        "org.jsoup.",
-        "okhttp3.",
-        "okio.",
-        "rx.",
-        "eu.kanade.tachiyomi.source.",
-        "eu.kanade.tachiyomi.network.",
-        "eu.kanade.tachiyomi.util.",
-        "uy.kohesive.injekt.",
-        "ireader.core.",
-        "io.ktor.",
-        "com.fleeksoft.",
-    )
-
-    fun shouldDelegateToParent(className: String): Boolean = parentPackages.any(className::startsWith)
+    fun shouldDelegateToParent(className: String): Boolean =
+        TachiyomiApkClassLoaderPolicy.shouldDelegateToParent(className)
 }

@@ -1,9 +1,8 @@
 package org.skepsun.kototoro.mihon.compat
 
-import eu.kanade.tachiyomi.source.online.HttpSource
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import org.skepsun.kototoro.mihon.model.MihonMangaSource
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiXSourceAdapter
 import org.skepsun.kototoro.parsers.model.ContentSource
 
 /** Immutable source authority attached to a single Mihon HTTP request. */
@@ -15,8 +14,10 @@ data class SourceRequestContext(
 
     companion object {
         fun from(source: ContentSource): SourceRequestContext {
-            val baseOrigin = ((source as? MihonMangaSource)?.catalogueSource as? HttpSource)
-                ?.baseUrl
+            // Any Tachiyomi-ABI ecosystem source (Mihon today, Tsundoku later) contributes its
+            // base URL through the shared adapter; no more hard cast to MihonMangaSource (§6.2).
+            val baseOrigin = (source as? TachiyomiXSourceAdapter)
+                ?.baseUrlOrNull
                 ?.toHttpsOrigin()
             return SourceRequestContext(
                 source = source,

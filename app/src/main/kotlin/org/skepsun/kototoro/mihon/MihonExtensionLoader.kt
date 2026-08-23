@@ -18,6 +18,11 @@ import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionMetadataSupport
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
 import org.skepsun.kototoro.extensions.runtime.ExternalExtensionSourceLoaderSupport
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.ExternalApkCandidateResolver
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.ExternalApkCandidateSelection
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiApkClassification
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiApkClassifier
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiApkEcosystemSpecs
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.mihon.compat.KotoInjektBridge
 import org.skepsun.kototoro.mihon.model.MihonExtensionInfo
@@ -76,14 +81,15 @@ class MihonExtensionLoader @Inject constructor(
             val localPkgs = LocalApkExtensionSupport.getLocalArchivePackages(context, pkgManager, ECOSYSTEM_DIR)
             android.util.Log.d(TAG, "Filtering ${installedPkgs.size} packages...")
 
-            // Filter to only extension packages
-            val extPkgs = (installedPkgs + localPkgs).filter { pkg: PackageInfo ->
-                val isExt = isPackageAnExtension(pkg)
-                if (pkg.packageName.contains("coomer", ignoreCase = true)) {
-                    android.util.Log.d(TAG, "!!! COOMER CHECK !!!: ${pkg.packageName}, isExt: $isExt")
-                }
-                isExt
-            }.distinctBy { it.packageName }
+            // Filter to only extension packages, then have the shared resolver keep the
+            // historical system-first candidate semantics for Mihon (plan §7.3). Filtering
+            // is done per-list before resolution so a same-named non-extension system package
+            // cannot shadow a local extension (legacy behavior preserved).
+            val extPkgs = ExternalApkCandidateResolver.resolve(
+                installed = installedPkgs.filter { isExtensionCandidateWithDebugLog(it) },
+                local = localPkgs.filter { isExtensionCandidateWithDebugLog(it) },
+                mode = ExternalApkCandidateSelection.SYSTEM_FIRST_KEEP_FIRST,
+            )
 
             if (extPkgs.isEmpty()) {
                 android.util.Log.d(TAG, "No Mihon extensions found")
@@ -128,37 +134,48 @@ class MihonExtensionLoader @Inject constructor(
         val installedPkgs = ExternalExtensionLoaderSupport.getInstalledPackages(pkgManager)
         val localPkgs = LocalApkExtensionSupport.getLocalArchivePackages(context, pkgManager, ECOSYSTEM_DIR)
 
-        return (installedPkgs + localPkgs)
-            .filter { isPackageAnExtension(it) }
-            .distinctBy { it.packageName }
+        return ExternalApkCandidateResolver.resolve(
+            installed = installedPkgs.filter { isPackageAnExtension(it) },
+            local = localPkgs.filter { isPackageAnExtension(it) },
+            mode = ExternalApkCandidateSelection.SYSTEM_FIRST_KEEP_FIRST,
+        )
             .mapNotNull { extractExtensionInfo(it) }
     }
 
+    private fun isExtensionCandidateWithDebugLog(pkg: PackageInfo): Boolean {
+        val isExt = isPackageAnExtension(pkg)
+        if (pkg.packageName.contains("coomer", ignoreCase = true)) {
+            android.util.Log.d(TAG, "!!! COOMER CHECK !!!: ${pkg.packageName}, isExt: $isExt")
+        }
+        return isExt
+    }
+
     private fun isPackageAnExtension(pkgInfo: PackageInfo): Boolean {
-        val pkgName = pkgInfo.packageName
-
-        // Method 1: Check for explicit feature declaration
-        val hasFeature = pkgInfo.reqFeatures?.any { it.name == EXTENSION_FEATURE } == true
-
-        // Method 2: Check for package naming convention (optional but helps)
-        val hasPackageName = ExternalExtensionLoaderSupport.looksLikeMihonPackage(pkgName)
-
-        // Method 3: Check for metadata in application info
-        val hasMetaData = ExternalExtensionMetadataSupport.hasDeclaredSource(
-            metaData = pkgInfo.applicationInfo?.metaData,
-            sourceClassKey = METADATA_SOURCE_CLASS,
-            sourceFactoryKey = METADATA_SOURCE_FACTORY,
+        // Delegates to the shared ecosystem classifier in loose (Mihon) mode: the classifier
+        // reproduces the historical 'feature OR (name AND metadata)' rules exactly, so this is
+        // behavior-preserving and makes the classifier the single classification seam.
+        val classification = TachiyomiApkClassifier.classify(
+            pkgInfo = pkgInfo,
+            spec = TachiyomiApkEcosystemSpecs.MIHON,
         )
-
-        // Mihon strictly checks for the feature, but we can be more inclusive
-        val isExtension = hasFeature || (hasPackageName && hasMetaData)
+        val isExtension = classification == TachiyomiApkClassification.Extension
 
         // Enhanced logging for debugging - LOG ALL POTENTIAL MATCHES
-        if (BuildConfig.DEBUG && (hasPackageName || isExtension)) {
-            android.util.Log.d(TAG, "isPackageAnExtension($pkgName): isExt=$isExtension (feature=$hasFeature, name=$hasPackageName, meta=$hasMetaData)")
-            if (!hasFeature) {
-                val features = pkgInfo.reqFeatures?.joinToString { it.name } ?: "none"
-                android.util.Log.d(TAG, "$pkgName missing required feature $EXTENSION_FEATURE. Current features: $features")
+        if (BuildConfig.DEBUG) {
+            val pkgName = pkgInfo.packageName
+            val hasFeature = pkgInfo.reqFeatures?.any { it.name == EXTENSION_FEATURE } == true
+            val hasPackageName = ExternalExtensionLoaderSupport.looksLikeMihonPackage(pkgName)
+            val hasMetaData = ExternalExtensionMetadataSupport.hasDeclaredSource(
+                metaData = pkgInfo.applicationInfo?.metaData,
+                sourceClassKey = METADATA_SOURCE_CLASS,
+                sourceFactoryKey = METADATA_SOURCE_FACTORY,
+            )
+            if (hasPackageName || isExtension) {
+                android.util.Log.d(TAG, "isPackageAnExtension($pkgName): isExt=$isExtension (feature=$hasFeature, name=$hasPackageName, meta=$hasMetaData)")
+                if (!hasFeature) {
+                    val features = pkgInfo.reqFeatures?.joinToString { it.name } ?: "none"
+                    android.util.Log.d(TAG, "$pkgName missing required feature $EXTENSION_FEATURE. Current features: $features")
+                }
             }
         }
 

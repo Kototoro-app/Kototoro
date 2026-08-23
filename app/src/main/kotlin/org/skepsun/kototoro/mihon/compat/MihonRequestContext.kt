@@ -2,13 +2,15 @@ package org.skepsun.kototoro.mihon.compat
 
 import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiXSourceAdapter
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 为 Mihon 扩展执行链路提供当前源上下文，便于底层网络层为扩展内部请求补齐来源信息。
+ * 为 Tachiyomi-ABI 扩展执行链路提供当前源上下文，便于底层网络层为扩展内部请求补齐来源信息。
+ * 来源 URL 一律通过 [TachiyomiXSourceAdapter] 读取（Mihon 今天、Tsundoku 后续），不再硬转
+ * `MihonMangaSource`（计划 §6.2 / T1.4）。
  */
 object MihonRequestContext {
 
@@ -21,9 +23,8 @@ object MihonRequestContext {
     fun sourceForHost(host: String): ContentSource? = registeredSources[host.lowercase()]
 
     fun registerSource(source: ContentSource) {
-        val mihonSource = source as? MihonMangaSource ?: return
-        val host = (mihonSource.catalogueSource as? eu.kanade.tachiyomi.source.online.HttpSource)
-            ?.baseUrl?.toHttpUrlOrNull()?.host?.lowercase() ?: return
+        val adapter = source as? TachiyomiXSourceAdapter ?: return
+        val host = adapter.baseUrlOrNull?.toHttpUrlOrNull()?.host?.lowercase() ?: return
         registeredSources[host] = source
     }
 
