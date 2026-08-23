@@ -153,6 +153,18 @@
     public protected *;
 }
 
+# Tsundoku novel extension support
+# Tsundoku extensions are Tachiyomi-ABI novel APKs (eu.kanade.tachiyomi.** kept
+# above). The host bridge and model classes must survive shrinking so the
+# runtime keeps the same surface the other ecosystems (mihon/aniyomi/ireader)
+# get; TsundokuNovelSource is recreated from stored identity keys and its
+# members are reached through ContentSource/interface dispatch.
+-keep class org.skepsun.kototoro.tsundoku.** { *; }
+-keepclassmembers class org.skepsun.kototoro.tsundoku.** {
+    public <init>(...);
+    public protected *;
+}
+
 # Kototoro IReader bridge classes
 -keep class org.skepsun.kototoro.ireader.** { *; }
 -keepclassmembers class org.skepsun.kototoro.ireader.** {
