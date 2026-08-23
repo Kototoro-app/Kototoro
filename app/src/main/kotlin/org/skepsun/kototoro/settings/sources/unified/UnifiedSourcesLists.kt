@@ -53,12 +53,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.model.getSummary
 import org.skepsun.kototoro.core.model.ContentSourceAvailability
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.ireader.model.IReaderMangaSource
+import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
 
 @Composable
@@ -290,7 +293,7 @@ internal fun buildGroupedUnifiedSourceRows(
                     add(
                         UnifiedSourceDisplayRow.PackageHeader(
                             packageId = packageId,
-                            packageName = members.first().packageName?.takeIf { it.isNotBlank() } ?: packageId,
+                            packageName = resolveUnifiedSourceGroupName(members, packageId),
                             kind = members.first().kind,
                             sourceCount = members.size,
                             collapsed = packageId in collapsedPackageIds,
@@ -306,6 +309,30 @@ internal fun buildGroupedUnifiedSourceRows(
             }
         }
     }
+}
+
+private fun resolveUnifiedSourceGroupName(
+    members: List<UnifiedSourceItem>,
+    fallback: String,
+): String {
+    val first = members.first()
+    val preferredName = when (first.kind) {
+        UnifiedSourceKind.JAR -> first.repositoryName?.takeIf { it.isNotBlank() }
+        UnifiedSourceKind.MIHON -> (first.source as? MihonMangaSource)?.catalogueSource?.name
+        UnifiedSourceKind.ANIYOMI -> (first.source as? AniyomiAnimeSource)?.animeCatalogueSource?.name
+        UnifiedSourceKind.IREADER -> (first.source as? IReaderMangaSource)?.catalogueSource?.name
+        else -> first.packageName?.takeIf { it.isNotBlank() }
+    }
+    val fallbackName = when (first.kind) {
+        UnifiedSourceKind.MIHON,
+        UnifiedSourceKind.ANIYOMI,
+        UnifiedSourceKind.IREADER -> first.title
+        else -> first.packageName
+    }
+    return preferredName?.takeIf { it.isNotBlank() }
+        ?: fallbackName?.takeIf { it.isNotBlank() }
+        ?: first.packageName?.takeIf { it.isNotBlank() }
+        ?: fallback
 }
 
 private fun togglePackageExpanded(current: Set<String>, packageId: String): Set<String> =
@@ -959,4 +986,3 @@ private fun UnifiedPackageIcon(
         }
     }
 }
-

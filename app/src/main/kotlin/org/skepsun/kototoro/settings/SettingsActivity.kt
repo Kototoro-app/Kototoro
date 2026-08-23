@@ -918,9 +918,10 @@ class SettingsActivity :
             SettingsDestination.NavConfigSettings -> getString(R.string.main_screen_sections)
             SettingsDestination.ChangelogSettings -> getString(R.string.changelog)
             SettingsDestination.AboutSettings -> getString(R.string.help_and_feedback)
-            is SettingsDestination.SourceSettings -> org.skepsun.kototoro.core.model.ContentSource(
-                destination.sourceName,
-            ).getTitle(this)
+            is SettingsDestination.SourceSettings -> resolveSourceSettingsTitle(
+                intent.getStringExtra(AppRouter.KEY_SOURCE_TITLE),
+                org.skepsun.kototoro.core.model.ContentSource(destination.sourceName).getTitle(this),
+            )
             is SettingsDestination.UnifiedSources -> getString(R.string.extension_management)
         }
     }
@@ -2207,4 +2208,8 @@ class SettingsActivity :
         // 仅在折叠屏展开且窗口满足双栏宽度时重建，避免分屏窄窗口反复重建
         setLegacyTopBarVisible(false)
     }
+}
+
+internal fun resolveSourceSettingsTitle(routeTitle: String?, resolvedTitle: String): String {
+    return routeTitle?.trim()?.takeIf { it.isNotEmpty() } ?: resolvedTitle
 }

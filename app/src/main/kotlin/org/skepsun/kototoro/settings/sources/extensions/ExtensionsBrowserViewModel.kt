@@ -211,6 +211,8 @@ class ExtensionsBrowserViewModel @Inject constructor(
             appContext.getSharedPreferences("jar_plugin_versions", android.content.Context.MODE_PRIVATE)
                 .edit()
                 .remove(item.pkgName)
+                .remove("${item.pkgName}:repo")
+                .remove("${item.pkgName}:repoName")
                 .apply()
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(appContext)
             return

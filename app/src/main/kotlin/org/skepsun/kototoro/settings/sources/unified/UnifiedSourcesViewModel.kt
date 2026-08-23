@@ -890,6 +890,8 @@ class UnifiedSourcesViewModel @Inject constructor(
             appContext.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
                 .edit()
                 .remove(packageName)
+                .remove("${packageName}:repo")
+                .remove("${packageName}:repoName")
                 .apply()
             GlobalExtensionManager.initialize(appContext)
             return PackageRemovalResult(removedDirectly = true)
@@ -1642,10 +1644,19 @@ class UnifiedSourcesViewModel @Inject constructor(
         val repositoriesById = repositories.associateBy { it.id }
         val enrichedPackages = packages.withUniquePackageIds().enrichWithSourceCoverage(sources)
         val packagesById = enrichedPackages.associateBy { it.id }
+        val enrichedSources = sources.map { source ->
+            if (source.kind == UnifiedSourceKind.JAR && source.repositoryName.isNullOrBlank()) {
+                source.copy(repositoryName = source.packageId?.let(packagesById::get)?.repositoryName)
+            } else {
+                source
+            }
+        }
         val visibleRepositories = repositories.filterBy(filters)
         val visiblePackages = enrichedPackages.filterBy(filters, repositoriesById)
-        val visibleSources = sources.filterBy(filters, repositoriesById, packagesById)
-        val availableLanguages = (enrichedPackages.mapNotNull { it.language } + sources.mapNotNull { it.language })
+        val visibleSources = enrichedSources.filterBy(filters, repositoriesById, packagesById)
+        val availableLanguages = (
+            enrichedPackages.mapNotNull { it.language } + enrichedSources.mapNotNull { it.language }
+        )
             .map { it.normalizeLanguageCode() }
             .filter { it.isNotBlank() }
             .distinct()
@@ -1662,11 +1673,13 @@ class UnifiedSourcesViewModel @Inject constructor(
             sources = visibleSources,
             allRepositories = repositories,
             allPackages = enrichedPackages,
-            allSources = sources,
-            availableKinds = (repositories.map { it.kind } + enrichedPackages.map { it.kind } + sources.map { it.kind })
+            allSources = enrichedSources,
+            availableKinds = (
+                repositories.map { it.kind } + enrichedPackages.map { it.kind } + enrichedSources.map { it.kind }
+            )
                 .distinct()
                 .sortedBy { it.ordinal },
-            availableContentTypes = sources.map { it.contentType }
+            availableContentTypes = enrichedSources.map { it.contentType }
                 .distinct()
                 .sortedBy { it.ordinal },
             availableLocationTypes = repositories.map { it.locationType }
@@ -2108,4 +2121,3 @@ private fun resolveRepositoryLocationTypeForAction(locator: String): UnifiedRepo
         else -> UnifiedRepositoryLocationType.INLINE_IMPORT
     }
 }
-

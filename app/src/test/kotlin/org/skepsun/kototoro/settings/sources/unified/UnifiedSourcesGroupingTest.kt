@@ -5,6 +5,10 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.kotest.matchers.types.shouldBeTypeOf
+import io.mockk.every
+import io.mockk.mockk
+import eu.kanade.tachiyomi.source.CatalogueSource
+import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -23,9 +27,9 @@ class UnifiedSourcesGroupingTest : FunSpec({
 
 	test("multi-source package collapses into one header with all members when expanded") {
 		val members = listOf(
-			sourceItem(id = "mihon:1", packageId = "pkg:multilang", packageName = "MultiLang"),
-			sourceItem(id = "mihon:2", packageId = "pkg:multilang", packageName = "MultiLang"),
-			sourceItem(id = "mihon:3", packageId = "pkg:multilang", packageName = "MultiLang"),
+			sourceItem(id = "mihon:1", packageId = "pkg:multilang", packageName = "MultiLang", title = "MultiLang"),
+			sourceItem(id = "mihon:2", packageId = "pkg:multilang", packageName = "MultiLang", title = "MultiLang"),
+			sourceItem(id = "mihon:3", packageId = "pkg:multilang", packageName = "MultiLang", title = "MultiLang"),
 		)
 
 		val rows = buildGroupedUnifiedSourceRows(members, emptySet())
@@ -89,6 +93,121 @@ class UnifiedSourcesGroupingTest : FunSpec({
 	test("empty list yields empty rows") {
 		buildGroupedUnifiedSourceRows(emptyList(), emptySet()) shouldHaveSize 0
 	}
+
+	test("jar group uses repository name") {
+		val members = listOf(
+			sourceItem(
+				id = "jar:1",
+				packageId = "pkg:jar",
+				packageName = "raw.jar.package",
+				kind = UnifiedSourceKind.JAR,
+				repositoryName = "Kotatsu Extensions",
+			),
+			sourceItem(
+				id = "jar:2",
+				packageId = "pkg:jar",
+				packageName = "raw.jar.package",
+				kind = UnifiedSourceKind.JAR,
+				repositoryName = "Kotatsu Extensions",
+			),
+		)
+
+		val header = buildGroupedUnifiedSourceRows(members, emptySet())
+			.first()
+			.shouldBeInstanceOf<UnifiedSourceDisplayRow.PackageHeader>()
+
+		header.packageName shouldBe "Kotatsu Extensions"
+	}
+
+	test("external multilingual group uses real source name") {
+		listOf(UnifiedSourceKind.MIHON, UnifiedSourceKind.ANIYOMI, UnifiedSourceKind.IREADER).forEach { kind ->
+			val members = listOf(
+				sourceItem(
+					id = "$kind:en",
+					packageId = "pkg:$kind",
+					packageName = "raw.extension.package",
+					kind = kind,
+					title = "Real Source",
+				),
+				sourceItem(
+					id = "$kind:zh",
+					packageId = "pkg:$kind",
+					packageName = "raw.extension.package",
+					kind = kind,
+					title = "Real Source",
+				),
+			)
+
+			val header = buildGroupedUnifiedSourceRows(members, emptySet())
+				.first()
+				.shouldBeInstanceOf<UnifiedSourceDisplayRow.PackageHeader>()
+
+			header.packageName shouldBe "Real Source"
+		}
+	}
+
+	test("mihon multilingual group omits language suffix from source title") {
+		val catalogueSource = mockk<CatalogueSource> {
+			every { id } returns 1L
+			every { name } returns "Komikindo"
+			every { lang } returns "id"
+			every { supportsLatest } returns true
+		}
+		val source = MihonMangaSource(
+			catalogueSource = catalogueSource,
+			pkgName = "eu.kanade.tachiyomi.extension.all.komikindo",
+			hasLanguageSuffix = true,
+		)
+		val members = listOf(
+			sourceItem(
+				id = "mihon:id",
+				packageId = "pkg:mihon",
+				packageName = source.pkgName,
+				title = "Komikindo (Bahasa Indonesia)",
+				source = source,
+			),
+			sourceItem(
+				id = "mihon:en",
+				packageId = "pkg:mihon",
+				packageName = source.pkgName,
+				title = "Komikindo (English)",
+				source = source,
+			),
+		)
+
+		val header = buildGroupedUnifiedSourceRows(members, emptySet())
+			.first()
+			.shouldBeInstanceOf<UnifiedSourceDisplayRow.PackageHeader>()
+
+		header.packageName shouldBe "Komikindo"
+	}
+
+	test("other group kinds keep extension package name") {
+		val members = listOf(
+			sourceItem(
+				id = "cloudstream:1",
+				packageId = "pkg:cloudstream",
+				packageName = "Original Package",
+				kind = UnifiedSourceKind.CLOUDSTREAM,
+				title = "Source One",
+				repositoryName = "Repository Name",
+			),
+			sourceItem(
+				id = "cloudstream:2",
+				packageId = "pkg:cloudstream",
+				packageName = "Original Package",
+				kind = UnifiedSourceKind.CLOUDSTREAM,
+				title = "Source Two",
+				repositoryName = "Repository Name",
+			),
+		)
+
+		val header = buildGroupedUnifiedSourceRows(members, emptySet())
+			.first()
+			.shouldBeInstanceOf<UnifiedSourceDisplayRow.PackageHeader>()
+
+		header.packageName shouldBe "Original Package"
+	}
 })
 
 private class FakeSource(override val name: String) : ContentSource {
@@ -101,16 +220,19 @@ private fun sourceItem(
 	packageId: String? = null,
 	packageName: String? = null,
 	kind: UnifiedSourceKind = UnifiedSourceKind.MIHON,
+	title: String = id,
+	repositoryName: String? = null,
+	source: ContentSource = FakeSource(id),
 ): UnifiedSourceItem {
 	return UnifiedSourceItem(
 		id = id,
 		kind = kind,
-		source = FakeSource(id),
-		title = id,
+		source = source,
+		title = title,
 		language = null,
 		contentType = ContentType.MANGA,
 		repositoryId = null,
-		repositoryName = null,
+		repositoryName = repositoryName,
 		packageId = packageId,
 		packageName = packageName,
 		isEnabled = true,

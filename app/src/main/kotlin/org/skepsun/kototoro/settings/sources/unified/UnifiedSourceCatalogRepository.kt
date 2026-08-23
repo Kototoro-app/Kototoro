@@ -277,7 +277,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                         name = packageName,
                         packageName = packageName,
                         repositoryId = null,
-                        repositoryName = null,
+                        repositoryName = versionPrefs.getString("${packageName}:repoName", null),
                         versionName = versionPrefs.getLong(packageName, 1L).toString(),
                         versionCode = versionPrefs.getLong(packageName, 1L),
                         libVersion = 1.0,
@@ -432,6 +432,14 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         val kind = resolveKind()
         val packageRef = resolvePackageRef(jsonSummary, jsonEntity)
         val repositoryRef = resolveRepositoryRef(jsonEntity)
+        val persistedJarRepositoryName = if (kind == UnifiedSourceKind.JAR) {
+            packageRef?.second?.let { packageName ->
+                appContext.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
+                    .getString("${packageName}:repoName", null)
+            }
+        } else {
+            null
+        }
         val nsfw = isNsfw()
         return UnifiedSourceItem(
             id = name,
@@ -441,7 +449,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             language = resolveLanguage(),
             contentType = getContentType().withNsfwFlag(nsfw),
             repositoryId = repositoryRef?.id,
-            repositoryName = repositoryRef?.title,
+            repositoryName = repositoryRef?.title ?: persistedJarRepositoryName,
             packageId = packageRef?.first,
             packageName = packageRef?.second,
             isEnabled = jsonSummary?.enabled ?: (settings.isAllSourcesEnabled || sourceEntity?.isEnabled == true),

@@ -115,6 +115,8 @@ class ExtensionInstallService @Inject constructor(
             context.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
                 .edit()
                 .putLong(extension.pkgName, extension.versionCode)
+                .putString("${extension.pkgName}:repo", extension.repoUrl)
+                .putString("${extension.pkgName}:repoName", extension.repoName)
                 .apply()
             org.skepsun.kototoro.core.extensions.GlobalExtensionManager.initialize(context)
             return ExtensionInstallResult.Completed

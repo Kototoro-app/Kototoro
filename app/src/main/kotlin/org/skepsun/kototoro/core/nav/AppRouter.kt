@@ -1492,6 +1492,7 @@ class AppRouter(
             else -> Intent(context, SettingsActivity::class.java)
                 .setAction(ACTION_SOURCE)
                 .putExtra(KEY_SOURCE, source.name)
+                .putExtra(KEY_SOURCE_TITLE, source.getTitle(context))
         }
 
         private fun inferUnifiedSourceKind(packageName: String): UnifiedSourceKind? {
@@ -1589,6 +1590,7 @@ class AppRouter(
         const val KEY_READER_MODE = "reader_mode"
         const val KEY_SORT_ORDER = "sort_order"
         const val KEY_SOURCE = "source"
+        const val KEY_SOURCE_TITLE = "source_title"
         const val KEY_SOURCE_TYPES = "source_types"
         const val KEY_CONTENT_KINDS = "content_kinds"
         const val KEY_HIDE_EMPTY = "hide_empty"
