@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  T0.3 fixture — AMBIGUOUS rejection path (plan §7.2 / T2A.2).
+
+  Deliberately declares BOTH the Tsundoku novel feature (tachiyomi.novelextension) and the
+  Mihon manga feature (tachiyomi.extension). The strict Tsundoku classifier refuses to guess
+  between the two ecosystems and classifies the APK as Ambiguous — the host must NOT load it
+  as a novel extension. Both ecosystem metadata keys are set too, so neither ecosystem's
+  loose name/metadata fallback could claim it without the feature ambiguity.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="tachiyomi.novelextension" />
+    <uses-feature android:name="tachiyomi.extension" />
+
+    <application
+        android:allowBackup="false"
+        android:label="Kototoro Fixture Ambiguous (novel+manga)">
+        <meta-data
+            android:name="tachiyomi.novelextension.class"
+            android:value=".AmbiguousNovel" />
+        <meta-data
+            android:name="tachiyomi.extension.class"
+            android:value=".AmbiguousNovel" />
+        <meta-data
+            android:name="tachiyomi.novelextension.nsfw"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomi.novelextension.novel"
+            android:value="1" />
+        <meta-data
+            android:name="tachiyomix.name"
+            android:value="Kototoro Fixture Ambiguous" />
+        <meta-data
+            android:name="tachiyomix.contentWarning"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomix.extensionLib"
+            android:value="1.4" />
+    </application>
+</manifest>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  T0.3 fixture — NovelSourcery extensions-lib 1.4 "single direct source" morphology.
+
+  Mirrors the real e.g. eu.kanade.tachiyomi.novelextension.en.bakatsuki (1.4.2) manifest
+  byte-for-byte in every key the host reads:
+    * bare <uses-feature android:name="tachiyomi.novelextension"/> — no `required` attribute,
+      so it defaults to required=true and lands in PackageInfo.reqFeatures (the field the
+      strict TachiyomiApkClassifier checks).
+    * tachiyomi.novelextension.class as a *relative* ".ClassName" (host resolves it against
+      the package name via ExternalExtensionSourceLoaderSupport).
+    * tachiyomi.novelextension.nsfw / .novel ints, tachiyomix.name string,
+      tachiyomix.contentWarning int, tachiyomix.extensionLib float 1.4 (versionName 1.4.1
+      agrees with it; the host prefers the metadata override).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="tachiyomi.novelextension" />
+
+    <application
+        android:allowBackup="false"
+        android:label="Kototoro Fixture Novel 1.4 (single)">
+        <meta-data
+            android:name="tachiyomi.novelextension.class"
+            android:value=".SingleNovel" />
+        <meta-data
+            android:name="tachiyomi.novelextension.nsfw"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomi.novelextension.novel"
+            android:value="1" />
+        <meta-data
+            android:name="tachiyomix.name"
+            android:value="Kototoro Fixture Novel 1.4 (single)" />
+        <meta-data
+            android:name="tachiyomix.contentWarning"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomix.extensionLib"
+            android:value="1.4" />
+    </application>
+</manifest>

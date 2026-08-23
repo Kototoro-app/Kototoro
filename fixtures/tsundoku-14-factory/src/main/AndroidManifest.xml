@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  T0.3 fixture — NovelSourcery extensions-lib 1.4 "SourceFactory" morphology.
+
+  Same real-extension manifest shape as the single fixture, except the metadata class points at
+  a SourceFactory implementation (.FactoryNovel). The host metadata seams
+  (TachiyomiApkLoaderRuntime.loadFromClass) instantiate the class, recognise it as a
+  SourceFactory, call createSources() and validate each returned source individually, so a
+  package can legitimately mix a novel source and a non-novel (manga) source — the manga object
+  is rejected per-source (TachiyomiSourceRejection) while the novel source is kept.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="tachiyomi.novelextension" />
+
+    <application
+        android:allowBackup="false"
+        android:label="Kototoro Fixture Novel 1.4 (factory)">
+        <meta-data
+            android:name="tachiyomi.novelextension.class"
+            android:value=".FactoryNovel" />
+        <meta-data
+            android:name="tachiyomi.novelextension.nsfw"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomi.novelextension.novel"
+            android:value="1" />
+        <meta-data
+            android:name="tachiyomix.name"
+            android:value="Kototoro Fixture Novel 1.4 (factory)" />
+        <meta-data
+            android:name="tachiyomix.contentWarning"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomix.extensionLib"
+            android:value="1.4" />
+    </application>
+</manifest>

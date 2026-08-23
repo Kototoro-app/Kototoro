@@ -347,6 +347,51 @@ def cloudstreamSanitizedJarTask = tasks.register('prepareCloudstreamRuntimeJar',
 
 def cloudstreamRuntimeJar = files(cloudstreamSanitizedJarTask.flatMap { it.archiveFile })
 
+/**
+ * T0.3 offline self-built fixture APKs (docs/architecture/tsundoku-extension-integration-plan,
+ * Phase 0): pack the compiled `eu.kanade.tachiyomi.*` host ABI into a plain jar so the
+ * fixtures/ modules can compile against it with `compileOnly` — no copied ABI sources, so
+ * the fixtures can never drift from the host (T2A.1 shipped the novel ABI; the debug variant's
+ * classes are exactly the ABI the host exposes via ChildFirstPathClassLoader delegation).
+ *
+ * R8/minification only runs for release/nightly; the debug `compileDebugKotlin` output is the
+ * faithful, unobfuscated ABI.
+ */
+def exportTachiyomiAbi = tasks.register('exportTachiyomiAbi', Jar) {
+	group = 'tsundoku fixtures'
+	description = 'Packages compiled eu.kanade.tachiyomi.* host ABI classes into build/libs/tachiyomi-abi.jar for fixture APK modules.'
+	archiveBaseName = 'tachiyomi-abi'
+	destinationDirectory = layout.buildDirectory.dir('libs')
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+	dependsOn 'compileDebugKotlin'
+	from(layout.buildDirectory.dir('intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes')) {
+		include 'eu/kanade/**'
+	}
+	doLast {
+		def jarFile = archiveFile.get().asFile
+		def zipFile = new ZipFile(jarFile)
+		try {
+			[
+				'eu/kanade/tachiyomi/source/Source.class',
+				'eu/kanade/tachiyomi/source/NovelSource.class',
+				'eu/kanade/tachiyomi/source/SourceFactory.class',
+				'eu/kanade/tachiyomi/source/SourceTracker.class',
+				'eu/kanade/tachiyomi/source/RateLimited.class',
+				'eu/kanade/tachiyomi/source/model/RefreshContext.class',
+				'eu/kanade/tachiyomi/source/model/Page.class',
+			].each { requiredEntry ->
+				if (zipFile.getEntry(requiredEntry) == null) {
+					throw new GradleException("Exported ABI jar ${jarFile.name} is missing ${requiredEntry}")
+				}
+			}
+		} finally {
+			zipFile.close()
+		}
+	}
+}
+
 // 配置SNAPSHOT版本的缓存策略
 configurations.all {
 	exclude group: 'org.jetbrains.kotlin', module: 'kotlin-android-extensions-runtime'

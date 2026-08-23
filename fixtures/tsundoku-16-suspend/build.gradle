@@ -1,0 +1,37 @@
+// T0.3 offline self-built fixture APK — extensions-lib 1.6 "suspend novel" morphology
+// (SourceTracker + RateLimited + fetchPageText + RefreshContext).
+// See docs/architecture/tsundoku-extension-integration-plan-2026-08.md Phase 0 / T0.3.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_16_suspend'
+    compileSdk = 37
+    defaultConfig {
+        applicationId = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_16_suspend'
+        minSdk = 26
+        targetSdk = 37
+        versionCode = 11
+        versionName = '1.6.1'
+    }
+    buildTypes {
+        debug {}
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'MissingApplicationIcon'
+    }
+}
+
+dependencies {
+    compileOnly files(rootProject.file('app/build/libs/tachiyomi-abi.jar')).builtBy(':app:exportTachiyomiAbi')
+    compileOnly libs.rxjava
+    compileOnly libs.kotlin.stdlib
+    compileOnly libs.kotlinx.coroutines.android
+    compileOnly libs.kotlinx.serialization.json
+}

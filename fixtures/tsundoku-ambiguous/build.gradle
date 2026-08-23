@@ -1,0 +1,39 @@
+// T0.3 offline self-built fixture APK — AMBIGUOUS rejection path: the APK declares BOTH the
+// novel feature (tachiyomi.novelextension) and the manga feature (tachiyomi.extension), which
+// the strict Tsundoku classifier (TachiyomiApkClassifier + TachiyomiApkEcosystemSpecs.TSUNDOKU,
+// plan §7.2) must refuse to guess and report as Ambiguous.
+// See docs/architecture/tsundoku-extension-integration-plan-2026-08.md Phase 0 / T0.3.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_ambiguous'
+    compileSdk = 37
+    defaultConfig {
+        applicationId = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_ambiguous'
+        minSdk = 26
+        targetSdk = 37
+        versionCode = 3
+        versionName = '1.4.3'
+    }
+    buildTypes {
+        debug {}
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'MissingApplicationIcon'
+    }
+}
+
+dependencies {
+    compileOnly files(rootProject.file('app/build/libs/tachiyomi-abi.jar')).builtBy(':app:exportTachiyomiAbi')
+    compileOnly libs.rxjava
+    compileOnly libs.kotlin.stdlib
+    compileOnly libs.kotlinx.coroutines.android
+    compileOnly libs.kotlinx.serialization.json
+}

@@ -1,0 +1,41 @@
+// T0.3 offline self-built fixture APK — extensions-lib 1.4 "single direct source" morphology.
+// See docs/architecture/tsundoku-extension-integration-plan-2026-08.md Phase 0 / T0.3.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_single'
+    compileSdk = 37
+    defaultConfig {
+        applicationId = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_single'
+        minSdk = 26
+        targetSdk = 37
+        // Real NovelSourcery extensions encode the patch number as versionCode (1.4.2 -> 2).
+        versionCode = 1
+        versionName = '1.4.1'
+    }
+    buildTypes {
+        debug {}
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'MissingApplicationIcon'
+    }
+}
+
+dependencies {
+    // The host (Kototoro) provides eu.kanade.tachiyomi.source.* at runtime via
+    // ChildFirstPathClassLoader delegation; compileOnly keeps the ABI out of the dex.
+    compileOnly files(rootProject.file('app/build/libs/tachiyomi-abi.jar')).builtBy(':app:exportTachiyomiAbi')
+    // Transitive signature types referenced by the host ABI (Source -> rx.Observable,
+    // SManga -> kotlinx.serialization.json.JsonObject, Page -> coroutines flow, ...).
+    compileOnly libs.rxjava
+    compileOnly libs.kotlin.stdlib
+    compileOnly libs.kotlinx.coroutines.android
+    compileOnly libs.kotlinx.serialization.json
+}

@@ -1,0 +1,36 @@
+// T0.3 offline self-built fixture APK — extensions-lib 1.4 "SourceFactory" morphology.
+// See docs/architecture/tsundoku-extension-integration-plan-2026-08.md Phase 0 / T0.3.
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_factory'
+    compileSdk = 37
+    defaultConfig {
+        applicationId = 'eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_factory'
+        minSdk = 26
+        targetSdk = 37
+        versionCode = 2
+        versionName = '1.4.2'
+    }
+    buildTypes {
+        debug {}
+        release {
+            minifyEnabled false
+        }
+    }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'MissingApplicationIcon'
+    }
+}
+
+dependencies {
+    compileOnly files(rootProject.file('app/build/libs/tachiyomi-abi.jar')).builtBy(':app:exportTachiyomiAbi')
+    compileOnly libs.rxjava
+    compileOnly libs.kotlin.stdlib
+    compileOnly libs.kotlinx.coroutines.android
+    compileOnly libs.kotlinx.serialization.json
+}

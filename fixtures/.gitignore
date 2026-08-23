@@ -1,0 +1,2 @@
+# fixtures are source-only: never track per-module build outputs (AGP intermediates, APKs, ABI jar).
+build/

@@ -22,6 +22,10 @@ data class TachiyomiApkEcosystemSpec(
     val sourceMetadataKey: String,
     /** Manifest metadata key carrying the SourceFactory class (nullable). */
     val factoryMetadataKey: String?,
+    /** Manifest metadata key carrying the NSFW flag (int: 1 = adult). */
+    val nsfwMetadataKey: String,
+    /** Package-name segment used to extract the language, e.g. "extension" / "novelextension". */
+    val languageMarker: String,
     /** Exact accepted extensions-lib versions (e.g. "1.4", "1.6"). */
     val acceptedLibVersions: Set<String>,
     /** Strict ecosystems require the required feature; Mihon keeps loose name/metadata fallback. */
@@ -37,6 +41,8 @@ object TachiyomiApkEcosystemSpecs {
         requiredFeature = "tachiyomi.extension",
         sourceMetadataKey = "tachiyomi.extension.class",
         factoryMetadataKey = "tachiyomi.extension.factory",
+        nsfwMetadataKey = "tachiyomi.extension.nsfw",
+        languageMarker = "extension",
         acceptedLibVersions = (12..19).map { it / 10.0 }.map(::formatLibVersion).toSet(),
         strictIdentification = false,
     )
@@ -48,6 +54,8 @@ object TachiyomiApkEcosystemSpecs {
         requiredFeature = "tachiyomi.novelextension",
         sourceMetadataKey = "tachiyomi.novelextension.class",
         factoryMetadataKey = "tachiyomi.novelextension.factory",
+        nsfwMetadataKey = "tachiyomi.novelextension.nsfw",
+        languageMarker = "novelextension",
         acceptedLibVersions = setOf("1.4", "1.6"),
         strictIdentification = true,
     )

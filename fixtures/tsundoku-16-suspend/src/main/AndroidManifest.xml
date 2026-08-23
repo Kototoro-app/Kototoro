@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  T0.3 fixture — NovelSourcery extensions-lib 1.6 morphology (e.g.
+  eu.kanade.tachiyomi.novelextension.en.novelfull shape, but self-built).
+
+  Same real-extension manifest keys as the 1.4 fixtures; the source implements the full 1.6
+  novel surface: isNovelSource + fetchPageText, SourceTracker reading/favorite callbacks,
+  RateLimited pacing hints, supportsLatest and the RefreshContext chapter-list overload.
+  tachiyomix.extensionLib=1.6 and versionName 1.6.1 both resolve to the host's accepted
+  "1.6" (metadata override wins).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="tachiyomi.novelextension" />
+
+    <application
+        android:allowBackup="false"
+        android:label="Kototoro Fixture Novel 1.6 (suspend)">
+        <meta-data
+            android:name="tachiyomi.novelextension.class"
+            android:value=".NovelSuspendV16" />
+        <meta-data
+            android:name="tachiyomi.novelextension.nsfw"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomi.novelextension.novel"
+            android:value="1" />
+        <meta-data
+            android:name="tachiyomix.name"
+            android:value="Kototoro Fixture Novel 1.6 (suspend)" />
+        <meta-data
+            android:name="tachiyomix.contentWarning"
+            android:value="0" />
+        <meta-data
+            android:name="tachiyomix.extensionLib"
+            android:value="1.6" />
+    </application>
+</manifest>
