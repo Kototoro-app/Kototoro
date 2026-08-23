@@ -45,6 +45,8 @@ import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.scrobbling.common.domain.tryScrobble
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
+import org.skepsun.kototoro.tracker.domain.SourceTrackerEvent
+import org.skepsun.kototoro.tracker.domain.SourceTrackerEventEmitter
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
@@ -68,6 +70,7 @@ class HistoryRepository @Inject constructor(
     private val workResolver: WorkResolver,
     private val workAggregateRepository: WorkAggregateRepository,
     private val spaceContentPolicy: SpaceContentPolicy,
+    private val sourceTrackerEvents: SourceTrackerEventEmitter,
 ) {
 
     private data class WorkHistoryOwner(
@@ -356,6 +359,7 @@ class HistoryRepository @Inject constructor(
                 chaptersCount = chaptersCount,
             ),
         )
+        emitRead(mangaId, percent)
         return true
     }
 
@@ -378,12 +382,15 @@ class HistoryRepository @Inject constructor(
         normalizeWorkHistory()
     }
 
-    suspend fun delete(manga: Content) = db.withTransaction {
-        val ownerRef = resolveHistoryOwnerRef(manga.id)
-        ownerRef.entityId?.let { entityId ->
-            db.getWorkHistoryDao().delete(entityId)
+    suspend fun delete(manga: Content) {
+        db.withTransaction {
+            val ownerRef = resolveHistoryOwnerRef(manga.id)
+            ownerRef.entityId?.let { entityId ->
+                db.getWorkHistoryDao().delete(entityId)
+            }
+            mangaRepository.gcChaptersCache()
         }
-        mangaRepository.gcChaptersCache()
+        emitUnread(manga)
     }
 
     suspend fun deleteAfter(minDate: Long) = db.withTransaction {
@@ -405,6 +412,7 @@ class HistoryRepository @Inject constructor(
             }
             mangaRepository.gcChaptersCache()
         }
+        emitUnreadAll(ids)
         return ReversibleHandle {
             recover(resolvedEntityIds)
         }
@@ -961,5 +969,61 @@ class HistoryRepository @Inject constructor(
             SearchKind.AUTHOR -> authors.anyContainsQuery()
             SearchKind.TAG -> tags.any { it.title.containsQuery() }
         }
+    }
+
+    /**
+     * T4B.1: progress write committed — publish [SourceTrackerEvent.Read].
+     *
+     * Only fires from deliberate `updateProgress` calls (details-page progress setter /
+     * mark-complete), not from per-page reader autosaves in [addOrUpdate].
+     */
+    private suspend fun emitRead(mangaId: Long, percent: Float) {
+        val content = db.getMangaDao().find(mangaId)?.toContent() ?: return
+        emitSourceTrackerEvent(
+            SourceTrackerEvent.Read(
+                contentId = content.id,
+                sourceKey = content.source.name,
+                percent = percent,
+                contentUrl = content.eventUrl(),
+            ),
+        )
+    }
+
+    /** T4B.1: single-content history deletion (mark unread) committed — publish [SourceTrackerEvent.Unread]. */
+    private fun emitUnread(manga: Content) {
+        emitSourceTrackerEvent(
+            SourceTrackerEvent.Unread(
+                contentId = manga.id,
+                sourceKey = manga.source.name,
+                contentUrl = manga.eventUrl(),
+            ),
+        )
+    }
+
+    /** T4B.1: bulk history deletion committed — publish [SourceTrackerEvent.Unread] per resolved content. */
+    private suspend fun emitUnreadAll(mangaIds: Collection<Long>) {
+        for (mangaId in mangaIds) {
+            val content = db.getMangaDao().find(mangaId)?.toContent() ?: continue
+            emitSourceTrackerEvent(
+                SourceTrackerEvent.Unread(
+                    contentId = content.id,
+                    sourceKey = content.source.name,
+                    contentUrl = content.eventUrl(),
+                ),
+            )
+        }
+    }
+
+    /** Best-effort post-commit publish: DB result is already final, so never propagate emitter failures. */
+    private fun emitSourceTrackerEvent(event: SourceTrackerEvent) {
+        try {
+            sourceTrackerEvents.emit(event)
+        } catch (e: Exception) {
+            // Local write already succeeded; a broken emitter must not surface to the caller.
+        }
+    }
+
+    private fun Content.eventUrl(): String? {
+        return publicUrl.takeIf { it.isNotBlank() } ?: url.takeIf { it.isNotBlank() }
     }
 }

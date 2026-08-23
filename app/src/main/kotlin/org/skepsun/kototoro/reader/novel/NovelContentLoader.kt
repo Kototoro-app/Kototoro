@@ -141,7 +141,9 @@ class NovelContentLoader @Inject constructor(
                     saveToCache(cacheKey, plainText)
                 }
             } else {
-                repository.getChapterContent(chapter, nextChapterUrl)?.let { chapterContent ->
+                repository.getChapterContent(chapter, nextChapterUrl)?.let { raw ->
+                    // T4A.3 在线安全边界：进入纯文本出口前先清洗（images 字段原值保留）
+                    val chapterContent = raw.copy(html = NovelHtmlNormalizer.sanitize(raw.html))
                     val plainText = htmlToPlainText(chapterContent.html)
                     send(plainText)
                     if (plainText.isNotBlank() && !isErrorContent(plainText)) {
@@ -170,7 +172,8 @@ class NovelContentLoader @Inject constructor(
         val sb = StringBuilder()
         pages.forEach { page ->
             val html = if (page.url.startsWith("data:", ignoreCase = true)) {
-                decodeChapterHtml(page.url)
+                // T4A.3 在线安全边界：data: 页面内容同样先清洗再进纯文本出口
+                NovelHtmlNormalizer.sanitize(decodeChapterHtml(page.url))
             } else {
                 runCatching {
                     val uri = java.net.URI(page.url)
@@ -253,7 +256,9 @@ class NovelContentLoader @Inject constructor(
             android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Using prefetched pages (${prefetchedPages.size})")
             prefetchedPages
         } else {
-            repository.getChapterContent(chapter)?.let { chapterContent ->
+            repository.getChapterContent(chapter)?.let { raw ->
+                // T4A.3 在线安全边界：进入纯文本出口前先清洗（images 字段原值保留）
+                val chapterContent = raw.copy(html = NovelHtmlNormalizer.sanitize(raw.html))
                 val plainText = htmlToPlainText(chapterContent.html)
                 android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Loaded via getChapterContent. Length=${plainText.length}")
                 if (plainText.isNotBlank() && !isErrorContent(plainText)) {
@@ -269,7 +274,7 @@ class NovelContentLoader @Inject constructor(
         val firstUrl = pages.firstOrNull()?.url
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: First page URL=${firstUrl?.take(100)}")
 
-        val html = if (firstUrl != null) decodeChapterHtml(firstUrl) else ""
+        val html = if (firstUrl != null) NovelHtmlNormalizer.sanitize(decodeChapterHtml(firstUrl)) else ""
         val plainText = htmlToPlainText(html)
 
         android.util.Log.d("NovelContentLoader", ">>> loadChapterContentInternal: Content parsed from network. Length=${plainText.length}")

@@ -21,6 +21,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
+import org.skepsun.kototoro.tracker.domain.SourceTrackerEventBus
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 import org.skepsun.kototoro.work.domain.WorkIdentity
@@ -43,6 +44,7 @@ class HistoryRepositoryResumeFilterTest {
 		workResolver = mockk<WorkResolver>(relaxed = true),
 		workAggregateRepository = workAggregateRepository,
 		spaceContentPolicy = spaceContentPolicy,
+		sourceTrackerEvents = SourceTrackerEventBus,
 	)
 
 	@Test

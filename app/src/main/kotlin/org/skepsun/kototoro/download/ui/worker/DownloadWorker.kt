@@ -92,6 +92,9 @@ import org.skepsun.kototoro.core.util.progress.RealtimeEtaEstimator
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.download.domain.DownloadProgress
 import org.skepsun.kototoro.download.domain.DownloadState
+import org.skepsun.kototoro.download.domain.FailedChapterImage
+import org.skepsun.kototoro.download.domain.NovelFailedImageStore
+import org.skepsun.kototoro.extensions.runtime.tachiyomi.TachiyomiXSourceAdapter
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.data.LocalStorageCache
 import org.skepsun.kototoro.local.data.LocalStorageChanges
@@ -121,10 +124,13 @@ import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.reader.domain.ReaderSuperResolutionManager
 import org.skepsun.kototoro.reader.domain.PageLoader
 import org.skepsun.kototoro.reader.novel.NovelContentLoader
+import org.skepsun.kototoro.reader.novel.NovelHtmlImageResolver
+import org.skepsun.kototoro.reader.novel.NovelHtmlNormalizer
 import org.skepsun.kototoro.reader.novel.NovelParagraphSplitter
 import org.skepsun.kototoro.reader.novel.NovelParagraphType
 import org.skepsun.kototoro.reader.novel.NovelReaderSettings
 import org.skepsun.kototoro.reader.novel.NovelTranslationProcessor
+import org.skepsun.kototoro.reader.novel.applyRetryResults
 import org.skepsun.kototoro.reader.translate.domain.ReaderPageTranslationProcessor
 import org.jsoup.Jsoup
 import com.hippo.unifile.UniFile
@@ -1056,15 +1062,15 @@ class DownloadWorker @AssistedInject constructor(
                     continue
                 }
 
+            // T4A.4：Jsoup Safelist 清洗（恶意标签/属性/javascript: 全部剔除），
+            // 再基于 baseUrl 把相对 src 解析为绝对 URL 后提取图片
+            val baseUrl = resolveNovelBaseUrl(content, chapter.value)
+            val safeHtml = NovelHtmlNormalizer.sanitize(content.html, baseUrl)
             val imageHeaderMap = LinkedHashMap<String, Map<String, String>>()
             content.images.forEach { imageHeaderMap[it.url] = it.headers }
-            runCatching {
-                val parsed = Jsoup.parse(content.html)
-                parsed.select("img").forEach { img ->
-                    val src = img.attr("data-src").ifBlank { img.attr("src") }.trim()
-                    if (src.isNotBlank() && !src.startsWith("data:", true)) {
-                        imageHeaderMap.putIfAbsent(src, emptyMap())
-                    }
+            NovelHtmlImageResolver.extractImageUrls(safeHtml, baseUrl).forEach { url ->
+                if (!url.startsWith("data:", ignoreCase = true) && !url.startsWith("file:", ignoreCase = true)) {
+                    imageHeaderMap.putIfAbsent(url, emptyMap())
                 }
             }
 
@@ -1087,17 +1093,8 @@ class DownloadWorker @AssistedInject constructor(
                 pageNumber++
             }
 
-                val rewrittenHtml = rewriteHtmlWithCustomNames(content.html, nameMap.mapValues { it.value.name })
-                val htmlFile = destination.createTempFile("html").apply {
-                    writeText(rewrittenHtml)
-                }
-                val htmlName = buildPageName(chapter, 0, "html")
-                output.addPage(
-                    chapter = chapter,
-                    file = htmlFile,
-                    pageNumber = 0,
-                    type = "text/html".toMimeTypeOrNull(),
-                )
+            val mapping = nameMap.mapValues { it.value.name }
+            val rewrittenHtml = rewriteHtmlWithCustomNames(safeHtml, mapping)
 
             val totalImages = nameMap.size
             val normalizedTotal = 100
@@ -1113,6 +1110,7 @@ class DownloadWorker @AssistedInject constructor(
                 isStuck = etaEstimator.isStuck(),
             ))
 
+            val failedImages = mutableListOf<FailedChapterImage>()
             nameMap.values.forEachIndexed { imageIndex, download ->
                 val headers = download.headers.toMutableMap()
                 if (headers.none { it.key.equals("referer", ignoreCase = true) }) {
@@ -1144,13 +1142,76 @@ class DownloadWorker @AssistedInject constructor(
                         eta = etaEstimator.getEta(),
                         isStuck = etaEstimator.isStuck(),
                     ))
-                }.onFailure {
-                    android.util.Log.d("DownloadWorker", "downloadNovelChapters: image download failed")
+                }.onFailure { e ->
+                    android.util.Log.d("DownloadWorker", "downloadNovelChapters: image failed: ${download.url}")
+                    failedImages += FailedChapterImage(
+                        chapterId = chapter.value.id,
+                        url = download.url,
+                        localName = null,
+                        error = e.message ?: e.javaClass.simpleName,
+                        failedAt = System.currentTimeMillis(),
+                    )
                 }
             }
 
-            val mapping = nameMap.mapValues { it.value.name }
-            output.putChapterImages(chapter.value.id, mapping)
+            // T4A.5：失败元数据落盘（初始失败状态）；重试后再用最终状态覆盖
+            val failedStoreFile = NovelFailedImageStore.sidecarFile(destination, manga.id, chapter.value.id)
+            if (failedImages.isNotEmpty()) {
+                NovelFailedImageStore.write(failedStoreFile, chapter.value.id, failedImages)
+            }
+
+            // T4A.5：单图重试（不做整章重下）
+            val retriedFiles = retryFailedImages(repo, manga, chapter, destination, nameMap, failedImages)
+            val retriedByUrl = retriedFiles.associateBy { it.first.url }
+            val retriedNames = LinkedHashMap<String, String>()
+            val finalFailed = mutableListOf<FailedChapterImage>()
+            var placeholderIndex = 0
+            for (failed in failedImages) {
+                val planned = nameMap[failed.url]
+                val retriedFile = retriedByUrl[failed.url]
+                if (retriedFile == null || planned == null) {
+                    // 重试仍失败（或映射缺失，理论不发生）：HTML 中以占位名 failed_<n>.jpg 引用
+                    placeholderIndex++
+                    val placeholder = "failed_$placeholderIndex.jpg"
+                    retriedNames[failed.url] = placeholder
+                    retriedFile?.second?.deleteAwait()
+                    finalFailed += failed.copy(
+                        localName = placeholder,
+                        error = (failed.error?.takeIf { it.isNotBlank() }?.plus("; ") ?: "") + "retry failed",
+                    )
+                    continue
+                }
+                // 重试成功：以原计划的 pageNumber 写进章节输出（与 HTML 内 src 同名）
+                val type = planned.mime ?: getMediaType(failed.url, retriedFile.second)
+                output.addPage(
+                    chapter = chapter,
+                    file = retriedFile.second,
+                    pageNumber = planned.pageNumber,
+                    type = type,
+                )
+                if (retriedFile.second.extension == "tmp") retriedFile.second.deleteAwait()
+                retriedNames[failed.url] = planned.name
+            }
+
+            // T4A.5：根据失败列表 + 重试成功集合生成最终 HTML / 最终 mapping（纯函数）
+            val retryResult = applyRetryResults(rewrittenHtml, mapping, retriedNames)
+
+            // 章节 HTML 以 page 0 落盘（放在重试之后，保证占位替换已反映在最终 HTML 中）
+            val htmlFile = destination.createTempFile("html").apply {
+                writeText(retryResult.html)
+            }
+            output.addPage(
+                chapter = chapter,
+                file = htmlFile,
+                pageNumber = 0,
+                type = "text/html".toMimeTypeOrNull(),
+            )
+
+            if (finalFailed.isNotEmpty()) {
+                NovelFailedImageStore.write(failedStoreFile, chapter.value.id, finalFailed)
+            }
+
+            output.putChapterImages(chapter.value.id, retryResult.mapping)
             if (output.flushChapter(chapter.value)) {
                 runCatchingCancellable {
                     localStorageChanges.emit(LocalContentParser(output.rootFile, applicationContext.cacheDir).getContent(withDetails = false))
@@ -1197,6 +1258,64 @@ class DownloadWorker @AssistedInject constructor(
             }
             doc.outerHtml()
         }.getOrDefault(html)
+    }
+
+    /**
+     * T4A.4：解析小说章节的图片基准 URL。
+     * 优先取 [NovelChapterContent.images] 首图的 origin；否则回退到
+     * [TachiyomiXSourceAdapter.baseUrlOrNull]（当 source 是 Tachiyomi 系 HttpSource 时）。
+     * 用于把清洗后 HTML 中的相对图片 src 解析为绝对 URL。
+     */
+    private fun resolveNovelBaseUrl(
+        content: NovelChapterContent,
+        chapter: ContentChapter,
+    ): String? {
+        content.images.firstOrNull()?.url?.let { url ->
+            val uri = runCatching { java.net.URI(url) }.getOrNull()
+            val scheme = uri?.scheme
+            val host = uri?.host
+            if (!scheme.isNullOrBlank() && !host.isNullOrBlank()) {
+                return "$scheme://$host"
+            }
+        }
+        return (chapter.source as? TachiyomiXSourceAdapter)?.baseUrlOrNull
+    }
+
+    /**
+     * T4A.5：单图重试（不做整章重下）。
+     *
+     * 仅对失败列表（[failedImages] 中的图 localName 均为 null，即从未下载成功）逐张重新
+     * [downloadFile]，返回成功重试的 `(FailedChapterImage, 下载 File)` 对；
+     * 仍失败的图不返回，由调用方写入占位名并保持失败元数据。
+     */
+    private suspend fun retryFailedImages(
+        repo: ContentRepository,
+        manga: Content,
+        chapter: IndexedValue<ContentChapter>,
+        destination: File,
+        nameMap: Map<String, ImageDownload>,
+        failedImages: List<FailedChapterImage>,
+    ): List<Pair<FailedChapterImage, File>> {
+        val retried = mutableListOf<Pair<FailedChapterImage, File>>()
+        for (failed in failedImages) {
+            val planned = nameMap[failed.url] ?: continue
+            val headers = planned.headers.toMutableMap()
+            if (headers.none { it.key.equals("referer", ignoreCase = true) }) {
+                headers["Referer"] = deriveReferer(failed.url, manga)
+            }
+            try {
+                val file = downloadFile(
+                    repo = repo,
+                    url = failed.url,
+                    destination = destination,
+                    headers = headers,
+                )
+                retried += failed to file
+            } catch (e: Exception) {
+                android.util.Log.d("DownloadWorker", "downloadNovelChapters: image retry failed: ${failed.url}")
+            }
+        }
+        return retried
     }
 
     private data class ImageDownload(

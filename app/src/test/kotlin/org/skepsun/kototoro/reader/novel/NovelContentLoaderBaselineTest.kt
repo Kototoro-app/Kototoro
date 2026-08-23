@@ -94,10 +94,10 @@ class NovelContentLoaderBaselineTest {
     }
 
     @Test
-    fun `br with attributes does NOT become a newline it is stripped joining the lines`() {
-        // 现状：<br class="..."> 不匹配 <br\s*/?>，随后被通用标签剥离删除，换行丢失。
+    fun `br with attributes is normalized to a newline by the safelist`() {
+        // Phase 4A 后：Jsoup Safelist 保留 <br>（丢弃其属性），换行不再丢失。
         val input = "第一行<br class=\"x\">第二行"
-        assertEquals("第一行第二行", convert(input))
+        assertEquals("第一行\n第二行", convert(input))
     }
 
     // ---------- 3. <p> 段落 ----------
@@ -132,10 +132,10 @@ class NovelContentLoaderBaselineTest {
     }
 
     @Test
-    fun `uppercase SCRIPT block is NOT matched by the case-sensitive regex and its content leaks as text`() {
-        // 现状：脚本剥离正则未加 (?i)，大写 <SCRIPT> 只被通用标签剥离删掉标签本身，内容泄漏为正文。
+    fun `uppercase SCRIPT block is removed entirely by the case-insensitive safelist`() {
+        // Phase 4A 后：Jsoup Safelist 大小写不敏感地清理 <SCRIPT> 及其内容，不再泄漏。
         val input = "<p>前</p><SCRIPT>evil()</SCRIPT><p>后</p>"
-        assertEquals("前\nevil()后\n", convert(input))
+        assertEquals("前\n后\n", convert(input))
     }
 
     @Test
@@ -154,19 +154,19 @@ class NovelContentLoaderBaselineTest {
     // ---------- 6. <img src> ----------
 
     @Test
-    fun `relative img src is kept verbatim and rendered as an image placeholder marker`() {
-        // 现状：相对路径不做任何 URL 解析/重写，原样出现在 📷 [图片: ...] 占位中；
-        // 占位前后各补一个换行，使其在段落切分时成为独立行。
+    fun `relative img src with no baseUrl is dropped by the safelist no placeholder`() {
+        // Phase 4A 后：无 baseUrl 时相对 src 无法通过协议校验被 Safelist 丢弃，img 静默剥离。
+        // （有 baseUrl 时由 NovelHtmlImageResolver 解析为绝对 URL 并在下载路径保留。）
         val input = "<p>插图：</p><img src=\"images/pic1.jpg\" alt=\"风景\"><p>继续</p>"
-        assertEquals("插图：\n\n📷 [图片: images/pic1.jpg]\n继续\n", convert(input))
+        assertEquals("插图：\n继续\n", convert(input))
     }
 
     @Test
-    fun `img src vs data-src pick the rightmost attribute wins for the placeholder`() {
-        // 现状（正则贪心回溯的结果）：占位取标签中“最靠右”的 src/data-src 属性；
-        // data-src 本身没有优先权（与本类 rewriteLocalImageSrc 中 Jsoup 显式优先 data-src 不同）。
+    fun `img data-src relative values without baseUrl survive and are placeholder-rendered`() {
+        // Phase 4A 后：Safelist 保留 data-src 属性（无协议校验），src 相对值被丢弃；
+        // 无 src 时占位优先取 data-src（与 rewriteLocalImageSrc 的 Jsoup 语义一致）。
         val input = "<img src=\"a.jpg\" data-src=\"a.webp\"><img data-src=\"b.webp\" src=\"b.jpg\">"
-        assertEquals("\n📷 [图片: a.webp]\n\n📷 [图片: b.jpg]\n", convert(input))
+        assertEquals("\n📷 [图片: a.webp]\n\n📷 [图片: b.webp]\n", convert(input))
     }
 
     @Test
@@ -196,10 +196,10 @@ class NovelContentLoaderBaselineTest {
     }
 
     @Test
-    fun `invalid hex and out-of-range numeric entities are left untouched`() {
-        // 现状：runCatching 兜底，解析失败时保留原始实体文本。
+    fun `invalid hex and out-of-range numeric entities after the safelist`() {
+        // Phase 4A 后：Jsoup 把越界数值实体 &#99999999; 归一化为 U+FFFD，非法十六进制保留原文。
         val input = "&#xZZ; &#99999999;"
-        assertEquals(input, convert(input))
+        assertEquals("&#xZZ; \uFFFD", convert(input))
     }
 
     @Test

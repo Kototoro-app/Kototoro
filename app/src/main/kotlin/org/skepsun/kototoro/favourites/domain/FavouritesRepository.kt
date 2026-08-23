@@ -50,6 +50,8 @@ import org.skepsun.kototoro.work.domain.matchesPublicationStateFilters
 import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.space.domain.SpaceId
+import org.skepsun.kototoro.tracker.domain.SourceTrackerEvent
+import org.skepsun.kototoro.tracker.domain.SourceTrackerEventEmitter
 import javax.inject.Inject
 
 private const val TAG = "FavouritesRepository"
@@ -73,6 +75,7 @@ class FavouritesRepository @Inject constructor(
     private val entityGraphRepository: EntityGraphRepository,
     private val workAggregateRepository: WorkAggregateRepository,
     private val settings: AppSettings,
+    private val sourceTrackerEvents: SourceTrackerEventEmitter,
 ) {
 
     data class QuickFilterMetadata(
@@ -434,6 +437,7 @@ class FavouritesRepository @Inject constructor(
             )
         }
         addResolvedAnchorsToCategory(categoryId, anchorContents, entityIdsByMangaId)
+        emitFavoriteAdded(anchorContents)
     }
 
     suspend fun addToCategoryAsSeparateWorks(categoryId: Long, mangas: Collection<Content>) {
@@ -442,6 +446,7 @@ class FavouritesRepository @Inject constructor(
             manga.id to entityGraphRepository.ensureIndependentLocalWorkEntity(manga).id
         }
         addResolvedAnchorsToCategory(categoryId, anchorContents, entityIdsByMangaId)
+        emitFavoriteAdded(anchorContents)
     }
 
     private suspend fun addResolvedAnchorsToCategory(
@@ -509,6 +514,7 @@ class FavouritesRepository @Inject constructor(
             }
             db.getChaptersDao().gc()
         }
+        emitUnfavoriteRemoved(ids)
         return ReversibleHandle { recoverToFavourites(resolvedEntityIds) }
     }
 
@@ -520,6 +526,7 @@ class FavouritesRepository @Inject constructor(
             }
             db.getChaptersDao().gc()
         }
+        emitUnfavoriteIfLastCategory(ids)
         return ReversibleHandle { recoverToCategory(categoryId, resolvedEntityIds) }
     }
 
@@ -911,5 +918,76 @@ class FavouritesRepository @Inject constructor(
             }
         }
         return (localContents.values + fallbackContents.values.filterNot { it.id in localContents }).distinctBy { it.id }
+    }
+
+    /**
+     * T4B.1: favorite write succeeded and committed — publish the unified event.
+     *
+     * The DB write has already completed; a failing emitter must never break the local result,
+     * so the emit is fire-and-forget and exception-safe.
+     */
+    private fun emitFavoriteAdded(contents: Collection<Content>) {
+        for (content in contents) {
+            emitSourceTrackerEvent(
+                SourceTrackerEvent.Favorite(
+                    contentId = content.id,
+                    sourceKey = content.source.name,
+                    added = true,
+                    contentUrl = content.eventUrl(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * T4B.1: full unfavorite committed — publish [SourceTrackerEvent.Unfavorite] for every
+     * removable id that still resolves to a stored projection.
+     */
+    private suspend fun emitUnfavoriteRemoved(mangaIds: Collection<Long>) {
+        for (mangaId in mangaIds) {
+            val content = db.getMangaDao().find(mangaId)?.toContent() ?: continue
+            emitSourceTrackerEvent(
+                SourceTrackerEvent.Unfavorite(
+                    contentId = content.id,
+                    sourceKey = content.source.name,
+                    contentUrl = content.eventUrl(),
+                ),
+            )
+        }
+    }
+
+    /**
+     * T4B.1: category-scoped removal committed. Only a *true* unfavorite (work no longer in
+     * any category) produces an event; removing from one of several categories is not a
+     * website-facing state change.
+     */
+    private suspend fun emitUnfavoriteIfLastCategory(mangaIds: Collection<Long>) {
+        for (mangaId in mangaIds) {
+            val content = db.getMangaDao().find(mangaId)?.toContent() ?: continue
+            val entityId = resolveFavouriteEntityId(mangaId)
+            if (entityId != null && db.getWorkFavouritesDao().findCategoriesCount(entityId) != 0) {
+                continue
+            }
+            emitSourceTrackerEvent(
+                SourceTrackerEvent.Unfavorite(
+                    contentId = content.id,
+                    sourceKey = content.source.name,
+                    contentUrl = content.eventUrl(),
+                ),
+            )
+        }
+    }
+
+    /** Best-effort post-commit publish: DB result is already final, so never propagate emitter failures. */
+    private fun emitSourceTrackerEvent(event: SourceTrackerEvent) {
+        try {
+            sourceTrackerEvents.emit(event)
+        } catch (e: Exception) {
+            // Local write already succeeded; a broken emitter must not surface to the caller.
+        }
+    }
+
+    private fun Content.eventUrl(): String? {
+        return publicUrl.takeIf { it.isNotBlank() } ?: url.takeIf { it.isNotBlank() }
     }
 }
