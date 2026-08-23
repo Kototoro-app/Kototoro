@@ -45,4 +45,19 @@ class ContentSourceTitleTest : FunSpec({
 
         source.getTitle(context) shouldBe "My Novel (中文)"
     }
+
+    test("anonymous TSUNDOKU_ wrapper shows a loading placeholder instead of the raw key") {
+        // Reproduces a saved novel whose Tsundoku extension package has been uninstalled:
+        // the row keeps the `TSUNDOKU_{id}` key until the live source can be resolved, and
+        // the title must not render the raw key on screen.
+        val anonymous = ContentSource("TSUNDOKU_1400001")
+
+        anonymous.getTitle(context) shouldBe "Loading Tsundoku source..."
+    }
+
+    test("anonymous IREADER_ wrapper shows a loading placeholder instead of the raw key") {
+        val anonymous = ContentSource("IREADER_10")
+
+        anonymous.getTitle(context) shouldBe "Loading IReader source..."
+    }
 })

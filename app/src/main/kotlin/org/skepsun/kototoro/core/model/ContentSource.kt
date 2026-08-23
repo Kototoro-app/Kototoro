@@ -276,7 +276,10 @@ fun ContentSource.getTitle(context: Context): String {
         is org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource -> source.displayName
         is org.skepsun.kototoro.cloudstream.model.CloudstreamSource -> source.displayName
         else -> {
-            // Try to handle anonymous wrappers for JSON, Mihon, or Aniyomi sources
+            // Try to handle anonymous wrappers for APK-housed ecosystems (JSON, Mihon,
+            // Aniyomi, IReader, Tsundoku, Cloudstream). The live instance is being resolved
+            // asynchronously by the callers; until then show a stable placeholder instead of
+            // leaking the raw `PREFIX_{id}` key on screen.
             if (source.name.startsWith("MIHON_")) {
                 "Loading Mihon source..."
             } else if (source.name.startsWith("CLOUDSTREAM_")) {
@@ -285,6 +288,10 @@ fun ContentSource.getTitle(context: Context): String {
                 "Loading JSON source..."
             } else if (source.name.startsWith("ANIYOMI_")) {
                 "Loading Aniyomi source..."
+            } else if (source.name.startsWith("IREADER_")) {
+                "Loading IReader source..."
+            } else if (source.name.startsWith("TSUNDOKU_")) {
+                "Loading Tsundoku source..."
             } else if (source.name.startsWith("TRACKING_")) {
                 source.name.removePrefix("TRACKING_")
             } else {

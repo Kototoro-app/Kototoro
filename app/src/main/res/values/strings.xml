@@ -2077,7 +2077,7 @@
     <string name="long_ago_read">Long time ago read</string>
     <string name="unread">Unread</string>
     <string name="enable_source">Enable source</string>
-    <string name="unsupported_source">This manga source is not supported</string>
+    <string name="unsupported_source">This source is not supported</string>
     <string name="unsupported_novel_source">This novel source is not supported</string>
     <string name="unsupported_video_source">This video source is not supported</string>
     <string name="show_pages_thumbs">Show pages thumbnails</string>
