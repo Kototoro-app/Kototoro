@@ -53,6 +53,7 @@ class ContentRepositoryFactoryTest {
 	private val mihonContentSourceResolver = mockk<MihonContentSourceResolver>()
 	private val aniyomiContentSourceResolver = mockk<AniyomiContentSourceResolver>()
 	private val ireaderContentSourceResolver = mockk<IReaderContentSourceResolver>()
+	private val tsundokuContentSourceResolver = mockk<TsundokuContentSourceResolver>()
 	private val parserContentRepositoryProvider = mockk<ParserContentRepositoryProvider>()
 	private val kotatsuContentRepositoryProvider = mockk<KotatsuContentRepositoryProvider>()
 	private val testContentRepositoryProvider = mockk<TestContentRepositoryProvider>()
@@ -77,6 +78,7 @@ class ContentRepositoryFactoryTest {
 			mihonContentSourceResolver,
 			aniyomiContentSourceResolver,
 			ireaderContentSourceResolver,
+			tsundokuContentSourceResolver,
 		).forEach { resolver ->
 			every { resolver.supports(any()) } returns false
 			every { resolver.resolve(any()) } returns null
@@ -103,6 +105,7 @@ class ContentRepositoryFactoryTest {
 			mihonContentSourceResolver = mihonContentSourceResolver,
 			aniyomiContentSourceResolver = aniyomiContentSourceResolver,
 			ireaderContentSourceResolver = ireaderContentSourceResolver,
+			tsundokuContentSourceResolver = tsundokuContentSourceResolver,
 		)
 		repositoryProviderRegistry = ContentRepositoryProviderRegistry(
 			builtinContentRepositoryProvider = BuiltinContentRepositoryProvider(
