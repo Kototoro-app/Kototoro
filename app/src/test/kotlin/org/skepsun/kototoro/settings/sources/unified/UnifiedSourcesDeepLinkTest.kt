@@ -41,12 +41,12 @@ class UnifiedSourcesDeepLinkTest {
     fun `all uri parameters parse`() {
         val link = UnifiedSourcesDeepLinkParser.fromUri(
             uriWithParameters(
-                "tab" to "Recovery",
+                "tab" to "Sources",
                 "package" to "com.example.ext",
                 "source" to "TSUNDOKU_9001",
             ),
         )
-        assertEquals(UnifiedSourcesDeepLinkParser.TAB_RECOVERY, link.initialTab)
+        assertEquals(UnifiedSourcesDeepLinkParser.TAB_SOURCES, link.initialTab)
         assertEquals("com.example.ext", link.packageFilter)
         assertEquals("TSUNDOKU_9001", link.sourceKey)
     }
@@ -84,10 +84,6 @@ class UnifiedSourcesDeepLinkTest {
         assertEquals(
             UnifiedSourcesDeepLinkParser.TAB_INSTALLED,
             UnifiedSourcesDeepLinkParser.fromUri(uriWithParameters("tab" to "PACKAGES")).initialTab,
-        )
-        assertEquals(
-            UnifiedSourcesDeepLinkParser.TAB_RECOVERY,
-            UnifiedSourcesDeepLinkParser.fromUri(uriWithParameters("tab" to "recovery")).initialTab,
         )
     }
 
@@ -141,7 +137,7 @@ class UnifiedSourcesDeepLinkTest {
     @Test
     fun `uri takes precedence over extras on every field`() {
         val uri = UnifiedSourcesDeepLink(
-            initialTab = UnifiedSourcesDeepLinkParser.TAB_RECOVERY,
+            initialTab = UnifiedSourcesDeepLinkParser.TAB_INSTALLED,
             packageFilter = "uri-pkg",
             sourceKey = null,
         )
@@ -151,7 +147,7 @@ class UnifiedSourcesDeepLinkTest {
             sourceKey = "TSUNDOKU_9001",
         )
         val merged = UnifiedSourcesDeepLinkParser.merge(uri, extras)
-        assertEquals(UnifiedSourcesDeepLinkParser.TAB_RECOVERY, merged.initialTab)
+        assertEquals(UnifiedSourcesDeepLinkParser.TAB_INSTALLED, merged.initialTab)
         assertEquals("uri-pkg", merged.packageFilter)
         // Uri left this field null, so the extras fill the gap.
         assertEquals("TSUNDOKU_9001", merged.sourceKey)

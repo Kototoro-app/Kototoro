@@ -24,7 +24,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
     private val viewModel by viewModels<UnifiedSourcesViewModel>()
     private var pendingFileImportKind: UnifiedSourceKind? = null
     private var pendingFileImportEnabled = true
-    private var pendingRecoverySideloadSourceKey: String? = null
     private var activeDeepLink: UnifiedSourcesDeepLink? = null
 
     private val openRepositoryFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -39,15 +38,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
         if (uri == null) return@registerForActivityResult
         persistReadPermission(uri)
         viewModel.importLocalJar(uri)
-    }
-
-    private val openRecoverySideload = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        val sourceKey = pendingRecoverySideloadSourceKey ?: return@registerForActivityResult
-        pendingRecoverySideloadSourceKey = null
-        if (uri != null) {
-            persistReadPermission(uri)
-            viewModel.onSideloadPicked(sourceKey, uri)
-        }
     }
 
     private val installLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -71,7 +61,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
             UnifiedSourcesContent(
                 initialAddRepositoryKind = initialKind,
                 initialAddRepositoryUrl = initialUrl,
-                onOpenSideloadPicker = ::openRecoverySideloadPicker,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -108,7 +97,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
     fun UnifiedSourcesContent(
         initialAddRepositoryKind: UnifiedSourceKind? = null,
         initialAddRepositoryUrl: String? = null,
-        onOpenSideloadPicker: (String) -> Unit = {},
         modifier: Modifier = Modifier,
     ) {
         var searchActive by remember { mutableStateOf(false) }
@@ -120,7 +108,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
             onActivePanelChange = { activePanel = it },
             initialAddRepositoryKind = initialAddRepositoryKind,
             initialAddRepositoryUrl = initialAddRepositoryUrl,
-            onOpenSideloadPicker = onOpenSideloadPicker,
             viewModel = viewModel,
             onBrowseSource = { item -> router.openList(item.source, null, null) },
             onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
@@ -158,19 +145,6 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
     private fun openLocalJarPicker() {
         openLocalJar.launch(
             arrayOf(
-                "application/java-archive",
-                "application/zip",
-                "*/*",
-            ),
-        )
-    }
-
-    /** Launches the system document picker for a recovery side-load (APK/JAR/zip). */
-    private fun openRecoverySideloadPicker(sourceKey: String) {
-        pendingRecoverySideloadSourceKey = sourceKey
-        openRecoverySideload.launch(
-            arrayOf(
-                "application/vnd.android.package-archive",
                 "application/java-archive",
                 "application/zip",
                 "*/*",

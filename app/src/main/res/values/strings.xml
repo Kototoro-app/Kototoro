@@ -3526,34 +3526,4 @@
     <string name="content_types">Content types</string>
     <string name="source_types">Source types</string>
     <string name="custom_space_rule_summary">%1$d content types · %2$d languages · %3$d source types</string>
-    <!-- Source recovery (Tsundoku Phase 5) -->
-    <string name="recovery_filter">Recovery</string>
-    <string name="recovery_missing_sources_summary">%1$d of %2$d sources need attention</string>
-    <string name="recovery_show">Show</string>
-    <string name="recovery_hide">Hide</string>
-    <string name="recovery_action">Recover</string>
-    <string name="recovery_action_sideload">Sideload</string>
-    <string name="recovery_action_reimport">Re-import</string>
-    <string name="recovery_action_confirm">Confirm</string>
-    <string name="recovery_status_resolved">Resolved</string>
-    <string name="recovery_status_missing">Missing</string>
-    <string name="recovery_status_repository">Repository</string>
-    <string name="recovery_status_sideload">Sideload</string>
-    <string name="recovery_status_reimport">Re-import</string>
-    <string name="recovery_status_signature">Signature changed</string>
-    <string name="recovery_result_success_title">Source recovered</string>
-    <string name="recovery_result_failure_title">Recovery failed</string>
-    <string name="recovery_result_success_message">%1$s was recovered successfully.</string>
-    <string name="recovery_result_failure_message">Could not recover %1$s. Check the repository, package, or network and try again.</string>
-    <string name="recovery_result_retry">Retry</string>
-    <string name="recovery_signature_title">Signature changed</string>
-    <string name="recovery_signature_message">The signing certificate of %1$s changed since this source was last associated. Re-associate and keep using it?</string>
-    <string name="recovery_signature_confirm">Re-associate</string>
-    <string name="recovery_signature_reject">Keep unassociated</string>
-    <string name="recovery_sideload_title">Sideload package</string>
-    <string name="recovery_sideload_message">Choose the package (APK / JAR) that provides %1$s.</string>
-    <string name="recovery_sideload_pick">Choose file</string>
-    <string name="recovery_root_badge_summary">%1$d source(s) need attention</string>
-    <string name="recovery_sources_entry_title">Source recovery</string>
-    <string name="recovery_sources_entry_summary">Restore missing sources (extensions, sideloads, repositories)</string>
 </resources>

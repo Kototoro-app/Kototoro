@@ -23,7 +23,6 @@ import org.skepsun.kototoro.core.db.TABLE_SOURCES
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
-import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.extensions.PluginContentSource
 import org.skepsun.kototoro.core.extensions.PluginMangaSource
@@ -373,11 +372,7 @@ class UnifiedSourceCatalogRepository @Inject constructor(
     }
 
     fun observeSources(): Flow<List<UnifiedSourceItem>> {
-        val dbChanges = database.invalidationTracker.createFlow(
-            TABLE_SOURCES,
-            TABLE_JSON_SOURCES,
-            "source_origins",
-        )
+        val dbChanges = database.invalidationTracker.createFlow(TABLE_SOURCES, TABLE_JSON_SOURCES)
             .onStart { emit(emptySet()) }
         val runtimeChanges = observeRuntimeSourceChanges()
         val settingsChanges = settings.observeAsFlow(AppSettings.KEY_SOURCES_ENABLED_ALL) {
@@ -432,19 +427,13 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         installedApkSources.forEach { sourceMap[it.name] = it }
         jsonSummaries.forEach { sourceMap[it.id] = JsonSourceListSource(it) }
 
-        val items = buildList {
-            sourceMap.values.forEach { source ->
+        val items = sourceMap.values
+            .map { source ->
                 val jsonSummary = jsonById[source.name]
                 val jsonEntity = jsonEntityById[source.name]
                 val sourceEntity = sourceEntities[source.name]
-                add(source.toUnifiedSourceItem(sourceEntity, jsonSummary, jsonEntity))
+                source.toUnifiedSourceItem(sourceEntity, jsonSummary, jsonEntity)
             }
-            // Uninstalled-but-recorded sources (recovery origins): their packages are gone so
-            // they never reach the runtime pools above. Inject them as placeholder rows so the
-            // missing-source recovery UI (需侧载 / 恢复 chips and the recovery filter) is
-            // actually visible instead of an empty list.
-            addAll(buildMissingOriginItems(sourceMap.keys))
-        }
             .sortedWith(compareBy({ it.kind.ordinal }, { it.title.lowercase() }))
         Log.d(
             "UnifiedSourceCatalog",
@@ -472,46 +461,6 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 add(source)
             }
         }
-    }
-
-    /**
-     * Placeholder rows for recorded source origins whose package/locator is no longer present
-     * in the runtime pools. Kept out of the list while the source is still available (its key
-     * is already in [existingKeys]); only truly missing origins surface, with the recovery
-     * status tag + action chip rendered on the row.
-     */
-    private suspend fun buildMissingOriginItems(existingKeys: Set<String>): List<UnifiedSourceItem> {
-        return database.getSourceOriginsDao().observeAll().first()
-            .asSequence()
-            .filter { it.sourceKey.isNotBlank() && it.sourceKey !in existingKeys }
-            .map { it.toMissingUnifiedSourceItem() }
-            .toList()
-    }
-
-    private fun SourceOriginEntity.toMissingUnifiedSourceItem(): UnifiedSourceItem {
-        val resolvedKind = UnifiedSourceKind.entries.firstOrNull { it.name == kind } ?: UnifiedSourceKind.NATIVE
-        val resolvedContentType = org.skepsun.kototoro.parsers.model.ContentType.entries
-            .firstOrNull { it.name == contentType }
-            ?: org.skepsun.kototoro.parsers.model.ContentType.OTHER
-        return UnifiedSourceItem(
-            id = sourceKey,
-            kind = resolvedKind,
-            source = org.skepsun.kototoro.core.model.ContentSource(sourceKey),
-            title = displayName?.takeIf { it.isNotBlank() }
-                ?: sourceKey.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.getDefault()) else it.toString() },
-            language = null,
-            contentType = resolvedContentType,
-            repositoryId = repositoryUrl?.let { repositoryId(resolvedKind, it) },
-            repositoryName = repositoryName,
-            packageId = packageName?.let { packageId(resolvedKind, it) },
-            packageName = packageName,
-            isEnabled = false,
-            isPinned = false,
-            isAvailable = false,
-            isInstalled = false,
-            isNsfw = false,
-            isBroken = false,
-        )
     }
 
     /**

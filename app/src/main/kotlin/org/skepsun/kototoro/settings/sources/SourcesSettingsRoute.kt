@@ -36,7 +36,6 @@ fun SourcesSettingsRoute(
     viewModel: SourcesSettingsViewModel,
     onSetupWizardClick: () -> Unit,
     onGlobalTagBlacklistClick: () -> Unit,
-    onRecoveryClick: () -> Unit = {},
 ) {
     val isLinksEnabled = viewModel.isLinksEnabled.collectAsStateWithLifecycle().value
     val installedJarNames by viewModel.installedJarNames.collectAsStateWithLifecycle()
@@ -140,7 +139,6 @@ fun SourcesSettingsRoute(
         onSetupWizardClick = onSetupWizardClick,
         onJarPriorityOrderChange = viewModel::persistJarPriorityOrder,
         onShowBrokenSourcesChange = { settings.isShowBrokenSources = it },
-        onRecoveryClick = onRecoveryClick,
         onAdultContentFilterTargetsChange = { targets ->
             val hideFromSourcesAndBrowse = AdultContentFilterTarget.SOURCES_AND_BROWSE in targets
             val hideFromHistory = AdultContentFilterTarget.HISTORY in targets

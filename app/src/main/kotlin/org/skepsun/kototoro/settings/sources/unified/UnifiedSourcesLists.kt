@@ -61,7 +61,6 @@ import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
-import org.skepsun.kototoro.extensions.recovery.SourceRecoveryStatus
 import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
@@ -79,9 +78,6 @@ internal fun UnifiedSourceList(
     selectedSourceIds: Set<String>,
     onSourceSelectionChange: (Set<String>) -> Unit,
     onSourcePinnedChange: (String, Boolean) -> Unit,
-    recoveryStatusByKey: Map<String, SourceRecoveryStatus> = emptyMap(),
-    inFlightSourceKeys: Set<String> = emptySet(),
-    onRunRecoveryAction: (UnifiedSourceItem) -> Unit = {},
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val horizontalPadding = if (expressive) 8.dp else 0.dp
@@ -171,9 +167,6 @@ internal fun UnifiedSourceList(
                             onOpenSourceSettings = onOpenSourceSettings,
                             onSourceEnabledChange = onSourceEnabledChange,
                             onSourcePinnedChange = onSourcePinnedChange,
-                            recoveryStatus = recoveryStatusByKey[item.id],
-                            recoveryInFlight = item.id in inFlightSourceKeys,
-                            onRunRecoveryAction = onRunRecoveryAction,
                         )
                         if (expressive) {
                             Spacer(modifier = Modifier.height(3.dp))
@@ -490,9 +483,6 @@ private fun UnifiedSourceRow(
     onOpenSourceSettings: (UnifiedSourceItem) -> Unit,
     onSourceEnabledChange: (String, Boolean) -> Unit,
     onSourcePinnedChange: (String, Boolean) -> Unit,
-    recoveryStatus: SourceRecoveryStatus? = null,
-    recoveryInFlight: Boolean = false,
-    onRunRecoveryAction: (UnifiedSourceItem) -> Unit = {},
 ) {
     val context = LocalContext.current
     var menuExpanded by rememberSaveable(item.id) { mutableStateOf(false) }
@@ -593,27 +583,6 @@ private fun UnifiedSourceRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val effectiveRecoveryStatus = recoveryStatus?.takeIf { it != SourceRecoveryStatus.RESOLVED }
-            if (effectiveRecoveryStatus != null) {
-                Row(
-                    modifier = Modifier.padding(top = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RecoveryStatusTag(status = effectiveRecoveryStatus)
-                    if (recoveryInFlight) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        CompactActionChip(
-                            onClick = { onRunRecoveryAction(item) },
-                            label = { Text(stringResource(effectiveRecoveryStatus.recoveryActionLabelRes())) },
-                        )
-                    }
-                }
-            }
         }
         Box {
             IconButton(

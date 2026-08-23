@@ -38,7 +38,6 @@ object UnifiedSourcesDeepLinkParser {
     const val TAB_SOURCES = "sources"
     const val TAB_REPOS = "repos"
     const val TAB_INSTALLED = "installed"
-    const val TAB_RECOVERY = "recovery"
 
     /** Aliases accepted for each canonical tab. Lookup keys are normalized (lowercase). */
     private val TAB_ALIASES = mapOf(
@@ -51,7 +50,6 @@ object UnifiedSourcesDeepLinkParser {
         TAB_INSTALLED to TAB_INSTALLED,
         "packages" to TAB_INSTALLED,
         "package" to TAB_INSTALLED,
-        TAB_RECOVERY to TAB_RECOVERY,
     )
 
     /**

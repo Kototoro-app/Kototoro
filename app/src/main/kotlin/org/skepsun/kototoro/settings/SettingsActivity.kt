@@ -78,7 +78,6 @@ import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
-import org.skepsun.kototoro.extensions.recovery.RecoveryActionCoordinator
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.core.util.FileSize
 import org.skepsun.kototoro.core.util.FoldableUtils
@@ -226,9 +225,6 @@ class SettingsActivity :
     @Inject
     lateinit var onnxModelManager: OnnxModelManager
 
-    @Inject
-    lateinit var recoveryCoordinator: RecoveryActionCoordinator
-
     private val isMasterDetails
         get() = FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
             resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
@@ -288,7 +284,6 @@ class SettingsActivity :
     private var pendingExternalBackupApp: ExternalBackupApp? = null
     private var pendingUnifiedSourcesFileImportKind: UnifiedSourceKind? = null
     private var pendingUnifiedSourcesFileImportEnabled = true
-    private var pendingUnifiedSourcesRecoverySideloadSourceKey: String? = null
     private var unifiedSourcesSearchActive by mutableStateOf(false)
     private var unifiedSourcesActivePanel by mutableStateOf<UnifiedToolbarFilterPanel?>(null)
     private var isLegacyTopBarVisible = false
@@ -419,17 +414,6 @@ class SettingsActivity :
         if (uri == null) return@registerForActivityResult
         persistReadPermission(uri)
         unifiedSourcesViewModel.importLocalJar(uri)
-    }
-
-    private val openUnifiedSourcesRecoverySideload = registerForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        val sourceKey = pendingUnifiedSourcesRecoverySideloadSourceKey ?: return@registerForActivityResult
-        pendingUnifiedSourcesRecoverySideloadSourceKey = null
-        if (uri != null) {
-            persistReadPermission(uri)
-            unifiedSourcesViewModel.onSideloadPicked(sourceKey, uri)
-        }
     }
 
     private val unifiedSourcesInstallLauncher = registerForActivityResult(
@@ -1355,7 +1339,6 @@ class SettingsActivity :
                             ),
                         )
                     },
-                    onRecoveryClick = ::openSourceRecovery,
                 )
             }
             is SettingsDestination.UnifiedSources -> {
@@ -1404,7 +1387,6 @@ class SettingsActivity :
                         onActivePanelChange = { unifiedSourcesActivePanel = it },
                         initialAddRepositoryKind = destination.initialRepositoryKind,
                         initialAddRepositoryUrl = destination.initialRepositoryUrl,
-                        onOpenSideloadPicker = ::openUnifiedSourcesRecoverySideloadPicker,
                         viewModel = unifiedSourcesViewModel,
                         onBrowseSource = { item -> router.openList(item.source, null, null) },
                         onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
@@ -1434,15 +1416,6 @@ class SettingsActivity :
         val searchResults by viewModel.content.collectAsStateWithLifecycle()
         val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
         val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
-        // Missing-source badge on the source-management entry: observed directly from the
-        // app-scoped recovery coordinator so it is populated when the settings root is
-        // opened, without having to visit the extension-management screen first.
-        val recoverySnapshot by recoveryCoordinator.snapshot.collectAsStateWithLifecycle()
-        // Re-derive recovery status once so the count is fresh on first open (the unified
-        // sources ViewModel already does the same when its own screen is opened).
-        LaunchedEffect(Unit) {
-            withContext(Dispatchers.IO) { recoveryCoordinator.refresh() }
-        }
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         SettingsTopBarScaffold(
             title = getString(R.string.settings),
@@ -1473,7 +1446,6 @@ class SettingsActivity :
                     onOpenDestination = { composeDestination ->
                         openDestination(composeDestination, null, true)
                     },
-                    recoveryMissingCount = recoverySnapshot.missingCount,
                 ),
                 searchQuery = searchQuery,
                 searchResults = searchResults,
@@ -1871,28 +1843,6 @@ class SettingsActivity :
                 "application/java-archive",
                 "application/zip",
                 "*/*",
-            ),
-        )
-    }
-
-    private fun openUnifiedSourcesRecoverySideloadPicker(sourceKey: String) {
-        pendingUnifiedSourcesRecoverySideloadSourceKey = sourceKey
-        openUnifiedSourcesRecoverySideload.launch(
-            arrayOf(
-                "application/vnd.android.package-archive",
-                "application/java-archive",
-                "application/zip",
-                "*/*",
-            ),
-        )
-    }
-
-    /** Opens the standalone unified-sources screen with the recovery deep link (T5.3 placeholder). */
-    private fun openSourceRecovery() {
-        startActivity(
-            UnifiedSourcesActivity.newDeepLinkIntent(
-                this,
-                UnifiedSourcesDeepLink(initialTab = UnifiedSourcesDeepLinkParser.TAB_RECOVERY),
             ),
         )
     }

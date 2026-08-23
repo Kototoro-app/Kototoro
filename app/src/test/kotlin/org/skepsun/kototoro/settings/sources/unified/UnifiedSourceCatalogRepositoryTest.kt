@@ -11,7 +11,6 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceSummary
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
-import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
 import org.skepsun.kototoro.core.jsonsource.JsonContentSource
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -139,29 +138,6 @@ class UnifiedSourceCatalogRepositoryTest : FunSpec({
         item.url shouldBe "https://github.com/example/novels/raw/repo/index.min.json"
     }
 
-    test("missing origin maps to a visible placeholder source row") {
-        val repository = testRepository()
-        val item = repository.invokeToMissingSourceItem(
-            SourceOriginEntity(
-                sourceKey = "TSUNDOKU_1400001",
-                kind = "TSUNDOKU",
-                displayName = "Kototoro Fixture Novel 1.4 (single)",
-                contentType = "NOVEL",
-                packageName = "eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_single",
-                lastSeenAt = 1L,
-                updatedAt = 1L,
-            ),
-        )
-
-        item.id shouldBe "TSUNDOKU_1400001"
-        item.kind shouldBe UnifiedSourceKind.TSUNDOKU
-        item.title shouldBe "Kototoro Fixture Novel 1.4 (single)"
-        item.packageName shouldBe "eu.kanade.tachiyomi.novelextension.zh.kototoro_fixture_14_single"
-        item.isAvailable shouldBe false
-        item.isInstalled shouldBe false
-        item.language shouldBe null
-    }
-
     test("preset merge replaces legacy json url and removes duplicate repository ids") {
         val repository = testRepository()
         val legacyItem = unifiedKeiyoushiRepositoryItem(
@@ -229,17 +205,6 @@ private fun UnifiedSourceCatalogRepository.invokeToUnifiedRepositoryItem(
     )
     method.isAccessible = true
     return method.invoke(this, repo, false) as UnifiedSourceRepositoryItem
-}
-
-private fun UnifiedSourceCatalogRepository.invokeToMissingSourceItem(
-    origin: org.skepsun.kototoro.core.db.entity.SourceOriginEntity,
-): UnifiedSourceItem {
-    val method = javaClass.getDeclaredMethod(
-        "toMissingUnifiedSourceItem",
-        org.skepsun.kototoro.core.db.entity.SourceOriginEntity::class.java,
-    )
-    method.isAccessible = true
-    return method.invoke(this, origin) as UnifiedSourceItem
 }
 
 @Suppress("UNCHECKED_CAST")

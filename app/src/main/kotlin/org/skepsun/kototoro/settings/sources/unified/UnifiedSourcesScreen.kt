@@ -29,7 +29,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
-import org.skepsun.kototoro.extensions.recovery.SourceRecoveryStatus
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
 import org.skepsun.kototoro.extensions.install.ExtensionInstallPolicy
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
@@ -113,8 +112,6 @@ private sealed interface UnifiedSourcesDialogState {
     ) : UnifiedSourcesDialogState
     data class InstallError(val message: String) : UnifiedSourcesDialogState
     data class ThirdPartyDisclaimer(val action: UnifiedThirdPartyAction) : UnifiedSourcesDialogState
-    data class RecoverySideload(val sourceKey: String) : UnifiedSourcesDialogState
-    data class SignatureConfirmation(val sourceKey: String) : UnifiedSourcesDialogState
 }
 
 internal sealed interface UnifiedThirdPartyAction {
@@ -176,7 +173,6 @@ fun UnifiedSourcesRoute(
     onActivePanelChange: (UnifiedToolbarFilterPanel?) -> Unit,
     initialAddRepositoryKind: UnifiedSourceKind? = null,
     initialAddRepositoryUrl: String? = null,
-    onOpenSideloadPicker: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: UnifiedSourcesViewModel = hiltViewModel(),
 ) {
@@ -184,7 +180,6 @@ fun UnifiedSourcesRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val updateAllInProgress by viewModel.updateAllInProgress.collectAsStateWithLifecycle()
-    val recoveryState by viewModel.recoveryState.collectAsStateWithLifecycle()
     var activeDialog by remember { mutableStateOf<UnifiedSourcesDialogState?>(null) }
     var initialRepositoryHandled by rememberSaveable { mutableStateOf(false) }
     var selectedSourceIdList by rememberSaveable { mutableStateOf(emptyList<String>()) }
@@ -254,18 +249,6 @@ fun UnifiedSourcesRoute(
             .mapTo(LinkedHashSet()) { it.id }
         if (sourceIds.isNotEmpty()) {
             activeDialog = UnifiedSourcesDialogState.SetFilteredSourcesEnabled(sourceIds, enabled)
-        }
-    }
-
-    fun handleRecoveryClick(item: UnifiedSourceItem) {
-        when (recoveryState.perSource[item.id]) {
-            SourceRecoveryStatus.SIDELOAD_REQUIRED -> {
-                activeDialog = UnifiedSourcesDialogState.RecoverySideload(item.id)
-            }
-            SourceRecoveryStatus.SIGNATURE_CONFIRMATION_REQUIRED -> {
-                activeDialog = UnifiedSourcesDialogState.SignatureConfirmation(item.id)
-            }
-            else -> viewModel.runRecoveryAction(item.id)
         }
     }
 
@@ -365,9 +348,6 @@ fun UnifiedSourcesRoute(
                 UNIFIED_SOURCES_TAB_PACKAGES -> viewModel.refreshPackages()
             }
         },
-        recoveryState = recoveryState,
-        onToggleRecoveryFilter = viewModel::toggleRecoveryFilter,
-        onRunRecoveryAction = ::handleRecoveryClick,
         modifier = modifier,
     )
 
@@ -658,44 +638,7 @@ fun UnifiedSourcesRoute(
             },
         )
 
-        is UnifiedSourcesDialogState.RecoverySideload -> UnifiedRecoverySideloadDialog(
-            sourceKey = dialog.sourceKey,
-            onDismiss = { activeDialog = null },
-            onPickFile = {
-                onOpenSideloadPicker(dialog.sourceKey)
-                activeDialog = null
-            },
-        )
-
-        is UnifiedSourcesDialogState.SignatureConfirmation -> UnifiedSignatureConfirmationDialog(
-            sourceKey = dialog.sourceKey,
-            onDismiss = { activeDialog = null },
-            onConfirm = {
-                viewModel.confirmSignature(dialog.sourceKey)
-                activeDialog = null
-            },
-            onReject = {
-                viewModel.rejectSignature(dialog.sourceKey)
-                activeDialog = null
-            },
-        )
-
         null -> Unit
-    }
-
-    // Recovery action result (T5.4): a global dialog driven by the last finished action.
-    // Dismissal is tracked by object identity so a re-emitted same result stays closed while
-    // a fresh result (retry or new action) re-opens the dialog without any ViewModel reset.
-    val recoveryResult = recoveryState.actionResult
-    var dismissedRecoveryResult by remember { mutableStateOf<Any?>(null) }
-    if (recoveryResult != null && recoveryResult !== dismissedRecoveryResult) {
-        UnifiedRecoveryResultDialog(
-            sourceKey = recoveryResult.sourceKey,
-            ok = recoveryResult.ok,
-            message = recoveryResult.message,
-            onRetry = { viewModel.runRecoveryAction(recoveryResult.sourceKey) },
-            onDismiss = { dismissedRecoveryResult = recoveryResult },
-        )
     }
 }
 
