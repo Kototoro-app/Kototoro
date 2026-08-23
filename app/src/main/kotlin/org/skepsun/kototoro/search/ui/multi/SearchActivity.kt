@@ -5,17 +5,36 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.viewModels
 import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.lifecycle.withCreationCallback
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ShareHelper
+import org.skepsun.kototoro.core.util.ext.getSerializableExtraCompat
+import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.search.ui.compose.SearchResultsRoute
 
 @AndroidEntryPoint
 class SearchActivity : BaseComposeActivity() {
 
-    private val viewModel by viewModels<SearchViewModel>()
+    private val viewModel by viewModels<SearchViewModel>(
+        extrasProducer = {
+            defaultViewModelCreationExtras.withCreationCallback<SearchViewModel.Factory> { factory ->
+                factory.create(
+                    query = intent.getStringExtra(AppRouter.KEY_QUERY).orEmpty(),
+                    kind = intent.getSerializableExtraCompat<SearchKind>(AppRouter.KEY_KIND) ?: SearchKind.SIMPLE,
+                    advancedTitle = intent.getStringExtra(AppRouter.KEY_ADVANCED_TITLE).orEmpty(),
+                    advancedTags = intent.getStringExtra(AppRouter.KEY_ADVANCED_TAGS).orEmpty(),
+                    advancedAuthor = intent.getStringExtra(AppRouter.KEY_ADVANCED_AUTHOR).orEmpty(),
+                    pinnedOnly = intent.getBooleanExtra(AppRouter.KEY_PINNED_ONLY, false),
+                    hideEmpty = intent.getBooleanExtra(AppRouter.KEY_HIDE_EMPTY, false),
+                    sourceTypeNames = intent.getStringArrayListExtra(AppRouter.KEY_SOURCE_TYPES),
+                    contentKindNames = intent.getStringArrayListExtra(AppRouter.KEY_CONTENT_KINDS),
+                )
+            }
+        },
+    )
     private val isPickMode by lazy { intent.getBooleanExtra(AppRouter.KEY_PICK_MODE, false) }
 
     override fun onCreate(savedInstanceState: Bundle?) {

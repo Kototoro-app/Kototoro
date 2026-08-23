@@ -58,6 +58,25 @@ private fun List<ListModel>.contentIndexOf(itemId: Long): Int {
     return indexOfFirst { model -> model is ContentListModel && model.id == itemId }
 }
 
+internal fun shouldUseRetainedPagingSnapshot(
+    retentionEnabled: Boolean,
+    hasPagingItems: Boolean,
+    hasRetainedSnapshot: Boolean,
+    returnTransitionSettled: Boolean,
+    retainedAnchorPrefixIsReady: Boolean,
+    pagingRefreshSettled: Boolean,
+    retainedAnchorIsLoaded: Boolean,
+): Boolean {
+    val refreshedAnchorWasRemoved = returnTransitionSettled &&
+        pagingRefreshSettled &&
+        !retainedAnchorIsLoaded
+    return retentionEnabled &&
+        hasPagingItems &&
+        hasRetainedSnapshot &&
+        !refreshedAnchorWasRemoved &&
+        (!retainedAnchorPrefixIsReady || !returnTransitionSettled)
+}
+
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
 }
@@ -272,10 +291,15 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         ?.endOfPaginationReached == true
     val retainedAnchorPrefixIsReady = retainedAnchorIsLoaded &&
         (liveAnchorIndex >= retainedAnchorIndex || pagingPrependExhausted)
-    val useRetainedPagingSnapshot = retainPagingSnapshotOnDetailsNavigation &&
-        lazyPagingItems != null &&
-        retainedPagingSnapshot != null &&
-        (!retainedAnchorPrefixIsReady || !returnTransitionSettled)
+    val useRetainedPagingSnapshot = shouldUseRetainedPagingSnapshot(
+        retentionEnabled = retainPagingSnapshotOnDetailsNavigation,
+        hasPagingItems = lazyPagingItems != null,
+        hasRetainedSnapshot = retainedPagingSnapshot != null,
+        returnTransitionSettled = returnTransitionSettled,
+        retainedAnchorPrefixIsReady = retainedAnchorPrefixIsReady,
+        pagingRefreshSettled = lazyPagingItems?.loadState?.refresh is LoadState.NotLoading,
+        retainedAnchorIsLoaded = retainedAnchorIsLoaded,
+    )
     LaunchedEffect(
         useRetainedPagingSnapshot,
         returnTransitionSettled,
@@ -289,7 +313,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             liveAnchorIndex in 0 until retainedAnchorIndex &&
             !pagingPrependExhausted
         ) {
-            lazyPagingItems[0]
+            lazyPagingItems?.get(0)
         }
     }
     val displayedItems = remember(items, retainedPagingSnapshot, useRetainedPagingSnapshot) {

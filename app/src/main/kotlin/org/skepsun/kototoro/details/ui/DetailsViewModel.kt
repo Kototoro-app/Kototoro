@@ -5182,7 +5182,7 @@ class DetailsViewModel @Inject constructor(
 
     fun updateUnifiedReadingStatus(status: ScrobblingStatus) {
         launchJob(Dispatchers.Default) {
-            val currentMangaId = resolveCurrentLocalMangaId() ?: return@launchJob
+            val currentMangaId = ensureCurrentWorkProjection() ?: return@launchJob
             dataRepository.setReadingStatus(currentMangaId, status)
             linkedTrackingItems.value.forEach { linked ->
                 if (!linked.hasScrobblingBinding) return@forEach
@@ -5301,6 +5301,7 @@ class DetailsViewModel @Inject constructor(
             } else {
                 favouritesRepository.removeFromCategory(categoryId, listOf(content.id))
             }
+            activateStoredWorkProjection(content)
         }
     }
 
@@ -5310,6 +5311,7 @@ class DetailsViewModel @Inject constructor(
         launchJob(Dispatchers.Default) {
             val content = getContentOrNull() ?: return@launchJob
             favouritesRepository.addToCategoryAsSeparateWorks(prompt.categoryId, listOf(content))
+            activateStoredWorkProjection(content)
         }
     }
 
@@ -5328,7 +5330,30 @@ class DetailsViewModel @Inject constructor(
                 content = content,
                 targetEntityId = targetEntityId,
             )
+            activateStoredWorkProjection(content)
         }
+    }
+
+    private suspend fun ensureCurrentWorkProjection(): Long? {
+        resolveCurrentLocalMangaId()?.let { return it }
+        val content = getContentOrNull() ?: return null
+        val storedContent = dataRepository.storeContentAndReturn(content, replaceExisting = false)
+        workResolver.ensureForProjection(
+            content = storedContent,
+            provenance = org.skepsun.kototoro.work.domain.WorkIdentityProvenance.USER,
+        )
+        return activateStoredWorkProjection(storedContent)
+    }
+
+    private suspend fun activateStoredWorkProjection(content: Content): Long? {
+        val storedContent = dataRepository.resolveStoredProjection(content)
+        val entityId = workResolver.resolveByMangaId(storedContent.id).entityId ?: return null
+        activeMangaIdFlow.value = storedContent.id
+        refreshEntityBoundLocalSources(
+            entityId = entityId,
+            activeMangaId = storedContent.id,
+        )
+        return storedContent.id
     }
 
     fun toggleMarkSafe() {
@@ -5801,4 +5826,3 @@ class DetailsViewModel @Inject constructor(
         return settings.readerTranslationTargetLanguage.ifBlank { "zh" }
     }
 }
-
