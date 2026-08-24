@@ -38,12 +38,18 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.ui.glass.GlassTuningController
+import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
+import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
+import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
+import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.normalized
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getLocalesConfig
+import org.skepsun.kototoro.core.util.ext.processLifecycleScope
 import org.skepsun.kototoro.core.util.ext.sortedWithSafe
 import org.skepsun.kototoro.core.util.ext.toList
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -71,9 +77,14 @@ fun AppearanceSettingsRoute(
     onOpenNavConfig: () -> Unit,
     onOpenPanoramaSettings: () -> Unit,
     onOpenProtectSetup: () -> Unit,
+    onOpenGlassSettings: () -> Unit = {},
     onOpenBadgesSettings: () -> Unit = {},
     onOpenSearchFiltersSettings: () -> Unit = {},
     onOpenNavigationSettings: () -> Unit = {},
+    onOpenListSettings: () -> Unit = {},
+    onOpenDetailsSettings: () -> Unit = {},
+    onOpenHomeSettings: () -> Unit = {},
+    onOpenInterfaceSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -172,8 +183,21 @@ fun AppearanceSettingsRoute(
             .value
             .let(coordinator::parseHiddenSourceTagSelection)
     val isMainFabEnabled = settings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }.value
+    val isFullWidthNavIndicatorEnabled =
+        settings.observeAsState(AppSettings.KEY_NAV_INDICATOR_FULL_WIDTH) { isFullWidthNavIndicatorEnabled }.value
+    val isSampleBlueNavAccentEnabled =
+        settings.observeAsState(AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE) { isSampleBlueNavAccentEnabled }.value
+    val glassImmersiveStrengthPercent =
+        settings.observeAsState(AppSettings.KEY_GLASS_IMMERSIVE_STRENGTH) { glassImmersiveStrengthPercent }.value
+    val isGlassEffectEnabled =
+        settings.observeAsState(AppSettings.KEY_GLASS_EFFECT_ENABLED) { isGlassEffectEnabled }.value
+    // Glass Finish Tuner state (Global + 5 role scopes) and its live controller.
+    val glassTuning = rememberGlassTuning(settings)
+    val glassTuningController = remember { GlassTuningController(settings) }
     val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
     val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
+    val isNavLabelsAlwaysVisible =
+        settings.observeAsState(AppSettings.KEY_NAV_LABELS_ALWAYS_VISIBLE) { isNavLabelsAlwaysVisible }.value
     val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
     val isNavLayeredSurface =
         settings.observeAsState(AppSettings.KEY_NAV_LAYERED_SURFACE) { isNavLayeredSurface }.value
@@ -278,6 +302,14 @@ fun AppearanceSettingsRoute(
 
     val uiState = AppearanceSettingsUiState(
         navSummary = coordinator.buildNavSummary(mainNavItems),
+        navigationGroupSummary = buildString {
+            append(context.getString(R.string.appearance_navigation_group_summary))
+            append(" · ")
+            append(navHeight)
+            append(" dp bar / ")
+            append(navFloatingHeight)
+            append(" dp floating")
+        },
         interfaceStyle = interfaceStyle,
         colorScheme = colorScheme,
         theme = theme,
@@ -324,9 +356,12 @@ fun AppearanceSettingsRoute(
         isMainFabEnabled = isMainFabEnabled,
         isNavBarPinned = isNavBarPinned,
         isNavLabelsVisible = isNavLabelsVisible,
+        isNavLabelsAlwaysVisible = isNavLabelsAlwaysVisible,
         isNavFloating = isNavFloating,
         isNavLayeredSurface = isNavLayeredSurface,
         isNavExpressivePillEnabled = isNavExpressivePillEnabled,
+        isFullWidthNavIndicatorEnabled = isFullWidthNavIndicatorEnabled,
+        isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
         navHeight = navHeight,
         navFloatingHeight = navFloatingHeight,
         isExitConfirmationEnabled = isExitConfirmationEnabled,
@@ -334,6 +369,9 @@ fun AppearanceSettingsRoute(
         isDynamicShortcutsEnabled = isDynamicShortcutsEnabled,
         isAppProtected = isAppProtected,
         screenshotsPolicy = screenshotsPolicy,
+        isGlassEffectEnabled = isGlassEffectEnabled,
+        isReducedVisualEffectsEnabled = isReducedVisualEffectsEnabled,
+        glassImmersiveStrengthPercent = glassImmersiveStrengthPercent,
     )
 
     AppearanceSettingsScreen(
@@ -345,7 +383,9 @@ fun AppearanceSettingsRoute(
         onColorSchemeChange = { coordinator.updateAndRestart(coroutineScope) { settings.colorScheme = it } },
         onThemeChange = coordinator::updateTheme,
         onBackgroundStyleChange = { coordinator.updateAndRestart(coroutineScope) { settings.backgroundStyle = it } },
-        onAmoledThemeChange = { coordinator.updateAndRestart(coroutineScope) { settings.isAmoledTheme = it } },
+        onAmoledThemeChange = {
+            coordinator.updateAndRestart(coroutineScope) { settings.isAmoledTheme = it }
+        },
         onAppFontPresetChange = {
             coordinator.updateAndRestart(coroutineScope) { settings.appFontPreset = it }
         },
@@ -396,19 +436,50 @@ fun AppearanceSettingsRoute(
         },
         onMainFabChange = { settings.isMainFabEnabled = it },
         onNavPinnedChange = { settings.isNavBarPinned = it },
-        onNavLabelsVisibleChange = { settings.isNavLabelsVisible = it },
+        onNavLabelsVisibleChange = {
+            settings.isNavLabelsVisible = it
+            if (!it) settings.isNavLabelsAlwaysVisible = false
+        },
+        onNavLabelsAlwaysVisibleChange = { settings.isNavLabelsAlwaysVisible = it },
         onNavFloatingChange = { settings.isNavFloating = it },
         onNavLayeredSurfaceChange = { settings.isNavLayeredSurface = it },
-        onNavExpressivePillChange = { settings.isNavExpressivePillEnabled = it },
+        onNavExpressivePillChange = {
+            settings.isNavExpressivePillEnabled = it
+            if (it) settings.isFullWidthNavIndicatorEnabled = false
+        },
         onNavHeightChange = { settings.navHeight = it },
         onNavFloatingHeightChange = { settings.navFloatingHeight = it },
         onExitConfirmationChange = { settings.isExitConfirmationEnabled = it },
         onDynamicShortcutsChange = { settings.isDynamicShortcutsEnabled = it },
         onAppProtectionChange = { coordinator.updateAppProtection(it) },
         onScreenshotsPolicyChange = { settings.screenshotsPolicy = it },
+        onGlassEffectEnabledChange = { settings.isGlassEffectEnabled = it },
+        onReducedVisualEffectsChange = { settings.isReducedVisualEffectsEnabled = it },
+        onImmersiveStrengthChange = { settings.glassImmersiveStrengthPercent = it },
+        glassTuning = glassTuning,
+        onGlassTuningSetValue = { scope, param, value ->
+            glassTuningController.setValue(scope, param, value)
+        },
+        onGlassTuningFollowGlobal = { scope, param, follow ->
+            glassTuningController.setFollowGlobal(scope, param, follow)
+        },
+        onGlassTuningPreset = { preset: GlassPreset ->
+            glassTuningController.applyPreset(preset.config)
+        },
+        onGlassTuningReset = { glassTuningController.resetAll() },
+        onFullWidthNavIndicatorChange = {
+            settings.isFullWidthNavIndicatorEnabled = it
+            if (it) settings.isNavExpressivePillEnabled = false
+        },
+        onSampleBlueNavAccentChange = { settings.isSampleBlueNavAccentEnabled = it },
+        onGlassSettingsClick = onOpenGlassSettings,
         onBadgesSettingsClick = onOpenBadgesSettings,
         onSearchFiltersSettingsClick = onOpenSearchFiltersSettings,
         onNavigationSettingsClick = onOpenNavigationSettings,
+        onListSettingsClick = onOpenListSettings,
+        onDetailsSettingsClick = onOpenDetailsSettings,
+        onHomeSettingsClick = onOpenHomeSettings,
+        onInterfaceSettingsClick = onOpenInterfaceSettings,
     )
 }
 
@@ -422,6 +493,15 @@ private class AppearanceSettingsCoordinator(
     fun updateTheme(value: Int) {
         settings.theme = value
         AppCompatDelegate.setDefaultNightMode(value)
+        // setDefaultNightMode recreates the foreground settings Activity. A
+        // composition-bound scope is cancelled with that Activity before it
+        // can refresh the stopped MainActivity, leaving the main screen on the
+        // previous mode. Keep the hand-off process-scoped so every tracked
+        // Activity observes FOLLOW_SYSTEM as well as explicit light/dark.
+        processLifecycleScope.launch {
+            delay(120)
+            activityRecreationHandle.recreateAll()
+        }
     }
 
     fun updateAppLocale(languageTags: String) {

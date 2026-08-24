@@ -16,17 +16,35 @@ class SettingsSearchHelper @Inject constructor(
         val result = ArrayList<SettingsItem>()
 
         val appearanceBreadcrumbs = listOf(context.getString(R.string.appearance))
-        val appearanceKeys = listOf(
+        fun addAppearanceItems(
+            entries: List<Pair<String, Int>>,
+            destination: SettingsDestination,
+            sectionTitleRes: Int? = null,
+        ) {
+            val breadcrumbs = if (sectionTitleRes == null) {
+                appearanceBreadcrumbs
+            } else {
+                appearanceBreadcrumbs + context.getString(sectionTitleRes)
+            }
+            entries.forEach { (key, titleRes) ->
+                result.add(
+                    SettingsItem(
+                        key = key,
+                        title = context.getString(titleRes),
+                        breadcrumbs = breadcrumbs,
+                        destination = destination,
+                    ),
+                )
+            }
+        }
+        addAppearanceItems(listOf(
             "interface_style" to R.string.interface_style,
             "color_theme" to R.string.color_theme,
             "theme" to R.string.appearance_mode,
             "background_style" to R.string.background_style,
             "amoled_theme" to R.string.black_dark_theme,
-            "app_font_preset" to R.string.pref_app_font_preset,
-            "tablet_ui_mode" to R.string.tablet_ui_mode,
-            "app_locale" to R.string.language,
-            "loading_circle_style" to R.string.pref_loading_circle_style,
-            "popup_radius" to R.string.pref_popup_radius,
+        ), SettingsDestination.AppearanceSettings)
+        addAppearanceItems(listOf(
             "list_mode_2" to R.string.list_mode,
             "grid_size" to R.string.grid_size,
             "rail_animation_intensity" to R.string.pref_rail_animation_intensity,
@@ -34,44 +52,98 @@ class SettingsSearchHelper @Inject constructor(
             "tablet_list_preview" to R.string.pref_tablet_list_preview,
             "tablet_list_filter_panel" to R.string.pref_tablet_list_filter_panel,
             "progress_indicators" to R.string.show_reading_indicators,
+        ), SettingsDestination.AppearanceListSettings, R.string.appearance_group_lists)
+        addAppearanceItems(listOf(
             "badges_top_left" to R.string.badge_top_left,
             "badges_top_right" to R.string.badge_top_right,
             "badges_bottom_left" to R.string.badge_bottom_left,
             "badges_bottom_right" to R.string.badge_bottom_right,
+        ), SettingsDestination.AppearanceBadgesSettings, R.string.badges_in_lists)
+        addAppearanceItems(listOf(
             "description_collapse" to R.string.collapse_long_description,
             "panorama_enabled" to R.string.pref_panorama_cover,
             "pages_tab" to R.string.show_pages_thumbs,
             "details_translate_button" to R.string.details_translate_button_visible,
             "modern_details_dock" to R.string.modern_details_dock,
             "details_tab" to R.string.default_tab,
+        ), SettingsDestination.AppearanceDetailsSettings, R.string.appearance_group_details)
+        addAppearanceItems(listOf(
+            "home_hero_mode" to R.string.pref_home_hero_mode,
+            "home_hero_background" to R.string.pref_home_hero_background,
+            "home_hero_content_layout" to R.string.pref_home_hero_content_layout,
             "search_suggest_types" to R.string.search_suggestions,
-            "nav_main" to R.string.main_screen_sections,
-            "shared_element_transitions" to R.string.shared_element_transitions,
-            "show_language_preset_filter" to R.string.show_language_preset_filter,
-            "hidden_language_preset" to R.string.fixed_language_preset,
-            "show_content_type_filter" to R.string.show_content_type_filter,
-            "hidden_content_type" to R.string.fixed_content_type,
-            "show_source_tag_filter" to R.string.show_source_tag_filter,
-            "hidden_source_tag" to R.string.fixed_source_tag,
-            "main_fab" to R.string.main_screen_fab,
-            "nav_pinned" to R.string.pin_navigation_ui,
-            "nav_labels" to R.string.show_labels_in_navbar,
-            "nav_floating" to R.string.pref_nav_floating,
-            "nav_expressive_pill" to R.string.pref_nav_expressive_pill,
-            "nav_height" to R.string.pref_nav_height,
-            "nav_floating_height" to R.string.pref_nav_floating_height,
-            "exit_confirm" to R.string.exit_confirmation,
             "dynamic_shortcuts" to R.string.history_shortcuts,
+        ), SettingsDestination.AppearanceHomeSettings, R.string.appearance_group_home)
+        addAppearanceItems(listOf(
+            "app_font_preset" to R.string.pref_app_font_preset,
+            "tablet_ui_mode" to R.string.tablet_ui_mode,
+            "app_locale" to R.string.language,
+            "loading_circle_style" to R.string.pref_loading_circle_style,
+            "popup_radius" to R.string.pref_popup_radius,
+            "shared_element_transitions" to R.string.shared_element_transitions,
+            "exit_confirm" to R.string.exit_confirmation,
             "protect_app" to R.string.protect_application,
-            "screenshots_policy" to R.string.screenshots_policy
+            "screenshots_policy" to R.string.screenshots_policy,
+        ), SettingsDestination.AppearanceInterfaceSettings, R.string.appearance_group_interface_and_behavior)
+
+        val glassBreadcrumbs = listOf(
+            context.getString(R.string.appearance),
+            context.getString(R.string.appearance_group_glass_tuner),
         )
-        appearanceKeys.forEach { (key, titleRes) ->
+        listOf(
+            "glass_tuner" to R.string.appearance_group_glass_tuner,
+            "glass_effect" to R.string.pref_glass_effect,
+            "glass_immersive_strength" to R.string.pref_glass_immersive_strength,
+            "reduce_visual_effects" to R.string.pref_reduce_visual_effects,
+        ).forEach { (key, titleRes) ->
             result.add(
                 SettingsItem(
                     key = key,
                     title = context.getString(titleRes),
-                    breadcrumbs = appearanceBreadcrumbs,
-                    destination = SettingsDestination.AppearanceSettings,
+                    breadcrumbs = glassBreadcrumbs,
+                    destination = SettingsDestination.AppearanceGlassSettings,
+                ),
+            )
+        }
+
+        addAppearanceItems(
+            entries = listOf(
+                "show_language_preset_filter" to R.string.show_language_preset_filter,
+                "hidden_language_preset" to R.string.fixed_language_preset,
+                "show_content_type_filter" to R.string.show_content_type_filter,
+                "hidden_content_type" to R.string.fixed_content_type,
+                "show_source_tag_filter" to R.string.show_source_tag_filter,
+                "hidden_source_tag" to R.string.fixed_source_tag,
+            ),
+            destination = SettingsDestination.AppearanceSearchFiltersSettings,
+            sectionTitleRes = R.string.search_bar_filters,
+        )
+
+        val navigationBreadcrumbs = listOf(
+            context.getString(R.string.appearance),
+            context.getString(R.string.appearance_navigation_group),
+        )
+        val navigationKeys = listOf(
+            "nav_main" to R.string.main_screen_sections,
+            "main_fab" to R.string.main_screen_fab,
+            "nav_pinned" to R.string.pin_navigation_ui,
+            "nav_labels" to R.string.show_labels_in_navbar,
+            "nav_labels_always_visible" to R.string.pref_nav_labels_always_visible,
+            "nav_floating" to R.string.pref_nav_floating,
+            "nav_layered_surface" to R.string.pref_nav_layered_surface,
+            "nav_expressive_pill" to R.string.pref_nav_expressive_pill,
+            "nav_indicator_full_width" to R.string.pref_nav_indicator_full_width,
+            "nav_accent_sample_blue" to R.string.pref_nav_accent_sample_blue,
+            "nav_height" to R.string.pref_nav_height,
+            "nav_floating_height" to R.string.pref_nav_floating_height,
+        )
+        navigationKeys.forEach { (key, titleRes) ->
+            result.add(
+                SettingsItem(
+                    key = key,
+                    title = context.getString(titleRes),
+                    breadcrumbs = navigationBreadcrumbs,
+                    destination = SettingsDestination.AppearanceNavigationSettings,
                 ),
             )
         }

@@ -71,4 +71,46 @@ class BottomNavLayoutSpecTest {
 			spec.labelMaxWidth shouldBe 40.dp
 		}
 	}
+
+	@Test
+	fun `idle selection pill has no motion-only lens or edge effects`() {
+		resolveBottomNavPillEffect(0f).let { spec ->
+			spec.idleMaterialFraction shouldBe 1f
+			spec.lensHeightDp shouldBe 0f
+			spec.lensAmountDp shouldBe 0f
+			spec.highlightAlpha shouldBe 0f
+			spec.innerShadowAlpha shouldBe 0f
+		}
+	}
+
+	@Test
+	fun `expanded selection pill reaches bilipai motion material`() {
+		resolveBottomNavPillEffect(1f).let { spec ->
+			spec.idleMaterialFraction shouldBe 0f
+			spec.lensHeightDp shouldBe 10f
+			spec.lensAmountDp shouldBe 14f
+			spec.highlightAlpha shouldBe 1f
+			spec.innerShadowAlpha shouldBe 0.15f
+		}
+	}
+
+	@Test
+	fun `expressive and full width pills use the same bilipai magnification amplitude`() {
+		resolveBottomNavMagnifyScale() shouldBe 78f / 56f
+	}
+
+	@Test
+	fun `dragged indicator center follows the pointer instead of snapping to a tab`() {
+		resolveBottomNavDragIndicatorX(
+			pointerX = 137.5f,
+			indicatorWidth = 80,
+			containerWidth = 360,
+			snappedOffsetX = 80,
+		) shouldBe 98
+	}
+
+	@Test
+	fun `released indicator interpolates from finger to selected tab center`() {
+		interpolateBottomNavSettleX(startX = 80f, targetX = 160f, progress = 0.5f) shouldBe 120f
+	}
 }

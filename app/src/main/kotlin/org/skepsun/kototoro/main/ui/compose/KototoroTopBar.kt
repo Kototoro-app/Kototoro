@@ -260,7 +260,10 @@ fun KototoroTopBar(
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
-                TopBarControlSurface {
+                TopBarControlSurface(
+                    lensEnabled = false,
+                    pressFeedbackEnabled = false,
+                ) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
                         Row(
                             modifier = Modifier
@@ -629,6 +632,8 @@ fun KototoroTopBar(
 @Composable
 internal fun TopBarControlSurface(
     allowBackdrop: Boolean = true,
+    lensEnabled: Boolean = true,
+    pressFeedbackEnabled: Boolean = true,
     fallbackContainerColor: Color? = null,
     shadowElevation: Dp = GlassDefaults.navigationShadowElevation,
     modifier: Modifier = Modifier,
@@ -662,6 +667,8 @@ internal fun TopBarControlSurface(
             // PillControl role: uniform hairline chrome without the persistent
             // specular highlight that bars also avoid.
             componentRole = GlassComponentRole.PillControl,
+            lensEnabled = lensEnabled,
+            pressFeedbackEnabled = pressFeedbackEnabled,
             content = content,
         )
     } else if (fallbackContainerColor != null) {
@@ -687,6 +694,8 @@ internal fun TopBarControlSurface(
             // PillControl role: uniform hairline chrome without the persistent
             // specular highlight that bars also avoid.
             componentRole = GlassComponentRole.PillControl,
+            lensEnabled = lensEnabled,
+            pressFeedbackEnabled = pressFeedbackEnabled,
             content = content,
         )
     }

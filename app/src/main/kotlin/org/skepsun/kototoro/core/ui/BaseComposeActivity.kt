@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
+import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.util.configureSafeAreaWindow
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
@@ -87,18 +90,25 @@ abstract class BaseComposeActivity :
             val cornerRadius by kototoroAppSettings.observeAsState(AppSettings.KEY_POPUP_RADIUS) {
                 cornerRadius
             }
+            // Glass Finish Tuner (ADR 0001): expose the live tuning state to the
+            // whole activity so every GlassSurface / bottom-nav pill reads the
+            // resolved per-scope parameters instead of hardcoded values. When
+            // nothing has been tuned the state resolves to exact legacy values.
+            val glassTuning = rememberGlassTuning(kototoroAppSettings)
             KototoroTheme(cornerRadius = cornerRadius) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    content()
-                    SnackbarHost(
-                        hostState = snackbarHostState,
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding(),
-                    )
-                    modalStack.forEach { modal ->
-                        key(modal.key) {
-                            modal.content()
+                CompositionLocalProvider(LocalGlassTuning provides glassTuning) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        content()
+                        SnackbarHost(
+                            hostState = snackbarHostState,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .navigationBarsPadding(),
+                        )
+                        modalStack.forEach { modal ->
+                            key(modal.key) {
+                                modal.content()
+                            }
                         }
                     }
                 }

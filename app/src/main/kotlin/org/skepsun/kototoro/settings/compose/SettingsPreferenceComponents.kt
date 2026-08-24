@@ -414,6 +414,11 @@ fun <T> SettingsChoicePreference(
     enabled: Boolean = true,
     onSettingsClick: (() -> Unit)? = null,
     settingsContentDescription: String? = null,
+    settingsIcon: ImageVector = Icons.Filled.Settings,
+    onSecondarySettingsClick: (() -> Unit)? = null,
+    secondarySettingsContentDescription: String? = null,
+    secondarySettingsIcon: ImageVector = Icons.Filled.Tune,
+    dialogFooter: (@Composable () -> Unit)? = null,
     onValueChange: (T) -> Unit,
 ) {
     var isDialogVisible by remember { mutableStateOf(false) }
@@ -467,8 +472,17 @@ fun <T> SettingsChoicePreference(
         if (onSettingsClick != null) {
             IconButton(onClick = onSettingsClick, enabled = enabled) {
                 Icon(
-                    imageVector = Icons.Filled.Settings,
+                    imageVector = settingsIcon,
                     contentDescription = settingsContentDescription,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        if (onSecondarySettingsClick != null) {
+            IconButton(onClick = onSecondarySettingsClick, enabled = enabled) {
+                Icon(
+                    imageVector = secondarySettingsIcon,
+                    contentDescription = secondarySettingsContentDescription,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -481,68 +495,87 @@ fun <T> SettingsChoicePreference(
     }
 
     if (isDialogVisible) {
-        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-        SettingsAlertDialog(
+        SettingsChoiceDialog(
             title = title,
+            value = currentValue,
+            options = options,
+            footer = dialogFooter,
             onDismissRequest = { isDialogVisible = false },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                ) {
-                    itemsIndexed(options, contentType = { _, _ -> "radio_option" }) { index, option ->
-                        val selected = option.value == currentValue
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
-                                .selectable(
-                                    selected = selected,
-                                    onClick = {
-                                        currentValue = option.value
-                                        onValueChange(option.value)
-                                        isDialogVisible = false
-                                    },
-                                )
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (!isIosStyle) {
-                                RadioButton(
-                                    selected = selected,
-                                    onClick = null,
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text(
-                                text = option.label,
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (isIosStyle && selected) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                        if (isIosStyle && index != options.lastIndex) {
-                            SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                SettingsDialogActionButton(
-                    text = stringResource(android.R.string.ok),
-                    onClick = { isDialogVisible = false },
-                )
+            onValueChange = {
+                currentValue = it
+                onValueChange(it)
+                isDialogVisible = false
             },
         )
     }
+}
+
+@Composable
+fun <T> SettingsChoiceDialog(
+    title: String,
+    value: T,
+    options: List<SettingsChoiceOption<T>>,
+    footer: (@Composable () -> Unit)? = null,
+    onDismissRequest: () -> Unit,
+    onValueChange: (T) -> Unit,
+) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    SettingsAlertDialog(
+        title = title,
+        onDismissRequest = onDismissRequest,
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp),
+            ) {
+                itemsIndexed(options, contentType = { _, _ -> "radio_option" }) { index, option ->
+                    val selected = option.value == value
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
+                            .selectable(selected = selected, onClick = { onValueChange(option.value) })
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (!isIosStyle) {
+                            RadioButton(selected = selected, onClick = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = option.label,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (isIosStyle && selected) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    if (isIosStyle && index != options.lastIndex) {
+                        SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
+                    }
+                }
+                if (footer != null) {
+                    item(contentType = "dialog_footer") {
+                        SettingsGroupDivider(startPadding = 0.dp, endPadding = 0.dp)
+                        footer()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            SettingsDialogActionButton(
+                text = stringResource(android.R.string.ok),
+                onClick = onDismissRequest,
+            )
+        },
+    )
 }
 
 @Composable

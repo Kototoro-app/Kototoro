@@ -1,10 +1,14 @@
 package org.skepsun.kototoro.core.ui.widgets
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.animateIntSizeAsState
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -30,6 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Shape
@@ -45,6 +50,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,17 +71,23 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.glass.GlassStyle
 import org.skepsun.kototoro.core.ui.glass.backdropSurfaceAlpha
+import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
+import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.util.FoldableUtils
 import dagger.hilt.android.EntryPointAccessors
 import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.shapes.Capsule
 import com.kyant.shapes.RoundedRectangle
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.highlight.HighlightStyle
 import com.kyant.backdrop.shadow.InnerShadow
-import com.kyant.backdrop.shadow.Shadow
 import coil3.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.delay
 
 data class BadgeInfo(val number: Int = 0, val isVisible: Boolean = false)
 
@@ -91,6 +103,9 @@ data class BottomNavState(
 private data class BottomNavPrefs(
     val isFloating: Boolean,
     val isExpressivePillEnabled: Boolean,
+    val isNavLabelsAlwaysVisible: Boolean,
+    val isFullWidthIndicatorEnabled: Boolean,
+    val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
 )
@@ -121,12 +136,18 @@ fun KototoroBottomNav(
     val prefs by appSettings.observeAsState(
         AppSettings.KEY_NAV_FLOATING,
         AppSettings.KEY_NAV_EXPRESSIVE_PILL,
+        AppSettings.KEY_NAV_LABELS_ALWAYS_VISIBLE,
+        AppSettings.KEY_NAV_INDICATOR_FULL_WIDTH,
+        AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE,
         AppSettings.KEY_NAV_HEIGHT,
         AppSettings.KEY_NAV_FLOATING_HEIGHT,
     ) {
         BottomNavPrefs(
             isFloating = isNavFloating,
             isExpressivePillEnabled = isNavExpressivePillEnabled,
+            isNavLabelsAlwaysVisible = isNavLabelsAlwaysVisible,
+            isFullWidthIndicatorEnabled = isFullWidthNavIndicatorEnabled,
+            isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
         )
@@ -136,6 +157,22 @@ fun KototoroBottomNav(
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    // Full-width tab-capsule indicator (the AndroidLiquidGlass LiquidBottomTabs
+    // layout): a full-width capsule bar with evenly weighted tabs, each wrapped
+    // by a full-tab 56dp pill when selected. This is one of the orthogonal
+    // tuning knobs (ADR 0001) — the glass parameters themselves always come from
+    // the per-scope Glass Finish Tuner state.
+    val useFullWidthIndicator = isIosStyle && prefs.isFullWidthIndicatorEnabled
+    // Optional sample-blue accent (0xFF0088FF / 0xFF0091FF) for the selected
+    // tab content, mirroring the LiquidBottomTabs sample.
+    val sampleAccent = if (isIosStyle && prefs.isSampleBlueNavAccentEnabled) {
+        if (MaterialTheme.colorScheme.isDarkTheme()) Color(0xFF0091FF) else Color(0xFF0088FF)
+    } else {
+        null
+    }
+    // Persistent labels: with "navigation pill button" off this reproduces the
+    // sample's always-visible tab labels.
+    val labelsAlwaysVisible = prefs.isNavLabelsAlwaysVisible
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
 
     val activeItems = navState.items
@@ -272,13 +309,14 @@ fun KototoroBottomNav(
                                     clickPulse = clickPulses[item.id] ?: 0,
                                     badge = badge,
                                     contentDescription = stringResource(item.title),
+                                    selectedTint = sampleAccent,
                                 )
                             },
                             label = { Text(stringResource(item.title)) },
                             alwaysShowLabel = showSelectedLabels,
                             colors = NavigationRailItemDefaults.colors(
                                 indicatorColor = Color.Transparent,
-                                selectedIconColor = if (isIosStyle) {
+                                selectedIconColor = sampleAccent ?: if (isIosStyle) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.onSecondaryContainer
@@ -312,18 +350,44 @@ fun KototoroBottomNav(
                     isExpressivePill = isExpressivePillEnabled,
                 )
             }
-            Row(
-                modifier = Modifier
-                    .wrapContentWidth()
-                    .padding(horizontal = layoutSpec.outerHorizontalPadding),
-                horizontalArrangement = Arrangement.spacedBy(layoutSpec.fabGap),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MainNavBottomContainer(
+            if (useFullWidthIndicator) {
+                // LiquidBottomTabs sample layout: a full-width capsule bar whose
+                // tabs are split evenly (weight 1f) with the content inset by 4dp
+                // on every side, and the selected tab is highlighted by a 56dp
+                // full-tab pill. Bar height follows the floating-height slider so
+                // 64dp (the sample look) stays reachable via the nav settings.
+                Row(
                     modifier = Modifier
-                        .wrapContentWidth(),
-                    style = navContainerStyle,
-                    shape = RoundedRectangle(28.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = layoutSpec.outerHorizontalPadding),
+                    horizontalArrangement = Arrangement.spacedBy(layoutSpec.fabGap),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FullWidthFloatingBottomNavRow(
+                        items = activeItems,
+                        selectedItemId = navState.selectedItemId,
+                        badges = navState.badges,
+                        clickPulses = clickPulses,
+                        showSelectedLabels = showSelectedLabels,
+                        labelsAlwaysVisible = labelsAlwaysVisible,
+                        accentOverride = sampleAccent,
+                        onItemSelected = onItemSelected,
+                        onItemReselected = onItemReselected,
+                        barStyle = navContainerStyle,
+                        barShape = Capsule(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height((navFloatingHeight + 4).dp),
+                    )
+                    adjacentAction?.invoke()
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .padding(horizontal = layoutSpec.outerHorizontalPadding),
+                    horizontalArrangement = Arrangement.spacedBy(layoutSpec.fabGap),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     FloatingBottomNavRow(
                         items = activeItems,
@@ -332,18 +396,22 @@ fun KototoroBottomNav(
                         clickPulses = clickPulses,
                         showSelectedLabels = layoutSpec.showLabels,
                         useExpressivePill = isExpressivePillEnabled,
+                        labelsAlwaysVisible = labelsAlwaysVisible,
                         itemSpacing = layoutSpec.itemSpacing,
                         labelScale = layoutSpec.labelScale,
                         labelMaxWidth = layoutSpec.labelMaxWidth,
+                        accentOverride = sampleAccent,
                         onItemSelected = onItemSelected,
                         onItemReselected = onItemReselected,
+                        barStyle = navContainerStyle,
+                        barShape = RoundedRectangle(28.dp),
                         modifier = Modifier
                             .wrapContentWidth()
                             .height(currentExplicitHeight)
                             .padding(horizontal = layoutSpec.horizontalPadding),
                     )
+                    adjacentAction?.invoke()
                 }
-                adjacentAction?.invoke()
             }
         }
     } else {
@@ -393,13 +461,14 @@ fun KototoroBottomNav(
                                     clickPulse = clickPulses[item.id] ?: 0,
                                     badge = badge,
                                     contentDescription = stringResource(item.title),
+                                    selectedTint = sampleAccent,
                                 )
                             },
                             label = { Text(stringResource(item.title)) },
                             alwaysShowLabel = showSelectedLabels,
                             colors = NavigationBarItemDefaults.colors(
                                 indicatorColor = Color.Transparent,
-                                selectedIconColor = if (isIosStyle) {
+                                selectedIconColor = sampleAccent ?: if (isIosStyle) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     MaterialTheme.colorScheme.onSecondaryContainer
@@ -422,6 +491,8 @@ private fun MainNavBottomContainer(
     modifier: Modifier,
     style: GlassStyle,
     shape: Shape,
+    exportedBackdrop: LayerBackdrop? = null,
+    lensEnabled: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     GlassSurface(
@@ -429,68 +500,121 @@ private fun MainNavBottomContainer(
         style = style,
         shape = shape,
         componentRole = GlassComponentRole.BottomBar,
+        exportedBackdrop = exportedBackdrop,
+        lensEnabled = lensEnabled,
         content = content,
     )
 }
+
+internal data class BottomNavPillEffectSpec(
+    val progress: Float,
+    val idleMaterialFraction: Float,
+    val lensHeightDp: Float,
+    val lensAmountDp: Float,
+    val highlightAlpha: Float,
+    val innerShadowAlpha: Float,
+)
+
+internal fun resolveBottomNavPillEffect(progress: Float): BottomNavPillEffectSpec {
+    val p = progress.coerceIn(0f, 1f)
+    return BottomNavPillEffectSpec(
+        progress = p,
+        idleMaterialFraction = 1f - p,
+        lensHeightDp = 10f * p,
+        lensAmountDp = 14f * p,
+        highlightAlpha = p,
+        innerShadowAlpha = 0.15f * p,
+    )
+}
+
+internal fun resolveBottomNavMagnifyScale(): Float = 78f / 56f
+
+internal fun resolveBottomNavDragIndicatorX(
+    pointerX: Float?,
+    indicatorWidth: Int,
+    containerWidth: Int,
+    snappedOffsetX: Int,
+): Int {
+    if (pointerX == null || indicatorWidth <= 0 || containerWidth <= 0) return snappedOffsetX
+    val maxOffset = (containerWidth - indicatorWidth).coerceAtLeast(0)
+    return (pointerX - indicatorWidth / 2f).roundToInt().coerceIn(0, maxOffset)
+}
+
+internal fun interpolateBottomNavSettleX(startX: Float, targetX: Float, progress: Float): Float =
+    startX + (targetX - startX) * progress.coerceIn(0f, 1f)
+
+private data class BottomNavSettleMotion(
+    val startCenterX: Float,
+    val targetCenterX: Float,
+)
+
 
 @Composable
 private fun Modifier.mainNavBackdrop(
     shape: Shape,
     enabled: Boolean,
     backdrop: com.kyant.backdrop.Backdrop?,
-    surfaceTint: Color,
+    selectionTint: Color,
     pressProgress: () -> Float = { 0f },
+    magnifyScale: Float = 1f,
 ): Modifier {
-    // Upstream LiquidBottomTabs uses a uniform 8dp blur on both the bar and
-    // the pill; the previous 4dp default on plain backgrounds made the glass
-    // separation noticeably weaker.
-    val blurRadius = 8.dp
     return then(if (enabled && backdrop != null) {
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
             effects = {
-                val p = pressProgress()
-                vibrancy()
-                blur(blurRadius.toPx() * (1f - 0.25f * p))
-                lens(
-                    refractionHeight = 10.dp.toPx() * (1f - 0.5f * p),
-                    refractionAmount = 12.dp.toPx() * (1f + 0.5f * p),
-                    chromaticAberration = true,
-                )
+                val spec = resolveBottomNavPillEffect(pressProgress())
+                // The combined backdrop already contains the single, fully
+                // rendered navigation glass shell. BiliPai does not blur that
+                // material a second time inside each indicator; only the
+                // moving/magnified state adds a lens.
+                if (spec.progress > 0.001f) {
+                    lens(
+                        refractionHeight = spec.lensHeightDp.dp.toPx(),
+                        refractionAmount = spec.lensAmountDp.dp.toPx(),
+                        depthEffect = true,
+                        chromaticAberration = true,
+                    )
+                }
             },
-            // Bottom-nav pill indicators are navigation chrome; like the top and
-            // bottom bars they render without the always-on edge highlight and
-            // gain press-driven depth feedback only while dragged/pressed (the
-            // library's LiquidBottomTabs pill animates blur/lens/innerShadow
-            // with pressProgress).
-            highlight = null,
-            shadow = {
-                Shadow(
-                    radius = 4.dp,
-                    offset = DpOffset(0.dp, 2.dp),
-                    color = Color.Black.copy(alpha = 0.08f),
-                )
+            highlight = {
+                val spec = resolveBottomNavPillEffect(pressProgress())
+                if (spec.highlightAlpha > 0f) Highlight(width = 0.5.dp, alpha = spec.highlightAlpha) else null
             },
+            // Kyant enables Shadow.Default unless it is explicitly replaced.
+            // BiliPai's indicator has no independent idle shadow: the whole
+            // navigation shell is one glass surface.
+            shadow = { null },
             innerShadow = {
-                val p = pressProgress()
-                InnerShadow(
-                    radius = 2.dp * p,
-                    alpha = p,
-                )
+                val spec = resolveBottomNavPillEffect(pressProgress())
+                if (spec.innerShadowAlpha > 0f) {
+                    InnerShadow(
+                        radius = 8.dp * spec.progress,
+                        color = Color.Black.copy(alpha = 0.15f),
+                        alpha = spec.innerShadowAlpha,
+                    )
+                } else {
+                    null
+                }
             },
+            // BiliPai scales the Backdrop render layer itself. Scaling the
+            // outer Compose node leaves the sampled layer at its resting
+            // bounds, which makes the out-of-bar portion stale or clipped.
             layerBlock = {
-                val p = pressProgress()
-                val scale = 1f + 0.08f * p
+                val progress = resolveBottomNavPillEffect(pressProgress()).progress
+                val scale = 1f + (magnifyScale - 1f) * progress
                 scaleX = scale
                 scaleY = scale
             },
             onDrawSurface = {
-                drawRect(surfaceTint)
+                val spec = resolveBottomNavPillEffect(pressProgress())
+                if (spec.idleMaterialFraction > 0f) {
+                    drawRect(selectionTint, alpha = spec.idleMaterialFraction)
+                }
             },
         )
     } else {
-        Modifier.background(surfaceTint, shape)
+        Modifier.background(selectionTint, shape)
     })
 }
 
@@ -546,26 +670,58 @@ private fun FloatingBottomNavRow(
     clickPulses: MutableMap<Int, Int>,
     showSelectedLabels: Boolean,
     useExpressivePill: Boolean,
+    labelsAlwaysVisible: Boolean,
+    accentOverride: Color? = null,
     itemSpacing: Dp,
     labelScale: Float,
     labelMaxWidth: Dp?,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
+    barStyle: GlassStyle,
+    barShape: Shape,
     modifier: Modifier = Modifier,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
+    val navigationShellBackdrop = rememberLayerBackdrop()
+    val navigationContentBackdrop = rememberLayerBackdrop()
+    val indicatorBackdrop = if (backdrop != null) {
+        // BiliPai/InstallerX ordering: page, tinted dock material, then dock
+        // foreground. The moving indicator samples all three, while the
+        // shell's final hairline/highlight stays outside the capture.
+        rememberCombinedBackdrop(backdrop, navigationShellBackdrop, navigationContentBackdrop)
+    } else {
+        null
+    }
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val amoledCanvas = LocalAmoledTheme.current
     val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
-    val pillSurfaceTint = GlassDefaults.chromeBackdropTint().copy(
-        alpha = GlassDefaults.bottomBarChromeStyle().backdropSurfaceAlpha(
-            componentRole = GlassComponentRole.BottomBar,
-            amoledCanvas = amoledCanvas,
-        ),
-    )
+    val pillSelectionTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
     var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
+    var dragIndicatorCenterX by remember { mutableStateOf<Float?>(null) }
+    var dragIndicatorWidthPx by remember { mutableStateOf<Int?>(null) }
+    var settleMotion by remember { mutableStateOf<BottomNavSettleMotion?>(null) }
+    val settleProgress by animateFloatAsState(
+        targetValue = if (settleMotion == null) 0f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.78f,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "bottomNavPillSettleProgress",
+    )
+    LaunchedEffect(settleMotion, settleProgress) {
+        val motion = settleMotion ?: return@LaunchedEffect
+        if (settleProgress >= 0.999f) {
+            dragPreviewItemId = null
+            dragIndicatorCenterX = null
+            delay(180)
+            if (settleMotion == motion) {
+                settleMotion = null
+                dragIndicatorWidthPx = null
+            }
+        }
+    }
     val pillPressProgress = remember { Animatable(0f) }
     LaunchedEffect(dragPreviewItemId) {
         pillPressProgress.animateTo(
@@ -573,36 +729,96 @@ private fun FloatingBottomNavRow(
             animationSpec = tween(if (dragPreviewItemId != null) 90 else 160),
         )
     }
+    // Use the same relative magnification as the 56dp BiliPai indicator. The
+    // compact 40dp expressive pill therefore grows to about 56dp, rather than
+    // nearly doubling to an oversized 78dp.
+    val pillMagnifyScale = resolveBottomNavMagnifyScale()
+    val pillSelectPulse = remember { Animatable(0f) }
+    var hasInitialSelection by remember { mutableStateOf(false) }
+    var justReleasedFromDrag by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedItemId) {
+        if (!hasInitialSelection) {
+            hasInitialSelection = true
+            return@LaunchedEffect
+        }
+        if (justReleasedFromDrag) {
+            justReleasedFromDrag = false
+            return@LaunchedEffect
+        }
+        pillSelectPulse.snapTo(0f)
+        pillSelectPulse.animateTo(
+            targetValue = 0f,
+            animationSpec = keyframes {
+                durationMillis = 400
+                0f at 0
+                1f at 200 using FastOutSlowInEasing
+                0f at 400 using FastOutSlowInEasing
+            },
+        )
+    }
     val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
     val selectedBounds = itemBounds[displayedSelectedItemId]
     val density = LocalDensity.current
-    val selectedContentColor = if (isIosStyle) {
+    val selectedContentColor = accentOverride ?: if (isIosStyle) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.onSecondaryContainer
     }
-    val targetIndicatorOffset = selectedBounds?.offset?.copy(
-        y = selectedBounds.offset.y + with(density) { 4.dp.roundToPx() },
-    ) ?: IntOffset.Zero
-    val targetIndicatorSize = selectedBounds?.size?.let {
-        IntSize(it.width, with(density) { 40.dp.roundToPx() })
-    } ?: IntSize.Zero
-    val indicatorOffset by animateIntOffsetAsState(
+    val pillHeightPx = with(density) { 40.dp.roundToPx() }
+    // Center the capsule on the selected item (not anchored to its top), so it
+    // stays symmetric for any bar height.
+    val targetIndicatorWidth = dragIndicatorWidthPx ?: selectedBounds?.size?.width ?: 0
+    val snappedIndicatorOffset = selectedBounds?.let {
+        IntOffset(
+            it.offset.x,
+            it.offset.y + (it.size.height - pillHeightPx) / 2,
+        )
+    } ?: IntOffset.Zero
+    val targetIndicatorOffset = snappedIndicatorOffset.copy(
+        x = resolveBottomNavDragIndicatorX(
+            pointerX = settleMotion?.let {
+                interpolateBottomNavSettleX(it.startCenterX, it.targetCenterX, settleProgress)
+            } ?: dragIndicatorCenterX,
+            indicatorWidth = targetIndicatorWidth,
+            containerWidth = containerSize.width,
+            snappedOffsetX = snappedIndicatorOffset.x,
+        ),
+    )
+    val targetIndicatorSize = if (targetIndicatorWidth > 0) {
+        IntSize(targetIndicatorWidth, with(density) { 40.dp.roundToPx() })
+    } else {
+        IntSize.Zero
+    }
+    val animatedIndicatorOffset by animateIntOffsetAsState(
         targetValue = targetIndicatorOffset,
         label = "bottomNavGlassPillOffset",
     )
-    val indicatorSize by animateIntSizeAsState(
+    val animatedIndicatorSize by animateIntSizeAsState(
         targetValue = targetIndicatorSize,
         label = "bottomNavGlassPillSize",
     )
+    val isIndicatorDirectlyPositioned = dragIndicatorCenterX != null || settleMotion != null
+    val indicatorOffset = if (isIndicatorDirectlyPositioned) targetIndicatorOffset else animatedIndicatorOffset
+    val indicatorSize = if (isIndicatorDirectlyPositioned) targetIndicatorSize else animatedIndicatorSize
+    val pillEffectProgress = maxOf(pillSelectPulse.value, pillPressProgress.value)
     Box(
         modifier = modifier
-            .animateContentSize()
             .onGloballyPositioned { coordinates ->
                 containerPositionInRoot = coordinates.positionInRoot()
+                containerSize = coordinates.size
             },
         contentAlignment = Alignment.Center,
     ) {
+        MainNavBottomContainer(
+            modifier = Modifier.matchParentSize(),
+            style = barStyle,
+            shape = barShape,
+            exportedBackdrop = navigationShellBackdrop,
+            // Kyant's 24dp shell lens produces repeated interior caustics on
+            // this wide capsule. BiliPai's visible result is one continuous
+            // dock material; refraction belongs to the moving indicator.
+            lensEnabled = false,
+        ) {}
         if (useSharedLiquidGlassPill && targetIndicatorSize != IntSize.Zero) {
             val indicatorShape = Capsule()
             Box(
@@ -613,21 +829,22 @@ private fun FloatingBottomNavRow(
                         width = with(density) { indicatorSize.width.toDp() },
                         height = with(density) { indicatorSize.height.toDp() },
                     )
+                    .graphicsLayer {
+                        clip = false
+                    }
+                    .zIndex(2f)
                     .mainNavBackdrop(
                         shape = indicatorShape,
                         enabled = backdrop != null,
-                        backdrop = backdrop,
-                        surfaceTint = pillSurfaceTint,
-                        pressProgress = { pillPressProgress.value },
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f),
-                        shape = indicatorShape,
+                        backdrop = indicatorBackdrop,
+                        selectionTint = pillSelectionTint,
+                        pressProgress = { pillEffectProgress },
+                        magnifyScale = pillMagnifyScale,
                     ),
             )
         }
         Row(
+            modifier = Modifier.layerBackdrop(navigationContentBackdrop),
             horizontalArrangement = Arrangement.spacedBy(itemSpacing, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -670,16 +887,20 @@ private fun FloatingBottomNavRow(
                             var pointerX = 0f
                             detectDragGestures(
                                 onDragStart = { startOffset ->
+                                    settleMotion = null
                                     val itemOffset = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
                                     // detectDragGestures reports startOffset in the item's
                                     // local coordinates; convert it to the shared row space
                                     // before comparing against sibling bounds.
                                     pointerX = itemOffset + startOffset.x
+                                    dragIndicatorCenterX = pointerX
+                                    dragIndicatorWidthPx = itemBounds[item.id]?.size?.width
                                     dragPreviewItemId = item.id
                                 },
                                 onDrag = { change, dragAmount ->
                                     change.consume()
                                     pointerX += dragAmount.x
+                                    dragIndicatorCenterX = pointerX
                                     val targetItemId = itemBounds
                                         .values
                                         .firstOrNull { it.containsHorizontal(pointerX) }
@@ -689,13 +910,28 @@ private fun FloatingBottomNavRow(
                                     }
                                 },
                                 onDragCancel = {
+                                    settleMotion = null
+                                    dragIndicatorCenterX = null
+                                    dragIndicatorWidthPx = null
                                     dragPreviewItemId = null
                                 },
                                 onDragEnd = {
                                     val targetItemId = dragPreviewItemId
-                                    dragPreviewItemId = null
+                                    val targetBounds = targetItemId?.let(itemBounds::get)
+                                    if (targetItemId != null && targetBounds != null) {
+                                        settleMotion = BottomNavSettleMotion(
+                                            startCenterX = pointerX,
+                                            targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
+                                        )
+                                    }
                                     if (targetItemId != null && targetItemId != selectedItemId) {
+                                        justReleasedFromDrag = true
                                         onItemSelected(targetItemId)
+                                    }
+                                    if (targetBounds == null) {
+                                        dragIndicatorCenterX = null
+                                        dragIndicatorWidthPx = null
+                                        dragPreviewItemId = null
                                     }
                                 },
                             )
@@ -737,7 +973,7 @@ private fun FloatingBottomNavRow(
                                                         shape = Capsule(),
                                                         enabled = backdrop != null,
                                                         backdrop = backdrop,
-                                                        surfaceTint = pillSurfaceTint,
+                                                        selectionTint = pillSelectionTint,
                                                     )
                                                 } else {
                                                     Modifier
@@ -805,7 +1041,7 @@ private fun FloatingBottomNavRow(
                             contentDescription = stringResource(item.title),
                         )
                     }
-                    if (isSelected && showSelectedLabels) {
+                    if ((isSelected || labelsAlwaysVisible) && showSelectedLabels) {
                         Spacer(modifier = Modifier.height(0.dp))
                         Text(
                             text = stringResource(item.title),
@@ -817,6 +1053,295 @@ private fun FloatingBottomNavRow(
                 }
             }
         }
+    }
+}
+}
+
+/**
+ * Full-width floating navigation row (the AndroidLiquidGlass LiquidBottomTabs
+ * layout): evenly weighted tabs with 4dp insets, each showing an icon over its
+ * label, and the selected tab wrapped by a 56dp full-tab capsule pill whose
+ * glass follows the bottom navigation shell material while idle.
+ * The selected content may optionally take the sample's blue accent.
+ */
+@Composable
+private fun FullWidthFloatingBottomNavRow(
+    items: List<NavItem>,
+    selectedItemId: Int,
+    badges: Map<Int, BadgeInfo>,
+    clickPulses: MutableMap<Int, Int>,
+    showSelectedLabels: Boolean,
+    labelsAlwaysVisible: Boolean,
+    accentOverride: Color? = null,
+    onItemSelected: (Int) -> Unit,
+    onItemReselected: (Int) -> Unit,
+    barStyle: GlassStyle,
+    barShape: Shape,
+    modifier: Modifier = Modifier,
+) {
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val navigationShellBackdrop = rememberLayerBackdrop()
+    val navigationContentBackdrop = rememberLayerBackdrop()
+    val indicatorBackdrop = if (backdrop != null) {
+        rememberCombinedBackdrop(backdrop, navigationShellBackdrop, navigationContentBackdrop)
+    } else {
+        null
+    }
+    val accentColor = accentOverride ?: MaterialTheme.colorScheme.primary
+    val pillSelectionTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
+    var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var dragPreviewItemId by remember { mutableStateOf<Int?>(null) }
+    var dragIndicatorCenterX by remember { mutableStateOf<Float?>(null) }
+    var dragIndicatorWidthPx by remember { mutableStateOf<Int?>(null) }
+    var settleMotion by remember { mutableStateOf<BottomNavSettleMotion?>(null) }
+    val settleProgress by animateFloatAsState(
+        targetValue = if (settleMotion == null) 0f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.78f,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "bottomNavFullWidthPillSettleProgress",
+    )
+    LaunchedEffect(settleMotion, settleProgress) {
+        val motion = settleMotion ?: return@LaunchedEffect
+        if (settleProgress >= 0.999f) {
+            dragPreviewItemId = null
+            dragIndicatorCenterX = null
+            delay(180)
+            if (settleMotion == motion) {
+                settleMotion = null
+                dragIndicatorWidthPx = null
+            }
+        }
+    }
+    val pillPressProgress = remember { Animatable(0f) }
+    LaunchedEffect(dragPreviewItemId) {
+        pillPressProgress.animateTo(
+            targetValue = if (dragPreviewItemId != null) 1f else 0f,
+            animationSpec = tween(if (dragPreviewItemId != null) 90 else 160),
+        )
+    }
+    // Selection "magnet magnify" mirroring the LiquidBottomTabs sample: the pill
+    // swells from 56dp to the sample's pressed 78dp (crossing the 64dp bar by
+    // 7dp on each side) while flying to the new tab, then settles on arrival.
+    val pillMagnifyScale = resolveBottomNavMagnifyScale()
+    val pillSelectPulse = remember { Animatable(0f) }
+    var hasInitialSelection by remember { mutableStateOf(false) }
+    var justReleasedFromDrag by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedItemId) {
+        if (!hasInitialSelection) {
+            hasInitialSelection = true
+            return@LaunchedEffect
+        }
+        if (justReleasedFromDrag) {
+            justReleasedFromDrag = false
+            return@LaunchedEffect
+        }
+        pillSelectPulse.snapTo(0f)
+        pillSelectPulse.animateTo(
+            targetValue = 0f,
+            animationSpec = keyframes {
+                durationMillis = 400
+                0f at 0
+                1f at 200 using FastOutSlowInEasing
+                0f at 400 using FastOutSlowInEasing
+            },
+        )
+    }
+    val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
+    val selectedBounds = itemBounds[displayedSelectedItemId]
+    val density = LocalDensity.current
+    // The pill is 56dp tall (64dp bar minus the 4dp inset on each side) and
+    // spans the selected tab's full content width, mirroring the sample.
+    val pillHeightPx = with(density) { 56.dp.roundToPx() }
+    val targetIndicatorWidth = dragIndicatorWidthPx ?: selectedBounds?.size?.width ?: 0
+    val snappedIndicatorOffset = selectedBounds?.let {
+        IntOffset(
+            it.offset.x,
+            it.offset.y + (it.size.height - pillHeightPx) / 2,
+        )
+    } ?: IntOffset.Zero
+    val targetIndicatorOffset = snappedIndicatorOffset.copy(
+        x = resolveBottomNavDragIndicatorX(
+            pointerX = settleMotion?.let {
+                interpolateBottomNavSettleX(it.startCenterX, it.targetCenterX, settleProgress)
+            } ?: dragIndicatorCenterX,
+            indicatorWidth = targetIndicatorWidth,
+            containerWidth = containerSize.width,
+            snappedOffsetX = snappedIndicatorOffset.x,
+        ),
+    )
+    val targetIndicatorSize = if (targetIndicatorWidth > 0) {
+        IntSize(targetIndicatorWidth, with(density) { 56.dp.roundToPx() })
+    } else {
+        IntSize.Zero
+    }
+    val animatedIndicatorOffset by animateIntOffsetAsState(
+        targetValue = targetIndicatorOffset,
+        label = "bottomNavSamplePillOffset",
+    )
+    val animatedIndicatorSize by animateIntSizeAsState(
+        targetValue = targetIndicatorSize,
+        label = "bottomNavSamplePillSize",
+    )
+    val isIndicatorDirectlyPositioned = dragIndicatorCenterX != null || settleMotion != null
+    val indicatorOffset = if (isIndicatorDirectlyPositioned) targetIndicatorOffset else animatedIndicatorOffset
+    val indicatorSize = if (isIndicatorDirectlyPositioned) targetIndicatorSize else animatedIndicatorSize
+    val pillEffectProgress = maxOf(pillSelectPulse.value, pillPressProgress.value)
+    Box(
+        modifier = modifier.onGloballyPositioned { coordinates ->
+            containerPositionInRoot = coordinates.positionInRoot()
+            containerSize = coordinates.size
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        MainNavBottomContainer(
+            modifier = Modifier.matchParentSize(),
+            style = barStyle,
+            shape = barShape,
+            exportedBackdrop = navigationShellBackdrop,
+            lensEnabled = false,
+        ) {}
+        if (targetIndicatorSize != IntSize.Zero) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { indicatorOffset }
+                    .size(
+                        width = with(density) { indicatorSize.width.toDp() },
+                        height = with(density) { indicatorSize.height.toDp() },
+                    )
+                    .graphicsLayer {
+                        clip = false
+                    }
+                    .zIndex(2f)
+                    .mainNavBackdrop(
+                        shape = Capsule(),
+                        enabled = backdrop != null,
+                        backdrop = indicatorBackdrop,
+                        selectionTint = pillSelectionTint,
+                        pressProgress = { pillEffectProgress },
+                        magnifyScale = pillMagnifyScale,
+                    ),
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp)
+                .layerBackdrop(navigationContentBackdrop),
+            horizontalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items.forEach { item ->
+                val isSelected = displayedSelectedItemId == item.id
+                val contentColor = if (isSelected) {
+                    accentColor
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                CompositionLocalProvider(LocalContentColor provides contentColor) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .onGloballyPositioned { coordinates ->
+                                val position = coordinates.positionInRoot() - containerPositionInRoot
+                                itemBounds[item.id] = NavItemBounds(
+                                    itemId = item.id,
+                                    offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
+                                    size = IntSize(coordinates.size.width, coordinates.size.height),
+                                )
+                            }
+                            .pointerInput(items, item.id) {
+                                var pointerX = 0f
+                                detectDragGestures(
+                                    onDragStart = { startOffset ->
+                                        settleMotion = null
+                                        val itemOffset = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
+                                        pointerX = itemOffset + startOffset.x
+                                        dragIndicatorCenterX = pointerX
+                                        dragIndicatorWidthPx = itemBounds[item.id]?.size?.width
+                                        dragPreviewItemId = item.id
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        pointerX += dragAmount.x
+                                        dragIndicatorCenterX = pointerX
+                                        val targetItemId = itemBounds
+                                            .values
+                                            .firstOrNull { it.containsHorizontal(pointerX) }
+                                            ?.itemId
+                                        if (targetItemId != null) {
+                                            dragPreviewItemId = targetItemId
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        settleMotion = null
+                                        dragIndicatorCenterX = null
+                                        dragIndicatorWidthPx = null
+                                        dragPreviewItemId = null
+                                    },
+                                    onDragEnd = {
+                                        val targetItemId = dragPreviewItemId
+                                        val targetBounds = targetItemId?.let(itemBounds::get)
+                                        if (targetItemId != null && targetBounds != null) {
+                                            settleMotion = BottomNavSettleMotion(
+                                                startCenterX = pointerX,
+                                                targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
+                                            )
+                                        }
+                                        if (targetItemId != null && targetItemId != selectedItemId) {
+                                            justReleasedFromDrag = true
+                                            onItemSelected(targetItemId)
+                                        }
+                                        if (targetBounds == null) {
+                                            dragIndicatorCenterX = null
+                                            dragIndicatorWidthPx = null
+                                            dragPreviewItemId = null
+                                        }
+                                    },
+                                )
+                            }
+                            .clickable(
+                                interactionSource = remember(item.id) { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    if (isSelected) {
+                                        onItemReselected(item.id)
+                                    } else {
+                                        clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
+                                        onItemSelected(item.id)
+                                    }
+                                },
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        PremiumNavigationIcon(
+                            itemId = item.id,
+                            isSelected = isSelected,
+                            clickPulse = clickPulses[item.id] ?: 0,
+                            badge = badges[item.id],
+                            contentDescription = stringResource(item.title),
+                            selectedTint = accentColor,
+                        )
+                        // The sample always keeps every tab label visible; expose
+                        // that via the "always show labels" toggle (fall back to
+                        // the selected-only label when it is off).
+                        if (showSelectedLabels && (isSelected || labelsAlwaysVisible)) {
+                            Text(
+                                text = stringResource(item.title),
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -837,6 +1362,7 @@ private fun PremiumNavigationIcon(
     clickPulse: Int,
     badge: BadgeInfo?,
     contentDescription: String,
+    selectedTint: Color? = null,
 ) {
     BadgedBox(
         modifier = Modifier.wrapContentSize(unbounded = true),
@@ -866,6 +1392,7 @@ private fun PremiumNavigationIcon(
             isSelected = isSelected,
             clickPulse = clickPulse,
             contentDescription = contentDescription,
+            selectedTint = selectedTint,
         )
     }
 }
@@ -882,6 +1409,7 @@ private fun AnimatedNavigationIcon(
     isSelected: Boolean,
     clickPulse: Int,
     contentDescription: String,
+    selectedTint: Color? = null,
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val animatedResId = remember(itemId) { navEnterAnimationResId(itemId) }
@@ -889,7 +1417,11 @@ private fun AnimatedNavigationIcon(
     val enterAnimationResId = if (isSelected && clickPulse > 0) animatedResId else null
     val tint = lerp(
         MaterialTheme.colorScheme.onSurfaceVariant,
-        if (isIosStyle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer,
+        selectedTint ?: if (isIosStyle) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        },
         if (isSelected) 1f else 0f,
     )
 

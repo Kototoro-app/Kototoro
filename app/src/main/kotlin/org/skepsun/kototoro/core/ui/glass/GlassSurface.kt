@@ -29,13 +29,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.highlight.HighlightStyle
+import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import androidx.compose.foundation.shape.CornerBasedShape
 import com.kyant.shapes.RoundedRectangle
@@ -163,6 +164,12 @@ object GlassDefaults {
     }
 }
 
+internal fun resolveGlassPressProgress(enabled: Boolean, progress: Float): Float =
+    if (enabled) progress.coerceIn(0f, 1f) else 0f
+
+internal fun shouldApplyGlassLens(enabled: Boolean, heightDp: Float, amountDp: Float): Boolean =
+    enabled && heightDp > 0f && amountDp > 0f
+
 /**
  * Shared control surface.
  *
@@ -178,6 +185,9 @@ fun GlassSurface(
     dialogSurface: Boolean = false,
     componentRole: GlassComponentRole = defaultGlassComponentRole(dialogSurface),
     highlightOnIdle: Boolean = true,
+    lensEnabled: Boolean = true,
+    pressFeedbackEnabled: Boolean = true,
+    exportedBackdrop: LayerBackdrop? = null,
     @Suppress("UNUSED_PARAMETER") debugLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -193,6 +203,9 @@ fun GlassSurface(
             shape = shape,
             componentRole = componentRole,
             highlightOnIdle = highlightOnIdle,
+            lensEnabled = lensEnabled,
+            pressFeedbackEnabled = pressFeedbackEnabled,
+            exportedBackdrop = exportedBackdrop,
             content = content,
         )
         return
@@ -241,13 +254,26 @@ fun LiquidGlassSurface(
     shape: Shape = GlassDefaults.shape,
     componentRole: GlassComponentRole = GlassComponentRole.Surface,
     highlightOnIdle: Boolean = true,
+    lensEnabled: Boolean = true,
+    pressFeedbackEnabled: Boolean = true,
+    exportedBackdrop: LayerBackdrop? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
     val amoledCanvas = LocalAmoledTheme.current
     val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
-    if (LocalInterfaceStyle.current != InterfaceStyle.IOS || !glassEnabled || backdrop == null || !allowsBackdrop) {
+    // Glass Finish Tuner (ADR 0001): resolve every drawer parameter from the
+    // per-role scope. The state falls back to exact legacy values when nothing
+    // has been tuned, so an untouched install renders pixel-identically.
+    val tuning = LocalGlassTuning.current ?: emptyGlassTuningState()
+    val tuningScope = GlassTuningScope.fromRole(componentRole)
+    if (LocalInterfaceStyle.current != InterfaceStyle.IOS ||
+        !glassEnabled ||
+        backdrop == null ||
+        !allowsBackdrop ||
+        !tuning.isOn(tuningScope, GlassTuningParam.GLASS_ENABLED)
+    ) {
         StableGlassFallback(
             modifier = modifier,
             style = style,
@@ -257,7 +283,6 @@ fun LiquidGlassSurface(
         return
     }
 
-    val exportedBackdrop = rememberLayerBackdrop()
     val colors = MaterialTheme.colorScheme
     val isDark = colors.isDarkTheme()
     val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
@@ -273,10 +298,7 @@ fun LiquidGlassSurface(
     // their own shadow, alpha and depth treatment.
     val suppressPersistentHighlight =
         isFloatingChrome || componentRole == GlassComponentRole.BottomPanel
-    val surfaceAlpha = style.backdropSurfaceAlpha(
-        componentRole = componentRole,
-        amoledCanvas = amoledCanvas,
-    )
+    val surfaceAlpha = tuning.value(tuningScope, GlassTuningParam.SURFACE_ALPHA)
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
@@ -306,7 +328,7 @@ fun LiquidGlassSurface(
     // a whole-bar brighten reads odd next to the discrete controls they host —
     // while pill controls and content glass track press so they glow while
     // touched.
-    val pressTracking = if (isNavigationChrome) {
+    val pressTracking = if (isNavigationChrome || !pressFeedbackEnabled) {
         Modifier
     } else {
         Modifier.pointerInput(Unit) {
@@ -331,78 +353,111 @@ fun LiquidGlassSurface(
                     exportedBackdrop = exportedBackdrop,
                     shape = { shape },
                     effects = {
-                        vibrancy()
-                        blur(8.dp.toPx())
+                        if (tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)) {
+                            vibrancy()
+                        }
+                        blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
                         // lens() requires a CornerBasedShape or the kyant
                         // RoundedRectangularShape; guard so callers passing a
                         // plain RectangleShape (edge-to-edge top chrome) degrade
                         // to blur instead of crashing during composition.
                         if (shape is CornerBasedShape || shape is RoundedRectangularShape) {
-                            lens(
-                                refractionHeight = 16.dp.toPx(),
-                                refractionAmount = 24.dp.toPx(),
-                                depthEffect = !isFloatingChrome,
-                                chromaticAberration = false,
-                            )
+                            val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                            val lensBoost = 1f +
+                                tuning.value(tuningScope, GlassTuningParam.PRESS_LENS_STRENGTH) * press
+                            val lensHeightDp = tuning.value(
+                                tuningScope,
+                                GlassTuningParam.LENS_HEIGHT_DP,
+                            ) * lensBoost
+                            val lensAmountDp = tuning.value(
+                                tuningScope,
+                                GlassTuningParam.LENS_AMOUNT_DP,
+                            ) * lensBoost
+                            if (shouldApplyGlassLens(lensEnabled, lensHeightDp, lensAmountDp)) {
+                                lens(
+                                    refractionHeight = lensHeightDp.dp.toPx(),
+                                    refractionAmount = lensAmountDp.dp.toPx(),
+                                    depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
+                                    chromaticAberration = tuning.isOn(
+                                        tuningScope,
+                                        GlassTuningParam.CHROMATIC_ABERRATION,
+                                    ) || (press > 0f && tuning.isOn(
+                                        tuningScope,
+                                        GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
+                                    )),
+                                )
+                            }
                         }
                     },
                     highlight = {
-                        // iOS navigation chrome (bars), floating pill controls
-                        // and large glass panels stay without the persistent
-                        // edge highlight. Content glass defaults to the upstream
-                        // Control Center always-on specular highlight that
-                        // follows device gravity; surfaces with
-                        // highlightOnIdle = false (large static info panels)
-                        // render without an idle edge and brighten only while
-                        // pressed, mirroring the library's own controls.
-                        if (isNavigationChrome || componentRole == GlassComponentRole.BottomPanel) {
-                            // Bars and large passive panels stay flat even while
-                            // pressed: a whole-bar or whole-panel brighten reads
-                            // odd compared to the discrete controls they host.
-                            null
-                        } else if (componentRole == GlassComponentRole.PillControl ||
-                            !highlightOnIdle
-                        ) {
-                            // Interaction-only gloss, mirroring the library's
-                            // own LiquidButton: no resting highlight, but the
-                            // glass responds to touch by brightening while
-                            // pressed (pill controls and opt-out info panels).
-                            if (pressProgress.value == 0f) null
-                            else {
+                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                        val pressRimOn = tuningScope in GlassTuning.pressableRoles &&
+                            press > 0f &&
+                            tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA) > 0f
+                        val idleRimOn = tuning.isOn(tuningScope, GlassTuningParam.RIM_ENABLED) && highlightOnIdle
+                        when {
+                            pressRimOn -> Highlight(
+                                style = HighlightStyle.Default(angle = 45f, falloff = 2f),
+                                alpha = press * tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA),
+                            )
+                            idleRimOn -> {
+                                val rimAlpha = tuning.value(tuningScope, GlassTuningParam.RIM_ALPHA)
                                 Highlight(
                                     style = HighlightStyle.Default(
-                                        angle = 45f,
+                                        angle = if (isFloatingChrome) 45f else (uiSensor?.gravityAngle ?: 45f),
                                         falloff = 2f,
                                     ),
-                                    alpha = pressProgress.value,
+                                    alpha = rimAlpha + (1f - rimAlpha) * press,
                                 )
                             }
-                        } else {
-                            Highlight(
-                                style = HighlightStyle.Default(
-                                    angle = uiSensor?.gravityAngle ?: 45f,
-                                    falloff = 2f,
-                                ),
-                                alpha = 0.65f + 0.35f * pressProgress.value,
-                            )
+                            else -> null
                         }
                     },
-                    shadow = if (style.shadowElevation > 0.dp) {
+                    shadow = if (tuning.isOn(tuningScope, GlassTuningParam.SHADOW_ENABLED) &&
+                        style.shadowElevation > 0.dp
+                    ) {
                         {
-                            // Light floating shadow, matching the library's own
-                            // controls (Shadow.Default is a heavy 24.dp drop that
-                            // reads as a hard ring on glass); use only a subtle
-                            // separation cue per the upstream glass bottom bar.
                             Shadow(
-                                radius = 4.dp,
-                                offset = DpOffset(0.dp, 2.dp),
+                                radius = tuning.value(tuningScope, GlassTuningParam.SHADOW_RADIUS_DP).dp,
+                                offset = DpOffset(
+                                    0.dp,
+                                    tuning.value(tuningScope, GlassTuningParam.SHADOW_OFFSET_DP).dp,
+                                ),
                                 color = Color.Black.copy(
-                                    alpha = if (isFloatingChrome) 0.10f else 0.06f,
+                                    alpha = tuning.value(tuningScope, GlassTuningParam.SHADOW_ALPHA),
                                 ),
                             )
                         }
                     } else {
                         null
+                    },
+                    innerShadow = {
+                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                        if (tuningScope in GlassTuning.pressableRoles && press > 0f &&
+                            tuning.value(tuningScope, GlassTuningParam.PRESS_INNER_SHADOW_ALPHA) > 0f
+                        ) {
+                            InnerShadow(
+                                radius = tuning.value(
+                                    tuningScope,
+                                    GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP,
+                                ).dp * press,
+                                alpha = press * tuning.value(
+                                    tuningScope,
+                                    GlassTuningParam.PRESS_INNER_SHADOW_ALPHA,
+                                ),
+                            )
+                        } else {
+                            null
+                        }
+                    },
+                    layerBlock = {
+                        val press = resolveGlassPressProgress(pressFeedbackEnabled, pressProgress.value)
+                        if (tuningScope in GlassTuning.pressableRoles && press > 0f) {
+                            val scale = 1f +
+                                tuning.value(tuningScope, GlassTuningParam.PRESS_SCALE_PERCENT) / 100f * press
+                            scaleX = scale
+                            scaleY = scale
+                        }
                     },
                     onDrawSurface = {
                         drawRect(tint)
@@ -410,24 +465,30 @@ fun LiquidGlassSurface(
                 )
                 // Hairline is the edge cue for floating chrome — pill controls
                 // and the floating bottom bar. Full-width top bars (settings,
-                // reader) deliberately stay borderless: a hairline around an
-                // edge-to-edge panel reads as an unwanted frame at the screen
-                // edge rather than a crisp control edge. It is a static
+                // reader) deliberately stay borderless by default: a hairline
+                // around an edge-to-edge panel reads as an unwanted frame at the
+                // screen edge rather than a crisp control edge. It is a static
                 // separator line (same family as the shadow), not the Liquid
-                // Glass specular highlight, which stays off for all chrome.
+                // Glass specular highlight.
                 .then(
-                    if (componentRole == GlassComponentRole.TopBar) {
-                        Modifier
-                    } else {
+                    if (tuning.isOn(tuningScope, GlassTuningParam.HAIRLINE_ENABLED)) {
                         Modifier.border(
                             width = 1.dp,
                             color = if (isDark) {
-                                Color.White.copy(alpha = style.borderAlpha)
+                                Color.White.copy(alpha = tuning.value(
+                                    tuningScope,
+                                    GlassTuningParam.HAIRLINE_ALPHA,
+                                ))
                             } else {
-                                colors.outlineVariant.copy(alpha = style.borderAlpha)
+                                colors.outlineVariant.copy(alpha = tuning.value(
+                                    tuningScope,
+                                    GlassTuningParam.HAIRLINE_ALPHA,
+                                ))
                             },
                             shape = shape,
                         )
+                    } else {
+                        Modifier
                     },
                 ),
             content = content,

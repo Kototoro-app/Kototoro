@@ -515,6 +515,21 @@ class SettingsActivity :
                 SettingsDestination.AppearanceSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_SETTINGS)
                 }
+                SettingsDestination.AppearanceListSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_LIST_SETTINGS)
+                }
+                SettingsDestination.AppearanceDetailsSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_DETAILS_SETTINGS)
+                }
+                SettingsDestination.AppearanceHomeSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS)
+                }
+                SettingsDestination.AppearanceInterfaceSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS)
+                }
+                SettingsDestination.AppearanceGlassSettings -> {
+                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS)
+                }
                 SettingsDestination.AppearanceBadgesSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS)
                 }
@@ -685,6 +700,11 @@ class SettingsActivity :
                 pushCurrentToStack = false,
             )
             SettingsDestination.AppearanceSettings,
+            SettingsDestination.AppearanceListSettings,
+            SettingsDestination.AppearanceDetailsSettings,
+            SettingsDestination.AppearanceHomeSettings,
+            SettingsDestination.AppearanceInterfaceSettings,
+            SettingsDestination.AppearanceGlassSettings,
             SettingsDestination.AppearanceBadgesSettings,
             SettingsDestination.AppearanceSearchFiltersSettings,
             SettingsDestination.AppearanceNavigationSettings,
@@ -847,6 +867,11 @@ class SettingsActivity :
         return when (destination) {
             SettingsDestination.Root -> COMPOSE_DESTINATION_ROOT
             SettingsDestination.AppearanceSettings -> COMPOSE_DESTINATION_APPEARANCE_SETTINGS
+            SettingsDestination.AppearanceListSettings -> COMPOSE_DESTINATION_APPEARANCE_LIST_SETTINGS
+            SettingsDestination.AppearanceDetailsSettings -> COMPOSE_DESTINATION_APPEARANCE_DETAILS_SETTINGS
+            SettingsDestination.AppearanceHomeSettings -> COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS
+            SettingsDestination.AppearanceInterfaceSettings -> COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS
+            SettingsDestination.AppearanceGlassSettings -> COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS
             SettingsDestination.AppearanceBadgesSettings -> COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS
             SettingsDestination.AppearanceSearchFiltersSettings -> COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS
             SettingsDestination.AppearanceNavigationSettings -> COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS
@@ -889,6 +914,12 @@ class SettingsActivity :
         return when (destination) {
             SettingsDestination.Root -> getString(R.string.settings)
             SettingsDestination.AppearanceSettings -> getString(R.string.appearance)
+            SettingsDestination.AppearanceListSettings -> getString(R.string.appearance_group_lists)
+            SettingsDestination.AppearanceDetailsSettings -> getString(R.string.appearance_group_details)
+            SettingsDestination.AppearanceHomeSettings -> getString(R.string.appearance_group_home)
+            SettingsDestination.AppearanceInterfaceSettings ->
+                getString(R.string.appearance_group_interface_and_behavior)
+            SettingsDestination.AppearanceGlassSettings -> getString(R.string.appearance_group_glass_tuner)
             SettingsDestination.AppearanceBadgesSettings -> getString(R.string.badges_in_lists)
             SettingsDestination.AppearanceSearchFiltersSettings -> getString(R.string.search_bar_filters)
             SettingsDestination.AppearanceNavigationSettings -> getString(R.string.appearance_navigation_group)
@@ -941,6 +972,9 @@ class SettingsActivity :
             onOpenNavConfig = { openDestination(SettingsDestination.NavConfigSettings, null, false) },
             onOpenPanoramaSettings = { openDestination(SettingsDestination.PanoramaSettings, null, false) },
             onOpenProtectSetup = { startActivity(Intent(this, ProtectSetupActivity::class.java)) },
+            onOpenGlassSettings = {
+                openDestination(SettingsDestination.AppearanceGlassSettings, null, false)
+            },
             onOpenBadgesSettings = {
                 openDestination(SettingsDestination.AppearanceBadgesSettings, null, false)
             },
@@ -949,6 +983,18 @@ class SettingsActivity :
             },
             onOpenNavigationSettings = {
                 openDestination(SettingsDestination.AppearanceNavigationSettings, null, false)
+            },
+            onOpenListSettings = {
+                openDestination(SettingsDestination.AppearanceListSettings, null, false)
+            },
+            onOpenDetailsSettings = {
+                openDestination(SettingsDestination.AppearanceDetailsSettings, null, false)
+            },
+            onOpenHomeSettings = {
+                openDestination(SettingsDestination.AppearanceHomeSettings, null, false)
+            },
+            onOpenInterfaceSettings = {
+                openDestination(SettingsDestination.AppearanceInterfaceSettings, null, false)
             },
         )
     }
@@ -961,6 +1007,31 @@ class SettingsActivity :
             }
             SettingsDestination.AppearanceSettings -> RenderComposeSection(title = getString(R.string.appearance)) {
                 RenderAppearanceSettings(AppearanceSettingsPage.OVERVIEW)
+            }
+            SettingsDestination.AppearanceListSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_lists),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.LISTS)
+            }
+            SettingsDestination.AppearanceDetailsSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_details),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.DETAILS)
+            }
+            SettingsDestination.AppearanceHomeSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_home),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.HOME)
+            }
+            SettingsDestination.AppearanceInterfaceSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_interface_and_behavior),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.INTERFACE)
+            }
+            SettingsDestination.AppearanceGlassSettings -> RenderComposeSection(
+                title = getString(R.string.appearance_group_glass_tuner),
+            ) {
+                RenderAppearanceSettings(AppearanceSettingsPage.GLASS)
             }
             SettingsDestination.AppearanceBadgesSettings -> RenderComposeSection(
                 title = getString(R.string.badges_in_lists),
@@ -2064,6 +2135,11 @@ class SettingsActivity :
         private const val STATE_UNIFIED_SOURCES_URL = "unified_sources_url"
         private const val COMPOSE_DESTINATION_ROOT = "root"
         private const val COMPOSE_DESTINATION_APPEARANCE_SETTINGS = "appearance_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_LIST_SETTINGS = "appearance_list_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_DETAILS_SETTINGS = "appearance_details_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS = "appearance_home_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS = "appearance_interface_settings"
+        private const val COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS = "appearance_glass_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS = "appearance_badges_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS = "appearance_search_filters_settings"
         private const val COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS = "appearance_navigation_settings"
@@ -2146,10 +2222,16 @@ class SettingsActivity :
         return when (getString(STATE_COMPOSE_DESTINATION)) {
             COMPOSE_DESTINATION_ROOT -> SettingsDestination.Root
             COMPOSE_DESTINATION_APPEARANCE_SETTINGS -> SettingsDestination.AppearanceSettings
+            COMPOSE_DESTINATION_APPEARANCE_LIST_SETTINGS -> SettingsDestination.AppearanceListSettings
+            COMPOSE_DESTINATION_APPEARANCE_DETAILS_SETTINGS -> SettingsDestination.AppearanceDetailsSettings
+            COMPOSE_DESTINATION_APPEARANCE_HOME_SETTINGS -> SettingsDestination.AppearanceHomeSettings
+            COMPOSE_DESTINATION_APPEARANCE_INTERFACE_SETTINGS -> SettingsDestination.AppearanceInterfaceSettings
+            COMPOSE_DESTINATION_APPEARANCE_GLASS_SETTINGS -> SettingsDestination.AppearanceGlassSettings
             COMPOSE_DESTINATION_APPEARANCE_BADGES_SETTINGS -> SettingsDestination.AppearanceBadgesSettings
             COMPOSE_DESTINATION_APPEARANCE_SEARCH_FILTERS_SETTINGS ->
                 SettingsDestination.AppearanceSearchFiltersSettings
-            COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS -> SettingsDestination.AppearanceNavigationSettings
+            COMPOSE_DESTINATION_APPEARANCE_NAVIGATION_SETTINGS ->
+                SettingsDestination.AppearanceNavigationSettings
             COMPOSE_DESTINATION_PANORAMA_SETTINGS -> SettingsDestination.PanoramaSettings
             COMPOSE_DESTINATION_USERS_SETTINGS -> SettingsDestination.UsersSettings
             COMPOSE_DESTINATION_SPACES_SETTINGS -> SettingsDestination.SpacesSettings

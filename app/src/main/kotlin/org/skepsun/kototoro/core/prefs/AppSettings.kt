@@ -31,6 +31,8 @@ import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent
+import org.skepsun.kototoro.core.ui.glass.GlassTuning
+import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.explore.data.SourcesSortOrder
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.core.prefs.VideoSuperResolutionMode
@@ -312,6 +314,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_NAV_LABELS, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS, value) }
 
+    /**
+     * Keep the label of every navigation item visible (not only the selected
+     * one). With the navigation pill (expressive) button disabled this matches
+     * the AndroidLiquidGlass LiquidBottomTabs sample look.
+     */
+    var isNavLabelsAlwaysVisible: Boolean
+        get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, false)
+        set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, value) }
+
     var isEntityGraphMigrated: Boolean
         get() = prefs.getBoolean(KEY_ENTITY_GRAPH_MIGRATED, false)
         set(value) = prefs.edit { putBoolean(KEY_ENTITY_GRAPH_MIGRATED, value) }
@@ -336,18 +347,27 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_NAV_LAYERED_SURFACE, false)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LAYERED_SURFACE, value) }
 
-    var isNavFloatingAdaptiveWidth: Boolean
-        get() = prefs.getBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, true)
-        set(value) = prefs.edit { putBoolean(KEY_NAV_FLOATING_ADAPTIVE_WIDTH, value) }
-
     var isMainFabEnabled: Boolean
         get() = prefs.getBoolean(KEY_MAIN_FAB, true)
         set(value) = prefs.edit { putBoolean(KEY_MAIN_FAB, value) }
 
+    /**
+     * Full-width tab-capsule selected indicator (the AndroidLiquidGlass
+     * LiquidBottomTabs layout) instead of the compact expressive pill.
+     */
+    var isFullWidthNavIndicatorEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, interfaceStyle == InterfaceStyle.IOS)
+        set(value) = prefs.edit { putBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, value) }
+
+    /** Tint selected nav content with the sample's accent blue instead of the theme accent. */
+    var isSampleBlueNavAccentEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, false)
+        set(value) = prefs.edit { putBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, value) }
+
     var isNavExpressivePillEnabled: Boolean
         get() = prefs.getBoolean(
             KEY_NAV_EXPRESSIVE_PILL,
-            interfaceStyle == InterfaceStyle.IOS || interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE,
+            interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE,
         )
         set(value) = prefs.edit { putBoolean(KEY_NAV_EXPRESSIVE_PILL, value) }
 
@@ -1220,6 +1240,19 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var isGlassEffectEnabled: Boolean
         get() = prefs.getBoolean(KEY_GLASS_EFFECT_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_GLASS_EFFECT_ENABLED, value) }
+
+    // --- Glass Finish Tuner (ADR 0001) ---
+    // Six JSON scope configs (Global + 5 chrome roles), stored via kotlinx
+    // serialization. Raw string accessors keep the encoding in GlassTuning.
+    fun glassTuningRaw(scope: GlassTuningScope): String? = prefs.getString(scope.storageKey, null)
+
+    fun setGlassTuningRaw(scope: GlassTuningScope, raw: String) {
+        prefs.edit { putString(scope.storageKey, raw) }
+    }
+
+    fun removeGlassTuning(scope: GlassTuningScope) {
+        prefs.edit { remove(scope.storageKey) }
+    }
 
     var incognitoModeForNsfw: TriStateOption
         get() = prefs.getEnumValue(KEY_INCOGNITO_NSFW, TriStateOption.ASK)
@@ -2324,9 +2357,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         val sanitizedSelectedSourceTags = SourceTag
             .sanitizeQuickFilterSelection(SourceTag.fromIds(getSelectedSourceTags()))
             .mapToSet { it.id }
+        // Glass Finish Tuner scope configs (Global + 5 roles), encoded without
+        // touching the editor (the edit block's receiver is the Editor).
+        val glassTuningBackup = GlassTuningScope.entries.associate { scope ->
+            val raw = prefs.getString(scope.storageKey, null)
+            val config = GlassTuning.decode(raw)
+            scope.storageKey to GlassTuning.encode(
+                if (config.initialized) config else GlassTuning.defaultConfig(scope),
+            )
+        }
         prefs.edit {
             putInt(KEY_NAV_HEIGHT, navHeight)
             putInt(KEY_NAV_FLOATING_HEIGHT, navFloatingHeight)
+            putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, isNavLabelsAlwaysVisible)
+            putBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, isFullWidthNavIndicatorEnabled)
+            putBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, isSampleBlueNavAccentEnabled)
             putInt(KEY_GRID_SIZE, gridSize)
             putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
             putFloat(KEY_PAGE_THUMBNAIL_ASPECT_RATIO, pageThumbnailAspectRatio)
@@ -2343,6 +2388,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putInt(KEY_GLASS_IMMERSIVE_STRENGTH, glassImmersiveStrengthPercent)
             putBoolean(KEY_GLASS_EFFECT_ENABLED, isGlassEffectEnabled)
             putBoolean(KEY_REDUCED_VISUAL_EFFECTS, isReducedVisualEffectsEnabled)
+            // Glass Finish Tuner scope configs (Global + 5 roles).
+            glassTuningBackup.forEach { (key, value) -> putString(key, value) }
             putStringSet(KEY_SEARCH_SUGGESTION_TYPES, sanitizedSearchSuggestionTypes.mapToSet { it.name })
             putStringSet(KEY_MANGA_LIST_BADGES, sanitizedBadges)
             putString(KEY_SELECTED_GROUP_TAB, sanitizedSelectedGroupTab)
@@ -2859,14 +2906,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_RELATED_MANGA = "related_manga"
         const val KEY_NAV_MAIN = "nav_main"
         const val KEY_NAV_LABELS = "nav_labels"
+        const val KEY_NAV_LABELS_ALWAYS_VISIBLE = "nav_labels_always_visible"
         const val KEY_NAV_PINNED = "nav_pinned"
         const val KEY_NAV_FLOATING = "nav_floating"
         const val KEY_NAV_LAYERED_SURFACE = "nav_layered_surface"
-        const val KEY_NAV_FLOATING_ADAPTIVE_WIDTH = "nav_floating_adaptive_width"
         const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
         const val KEY_NAV_HEIGHT = "nav_height"
         const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
         const val KEY_MAIN_FAB = "main_fab"
+        const val KEY_NAV_INDICATOR_FULL_WIDTH = "nav_indicator_full_width"
+        const val KEY_NAV_ACCENT_SAMPLE_BLUE = "nav_accent_sample_blue"
 
         const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"
         const val KEY_POPUP_RADIUS = "popup_radius"

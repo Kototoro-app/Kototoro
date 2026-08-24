@@ -6,12 +6,19 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -31,6 +38,11 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
+import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
+import org.skepsun.kototoro.core.ui.glass.GlassTuningState
+import org.skepsun.kototoro.settings.compose.glass.GlassPreset
+import org.skepsun.kototoro.settings.compose.glass.GlassTuningSection
 
 data class AppearanceSettingsUiState(
     val navSummary: String,
@@ -78,11 +90,15 @@ data class AppearanceSettingsUiState(
     val isShowSourceTagFilter: Boolean,
     val hiddenSourceTag: Set<String>,
     val isMainFabEnabled: Boolean,
+    val navigationGroupSummary: String,
     val isNavBarPinned: Boolean,
     val isNavLabelsVisible: Boolean,
+    val isNavLabelsAlwaysVisible: Boolean,
     val isNavFloating: Boolean,
     val isNavLayeredSurface: Boolean,
     val isNavExpressivePillEnabled: Boolean,
+    val isFullWidthNavIndicatorEnabled: Boolean,
+    val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
     val isExitConfirmationEnabled: Boolean,
@@ -90,6 +106,9 @@ data class AppearanceSettingsUiState(
     val isDynamicShortcutsEnabled: Boolean,
     val isAppProtected: Boolean,
     val screenshotsPolicy: ScreenshotsPolicy,
+    val isGlassEffectEnabled: Boolean,
+    val isReducedVisualEffectsEnabled: Boolean,
+    val glassImmersiveStrengthPercent: Int,
 )
 
 data class AppearanceSettingsOptions(
@@ -121,6 +140,11 @@ data class AppearanceSettingsOptions(
 
 enum class AppearanceSettingsPage {
     OVERVIEW,
+    LISTS,
+    DETAILS,
+    HOME,
+    INTERFACE,
+    GLASS,
     BADGES,
     SEARCH_FILTERS,
     NAVIGATION,
@@ -177,6 +201,7 @@ fun AppearanceSettingsScreen(
     onMainFabChange: (Boolean) -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
+    onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
     onNavLayeredSurfaceChange: (Boolean) -> Unit,
     onNavExpressivePillChange: (Boolean) -> Unit,
@@ -186,11 +211,40 @@ fun AppearanceSettingsScreen(
     onDynamicShortcutsChange: (Boolean) -> Unit,
     onAppProtectionChange: (Boolean) -> Unit,
     onScreenshotsPolicyChange: (ScreenshotsPolicy) -> Unit,
+    onGlassEffectEnabledChange: (Boolean) -> Unit,
+    onReducedVisualEffectsChange: (Boolean) -> Unit,
+    onImmersiveStrengthChange: (Int) -> Unit,
+    glassTuning: GlassTuningState,
+    onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
+    onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
+    onGlassTuningPreset: (GlassPreset) -> Unit,
+    onGlassTuningReset: () -> Unit,
+    onFullWidthNavIndicatorChange: (Boolean) -> Unit,
+    onSampleBlueNavAccentChange: (Boolean) -> Unit,
+    onGlassSettingsClick: () -> Unit = {},
     onBadgesSettingsClick: () -> Unit = {},
     onSearchFiltersSettingsClick: () -> Unit = {},
     onNavigationSettingsClick: () -> Unit = {},
+    onListSettingsClick: () -> Unit = {},
+    onDetailsSettingsClick: () -> Unit = {},
+    onHomeSettingsClick: () -> Unit = {},
+    onInterfaceSettingsClick: () -> Unit = {},
 ) {
     when (page) {
+        AppearanceSettingsPage.GLASS -> {
+            AppearanceGlassSettingsScreen(
+                state = state,
+                glassTuning = glassTuning,
+                onGlassEffectEnabledChange = onGlassEffectEnabledChange,
+                onReducedVisualEffectsChange = onReducedVisualEffectsChange,
+                onImmersiveStrengthChange = onImmersiveStrengthChange,
+                onGlassTuningSetValue = onGlassTuningSetValue,
+                onGlassTuningFollowGlobal = onGlassTuningFollowGlobal,
+                onGlassTuningPreset = onGlassTuningPreset,
+                onGlassTuningReset = onGlassTuningReset,
+            )
+            return
+        }
         AppearanceSettingsPage.BADGES -> {
             AppearanceBadgesSettingsScreen(
                 state = state,
@@ -220,19 +274,30 @@ fun AppearanceSettingsScreen(
         AppearanceSettingsPage.NAVIGATION -> {
             AppearanceNavigationSettingsScreen(
                 state = state,
+                onNavConfigClick = onNavConfigClick,
                 onNavPinnedChange = onNavPinnedChange,
                 onNavLabelsVisibleChange = onNavLabelsVisibleChange,
+                onNavLabelsAlwaysVisibleChange = onNavLabelsAlwaysVisibleChange,
                 onNavFloatingChange = onNavFloatingChange,
                 onNavLayeredSurfaceChange = onNavLayeredSurfaceChange,
                 onNavExpressivePillChange = onNavExpressivePillChange,
+                onFullWidthNavIndicatorChange = onFullWidthNavIndicatorChange,
+                onSampleBlueNavAccentChange = onSampleBlueNavAccentChange,
                 onNavHeightChange = onNavHeightChange,
                 onNavFloatingHeightChange = onNavFloatingHeightChange,
+                onMainFabChange = onMainFabChange,
             )
             return
         }
-        AppearanceSettingsPage.OVERVIEW -> Unit
+        AppearanceSettingsPage.OVERVIEW,
+        AppearanceSettingsPage.LISTS,
+        AppearanceSettingsPage.DETAILS,
+        AppearanceSettingsPage.HOME,
+        AppearanceSettingsPage.INTERFACE,
+        -> Unit
     }
     val usesExpressiveTypography = true
+    var showColorSchemeDialog by rememberSaveable { mutableStateOf(false) }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -249,6 +314,7 @@ fun AppearanceSettingsScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+        if (page == AppearanceSettingsPage.OVERVIEW) {
         item(key = "appearance_theme_and_color") {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_theme_and_color),
@@ -259,21 +325,16 @@ fun AppearanceSettingsScreen(
                         iconRes = R.drawable.ic_appearance,
                         value = state.interfaceStyle,
                         options = options.interfaceStyles,
-                        onValueChange = onInterfaceStyleChange,
-                    )
-                }
-                item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.color_theme),
-                        iconRes = R.drawable.ic_auto_fix,
-                        value = state.colorScheme,
-                        options = options.colorSchemes,
-                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                            stringResource(R.string.appearance_color_scheme_ios_note)
-                        } else {
-                            null
+                        onSettingsClick = { showColorSchemeDialog = true },
+                        settingsContentDescription = stringResource(R.string.color_theme),
+                        settingsIcon = Icons.Filled.Palette,
+                        onSecondarySettingsClick = onGlassSettingsClick.takeIf {
+                            state.interfaceStyle == InterfaceStyle.IOS
                         },
-                        onValueChange = onColorSchemeChange,
+                        secondarySettingsContentDescription = stringResource(
+                            R.string.appearance_group_glass_tuner,
+                        ),
+                        onValueChange = onInterfaceStyleChange,
                     )
                 }
                 item {
@@ -282,6 +343,14 @@ fun AppearanceSettingsScreen(
                         iconRes = R.drawable.ic_timelapse,
                         value = state.theme,
                         options = options.themes,
+                        dialogFooter = {
+                            SettingsSwitchPreference(
+                                title = stringResource(R.string.black_dark_theme),
+                                checked = state.isAmoledTheme,
+                                summary = stringResource(R.string.black_dark_theme_summary),
+                                onCheckedChange = onAmoledThemeChange,
+                            )
+                        },
                         onValueChange = onThemeChange,
                     )
                 }
@@ -295,106 +364,72 @@ fun AppearanceSettingsScreen(
                         onValueChange = onBackgroundStyleChange,
                     )
                 }
-                item {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.black_dark_theme),
-                        iconRes = R.drawable.ic_eye_off,
-                        checked = state.isAmoledTheme,
-                        summary = stringResource(R.string.black_dark_theme_summary),
-                        onCheckedChange = onAmoledThemeChange,
-                    )
-                }
             }
         }
 
-        item(key = "appearance_text_and_language") {
+        item(key = "appearance_content_settings") {
             SettingsPreferenceGroup(
-                title = stringResource(R.string.appearance_group_text_and_language),
+                title = stringResource(R.string.appearance_group_content_display),
             ) {
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.pref_app_font_preset),
-                        iconRes = R.drawable.ic_read,
-                        value = if (usesExpressiveTypography) {
-                            state.expressiveAppFontPreset
-                        } else {
-                            state.appFontPreset
-                        },
-                        options = options.fontPresets,
-                        summary = stringResource(R.string.pref_app_font_preset_summary),
-                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
-                            stringResource(
-                                R.string.appearance_ios_font_note,
-                                options.fontPresets.firstOrNull {
-                                    it.value == state.expressiveAppFontPreset
-                                }?.label.orEmpty(),
-                            )
-                        } else {
-                            null
-                        },
-                        onValueChange = if (usesExpressiveTypography) {
-                            onExpressiveAppFontPresetChange
-                        } else {
-                            onAppFontPresetChange
-                        },
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_group_lists),
+                        summary = stringResource(R.string.appearance_lists_summary),
+                        iconRes = R.drawable.ic_list,
+                        onClick = onListSettingsClick,
                     )
                 }
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.language),
-                        iconRes = R.drawable.ic_language,
-                        value = state.appLocale,
-                        options = options.appLocales,
-                        onValueChange = onAppLocaleChange,
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_group_details),
+                        summary = stringResource(R.string.appearance_details_summary),
+                        iconRes = R.drawable.ic_book_page,
+                        onClick = onDetailsSettingsClick,
+                    )
+                }
+                item {
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_group_home),
+                        summary = stringResource(R.string.appearance_home_summary),
+                        iconRes = R.drawable.ic_home_filled,
+                        onClick = onHomeSettingsClick,
                     )
                 }
             }
         }
-
-        item(key = "appearance_interface_components") {
+        item(key = "appearance_interface_settings") {
             SettingsPreferenceGroup(
-                title = stringResource(R.string.appearance_group_interface_components),
+                title = stringResource(R.string.appearance_group_interface),
             ) {
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.tablet_ui_mode),
-                        iconRes = R.drawable.ic_aspect_ratio,
-                        value = state.tabletUiMode,
-                        options = options.tabletUiModes,
-                        onValueChange = onTabletUiModeChange,
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_group_interface_and_behavior),
+                        summary = stringResource(R.string.appearance_interface_behavior_summary),
+                        iconRes = R.drawable.ic_appearance,
+                        onClick = onInterfaceSettingsClick,
                     )
                 }
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.pref_loading_circle_style),
-                        iconRes = R.drawable.ic_timer_run,
-                        value = state.loadingCircleStyle,
-                        options = options.loadingCircleStyles,
-                        summary = stringResource(R.string.pref_loading_circle_style_summary),
-                        onValueChange = onLoadingCircleStyleChange,
+                    SettingsActionPreference(
+                        title = stringResource(R.string.search_bar_filters),
+                        summary = stringResource(R.string.appearance_search_filters_group_summary),
+                        iconRes = R.drawable.ic_filter_menu,
+                        onClick = onSearchFiltersSettingsClick,
                     )
                 }
                 item {
-                    SettingsChoicePreference(
-                        title = stringResource(R.string.pref_popup_radius),
-                        iconRes = R.drawable.ic_aspect_ratio,
-                        value = state.popupRadius,
-                        options = options.popupRadii,
-                        styleHint = stringResource(
-                            if (state.popupRadius == -1) {
-                                R.string.appearance_style_default_value
-                            } else {
-                                R.string.appearance_style_custom_override
-                            },
-                            stringResource(state.interfaceStyle.titleResId),
-                            "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
-                        ),
-                        onValueChange = onPopupRadiusChange,
+                    SettingsActionPreference(
+                        title = stringResource(R.string.appearance_navigation_group),
+                        iconRes = R.drawable.ic_drawer_menu,
+                        summary = state.navigationGroupSummary,
+                        onClick = onNavigationSettingsClick,
                     )
                 }
             }
         }
+        }
 
+        if (page == AppearanceSettingsPage.LISTS) {
         item(key = "appearance_tablet_list") {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_tablet_list),
@@ -499,7 +534,9 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+        }
 
+        if (page == AppearanceSettingsPage.DETAILS) {
         item(key = "details_content") {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_details_content),
@@ -569,7 +606,9 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+        }
 
+        if (page == AppearanceSettingsPage.HOME) {
         item(key = "main_home_display_${state.homeHeroMode}") {
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_home_display),
@@ -621,23 +660,6 @@ fun AppearanceSettingsScreen(
                         onValueChange = onSearchSuggestionTypesChange,
                     )
                 }
-                item {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.main_screen_sections),
-                        iconRes = R.drawable.ic_home,
-                        summary = state.navSummary,
-                        onClick = onNavConfigClick,
-                    )
-                }
-                item {
-                    SettingsSwitchPreference(
-                        title = stringResource(R.string.main_screen_fab),
-                        iconRes = R.drawable.ic_shortcut,
-                        checked = state.isMainFabEnabled,
-                        summary = stringResource(R.string.main_screen_fab_summary),
-                        onCheckedChange = onMainFabChange,
-                    )
-                }
                 if (state.isDynamicShortcutsVisible) {
                     item {
                         SettingsSwitchPreference(
@@ -649,20 +671,94 @@ fun AppearanceSettingsScreen(
                         )
                     }
                 }
+            }
+        }
+        }
+
+        if (page == AppearanceSettingsPage.INTERFACE) {
+        item(key = "appearance_text_and_language") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_text_and_language),
+            ) {
                 item {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.search_bar_filters),
-                        summary = stringResource(R.string.appearance_search_filters_group_summary),
-                        iconRes = R.drawable.ic_filter_menu,
-                        onClick = onSearchFiltersSettingsClick,
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_app_font_preset),
+                        iconRes = R.drawable.ic_read,
+                        value = if (usesExpressiveTypography) {
+                            state.expressiveAppFontPreset
+                        } else {
+                            state.appFontPreset
+                        },
+                        options = options.fontPresets,
+                        summary = stringResource(R.string.pref_app_font_preset_summary),
+                        styleHint = if (state.interfaceStyle == InterfaceStyle.IOS) {
+                            stringResource(
+                                R.string.appearance_ios_font_note,
+                                options.fontPresets.firstOrNull {
+                                    it.value == state.expressiveAppFontPreset
+                                }?.label.orEmpty(),
+                            )
+                        } else {
+                            null
+                        },
+                        onValueChange = if (usesExpressiveTypography) {
+                            onExpressiveAppFontPresetChange
+                        } else {
+                            onAppFontPresetChange
+                        },
                     )
                 }
                 item {
-                    SettingsActionPreference(
-                        title = stringResource(R.string.appearance_navigation_group),
-                        summary = stringResource(R.string.appearance_navigation_group_summary),
-                        iconRes = R.drawable.ic_drawer_menu,
-                        onClick = onNavigationSettingsClick,
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.language),
+                        iconRes = R.drawable.ic_language,
+                        value = state.appLocale,
+                        options = options.appLocales,
+                        onValueChange = onAppLocaleChange,
+                    )
+                }
+            }
+        }
+
+        item(key = "appearance_interface_components") {
+            SettingsPreferenceGroup(
+                title = stringResource(R.string.appearance_group_interface_components),
+            ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.tablet_ui_mode),
+                        iconRes = R.drawable.ic_aspect_ratio,
+                        value = state.tabletUiMode,
+                        options = options.tabletUiModes,
+                        onValueChange = onTabletUiModeChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_loading_circle_style),
+                        iconRes = R.drawable.ic_timer_run,
+                        value = state.loadingCircleStyle,
+                        options = options.loadingCircleStyles,
+                        summary = stringResource(R.string.pref_loading_circle_style_summary),
+                        onValueChange = onLoadingCircleStyleChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.pref_popup_radius),
+                        iconRes = R.drawable.ic_aspect_ratio,
+                        value = state.popupRadius,
+                        options = options.popupRadii,
+                        styleHint = stringResource(
+                            if (state.popupRadius == -1) {
+                                R.string.appearance_style_default_value
+                            } else {
+                                R.string.appearance_style_custom_override
+                            },
+                            stringResource(state.interfaceStyle.titleResId),
+                            "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
+                        ),
+                        onValueChange = onPopupRadiusChange,
                     )
                 }
             }
@@ -719,6 +815,69 @@ fun AppearanceSettingsScreen(
                 }
             }
         }
+        }
+        }
+    }
+    if (showColorSchemeDialog) {
+        SettingsChoiceDialog(
+            title = stringResource(R.string.color_theme),
+            value = state.colorScheme,
+            options = options.colorSchemes,
+            onDismissRequest = { showColorSchemeDialog = false },
+            onValueChange = {
+                showColorSchemeDialog = false
+                onColorSchemeChange(it)
+            },
+        )
+    }
+}
+
+@Composable
+private fun AppearanceGlassSettingsScreen(
+    state: AppearanceSettingsUiState,
+    glassTuning: GlassTuningState,
+    onGlassEffectEnabledChange: (Boolean) -> Unit,
+    onReducedVisualEffectsChange: (Boolean) -> Unit,
+    onImmersiveStrengthChange: (Int) -> Unit,
+    onGlassTuningSetValue: (GlassTuningScope, GlassTuningParam, Float) -> Unit,
+    onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
+    onGlassTuningPreset: (GlassPreset) -> Unit,
+    onGlassTuningReset: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = SettingsContentHorizontalPadding,
+                end = SettingsContentHorizontalPadding,
+                top = settingsContentTopInset(8.dp),
+                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp,
+            ),
+        ) {
+            item(key = "appearance_glass_tuning_controls") {
+                SettingsPreferenceGroup(
+                    title = stringResource(R.string.appearance_group_glass_tuner),
+                ) {
+                    item {
+                        GlassTuningSection(
+                            tuning = glassTuning,
+                            isGlassEffectEnabled = state.isGlassEffectEnabled,
+                            isReducedVisualEffects = state.isReducedVisualEffectsEnabled,
+                            immersiveStrengthPercent = state.glassImmersiveStrengthPercent,
+                            onGlassEffectEnabledChange = onGlassEffectEnabledChange,
+                            onReducedVisualEffectsChange = onReducedVisualEffectsChange,
+                            onImmersiveStrengthChange = onImmersiveStrengthChange,
+                            onSetValue = onGlassTuningSetValue,
+                            onSetFollowGlobal = onGlassTuningFollowGlobal,
+                            onApplyPreset = onGlassTuningPreset,
+                            onRestoreDefaults = onGlassTuningReset,
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -871,17 +1030,31 @@ private fun AppearanceSearchFiltersSettingsScreen(
         }
 }
 
+
 @Composable
 private fun AppearanceNavigationSettingsScreen(
     state: AppearanceSettingsUiState,
+    onNavConfigClick: () -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
+    onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
     onNavLayeredSurfaceChange: (Boolean) -> Unit,
     onNavExpressivePillChange: (Boolean) -> Unit,
+    onFullWidthNavIndicatorChange: (Boolean) -> Unit,
+    onSampleBlueNavAccentChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
+    onMainFabChange: (Boolean) -> Unit,
 ) = AppearanceSubpage {
+    item {
+        SettingsActionPreference(
+            title = stringResource(R.string.main_screen_sections),
+            iconRes = R.drawable.ic_home,
+            summary = state.navSummary,
+            onClick = onNavConfigClick,
+        )
+    }
     item {
         SettingsSwitchPreference(
             title = stringResource(R.string.pin_navigation_ui),
@@ -897,6 +1070,16 @@ private fun AppearanceNavigationSettingsScreen(
             iconRes = R.drawable.ic_list_detailed,
             checked = state.isNavLabelsVisible,
             onCheckedChange = onNavLabelsVisibleChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_labels_always_visible),
+            iconRes = R.drawable.ic_list_detailed,
+            checked = state.isNavLabelsAlwaysVisible,
+            summary = stringResource(R.string.pref_nav_labels_always_visible_summary),
+            enabled = state.isNavLabelsVisible && !state.isNavExpressivePillEnabled,
+            onCheckedChange = onNavLabelsAlwaysVisibleChange,
         )
     }
     item {
@@ -924,12 +1107,34 @@ private fun AppearanceNavigationSettingsScreen(
             checked = state.isNavExpressivePillEnabled,
             summary = stringResource(R.string.pref_nav_expressive_pill_summary),
             styleHint = stringResource(
-                R.string.appearance_style_default_value,
-                stringResource(state.interfaceStyle.titleResId),
-                stringResource(R.string.enabled),
+                R.string.appearance_recommended_for_style,
+                stringResource(InterfaceStyle.MATERIAL_3_EXPRESSIVE.titleResId),
             ),
             enabled = state.isNavFloating,
             onCheckedChange = onNavExpressivePillChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_indicator_full_width),
+            iconRes = R.drawable.ic_drawer_menu,
+            checked = state.isFullWidthNavIndicatorEnabled,
+            summary = stringResource(R.string.pref_nav_indicator_full_width_summary),
+            styleHint = stringResource(
+                R.string.appearance_recommended_for_style,
+                stringResource(InterfaceStyle.IOS.titleResId),
+            ),
+            enabled = state.isNavFloating,
+            onCheckedChange = onFullWidthNavIndicatorChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_accent_sample_blue),
+            iconRes = R.drawable.ic_auto_fix,
+            checked = state.isSampleBlueNavAccentEnabled,
+            summary = stringResource(R.string.pref_nav_accent_sample_blue_summary),
+            onCheckedChange = onSampleBlueNavAccentChange,
         )
     }
     item {
@@ -939,7 +1144,9 @@ private fun AppearanceNavigationSettingsScreen(
             value = state.navHeight,
             valueRange = 48..88,
             step = 4,
-            valueText = { "${it}dp" },
+            summary = stringResource(R.string.pref_nav_height_summary),
+            valueText = { "$it" + "dp" },
+            enabled = !state.isNavFloating,
             onValueChange = onNavHeightChange,
         )
     }
@@ -950,9 +1157,19 @@ private fun AppearanceNavigationSettingsScreen(
             value = state.navFloatingHeight,
             valueRange = 48..84,
             step = 4,
-            valueText = { "${it}dp" },
+            summary = stringResource(R.string.pref_nav_floating_height_summary),
+            valueText = { "$it" + "dp" },
             enabled = state.isNavFloating,
             onValueChange = onNavFloatingHeightChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.main_screen_fab),
+            iconRes = R.drawable.ic_shortcut,
+            checked = state.isMainFabEnabled,
+            summary = stringResource(R.string.main_screen_fab_summary),
+            onCheckedChange = onMainFabChange,
         )
     }
 }
