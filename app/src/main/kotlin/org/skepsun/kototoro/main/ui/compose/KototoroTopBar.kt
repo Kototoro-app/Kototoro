@@ -261,7 +261,11 @@ fun KototoroTopBar(
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
                 TopBarControlSurface(
-                    lensEnabled = false,
+                    // The right-side action group is a PillControl capsule like
+                    // the compact tab rails; it used to hard-disable the lens,
+                    // which made it inconsistent with every other pill (no lens
+                    // under any preset). Pill tuning (Control Center: refraction
+                    // 8/12) now keeps it safe on small capsules, so restore it.
                     pressFeedbackEnabled = false,
                 ) {
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
