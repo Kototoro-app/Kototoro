@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material3.*
@@ -30,11 +31,12 @@ import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ReaderIntent
-import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
+import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -62,7 +64,8 @@ fun AppBookmarksRoute(
     viewModel: AllBookmarksViewModel,
     contentPadding: PaddingValues,
     appRouter: AppRouter,
-    pageSaveHelper: PageSaveHelper
+    pageSaveHelper: PageSaveHelper,
+    onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit,
 ) {
     val items by viewModel.content.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
@@ -275,32 +278,44 @@ fun AppBookmarksRoute(
             }
         }
 
+        BackHandler(enabled = composeSelectionIds.isNotEmpty()) {
+            composeSelectionIds = emptySet()
+        }
+
         if (composeSelectionIds.isNotEmpty()) {
-            KototoroSelectionTopBar(
-                selectedCount = composeSelectionIds.size,
-                isAllNonLocal = true,
-                isSingleSelection = composeSelectionIds.size == 1,
-                showRemoveOption = true,
-                supportedActions = setOf(SelectionAction.SELECT_ALL, SelectionAction.REMOVE, SelectionAction.SAVE),
-                onClearSelection = { composeSelectionIds = emptySet() },
-                onActionClick = { action ->
-                    when (action) {
-                        SelectionAction.SELECT_ALL -> {
-                            val allIds = items.mapNotNull { (it as? Bookmark)?.pageId }.toSet()
-                            composeSelectionIds = allIds
-                        }
-                        SelectionAction.REMOVE -> {
-                            viewModel.removeBookmarks(composeSelectionIds)
-                            composeSelectionIds = emptySet()
-                        }
-                        SelectionAction.SAVE -> {
-                            viewModel.savePages(pageSaveHelper, composeSelectionIds)
-                            composeSelectionIds = emptySet()
-                        }
-                        else -> {}
-                    }
-                }
-            )
+            SideEffect {
+                onTopBarOverrideChanged(
+                    ContentSelectionTopBarOverrideState(
+                        selectedCount = composeSelectionIds.size,
+                        isAllNonLocal = true,
+                        isSingleSelection = composeSelectionIds.size == 1,
+                        showRemoveOption = true,
+                        supportedActions = setOf(SelectionAction.SELECT_ALL, SelectionAction.REMOVE, SelectionAction.SAVE),
+                        onClearSelection = { composeSelectionIds = emptySet() },
+                        onActionClick = { action ->
+                            when (action) {
+                                SelectionAction.SELECT_ALL -> {
+                                    val allIds = items.mapNotNull { (it as? Bookmark)?.pageId }.toSet()
+                                    composeSelectionIds = allIds
+                                }
+                                SelectionAction.REMOVE -> {
+                                    viewModel.removeBookmarks(composeSelectionIds)
+                                    composeSelectionIds = emptySet()
+                                }
+                                SelectionAction.SAVE -> {
+                                    viewModel.savePages(pageSaveHelper, composeSelectionIds)
+                                    composeSelectionIds = emptySet()
+                                }
+                                else -> {}
+                            }
+                        },
+                    ),
+                )
+            }
+        } else {
+            LaunchedEffect(Unit) {
+                onTopBarOverrideChanged(null)
+            }
         }
     }
 }

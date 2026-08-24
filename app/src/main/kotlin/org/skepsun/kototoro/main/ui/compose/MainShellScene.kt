@@ -157,6 +157,7 @@ private const val TOP_BAR_OWNER_FEED = "feed"
 private const val TOP_BAR_OWNER_LOCAL = "local"
 private const val TOP_BAR_OWNER_SUGGESTIONS = "suggestions"
 private const val TOP_BAR_OWNER_UPDATED = "updated"
+private const val TOP_BAR_OWNER_BOOKMARKS = "bookmarks"
 
 @OptIn(ExperimentalSharedTransitionApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -381,6 +382,7 @@ private fun MainShellTopLevelEntryContent(
             pageSaveHelper = requireNotNull(pageSaveHelper) {
                 "BookmarksRoute requires a pre-registered PageSaveHelper"
             },
+            onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
         )
         org.skepsun.kototoro.main.ui.navigation3.UpdatedNavKey -> UpdatedTopLevelRouteContent(
             animatedVisibilityScope = animatedVisibilityScope,
@@ -1061,10 +1063,29 @@ internal fun BookmarksTopLevelRouteContent(
     appRouter: org.skepsun.kototoro.core.nav.AppRouter,
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
+    onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.bookmarks.ui.AllBookmarksViewModel>("bookmarks")
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
+    var bookmarksContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
+
+    SideEffect {
+        onExploreSourceSelectionTopBarChanged(
+            RouteScopedTopBarOverrideState(
+                TOP_BAR_OWNER_BOOKMARKS,
+                LayeredTopBarOverrideState(contextualOverrideState = bookmarksContextualTopBarOverride),
+            ),
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onExploreSourceSelectionTopBarChanged(
+                RouteScopedTopBarOverrideState(TOP_BAR_OWNER_BOOKMARKS, null),
+            )
+        }
+    }
 
     val mainChromeController = LocalMainChromeController.current
     DisposableEffect(viewModel, selectedGroupTab, selectedSourceTags) {
@@ -1099,6 +1120,7 @@ internal fun BookmarksTopLevelRouteContent(
         contentPadding = contentPadding,
         appRouter = appRouter,
         pageSaveHelper = pageSaveHelper,
+        onTopBarOverrideChanged = { bookmarksContextualTopBarOverride = it },
     )
 }
 
