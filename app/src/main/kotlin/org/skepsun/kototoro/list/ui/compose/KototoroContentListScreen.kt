@@ -1221,8 +1221,13 @@ private fun listModelComposeKey(
     index: Int,
 ): String = when (listModel) {
     is ContentListModel -> "${listModel.javaClass.simpleName}:${listModel.id}"
-    is ListHeader -> "header:${listModel.hashCode()}"
-    is QuickFilter -> "quick_filter"
+    // Keep the position suffix on supplementary rows: without it, two headers whose
+    // hashCode collides (e.g. MinutesAgo(n) / HoursAgo(n) / DaysAgo(n) / MonthsAgo(n) all
+    // hash to the same value, or the same header emitted twice by a paging pipeline)
+    // produce a duplicate LazyGrid/LazyColumn key and crash with
+    // "Key header:... was already used".
+    is ListHeader -> "header:${listModel.hashCode()}:$index"
+    is QuickFilter -> "quick_filter:$index"
     is InfoModel -> "info:${listModel.hashCode()}:$index"
     is EmptyState -> "empty_state:${listModel.hashCode()}:$index"
     is ErrorState -> "error_state:${listModel.hashCode()}:$index"

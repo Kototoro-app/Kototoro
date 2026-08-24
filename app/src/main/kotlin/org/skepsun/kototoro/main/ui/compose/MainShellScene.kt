@@ -1195,7 +1195,12 @@ internal fun HistoryTopLevelRouteContent(
         }.getOrNull()
     }
     val historyPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
-    val items = historyPagingItems.itemSnapshotList.items
+    // The paging stream already carries headers + content rows. Keeping the snapshot as a
+    // separate leading `items` list would render every row twice (leading + paging) inside
+    // KototoroContentListScreen and crash on duplicate "header:"... keys. Keep it only for
+    // selection bookkeeping (SELECT_ALL / selectedModels), and feed an empty leading list
+    // to the screen so content comes exclusively from the paging stream.
+    val historySnapshotItems = historyPagingItems.itemSnapshotList.items
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
@@ -1206,8 +1211,8 @@ internal fun HistoryTopLevelRouteContent(
     var selectedItemsIds by remember { mutableStateOf(emptySet<Long>()) }
     var showClearDialog by remember { mutableStateOf(false) }
     var pendingMarkAsReadItems by remember { mutableStateOf<List<Content>?>(null) }
-    val selectedModels = remember(items, selectedItemsIds) {
-        items
+    val selectedModels = remember(historySnapshotItems, selectedItemsIds) {
+        historySnapshotItems
             .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
             .filter { it.id in selectedItemsIds }
     }
@@ -1262,7 +1267,7 @@ internal fun HistoryTopLevelRouteContent(
                             onActionClick = { action ->
                                 when (action) {
                                     org.skepsun.kototoro.list.ui.compose.SelectionAction.SELECT_ALL -> {
-                                        selectedItemsIds = items
+                                        selectedItemsIds = historySnapshotItems
                                             .filterIsInstance<org.skepsun.kototoro.list.ui.model.ContentListModel>()
                                             .mapTo(linkedSetOf()) { it.id }
                                     }
@@ -1357,7 +1362,7 @@ internal fun HistoryTopLevelRouteContent(
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
         org.skepsun.kototoro.history.ui.compose.HistoryScreen(
             contentPadding = contentPadding,
-            items = items,
+            items = emptyList(),
             pagingItems = historyPagingItems,
             headerQuickFilter = headerQuickFilter,
             listMode = listMode,
