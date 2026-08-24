@@ -814,10 +814,11 @@ private fun FloatingBottomNavRow(
             style = barStyle,
             shape = barShape,
             exportedBackdrop = navigationShellBackdrop,
-            // Kyant's 24dp shell lens produces repeated interior caustics on
-            // this wide capsule. BiliPai's visible result is one continuous
-            // dock material; refraction belongs to the moving indicator.
-            lensEnabled = false,
+            // Refraction follows the BottomBar scope like every other glass
+            // role. An older hard-disable predated the lens safety clamp and
+            // the role-delta tuner; the clamp now bounds the lens on this wide
+            // capsule, and the moving indicator keeps its own selection
+            // refraction layered on top. Tune per-role in the Glass tuner.
         ) {}
         if (useSharedLiquidGlassPill && targetIndicatorSize != IntSize.Zero) {
             val indicatorShape = Capsule()
@@ -1202,7 +1203,6 @@ private fun FullWidthFloatingBottomNavRow(
             style = barStyle,
             shape = barShape,
             exportedBackdrop = navigationShellBackdrop,
-            lensEnabled = false,
         ) {}
         if (targetIndicatorSize != IntSize.Zero) {
             Box(
