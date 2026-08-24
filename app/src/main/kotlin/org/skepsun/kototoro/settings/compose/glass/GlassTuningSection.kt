@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -33,6 +36,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -65,6 +69,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassScopeConfig
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -98,6 +103,12 @@ fun GlassTuningSection(
     onSetFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onApplyPreset: (GlassPreset) -> Unit,
     onRestoreDefaults: () -> Unit,
+    customPresets: List<GlassCustomPreset> = emptyList(),
+    onSaveCustomPreset: () -> Unit = {},
+    onApplyCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onDeleteCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onExportCustomPresets: () -> Unit = {},
+    onImportCustomPresets: () -> Unit = {},
 ) {
     var previewValues by remember {
         mutableStateOf<Map<Pair<GlassTuningScope, GlassTuningParam>, Float>>(emptyMap())
@@ -128,10 +139,19 @@ fun GlassTuningSection(
     HorizontalDivider()
     GlassPresetRow(
         tuning = tuning,
+        customPresets = customPresets,
         onApplyPreset = {
             previewValues = emptyMap()
             onApplyPreset(it)
         },
+        onApplyCustomPreset = {
+            previewValues = emptyMap()
+            onApplyCustomPreset(it)
+        },
+        onSaveCustomPreset = onSaveCustomPreset,
+        onDeleteCustomPreset = onDeleteCustomPreset,
+        onExportCustomPresets = onExportCustomPresets,
+        onImportCustomPresets = onImportCustomPresets,
         onRestoreDefaults = {
             previewValues = emptyMap()
             onRestoreDefaults()
@@ -260,11 +280,23 @@ private fun GlassImmersiveSlider(
 @OptIn(ExperimentalLayoutApi::class)
 private fun GlassPresetRow(
     tuning: GlassTuningState,
+    customPresets: List<GlassCustomPreset>,
     onApplyPreset: (GlassPreset) -> Unit,
+    onApplyCustomPreset: (GlassCustomPreset) -> Unit,
+    onSaveCustomPreset: () -> Unit,
+    onDeleteCustomPreset: (GlassCustomPreset) -> Unit,
+    onExportCustomPresets: () -> Unit,
+    onImportCustomPresets: () -> Unit,
     onRestoreDefaults: () -> Unit,
 ) {
     var showRestoreConfirmation by remember { mutableStateOf(false) }
+    var deleteTarget by remember { mutableStateOf<GlassCustomPreset?>(null) }
     val activePreset = GlassPreset.entries.firstOrNull { it.matches(tuning) }
+    val activeCustom = if (activePreset == null) {
+        customPresets.firstOrNull { it.matches(tuning) }
+    } else {
+        null
+    }
     if (showRestoreConfirmation) {
         SettingsAlertDialog(
             title = stringResource(R.string.pref_glass_restore_defaults),
@@ -288,6 +320,29 @@ private fun GlassPresetRow(
             Text(stringResource(R.string.pref_glass_restore_defaults_message))
         }
     }
+    deleteTarget?.let { target ->
+        SettingsAlertDialog(
+            title = stringResource(R.string.pref_glass_delete_preset),
+            onDismissRequest = { deleteTarget = null },
+            confirmButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(R.string.pref_glass_delete_preset),
+                    onClick = {
+                        deleteTarget = null
+                        onDeleteCustomPreset(target)
+                    },
+                )
+            },
+            dismissButton = {
+                SettingsDialogActionButton(
+                    text = stringResource(android.R.string.cancel),
+                    onClick = { deleteTarget = null },
+                )
+            },
+        ) {
+            Text(stringResource(R.string.pref_glass_delete_preset_message, target.name))
+        }
+    }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -298,14 +353,29 @@ private fun GlassPresetRow(
                 style = MaterialTheme.typography.titleSmall,
             )
             Spacer(modifier = Modifier.weight(1f))
-            Text(
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PresetRowAction(
+                text = stringResource(R.string.pref_glass_save_preset),
+                onClick = onSaveCustomPreset,
+            )
+            PresetRowAction(
+                text = stringResource(R.string.pref_glass_export_presets),
+                onClick = onExportCustomPresets,
+            )
+            PresetRowAction(
+                text = stringResource(R.string.pref_glass_import_presets),
+                onClick = onImportCustomPresets,
+            )
+            PresetRowAction(
                 text = stringResource(R.string.pref_glass_restore_defaults),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { showRestoreConfirmation = true }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                onClick = { showRestoreConfirmation = true },
             )
         }
         FlowRow(
@@ -321,14 +391,45 @@ private fun GlassPresetRow(
                     colors = FilterChipDefaults.filterChipColors(),
                 )
             }
+            customPresets.forEach { preset ->
+                FilterChip(
+                    selected = activeCustom == preset,
+                    onClick = { onApplyCustomPreset(preset) },
+                    label = { Text(preset.name, maxLines = 1) },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.pref_glass_delete_preset),
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clip(CircleShape)
+                                .clickable(onClick = { deleteTarget = preset })
+                                .padding(2.dp),
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(),
+                )
+            }
             FilterChip(
-                selected = activePreset == null,
+                selected = activePreset == null && activeCustom == null,
                 onClick = {},
                 label = { Text(stringResource(R.string.pref_glass_preset_custom)) },
-                enabled = false,
             )
         }
     }
+}
+
+@Composable
+private fun PresetRowAction(text: String, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
 }
 
 /** Section header used for the Global (always expanded) scope. */
@@ -498,6 +599,7 @@ private fun GlassParamRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GlassParamControl(
     param: GlassTuningParam,
@@ -535,6 +637,29 @@ private fun GlassParamControl(
                 )
             }
         }
+        ParamKind.OPTION -> {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Text(
+                    text = stringResource(paramTitleRes(param)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HighlightStyleLabel.entries.forEach { option ->
+                        FilterChip(
+                            selected = value.toInt() == option.value,
+                            onClick = { onValueChange(option.value.toFloat()) },
+                            enabled = enabled,
+                            label = { Text(stringResource(option.labelRes)) },
+                        )
+                    }
+                }
+            }
+        }
         ParamKind.SLIDER -> {
             var pendingValue by remember(value) { mutableStateOf(value) }
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp)) {
@@ -568,9 +693,17 @@ private fun GlassParamControl(
     }
 }
 
+private enum class HighlightStyleLabel(val value: Int, val labelRes: Int) {
+    DEFAULT(0, R.string.pref_glass_highlight_style_default),
+    AMBIENT(1, R.string.pref_glass_highlight_style_ambient),
+    PLAIN(2, R.string.pref_glass_highlight_style_plain),
+}
+
 private fun paramTitleRes(param: GlassTuningParam): Int = when (param) {
     GlassTuningParam.GLASS_ENABLED -> R.string.pref_glass_param_glass_enabled
     GlassTuningParam.VIBRANCY -> R.string.pref_glass_param_vibrancy
+    GlassTuningParam.SATURATION -> R.string.pref_glass_param_saturation
+    GlassTuningParam.BRIGHTNESS -> R.string.pref_glass_param_brightness
     GlassTuningParam.BLUR_RADIUS_DP -> R.string.pref_glass_param_blur_radius
     GlassTuningParam.LENS_HEIGHT_DP -> R.string.pref_glass_param_lens_height
     GlassTuningParam.LENS_AMOUNT_DP -> R.string.pref_glass_param_lens_amount
@@ -579,6 +712,7 @@ private fun paramTitleRes(param: GlassTuningParam): Int = when (param) {
     GlassTuningParam.SURFACE_ALPHA -> R.string.pref_glass_param_surface_alpha
     GlassTuningParam.RIM_ENABLED -> R.string.pref_glass_param_rim
     GlassTuningParam.RIM_ALPHA -> R.string.pref_glass_param_rim_alpha
+    GlassTuningParam.HIGHLIGHT_STYLE -> R.string.pref_glass_param_highlight_style
     GlassTuningParam.HAIRLINE_ENABLED -> R.string.pref_glass_param_hairline
     GlassTuningParam.HAIRLINE_ALPHA -> R.string.pref_glass_param_hairline_alpha
     GlassTuningParam.SHADOW_ENABLED -> R.string.pref_glass_param_shadow
@@ -611,26 +745,70 @@ private fun formatParamValue(param: GlassTuningParam, value: Float): String = wh
     GlassTuningParam.PRESS_INNER_SHADOW_ALPHA,
     GlassTuningParam.PRESS_LENS_STRENGTH,
     -> DecimalFormat("0.00").format(value)
+    GlassTuningParam.SATURATION -> "${DecimalFormat("0.00").format(value)}×"
+    GlassTuningParam.BRIGHTNESS -> if (value > 0f) {
+        "+" + DecimalFormat("0.00").format(value)
+    } else {
+        DecimalFormat("0.00").format(value)
+    }
+    GlassTuningParam.HIGHLIGHT_STYLE -> stringResource(
+        HighlightStyleLabel.entries.firstOrNull { it.value == value.toInt() }
+            ?.labelRes ?: R.string.pref_glass_highlight_style_default,
+    )
     else -> stringResource(if (value >= 0.5f) R.string.enabled else R.string.disabled)
 }
 
 /**
  * Quality presets. Applying one replaces the Global scope with these values and
- * makes every role follow global (see [GlassTuningController.applyPreset]).
+ * makes every role follow global (see [GlassTuningController.applyPreset]),
+ * except for roles listed in [roleOverrides] which use a "Global + delta"
+ * config — the overridden keys resolve to the delta values, everything else
+ * keeps following the preset's Global scope.
  */
-enum class GlassPreset(val id: String, val titleRes: Int) {
-    BILIPAI("bilipai", R.string.pref_glass_preset_bilipai),
+enum class GlassPreset(
+    val id: String,
+    val titleRes: Int,
+    val roleOverrides: Map<GlassTuningScope, Map<String, Float>> = emptyMap(),
+) {
+    CONTROL_CENTER(
+        "control_center",
+        R.string.pref_glass_preset_control_center,
+        roleOverrides = mapOf(
+            // ReaderMenuGlass fidelity: legado menus are flush surfaces with no
+            // drop shadow — Control Center keeps its strong shadows on bars,
+            // pills and panels but drops them inside menus.
+            GlassTuningScope.MENU to mapOf(
+                GlassTuningParam.SHADOW_ENABLED.key to 0f,
+            ),
+            // Small pill controls (compact tab rails, group pills, the selected
+            // bottom-nav pill) are stadium shapes whose corner radius equals half
+            // their shortest side — even a safety-clamped 20dp refraction ring
+            // hugs the rounded caps and paints internal arc artifacts. Let pills
+            // keep a gentle refraction while bars/panels keep the strong 24/24.
+            GlassTuningScope.PILL_CONTROL to mapOf(
+                GlassTuningParam.LENS_HEIGHT_DP.key to 8f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 12f,
+            ),
+        ),
+    ),
     LIQUID("liquid", R.string.pref_glass_preset_liquid),
     SOFT("soft", R.string.pref_glass_preset_soft),
     CLEAN("clean", R.string.pref_glass_preset_clean),
+    REFRACTION("refraction", R.string.pref_glass_preset_refraction),
+    READER("reader", R.string.pref_glass_preset_reader),
+    ECO("eco", R.string.pref_glass_preset_eco),
+    VIBRANT("vibrant", R.string.pref_glass_preset_vibrant),
+    DEPTH("depth", R.string.pref_glass_preset_depth),
     ;
 
     val config: GlassScopeConfig
         get() = GlassScopeConfig(
         values = when (this) {
-            BILIPAI -> mapOf(
+            CONTROL_CENTER -> mapOf(
                 GlassTuningParam.GLASS_ENABLED.key to 1f,
                 GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
                 GlassTuningParam.BLUR_RADIUS_DP.key to 4f,
                 GlassTuningParam.LENS_HEIGHT_DP.key to 24f,
                 GlassTuningParam.LENS_AMOUNT_DP.key to 24f,
@@ -639,6 +817,7 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
                 GlassTuningParam.SURFACE_ALPHA.key to 0.38f,
                 GlassTuningParam.RIM_ENABLED.key to 1f,
                 GlassTuningParam.RIM_ALPHA.key to 0.75f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
                 GlassTuningParam.HAIRLINE_ENABLED.key to 0f,
                 GlassTuningParam.HAIRLINE_ALPHA.key to 0f,
                 GlassTuningParam.SHADOW_ENABLED.key to 1f,
@@ -655,6 +834,8 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
             LIQUID -> mapOf(
                 GlassTuningParam.GLASS_ENABLED.key to 1f,
                 GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
                 GlassTuningParam.BLUR_RADIUS_DP.key to 8f,
                 GlassTuningParam.LENS_HEIGHT_DP.key to 16f,
                 GlassTuningParam.LENS_AMOUNT_DP.key to 24f,
@@ -663,6 +844,7 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
                 GlassTuningParam.SURFACE_ALPHA.key to 0.40f,
                 GlassTuningParam.RIM_ENABLED.key to 0f,
                 GlassTuningParam.RIM_ALPHA.key to 0.65f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
                 GlassTuningParam.HAIRLINE_ENABLED.key to 0f,
                 GlassTuningParam.HAIRLINE_ALPHA.key to 0f,
                 GlassTuningParam.SHADOW_ENABLED.key to 0f,
@@ -679,6 +861,8 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
             SOFT -> mapOf(
                 GlassTuningParam.GLASS_ENABLED.key to 1f,
                 GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
                 GlassTuningParam.BLUR_RADIUS_DP.key to 8f,
                 GlassTuningParam.LENS_HEIGHT_DP.key to 16f,
                 GlassTuningParam.LENS_AMOUNT_DP.key to 24f,
@@ -687,6 +871,7 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
                 GlassTuningParam.SURFACE_ALPHA.key to 0.42f,
                 GlassTuningParam.RIM_ENABLED.key to 0f,
                 GlassTuningParam.RIM_ALPHA.key to 0.65f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
                 GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
                 GlassTuningParam.HAIRLINE_ALPHA.key to 0.16f,
                 GlassTuningParam.SHADOW_ENABLED.key to 1f,
@@ -703,6 +888,8 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
             CLEAN -> mapOf(
                 GlassTuningParam.GLASS_ENABLED.key to 1f,
                 GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
                 GlassTuningParam.BLUR_RADIUS_DP.key to 4f,
                 GlassTuningParam.LENS_HEIGHT_DP.key to 0f,
                 GlassTuningParam.LENS_AMOUNT_DP.key to 0f,
@@ -711,6 +898,7 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
                 GlassTuningParam.SURFACE_ALPHA.key to 0.30f,
                 GlassTuningParam.RIM_ENABLED.key to 0f,
                 GlassTuningParam.RIM_ALPHA.key to 0.5f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
                 GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
                 GlassTuningParam.HAIRLINE_ALPHA.key to 0.20f,
                 GlassTuningParam.SHADOW_ENABLED.key to 1f,
@@ -724,22 +912,147 @@ enum class GlassPreset(val id: String, val titleRes: Int) {
                 GlassTuningParam.PRESS_SCALE_PERCENT.key to 4f,
                 GlassTuningParam.PRESS_LENS_STRENGTH.key to 0f,
             )
+            REFRACTION -> mapOf(
+                GlassTuningParam.GLASS_ENABLED.key to 1f,
+                GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
+                GlassTuningParam.BLUR_RADIUS_DP.key to 2f,
+                GlassTuningParam.LENS_HEIGHT_DP.key to 16f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 44f,
+                GlassTuningParam.DEPTH_EFFECT.key to 0f,
+                GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.SURFACE_ALPHA.key to 0.40f,
+                GlassTuningParam.RIM_ENABLED.key to 0f,
+                GlassTuningParam.RIM_ALPHA.key to 0.5f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
+                GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
+                GlassTuningParam.HAIRLINE_ALPHA.key to 0.25f,
+                GlassTuningParam.SHADOW_ENABLED.key to 1f,
+                GlassTuningParam.SHADOW_RADIUS_DP.key to 4f,
+                GlassTuningParam.SHADOW_OFFSET_DP.key to 2f,
+                GlassTuningParam.SHADOW_ALPHA.key to 0.10f,
+                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 1f,
+                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 8f,
+                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 0.8f,
+                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.PRESS_SCALE_PERCENT.key to 6f,
+                GlassTuningParam.PRESS_LENS_STRENGTH.key to 1f,
+            )
+            READER -> mapOf(
+                GlassTuningParam.GLASS_ENABLED.key to 1f,
+                GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
+                GlassTuningParam.BLUR_RADIUS_DP.key to 12f,
+                GlassTuningParam.LENS_HEIGHT_DP.key to 0f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 0f,
+                GlassTuningParam.DEPTH_EFFECT.key to 0f,
+                GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.SURFACE_ALPHA.key to 0.55f,
+                GlassTuningParam.RIM_ENABLED.key to 1f,
+                GlassTuningParam.RIM_ALPHA.key to 0.5f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
+                GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
+                GlassTuningParam.HAIRLINE_ALPHA.key to 0.20f,
+                GlassTuningParam.SHADOW_ENABLED.key to 0f,
+                GlassTuningParam.SHADOW_RADIUS_DP.key to 0f,
+                GlassTuningParam.SHADOW_OFFSET_DP.key to 0f,
+                GlassTuningParam.SHADOW_ALPHA.key to 0f,
+                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 0.6f,
+                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 0f,
+                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 0f,
+                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.PRESS_SCALE_PERCENT.key to 3f,
+                GlassTuningParam.PRESS_LENS_STRENGTH.key to 0f,
+            )
+            ECO -> mapOf(
+                GlassTuningParam.GLASS_ENABLED.key to 1f,
+                GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
+                GlassTuningParam.BLUR_RADIUS_DP.key to 8f,
+                GlassTuningParam.LENS_HEIGHT_DP.key to 0f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 0f,
+                GlassTuningParam.DEPTH_EFFECT.key to 0f,
+                GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.SURFACE_ALPHA.key to 0.55f,
+                GlassTuningParam.RIM_ENABLED.key to 1f,
+                GlassTuningParam.RIM_ALPHA.key to 0.5f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
+                GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
+                GlassTuningParam.HAIRLINE_ALPHA.key to 0.12f,
+                GlassTuningParam.SHADOW_ENABLED.key to 0f,
+                GlassTuningParam.SHADOW_RADIUS_DP.key to 0f,
+                GlassTuningParam.SHADOW_OFFSET_DP.key to 0f,
+                GlassTuningParam.SHADOW_ALPHA.key to 0f,
+                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 0.5f,
+                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 0f,
+                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 0f,
+                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.PRESS_SCALE_PERCENT.key to 3f,
+                GlassTuningParam.PRESS_LENS_STRENGTH.key to 0f,
+            )
+            VIBRANT -> mapOf(
+                GlassTuningParam.GLASS_ENABLED.key to 1f,
+                GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1.5f,
+                GlassTuningParam.BRIGHTNESS.key to 0.05f,
+                GlassTuningParam.BLUR_RADIUS_DP.key to 12f,
+                GlassTuningParam.LENS_HEIGHT_DP.key to 10f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 14f,
+                GlassTuningParam.DEPTH_EFFECT.key to 0f,
+                GlassTuningParam.CHROMATIC_ABERRATION.key to 1f,
+                GlassTuningParam.SURFACE_ALPHA.key to 0.40f,
+                GlassTuningParam.RIM_ENABLED.key to 1f,
+                GlassTuningParam.RIM_ALPHA.key to 0.6f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
+                GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
+                GlassTuningParam.HAIRLINE_ALPHA.key to 0.15f,
+                GlassTuningParam.SHADOW_ENABLED.key to 1f,
+                GlassTuningParam.SHADOW_RADIUS_DP.key to 4f,
+                GlassTuningParam.SHADOW_OFFSET_DP.key to 2f,
+                GlassTuningParam.SHADOW_ALPHA.key to 0.10f,
+                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 1f,
+                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 8f,
+                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 1f,
+                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 1f,
+                GlassTuningParam.PRESS_SCALE_PERCENT.key to 6f,
+                GlassTuningParam.PRESS_LENS_STRENGTH.key to 1f,
+            )
+            DEPTH -> mapOf(
+                GlassTuningParam.GLASS_ENABLED.key to 1f,
+                GlassTuningParam.VIBRANCY.key to 1f,
+                GlassTuningParam.SATURATION.key to 1f,
+                GlassTuningParam.BRIGHTNESS.key to 0f,
+                GlassTuningParam.BLUR_RADIUS_DP.key to 10f,
+                GlassTuningParam.LENS_HEIGHT_DP.key to 20f,
+                GlassTuningParam.LENS_AMOUNT_DP.key to 28f,
+                GlassTuningParam.DEPTH_EFFECT.key to 1f,
+                GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
+                GlassTuningParam.SURFACE_ALPHA.key to 0.42f,
+                GlassTuningParam.RIM_ENABLED.key to 1f,
+                GlassTuningParam.RIM_ALPHA.key to 0.7f,
+                GlassTuningParam.HIGHLIGHT_STYLE.key to 1f,
+                GlassTuningParam.HAIRLINE_ENABLED.key to 0f,
+                GlassTuningParam.HAIRLINE_ALPHA.key to 0f,
+                GlassTuningParam.SHADOW_ENABLED.key to 1f,
+                GlassTuningParam.SHADOW_RADIUS_DP.key to 8f,
+                GlassTuningParam.SHADOW_OFFSET_DP.key to 3f,
+                GlassTuningParam.SHADOW_ALPHA.key to 0.12f,
+                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 1f,
+                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 8f,
+                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 1f,
+                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 1f,
+                GlassTuningParam.PRESS_SCALE_PERCENT.key to 8f,
+                GlassTuningParam.PRESS_LENS_STRENGTH.key to 1f,
+            )
         },
         initialized = true,
     )
 
-    fun matches(tuning: GlassTuningState): Boolean {
-        val global = tuning.config(GlassTuningScope.GLOBAL)
-        val globalMatches = config.values.all { (key, value) ->
-            val param = GlassTuningParam.fromKey(key) ?: return@all false
-            (global.value(param) ?: param.fallback) == value
-        }
-        val allParams = GlassTuningParam.entries.mapTo(mutableSetOf()) { it.key }
-        val rolesFollowPreset = GlassTuningScope.entries
-            .filter { it != GlassTuningScope.GLOBAL }
-            .all { scope -> tuning.config(scope).followGlobal.containsAll(allParams) }
-        return globalMatches && rolesFollowPreset
-    }
+    fun matches(tuning: GlassTuningState): Boolean =
+        GlassTuning.matches(tuning, config.values, roleOverrides)
 }
 
 // ---------------------------------------------------------------------------

@@ -1254,6 +1254,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         prefs.edit { remove(scope.storageKey) }
     }
 
+    // User-saved glass presets: one JSON list, encoded by GlassTuning.
+    fun customGlassPresetsRaw(): String? = prefs.getString(KEY_CUSTOM_GLASS_PRESETS, null)
+
+    fun setCustomGlassPresetsRaw(raw: String) {
+        prefs.edit { putString(KEY_CUSTOM_GLASS_PRESETS, raw) }
+    }
+
+    fun removeCustomGlassPresets() {
+        prefs.edit { remove(KEY_CUSTOM_GLASS_PRESETS) }
+    }
+
     var incognitoModeForNsfw: TriStateOption
         get() = prefs.getEnumValue(KEY_INCOGNITO_NSFW, TriStateOption.ASK)
         set(value) = prefs.edit { putEnumValue(KEY_INCOGNITO_NSFW, value) }
@@ -2543,6 +2554,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_HIDDEN_SOURCE_TAG = "hidden_source_tag"
         const val KEY_ACTIVE_SOURCE_PRESET_ID = "active_source_preset_id"
         const val KEY_SOURCES_GROUPED_BY_LANGUAGE = "sources_grouped_by_language"
+        const val KEY_CUSTOM_GLASS_PRESETS = "custom_glass_presets"
         const val KEY_EXPLORE_HIDE_EMPTY_SOURCES = "explore_hide_empty_sources"
         const val KEY_ACTIVE_TVBOX_REPOSITORY = "active_tvbox_repository"
 

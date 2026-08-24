@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,7 +14,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import javax.inject.Inject
@@ -38,10 +42,14 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
+import org.skepsun.kototoro.core.ui.glass.GlassTuning
 import org.skepsun.kototoro.core.ui.glass.GlassTuningController
 import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
+import org.skepsun.kototoro.core.ui.glass.rememberGlassCustomPresets
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
+import org.skepsun.kototoro.core.ui.glass.toCustomPreset
 import org.skepsun.kototoro.settings.compose.glass.GlassPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.prefs.normalized
@@ -87,6 +95,7 @@ fun AppearanceSettingsRoute(
     onOpenInterfaceSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     val coordinator = remember(context, settings, activityRecreationHandle) {
         AppearanceSettingsCoordinator(
@@ -194,6 +203,8 @@ fun AppearanceSettingsRoute(
     // Glass Finish Tuner state (Global + 5 role scopes) and its live controller.
     val glassTuning = rememberGlassTuning(settings)
     val glassTuningController = remember { GlassTuningController(settings) }
+    val customGlassPresets = rememberGlassCustomPresets(settings)
+    val nextCustomPresetName = stringResource(R.string.pref_glass_custom_preset_name, customGlassPresets.size + 1)
     val isNavBarPinned = settings.observeAsState(AppSettings.KEY_NAV_PINNED) { isNavBarPinned }.value
     val isNavLabelsVisible = settings.observeAsState(AppSettings.KEY_NAV_LABELS) { isNavLabelsVisible }.value
     val isNavLabelsAlwaysVisible =
@@ -464,9 +475,64 @@ fun AppearanceSettingsRoute(
             glassTuningController.setFollowGlobal(scope, param, follow)
         },
         onGlassTuningPreset = { preset: GlassPreset ->
-            glassTuningController.applyPreset(preset.config)
+            glassTuningController.applyPreset(preset.config, preset.roleOverrides)
         },
         onGlassTuningReset = { glassTuningController.resetAll() },
+        customGlassPresets = customGlassPresets,
+        onGlassTuningSaveCustomPreset = {
+            val preset = glassTuning.toCustomPreset(
+                id = "custom_${System.currentTimeMillis()}",
+                name = nextCustomPresetName,
+            )
+            settings.setCustomGlassPresetsRaw(
+                GlassTuning.encodeCustomPresets(customGlassPresets + preset),
+            )
+        },
+        onGlassTuningApplyCustomPreset = { preset ->
+            glassTuningController.applyPreset(preset.config, preset.scopeOverrides())
+        },
+        onGlassTuningDeleteCustomPreset = { preset ->
+            val remaining = customGlassPresets.filterNot { it.id == preset.id }
+            if (remaining.isEmpty()) {
+                settings.removeCustomGlassPresets()
+            } else {
+                settings.setCustomGlassPresetsRaw(GlassTuning.encodeCustomPresets(remaining))
+            }
+        },
+        onGlassTuningExportCustomPresets = {
+            if (customGlassPresets.isEmpty()) {
+                Toast.makeText(
+                    context,
+                    R.string.pref_glass_presets_export_empty,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                clipboard.setText(AnnotatedString(GlassTuning.encodeCustomPresets(customGlassPresets)))
+                Toast.makeText(
+                    context,
+                    R.string.pref_glass_presets_exported,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        },
+        onGlassTuningImportCustomPresets = {
+            val imported = GlassTuning.decodeCustomPresets(clipboard.getText()?.text)
+            if (imported.isEmpty()) {
+                Toast.makeText(
+                    context,
+                    R.string.pref_glass_presets_import_invalid,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            } else {
+                val merged = (customGlassPresets + imported).distinctBy { it.id }
+                settings.setCustomGlassPresetsRaw(GlassTuning.encodeCustomPresets(merged))
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.pref_glass_presets_imported, imported.size),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        },
         onFullWidthNavIndicatorChange = {
             settings.isFullWidthNavIndicatorEnabled = it
             if (it) settings.isNavExpressivePillEnabled = false

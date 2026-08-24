@@ -38,6 +38,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
 import org.skepsun.kototoro.core.ui.glass.GlassTuningState
@@ -219,6 +220,12 @@ fun AppearanceSettingsScreen(
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onGlassTuningPreset: (GlassPreset) -> Unit,
     onGlassTuningReset: () -> Unit,
+    customGlassPresets: List<GlassCustomPreset> = emptyList(),
+    onGlassTuningSaveCustomPreset: () -> Unit = {},
+    onGlassTuningApplyCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onGlassTuningDeleteCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onGlassTuningExportCustomPresets: () -> Unit = {},
+    onGlassTuningImportCustomPresets: () -> Unit = {},
     onFullWidthNavIndicatorChange: (Boolean) -> Unit,
     onSampleBlueNavAccentChange: (Boolean) -> Unit,
     onGlassSettingsClick: () -> Unit = {},
@@ -242,6 +249,12 @@ fun AppearanceSettingsScreen(
                 onGlassTuningFollowGlobal = onGlassTuningFollowGlobal,
                 onGlassTuningPreset = onGlassTuningPreset,
                 onGlassTuningReset = onGlassTuningReset,
+                customGlassPresets = customGlassPresets,
+                onGlassTuningSaveCustomPreset = onGlassTuningSaveCustomPreset,
+                onGlassTuningApplyCustomPreset = onGlassTuningApplyCustomPreset,
+                onGlassTuningDeleteCustomPreset = onGlassTuningDeleteCustomPreset,
+                onGlassTuningExportCustomPresets = onGlassTuningExportCustomPresets,
+                onGlassTuningImportCustomPresets = onGlassTuningImportCustomPresets,
             )
             return
         }
@@ -843,6 +856,12 @@ private fun AppearanceGlassSettingsScreen(
     onGlassTuningFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
     onGlassTuningPreset: (GlassPreset) -> Unit,
     onGlassTuningReset: () -> Unit,
+    customGlassPresets: List<GlassCustomPreset> = emptyList(),
+    onGlassTuningSaveCustomPreset: () -> Unit = {},
+    onGlassTuningApplyCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onGlassTuningDeleteCustomPreset: (GlassCustomPreset) -> Unit = {},
+    onGlassTuningExportCustomPresets: () -> Unit = {},
+    onGlassTuningImportCustomPresets: () -> Unit = {},
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -874,6 +893,12 @@ private fun AppearanceGlassSettingsScreen(
                             onSetFollowGlobal = onGlassTuningFollowGlobal,
                             onApplyPreset = onGlassTuningPreset,
                             onRestoreDefaults = onGlassTuningReset,
+                            customPresets = customGlassPresets,
+                            onSaveCustomPreset = onGlassTuningSaveCustomPreset,
+                            onApplyCustomPreset = onGlassTuningApplyCustomPreset,
+                            onDeleteCustomPreset = onGlassTuningDeleteCustomPreset,
+                            onExportCustomPresets = onGlassTuningExportCustomPresets,
+                            onImportCustomPresets = onGlassTuningImportCustomPresets,
                         )
                     }
                 }

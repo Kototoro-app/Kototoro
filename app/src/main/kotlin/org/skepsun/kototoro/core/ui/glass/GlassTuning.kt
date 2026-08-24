@@ -26,7 +26,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
  * overrides whose values reproduce the exact pre-refactor rendering — so an
  * untouched install looks pixel-identical (see docs/adr/0001).
  */
-enum class ParamKind { SWITCH, SLIDER }
+enum class ParamKind { SWITCH, SLIDER, OPTION }
 
 enum class GlassTuningParam(
     val key: String,
@@ -39,6 +39,8 @@ enum class GlassTuningParam(
 ) {
     GLASS_ENABLED("glass_enabled", ParamKind.SWITCH, 0f, 1f, 1f, 1f),
     VIBRANCY("vibrancy", ParamKind.SWITCH, 0f, 1f, 1f, 1f),
+    SATURATION("saturation", ParamKind.SLIDER, 0.5f, 2.0f, 0.05f, 1f),
+    BRIGHTNESS("brightness", ParamKind.SLIDER, -0.5f, 0.5f, 0.05f, 0f),
     BLUR_RADIUS_DP("blur_radius_dp", ParamKind.SLIDER, 0f, 32f, 1f, 8f),
     LENS_HEIGHT_DP("lens_height_dp", ParamKind.SLIDER, 0f, 48f, 1f, 16f),
     LENS_AMOUNT_DP("lens_amount_dp", ParamKind.SLIDER, 0f, 96f, 1f, 24f),
@@ -47,6 +49,7 @@ enum class GlassTuningParam(
     SURFACE_ALPHA("surface_alpha", ParamKind.SLIDER, 0.01f, 1f, 0.01f, 0.50f),
     RIM_ENABLED("rim_enabled", ParamKind.SWITCH, 0f, 1f, 1f, 0f),
     RIM_ALPHA("rim_alpha", ParamKind.SLIDER, 0.01f, 1f, 0.01f, 0.65f),
+    HIGHLIGHT_STYLE("highlight_style", ParamKind.OPTION, 0f, 2f, 1f, 0f),
     HAIRLINE_ENABLED("hairline_enabled", ParamKind.SWITCH, 0f, 1f, 1f, 1f),
     HAIRLINE_ALPHA("hairline_alpha", ParamKind.SLIDER, 0f, 1f, 0.01f, 0.24f),
     SHADOW_ENABLED("shadow_enabled", ParamKind.SWITCH, 0f, 1f, 1f, 1f),
@@ -144,12 +147,15 @@ object GlassTuning {
     val uniformParams: Set<GlassTuningParam> = setOf(
         GlassTuningParam.GLASS_ENABLED,
         GlassTuningParam.VIBRANCY,
+        GlassTuningParam.SATURATION,
+        GlassTuningParam.BRIGHTNESS,
         GlassTuningParam.BLUR_RADIUS_DP,
         GlassTuningParam.LENS_HEIGHT_DP,
         GlassTuningParam.LENS_AMOUNT_DP,
         GlassTuningParam.DEPTH_EFFECT,
         GlassTuningParam.CHROMATIC_ABERRATION,
         GlassTuningParam.RIM_ALPHA,
+        GlassTuningParam.HIGHLIGHT_STYLE,
         GlassTuningParam.SHADOW_ENABLED,
         GlassTuningParam.SHADOW_RADIUS_DP,
         GlassTuningParam.SHADOW_OFFSET_DP,
@@ -192,6 +198,13 @@ object GlassTuning {
         if (raw.isNullOrBlank()) GlassScopeConfig()
         else runCatching { json.decodeFromString<GlassScopeConfig>(raw) }.getOrDefault(GlassScopeConfig())
 
+    fun encodeCustomPresets(presets: List<GlassCustomPreset>): String =
+        json.encodeToString(presets)
+
+    fun decodeCustomPresets(raw: String?): List<GlassCustomPreset> =
+        if (raw.isNullOrBlank()) emptyList()
+        else runCatching { json.decodeFromString<List<GlassCustomPreset>>(raw) }.getOrDefault(emptyList())
+
     /** Default config for a scope — materialized lazily on first read. */
     fun defaultConfig(scope: GlassTuningScope): GlassScopeConfig {
         if (scope == GlassTuningScope.GLOBAL) {
@@ -211,6 +224,22 @@ object GlassTuning {
         )
         overrides[GlassTuningParam.HAIRLINE_ALPHA.key] = legacyFallback(scope, GlassTuningParam.HAIRLINE_ALPHA)
         overrides[GlassTuningParam.SHADOW_ALPHA.key] = legacyFallback(scope, GlassTuningParam.SHADOW_ALPHA)
+        return GlassScopeConfig(
+            values = overrides,
+            followGlobal = follow,
+            initialized = true,
+        )
+    }
+
+    /**
+     * Role config for a preset with role-specific overrides: the overridden
+     * keys resolve to the given values, every other parameter keeps following
+     * the preset's Global scope. This is the "Global + per-role delta" preset
+     * model — a preset is a global baseline plus optional role tweaks (e.g.
+     * menus without shadows, pills with stronger rims).
+     */
+    fun presetScopeConfig(overrides: Map<String, Float>): GlassScopeConfig {
+        val follow = GlassTuningParam.entries.mapTo(mutableSetOf()) { it.key } - overrides.keys
         return GlassScopeConfig(
             values = overrides,
             followGlobal = follow,
@@ -249,6 +278,44 @@ object GlassTuning {
             }
             else -> param.fallback
         }
+    }
+
+    /**
+     * Whether a tuning state exactly matches a preset described by a Global
+     * value map plus optional per-role deltas. Undeclared roles must follow
+     * Global entirely; roles with deltas must resolve their overridden keys to
+     * the delta values locally and keep everything else following Global.
+     */
+    fun matches(
+        tuning: GlassTuningState,
+        globalValues: Map<String, Float>,
+        roleOverrides: Map<GlassTuningScope, Map<String, Float>>,
+    ): Boolean {
+        val global = tuning.config(GlassTuningScope.GLOBAL)
+        val globalMatches = globalValues.all { (key, value) ->
+            val param = GlassTuningParam.fromKey(key) ?: return@all false
+            // Resolve missing keys exactly like GlassTuningState does — legacy
+            // GLOBAL fallback, not the bare param fallback (they differ for
+            // RIM_ENABLED / DEPTH_EFFECT at the Global scope).
+            (global.value(param) ?: legacyFallback(GlassTuningScope.GLOBAL, param)) == value
+        }
+        val allParams = GlassTuningParam.entries.mapTo(mutableSetOf()) { it.key }
+        val rolesFollowPreset = GlassTuningScope.entries
+            .filter { it != GlassTuningScope.GLOBAL }
+            .all { scope ->
+                val overrides = roleOverrides[scope]
+                val roleConfig = tuning.config(scope)
+                if (overrides == null) {
+                    roleConfig.followGlobal.containsAll(allParams)
+                } else {
+                    overrides.all { (key, value) ->
+                        val param = GlassTuningParam.fromKey(key) ?: return@all false
+                        key !in roleConfig.followGlobal &&
+                            (roleConfig.value(param) ?: legacyFallback(scope, param)) == value
+                    }
+                }
+            }
+        return globalMatches && rolesFollowPreset
     }
 }
 
@@ -315,10 +382,16 @@ class GlassTuningController(private val appSettings: AppSettings) {
     }
 
     /**
-     * Replaces the Global scope with a preset config and makes every role follow
-     * it entirely — a preset is authoritative over the per-role legacy overrides.
+     * Replaces the Global scope with a preset config, then makes every role
+     * follow it — a preset is authoritative over the per-role legacy overrides.
+     * Roles listed in [roleOverrides] get a "Global + delta" config instead:
+     * their overridden keys resolve to the given values while everything else
+     * keeps following the preset's Global scope.
      */
-    fun applyPreset(config: GlassScopeConfig) {
+    fun applyPreset(
+        config: GlassScopeConfig,
+        roleOverrides: Map<GlassTuningScope, Map<String, Float>> = emptyMap(),
+    ) {
         appSettings.setGlassTuningRaw(
             GlassTuningScope.GLOBAL,
             GlassTuning.encode(config.copy(initialized = true)),
@@ -326,7 +399,14 @@ class GlassTuningController(private val appSettings: AppSettings) {
         GlassTuningScope.entries
             .filter { it != GlassTuningScope.GLOBAL }
             .forEach { role ->
-                appSettings.setGlassTuningRaw(role, GlassTuning.encode(GlassScopeConfig().followAll()))
+                val overrides = roleOverrides[role]
+                val roleConfig =
+                    if (overrides == null) {
+                        GlassScopeConfig().followAll()
+                    } else {
+                        GlassTuning.presetScopeConfig(overrides)
+                    }
+                appSettings.setGlassTuningRaw(role, GlassTuning.encode(roleConfig))
             }
     }
 
@@ -360,3 +440,66 @@ fun rememberGlassTuning(appSettings: AppSettings): GlassTuningState {
 
 /** An empty tuning state that resolves every parameter to its legacy default. */
 fun emptyGlassTuningState(): GlassTuningState = GlassTuningState(emptyMap())
+
+/**
+ * A user-saved preset: a Global baseline (all parameter keys) plus optional
+ * per-role deltas keyed by [GlassTuningScope.prefKey]. Stored as one JSON list
+ * under [AppSettings.KEY_CUSTOM_GLASS_PRESETS]; serialization lives in
+ * [GlassTuning.encodeCustomPresets] / [GlassTuning.decodeCustomPresets].
+ */
+@Serializable
+data class GlassCustomPreset(
+    val id: String,
+    val name: String,
+    val global: Map<String, Float>,
+    val roleOverrides: Map<String, Map<String, Float>> = emptyMap(),
+) {
+    val config: GlassScopeConfig
+        get() = GlassScopeConfig(values = global, initialized = true)
+
+    fun scopeOverrides(): Map<GlassTuningScope, Map<String, Float>> =
+        roleOverrides.mapNotNull { (key, values) ->
+            val scope = GlassTuningScope.entries.firstOrNull { it.prefKey == key }
+            if (scope == null || scope == GlassTuningScope.GLOBAL) null else scope to values
+        }.toMap()
+
+    fun matches(tuning: GlassTuningState): Boolean =
+        GlassTuning.matches(tuning, global, scopeOverrides())
+}
+
+/**
+ * Snapshots the current tuning (effective Global values + the per-role deltas
+ * the user has un-followed) into a [GlassCustomPreset] ready to persist.
+ */
+fun GlassTuningState.toCustomPreset(id: String, name: String): GlassCustomPreset {
+    val globalValues = GlassTuningParam.entries.associate { param ->
+        param.key to value(GlassTuningScope.GLOBAL, param)
+    }
+    val roleOverrides = GlassTuningScope.entries
+        .filter { it != GlassTuningScope.GLOBAL }
+        .mapNotNull { scope ->
+            val scopeConfig = config(scope)
+            val overrides = GlassTuningParam.entries
+                .filter { !scopeConfig.isFollowing(it) }
+                .associate { it.key to value(scope, it) }
+            if (overrides.isEmpty()) null else scope.prefKey to overrides
+        }
+        .toMap()
+    return GlassCustomPreset(
+        id = id,
+        name = name,
+        global = globalValues,
+        roleOverrides = roleOverrides,
+    )
+}
+
+/**
+ * Observes the user-saved glass presets list.
+ */
+@Composable
+fun rememberGlassCustomPresets(appSettings: AppSettings): List<GlassCustomPreset> {
+    val raw by appSettings.observeAsState(AppSettings.KEY_CUSTOM_GLASS_PRESETS) {
+        appSettings.customGlassPresetsRaw()
+    }
+    return GlassTuning.decodeCustomPresets(raw)
+}

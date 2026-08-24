@@ -21,17 +21,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorControls
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
@@ -169,6 +173,83 @@ internal fun resolveGlassPressProgress(enabled: Boolean, progress: Float): Float
 
 internal fun shouldApplyGlassLens(enabled: Boolean, heightDp: Float, amountDp: Float): Boolean =
     enabled && heightDp > 0f && amountDp > 0f
+
+/**
+ * Maps the [GlassTuningParam.HIGHLIGHT_STYLE] option value to the Kyant
+ * [HighlightStyle]: 0 = Default, 1 = Ambient, 2 = Plain.
+ */
+internal fun resolveGlassHighlightStyle(value: Int, angle: Float): HighlightStyle = when (value) {
+    1 -> HighlightStyle.Ambient()
+    2 -> HighlightStyle.Plain()
+    else -> HighlightStyle.Default(angle = angle, falloff = 2f)
+}
+
+internal data class GlassLensParameters(
+    val refractionHeight: Float,
+    val refractionAmount: Float,
+)
+
+/**
+ * Backdrop's lens shader requires refractionHeight to stay within the
+ * surface's minimum corner radius and refractionAmount within its shortest
+ * side. Clamping here keeps strong presets (e.g. Control Center lens 24/24)
+ * from painting internal arc artifacts on small capsules, pills and group
+ * controls while leaving large bars and panels untouched.
+ */
+internal fun resolveGlassLensParameters(
+    shape: Shape,
+    size: Size,
+    layoutDirection: LayoutDirection,
+    density: Density,
+    requestedHeight: Float,
+    requestedAmount: Float,
+): GlassLensParameters? {
+    if (
+        !requestedHeight.isFinite() ||
+        !requestedAmount.isFinite() ||
+        requestedHeight <= 0f ||
+        requestedAmount <= 0f ||
+        !size.width.isFinite() ||
+        !size.height.isFinite() ||
+        size.width <= 0f ||
+        size.height <= 0f
+    ) {
+        return null
+    }
+
+    val cornerRadii = shape.liquidLensCornerRadii(size, layoutDirection, density) ?: return null
+    val minCornerRadius = cornerRadii.minOrNull()?.takeIf { it.isFinite() && it > 0f } ?: return null
+    val shortestSide = size.minDimension
+    return GlassLensParameters(
+        refractionHeight = requestedHeight.coerceAtMost(minCornerRadius),
+        refractionAmount = requestedAmount.coerceAtMost(shortestSide),
+    )
+}
+
+private fun Shape.liquidLensCornerRadii(
+    size: Size,
+    layoutDirection: LayoutDirection,
+    density: Density,
+): List<Float>? =
+    when (this) {
+        is RoundedRectangularShape -> {
+            val corners = corners(size, layoutDirection, density)
+            listOf(corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft)
+        }
+
+        is CornerBasedShape -> {
+            val maxRadius = size.minDimension / 2f
+            val isLtr = layoutDirection == LayoutDirection.Ltr
+            listOf(
+                (if (isLtr) topStart else topEnd).toPx(size, density).coerceAtMost(maxRadius),
+                (if (isLtr) topEnd else topStart).toPx(size, density).coerceAtMost(maxRadius),
+                (if (isLtr) bottomEnd else bottomStart).toPx(size, density).coerceAtMost(maxRadius),
+                (if (isLtr) bottomStart else bottomEnd).toPx(size, density).coerceAtMost(maxRadius),
+            )
+        }
+
+        else -> null
+    }
 
 /**
  * Shared control surface.
@@ -356,6 +437,15 @@ fun LiquidGlassSurface(
                         if (tuning.isOn(tuningScope, GlassTuningParam.VIBRANCY)) {
                             vibrancy()
                         }
+                        // Independent color grading on top of the glass: saturation /
+                        // brightness as a colorControls pass (SimpMusic / SPICaWeather
+                        // recipe). Skipped at neutral values so it never stacks with
+                        // vibrancy's own saturation lift.
+                        val saturation = tuning.value(tuningScope, GlassTuningParam.SATURATION)
+                        val brightness = tuning.value(tuningScope, GlassTuningParam.BRIGHTNESS)
+                        if (saturation != 1f || brightness != 0f) {
+                            colorControls(brightness = brightness, saturation = saturation)
+                        }
                         blur(tuning.value(tuningScope, GlassTuningParam.BLUR_RADIUS_DP).dp.toPx())
                         // lens() requires a CornerBasedShape or the kyant
                         // RoundedRectangularShape; guard so callers passing a
@@ -374,18 +464,34 @@ fun LiquidGlassSurface(
                                 GlassTuningParam.LENS_AMOUNT_DP,
                             ) * lensBoost
                             if (shouldApplyGlassLens(lensEnabled, lensHeightDp, lensAmountDp)) {
-                                lens(
-                                    refractionHeight = lensHeightDp.dp.toPx(),
-                                    refractionAmount = lensAmountDp.dp.toPx(),
-                                    depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
-                                    chromaticAberration = tuning.isOn(
-                                        tuningScope,
-                                        GlassTuningParam.CHROMATIC_ABERRATION,
-                                    ) || (press > 0f && tuning.isOn(
-                                        tuningScope,
-                                        GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
-                                    )),
+                                // Backdrop's lens SDF requires refractionHeight to stay within
+                                // the surface's minimum corner radius and refractionAmount within
+                                // its shortest side (KeiOS BackdropLensSafety mirrors this
+                                // documented library constraint). Unclamped values paint internal
+                                // arc artifacts and corner discontinuities on small surfaces —
+                                // compact tab rails, pills, group controls.
+                                val lensParams = resolveGlassLensParameters(
+                                    shape = shape,
+                                    size = size,
+                                    layoutDirection = layoutDirection,
+                                    density = this,
+                                    requestedHeight = lensHeightDp.dp.toPx(),
+                                    requestedAmount = lensAmountDp.dp.toPx(),
                                 )
+                                if (lensParams != null) {
+                                    lens(
+                                        refractionHeight = lensParams.refractionHeight,
+                                        refractionAmount = lensParams.refractionAmount,
+                                        depthEffect = tuning.isOn(tuningScope, GlassTuningParam.DEPTH_EFFECT),
+                                        chromaticAberration = tuning.isOn(
+                                            tuningScope,
+                                            GlassTuningParam.CHROMATIC_ABERRATION,
+                                        ) || (press > 0f && tuning.isOn(
+                                            tuningScope,
+                                            GlassTuningParam.PRESS_CHROMATIC_ABERRATION,
+                                        )),
+                                    )
+                                }
                             }
                         }
                     },
@@ -395,18 +501,22 @@ fun LiquidGlassSurface(
                             press > 0f &&
                             tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA) > 0f
                         val idleRimOn = tuning.isOn(tuningScope, GlassTuningParam.RIM_ENABLED) && highlightOnIdle
+                        // 0 = Default specular (angle tracks gravity on non-bar chrome),
+                        // 1 = Ambient (even edge glow — BiliTV / BiliPai look),
+                        // 2 = Plain (uniform tint without a shader).
+                        val edgeStyle = resolveGlassHighlightStyle(
+                            tuning.value(tuningScope, GlassTuningParam.HIGHLIGHT_STYLE).toInt(),
+                            angle = if (isFloatingChrome) 45f else (uiSensor?.gravityAngle ?: 45f),
+                        )
                         when {
                             pressRimOn -> Highlight(
-                                style = HighlightStyle.Default(angle = 45f, falloff = 2f),
+                                style = edgeStyle,
                                 alpha = press * tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA),
                             )
                             idleRimOn -> {
                                 val rimAlpha = tuning.value(tuningScope, GlassTuningParam.RIM_ALPHA)
                                 Highlight(
-                                    style = HighlightStyle.Default(
-                                        angle = if (isFloatingChrome) 45f else (uiSensor?.gravityAngle ?: 45f),
-                                        falloff = 2f,
-                                    ),
+                                    style = edgeStyle,
                                     alpha = rimAlpha + (1f - rimAlpha) * press,
                                 )
                             }
