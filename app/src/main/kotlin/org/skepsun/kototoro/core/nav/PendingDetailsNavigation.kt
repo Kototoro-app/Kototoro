@@ -29,6 +29,9 @@ object PendingDetailsNavigation {
 
     fun consume(): DetailsOrigin? = pendingOrigin.also { pendingOrigin = null }
 
+    /** Non-destructive read: for re-seeding the payload from durable state when it went missing. */
+    fun peek(): DetailsOrigin? = pendingOrigin
+
     fun lastContent(): Content? = lastContent
 
     fun lastSharedElementKey(): String? = lastSharedElementKey
