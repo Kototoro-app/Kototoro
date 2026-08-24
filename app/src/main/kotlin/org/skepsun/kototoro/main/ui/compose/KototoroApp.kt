@@ -158,9 +158,6 @@ import org.skepsun.kototoro.main.ui.navigation3.restoreFromSpaceSession
 import org.skepsun.kototoro.main.ui.navigation3.toSpaceSessionSnapshot
 import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.domain.SpaceKind
-import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.space.domain.SpaceRouteSnapshot
 import org.skepsun.kototoro.space.domain.SpaceSessionSnapshot
 import org.skepsun.kototoro.space.ui.SpaceNavigationSessionUiState
 import org.skepsun.kototoro.space.ui.SpaceResumeUiState
@@ -1635,19 +1632,12 @@ private fun KototoroAppSpaceSessionEffects(
             return@LaunchedEffect
         }
         // The v3 back stacks were already populated by restoreFromSpaceSession; the inner
-        // NavDisplay renders their immersive entries directly. Only seed the pending
-        // details origin so the restored DetailsNavKey has its content on first composition.
-        session.stacks[session.selectedTopLevel].orEmpty().forEach { route ->
-            if (route is SpaceRouteSnapshot.WorkDetails) {
-                PendingDetailsNavigation.set(
-                    DetailsOrigin.EntityGraph(
-                        entityId = route.entityId,
-                        preferredLocalMangaId = route.requestedProjectionId,
-                        initialProjectionLocalMangaId = route.requestedProjectionId,
-                    ),
-                )
-            }
-        }
+        // NavDisplay renders their immersive entries directly. No pending details origin is
+        // seeded here: every restored DetailsNavKey re-seeds its own origin from the key's
+        // identity (MainShellScene's DetailsNavKey branch) synchronously before its fresh
+        // ViewModels are created. Seeding in this LaunchedEffect would run after that first
+        // composition and leave a stale payload behind that a different details entry could
+        // later consume.
         rootRestoredSpaceIds[navigationSpaceId] = true
     }
 }

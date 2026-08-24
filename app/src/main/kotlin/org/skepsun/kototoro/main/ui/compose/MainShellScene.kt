@@ -63,6 +63,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
+import org.skepsun.kototoro.main.ui.navigation3.toDetailsOriginOrNull
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
@@ -447,6 +448,18 @@ private fun MainShellTopLevelEntryContent(
             }
         }
         is org.skepsun.kototoro.main.ui.navigation3.DetailsNavKey -> {
+            // PendingDetailsNavigation (the process-wide origin hand-off) does not survive
+            // process death and is never set by space-session restores, but DetailsNavKey
+            // itself does survive — it is a serializable route key carrying the work's
+            // identity. A fresh DetailsViewModel is created right after this block, so when
+            // the static payload is missing re-seed it from the key's own fields; otherwise
+            // the restored details page would reopen blank. Guarded by peek(): a normal open
+            // keeps its richer payload (full LocalMangaContent / shared-element key).
+            remember(key) {
+                if (PendingDetailsNavigation.peek() == null) {
+                    key.toDetailsOriginOrNull()?.let { PendingDetailsNavigation.set(it) }
+                }
+            }
             val detailsViewModel = hiltViewModel<DetailsViewModel>()
             val pagesViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel>()
             val bookmarksViewModel = hiltViewModel<org.skepsun.kototoro.details.ui.pager.bookmarks.BookmarksViewModel>()

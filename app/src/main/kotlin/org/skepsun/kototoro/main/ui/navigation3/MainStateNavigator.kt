@@ -93,3 +93,24 @@ private fun DetailsOrigin.toDetailsNavKey(): DetailsNavKey = when (this) {
     is DetailsOrigin.TrackingItem,
     -> DetailsNavKey()
 }
+
+/**
+ * Inverse of [DetailsOrigin.toDetailsNavKey]: rebuild a best-effort [DetailsOrigin]
+ * from a [DetailsNavKey]'s own serialized identity.
+ *
+ * [PendingDetailsNavigation] (the process-wide hand-off to the details ViewModels)
+ * does not survive process death and is never set by space-session restores, but
+ * [DetailsNavKey] itself does survive — it is a serializable route key. A restored
+ * details entry can therefore re-seed the hand-off from its own fields before its
+ * fresh ViewModels are created. Tracking origins carry no navigable identity, so
+ * they resolve to null (unrecoverable after the payload is lost).
+ */
+internal fun DetailsNavKey.toDetailsOriginOrNull(): DetailsOrigin? = when {
+    entityId != null && requestedProjectionId != null -> DetailsOrigin.EntityGraph(
+        entityId = entityId,
+        initialProjectionLocalMangaId = requestedProjectionId,
+    )
+    entityId != null -> DetailsOrigin.EntityGraph(entityId = entityId)
+    requestedProjectionId != null -> DetailsOrigin.LocalMangaId(mangaId = requestedProjectionId)
+    else -> null
+}
