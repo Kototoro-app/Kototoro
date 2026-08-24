@@ -3573,6 +3573,14 @@
     <string name="pref_glass_scope_menu">Menus</string>
     <string name="pref_glass_follow_global">Follow global</string>
     <string name="pref_glass_follow_global_summary_value">Follows global · %1$s</string>
+    <string name="pref_glass_scope_global_desc">Baseline every role falls back to unless overridden</string>
+    <string name="pref_glass_scope_top_bar_desc">Wide top-bar glass (e.g. the settings top bar)</string>
+    <string name="pref_glass_scope_bottom_bar_desc">Bottom-navigation dock (floating capsule / full-width)</string>
+    <string name="pref_glass_scope_pill_desc">Small capsules: favourites group, compact tab rails, top-bar button groups, bottom-nav selected indicator, reader/novel toolbars, space switcher</string>
+    <string name="pref_glass_scope_bottom_panel_desc">Bottom panels on details and reader screens</string>
+    <string name="pref_glass_scope_menu_desc">Dropdown menus and popovers</string>
+    <string name="pref_glass_role_delta">Role deltas</string>
+    <string name="pref_glass_local_overrides_count">%1$d local override(s)</string>
     <string name="pref_glass_role_section_hint">Per-role overrides — every parameter can follow the global baseline or be tuned here</string>
     <string name="pref_glass_param_glass_enabled">Glass material</string>
     <string name="pref_glass_param_vibrancy">Vibrancy</string>

@@ -2954,6 +2954,14 @@ SHA-256 指纹:
     <string name="pref_glass_scope_menu">菜单</string>
     <string name="pref_glass_follow_global">跟随全局</string>
     <string name="pref_glass_follow_global_summary_value">跟随全局 · %1$s</string>
+    <string name="pref_glass_scope_global_desc">全局基准：各角色未覆盖时回退到的基线取值</string>
+    <string name="pref_glass_scope_top_bar_desc">顶栏宽玻璃面（如设置页顶栏）</string>
+    <string name="pref_glass_scope_bottom_bar_desc">底部导航栏 Docker（悬浮胶囊 / 全宽悬浮）</string>
+    <string name="pref_glass_scope_pill_desc">小胶囊控件：收藏分组、紧凑标签栏、顶栏按钮组、底栏选中指示器、阅读器/小说工具栏、空间切换器</string>
+    <string name="pref_glass_scope_bottom_panel_desc">详情页与阅读界面的底部面板</string>
+    <string name="pref_glass_scope_menu_desc">下拉菜单与浮层</string>
+    <string name="pref_glass_role_delta">角色增量</string>
+    <string name="pref_glass_local_overrides_count">%1$d 项本地覆盖</string>
     <string name="pref_glass_role_section_hint">每个组件参数均可跟随全局或单独覆盖</string>
     <string name="pref_glass_param_glass_enabled">玻璃材质</string>
     <string name="pref_glass_param_vibrancy">鲜艳度</string>

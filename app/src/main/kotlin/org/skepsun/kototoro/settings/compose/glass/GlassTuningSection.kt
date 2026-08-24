@@ -161,7 +161,7 @@ fun GlassTuningSection(
     // Global baseline scope.
     GlassScopeHeader(
         title = stringResource(R.string.pref_glass_scope_global),
-        subtitle = stringResource(R.string.pref_glass_follow_global),
+        subtitle = stringResource(R.string.pref_glass_scope_global_desc),
         expanded = true,
         onToggle = {},
         enabled = false,
@@ -416,7 +416,54 @@ private fun GlassPresetRow(
                 label = { Text(stringResource(R.string.pref_glass_preset_custom)) },
             )
         }
+        // Expose the active preset's per-role logic: which roles deviate from
+        // the global baseline and by how much (e.g. Control Center drops menu
+        // shadows and softens pill refraction).
+        val activeRoleOverrides = when {
+            activePreset != null && activePreset.roleOverrides.isNotEmpty() ->
+                activePreset.roleOverrides
+            activeCustom != null && activeCustom.scopeOverrides().isNotEmpty() ->
+                activeCustom.scopeOverrides()
+            else -> null
+        }
+        if (activeRoleOverrides != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.pref_glass_role_delta),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = presetRoleDeltaSummary(activeRoleOverrides),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
+}
+
+@Composable
+private fun presetRoleDeltaSummary(roleOverrides: Map<GlassTuningScope, Map<String, Float>>): String {
+    val parts = mutableListOf<String>()
+    for ((scope, overrides) in roleOverrides) {
+        val scopeName = stringResource(roleTitles[scope] ?: R.string.pref_glass_scope_global)
+        val items = mutableListOf<String>()
+        for ((key, value) in overrides) {
+            val param = GlassTuningParam.fromKey(key)
+            items += if (param == null) {
+                "$key $value"
+            } else {
+                stringResource(paramTitleRes(param)) + " " + formatParamValue(param, value)
+            }
+        }
+        parts += "$scopeName：${items.joinToString("、")}"
+    }
+    return parts.joinToString(" · ")
 }
 
 @Composable
@@ -479,6 +526,15 @@ private val roleTitles: Map<GlassTuningScope, Int> = mapOf(
     GlassTuningScope.MENU to R.string.pref_glass_scope_menu,
 )
 
+/** What each tunable scope maps to in the app, shown in the scope headers. */
+private val roleDescriptions: Map<GlassTuningScope, Int> = mapOf(
+    GlassTuningScope.TOP_BAR to R.string.pref_glass_scope_top_bar_desc,
+    GlassTuningScope.BOTTOM_BAR to R.string.pref_glass_scope_bottom_bar_desc,
+    GlassTuningScope.PILL_CONTROL to R.string.pref_glass_scope_pill_desc,
+    GlassTuningScope.BOTTOM_PANEL to R.string.pref_glass_scope_bottom_panel_desc,
+    GlassTuningScope.MENU to R.string.pref_glass_scope_menu_desc,
+)
+
 @Composable
 private fun GlassRoleScope(
     scope: GlassTuningScope,
@@ -488,10 +544,25 @@ private fun GlassRoleScope(
     onSetFollowGlobal: (GlassTuningScope, GlassTuningParam, Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Expose each role's preset state: what it is in the app (description)
+    // plus how many parameters currently break away from the global baseline.
+    val description = stringResource(
+        roleDescriptions[scope] ?: R.string.pref_glass_follow_global,
+    )
+    val localOverrideCount = GlassTuning.paramsForScope(scope)
+        .count { !tuning.isFollowingGlobal(scope, it) }
+    val subtitle = if (localOverrideCount > 0) {
+        description + " · " + stringResource(
+            R.string.pref_glass_local_overrides_count,
+            localOverrideCount,
+        )
+    } else {
+        description
+    }
     Column(modifier = Modifier.fillMaxWidth().animateContentSize()) {
         GlassScopeHeader(
             title = stringResource(roleTitles[scope] ?: R.string.pref_glass_scope_global),
-            subtitle = stringResource(R.string.pref_glass_follow_global),
+            subtitle = subtitle,
             expanded = expanded,
             onToggle = { expanded = !expanded },
         )
