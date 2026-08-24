@@ -260,7 +260,7 @@ private fun EmptyScrobblingState(item: EmptyState) {
 
 private fun itemKey(item: ListModel): String = when (item) {
     is ScrobblingStatus -> "status:${item.ordinal}"
-    is ScrobblingInfo -> "info:${item.scrobbler.id}:${item.targetId}:${item.mangaId}:${item.mediaType}"
+    is ScrobblingInfo -> item.identityKey()
     is EmptyState -> "empty"
     else -> item.hashCode().toString()
 }

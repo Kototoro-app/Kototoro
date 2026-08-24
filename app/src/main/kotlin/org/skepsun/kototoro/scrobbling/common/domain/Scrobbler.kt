@@ -144,6 +144,13 @@ abstract class Scrobbler(
                     }.awaitAll()
                 }.filterNotNull()
             }
+            // The `scrobblings` table can contain several rows that map to the same
+            // (scrobbler, entityId, preferredLocalMangaId, targetId, mangaId, mediaType)
+            // because the primary key also includes the rate `id`/`ownerId`. Such rows
+            // would produce identical LazyColumn keys and crash the config screen, so
+            // collapse them. The SQL ordering already puts the preferred row first, and
+            // distinctBy keeps the first occurrence.
+            .map { infos -> infos.distinctBy { it.identityKey() } }
     }
 
     suspend fun warmUpScrobblingInfo(info: ScrobblingInfo) {

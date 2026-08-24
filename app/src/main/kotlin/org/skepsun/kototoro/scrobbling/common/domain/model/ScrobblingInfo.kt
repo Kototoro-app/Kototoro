@@ -21,13 +21,30 @@ data class ScrobblingInfo(
 ) : ListModel {
 
     override fun areItemsTheSame(other: ListModel): Boolean {
-        return other is ScrobblingInfo &&
-            other.scrobbler == scrobbler &&
-            other.entityId == entityId &&
-            other.preferredLocalMangaId == preferredLocalMangaId &&
-            other.targetId == targetId &&
-            other.mangaId == mangaId &&
-            other.mediaType == mediaType
+        return other is ScrobblingInfo && other.identityKey() == identityKey()
+    }
+
+    /**
+     * Stable identity used for list diffing and for Compose LazyColumn item keys.
+     * It must be unique for every distinct [ScrobblingInfo] in a list: the same
+     * `scrobblings` table row can be duplicated in the database (rows differ only
+     * in the PK columns `id`/`owner_id`), so the key intentionally covers every
+     * field that distinguishes one scrobbling entry from another. Failing to keep
+     * this unique crashes LazyColumn with "Key was already used".
+     */
+    fun identityKey(): String = buildString {
+        append("info:")
+        append(scrobbler.id)
+        append(':')
+        append(entityId)
+        append(':')
+        append(preferredLocalMangaId)
+        append(':')
+        append(targetId)
+        append(':')
+        append(mangaId)
+        append(':')
+        append(mediaType)
     }
 
     override fun getChangePayload(previousState: ListModel): Any? = when {
