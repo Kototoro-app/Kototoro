@@ -52,6 +52,22 @@ class UnifiedSourcesEnabledOverridesTest : FunSpec({
 		state.withEnabledOverrides(emptyMap()) shouldBeSameInstanceAs state
 		state.withEnabledOverrides(mapOf()) shouldBeSameInstanceAs state
 	}
+
+	test("override is never retired while the authoritative rebuild disagrees") {
+		// Regression: an override (id -> off) must survive until the base state actually
+		// reports off. Retiring it while the DB write is in flight made the switch flicker
+		// back to the previous state before the rebuild landed.
+		val baseStillEnabled = listOf(enabledOverrideSourceItem(id = "TSUNDOKU_1", isEnabled = true))
+		baseStillEnabled.agreedOverrideIds(mapOf("TSUNDOKU_1" to false)) shouldBe emptySet()
+	}
+
+	test("override is retired once the authoritative rebuild agrees") {
+		val baseNowDisabled = listOf(enabledOverrideSourceItem(id = "TSUNDOKU_1", isEnabled = false))
+		baseNowDisabled.agreedOverrideIds(mapOf("TSUNDOKU_1" to false)) shouldBe setOf("TSUNDOKU_1")
+
+		val baseNowEnabled = listOf(enabledOverrideSourceItem(id = "TSUNDOKU_1", isEnabled = true))
+		baseNowEnabled.agreedOverrideIds(mapOf("TSUNDOKU_1" to true)) shouldBe setOf("TSUNDOKU_1")
+	}
 })
 
 private class EnabledOverrideSource(override val name: String) : ContentSource {

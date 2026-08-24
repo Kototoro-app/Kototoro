@@ -189,6 +189,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         baseSourcesUiState,
         _enabledOverrides,
     ) { state, enabledOverrides ->
+        pruneAgreedEnabledOverrides(state, enabledOverrides)
         state.withEnabledOverrides(enabledOverrides)
     }.stateIn(
         scope = viewModelScope,
@@ -817,14 +818,36 @@ class UnifiedSourcesViewModel @Inject constructor(
             runCatching {
                 contentSourcesRepository.setSourcesEnabled(sourceItems.map { it.source }, enabled)
             }
-            // Reconcile: drop overrides that authoritative state now agrees on.
-            val authoritative = (uiState.value as? UnifiedSourcesUiState.Ready)
-                ?.allSources
-                .orEmpty()
-                .associate { it.id to it.isEnabled }
-            _enabledOverrides.update { overrides ->
-                overrides.filterNot { (id, value) -> authoritative[id] == value }
-            }
+            // Overrides are retired by [pruneAgreedEnabledOverrides] once the authoritative
+            // rebuild agrees with them; never remove them here based on the merged state.
+        }
+    }
+
+    /**
+     * Retires override entries that the authoritative (un-overridden) base rebuild now
+     * agrees with. Must compare against the base state — never the merged [uiState] — or
+     * the first rebuild after a toggle would drop the override while the DB write is still
+     * in flight and the switch would flicker back to the previous state. The re-emission
+     * caused by this StateFlow update settles after one pass because the agreed keys are
+     * no longer present.
+     */
+    private fun pruneAgreedEnabledOverrides(
+        base: UnifiedSourcesUiState.Ready,
+        overrides: Map<String, Boolean>,
+    ) {
+        if (overrides.isEmpty()) {
+            return
+        }
+        val agreed = base.allSources.agreedOverrideIds(overrides)
+        if (agreed.isEmpty()) {
+            return
+        }
+        val baseById = base.allSources.associateBy { it.id }
+        _enabledOverrides.update { map ->
+            // Only drop when the CURRENT override also agrees with the authoritative base,
+            // guarding against a re-toggle racing between the snapshot and the update.
+            val drop = agreed.filterTo(mutableSetOf()) { id -> baseById[id]?.isEnabled == map[id] }
+            if (drop.isEmpty()) map else map - drop
         }
     }
 
@@ -2225,4 +2248,15 @@ internal fun List<UnifiedSourceItem>.withEnabledOverrides(
 ): List<UnifiedSourceItem> = map { item ->
     val value = overrides[item.id] ?: return@map item
     if (item.isEnabled == value) item else item.copy(isEnabled = value)
+}
+
+/**
+ * Ids whose override matches the authoritative item state on this list. Used to retire
+ * optimistic overrides only once the rebuild agrees with them (never before, or the
+ * switch would flicker back while the DB write is still in flight).
+ */
+internal fun List<UnifiedSourceItem>.agreedOverrideIds(
+    overrides: Map<String, Boolean>,
+): Set<String> = mapNotNullTo(mutableSetOf()) { item ->
+    item.id.takeIf { overrides[it] == item.isEnabled }
 }
