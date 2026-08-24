@@ -34,7 +34,7 @@ The official Agent workflow consists of three related pieces:
 
 ## Non-Obvious Build Facts
 
-- **JDK 17 is required** for Gradle, even though `compileOptions` target Java 11. CI uses `temurin-17`.
+- **JDK 17 or newer is required** to run Gradle (AGP 9 / Gradle 9.7 require Java 17+; newer LTS JDKs such as Temurin 21/24 also work), even though `compileOptions` target Java 11. CI uses `temurin-17`.
 - **`app/build.gradle` uses Groovy DSL**, not Kotlin DSL — do not write `.kts` syntax in it.
 - **Nightly variant** auto-generates `versionCode`/`versionName` from the date via the AGP Variant API (`androidComponents.onVariants` in `app/build.gradle`; AGP 9 removed the legacy `applicationVariants` API). `versionCode` = `yyMMdd`, `versionName` = `N` + `yyyyMMdd`. Do not manually set those for nightly.
 - **Hilt `enableAggregatingTask = true`** is set; removing it can break release builds with generic assisted factory validation errors.
