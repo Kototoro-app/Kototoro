@@ -697,6 +697,12 @@ private fun FloatingBottomNavRow(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
     val pillSelectionTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    // pointerInput blocks only restart when their keys change, so any parameter
+    // they capture (selectedItemId, onItemSelected) goes stale across
+    // recompositions. rememberUpdatedState keeps the drag handlers reading the
+    // live selection and callback.
+    val currentSelectedItemId by rememberUpdatedState(selectedItemId)
+    val currentOnItemSelected by rememberUpdatedState(onItemSelected)
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
@@ -927,9 +933,9 @@ private fun FloatingBottomNavRow(
                                             targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
                                         )
                                     }
-                                    if (targetItemId != null && targetItemId != selectedItemId) {
+                                    if (targetItemId != null && targetItemId != currentSelectedItemId) {
                                         justReleasedFromDrag = true
-                                        onItemSelected(targetItemId)
+                                        currentOnItemSelected(targetItemId)
                                     }
                                     if (targetBounds == null) {
                                         dragIndicatorCenterX = null
@@ -1094,6 +1100,12 @@ private fun FullWidthFloatingBottomNavRow(
     }
     val accentColor = accentOverride ?: MaterialTheme.colorScheme.primary
     val pillSelectionTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    // pointerInput blocks only restart when their keys change, so any parameter
+    // they capture (selectedItemId, onItemSelected) goes stale across
+    // recompositions. rememberUpdatedState keeps the drag handlers reading the
+    // live selection and callback.
+    val currentSelectedItemId by rememberUpdatedState(selectedItemId)
+    val currentOnItemSelected by rememberUpdatedState(onItemSelected)
     val itemBounds = remember { mutableStateMapOf<Int, NavItemBounds>() }
     var containerPositionInRoot by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
@@ -1296,9 +1308,9 @@ private fun FullWidthFloatingBottomNavRow(
                                             targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
                                         )
                                     }
-                                    if (targetItemId != null && targetItemId != selectedItemId) {
+                                    if (targetItemId != null && targetItemId != currentSelectedItemId) {
                                         justReleasedFromDrag = true
-                                        onItemSelected(targetItemId)
+                                        currentOnItemSelected(targetItemId)
                                     }
                                     if (targetBounds == null) {
                                         dragIndicatorCenterX = null
