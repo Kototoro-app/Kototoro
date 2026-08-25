@@ -4,13 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,12 +26,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
+/**
+ * Target container opacity for the Material tiles while the blurred artwork
+ * image background is active. Color.copy(alpha) sets the absolute alpha, so a
+ * uniform target is used here instead of multiplying — the artwork theme
+ * already lowers the alpha of some containers (secondaryContainer 0.55/0.60,
+ * surfaceContainerHighest 0.86/0.90), and merely multiplying would leave tiles
+ * inconsistently transparent or even more opaque than before.
+ */
+private const val QUICK_ACTION_ARTWORK_CONTAINER_ALPHA = 0.50f
+
+/** Target container opacity for the glass (iOS) tiles while the blurred artwork image background is active. */
+private const val QUICK_ACTION_ARTWORK_GLASS_ALPHA = 0.45f
 
 @Composable
 internal fun QuickActionsSection(
@@ -53,27 +66,37 @@ internal fun QuickActionsSection(
         )
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val itemSpacing = 8.dp
+            val rowSpacing = if (isIosStyle) 7.dp else 8.dp
             val preferredItemWidth = 68.dp
             val columns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
                 .toInt()
                 .coerceAtLeast(2)
-            val itemWidth = (maxWidth - itemSpacing * (columns - 1)) / columns
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(itemSpacing),
-                verticalArrangement = if (isIosStyle) {
-                    Arrangement.spacedBy(7.dp, Alignment.CenterVertically)
-                } else {
-                    Arrangement.spacedBy(8.dp)
-                },
-                maxItemsInEachRow = columns,
+            // Chunk into full-width Rows where every item uses weight(1f), so a
+            // row always fills the entire width — including partial last rows on
+            // uncommon screen widths that would otherwise leave a large gap on
+            // the right with a fixed-column FlowRow.
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(rowSpacing),
             ) {
-                actions.forEachIndexed { index, action ->
-                    QuickAccessButton(
-                        action = action,
-                        paletteIndex = index,
-                        modifier = Modifier.size(width = itemWidth, height = 64.dp),
-                    )
-                }
+                actions.mapIndexed { index, action -> index to action }
+                    .chunked(columns)
+                    .forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(itemSpacing),
+                        ) {
+                            rowItems.forEach { (index, action) ->
+                                QuickAccessButton(
+                                    action = action,
+                                    paletteIndex = index,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(64.dp),
+                                )
+                            }
+                        }
+                    }
             }
         }
     }
@@ -94,11 +117,17 @@ private fun QuickAccessButton(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     val containerColor = when {
         !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
         paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
         paletteIndex % 3 == 1 -> MaterialTheme.colorScheme.tertiaryContainer
         else -> MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val effectiveContainerColor = if (isArtworkBackground) {
+        containerColor.copy(alpha = QUICK_ACTION_ARTWORK_CONTAINER_ALPHA)
+    } else {
+        containerColor
     }
     val expressiveContentColor = when (paletteIndex % 3) {
         0 -> MaterialTheme.colorScheme.onSecondaryContainer
@@ -147,7 +176,13 @@ private fun QuickAccessButton(
         GlassSurface(
             modifier = modifier,
             shape = shape,
-            style = GlassDefaults.subtleStyle(),
+            style = GlassDefaults.subtleStyle().copy(
+                containerAlpha = if (isArtworkBackground) {
+                    QUICK_ACTION_ARTWORK_GLASS_ALPHA
+                } else {
+                    GlassDefaults.subtleStyle().containerAlpha
+                },
+            ),
         ) {
             content()
         }
@@ -155,7 +190,7 @@ private fun QuickAccessButton(
         Surface(
             modifier = modifier,
             shape = shape,
-            color = containerColor,
+            color = effectiveContainerColor,
             tonalElevation = if (expressive) 0.dp else 1.dp,
         ) {
             content()
