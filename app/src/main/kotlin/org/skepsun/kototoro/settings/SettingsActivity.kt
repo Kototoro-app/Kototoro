@@ -61,7 +61,6 @@ import org.skepsun.kototoro.backups.ui.backup.UsagiBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
-import org.skepsun.kototoro.core.github.AppVersion
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -460,7 +459,6 @@ class SettingsActivity :
             openDefaultDestination()
         }
         viewModel.onNavigateToPreference.observeEvent(this, ::navigateToPreference)
-        aboutSettingsViewModel.onUpdateAvailable.observeEvent(this, ::onAboutUpdateAvailable)
 
         observeFoldableState()
     }
@@ -1383,6 +1381,9 @@ class SettingsActivity :
                 AboutSettingsRoute(
                     settings = kototoroAppSettings,
                     viewModel = aboutSettingsViewModel,
+                    onCheckUpdate = {
+                        startActivity(Intent(this, AppUpdateActivity::class.java))
+                    },
                     onChangelogClick = {
                         openDestination(SettingsDestination.ChangelogSettings, null, false)
                     },
@@ -2078,14 +2079,6 @@ class SettingsActivity :
         pendingSettingsDialog = SettingsDialogState.ProxyTestResult(
             message = error?.getDisplayMessage(resources) ?: getString(R.string.connection_ok),
         )
-    }
-
-    private fun onAboutUpdateAvailable(version: AppVersion?) {
-        if (version == null) {
-            Toast.makeText(this, R.string.no_update_available, Toast.LENGTH_SHORT).show()
-        } else {
-            startActivity(Intent(this, AppUpdateActivity::class.java))
-        }
     }
 
     private fun openAboutLink(key: String): Boolean {

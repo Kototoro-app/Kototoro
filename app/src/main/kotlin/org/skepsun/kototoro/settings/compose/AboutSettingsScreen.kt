@@ -42,7 +42,6 @@ fun AboutSettingsScreen(
     settings: AppSettings,
     isUpdateSupported: Boolean,
     isUpdateAvailable: Boolean,
-    isLoading: Boolean,
     onCheckUpdate: () -> Unit,
     onChangelogClick: () -> Unit,
     onLinkClick: (key: String) -> Unit,
@@ -76,7 +75,7 @@ fun AboutSettingsScreen(
                             title = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
                             iconRes = R.drawable.ic_app_update,
                             summary = stringResource(R.string.check_for_updates),
-                            enabled = isUpdateSupported && !isLoading,
+                            enabled = isUpdateSupported,
                             showUpdateBadge = isUpdateAvailable,
                             onClick = onCheckUpdate,
                         )

@@ -45,6 +45,8 @@ import org.skepsun.kototoro.details.ui.pager.pages.PagesViewModel
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 
+internal const val DETAILS_PANE_PRESS_FEEDBACK_ENABLED = false
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DetailsPaneContent(
@@ -207,6 +209,7 @@ internal fun DetailsPaneContent(
                 style = paneGlassStyle,
                 dialogSurface = LocalInterfaceStyle.current != InterfaceStyle.IOS,
                 componentRole = GlassComponentRole.BottomPanel,
+                pressFeedbackEnabled = DETAILS_PANE_PRESS_FEEDBACK_ENABLED,
             ) {
                 Box(
                     modifier = Modifier
@@ -304,4 +307,3 @@ internal fun DetailsDockContainer(
         }
     }
 }
-

@@ -50,7 +50,7 @@ class AppUpdateViewModel @Inject constructor(
             sourceProbes.value = repository.probeUpdateSources()
         }
         if (nextVersion.value == null) {
-            loadSource(selectedSource.value, showEmptyMessage = false)
+            loadSource(selectedSource.value, showEmptyMessage = true)
         }
     }
 
