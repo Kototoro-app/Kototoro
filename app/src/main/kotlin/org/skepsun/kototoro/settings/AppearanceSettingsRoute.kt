@@ -37,6 +37,7 @@ import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
@@ -192,8 +193,9 @@ fun AppearanceSettingsRoute(
             .value
             .let(coordinator::parseHiddenSourceTagSelection)
     val isMainFabEnabled = settings.observeAsState(AppSettings.KEY_MAIN_FAB) { isMainFabEnabled }.value
-    val isFullWidthNavIndicatorEnabled =
-        settings.observeAsState(AppSettings.KEY_NAV_INDICATOR_FULL_WIDTH) { isFullWidthNavIndicatorEnabled }.value
+    val navIndicatorStyle =
+        settings.observeAsState(AppSettings.KEY_NAV_INDICATOR_STYLE) { navIndicatorStyle }.value
+    val isNavFullWidth = settings.observeAsState(AppSettings.KEY_NAV_FULL_WIDTH) { isNavFullWidth }.value
     val isSampleBlueNavAccentEnabled =
         settings.observeAsState(AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE) { isSampleBlueNavAccentEnabled }.value
     val glassImmersiveStrengthPercent =
@@ -212,8 +214,6 @@ fun AppearanceSettingsRoute(
     val isNavFloating = settings.observeAsState(AppSettings.KEY_NAV_FLOATING) { isNavFloating }.value
     val isNavLayeredSurface =
         settings.observeAsState(AppSettings.KEY_NAV_LAYERED_SURFACE) { isNavLayeredSurface }.value
-    val isNavExpressivePillEnabled =
-        settings.observeAsState(AppSettings.KEY_NAV_EXPRESSIVE_PILL) { isNavExpressivePillEnabled }.value
     val navHeight = settings.observeAsState(AppSettings.KEY_NAV_HEIGHT) { navHeight }.value
     val navFloatingHeight = settings.observeAsState(AppSettings.KEY_NAV_FLOATING_HEIGHT) { navFloatingHeight }.value
     val isExitConfirmationEnabled =
@@ -305,6 +305,7 @@ fun AppearanceSettingsRoute(
         detailsTabs = coordinator.buildDetailsTabOptions(),
         searchSuggestionTypes = coordinator.buildSearchSuggestionTypeOptions(),
         listToDetailsTransitionOptions = listToDetailsTransitionOptions,
+        navIndicatorStyleOptions = coordinator.buildNavIndicatorStyleOptions(),
         languagePresets = languagePresetOptions,
         contentTypes = coordinator.buildContentTypeOptions(),
         sourceTags = coordinator.buildSourceTagOptions(),
@@ -370,8 +371,8 @@ fun AppearanceSettingsRoute(
         isNavLabelsAlwaysVisible = isNavLabelsAlwaysVisible,
         isNavFloating = isNavFloating,
         isNavLayeredSurface = isNavLayeredSurface,
-        isNavExpressivePillEnabled = isNavExpressivePillEnabled,
-        isFullWidthNavIndicatorEnabled = isFullWidthNavIndicatorEnabled,
+        navIndicatorStyle = navIndicatorStyle,
+        isNavFullWidth = isNavFullWidth,
         isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
         navHeight = navHeight,
         navFloatingHeight = navFloatingHeight,
@@ -454,10 +455,8 @@ fun AppearanceSettingsRoute(
         onNavLabelsAlwaysVisibleChange = { settings.isNavLabelsAlwaysVisible = it },
         onNavFloatingChange = { settings.isNavFloating = it },
         onNavLayeredSurfaceChange = { settings.isNavLayeredSurface = it },
-        onNavExpressivePillChange = {
-            settings.isNavExpressivePillEnabled = it
-            if (it) settings.isFullWidthNavIndicatorEnabled = false
-        },
+        onNavIndicatorStyleChange = { settings.navIndicatorStyle = it },
+        onNavFullWidthChange = { settings.isNavFullWidth = it },
         onNavHeightChange = { settings.navHeight = it },
         onNavFloatingHeightChange = { settings.navFloatingHeight = it },
         onExitConfirmationChange = { settings.isExitConfirmationEnabled = it },
@@ -532,10 +531,6 @@ fun AppearanceSettingsRoute(
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-        },
-        onFullWidthNavIndicatorChange = {
-            settings.isFullWidthNavIndicatorEnabled = it
-            if (it) settings.isNavExpressivePillEnabled = false
         },
         onSampleBlueNavAccentChange = { settings.isSampleBlueNavAccentEnabled = it },
         onGlassSettingsClick = onOpenGlassSettings,
@@ -694,6 +689,12 @@ private class AppearanceSettingsCoordinator(
         val labels = context.resources.getStringArray(R.array.list_modes)
         return ListMode.entries.mapIndexed { index, value ->
             SettingsChoiceOption(value = value, label = labels[index])
+        }
+    }
+
+    fun buildNavIndicatorStyleOptions(): List<SettingsChoiceOption<NavIndicatorStyle>> {
+        return NavIndicatorStyle.entries.map { style ->
+            SettingsChoiceOption(value = style, label = context.getString(style.titleResId))
         }
     }
 

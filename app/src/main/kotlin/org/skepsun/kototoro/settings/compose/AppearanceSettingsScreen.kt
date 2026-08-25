@@ -33,6 +33,7 @@ import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
@@ -97,8 +98,8 @@ data class AppearanceSettingsUiState(
     val isNavLabelsAlwaysVisible: Boolean,
     val isNavFloating: Boolean,
     val isNavLayeredSurface: Boolean,
-    val isNavExpressivePillEnabled: Boolean,
-    val isFullWidthNavIndicatorEnabled: Boolean,
+    val navIndicatorStyle: NavIndicatorStyle,
+    val isNavFullWidth: Boolean,
     val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
@@ -133,6 +134,7 @@ data class AppearanceSettingsOptions(
     val detailsTabs: List<SettingsChoiceOption<Int>>,
     val searchSuggestionTypes: List<SettingsChoiceOption<SearchSuggestionType>>,
     val listToDetailsTransitionOptions: List<SettingsChoiceOption<ListToDetailsTransition>>,
+    val navIndicatorStyleOptions: List<SettingsChoiceOption<NavIndicatorStyle>>,
     val languagePresets: List<SettingsChoiceOption<String>>,
     val contentTypes: List<SettingsChoiceOption<String>>,
     val sourceTags: List<SettingsChoiceOption<String>>,
@@ -205,7 +207,7 @@ fun AppearanceSettingsScreen(
     onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
     onNavLayeredSurfaceChange: (Boolean) -> Unit,
-    onNavExpressivePillChange: (Boolean) -> Unit,
+    onNavIndicatorStyleChange: (NavIndicatorStyle) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
     onExitConfirmationChange: (Boolean) -> Unit,
@@ -226,7 +228,7 @@ fun AppearanceSettingsScreen(
     onGlassTuningDeleteCustomPreset: (GlassCustomPreset) -> Unit = {},
     onGlassTuningExportCustomPresets: () -> Unit = {},
     onGlassTuningImportCustomPresets: () -> Unit = {},
-    onFullWidthNavIndicatorChange: (Boolean) -> Unit,
+    onNavFullWidthChange: (Boolean) -> Unit,
     onSampleBlueNavAccentChange: (Boolean) -> Unit,
     onGlassSettingsClick: () -> Unit = {},
     onBadgesSettingsClick: () -> Unit = {},
@@ -287,14 +289,15 @@ fun AppearanceSettingsScreen(
         AppearanceSettingsPage.NAVIGATION -> {
             AppearanceNavigationSettingsScreen(
                 state = state,
+                options = options,
                 onNavConfigClick = onNavConfigClick,
                 onNavPinnedChange = onNavPinnedChange,
                 onNavLabelsVisibleChange = onNavLabelsVisibleChange,
                 onNavLabelsAlwaysVisibleChange = onNavLabelsAlwaysVisibleChange,
                 onNavFloatingChange = onNavFloatingChange,
                 onNavLayeredSurfaceChange = onNavLayeredSurfaceChange,
-                onNavExpressivePillChange = onNavExpressivePillChange,
-                onFullWidthNavIndicatorChange = onFullWidthNavIndicatorChange,
+                onNavIndicatorStyleChange = onNavIndicatorStyleChange,
+                onNavFullWidthChange = onNavFullWidthChange,
                 onSampleBlueNavAccentChange = onSampleBlueNavAccentChange,
                 onNavHeightChange = onNavHeightChange,
                 onNavFloatingHeightChange = onNavFloatingHeightChange,
@@ -1059,14 +1062,15 @@ private fun AppearanceSearchFiltersSettingsScreen(
 @Composable
 private fun AppearanceNavigationSettingsScreen(
     state: AppearanceSettingsUiState,
+    options: AppearanceSettingsOptions,
     onNavConfigClick: () -> Unit,
     onNavPinnedChange: (Boolean) -> Unit,
     onNavLabelsVisibleChange: (Boolean) -> Unit,
     onNavLabelsAlwaysVisibleChange: (Boolean) -> Unit,
     onNavFloatingChange: (Boolean) -> Unit,
     onNavLayeredSurfaceChange: (Boolean) -> Unit,
-    onNavExpressivePillChange: (Boolean) -> Unit,
-    onFullWidthNavIndicatorChange: (Boolean) -> Unit,
+    onNavIndicatorStyleChange: (NavIndicatorStyle) -> Unit,
+    onNavFullWidthChange: (Boolean) -> Unit,
     onSampleBlueNavAccentChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
@@ -1103,7 +1107,7 @@ private fun AppearanceNavigationSettingsScreen(
             iconRes = R.drawable.ic_list_detailed,
             checked = state.isNavLabelsAlwaysVisible,
             summary = stringResource(R.string.pref_nav_labels_always_visible_summary),
-            enabled = state.isNavLabelsVisible && !state.isNavExpressivePillEnabled,
+            enabled = state.isNavLabelsVisible && state.navIndicatorStyle == NavIndicatorStyle.LABELS_BELOW,
             onCheckedChange = onNavLabelsAlwaysVisibleChange,
         )
     }
@@ -1126,31 +1130,28 @@ private fun AppearanceNavigationSettingsScreen(
         )
     }
     item {
-        SettingsSwitchPreference(
-            title = stringResource(R.string.pref_nav_expressive_pill),
+        SettingsChoicePreference(
+            title = stringResource(R.string.pref_nav_indicator_style),
             iconRes = R.drawable.ic_aspect_ratio,
-            checked = state.isNavExpressivePillEnabled,
-            summary = stringResource(R.string.pref_nav_expressive_pill_summary),
-            styleHint = stringResource(
-                R.string.appearance_recommended_for_style,
-                stringResource(InterfaceStyle.MATERIAL_3_EXPRESSIVE.titleResId),
-            ),
+            value = state.navIndicatorStyle,
+            options = options.navIndicatorStyleOptions,
+            summary = stringResource(R.string.pref_nav_indicator_style_summary),
             enabled = state.isNavFloating,
-            onCheckedChange = onNavExpressivePillChange,
+            onValueChange = onNavIndicatorStyleChange,
         )
     }
     item {
         SettingsSwitchPreference(
-            title = stringResource(R.string.pref_nav_indicator_full_width),
+            title = stringResource(R.string.pref_nav_full_width),
             iconRes = R.drawable.ic_drawer_menu,
-            checked = state.isFullWidthNavIndicatorEnabled,
-            summary = stringResource(R.string.pref_nav_indicator_full_width_summary),
+            checked = state.isNavFullWidth,
+            summary = stringResource(R.string.pref_nav_full_width_summary),
             styleHint = stringResource(
                 R.string.appearance_recommended_for_style,
                 stringResource(InterfaceStyle.IOS.titleResId),
             ),
             enabled = state.isNavFloating,
-            onCheckedChange = onFullWidthNavIndicatorChange,
+            onCheckedChange = onNavFullWidthChange,
         )
     }
     item {

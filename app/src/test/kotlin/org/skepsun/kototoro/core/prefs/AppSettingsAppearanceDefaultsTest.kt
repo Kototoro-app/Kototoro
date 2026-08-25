@@ -18,6 +18,7 @@ class AppSettingsAppearanceDefaultsTest {
 
 	private val context = mockk<Context>()
 	private val preferences = mockk<SharedPreferences>()
+	private val editor = mockk<SharedPreferences.Editor>(relaxed = true)
 
 	@BeforeEach
 	fun setUp() {
@@ -27,6 +28,7 @@ class AppSettingsAppearanceDefaultsTest {
 		every { context.resources } returns mockk<Resources> {
 			every { getStringArray(any()) } returns emptyArray()
 		}
+		every { preferences.edit() } returns editor
 		every { preferences.contains(any()) } returns false
 		every { preferences.getBoolean(any(), any()) } answers { secondArg() }
 		every { preferences.getInt(any(), any()) } answers { secondArg() }
@@ -66,6 +68,49 @@ class AppSettingsAppearanceDefaultsTest {
 
 		settings.appFontPreset shouldBe AppFontPreset.INTER
 		settings.expressiveAppFontPreset shouldBe AppFontPreset.INTER
+	}
+
+	@Test
+	fun `navigation indicator defaults to labels below with full width off`() {
+		val settings = AppSettings(context)
+
+		settings.navIndicatorStyle shouldBe NavIndicatorStyle.LABELS_BELOW
+		settings.isNavFullWidth shouldBe false
+	}
+
+	@Test
+	fun `navigation labels are always visible by default`() {
+		val settings = AppSettings(context)
+
+		settings.isNavLabelsAlwaysVisible shouldBe true
+	}
+
+	@Test
+	fun `default main navigation buttons are home history favourites browse and feed`() {
+		val settings = AppSettings(context)
+
+		settings.mainNavItems shouldBe listOf(
+			NavItem.HOME,
+			NavItem.HISTORY,
+			NavItem.FAVORITES,
+			NavItem.EXPLORE,
+			NavItem.FEED,
+		)
+	}
+
+	@Test
+	fun `2_0_1 forced three item nav default is re-expanded back to five`() {
+		every { preferences.getString(AppSettings.KEY_NAV_MAIN, null) } returns "HOME,FAVORITES,EXPLORE"
+
+		val settings = AppSettings(context)
+
+		settings.mainNavItems shouldBe listOf(
+			NavItem.HOME,
+			NavItem.HISTORY,
+			NavItem.FAVORITES,
+			NavItem.EXPLORE,
+			NavItem.FEED,
+		)
 	}
 
 	@Test

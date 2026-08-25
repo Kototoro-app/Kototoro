@@ -58,6 +58,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.prefs.observeAsState
@@ -102,9 +103,9 @@ data class BottomNavState(
 @Immutable
 private data class BottomNavPrefs(
     val isFloating: Boolean,
-    val isExpressivePillEnabled: Boolean,
+    val indicatorStyle: NavIndicatorStyle,
+    val isNavFullWidth: Boolean,
     val isNavLabelsAlwaysVisible: Boolean,
-    val isFullWidthIndicatorEnabled: Boolean,
     val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
@@ -135,34 +136,34 @@ fun KototoroBottomNav(
 
     val prefs by appSettings.observeAsState(
         AppSettings.KEY_NAV_FLOATING,
-        AppSettings.KEY_NAV_EXPRESSIVE_PILL,
+        AppSettings.KEY_NAV_INDICATOR_STYLE,
+        AppSettings.KEY_NAV_FULL_WIDTH,
         AppSettings.KEY_NAV_LABELS_ALWAYS_VISIBLE,
-        AppSettings.KEY_NAV_INDICATOR_FULL_WIDTH,
         AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE,
         AppSettings.KEY_NAV_HEIGHT,
         AppSettings.KEY_NAV_FLOATING_HEIGHT,
     ) {
         BottomNavPrefs(
             isFloating = isNavFloating,
-            isExpressivePillEnabled = isNavExpressivePillEnabled,
+            indicatorStyle = navIndicatorStyle,
+            isNavFullWidth = isNavFullWidth,
             isNavLabelsAlwaysVisible = isNavLabelsAlwaysVisible,
-            isFullWidthIndicatorEnabled = isFullWidthNavIndicatorEnabled,
             isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
         )
     }
     val isFloating = prefs.isFloating
-    val isExpressivePillEnabled = prefs.isExpressivePillEnabled
+    val isExpressivePillEnabled = prefs.indicatorStyle == NavIndicatorStyle.LABELS_RIGHT
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    // Full-width tab-capsule indicator (the AndroidLiquidGlass LiquidBottomTabs
-    // layout): a full-width capsule bar with evenly weighted tabs, each wrapped
-    // by a full-tab 56dp pill when selected. This is one of the orthogonal
-    // tuning knobs (ADR 0001) — the glass parameters themselves always come from
-    // the per-scope Glass Finish Tuner state.
-    val useFullWidthIndicator = isIosStyle && prefs.isFullWidthIndicatorEnabled
+    // Full-width floating navigation bar: the AndroidLiquidGlass LiquidBottomTabs
+    // layout spans the full screen width with evenly weighted tabs. It is now an
+    // independent toggle (default off) that combines with either label
+    // arrangement instead of being the implicit look of a "full-width capsule
+    // indicator" flag.
+    val useFullWidthIndicator = prefs.isNavFullWidth
     // Optional sample-blue accent (0xFF0088FF / 0xFF0091FF) for the selected
     // tab content, mirroring the LiquidBottomTabs sample.
     val sampleAccent = if (isIosStyle && prefs.isSampleBlueNavAccentEnabled) {
@@ -170,8 +171,8 @@ fun KototoroBottomNav(
     } else {
         null
     }
-    // Persistent labels: with "navigation pill button" off this reproduces the
-    // sample's always-visible tab labels.
+    // Persistent labels: with the labels-right (pill) arrangement off this
+    // reproduces the sample's always-visible tab labels.
     val labelsAlwaysVisible = prefs.isNavLabelsAlwaysVisible
     val tabletUiMode by appSettings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
 
@@ -370,6 +371,7 @@ fun KototoroBottomNav(
                         clickPulses = clickPulses,
                         showSelectedLabels = showSelectedLabels,
                         labelsAlwaysVisible = labelsAlwaysVisible,
+                        labelsToTheRight = isExpressivePillEnabled,
                         accentOverride = sampleAccent,
                         onItemSelected = onItemSelected,
                         onItemReselected = onItemReselected,
@@ -1060,9 +1062,10 @@ private fun FloatingBottomNavRow(
 
 /**
  * Full-width floating navigation row (the AndroidLiquidGlass LiquidBottomTabs
- * layout): evenly weighted tabs with 4dp insets, each showing an icon over its
- * label, and the selected tab wrapped by a 56dp full-tab capsule pill whose
- * glass follows the bottom navigation shell material while idle.
+ * layout): evenly weighted tabs with 4dp insets and a selected tab wrapped by
+ * a 56dp full-tab capsule pill whose glass follows the bottom navigation shell
+ * material while idle. With [labelsToTheRight] each tab lays its label beside
+ * the icon (the pill arrangement) instead of below it.
  * The selected content may optionally take the sample's blue accent.
  */
 @Composable
@@ -1073,6 +1076,7 @@ private fun FullWidthFloatingBottomNavRow(
     clickPulses: MutableMap<Int, Int>,
     showSelectedLabels: Boolean,
     labelsAlwaysVisible: Boolean,
+    labelsToTheRight: Boolean = false,
     accentOverride: Color? = null,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
@@ -1243,101 +1247,131 @@ private fun FullWidthFloatingBottomNavRow(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 CompositionLocalProvider(LocalContentColor provides contentColor) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .onGloballyPositioned { coordinates ->
-                                val position = coordinates.positionInRoot() - containerPositionInRoot
-                                itemBounds[item.id] = NavItemBounds(
-                                    itemId = item.id,
-                                    offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
-                                    size = IntSize(coordinates.size.width, coordinates.size.height),
-                                )
-                            }
-                            .pointerInput(items, item.id) {
-                                var pointerX = 0f
-                                detectDragGestures(
-                                    onDragStart = { startOffset ->
-                                        settleMotion = null
-                                        val itemOffset = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
-                                        pointerX = itemOffset + startOffset.x
-                                        dragIndicatorCenterX = pointerX
-                                        dragIndicatorWidthPx = itemBounds[item.id]?.size?.width
-                                        dragPreviewItemId = item.id
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        pointerX += dragAmount.x
-                                        dragIndicatorCenterX = pointerX
-                                        val targetItemId = itemBounds
-                                            .values
-                                            .firstOrNull { it.containsHorizontal(pointerX) }
-                                            ?.itemId
-                                        if (targetItemId != null) {
-                                            dragPreviewItemId = targetItemId
-                                        }
-                                    },
-                                    onDragCancel = {
-                                        settleMotion = null
+                    val itemModifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .onGloballyPositioned { coordinates ->
+                            val position = coordinates.positionInRoot() - containerPositionInRoot
+                            itemBounds[item.id] = NavItemBounds(
+                                itemId = item.id,
+                                offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
+                                size = IntSize(coordinates.size.width, coordinates.size.height),
+                            )
+                        }
+                        .pointerInput(items, item.id) {
+                            var pointerX = 0f
+                            detectDragGestures(
+                                onDragStart = { startOffset ->
+                                    settleMotion = null
+                                    val itemOffset = itemBounds[item.id]?.offset?.x?.toFloat() ?: 0f
+                                    pointerX = itemOffset + startOffset.x
+                                    dragIndicatorCenterX = pointerX
+                                    dragIndicatorWidthPx = itemBounds[item.id]?.size?.width
+                                    dragPreviewItemId = item.id
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    pointerX += dragAmount.x
+                                    dragIndicatorCenterX = pointerX
+                                    val targetItemId = itemBounds
+                                        .values
+                                        .firstOrNull { it.containsHorizontal(pointerX) }
+                                        ?.itemId
+                                    if (targetItemId != null) {
+                                        dragPreviewItemId = targetItemId
+                                    }
+                                },
+                                onDragCancel = {
+                                    settleMotion = null
+                                    dragIndicatorCenterX = null
+                                    dragIndicatorWidthPx = null
+                                    dragPreviewItemId = null
+                                },
+                                onDragEnd = {
+                                    val targetItemId = dragPreviewItemId
+                                    val targetBounds = targetItemId?.let(itemBounds::get)
+                                    if (targetItemId != null && targetBounds != null) {
+                                        settleMotion = BottomNavSettleMotion(
+                                            startCenterX = pointerX,
+                                            targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
+                                        )
+                                    }
+                                    if (targetItemId != null && targetItemId != selectedItemId) {
+                                        justReleasedFromDrag = true
+                                        onItemSelected(targetItemId)
+                                    }
+                                    if (targetBounds == null) {
                                         dragIndicatorCenterX = null
                                         dragIndicatorWidthPx = null
                                         dragPreviewItemId = null
-                                    },
-                                    onDragEnd = {
-                                        val targetItemId = dragPreviewItemId
-                                        val targetBounds = targetItemId?.let(itemBounds::get)
-                                        if (targetItemId != null && targetBounds != null) {
-                                            settleMotion = BottomNavSettleMotion(
-                                                startCenterX = pointerX,
-                                                targetCenterX = targetBounds.offset.x + targetBounds.size.width / 2f,
-                                            )
-                                        }
-                                        if (targetItemId != null && targetItemId != selectedItemId) {
-                                            justReleasedFromDrag = true
-                                            onItemSelected(targetItemId)
-                                        }
-                                        if (targetBounds == null) {
-                                            dragIndicatorCenterX = null
-                                            dragIndicatorWidthPx = null
-                                            dragPreviewItemId = null
-                                        }
-                                    },
-                                )
-                            }
-                            .clickable(
-                                interactionSource = remember(item.id) { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {
-                                    if (isSelected) {
-                                        onItemReselected(item.id)
-                                    } else {
-                                        clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
-                                        onItemSelected(item.id)
                                     }
                                 },
-                            ),
-                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        PremiumNavigationIcon(
-                            itemId = item.id,
-                            isSelected = isSelected,
-                            clickPulse = clickPulses[item.id] ?: 0,
-                            badge = badges[item.id],
-                            contentDescription = stringResource(item.title),
-                            selectedTint = accentColor,
-                        )
-                        // The sample always keeps every tab label visible; expose
-                        // that via the "always show labels" toggle (fall back to
-                        // the selected-only label when it is off).
-                        if (showSelectedLabels && (isSelected || labelsAlwaysVisible)) {
-                            Text(
-                                text = stringResource(item.title),
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false,
                             )
+                        }
+                        .clickable(
+                            interactionSource = remember(item.id) { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                if (isSelected) {
+                                    onItemReselected(item.id)
+                                } else {
+                                    clickPulses[item.id] = (clickPulses[item.id] ?: 0) + 1
+                                    onItemSelected(item.id)
+                                }
+                            },
+                        )
+                    if (labelsToTheRight) {
+                        Row(
+                            modifier = itemModifier,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            PremiumNavigationIcon(
+                                itemId = item.id,
+                                isSelected = isSelected,
+                                clickPulse = clickPulses[item.id] ?: 0,
+                                badge = badges[item.id],
+                                contentDescription = stringResource(item.title),
+                                selectedTint = accentColor,
+                            )
+                            // Pill arrangement shows its label beside the selected
+                            // icon only (mirrors the compact pill behaviour).
+                            if (showSelectedLabels && isSelected) {
+                                Text(
+                                    text = stringResource(item.title),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.widthIn(max = 72.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = itemModifier,
+                            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            PremiumNavigationIcon(
+                                itemId = item.id,
+                                isSelected = isSelected,
+                                clickPulse = clickPulses[item.id] ?: 0,
+                                badge = badges[item.id],
+                                contentDescription = stringResource(item.title),
+                                selectedTint = accentColor,
+                            )
+                            // The sample always keeps every tab label visible; expose
+                            // that via the "always show labels" toggle (fall back to
+                            // the selected-only label when it is off).
+                            if (showSelectedLabels && (isSelected || labelsAlwaysVisible)) {
+                                Text(
+                                    text = stringResource(item.title),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
                     }
                 }

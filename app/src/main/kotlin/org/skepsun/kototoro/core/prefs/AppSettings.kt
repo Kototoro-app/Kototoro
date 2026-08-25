@@ -226,6 +226,46 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
     }
 
+    /**
+     * One-time migration of the pre-2.1 navigation indicator flags.
+     *
+     * 2.0.0 shipped the expressive pill on by default for the iOS/expressive
+     * styles; 2.0.1 introduced the full-width capsule indicator (on by default
+     * for iOS) but kept reading the old pill flag, so users who had the pill
+     * carried over ended up with both enabled at once even though they are
+     * mutually exclusive. We fold them into a single [NavIndicatorStyle] plus
+     * an independent full-width toggle, preserving whatever was effectively on
+     * screen:
+     *
+     *  - full-width enabled explicitly, or via the 2.0.1 iOS default that the
+     *    carried-over pill flag collided with -> LABELS_BELOW + full width on
+     *  - pill only (no full-width default) -> LABELS_RIGHT
+     *  - neither stored -> LABELS_BELOW, full width off (the new default)
+     */
+    private fun migrateLegacyNavIndicatorStyle() {
+        val storedPill = prefs.getBoolean(KEY_NAV_EXPRESSIVE_PILL, false)
+        val hasPill = prefs.contains(KEY_NAV_EXPRESSIVE_PILL)
+        val storedFullWidth = prefs.getBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, false)
+        // 2.0.1 defaulted the full-width indicator on for the iOS style even
+        // when the key was absent; a persisted pill plus an absent full-width
+        // key is exactly the carry-over that produced the both-on conflict.
+        val pillCarryOverCollision = hasPill && storedPill &&
+            !prefs.contains(KEY_NAV_INDICATOR_FULL_WIDTH) &&
+            interfaceStyle == InterfaceStyle.IOS
+        val effectiveFullWidth = storedFullWidth || pillCarryOverCollision
+        prefs.edit {
+            putEnumValue(
+                KEY_NAV_INDICATOR_STYLE,
+                when {
+                    effectiveFullWidth -> NavIndicatorStyle.LABELS_BELOW
+                    storedPill -> NavIndicatorStyle.LABELS_RIGHT
+                    else -> NavIndicatorStyle.LABELS_BELOW
+                },
+            )
+            putBoolean(KEY_NAV_FULL_WIDTH, effectiveFullWidth)
+        }
+    }
+
     var hasSeenPluginWelcome: Boolean
         get() = prefs.getBoolean("has_seen_plugin_welcome", false)
         set(value) = prefs.edit { putBoolean("has_seen_plugin_welcome", value) }
@@ -285,18 +325,20 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     var mainNavItems: List<NavItem>
         get() {
             val rawStr = prefs.getString(KEY_NAV_MAIN, null)
-            if (rawStr == "HOME,HISTORY,FAVORITES,EXPLORE,FEED") {
-                val newDefaults = listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.EXPLORE)
-                prefs.edit { putString(KEY_NAV_MAIN, newDefaults.joinToString(",") { it.name }) }
-                return newDefaults
-            }
-            val raw = rawStr?.split(',')
-            val items = if (raw.isNullOrEmpty()) {
-                listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.EXPLORE)
-            } else {
-                raw.mapNotNull { x -> NavItem.entries.find(x) }
-                .filterNot { it == NavItem.DISCOVER }
-                .ifEmpty { listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.EXPLORE) }
+            val legacyThreeItemDefault = migratedLegacyThreeNavItems.joinToString(",") { it.name }
+            val items = when (rawStr) {
+                null -> defaultMainNavItems
+                legacyThreeItemDefault -> {
+                    // 2.0.1 rewrote and persisted the legacy five-destination
+                    // default down to Home/Favourites/Browse; restore it to the
+                    // five-destination set. Custom orders are left untouched.
+                    prefs.edit { putString(KEY_NAV_MAIN, defaultMainNavItems.joinToString(",") { it.name }) }
+                    defaultMainNavItems
+                }
+                else -> rawStr.split(',')
+                    .mapNotNull { x -> NavItem.entries.find(x) }
+                    .filterNot { it == NavItem.DISCOVER }
+                    .ifEmpty { defaultMainNavItems }
             }
             return items.limitMainNavigationItems().also { limitedItems ->
                 if (limitedItems.size != items.size) {
@@ -316,11 +358,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
     /**
      * Keep the label of every navigation item visible (not only the selected
-     * one). With the navigation pill (expressive) button disabled this matches
-     * the AndroidLiquidGlass LiquidBottomTabs sample look.
+     * one). Only applies to the labels-below indicator arrangement; the
+     * labels-right (pill) arrangement shows the label on the selected item.
      */
     var isNavLabelsAlwaysVisible: Boolean
-        get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, false)
+        get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, value) }
 
     var isEntityGraphMigrated: Boolean
@@ -352,24 +394,39 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_MAIN_FAB, value) }
 
     /**
-     * Full-width tab-capsule selected indicator (the AndroidLiquidGlass
-     * LiquidBottomTabs layout) instead of the compact expressive pill.
+     * How the selected item is highlighted in the floating navigation bar. This
+     * is the single source of truth folded out of the two mutually exclusive
+     * legacy booleans (the expressive pill and the full-width capsule
+     * indicator): see [NavIndicatorStyle].
      */
-    var isFullWidthNavIndicatorEnabled: Boolean
-        get() = prefs.getBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, interfaceStyle == InterfaceStyle.IOS)
-        set(value) = prefs.edit { putBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, value) }
+    var navIndicatorStyle: NavIndicatorStyle
+        get() {
+            if (!prefs.contains(KEY_NAV_INDICATOR_STYLE)) {
+                migrateLegacyNavIndicatorStyle()
+            }
+            return prefs.getEnumValue(KEY_NAV_INDICATOR_STYLE, NavIndicatorStyle.LABELS_BELOW)
+        }
+        set(value) = prefs.edit { putEnumValue(KEY_NAV_INDICATOR_STYLE, value) }
+
+    /**
+     * Whether the floating navigation bar stretches across the full screen
+     * width (even with a single item). The legacy full-width capsule indicator
+     * always implied this; it is now an independent toggle (default off) that
+     * combines with either [NavIndicatorStyle].
+     */
+    var isNavFullWidth: Boolean
+        get() {
+            if (!prefs.contains(KEY_NAV_INDICATOR_STYLE)) {
+                migrateLegacyNavIndicatorStyle()
+            }
+            return prefs.getBoolean(KEY_NAV_FULL_WIDTH, false)
+        }
+        set(value) = prefs.edit { putBoolean(KEY_NAV_FULL_WIDTH, value) }
 
     /** Tint selected nav content with the sample's accent blue instead of the theme accent. */
     var isSampleBlueNavAccentEnabled: Boolean
         get() = prefs.getBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, false)
         set(value) = prefs.edit { putBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, value) }
-
-    var isNavExpressivePillEnabled: Boolean
-        get() = prefs.getBoolean(
-            KEY_NAV_EXPRESSIVE_PILL,
-            interfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE,
-        )
-        set(value) = prefs.edit { putBoolean(KEY_NAV_EXPRESSIVE_PILL, value) }
 
     @Deprecated("Use interfaceStyle instead")
     var isMaterialExpressiveComponentsEnabled: Boolean
@@ -2381,7 +2438,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putInt(KEY_NAV_HEIGHT, navHeight)
             putInt(KEY_NAV_FLOATING_HEIGHT, navFloatingHeight)
             putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, isNavLabelsAlwaysVisible)
-            putBoolean(KEY_NAV_INDICATOR_FULL_WIDTH, isFullWidthNavIndicatorEnabled)
+            putEnumValue(KEY_NAV_INDICATOR_STYLE, navIndicatorStyle)
+            putBoolean(KEY_NAV_FULL_WIDTH, isNavFullWidth)
             putBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, isSampleBlueNavAccentEnabled)
             putInt(KEY_GRID_SIZE, gridSize)
             putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
@@ -2923,10 +2981,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_NAV_FLOATING = "nav_floating"
         const val KEY_NAV_LAYERED_SURFACE = "nav_layered_surface"
         const val KEY_NAV_EXPRESSIVE_PILL = "nav_expressive_pill"
+        const val KEY_NAV_INDICATOR_STYLE = "nav_indicator_style"
+        const val KEY_NAV_FULL_WIDTH = "nav_full_width"
+        const val KEY_NAV_INDICATOR_FULL_WIDTH = "nav_indicator_full_width"
         const val KEY_NAV_HEIGHT = "nav_height"
         const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
         const val KEY_MAIN_FAB = "main_fab"
-        const val KEY_NAV_INDICATOR_FULL_WIDTH = "nav_indicator_full_width"
         const val KEY_NAV_ACCENT_SAMPLE_BLUE = "nav_accent_sample_blue"
 
         const val KEY_LOADING_CIRCLE_STYLE = "loading_circle_style"

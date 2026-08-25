@@ -8,6 +8,29 @@ import org.skepsun.kototoro.R
 
 const val MAX_MAIN_NAV_ITEM_COUNT = 5
 
+/**
+ * Default main navigation buttons: Home, History, Favourites, Browse and
+ * Subscriptions (主页、历史、收藏、浏览、订阅).
+ */
+val defaultMainNavItems = listOf(
+    NavItem.HOME,
+    NavItem.HISTORY,
+    NavItem.FAVORITES,
+    NavItem.EXPLORE,
+    NavItem.FEED,
+)
+
+/**
+ * The three-destination set 2.0.1 forced onto everyone who still had the
+ * legacy five-destination default ("HOME,HISTORY,FAVORITES,EXPLORE,FEED"). It
+ * is re-expanded to [defaultMainNavItems].
+ */
+internal val migratedLegacyThreeNavItems = listOf(
+    NavItem.HOME,
+    NavItem.FAVORITES,
+    NavItem.EXPLORE,
+)
+
 internal fun Iterable<NavItem>.limitMainNavigationItems(): List<NavItem> =
     distinct().take(MAX_MAIN_NAV_ITEM_COUNT)
 
