@@ -117,11 +117,10 @@ class KotoInjektBridge(
  * accepts *interfaces* and `Application` is a concrete class, so a dynamic proxy would require a
  * bytecode-generation dependency (ByteBuddy/CGLIB) — out of scope (no new deps). And, contrary to
  * the usual assumption, `ContextWrapper.getSharedPreferences(String, int)` is **not** `final` in
- * the compileSdk 37 API surface, so overriding exactly that one method is legal. The rest of the
- * class keeps ContextWrapper's inherited behavior, which would hit a null `mBase` (this wrapper
- * is never attached by the system), so the context/resource accessors most likely to be touched by
- * preference code — [getApplicationContext], [getBaseContext], [getAssets], [getResources] —
- * explicitly forward to [real].
+ * the compileSdk 37 API surface, so overriding exactly that one method is legal. This wrapper is
+ * not attached by the system, so it attaches [real] as its base context during construction. This
+ * keeps every inherited Context API safe, including APIs such as `getDeviceId()` that newer Android
+ * versions may call while constructing a WebView.
  *
  * This wrapper is only ever handed out to extension code through Injekt; the system never
  * instantiates it. Non-TSUNDOKU sources are unaffected because the remap is a no-op for them.
@@ -129,6 +128,10 @@ class KotoInjektBridge(
 internal class NamespacedApplication(
     private val real: Application,
 ) : Application() {
+
+    init {
+        attachBaseContext(real)
+    }
 
     override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
         val remapped = remapTachiyomiPreferenceKey(name, MihonRequestContext.currentSource())
