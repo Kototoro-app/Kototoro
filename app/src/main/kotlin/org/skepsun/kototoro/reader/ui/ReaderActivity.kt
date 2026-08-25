@@ -663,6 +663,12 @@ class ReaderActivity :
         viewModel.isInfoBarTransparent.observe(this) {
             composeReaderController.updateInfoBar { copy(drawBackground = !it) }
         }
+        viewModel.infoBarLayout.observe(this) {
+            composeReaderController.updateInfoBar { copy(layout = it) }
+        }
+        viewModel.isInfoBarCutoutAvoidanceEnabled.observe(this) {
+            composeReaderController.updateInfoBar { copy(avoidDisplayCutout = it) }
+        }
         viewModel.isInfoBarEnabled.observe(this, ::onReaderBarChanged)
         viewModel.isBookmarkAdded.observe(this, MenuInvalidator(this))
         viewModel.onAskNsfwIncognito.observeEvent(this) { askForIncognitoMode() }
@@ -1220,14 +1226,13 @@ class ReaderActivity :
                         it.chaptersTotal,
                         it.currentPage + 1,
                         it.totalPages,
-                    ) + if (it.percent in 0f..1f) {
-                        "     " + getString(
-                            R.string.percent_string_pattern,
-                            (it.percent * 100).roundToInt(),
-                        )
-                    } else {
-                        ""
-                    }
+                    )
+                }.orEmpty(),
+                progressText = uiState?.takeIf { it.percent in 0f..1f }?.let {
+                    getString(
+                        R.string.percent_string_pattern,
+                        (it.percent * 100).roundToInt(),
+                    )
                 }.orEmpty(),
                 showSystemStatus = settings.isReaderFullscreenEnabled,
             )

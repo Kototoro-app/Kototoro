@@ -1974,6 +1974,13 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isReaderBarTransparent: Boolean
         get() = prefs.getBoolean(KEY_READER_BAR_TRANSPARENT, true)
 
+    var readerInfoBarLayout: ReaderInfoBarLayout
+        get() = prefs.getEnumValue(KEY_READER_BAR_LAYOUT, ReaderInfoBarLayout.CENTERED)
+        set(value) = prefs.edit { putEnumValue(KEY_READER_BAR_LAYOUT, value) }
+
+    val isReaderInfoBarCutoutAvoidanceEnabled: Boolean
+        get() = prefs.getBoolean(KEY_READER_BAR_CUTOUT_AVOIDANCE, false)
+
     val isReaderChapterToastEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_CHAPTER_TOAST, true)
 
@@ -2844,6 +2851,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SYNC_SETTINGS = "sync_settings"
         const val KEY_READER_BAR = "reader_bar"
         const val KEY_READER_BAR_TRANSPARENT = "reader_bar_transparent"
+        const val KEY_READER_BAR_LAYOUT = "reader_bar_layout"
+        const val KEY_READER_BAR_CUTOUT_AVOIDANCE = "reader_bar_cutout_avoidance"
         const val KEY_READER_CHAPTER_TOAST = "reader_chapter_toast"
         const val KEY_READER_SUPER_RESOLUTION_ENABLED = "reader_super_resolution_enabled"
         const val KEY_READER_SUPER_RESOLUTION_ENGINE = "reader_super_resolution_engine"

@@ -367,6 +367,8 @@ class SettingsSearchHelper @Inject constructor(
             "reader_screen_on" to R.string.keep_screen_on,
             "reader_multitask" to R.string.reader_multitask,
             "reader_bar" to R.string.reader_info_bar,
+            "reader_bar_layout" to R.string.reader_info_bar_layout,
+            "reader_bar_cutout_avoidance" to R.string.reader_info_bar_cutout_avoidance,
             "reader_bar_transparent" to R.string.reader_info_bar_transparent,
             "reader_chapter_toast" to R.string.reader_chapter_toast,
             "reader_background" to R.string.background,

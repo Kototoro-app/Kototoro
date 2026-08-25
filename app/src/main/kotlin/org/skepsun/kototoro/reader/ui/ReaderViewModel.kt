@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ReaderControl
+import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationMode
 import org.skepsun.kototoro.core.prefs.ReaderTranslationPipelineMode
@@ -228,6 +229,18 @@ class ReaderViewModel @Inject constructor(
         scope = viewModelScope + Dispatchers.Default,
         key = AppSettings.KEY_READER_BAR_TRANSPARENT,
         valueProducer = { isReaderBarTransparent },
+    )
+
+    val infoBarLayout = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_READER_BAR_LAYOUT,
+        valueProducer = { readerInfoBarLayout },
+    )
+
+    val isInfoBarCutoutAvoidanceEnabled = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_READER_BAR_CUTOUT_AVOIDANCE,
+        valueProducer = { isReaderInfoBarCutoutAvoidanceEnabled },
     )
 
     val isKeepScreenOnEnabled = settings.observeAsStateFlow(

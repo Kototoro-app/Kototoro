@@ -1661,6 +1661,11 @@
     <string name="reader_font_size">字体大小</string>
     <string name="reader_fullscreen_summary">将系统状态栏与通知栏隐藏</string>
     <string name="reader_info_bar">显示阅读状态</string>
+    <string name="reader_info_bar_layout">阅读状态排版</string>
+    <string name="reader_info_bar_layout_centered">居中紧凑</string>
+    <string name="reader_info_bar_layout_split">左右分栏</string>
+    <string name="reader_info_bar_cutout_avoidance">避让屏幕挖孔（实验性）</string>
+    <string name="reader_info_bar_cutout_avoidance_summary">实验性功能：将阅读信息移出摄像头挖孔或刘海区域</string>
     <string name="reader_info_bar_summary">在屏幕顶部显示当前时间和阅读进度</string>
     <string name="reader_info_bar_transparent">透明阅读状态栏</string>
     <string name="reader_info_pattern">第 %1$d/%2$d 章 第 %3$d/%4$d 页</string>

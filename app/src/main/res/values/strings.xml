@@ -871,6 +871,11 @@
     <string name="automatic_scroll">Automatic scroll</string>
     <string name="reader_info_pattern">Ch. %1$d/%2$d Pg. %3$d/%4$d</string>
     <string name="reader_info_bar">Show information bar in reader</string>
+    <string name="reader_info_bar_layout">Information bar layout</string>
+    <string name="reader_info_bar_layout_centered">Centered</string>
+    <string name="reader_info_bar_layout_split">Split sides</string>
+    <string name="reader_info_bar_cutout_avoidance">Avoid display cutout (experimental)</string>
+    <string name="reader_info_bar_cutout_avoidance_summary">Experimental: move reader information away from camera cutouts and notches</string>
     <string name="comics_archive">Comics archive</string>
     <string name="folder_with_images">Folder with images</string>
     <string name="importing_manga">Importing manga</string>

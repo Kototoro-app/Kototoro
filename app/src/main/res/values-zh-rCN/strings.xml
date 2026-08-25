@@ -490,6 +490,11 @@
     <string name="explore">浏览</string>
     <string name="automatic_scroll">自动翻页</string>
     <string name="reader_info_bar">显示阅读状态</string>
+    <string name="reader_info_bar_layout">阅读状态排版</string>
+    <string name="reader_info_bar_layout_centered">居中紧凑</string>
+    <string name="reader_info_bar_layout_split">左右分栏</string>
+    <string name="reader_info_bar_cutout_avoidance">避让屏幕挖孔（实验性）</string>
+    <string name="reader_info_bar_cutout_avoidance_summary">实验性功能：将阅读信息移出摄像头挖孔或刘海区域</string>
     <string name="comics_archive">漫画压缩包</string>
     <string name="folder_with_images">图片文件夹</string>
     <string name="importing_manga">内容导入中</string>

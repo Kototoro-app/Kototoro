@@ -34,6 +34,7 @@ import org.skepsun.kototoro.core.prefs.EInkRefreshColor
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderControl
+import org.skepsun.kototoro.core.prefs.ReaderInfoBarLayout
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.reader.novel.NovelPageTurnAnimation
@@ -74,6 +75,10 @@ fun ReaderSettingsScreen(
     )
     val readerBackgroundNames = ReaderBackground.entries.map { it.name }
     val readerAnimationNames = ReaderAnimation.entries.map { it.name }
+    val readerInfoBarLayoutOptions = listOf(
+        SettingsChoiceOption(ReaderInfoBarLayout.CENTERED, stringResource(R.string.reader_info_bar_layout_centered)),
+        SettingsChoiceOption(ReaderInfoBarLayout.SPLIT, stringResource(R.string.reader_info_bar_layout_split)),
+    )
     val pagesPreloadNames = listOf("1", "2", "0")
     val eInkModeEnabled = settings.observeAsState(AppSettings.KEY_EINK_MODE) { isEInkModeEnabled }.value
     val eInkRefreshEnabled = settings.observeAsState(AppSettings.KEY_EINK_REFRESH) { isEInkRefreshEnabled }.value
@@ -141,6 +146,7 @@ fun ReaderSettingsScreen(
                             readerOrientationNames = readerOrientationNames,
                             readerBackgroundNames = readerBackgroundNames,
                             readerAnimationNames = readerAnimationNames,
+                            readerInfoBarLayoutOptions = readerInfoBarLayoutOptions,
                             pagesPreloadNames = pagesPreloadNames,
                             readerControlOptions = readerControlOptions,
                             onReaderAiSettingsEntryClick = onReaderAiSettingsEntryClick,
@@ -549,6 +555,7 @@ private fun ReaderMangaSettingsPage(
     readerOrientationNames: List<String>,
     readerBackgroundNames: List<String>,
     readerAnimationNames: List<String>,
+    readerInfoBarLayoutOptions: List<SettingsChoiceOption<ReaderInfoBarLayout>>,
     pagesPreloadNames: List<String>,
     readerControlOptions: List<SettingsChoiceOption<ReaderControl>>,
     onReaderAiSettingsEntryClick: () -> Unit,
@@ -799,6 +806,32 @@ private fun ReaderMangaSettingsPage(
                     isReaderBarEnabled
                 }.value,
                 onCheckedChange = { settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR, it) } },
+            )
+        }
+        item {
+            SettingsChoicePreference(
+                title = stringResource(R.string.reader_info_bar_layout),
+                iconRes = R.drawable.ic_reorder_handle,
+                value = settings.observeAsState(AppSettings.KEY_READER_BAR_LAYOUT) {
+                    readerInfoBarLayout
+                }.value,
+                options = readerInfoBarLayoutOptions,
+                enabled = settings.isReaderBarEnabled,
+                onValueChange = { settings.readerInfoBarLayout = it },
+            )
+        }
+        item {
+            SettingsSwitchPreference(
+                title = stringResource(R.string.reader_info_bar_cutout_avoidance),
+                summary = stringResource(R.string.reader_info_bar_cutout_avoidance_summary),
+                iconRes = R.drawable.ic_fullscreen,
+                checked = settings.observeAsState(AppSettings.KEY_READER_BAR_CUTOUT_AVOIDANCE) {
+                    isReaderInfoBarCutoutAvoidanceEnabled
+                }.value,
+                enabled = settings.isReaderBarEnabled,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_BAR_CUTOUT_AVOIDANCE, it) }
+                },
             )
         }
         item {
