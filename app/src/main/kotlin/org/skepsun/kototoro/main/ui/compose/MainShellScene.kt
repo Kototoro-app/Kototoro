@@ -1308,17 +1308,10 @@ internal fun UpdatedTopLevelRouteContent(
             contentPadding = contentPadding,
             appRouter = appRouter,
             showRemoveOption = true,
-            // Inline bar is kept as a same-slot fallback (status-bar padded, top-center) so the
-            // selection bar is always visible; it coincides with the chrome override bar.
-            showInlineSelectionTopBar = true,
-            inlineSelectionBarAnimated = false,
-            inlineSelectionSupportedActions = setOf(
-                SelectionAction.SELECT_ALL,
-                SelectionAction.REMOVE,
-                SelectionAction.SHARE,
-                SelectionAction.FAVOURITE,
-            ),
-            inlineSelectionIncludeContextualActions = false,
+            // Selection is owned by the route and reported to the main chrome, so the
+            // route must not draw its own inline bar: a same-slot duplicate would be
+            // captured by the chrome glass backdrop and render as artifacts.
+            showInlineSelectionTopBar = false,
             selectionControl = remember(updatedSelectedItemIdsState) {
                 ContentSelectionControl(updatedSelectedItemIdsState) { updatedSelectedItemIds = it }
             },
