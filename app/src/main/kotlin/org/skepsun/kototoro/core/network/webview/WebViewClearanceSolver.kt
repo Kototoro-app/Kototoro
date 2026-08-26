@@ -8,16 +8,18 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.CookieJar
 import okhttp3.Headers
 import okhttp3.Request
 import org.skepsun.kototoro.core.network.cookies.MutableCookieJar
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import java.util.Locale
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 /**
  * Mihon/Komikku 风格的 Cloudflare 求解器（用于 CloudflareStrategy.MIHON）。
@@ -31,6 +33,9 @@ import javax.inject.Singleton
  *
  * 移植自 komikku 的 CloudflareInterceptor / WebViewInterceptor（约 240 行）。
  * 注意：本类的方法必须在工作线程调用（OkHttp 拦截器场景），WebView 操作会投递到主线程。
+ *
+ * 自 2026-08 起为 [suspend] 函数：可被 [CloudflareSolveCoordinator] 取消 —— 当该 host 的
+ * 最后一个等待者被取消时，求解协程被取消，WebView 会停止加载并销毁；超时同样走取消路径。
  */
 @Singleton
 class WebViewClearanceSolver @Inject constructor(
@@ -43,75 +48,31 @@ class WebViewClearanceSolver @Inject constructor(
      * 在离屏 WebView 中求解 [request] 的 Cloudflare 挑战。
      * 返回 true 当且仅当检测到新的 `cf_clearance`（与求解前不同）。
      * 求解前会移除旧的 `cf_clearance`，以便把“新 cookie 出现”当作成功信号。
+     *
+     * 超时（[WAIT_TIMEOUT_MS]）或协程取消时返回 false 并销毁 WebView；
+     * WebView 的创建、停止与销毁始终发生在主线程。
      */
-    fun solve(request: Request): Boolean {
+    suspend fun solve(request: Request): Boolean {
         val url = request.url.toString()
         val oldClearance = CloudFlareHelper.getClearanceCookie(cookieJar, url)
         removeClearance(request)
-
-        val latch = CountDownLatch(1)
         val headers = parseHeaders(request.headers)
-        var webView: WebView? = null
-        var cloudflareBypassed = false
-        var challengeFound = false
 
-        executor.execute {
-            webView = try {
-                createWebView(request)
-            } catch (e: Exception) {
-                android.util.Log.w(TAG, "createWebView failed: " + url, e)
-                latch.countDown()
-                return@execute
-            }
-            webView!!.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView, finishedUrl: String) {
-                    if (hasNewClearance(url, oldClearance)) {
-                        cloudflareBypassed = true
-                        latch.countDown()
-                        return
+        return withTimeoutOrNull(WAIT_TIMEOUT_MS) {
+            var session: SolveSession? = null
+            try {
+                suspendCancellableCoroutine { continuation ->
+                    val s = SolveSession(url, oldClearance, request, headers) { result ->
+                        continuation.resume(result)
                     }
-                    if (finishedUrl == url && !challengeFound) {
-                        // 首个请求直接加载完成且没有出现挑战，放弃等待。
-                        latch.countDown()
-                    }
+                    session = s
+                    continuation.invokeOnCancellation { s.destroy() }
+                    s.start()
                 }
-
-                override fun onReceivedHttpError(
-                    view: WebView?,
-                    request: WebResourceRequest?,
-                    errorResponse: WebResourceResponse?,
-                ) {
-                    if (request?.isForMainFrame == true) {
-                        if (errorResponse?.statusCode in ERROR_CODES) {
-                            // 主框架返回 CF 挑战页，继续等待 JS 求解。
-                            challengeFound = true
-                        } else {
-                            // 非 Cloudflare 错误，放弃等待。
-                            latch.countDown()
-                        }
-                    }
-                }
+            } finally {
+                session?.destroy()
             }
-            webView!!.loadUrl(url, headers)
-        }
-
-        latch.await(WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-
-        executor.execute {
-            webView?.let { wv ->
-                runCatching {
-                    wv.stopLoading()
-                    wv.loadUrl("about:blank")
-                    wv.destroy()
-                }
-            }
-        }
-        return cloudflareBypassed
-    }
-
-    private fun hasNewClearance(url: String, oldClearance: String?): Boolean {
-        val current = CloudFlareHelper.getClearanceCookie(cookieJar, url)
-        return current != null && current != oldClearance
+        } ?: false
     }
 
     private fun removeClearance(request: Request) {
@@ -147,9 +108,113 @@ class WebViewClearanceSolver @Inject constructor(
         return result
     }
 
+    /**
+     * Owns one off-screen WebView solve: create/load on the main thread, settle exactly once,
+     * destroy at most once. Destroy is safe to call from any thread and before/after creation.
+     */
+    private inner class SolveSession(
+        private val url: String,
+        private val oldClearance: String?,
+        private val request: Request,
+        private val headers: Map<String, String>,
+        private val onSettled: (Boolean) -> Unit,
+    ) {
+        @Volatile
+        var webView: WebView? = null
+
+        @Volatile
+        var challengeFound = false
+
+        private val settled = AtomicBoolean(false)
+        private val destroyed = AtomicBoolean(false)
+
+        fun start() {
+            executor.execute {
+                if (destroyed.get()) {
+                    // 求解在创建 WebView 之前已被取消。
+                    return@execute
+                }
+                val created = try {
+                    createWebView(request)
+                } catch (e: Exception) {
+                    android.util.Log.w(TAG, "createWebView failed: $url", e)
+                    settle(false)
+                    return@execute
+                }
+                webView = created
+                if (destroyed.get()) {
+                    // destroy 与创建发生竞态，立即在主线程销毁。
+                    runCatching {
+                        created.stopLoading()
+                        created.loadUrl("about:blank")
+                        created.destroy()
+                    }
+                    return@execute
+                }
+                created.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, finishedUrl: String) {
+                        if (hasNewClearance()) {
+                            settle(true)
+                            return
+                        }
+                        if (finishedUrl == url && !challengeFound) {
+                            // 首个请求直接加载完成且没有出现挑战，放弃等待。
+                            settle(false)
+                        }
+                    }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?,
+                    ) {
+                        if (request?.isForMainFrame == true) {
+                            if (errorResponse?.statusCode in ERROR_CODES) {
+                                // 主框架返回 CF 挑战页，继续等待 JS 求解。
+                                challengeFound = true
+                            } else {
+                                // 非 Cloudflare 错误，放弃等待。
+                                settle(false)
+                            }
+                        }
+                    }
+                }
+                created.loadUrl(url, headers)
+            }
+        }
+
+        private fun hasNewClearance(): Boolean {
+            val current = CloudFlareHelper.getClearanceCookie(cookieJar, url)
+            return current != null && current != oldClearance
+        }
+
+        /** 幂等；把 stop+destroy 投递到主线程执行。 */
+        fun destroy() {
+            if (!destroyed.compareAndSet(false, true)) {
+                return
+            }
+            executor.execute {
+                val wv = webView
+                if (wv != null) {
+                    runCatching {
+                        wv.stopLoading()
+                        wv.loadUrl("about:blank")
+                        wv.destroy()
+                    }
+                }
+            }
+        }
+
+        private fun settle(result: Boolean) {
+            if (settled.compareAndSet(false, true)) {
+                onSettled(result)
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "WebViewClearanceSolver"
-        const val WAIT_TIMEOUT_SECONDS = 30L
+        const val WAIT_TIMEOUT_MS = 30_000L
         val ERROR_CODES = listOf(403, 503)
         val CLOUDFLARE_COOKIE_NAMES = listOf("cf_clearance")
 

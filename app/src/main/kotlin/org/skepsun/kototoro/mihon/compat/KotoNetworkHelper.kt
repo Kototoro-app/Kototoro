@@ -22,6 +22,7 @@ import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CloudFlareInterceptor as KototoroCloudFlareInterceptor
 import org.skepsun.kototoro.core.network.browserTransportHeaders
 import org.skepsun.kototoro.core.network.cookies.sensitiveValueFingerprint
+import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -52,6 +53,7 @@ class KotoNetworkHelper(
     private val webViewExecutor: dagger.Lazy<WebViewExecutor>? = null,
     private val settings: AppSettings? = null,
     private val clearanceSolver: WebViewClearanceSolver? = null,
+    private val solveCoordinator: CloudflareSolveCoordinator? = null,
 ) : NetworkHelper() {
 
     // Dynamically loaded extensions reference this class outside the app's static dex graph.
@@ -234,7 +236,20 @@ class KotoNetworkHelper(
                 if (solver == null) {
                     response.closeThrowing(error)
                 }
-                val solved = runCatching { solver.solve(request) }.getOrDefault(false)
+                // Host-level single flight: concurrent requests for the same host share one WebView
+                // solve; each request retries at most once after a successful solve.
+                val solved = runCatching {
+                    runBlocking {
+                        val coordinator = solveCoordinator
+                        if (coordinator != null) {
+                            coordinator.solve(request.url.host) {
+                                solver.solve(request)
+                            }
+                        } else {
+                            solver.solve(request)
+                        }
+                    }
+                }.getOrDefault(false)
                 if (solved) {
                     response.close()
                     android.util.Log.i(

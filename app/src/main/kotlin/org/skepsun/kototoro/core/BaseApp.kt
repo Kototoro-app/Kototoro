@@ -228,6 +228,8 @@ open class BaseApp : App(), Configuration.Provider, SingletonImageLoader.Factory
         fun ireaderExtensionManager(): IReaderExtensionManager
         fun tsundokuExtensionManager(): org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
         fun captchaAutoResolveCoordinator(): org.skepsun.kototoro.core.exceptions.resolve.CaptchaAutoResolveCoordinator
+        fun cloudflareSolveCoordinator(): org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
+        fun webViewClearanceSolver(): org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
         fun cloudstreamRuntimeManager(): org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
         fun jsonSourceManager(): org.skepsun.kototoro.core.jsonsource.JsonSourceManager
         fun externalExtensionRepoRepository(): org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository

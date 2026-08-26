@@ -15,16 +15,27 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
+import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import java.util.concurrent.ConcurrentHashMap
 
-/** Resolves Cloudflare before Cloudstream failures escape into Kototoro's global captcha flow. */
+/**
+ * Resolves Cloudflare before Cloudstream failures escape into Kototoro's global captcha flow.
+ *
+ * Cloudstream is the EXCEPTION to the global solver: the plugin's own CF solver
+ * ([resolveWithCloudstream]) runs FIRST; only when it fails to obtain clearance does the host
+ * go through the global [CloudflareSolveCoordinator] solver as a fallback, then (TRANSPORT
+ * strategy only) the browser transport marks the last resort.
+ */
 internal class CloudstreamCloudflareInterceptor(
     private val webViewExecutor: WebViewExecutor,
     private val settings: AppSettings? = null,
+    private val solveCoordinator: CloudflareSolveCoordinator? = null,
+    private val clearanceSolver: WebViewClearanceSolver? = null,
 ) : Interceptor {
     private val resolverMutexes = ConcurrentHashMap<String, Mutex>()
     private val lastResolverAttemptAt = ConcurrentHashMap<String, Long>()
@@ -74,13 +85,27 @@ internal class CloudstreamCloudflareInterceptor(
             try {
                 return chain.proceed(resolvedRequest)
             } catch (retryError: CloudFlareProtectedException) {
-                Log.w(TAG, "OkHttp retry still protected; using browser response: ${request.url}")
+                Log.w(TAG, "OkHttp retry still protected; trying global solver: ${request.url}")
             }
         } else if (hadClearance) {
-            Log.i(TAG, "Existing clearance was rejected by OkHttp; using browser response: ${request.url}")
+            Log.i(TAG, "Existing clearance was rejected by OkHttp; trying global solver: ${request.url}")
         } else {
-            Log.w(TAG, "Cloudstream resolver did not obtain clearance: ${request.url}")
-            throw originalError
+            Log.w(TAG, "Cloudstream resolver did not obtain clearance; trying global solver: ${request.url}")
+        }
+
+        // 全局求解器回退：Cloudstream 插件自带 CF 求解器优先，失败后回到全局 host 协调求解器（与 MIHON 共享同一 CookieManager）。
+        val globalSolved = runBlocking {
+            val coordinator = solveCoordinator
+            val solver = clearanceSolver
+            coordinator != null && solver != null &&
+                coordinator.solve(request.url.host) { solver.solve(request) }
+        }
+        if (globalSolved) {
+            try {
+                return chain.proceed(resolvedRequest)
+            } catch (retryError: CloudFlareProtectedException) {
+                Log.w(TAG, "Global solver retry still protected: ${request.url}")
+            }
         }
 
         if (settings?.cloudflareStrategy != CloudflareStrategy.TRANSPORT) {

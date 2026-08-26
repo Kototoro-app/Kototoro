@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.UserAgentProvider
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.extensions.runtime.tachiyomi.remapTachiyomiPreferenceKey
@@ -33,6 +34,7 @@ class KotoInjektBridge(
     private val webViewExecutor: dagger.Lazy<WebViewExecutor>? = null,
     private val settings: AppSettings? = null,
     private val clearanceSolver: WebViewClearanceSolver? = null,
+    private val solveCoordinator: CloudflareSolveCoordinator? = null,
 ) {
 
     private val application: Application
@@ -59,6 +61,7 @@ class KotoInjektBridge(
                 webViewExecutor = webViewExecutor,
                 settings = settings,
                 clearanceSolver = clearanceSolver,
+                solveCoordinator = solveCoordinator,
             )
 
             Injekt.importModule(object : InjektModule {

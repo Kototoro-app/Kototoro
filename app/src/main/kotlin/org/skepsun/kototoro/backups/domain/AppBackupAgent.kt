@@ -116,6 +116,8 @@ class AppBackupAgent : BackupAgent() {
                         context = applicationContext,
                         contentHttpClient = okhttp3.OkHttpClient(),
                         settings = appSettings,
+                        solveCoordinator = entryPoint.cloudflareSolveCoordinator(),
+                        clearanceSolver = entryPoint.webViewClearanceSolver(),
                     ),
                     tsundokuExtensionManager = org.skepsun.kototoro.tsundoku.TsundokuExtensionManager(
                         context = applicationContext,
@@ -238,6 +240,8 @@ class AppBackupAgent : BackupAgent() {
                             context = applicationContext,
                             contentHttpClient = okhttp3.OkHttpClient(),
                             settings = appSettings,
+                            solveCoordinator = entryPoint.cloudflareSolveCoordinator(),
+                            clearanceSolver = entryPoint.webViewClearanceSolver(),
                         ),
                         tsundokuExtensionManager = org.skepsun.kototoro.tsundoku.TsundokuExtensionManager(
                             context = applicationContext,

@@ -14,6 +14,7 @@ import okio.IOException
 import kotlinx.coroutines.runBlocking
 import org.skepsun.kototoro.core.exceptions.CloudFlareBlockedException
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
@@ -27,6 +28,7 @@ class CloudFlareInterceptor(
     private val webViewExecutor: Lazy<WebViewExecutor>? = null,
     private val settings: AppSettings? = null,
     private val clearanceSolver: WebViewClearanceSolver? = null,
+    private val solveCoordinator: CloudflareSolveCoordinator? = null,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
@@ -160,8 +162,19 @@ class CloudFlareInterceptor(
 
     private fun resolveAndRetryWithWebView(chain: Interceptor.Chain, request: Request): Response? {
         val solver = clearanceSolver ?: return null
+        val coordinator = solveCoordinator
         return try {
-            val solved = solver.solve(request)
+            // Host-level single flight: concurrent requests for the same host share one WebView
+            // solve; each request retries at most once after a successful solve.
+            val solved = runBlocking {
+                if (coordinator != null) {
+                    coordinator.solve(request.url.host) {
+                        solver.solve(request)
+                    }
+                } else {
+                    solver.solve(request)
+                }
+            }
             if (solved) {
                 Log.i(TAG, "WebView clearance solved; retrying request: " + request.url)
                 chain.proceed(request)

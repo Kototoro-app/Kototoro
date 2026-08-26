@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.mihon.compat.KotoInjektBridge
+import org.skepsun.kototoro.core.network.webview.CloudflareSolveCoordinator
 import org.skepsun.kototoro.core.network.webview.WebViewClearanceSolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import javax.inject.Singleton
@@ -28,6 +29,7 @@ object MihonModule {
         webViewExecutor: dagger.Lazy<WebViewExecutor>,
         settings: AppSettings,
         clearanceSolver: WebViewClearanceSolver,
+        solveCoordinator: CloudflareSolveCoordinator,
     ): KotoInjektBridge {
         return try {
             KotoInjektBridge(
@@ -37,6 +39,7 @@ object MihonModule {
                 webViewExecutor = webViewExecutor,
                 settings = settings,
                 clearanceSolver = clearanceSolver,
+                solveCoordinator = solveCoordinator,
             )
         } catch (e: Throwable) {
             android.util.Log.e("MihonModule", "CRITICAL ERROR: Failed to create KotoInjektBridge!", e)
