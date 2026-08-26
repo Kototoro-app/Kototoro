@@ -77,6 +77,18 @@ internal fun shouldUseRetainedPagingSnapshot(
         (!retainedAnchorPrefixIsReady || !returnTransitionSettled)
 }
 
+/**
+ * Lets a parent own the multi-select state instead of [AppContentListRoute]'s internal
+ * `rememberSaveable` set. Used by top-level routes (e.g. the Updated page) that report
+ * their own selection top bar to the main chrome directly, mirroring History/Feed —
+ * and by extension it suppresses this route's own chrome reporting so there is exactly
+ * one bar.
+ */
+class ContentSelectionControl(
+    val selectedIds: State<Set<Long>>,
+    val onSelectionChanged: (Set<Long>) -> Unit,
+)
+
 private fun <T> eventCollector(block: suspend (T) -> Unit): FlowCollector<T> = FlowCollector { value ->
     block(value)
 }
@@ -113,6 +125,10 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     appRouter: AppRouter,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     showRemoveOption: Boolean = false,
+    showInlineSelectionTopBar: Boolean = false,
+    inlineSelectionSupportedActions: Set<SelectionAction>? = null,
+    inlineSelectionIncludeContextualActions: Boolean = true,
+    selectionControl: ContentSelectionControl? = null,
     sharedTransitionEnabled: Boolean = true,
     sharedElementInstanceKey: String? = null,
     isContentTypeFilterVisible: Boolean = true,
@@ -181,6 +197,18 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val hapticFeedback = LocalHapticFeedback.current
     var pendingFixIds by remember { mutableStateOf<Set<Long>?>(null) }
     var pendingMarkAsCompletedItems by remember { mutableStateOf<List<ContentListModel>?>(null) }
+
+    // When the parent supplies [selectionControl], the parent owns selection state and this
+    // route's own chrome reporting is suppressed (exactly one selection bar in the app).
+    val usesExternalSelection = selectionControl != null
+    val currentSelectionIds = selectionControl?.selectedIds?.value ?: composeSelectionIds
+    fun updateSelection(ids: Set<Long>) {
+        if (usesExternalSelection) {
+            selectionControl?.onSelectionChanged?.invoke(ids)
+        } else {
+            composeSelectionIds = ids
+        }
+    }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
     val context = LocalContext.current
@@ -320,10 +348,15 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         if (useRetainedPagingSnapshot) items + retainedPagingSnapshot?.items.orEmpty() else items
     }
     val displayedPagingItems = if (useRetainedPagingSnapshot) null else lazyPagingItems
-    val selectionModels = remember(displayedItems, loadedPagingItems, displayedPagingItems, composeSelectionIds) {
+    val selectionModels = remember(
+        displayedItems,
+        loadedPagingItems,
+        displayedPagingItems,
+        currentSelectionIds,
+    ) {
         prepareContentSelectionModels(
             if (displayedPagingItems == null) displayedItems else loadedPagingItems,
-            composeSelectionIds,
+            currentSelectionIds,
         )
     }
     val selectedModels = selectionModels.selectedModels
@@ -379,110 +412,112 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         }
     }
 
-    BackHandler(enabled = composeSelectionIds.isNotEmpty()) {
-        composeSelectionIds = emptySet()
+    BackHandler(enabled = currentSelectionIds.isNotEmpty()) {
+        updateSelection(emptySet())
     }
 
-    if (composeSelectionIds.isNotEmpty()) {
-        SideEffect {
-            val supportedActions = buildSet {
-                add(SelectionAction.SELECT_ALL)
-                add(SelectionAction.PIN)
-                add(SelectionAction.SHARE)
-                add(SelectionAction.SAVE)
-                if (showRemoveOption || onRemoveSelection != null) {
-                    add(SelectionAction.REMOVE)
+    if (!usesExternalSelection) {
+        if (currentSelectionIds.isNotEmpty()) {
+            SideEffect {
+                val supportedActions = buildSet {
+                    add(SelectionAction.SELECT_ALL)
+                    add(SelectionAction.PIN)
+                    add(SelectionAction.SHARE)
+                    add(SelectionAction.SAVE)
+                    if (showRemoveOption || onRemoveSelection != null) {
+                        add(SelectionAction.REMOVE)
+                    }
+                    if (onPinSelection == null) {
+                        remove(SelectionAction.PIN)
+                    }
+                    if (onMarkAsCompletedSelection != null) {
+                        add(SelectionAction.MARK_AS_COMPLETED)
+                    }
+                    add(SelectionAction.FAVOURITE)
                 }
-                if (onPinSelection == null) {
-                    remove(SelectionAction.PIN)
-                }
-                if (onMarkAsCompletedSelection != null) {
-                    add(SelectionAction.MARK_AS_COMPLETED)
-                }
-                add(SelectionAction.FAVOURITE)
+                onTopBarOverrideChanged(
+                    ContentSelectionTopBarOverrideState(
+                        selectedCount = currentSelectionIds.size,
+                        isAllNonLocal = selectedModels.none { it.manga.isLocal },
+                        isSingleSelection = currentSelectionIds.size == 1,
+                        showRemoveOption = showRemoveOption,
+                        supportedActions = supportedActions,
+                        allPinned = selectedModels.all { it.isPinned },
+                        preferredInlineActions = preferredSelectionInlineActions,
+                        removeActionIconRes = removeSelectionActionIconRes,
+                        removeActionTitleRes = removeSelectionActionTitleRes,
+                        fixActionTitleRes = fixSelectionActionTitleRes,
+                        onClearSelection = { updateSelection(emptySet()) },
+                        onActionClick = { action ->
+                            when (action) {
+                                SelectionAction.SELECT_ALL -> {
+                                    hapticFeedback.performSelectionHapticFeedback()
+                                    updateSelection(selectionModels.allContentIds)
+                                }
+
+                                SelectionAction.REMOVE -> {
+                                    onRemoveSelection?.invoke(currentSelectionIds)
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.SHARE -> {
+                                    if (onShareSelection != null) {
+                                        onShareSelection(currentSelectionIds)
+                                    } else {
+                                        ShareHelper(context).shareContentLinks(selectedModels.map { it.manga })
+                                    }
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.FAVOURITE -> {
+                                    appRouter.showFavoriteDialog(selectedModels.map { it.manga })
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.SAVE -> {
+                                    appRouter.showDownloadDialog(selectedModels.map { it.manga })
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.EDIT_OVERRIDE -> {
+                                    selectedModels.singleOrNull()?.manga?.let(appRouter::openContentOverrideConfig)
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.FIX -> {
+                                    if (onFixSelection != null) {
+                                        onFixSelection(currentSelectionIds)
+                                        updateSelection(emptySet())
+                                    } else {
+                                        pendingFixIds = currentSelectionIds
+                                    }
+                                }
+
+                                SelectionAction.PIN -> {
+                                    onPinSelection?.invoke(currentSelectionIds)
+                                    updateSelection(emptySet())
+                                }
+
+                                SelectionAction.MARK_AS_COMPLETED -> {
+                                    pendingMarkAsCompletedItems = selectedModels
+                                    updateSelection(emptySet())
+                                }
+                            }
+                        },
+                    ),
+                )
             }
-            onTopBarOverrideChanged(
-                ContentSelectionTopBarOverrideState(
-                    selectedCount = composeSelectionIds.size,
-                    isAllNonLocal = selectedModels.none { it.manga.isLocal },
-                    isSingleSelection = composeSelectionIds.size == 1,
-                    showRemoveOption = showRemoveOption,
-                    supportedActions = supportedActions,
-                    allPinned = selectedModels.all { it.isPinned },
-                    preferredInlineActions = preferredSelectionInlineActions,
-                    removeActionIconRes = removeSelectionActionIconRes,
-                    removeActionTitleRes = removeSelectionActionTitleRes,
-                    fixActionTitleRes = fixSelectionActionTitleRes,
-                    onClearSelection = { composeSelectionIds = emptySet() },
-                    onActionClick = { action ->
-                        when (action) {
-                            SelectionAction.SELECT_ALL -> {
-                                hapticFeedback.performSelectionHapticFeedback()
-                                composeSelectionIds = selectionModels.allContentIds
-                            }
-
-                            SelectionAction.REMOVE -> {
-                                onRemoveSelection?.invoke(composeSelectionIds)
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.SHARE -> {
-                                if (onShareSelection != null) {
-                                    onShareSelection(composeSelectionIds)
-                                } else {
-                                    ShareHelper(context).shareContentLinks(selectedModels.map { it.manga })
-                                }
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.FAVOURITE -> {
-                                appRouter.showFavoriteDialog(selectedModels.map { it.manga })
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.SAVE -> {
-                                appRouter.showDownloadDialog(selectedModels.map { it.manga })
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.EDIT_OVERRIDE -> {
-                                selectedModels.singleOrNull()?.manga?.let(appRouter::openContentOverrideConfig)
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.FIX -> {
-                                if (onFixSelection != null) {
-                                    onFixSelection(composeSelectionIds)
-                                    composeSelectionIds = emptySet()
-                                } else {
-                                    pendingFixIds = composeSelectionIds
-                                }
-                            }
-
-                            SelectionAction.PIN -> {
-                                onPinSelection?.invoke(composeSelectionIds)
-                                composeSelectionIds = emptySet()
-                            }
-
-                            SelectionAction.MARK_AS_COMPLETED -> {
-                                pendingMarkAsCompletedItems = selectedModels
-                                composeSelectionIds = emptySet()
-                            }
-                        }
-                    },
-                ),
-            )
-        }
-    } else {
-        LaunchedEffect(Unit) {
-            onTopBarOverrideChanged(null)
+        } else {
+            LaunchedEffect(Unit) {
+                onTopBarOverrideChanged(null)
+            }
         }
     }
 
     if (emitFilterRailOverride) {
         SideEffect {
             onFilterRailOverrideChanged(
-                if (composeSelectionIds.isEmpty()) {
+                if (currentSelectionIds.isEmpty()) {
                     quickFilterRailOverride
                 } else {
                     null
@@ -689,13 +724,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         hasMoreItems = hasMoreItems,
         loadMoreVisibleThreshold = loadMoreVisibleThreshold,
         gridScale = gridScale,
-        selectedItemsIds = composeSelectionIds,
+        selectedItemsIds = currentSelectionIds,
         onPrepareItemTransition = { item, coverBounds ->
         },
         onItemClick = itemClick@{ item ->
-            if (composeSelectionIds.isNotEmpty()) {
+            if (currentSelectionIds.isNotEmpty()) {
                 hapticFeedback.performSelectionHapticFeedback()
-                composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
+                updateSelection(if (item.id in currentSelectionIds) currentSelectionIds - item.id else currentSelectionIds + item.id)
             } else {
                 val content = item.toContentWithOverride()
                 if (viewModel.onContentClick(content)) return@itemClick
@@ -759,26 +794,26 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             }
         },
         onItemLongClick = { item ->
-            if (composeSelectionIds.isEmpty()) {
-                composeSelectionIds = setOf(item.id)
+            if (currentSelectionIds.isEmpty()) {
+                updateSelection(setOf(item.id))
             } else {
-                composeSelectionIds = if (item.id in composeSelectionIds) composeSelectionIds - item.id else composeSelectionIds + item.id
+                updateSelection(if (item.id in currentSelectionIds) currentSelectionIds - item.id else currentSelectionIds + item.id)
             }
         },
-        onClearSelection = { composeSelectionIds = emptySet() },
+        onClearSelection = { updateSelection(emptySet()) },
         onSelectionAction = { action ->
             when (action) {
                 SelectionAction.SELECT_ALL -> {
                     hapticFeedback.performSelectionHapticFeedback()
-                    composeSelectionIds = selectionModels.allContentIds
+                    updateSelection(selectionModels.allContentIds)
                 }
                 SelectionAction.REMOVE -> {
-                    onRemoveSelection?.invoke(composeSelectionIds)
-                    composeSelectionIds = emptySet()
+                    onRemoveSelection?.invoke(currentSelectionIds)
+                    updateSelection(emptySet())
                 }
                 SelectionAction.SHARE -> {
-                    onShareSelection?.invoke(composeSelectionIds)
-                    composeSelectionIds = emptySet()
+                    onShareSelection?.invoke(currentSelectionIds)
+                    updateSelection(emptySet())
                 }
                 else -> {}
             }
@@ -810,7 +845,9 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                 appRouter.openBrowser(url, null, null)
             }
         },
-        showInlineSelectionTopBar = false,
+        showInlineSelectionTopBar = showInlineSelectionTopBar,
+        inlineSelectionSupportedActions = inlineSelectionSupportedActions,
+        inlineSelectionIncludeContextualActions = inlineSelectionIncludeContextualActions,
         listHeader = listHeader,
         showQuickFilterInline = showQuickFilterInline,
         enableItemAnimations = enableItemAnimations,

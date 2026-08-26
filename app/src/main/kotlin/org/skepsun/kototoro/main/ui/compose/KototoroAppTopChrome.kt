@@ -324,6 +324,7 @@ private fun MainSelectionTopChrome(
                 removeActionIconRes = effectiveTopBarOverrideState.removeActionIconRes,
                 removeActionTitleRes = effectiveTopBarOverrideState.removeActionTitleRes,
                 fixActionTitleRes = effectiveTopBarOverrideState.fixActionTitleRes,
+                includeContextualActions = effectiveTopBarOverrideState.includeContextualActions,
                 onClearSelection = effectiveTopBarOverrideState.onClearSelection,
                 onActionClick = effectiveTopBarOverrideState.onActionClick,
                 modifier = modifier,

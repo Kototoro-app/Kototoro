@@ -350,6 +350,19 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    fun markAsRead(ids: Collection<Long>) {
+        if (ids.isEmpty()) {
+            return
+        }
+        launchJob(Dispatchers.Default) {
+            for (id in ids) {
+                if (id > 0L) {
+                    repository.markAsRead(id)
+                }
+            }
+        }
+    }
+
     fun selectCategory(categoryId: Long) {
         selectedCategoryId.value = categoryId
     }

@@ -206,6 +206,8 @@ fun KototoroContentListScreen(
     onRetry: () -> Unit = {},
     onSecondaryAction: ((Throwable) -> Unit)? = null,
     showInlineSelectionTopBar: Boolean = true,
+    inlineSelectionSupportedActions: Set<SelectionAction>? = null,
+    inlineSelectionIncludeContextualActions: Boolean = true,
     showQuickFilterInline: Boolean = true,
     enableItemAnimations: Boolean = true,
     modifier: Modifier = Modifier,
@@ -587,6 +589,8 @@ fun KototoroContentListScreen(
                 isAllNonLocal = isAllNonLocal,
                 isSingleSelection = selectedItemsIds.size == 1,
                 showRemoveOption = showRemoveOption,
+                supportedActions = inlineSelectionSupportedActions,
+                includeContextualActions = inlineSelectionIncludeContextualActions,
                 onClearSelection = onClearSelection,
                 onActionClick = onSelectionAction
             )

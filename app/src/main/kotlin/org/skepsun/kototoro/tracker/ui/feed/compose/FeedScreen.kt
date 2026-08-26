@@ -74,6 +74,8 @@ fun FeedScreen(
     selectedCategoryId: Long,
     onCategorySelected: (Long) -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
+    selectedItemIds: Set<Long> = emptySet(),
+    onFeedItemLongClick: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -204,7 +206,9 @@ fun FeedScreen(
                     is FeedItem -> {
                         FeedItemCard(
                             item = item,
-                            onClick = { coverBounds -> onFeedItemClick(item, coverBounds) }
+                            isSelected = item.id in selectedItemIds,
+                            onClick = { coverBounds -> onFeedItemClick(item, coverBounds) },
+                            onLongClick = { onFeedItemLongClick(item) },
                         )
                     }
                     is UpdatedContentHeader -> {

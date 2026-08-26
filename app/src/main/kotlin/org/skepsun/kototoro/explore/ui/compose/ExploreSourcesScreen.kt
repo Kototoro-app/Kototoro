@@ -12,10 +12,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.DpOffset
 import androidx.collection.LongSet
 import androidx.collection.longSetOf
 import androidx.compose.ui.unit.dp
@@ -33,16 +37,26 @@ import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.isLocal
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.explore.ui.ExploreViewModel
 import org.skepsun.kototoro.explore.ui.model.ContentSourceItem
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
+import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
+import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
+import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -273,7 +287,7 @@ fun KototoroExploreSourcesScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun ExploreSelectionTopBar(
     selectedCount: Int,
@@ -293,55 +307,173 @@ fun ExploreSelectionTopBar(
     onToggleEmptyAvailability: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    TopAppBar(
-        title = { Text("$selectedCount selected", style = MaterialTheme.typography.titleMedium) },
-        navigationIcon = {
-            IconButton(onClick = onClearSelection) {
-                Icon(Icons.Default.Close, contentDescription = "Clear Selection")
-            }
-        },
-        actions = {
-            if (isSingleSelection) {
-                IconButton(onClick = onSettings) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                }
-                IconButton(onClick = onShortcut) {
-                    Icon(painterResource(id = R.drawable.ic_shortcut), contentDescription = "Shortcut")
-                }
-            }
-            if (canPin) {
-                IconButton(onClick = onPin) {
-                    Icon(painterResource(id = R.drawable.ic_pin), contentDescription = "Pin")
-                }
-            }
-            if (canUnpin) {
-                IconButton(onClick = onUnpin) {
-                    Icon(painterResource(id = R.drawable.ic_unpin), contentDescription = "Unpin")
-                }
-            }
-            if (canDisable) {
-                IconButton(onClick = onDisable) {
-                    Icon(painterResource(id = R.drawable.ic_eye_off), contentDescription = "Disable")
-                }
-            }
-            if (canDelete) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete")
-                }
-            }
-            IconButton(onClick = onToggleEmptyAvailability) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val topBarControlHeight = tokens.topBarButtonSize
+    val topBarIconSize = tokens.topBarIconSize
+    val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = statusBarPadding.calculateTopPadding())
+            .height(tokens.mainTopBarHeight)
+            .padding(horizontal = CompactTopBarHorizontalPadding),
+        horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Left: independent close button container.
+        TopBarControlSurface {
+            IconButton(
+                onClick = onClearSelection,
+                modifier = Modifier.size(topBarControlHeight),
+            ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_source_empty),
-                    contentDescription = stringResource(markEmptyTitleRes),
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.close),
+                    modifier = Modifier.size(topBarIconSize),
                 )
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            titleContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        modifier = modifier,
-    )
+        }
+        Text(
+            text = "$selectedCount selected",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            // Weighted so the right action pill keeps its full width on narrow screens
+            // (the title simply ellipsizes if space runs out).
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(start = 2.dp, end = 4.dp),
+        )
+
+        // Right: operation buttons combination container (a pill capsule like the
+        // main top bar's action group). Primary actions stay inline; rarer
+        // single-source actions (settings/shortcut) and destructive delete live in
+        // the overflow menu so the inline row never overflows on narrow screens.
+        TopBarControlSurface(
+            pressFeedbackEnabled = false,
+        ) {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides topBarControlHeight) {
+                Row(
+                    modifier = Modifier
+                        .widthIn(min = topBarControlHeight)
+                        .height(topBarControlHeight)
+                        .padding(start = 2.dp, end = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    if (canPin) {
+                        IconButton(
+                            onClick = onPin,
+                            modifier = Modifier.size(topBarControlHeight),
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.ic_pin),
+                                contentDescription = stringResource(R.string.pin),
+                                modifier = Modifier.size(topBarIconSize),
+                            )
+                        }
+                    }
+                    if (canUnpin) {
+                        IconButton(
+                            onClick = onUnpin,
+                            modifier = Modifier.size(topBarControlHeight),
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.ic_unpin),
+                                contentDescription = stringResource(R.string.unpin),
+                                modifier = Modifier.size(topBarIconSize),
+                            )
+                        }
+                    }
+                    if (canDisable) {
+                        IconButton(
+                            onClick = onDisable,
+                            modifier = Modifier.size(topBarControlHeight),
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.ic_eye_off),
+                                contentDescription = stringResource(R.string.disable),
+                                modifier = Modifier.size(topBarIconSize),
+                            )
+                        }
+                    }
+                    IconButton(
+                        onClick = onToggleEmptyAvailability,
+                        modifier = Modifier.size(topBarControlHeight),
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_source_empty),
+                            contentDescription = stringResource(markEmptyTitleRes),
+                            modifier = Modifier.size(topBarIconSize),
+                        )
+                    }
+
+                    // Overflow menu - single-source actions + delete.
+                    var overflowAnchorBounds by remember { mutableStateOf(Rect.Zero) }
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
+                    ) {
+                        IconButton(
+                            onClick = { showOverflowMenu = true },
+                            modifier = Modifier.size(topBarControlHeight),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = stringResource(R.string.more),
+                                modifier = Modifier.size(topBarIconSize),
+                            )
+                        }
+                        GlassDropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false },
+                            offset = DpOffset(x = 0.dp, y = 4.dp),
+                            alignToAnchorEnd = true,
+                            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                            anchorTapThrough = true,
+                            anchorBounds = overflowAnchorBounds,
+                            shape = CompactTopBarPillShape,
+                            style = GlassDefaults.subtleStyle(),
+                        ) {
+                            if (isSingleSelection) {
+                                CompactDropdownMenuItem(
+                                    text = {
+                                        CompactDropdownMenuText(text = stringResource(R.string.settings))
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        onSettings()
+                                    },
+                                )
+                                CompactDropdownMenuItem(
+                                    text = {
+                                        CompactDropdownMenuText(text = "Shortcut")
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        onShortcut()
+                                    },
+                                )
+                            }
+                            if (canDelete) {
+                                CompactDropdownMenuItem(
+                                    text = {
+                                        CompactDropdownMenuText(text = stringResource(R.string.delete))
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        onDelete()
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
