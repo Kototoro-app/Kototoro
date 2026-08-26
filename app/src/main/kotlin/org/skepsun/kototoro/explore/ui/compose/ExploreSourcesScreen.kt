@@ -311,6 +311,9 @@ fun ExploreSelectionTopBar(
     val topBarControlHeight = tokens.topBarButtonSize
     val topBarIconSize = tokens.topBarIconSize
     val statusBarPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues()
+    // The overflow menu only contains single-source actions (settings/shortcut) and
+    // delete, so the "more" pill is only shown when at least one such action exists.
+    val hasOverflowActions = isSingleSelection || canDelete
 
     Row(
         modifier = modifier
@@ -340,12 +343,13 @@ fun ExploreSelectionTopBar(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            // Weighted so the right action pill keeps its full width on narrow screens
-            // (the title simply ellipsizes if space runs out).
+            // Mirrors the main top bar's title: capped width + ellipsis, followed by a
+            // weight spacer so the right action pill is always flush to the end.
             modifier = Modifier
-                .weight(1f, fill = false)
+                .widthIn(max = 96.dp)
                 .padding(start = 2.dp, end = 4.dp),
         )
+        Spacer(modifier = Modifier.weight(1f))
 
         // Right: operation buttons combination container (a pill capsule like the
         // main top bar's action group). Primary actions stay inline; rarer
@@ -410,12 +414,14 @@ fun ExploreSelectionTopBar(
                         )
                     }
 
-                    // Overflow menu - single-source actions + delete.
-                    var overflowAnchorBounds by remember { mutableStateOf(Rect.Zero) }
-                    var showOverflowMenu by remember { mutableStateOf(false) }
-                    Box(
-                        modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
-                    ) {
+                    // Overflow menu - single-source actions + delete. Only present when
+                    // it actually has at least one entry.
+                    if (hasOverflowActions) {
+                        var overflowAnchorBounds by remember { mutableStateOf(Rect.Zero) }
+                        var showOverflowMenu by remember { mutableStateOf(false) }
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { overflowAnchorBounds = it.boundsInRoot() },
+                        ) {
                         IconButton(
                             onClick = { showOverflowMenu = true },
                             modifier = Modifier.size(topBarControlHeight),
@@ -468,6 +474,7 @@ fun ExploreSelectionTopBar(
                                     },
                                 )
                             }
+                        }
                         }
                     }
                 }

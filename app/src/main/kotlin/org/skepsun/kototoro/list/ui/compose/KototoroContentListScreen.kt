@@ -2,6 +2,8 @@ package org.skepsun.kototoro.list.ui.compose
 
 import coil3.compose.AsyncImage
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -206,6 +208,7 @@ fun KototoroContentListScreen(
     onRetry: () -> Unit = {},
     onSecondaryAction: ((Throwable) -> Unit)? = null,
     showInlineSelectionTopBar: Boolean = true,
+    inlineSelectionBarAnimated: Boolean = true,
     inlineSelectionSupportedActions: Set<SelectionAction>? = null,
     inlineSelectionIncludeContextualActions: Boolean = true,
     showQuickFilterInline: Boolean = true,
@@ -575,8 +578,16 @@ fun KototoroContentListScreen(
         // Selection Contextual TopBar overlay
         AnimatedVisibility(
             visible = showInlineSelectionTopBar && selectedItemsIds.isNotEmpty(),
-            enter = slideInVertically(initialOffsetY = { -it }),
-            exit = slideOutVertically(targetOffsetY = { -it }),
+            enter = if (inlineSelectionBarAnimated) {
+                slideInVertically(initialOffsetY = { -it })
+            } else {
+                EnterTransition.None
+            },
+            exit = if (inlineSelectionBarAnimated) {
+                slideOutVertically(targetOffsetY = { -it })
+            } else {
+                ExitTransition.None
+            },
             modifier = Modifier.align(Alignment.TopCenter)
         ) {
             val selectedModels = (pagingItems?.itemSnapshotList?.items ?: items)

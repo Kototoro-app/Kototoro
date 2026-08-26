@@ -126,6 +126,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     showRemoveOption: Boolean = false,
     showInlineSelectionTopBar: Boolean = false,
+    inlineSelectionBarAnimated: Boolean = true,
     inlineSelectionSupportedActions: Set<SelectionAction>? = null,
     inlineSelectionIncludeContextualActions: Boolean = true,
     selectionControl: ContentSelectionControl? = null,
@@ -846,6 +847,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             }
         },
         showInlineSelectionTopBar = showInlineSelectionTopBar,
+        inlineSelectionBarAnimated = inlineSelectionBarAnimated,
         inlineSelectionSupportedActions = inlineSelectionSupportedActions,
         inlineSelectionIncludeContextualActions = inlineSelectionIncludeContextualActions,
         listHeader = listHeader,

@@ -1311,6 +1311,7 @@ internal fun UpdatedTopLevelRouteContent(
             // Inline bar is kept as a same-slot fallback (status-bar padded, top-center) so the
             // selection bar is always visible; it coincides with the chrome override bar.
             showInlineSelectionTopBar = true,
+            inlineSelectionBarAnimated = false,
             inlineSelectionSupportedActions = setOf(
                 SelectionAction.SELECT_ALL,
                 SelectionAction.REMOVE,
