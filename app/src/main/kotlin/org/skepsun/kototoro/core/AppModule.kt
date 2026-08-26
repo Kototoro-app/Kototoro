@@ -41,6 +41,7 @@ import org.skepsun.kototoro.core.image.CbzFetcher
 import org.skepsun.kototoro.core.image.ContentSourceHeaderInterceptor
 import org.skepsun.kototoro.core.image.TVBoxSearchCoverFetcher
 import org.skepsun.kototoro.core.image.ImageFailureSuppressingInterceptor
+import org.skepsun.kototoro.core.image.buildImageNetworkClient
 import org.skepsun.kototoro.core.image.SuppressingCoilLogger
 import org.skepsun.kototoro.core.network.ContentHttpClient
 import org.skepsun.kototoro.core.network.imageproxy.ImageProxyInterceptor
@@ -154,6 +155,7 @@ interface AppModule {
             coverRestoreInterceptor: CoverRestoreInterceptor,
             networkStateProvider: Provider<NetworkState>,
             captchaHandler: CaptchaHandler,
+            cloudflareHostCooldown: org.skepsun.kototoro.core.network.CloudflareHostCooldown,
             settings: AppSettings,
         ): ImageLoader {
             val diskCacheFactory = {
@@ -166,20 +168,25 @@ interface AppModule {
             val okHttpClientLazy = lazy {
                 okHttpClientProvider.get().newBuilder().cache(null).build()
             }
+            // P2 每场景超时：Coil 图片调用（封面/图标，非 Mihon 路径）整次调用上限 20s
+            // （全局客户端 callTimeout 为 300s，弱网/VPN 黑洞时会长时间占住图片并发槽位）。
+            val imageNetworkClient = buildImageNetworkClient(okHttpClientLazy.value)
             return ImageLoader.Builder(context)
                 .interceptorCoroutineContext(Dispatchers.Default)
+                .fetcherCoroutineContext(Dispatchers.IO.limitedParallelism(8))
+                .decoderCoroutineContext(Dispatchers.IO.limitedParallelism(3))
                 .diskCache(diskCacheFactory)
                 .logger(if (BuildConfig.DEBUG) SuppressingCoilLogger() else null)
                 .allowRgb565(context.isLowRamDevice())
                 .eventListener(captchaHandler)
                 .components {
-                    add(ImageFailureSuppressingInterceptor())
+                    add(ImageFailureSuppressingInterceptor(cloudflareHostCooldown))
                     add(tvBoxSearchCoverFetcherFactory)
                     // Register our custom cover fetcher before OkHttpNetworkFetcherFactory so it can intercept string URLs for Mihon sources
                     add(coverFetcherFactory)
                     add(
                         OkHttpNetworkFetcherFactory(
-                            callFactory = okHttpClientLazy::value,
+                            callFactory = { imageNetworkClient },
                             connectivityChecker = { networkStateProvider.get() },
                         ),
                     )
