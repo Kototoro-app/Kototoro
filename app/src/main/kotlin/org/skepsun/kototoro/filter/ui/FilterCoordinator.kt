@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.nav.resolveContentListSourceName
 import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -696,9 +697,6 @@ class FilterCoordinator @Inject constructor(
     }
 }
 
-private fun SavedStateHandle.resolveSourceName(): String? {
-    return get<String>(org.skepsun.kototoro.core.nav.AppRouter.KEY_SOURCE)
-        ?: get<String>("sourceName")
-}
+private fun SavedStateHandle.resolveSourceName(): String? = resolveContentListSourceName(this, consumePending = false)
 
 // 当前 parser 模型不再暴露 tag group 的独占元信息，过�?UI 统一回退为非独占�?
