@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.image
 
 import android.util.Log
 import coil3.ImageLoader
+import coil3.disk.DiskCache
 import coil3.fetch.FetchResult
 import coil3.fetch.Fetcher
 import coil3.request.Options
@@ -24,6 +25,8 @@ class TVBoxSearchCoverFetcher(
     private val repositoryFactory: ContentRepository.Factory,
     private val fallbackImageClient: OkHttpClient,
     private val options: Options,
+    private val diskCache: DiskCache?,
+    private val fetchCoordinator: ContentCoverFetchCoordinator,
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
@@ -58,13 +61,15 @@ class TVBoxSearchCoverFetcher(
             options = options,
             imageClient = imageClient,
             repo = repo,
-            cacheDir = options.fileSystem,
+            diskCache = diskCache,
+            fetchCoordinator = fetchCoordinator,
         ).fetch()
     }
 
     class Factory @Inject constructor(
         private val repositoryFactory: ContentRepository.Factory,
         @ContentHttpClient private val fallbackImageClient: OkHttpClient,
+        private val fetchCoordinator: ContentCoverFetchCoordinator,
     ) : Fetcher.Factory<TVBoxSearchCoverModel> {
 
         override fun create(data: TVBoxSearchCoverModel, options: Options, imageLoader: ImageLoader): Fetcher? {
@@ -82,6 +87,8 @@ class TVBoxSearchCoverFetcher(
                 repositoryFactory = repositoryFactory,
                 fallbackImageClient = fallbackImageClient,
                 options = options,
+                diskCache = imageLoader.diskCache,
+                fetchCoordinator = fetchCoordinator,
             )
         }
     }
