@@ -261,6 +261,14 @@ class ExternalBackupRepository @Inject constructor(
         private var cachedCandidates: List<SourceCandidate>? = null
 
         suspend fun resolve(record: ExternalBackupContentRecord): SourceResolveResult {
+            if (record.app == ExternalBackupApp.MIHON) {
+                // TachiyomiSY (and SY-lineage forks) bundle E-Hentai / ExHentai as
+                // built-in sources whose ids are NOT Mihon-extension ids. Remap those to
+                // the native Kotatsu parser source when available; everything else stays
+                // verbatim as MIHON_<id>.
+                resolveTachiyomiSyBuiltinSource(record)?.let { return it }
+                return SourceResolveResult.Resolved(record)
+            }
             if (record.app != ExternalBackupApp.VENERA) {
                 return SourceResolveResult.Resolved(record)
             }
@@ -293,6 +301,32 @@ class ExternalBackupRepository @Inject constructor(
                 else -> null
             } ?: return SourceResolveResult.Unmatched
             return SourceResolveResult.Resolved(record.copy(sourceName = resolved.sourceName))
+        }
+
+        /**
+         * Remaps a `MIHON_<id>` source that corresponds to a TachiyomiSY bundled
+         * (non-extension) source to the matching native Kotatsu parser source.
+         *
+         * Returns `null` (meaning "keep the raw MIHON_<id> key") when the id is not a
+         * known bundled id or when the native source is not currently available — the
+         * record must still import instead of failing.
+         */
+        private suspend fun resolveTachiyomiSyBuiltinSource(
+            record: ExternalBackupContentRecord,
+        ): SourceResolveResult? {
+            val sourceId = record.sourceName.removePrefix("MIHON_").toLongOrNull()
+                ?: return null
+            val nativeName = TachiyomiSyBuiltinSources.nativeSourceNameForId(sourceId)
+                ?: return null
+            val matches = candidates()
+                .filter { it.sourceName == nativeName && it.kind == SourceKind.NATIVE }
+                .distinctBy { it.sourceName }
+            if (matches.size != 1) {
+                return null
+            }
+            return SourceResolveResult.Resolved(
+                record.copy(sourceName = matches.first().sourceName),
+            )
         }
 
         private fun resolveFixedMapping(
