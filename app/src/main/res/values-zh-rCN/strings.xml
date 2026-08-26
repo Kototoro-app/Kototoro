@@ -2342,6 +2342,8 @@
     <string name="pref_nav_indicator_style_labels_right">标签在右</string>
     <string name="pref_nav_full_width">全宽导航栏</string>
     <string name="pref_nav_full_width_summary">让悬浮导航栏占满屏幕宽度</string>
+    <string name="pref_nav_capsule">导航胶囊</string>
+    <string name="pref_nav_capsule_summary">为选中项显示胶囊背景；关闭后仅使用强调色高亮</string>
     <string name="pref_nav_floating_adaptive_width">悬浮导航栏自适应宽度</string>
     <string name="pref_nav_floating_adaptive_width_summary">导航按钮较少时自动收窄悬浮导航栏</string>
     <string name="pref_reader_toolbar_floating">悬浮阅读器工具栏</string>

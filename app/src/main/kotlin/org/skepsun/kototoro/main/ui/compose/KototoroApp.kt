@@ -67,6 +67,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -230,6 +231,7 @@ private fun rememberMainResumeCoverRequest(content: Content?): ImageRequest? {
 internal data class KototoroNavigationPrefs(
     val isFloating: Boolean,
     val isLayeredSurface: Boolean,
+    val adjacentFabSize: Dp,
 )
 
 @Immutable
@@ -1200,7 +1202,7 @@ fun KototoroApp(
                                     onClick = effectiveResumeClick,
                                     action = effectiveResumeAction,
                                     coverModel = effectiveResumeCoverModel,
-                                    modifier = Modifier.size(56.dp),
+                                    size = prefs.navigationPrefs.value.adjacentFabSize,
                                 )
                             }
                         } else null,

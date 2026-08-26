@@ -100,6 +100,71 @@ class BottomNavLayoutSpecTest {
 	}
 
 	@Test
+	fun `full width pill matches the tab content height at the default bar`() {
+		// navFloatingHeight 52 -> 56dp bar, tab content 48dp after the 4dp
+		// insets; the resting pill must follow the tab instead of overflowing.
+		resolveBottomNavFullWidthPillHeight(
+			tabContentHeightPx = 48,
+			idealPillHeightPx = 56,
+		) shouldBe 48
+	}
+
+	@Test
+	fun `full width pill shrinks with the smallest floating bar`() {
+		// navFloatingHeight 48 -> 52dp bar, tab content only 44dp.
+		resolveBottomNavFullWidthPillHeight(
+			tabContentHeightPx = 44,
+			idealPillHeightPx = 56,
+		) shouldBe 44
+	}
+
+	@Test
+	fun `full width pill never grows past the 56dp sample cap`() {
+		// A tall bar (84dp) leaves a 76dp tab; the resting pill stays at the
+		// sample's 56dp design height rather than filling the whole tab.
+		resolveBottomNavFullWidthPillHeight(
+			tabContentHeightPx = 76,
+			idealPillHeightPx = 56,
+		) shouldBe 56
+	}
+
+	@Test
+	fun `full width pill falls back to the ideal height before measurement`() {
+		resolveBottomNavFullWidthPillHeight(
+			tabContentHeightPx = 0,
+			idealPillHeightPx = 56,
+		) shouldBe 56
+	}
+
+	@Test
+	fun `floating bar height follows the floating height setting plus inset`() {
+		resolveNavBarHeight(
+			isFloating = true,
+			navHeight = 80,
+			navFloatingHeight = 52,
+		) shouldBe 56.dp
+		resolveNavBarHeight(
+			isFloating = true,
+			navHeight = 80,
+			navFloatingHeight = 84,
+		) shouldBe 88.dp
+	}
+
+	@Test
+	fun `docked bar height follows the nav height setting`() {
+		resolveNavBarHeight(
+			isFloating = false,
+			navHeight = 48,
+			navFloatingHeight = 52,
+		) shouldBe 48.dp
+		resolveNavBarHeight(
+			isFloating = false,
+			navHeight = 88,
+			navFloatingHeight = 52,
+		) shouldBe 88.dp
+	}
+
+	@Test
 	fun `dragged indicator center follows the pointer instead of snapping to a tab`() {
 		resolveBottomNavDragIndicatorX(
 			pointerX = 137.5f,

@@ -3341,6 +3341,8 @@
     <string name="pref_nav_indicator_style_labels_right">Labels at the right of icons</string>
     <string name="pref_nav_full_width">Full-width navigation bar</string>
     <string name="pref_nav_full_width_summary">Stretch the floating navigation bar across the full screen width</string>
+    <string name="pref_nav_capsule">Capsule background</string>
+    <string name="pref_nav_capsule_summary">Wrap the selected item in a capsule pill; keep it off to highlight with the accent color only</string>
     <string name="pref_nav_floating_adaptive_width">Adaptive floating navigation width</string>
     <string name="pref_nav_floating_adaptive_width_summary">Reduce the floating navigation bar width when fewer navigation items are shown</string>
     <string name="pref_nav_height">Navigation bar height</string>

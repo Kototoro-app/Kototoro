@@ -423,6 +423,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
         set(value) = prefs.edit { putBoolean(KEY_NAV_FULL_WIDTH, value) }
 
+    /**
+     * Whether the selected floating navigation item is wrapped by a capsule/pill
+     * background. When off, selection is communicated only through the accent
+     * content color (icon/label) without any capsule.
+     */
+    var isNavCapsuleEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NAV_CAPSULE, true)
+        set(value) = prefs.edit { putBoolean(KEY_NAV_CAPSULE, value) }
+
     /** Tint selected nav content with the sample's accent blue instead of the theme accent. */
     var isSampleBlueNavAccentEnabled: Boolean
         get() = prefs.getBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, false)
@@ -2447,6 +2456,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, isNavLabelsAlwaysVisible)
             putEnumValue(KEY_NAV_INDICATOR_STYLE, navIndicatorStyle)
             putBoolean(KEY_NAV_FULL_WIDTH, isNavFullWidth)
+            putBoolean(KEY_NAV_CAPSULE, isNavCapsuleEnabled)
             putBoolean(KEY_NAV_ACCENT_SAMPLE_BLUE, isSampleBlueNavAccentEnabled)
             putInt(KEY_GRID_SIZE, gridSize)
             putInt(KEY_GRID_SIZE_PAGES, gridSizePages)
@@ -2993,6 +3003,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_NAV_INDICATOR_STYLE = "nav_indicator_style"
         const val KEY_NAV_FULL_WIDTH = "nav_full_width"
         const val KEY_NAV_INDICATOR_FULL_WIDTH = "nav_indicator_full_width"
+        const val KEY_NAV_CAPSULE = "nav_capsule"
         const val KEY_NAV_HEIGHT = "nav_height"
         const val KEY_NAV_FLOATING_HEIGHT = "nav_floating_height"
         const val KEY_MAIN_FAB = "main_fab"

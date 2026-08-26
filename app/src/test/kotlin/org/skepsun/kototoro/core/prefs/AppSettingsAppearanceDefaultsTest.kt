@@ -79,6 +79,13 @@ class AppSettingsAppearanceDefaultsTest {
 	}
 
 	@Test
+	fun `navigation capsule background is enabled by default`() {
+		val settings = AppSettings(context)
+
+		settings.isNavCapsuleEnabled shouldBe true
+	}
+
+	@Test
 	fun `navigation labels are always visible by default`() {
 		val settings = AppSettings(context)
 

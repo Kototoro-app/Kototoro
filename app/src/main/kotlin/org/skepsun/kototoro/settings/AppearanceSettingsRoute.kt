@@ -216,6 +216,7 @@ fun AppearanceSettingsRoute(
         settings.observeAsState(AppSettings.KEY_NAV_LAYERED_SURFACE) { isNavLayeredSurface }.value
     val navHeight = settings.observeAsState(AppSettings.KEY_NAV_HEIGHT) { navHeight }.value
     val navFloatingHeight = settings.observeAsState(AppSettings.KEY_NAV_FLOATING_HEIGHT) { navFloatingHeight }.value
+    val isNavCapsuleEnabled = settings.observeAsState(AppSettings.KEY_NAV_CAPSULE) { isNavCapsuleEnabled }.value
     val isExitConfirmationEnabled =
         settings.observeAsState(AppSettings.KEY_EXIT_CONFIRM) { isExitConfirmationEnabled }.value
     val isDynamicShortcutsEnabled =
@@ -373,6 +374,7 @@ fun AppearanceSettingsRoute(
         isNavLayeredSurface = isNavLayeredSurface,
         navIndicatorStyle = navIndicatorStyle,
         isNavFullWidth = isNavFullWidth,
+        isNavCapsuleEnabled = isNavCapsuleEnabled,
         isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
         navHeight = navHeight,
         navFloatingHeight = navFloatingHeight,
@@ -457,6 +459,7 @@ fun AppearanceSettingsRoute(
         onNavLayeredSurfaceChange = { settings.isNavLayeredSurface = it },
         onNavIndicatorStyleChange = { settings.navIndicatorStyle = it },
         onNavFullWidthChange = { settings.isNavFullWidth = it },
+        onNavCapsuleChange = { settings.isNavCapsuleEnabled = it },
         onNavHeightChange = { settings.navHeight = it },
         onNavFloatingHeightChange = { settings.navFloatingHeight = it },
         onExitConfirmationChange = { settings.isExitConfirmationEnabled = it },

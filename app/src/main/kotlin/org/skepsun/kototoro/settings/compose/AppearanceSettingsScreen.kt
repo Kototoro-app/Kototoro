@@ -100,6 +100,7 @@ data class AppearanceSettingsUiState(
     val isNavLayeredSurface: Boolean,
     val navIndicatorStyle: NavIndicatorStyle,
     val isNavFullWidth: Boolean,
+    val isNavCapsuleEnabled: Boolean,
     val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
@@ -230,6 +231,7 @@ fun AppearanceSettingsScreen(
     onGlassTuningImportCustomPresets: () -> Unit = {},
     onNavFullWidthChange: (Boolean) -> Unit,
     onSampleBlueNavAccentChange: (Boolean) -> Unit,
+    onNavCapsuleChange: (Boolean) -> Unit,
     onGlassSettingsClick: () -> Unit = {},
     onBadgesSettingsClick: () -> Unit = {},
     onSearchFiltersSettingsClick: () -> Unit = {},
@@ -299,6 +301,7 @@ fun AppearanceSettingsScreen(
                 onNavIndicatorStyleChange = onNavIndicatorStyleChange,
                 onNavFullWidthChange = onNavFullWidthChange,
                 onSampleBlueNavAccentChange = onSampleBlueNavAccentChange,
+                onNavCapsuleChange = onNavCapsuleChange,
                 onNavHeightChange = onNavHeightChange,
                 onNavFloatingHeightChange = onNavFloatingHeightChange,
                 onMainFabChange = onMainFabChange,
@@ -1072,6 +1075,7 @@ private fun AppearanceNavigationSettingsScreen(
     onNavIndicatorStyleChange: (NavIndicatorStyle) -> Unit,
     onNavFullWidthChange: (Boolean) -> Unit,
     onSampleBlueNavAccentChange: (Boolean) -> Unit,
+    onNavCapsuleChange: (Boolean) -> Unit,
     onNavHeightChange: (Int) -> Unit,
     onNavFloatingHeightChange: (Int) -> Unit,
     onMainFabChange: (Boolean) -> Unit,
@@ -1152,6 +1156,16 @@ private fun AppearanceNavigationSettingsScreen(
             ),
             enabled = state.isNavFloating,
             onCheckedChange = onNavFullWidthChange,
+        )
+    }
+    item {
+        SettingsSwitchPreference(
+            title = stringResource(R.string.pref_nav_capsule),
+            iconRes = R.drawable.ic_toggle,
+            checked = state.isNavCapsuleEnabled,
+            summary = stringResource(R.string.pref_nav_capsule_summary),
+            enabled = state.isNavFloating,
+            onCheckedChange = onNavCapsuleChange,
         )
     }
     item {

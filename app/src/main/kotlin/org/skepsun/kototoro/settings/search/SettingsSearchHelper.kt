@@ -133,6 +133,7 @@ class SettingsSearchHelper @Inject constructor(
             "nav_layered_surface" to R.string.pref_nav_layered_surface,
             "nav_indicator_style" to R.string.pref_nav_indicator_style,
             "nav_full_width" to R.string.pref_nav_full_width,
+            "nav_capsule" to R.string.pref_nav_capsule,
             "nav_accent_sample_blue" to R.string.pref_nav_accent_sample_blue,
             "nav_height" to R.string.pref_nav_height,
             "nav_floating_height" to R.string.pref_nav_floating_height,

@@ -82,6 +82,7 @@ class SettingsSearchHelperTest {
 			"nav_layered_surface" to "string-${R.string.pref_nav_layered_surface}",
 			"nav_indicator_style" to "string-${R.string.pref_nav_indicator_style}",
 			"nav_full_width" to "string-${R.string.pref_nav_full_width}",
+			"nav_capsule" to "string-${R.string.pref_nav_capsule}",
 			"nav_accent_sample_blue" to "string-${R.string.pref_nav_accent_sample_blue}",
 			"nav_height" to "string-${R.string.pref_nav_height}",
 			"nav_floating_height" to "string-${R.string.pref_nav_floating_height}",

@@ -109,6 +109,7 @@ private data class BottomNavPrefs(
     val isSampleBlueNavAccentEnabled: Boolean,
     val navHeight: Int,
     val navFloatingHeight: Int,
+    val isNavCapsuleEnabled: Boolean,
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -142,6 +143,7 @@ fun KototoroBottomNav(
         AppSettings.KEY_NAV_ACCENT_SAMPLE_BLUE,
         AppSettings.KEY_NAV_HEIGHT,
         AppSettings.KEY_NAV_FLOATING_HEIGHT,
+        AppSettings.KEY_NAV_CAPSULE,
     ) {
         BottomNavPrefs(
             isFloating = isNavFloating,
@@ -151,10 +153,12 @@ fun KototoroBottomNav(
             isSampleBlueNavAccentEnabled = isSampleBlueNavAccentEnabled,
             navHeight = navHeight,
             navFloatingHeight = navFloatingHeight,
+            isNavCapsuleEnabled = isNavCapsuleEnabled,
         )
     }
     val isFloating = prefs.isFloating
     val isExpressivePillEnabled = prefs.indicatorStyle == NavIndicatorStyle.LABELS_RIGHT
+    val isCapsuleEnabled = prefs.isNavCapsuleEnabled
     val navHeight = prefs.navHeight
     val navFloatingHeight = prefs.navFloatingHeight
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
@@ -342,11 +346,16 @@ fun KototoroBottomNav(
                 adjacentAction != null,
                 showSelectedLabels,
                 isExpressivePillEnabled,
+                navFloatingHeight,
             ) {
                 resolveBottomNavLayout(
                     availableWidth = maxWidth,
                     itemCount = activeItems.size,
-                    fabWidth = 56.dp.takeIf { adjacentAction != null },
+                    fabWidth = resolveNavBarHeight(
+                        isFloating = true,
+                        navHeight = navHeight,
+                        navFloatingHeight = navFloatingHeight,
+                    ).takeIf { adjacentAction != null },
                     showLabels = showSelectedLabels,
                     isExpressivePill = isExpressivePillEnabled,
                 )
@@ -373,6 +382,7 @@ fun KototoroBottomNav(
                         labelsAlwaysVisible = labelsAlwaysVisible,
                         labelsToTheRight = isExpressivePillEnabled,
                         accentOverride = sampleAccent,
+                        capsuleEnabled = isCapsuleEnabled,
                         onItemSelected = onItemSelected,
                         onItemReselected = onItemReselected,
                         barStyle = navContainerStyle,
@@ -399,6 +409,7 @@ fun KototoroBottomNav(
                         showSelectedLabels = layoutSpec.showLabels,
                         useExpressivePill = isExpressivePillEnabled,
                         labelsAlwaysVisible = labelsAlwaysVisible,
+                        capsuleEnabled = isCapsuleEnabled,
                         itemSpacing = layoutSpec.itemSpacing,
                         labelScale = layoutSpec.labelScale,
                         labelMaxWidth = layoutSpec.labelMaxWidth,
@@ -530,6 +541,36 @@ internal fun resolveBottomNavPillEffect(progress: Float): BottomNavPillEffectSpe
 }
 
 internal fun resolveBottomNavMagnifyScale(): Float = 78f / 56f
+
+/**
+ * Actual on-screen height of the navigation bar shell: the floating bar is the
+ * floating-height setting plus the 4dp glass inset, the docked bar is exactly
+ * the nav-height setting. The continue-reading FAB next to the bar mirrors the
+ * same value so both stay visually consistent when the height slider changes.
+ */
+internal fun resolveNavBarHeight(
+    isFloating: Boolean,
+    navHeight: Int,
+    navFloatingHeight: Int,
+): Dp = if (isFloating) (navFloatingHeight + 4).dp else navHeight.dp
+
+/**
+ * Resting height of the full-width tab pill. The sample design is a 56dp pill
+ * inside a 64dp bar (the 4dp content inset on each side leaves a 56dp tab).
+ * The floating bar height is user-configurable down to 48dp (a 52dp bar whose
+ * content area is only 44dp), so the pill fills the tab's measured content
+ * height up to the 56dp sample cap instead of overflowing the nav shell. While
+ * the pill is in motion (press/fly-to-tab) it may still cross the bar — only
+ * the resting capsule is clamped.
+ */
+internal fun resolveBottomNavFullWidthPillHeight(
+    tabContentHeightPx: Int,
+    idealPillHeightPx: Int,
+): Int = if (tabContentHeightPx <= 0) {
+    idealPillHeightPx
+} else {
+    tabContentHeightPx.coerceAtMost(idealPillHeightPx)
+}
 
 internal fun resolveBottomNavDragIndicatorX(
     pointerX: Float?,
@@ -673,6 +714,7 @@ private fun FloatingBottomNavRow(
     showSelectedLabels: Boolean,
     useExpressivePill: Boolean,
     labelsAlwaysVisible: Boolean,
+    capsuleEnabled: Boolean,
     accentOverride: Color? = null,
     itemSpacing: Dp,
     labelScale: Float,
@@ -695,7 +737,12 @@ private fun FloatingBottomNavRow(
         null
     }
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val useSharedLiquidGlassPill = useExpressivePill && isIosStyle
+    // The shared moving capsule is the indicator for the labels-below
+    // arrangement (labels-below + non-full-width previously had no capsule at
+    // all) and for the iOS expressive pill. Non-iOS expressive keeps its
+    // per-item static capsule instead. Disabling the nav capsule switch hides
+    // every capsule background and leaves only the accent content color.
+    val useSharedLiquidGlassPill = capsuleEnabled && (!useExpressivePill || isIosStyle)
     val pillSelectionTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
     // pointerInput blocks only restart when their keys change, so any parameter
     // they capture (selectedItemId, onItemSelected) goes stale across
@@ -737,10 +784,6 @@ private fun FloatingBottomNavRow(
             animationSpec = tween(if (dragPreviewItemId != null) 90 else 160),
         )
     }
-    // Use the same relative magnification as the 56dp BiliPai indicator. The
-    // compact 40dp expressive pill therefore grows to about 56dp, rather than
-    // nearly doubling to an oversized 78dp.
-    val pillMagnifyScale = resolveBottomNavMagnifyScale()
     val pillSelectPulse = remember { Animatable(0f) }
     var hasInitialSelection by remember { mutableStateOf(false) }
     var justReleasedFromDrag by remember { mutableStateOf(false) }
@@ -773,6 +816,11 @@ private fun FloatingBottomNavRow(
         MaterialTheme.colorScheme.onSecondaryContainer
     }
     val pillHeightPx = with(density) { 40.dp.roundToPx() }
+    // Use the same relative magnification as the 56dp BiliPai indicator: the
+    // compact 40dp expressive pill grows to about 56dp rather than nearly
+    // doubling to 78dp. The growth happens while the pill is in motion and may
+    // cross the bar edge; the resting capsule stays inside the shell.
+    val pillMagnifyScale = resolveBottomNavMagnifyScale()
     // Center the capsule on the selected item (not anchored to its top), so it
     // stays symmetric for any bar height.
     val targetIndicatorWidth = dragIndicatorWidthPx ?: selectedBounds?.size?.width ?: 0
@@ -868,13 +916,9 @@ private fun FloatingBottomNavRow(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             }
-            val useLiquidGlassPill = isSelected && useExpressivePill && isIosStyle
-            val selectedContainerColor = if (isSelected && useExpressivePill && !isIosStyle) {
-                if (useLiquidGlassPill) {
-                    Color.White.copy(alpha = 0.12f)
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer
-                }
+            val useLiquidGlassPill = isSelected && capsuleEnabled && useExpressivePill && isIosStyle
+            val selectedContainerColor = if (isSelected && capsuleEnabled && useExpressivePill && !isIosStyle) {
+                MaterialTheme.colorScheme.secondaryContainer
             } else {
                 Color.Transparent
             }
@@ -1084,6 +1128,7 @@ private fun FullWidthFloatingBottomNavRow(
     labelsAlwaysVisible: Boolean,
     labelsToTheRight: Boolean = false,
     accentOverride: Color? = null,
+    capsuleEnabled: Boolean,
     onItemSelected: (Int) -> Unit,
     onItemReselected: (Int) -> Unit,
     barStyle: GlassStyle,
@@ -1141,9 +1186,9 @@ private fun FullWidthFloatingBottomNavRow(
         )
     }
     // Selection "magnet magnify" mirroring the LiquidBottomTabs sample: the pill
-    // swells from 56dp to the sample's pressed 78dp (crossing the 64dp bar by
-    // 7dp on each side) while flying to the new tab, then settles on arrival.
-    val pillMagnifyScale = resolveBottomNavMagnifyScale()
+    // swells while flying to the new tab, then settles on arrival. The transient
+    // growth is allowed to cross the bar edge; only the resting capsule below is
+    // kept inside the nav shell.
     val pillSelectPulse = remember { Animatable(0f) }
     var hasInitialSelection by remember { mutableStateOf(false) }
     var justReleasedFromDrag by remember { mutableStateOf(false) }
@@ -1170,9 +1215,19 @@ private fun FullWidthFloatingBottomNavRow(
     val displayedSelectedItemId = dragPreviewItemId ?: selectedItemId
     val selectedBounds = itemBounds[displayedSelectedItemId]
     val density = LocalDensity.current
-    // The pill is 56dp tall (64dp bar minus the 4dp inset on each side) and
-    // spans the selected tab's full content width, mirroring the sample.
-    val pillHeightPx = with(density) { 56.dp.roundToPx() }
+    // The pill is 56dp tall at the sample's 64dp bar (64dp minus the 4dp inset
+    // on each side) and spans the selected tab's full content width. Smaller
+    // floating bars (the height slider goes down to 48dp -> a 52dp bar) shrink
+    // the resting pill to the tab's measured content height so the capsule
+    // never overflows the navigation shell edges.
+    val restingPillHeightPx = with(density) { 56.dp.roundToPx() }
+    val pillHeightPx = resolveBottomNavFullWidthPillHeight(
+        tabContentHeightPx = selectedBounds?.size?.height ?: 0,
+        idealPillHeightPx = restingPillHeightPx,
+    )
+    // Motion magnification keeps the full BiliPai amplitude (it may cross the
+    // bar while flying between tabs); the resting capsule stays in bounds.
+    val pillMagnifyScale = resolveBottomNavMagnifyScale()
     val targetIndicatorWidth = dragIndicatorWidthPx ?: selectedBounds?.size?.width ?: 0
     val snappedIndicatorOffset = selectedBounds?.let {
         IntOffset(
@@ -1191,7 +1246,7 @@ private fun FullWidthFloatingBottomNavRow(
         ),
     )
     val targetIndicatorSize = if (targetIndicatorWidth > 0) {
-        IntSize(targetIndicatorWidth, with(density) { 56.dp.roundToPx() })
+        IntSize(targetIndicatorWidth, pillHeightPx)
     } else {
         IntSize.Zero
     }
@@ -1220,7 +1275,7 @@ private fun FullWidthFloatingBottomNavRow(
             shape = barShape,
             exportedBackdrop = navigationShellBackdrop,
         ) {}
-        if (targetIndicatorSize != IntSize.Zero) {
+        if (capsuleEnabled && targetIndicatorSize != IntSize.Zero) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -1263,14 +1318,17 @@ private fun FullWidthFloatingBottomNavRow(
                         .weight(1f)
                         .fillMaxHeight()
                         .onGloballyPositioned { coordinates ->
-                            val position = coordinates.positionInRoot() - containerPositionInRoot
-                            itemBounds[item.id] = NavItemBounds(
-                                itemId = item.id,
-                                offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
-                                size = IntSize(coordinates.size.width, coordinates.size.height),
-                            )
+                            if (capsuleEnabled) {
+                                val position = coordinates.positionInRoot() - containerPositionInRoot
+                                itemBounds[item.id] = NavItemBounds(
+                                    itemId = item.id,
+                                    offset = IntOffset(position.x.roundToInt(), position.y.roundToInt()),
+                                    size = IntSize(coordinates.size.width, coordinates.size.height),
+                                )
+                            }
                         }
                         .pointerInput(items, item.id) {
+                            if (!capsuleEnabled) return@pointerInput
                             var pointerX = 0f
                             detectDragGestures(
                                 onDragStart = { startOffset ->

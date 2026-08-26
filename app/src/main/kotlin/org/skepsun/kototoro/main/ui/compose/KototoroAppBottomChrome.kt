@@ -23,6 +23,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
@@ -48,12 +49,13 @@ internal fun ContinueReadingFab(
     action: MainResumeAction,
     coverModel: Any?,
     modifier: Modifier = Modifier,
+    size: Dp = 56.dp,
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val hasCover = coverModel != null
     if (isIosStyle) {
         GlassSurface(
-            modifier = modifier.size(56.dp),
+            modifier = modifier.size(size),
             shape = CircleShape,
             style = GlassDefaults.regularStyle(),
             componentRole = GlassComponentRole.Surface,
@@ -74,7 +76,7 @@ internal fun ContinueReadingFab(
     } else {
         Surface(
             onClick = onClick,
-            modifier = modifier.size(56.dp),
+            modifier = modifier.size(size),
             shape = CircleShape,
             color = if (hasCover) Color.Transparent else MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

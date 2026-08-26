@@ -1635,6 +1635,8 @@
     <string name="pref_nav_indicator_style_labels_right">標籤在右</string>
     <string name="pref_nav_full_width">全寬導覽列</string>
     <string name="pref_nav_full_width_summary">讓懸浮導覽列佔滿螢幕寬度</string>
+    <string name="pref_nav_capsule">導覽膠囊</string>
+    <string name="pref_nav_capsule_summary">為選中項目顯示膠囊背景；關閉後僅使用強調色高亮</string>
     <string name="pref_nav_floating_adaptive_width">懸浮導航欄自適應寬度</string>
     <string name="pref_nav_floating_adaptive_width_summary">導航按鈕較少時自動收窄懸浮導航欄</string>
     <string name="pref_nav_floating_height">浮動導航欄高度</string>

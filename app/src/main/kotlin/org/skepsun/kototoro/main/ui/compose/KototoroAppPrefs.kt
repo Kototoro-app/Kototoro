@@ -8,6 +8,7 @@ import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.TabletUiMode
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.widgets.resolveNavBarHeight
 import org.skepsun.kototoro.list.domain.ListSortOrder
 
 /**
@@ -40,10 +41,17 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
     val navigationPrefs = appSettings.observeAsState(
         AppSettings.KEY_NAV_FLOATING,
         AppSettings.KEY_NAV_LAYERED_SURFACE,
+        AppSettings.KEY_NAV_HEIGHT,
+        AppSettings.KEY_NAV_FLOATING_HEIGHT,
     ) {
         KototoroNavigationPrefs(
             isFloating = isNavFloating,
             isLayeredSurface = isNavLayeredSurface,
+            adjacentFabSize = resolveNavBarHeight(
+                isFloating = isNavFloating,
+                navHeight = navHeight,
+                navFloatingHeight = navFloatingHeight,
+            ),
         )
     }
     val displayPrefs = appSettings.observeAsState(
