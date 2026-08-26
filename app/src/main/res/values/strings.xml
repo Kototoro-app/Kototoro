@@ -1038,6 +1038,8 @@
     <string name="import_backup_supported_apps_summary">Mihon, Komikku, Aniyomi, Anikku, Animiru, Venera</string>
     <string name="import_backup_scope_summary">This version restores favorites, history, and imported reading progress metadata.</string>
     <string name="import_backup_started_background">The external backup will be imported in the background</string>
+    <string name="import_backup_mihon_note">Includes TachiyomiSY and Neko backups. Their built-in E-Hentai, ExHentai, and MangaDex entries are mapped to Kototoro native sources automatically.</string>
+    <string name="import_backup_komikku_note">Komikku\'s built-in E-Hentai and ExHentai entries are mapped to the Kototoro native E-Hentai source automatically.</string>
     <string name="server_address">Server address</string>
     <string name="sync_host_description">You can use a self-hosted synchronization server or a default one. Don\'t change this if you\'re not sure what you\'re doing.</string>
     <string name="ignore_ssl_errors">Ignore SSL errors</string>

@@ -261,12 +261,12 @@ class ExternalBackupRepository @Inject constructor(
         private var cachedCandidates: List<SourceCandidate>? = null
 
         suspend fun resolve(record: ExternalBackupContentRecord): SourceResolveResult {
-            if (record.app == ExternalBackupApp.MIHON) {
-                // TachiyomiSY (and SY-lineage forks) bundle E-Hentai / ExHentai as
-                // built-in sources whose ids are NOT Mihon-extension ids. Remap those to
-                // the native Kotatsu parser source when available; everything else stays
+            if (record.sourceName.startsWith("MIHON_")) {
+                // Mihon-family forks (TachiyomiSY, Komikku, Neko, ...) bundle some sources
+                // in-app with ids that never match a Mihon extension. Remap those to the
+                // native Kotatsu parser source when available; everything else stays
                 // verbatim as MIHON_<id>.
-                resolveTachiyomiSyBuiltinSource(record)?.let { return it }
+                resolveMihonFamilySource(record)?.let { return it }
                 return SourceResolveResult.Resolved(record)
             }
             if (record.app != ExternalBackupApp.VENERA) {
@@ -304,21 +304,45 @@ class ExternalBackupRepository @Inject constructor(
         }
 
         /**
-         * Remaps a `MIHON_<id>` source that corresponds to a TachiyomiSY bundled
-         * (non-extension) source to the matching native Kotatsu parser source.
+         * Remaps a `MIHON_<id>` source that comes from a Mihon-family fork built-in source
+         * to the matching native Kotatsu parser source.
          *
-         * Returns `null` (meaning "keep the raw MIHON_<id> key") when the id is not a
-         * known bundled id or when the native source is not currently available — the
-         * record must still import instead of failing.
+         * Returns `null` (meaning "keep the raw MIHON_<id> key") when there is nothing to
+         * remap or when the native source is not currently available — the record must
+         * still import instead of failing.
          */
-        private suspend fun resolveTachiyomiSyBuiltinSource(
+        private suspend fun resolveMihonFamilySource(
             record: ExternalBackupContentRecord,
         ): SourceResolveResult? {
             val sourceId = record.sourceName.removePrefix("MIHON_").toLongOrNull()
                 ?: return null
-            val nativeName = TachiyomiSyBuiltinSources.nativeSourceNameForId(sourceId)
-                ?: return null
-            val matches = candidates()
+            val natives = candidates()
+
+            // 1) Authoritative fork-built-in id table (TachiyomiSY, Komikku).
+            MihonForkBuiltinSources.nativeSourceNameForId(sourceId)?.let { nativeName ->
+                resolveNativeOrNull(record, nativeName, natives)?.let { return it }
+            }
+
+            // 2) Never disturb a source that already resolves to an installed Mihon
+            //    extension — those ids are ecosystem-stable and already linked.
+            if (natives.any { it.sourceName == record.sourceName && it.kind == SourceKind.MIHON }) {
+                return null
+            }
+
+            // 3) URL-shape inference for built-ins that are not enumerated (e.g. Neko's
+            //    MangaDex ids are MD5-derived per language and kept out of the table).
+            val inferredName = MihonForkBuiltinSources.nativeSourceNameForMihonUrl(
+                url = record.url.ifBlank { record.publicUrl },
+            ) ?: return null
+            return resolveNativeOrNull(record, inferredName, natives)
+        }
+
+        private fun resolveNativeOrNull(
+            record: ExternalBackupContentRecord,
+            nativeName: String,
+            natives: List<SourceCandidate>,
+        ): SourceResolveResult? {
+            val matches = natives
                 .filter { it.sourceName == nativeName && it.kind == SourceKind.NATIVE }
                 .distinctBy { it.sourceName }
             if (matches.size != 1) {

@@ -387,6 +387,13 @@ fun BackupsSettingsScreen(
                                 onClick = { onImportExternalBackupAppClick(app) },
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            app.guideNoteRes()?.let { noteRes ->
+                                Text(
+                                    text = stringResource(noteRes),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
                 },
@@ -501,6 +508,13 @@ private fun ExternalBackupApp.displayName(): String = when (this) {
     ExternalBackupApp.ANIYOMI -> "Aniyomi"
     ExternalBackupApp.ANIKKU -> "Anikku"
     ExternalBackupApp.ANIMIRU -> "Animiru"
+}
+
+/** Optional guidance shown under an import app row about built-in-source remapping. */
+private fun ExternalBackupApp.guideNoteRes(): Int? = when (this) {
+    ExternalBackupApp.MIHON -> R.string.import_backup_mihon_note
+    ExternalBackupApp.KOMIKKU -> R.string.import_backup_komikku_note
+    else -> null
 }
 
 @Composable
