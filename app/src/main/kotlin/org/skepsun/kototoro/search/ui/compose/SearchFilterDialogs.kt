@@ -2,17 +2,22 @@ package org.skepsun.kototoro.search.ui.compose
 
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +25,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -34,27 +41,31 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
-import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.model.titleRes
-import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
-import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 
 import org.skepsun.kototoro.filter.ui.model.UiTagGroup
 import org.skepsun.kototoro.filter.data.PersistableFilter.Companion.MAX_TITLE_LENGTH
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.SortOrder
+import java.util.Locale
+
+private const val VISIBLE_TAG_LIMIT = 8
+private const val SEARCH_TAG_LIMIT = 16
 
 @Composable
 internal fun SaveFilterNameDialog(
@@ -161,49 +172,20 @@ internal fun SortOrderFilterSection(
 ) {
     val selectedLabel = selectedSortOrder?.let { resolveSortOrderLabel(sourceName, it) }.orEmpty()
     Box {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.42f),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.42f),
-            ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onExpandedChange(!expanded) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = selectedLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Icon(
-                    painter = painterResource(R.drawable.ic_expand_more),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
+        FilterDropdownAnchor(
+            label = selectedLabel,
+            expanded = expanded,
+            onClick = { onExpandedChange(!expanded) },
+        )
 
-        GlassDropdownMenu(
+        DropdownMenu(
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
+            modifier = Modifier.widthIn(min = 180.dp, max = 280.dp),
         ) {
             sortOrders.forEach { item ->
                 val selected = item == selectedSortOrder
-                CompactDropdownMenuItem(
+                DropdownMenuItem(
                     text = { Text(resolveSortOrderLabel(sourceName, item)) },
                     onClick = {
                         onSortOrderChange(item)
@@ -226,6 +208,104 @@ internal fun SortOrderFilterSection(
             }
         }
     }
+}
+
+@Composable
+internal fun LocaleFilterSection(
+    locales: List<Locale?>,
+    selectedLocale: Locale?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onLocaleChange: (Locale?) -> Unit,
+) {
+    val selectedLabel = localeLabel(selectedLocale)
+    Box {
+        FilterDropdownAnchor(
+            label = selectedLabel,
+            expanded = expanded,
+            onClick = { onExpandedChange(!expanded) },
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+            modifier = Modifier.widthIn(min = 160.dp, max = 260.dp),
+        ) {
+            locales.forEach { locale ->
+                val selected = locale == selectedLocale
+                DropdownMenuItem(
+                    text = { Text(localeLabel(locale)) },
+                    onClick = {
+                        onLocaleChange(locale)
+                        onExpandedChange(false)
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(
+                                if (selected) R.drawable.ic_check else R.drawable.ic_language,
+                            ),
+                            contentDescription = null,
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterDropdownAnchor(
+    label: String,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_expand_more),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (expanded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun localeLabel(locale: Locale?): String = if (locale == null) {
+    stringResource(R.string.all)
+} else {
+    locale.getDisplayName(locale).ifBlank { locale.toLanguageTag() }
 }
 
 @Composable
@@ -254,16 +334,17 @@ internal fun TagGroupsSection(
     textInputLabel: (ContentTag) -> String,
     onToggleTag: (ContentTag, Boolean, Boolean) -> Unit,
     onTextInputTagClick: (ContentTag) -> Unit,
-    onOpenTagCatalog: (String?, Boolean) -> Unit,
 ) {
     val visibleGroups = tagGroups.filter { it.tags.isNotEmpty() }
     if (visibleGroups.isEmpty()) return
-    FilterSection(title = title) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            visibleGroups.forEach { group ->
-                TagGroupContent(
+    var query by rememberSaveable(title, excludeMode) { mutableStateOf("") }
+    val singleGroup = visibleGroups.singleOrNull()
+    FilterSection(
+        title = title,
+        iconRes = R.drawable.ic_tag,
+        headerAction = singleGroup?.takeIf { it.tags.size > VISIBLE_TAG_LIMIT }?.let { group ->
+            {
+                TagGroupDropdown(
                     group = group,
                     excludeMode = excludeMode,
                     isTextInputTag = isTextInputTag,
@@ -271,7 +352,66 @@ internal fun TagGroupsSection(
                     textInputLabel = textInputLabel,
                     onToggleTag = onToggleTag,
                     onTextInputTagClick = onTextInputTagClick,
-                    onOpenTagCatalog = onOpenTagCatalog,
+                )
+            }
+        },
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (visibleGroups.sumOf { it.tags.size } > VISIBLE_TAG_LIMIT) {
+                val searchShape = RoundedCornerShape(12.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .background(MaterialTheme.colorScheme.surface, searchShape)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, searchShape)
+                        .padding(horizontal = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_search),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (query.isEmpty()) {
+                                    Text(
+                                        text = stringResource(R.string.search),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+                }
+            }
+            visibleGroups.forEach { group ->
+                TagGroupContent(
+                    group = group,
+                    showTitle = singleGroup == null,
+                    query = query,
+                    excludeMode = excludeMode,
+                    isTextInputTag = isTextInputTag,
+                    textInputValue = textInputValue,
+                    textInputLabel = textInputLabel,
+                    onToggleTag = onToggleTag,
+                    onTextInputTagClick = onTextInputTagClick,
                 )
             }
         }
@@ -281,25 +421,28 @@ internal fun TagGroupsSection(
 @Composable
 private fun TagGroupContent(
     group: UiTagGroup,
+    showTitle: Boolean,
+    query: String,
     excludeMode: Boolean,
     isTextInputTag: (ContentTag) -> Boolean,
     textInputValue: (ContentTag) -> String?,
     textInputLabel: (ContentTag) -> String,
     onToggleTag: (ContentTag, Boolean, Boolean) -> Unit,
     onTextInputTagClick: (ContentTag) -> Unit,
-    onOpenTagCatalog: (String?, Boolean) -> Unit,
 ) {
-    val orderedTags = remember(group) {
+    val orderedTags = remember(group, query) {
         (group.selected.toList() + group.tags.filterNot { it in group.selected }.sortedBy { it.title })
             .distinctBy { it.key }
+            .filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
     }
-    val visibleTags = remember(orderedTags) { orderedTags.take(12) }
-    val canExpand = orderedTags.size > visibleTags.size
+    val previewLimit = if (query.isBlank()) VISIBLE_TAG_LIMIT else SEARCH_TAG_LIMIT
+    val visibleTags = remember(orderedTags, previewLimit) { orderedTags.take(previewLimit) }
+    val canExpand = group.tags.size > VISIBLE_TAG_LIMIT
 
     Column(
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        if (group.title.isNotBlank()) {
+        if (showTitle && group.title.isNotBlank()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -311,15 +454,15 @@ private fun TagGroupContent(
                     fontWeight = FontWeight.SemiBold,
                 )
                 if (canExpand) {
-                    IconButton(
-                        onClick = { onOpenTagCatalog(group.title, excludeMode) },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = stringResource(R.string.show_more),
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
+                    TagGroupDropdown(
+                        group = group,
+                        excludeMode = excludeMode,
+                        isTextInputTag = isTextInputTag,
+                        textInputValue = textInputValue,
+                        textInputLabel = textInputLabel,
+                        onToggleTag = onToggleTag,
+                        onTextInputTagClick = onTextInputTagClick,
+                    )
                 }
             }
         }
@@ -362,12 +505,139 @@ private fun TagGroupContent(
 }
 
 @Composable
+private fun TagGroupDropdown(
+    group: UiTagGroup,
+    excludeMode: Boolean,
+    isTextInputTag: (ContentTag) -> Boolean,
+    textInputValue: (ContentTag) -> String?,
+    textInputLabel: (ContentTag) -> String,
+    onToggleTag: (ContentTag, Boolean, Boolean) -> Unit,
+    onTextInputTagClick: (ContentTag) -> Unit,
+) {
+    var expanded by rememberSaveable(group.title, excludeMode) { mutableStateOf(false) }
+    val orderedTags = remember(group) {
+        (group.selected.toList() + group.tags.filterNot { it in group.selected }.sortedBy { it.title })
+            .distinctBy { it.key }
+    }
+    Box {
+        IconButton(
+            onClick = { expanded = !expanded },
+            modifier = Modifier.size(32.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = stringResource(R.string.show_more),
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .widthIn(min = 220.dp, max = 320.dp)
+                .heightIn(max = 360.dp),
+        ) {
+            orderedTags.forEach { tag ->
+                val value = textInputValue(tag)
+                val textInput = isTextInputTag(tag) || value != null
+                val selected = if (textInput) !value.isNullOrBlank() else tag in group.selected
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = when {
+                                textInput && !value.isNullOrBlank() -> "${textInputLabel(tag)}: $value"
+                                textInput -> textInputLabel(tag)
+                                else -> tag.title
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    onClick = {
+                        if (textInput) {
+                            expanded = false
+                            onTextInputTagClick(tag)
+                        } else {
+                            onToggleTag(tag, !selected, excludeMode)
+                        }
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(
+                                if (selected) R.drawable.ic_check else R.drawable.ic_tag,
+                            ),
+                            contentDescription = null,
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun FilterSection(
     title: String,
+    modifier: Modifier = Modifier,
+    iconRes: Int? = null,
+    headerAction: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    FilterPanelGroup(title = title) {
-        content()
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLowest,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
+        border = BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                iconRes?.let {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(13.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(it),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                headerAction?.invoke()
+            }
+            content()
+        }
     }
 }
 
@@ -377,8 +647,8 @@ internal fun FilterChipFlow(
     content: @Composable () -> Unit,
 ) {
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         content()
     }
@@ -391,13 +661,16 @@ internal fun SearchPanelChip(
     label: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 36.dp) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 24.dp) {
         FilterChip(
             selected = selected,
             onClick = onClick,
-            modifier = modifier.heightIn(min = 36.dp),
+            modifier = modifier.heightIn(min = 24.dp),
+            shape = RoundedCornerShape(8.dp),
             label = {
-                androidx.compose.material3.ProvideTextStyle(MaterialTheme.typography.labelLarge) {
+                androidx.compose.material3.ProvideTextStyle(
+                    MaterialTheme.typography.labelSmall.copy(lineHeight = 12.sp),
+                ) {
                     label()
                 }
             },
@@ -406,26 +679,26 @@ internal fun SearchPanelChip(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(12.dp),
                     )
                 }
             } else {
                 null
             },
             colors = FilterChipDefaults.filterChipColors(
-                containerColor = Color.Transparent,
+                containerColor = MaterialTheme.colorScheme.surface,
                 labelColor = MaterialTheme.colorScheme.onSurface,
-                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f),
-                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.primary,
+                selectedLeadingIconColor = MaterialTheme.colorScheme.primary,
             ),
             border = FilterChipDefaults.filterChipBorder(
                 enabled = true,
                 selected = selected,
                 borderColor = if (selected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.58f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.78f)
                 } else {
-                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.52f)
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.62f)
                 },
             ),
         )
@@ -438,4 +711,3 @@ internal fun ListMode.iconRes(): Int = when (this) {
     ListMode.GRID,
     ListMode.COMPACT_GRID -> R.drawable.ic_grid
 }
-

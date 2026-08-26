@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.search.ui.compose
 
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,15 +11,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -29,14 +27,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,10 +94,9 @@ internal fun SearchFilterPanel(
     textInputValue: (ContentTag) -> String?,
     textInputLabel: (ContentTag) -> String,
     onSetTextInputValue: (ContentTag, String) -> Unit,
-    onOpenTagCatalog: (String?, Boolean) -> Unit,
     modifier: Modifier = Modifier,
     fillAvailableHeight: Boolean = true,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
     savedFilters: FilterProperty<PersistableFilter> = FilterProperty.EMPTY,
     isSaveEnabled: Boolean = false,
     onToggleSavedFilter: (PersistableFilter) -> Unit = {},
@@ -108,81 +107,160 @@ internal fun SearchFilterPanel(
 ) {
     val scrollState = rememberScrollState()
     var sortExpanded by rememberSaveable { mutableStateOf(false) }
+    var localeExpanded by rememberSaveable { mutableStateOf(false) }
     var textInputDialog by remember { mutableStateOf<ContentTag?>(null) }
     var pendingSaveName by remember { mutableStateOf<String?>(null) }
     var pendingOverwriteName by remember { mutableStateOf<String?>(null) }
     var pendingRenameFilter by remember { mutableStateOf<PersistableFilter?>(null) }
     var savedFilterMenuPreset by remember { mutableStateOf<PersistableFilter?>(null) }
+    var showTagBlacklist by rememberSaveable { mutableStateOf(blacklistedTagCount > 0) }
+    LaunchedEffect(blacklistedTagCount) {
+        if (blacklistedTagCount == 0) {
+            showTagBlacklist = false
+        }
+    }
+    val selectedFilterCount = remember(
+        tagGroups,
+        excludedTagGroups,
+        selectedContentTypes,
+        selectedStates,
+        selectedLocale,
+        selectedAuthor,
+    ) {
+        tagGroups.flatMapTo(mutableSetOf()) { it.selected }.size +
+            excludedTagGroups.flatMapTo(mutableSetOf()) { it.selected }.size +
+            selectedContentTypes.size +
+            selectedStates.size +
+            (if (selectedLocale != null) 1 else 0) +
+            (if (!selectedAuthor.isNullOrBlank()) 1 else 0)
+    }
 
     Column(
         modifier = modifier
             .then(if (fillAvailableHeight) Modifier.fillMaxHeight() else Modifier)
             .verticalScroll(scrollState)
             .padding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.filter),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = stringResource(R.string.filter),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (selectedFilterCount > 0) {
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.54f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.selected_count, selectedFilterCount),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedButton(
+                IconButton(
                     onClick = { pendingSaveName = "" },
                     enabled = isSaveEnabled,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.38f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f),
-                    ),
                 ) {
-                    Text(stringResource(R.string.save))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_save),
+                        contentDescription = stringResource(R.string.save_filter),
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
-                OutlinedButton(
-                    onClick = onReset,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.38f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f),
-                    ),
+                TextButton(
+                    onClick = { showTagBlacklist = !showTagBlacklist },
                 ) {
-                    Text(stringResource(R.string.reset_filter))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_cancel_multiple),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(if (showTagBlacklist) R.string.hide else R.string.show))
+                }
+                TextButton(
+                    onClick = onReset,
+                ) {
+                    Text(stringResource(R.string.clear))
                 }
             }
         }
 
-        GlobalTagBlacklistStatus(
-            blacklistedTagCount = blacklistedTagCount,
-            onClick = onOpenGlobalTagBlacklist,
-        )
-
-        FilterSection(title = stringResource(R.string.sort_order)) {
-            SortOrderFilterSection(
-                sourceName = sourceName,
-                sortOrders = sortOrders,
-                selectedSortOrder = selectedSortOrder,
-                expanded = sortExpanded,
-                onExpandedChange = { sortExpanded = it },
-                onSortOrderChange = onSortOrderChange,
+        if (showTagBlacklist) {
+            GlobalTagBlacklistStatus(
+                blacklistedTagCount = blacklistedTagCount,
+                onClick = onOpenGlobalTagBlacklist,
+                compact = true,
             )
         }
 
+        if (sortOrders.isNotEmpty() || locales.isNotEmpty()) {
+            FilterSection(
+                title = stringResource(R.string.sort_and_language),
+                iconRes = R.drawable.ic_sort,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sort_order),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        SortOrderFilterSection(
+                            sourceName = sourceName,
+                            sortOrders = sortOrders,
+                            selectedSortOrder = selectedSortOrder,
+                            expanded = sortExpanded,
+                            onExpandedChange = { sortExpanded = it },
+                            onSortOrderChange = onSortOrderChange,
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.language),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        LocaleFilterSection(
+                            locales = locales,
+                            selectedLocale = selectedLocale,
+                            expanded = localeExpanded,
+                            onExpandedChange = { localeExpanded = it },
+                            onLocaleChange = onLocaleChange,
+                        )
+                    }
+                }
+            }
+        }
+
         if (contentTypes.isNotEmpty()) {
-            FilterSection(title = stringResource(R.string.type)) {
+            FilterSection(
+                title = stringResource(R.string.type),
+                iconRes = R.drawable.ic_filter_content_type,
+            ) {
                 FilterChipFlow {
                     contentTypes.forEach { type ->
                         val isSelected = type in selectedContentTypes
@@ -197,7 +275,10 @@ internal fun SearchFilterPanel(
         }
 
         if (states.isNotEmpty()) {
-            FilterSection(title = stringResource(R.string.state)) {
+            FilterSection(
+                title = stringResource(R.string.state),
+                iconRes = R.drawable.ic_filter_menu,
+            ) {
                 FilterChipFlow {
                     states.forEach { state ->
                         val isSelected = state in selectedStates
@@ -211,31 +292,11 @@ internal fun SearchFilterPanel(
             }
         }
 
-        if (locales.isNotEmpty()) {
-            FilterSection(title = stringResource(R.string.language)) {
-                FilterChipFlow {
-                    locales.forEach { locale ->
-                        val isSelected = locale == selectedLocale
-                        SearchPanelChip(
-                            selected = isSelected,
-                            onClick = { onLocaleChange(if (isSelected) null else locale) },
-                            label = {
-                                Text(
-                                    if (locale == null) {
-                                        stringResource(R.string.all)
-                                    } else {
-                                        locale.getDisplayName(locale).ifBlank { locale.toLanguageTag() }
-                                    },
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
         if (authors.isNotEmpty()) {
-            FilterSection(title = stringResource(R.string.author)) {
+            FilterSection(
+                title = stringResource(R.string.author),
+                iconRes = R.drawable.ic_user,
+            ) {
                 OutlinedTextField(
                     value = selectedAuthor.orEmpty(),
                     onValueChange = { onAuthorChange(it.ifBlank { null }) },
@@ -271,7 +332,6 @@ internal fun SearchFilterPanel(
             textInputLabel = textInputLabel,
             onToggleTag = onToggleTag,
             onTextInputTagClick = { tag -> textInputDialog = tag },
-            onOpenTagCatalog = onOpenTagCatalog,
         )
 
         if (excludedTagGroups.any { it.tags.isNotEmpty() }) {
@@ -284,12 +344,14 @@ internal fun SearchFilterPanel(
                 textInputLabel = textInputLabel,
                 onToggleTag = onToggleTag,
                 onTextInputTagClick = { tag -> textInputDialog = tag },
-                onOpenTagCatalog = onOpenTagCatalog,
             )
         }
 
         if (!savedFilters.isEmpty() || savedFilters.isLoading) {
-            FilterSection(title = stringResource(R.string.saved_filters)) {
+            FilterSection(
+                title = stringResource(R.string.saved_filters),
+                iconRes = R.drawable.ic_save,
+            ) {
                 FilterChipFlow {
                     savedFilters.availableItems.forEach { preset ->
                         val selected = preset in savedFilters.selectedItems
@@ -462,4 +524,3 @@ internal fun SearchFilterPanel(
         )
     }
 }
-

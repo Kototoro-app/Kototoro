@@ -105,7 +105,6 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
-import org.skepsun.kototoro.filter.ui.tags.TagsCatalogRoute
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ErrorState
@@ -372,7 +371,6 @@ fun AppSearchContentListRoute(
     }
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
-    var showTagsCatalog by remember { mutableStateOf<Pair<String?, Boolean>?>(null) }
     var selectedItemsIds by rememberSaveable { mutableStateOf<Set<Long>>(emptySet()) }
     val hapticFeedback = LocalHapticFeedback.current
     val focusRequester = remember { FocusRequester() }
@@ -834,9 +832,6 @@ fun AppSearchContentListRoute(
                                 textInputValue = viewModel.filterCoordinator::getTextInputValue,
                                 textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
                                 onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
-                                onOpenTagCatalog = { groupTitle, excludeMode ->
-                                    showTagsCatalog = groupTitle to excludeMode
-                                },
                                 modifier = Modifier.fillMaxHeight(),
                                 contentPadding = PaddingValues(
                                     start = 16.dp,
@@ -986,9 +981,6 @@ fun AppSearchContentListRoute(
                             textInputValue = viewModel.filterCoordinator::getTextInputValue,
                             textInputLabel = viewModel.filterCoordinator::getTextInputLabel,
                             onSetTextInputValue = viewModel.filterCoordinator::setTextInputValue,
-                            onOpenTagCatalog = { groupTitle, excludeMode ->
-                                showTagsCatalog = groupTitle to excludeMode
-                            },
                             modifier = Modifier.fillMaxWidth(),
                             fillAvailableHeight = true,
                             savedFilters = savedFiltersProperty,
@@ -1003,14 +995,5 @@ fun AppSearchContentListRoute(
             }
         }
 
-        showTagsCatalog?.let { (groupTitle: String?, excludeMode: Boolean) ->
-            TagsCatalogRoute(
-                filter = viewModel.filterCoordinator,
-                isExcludeTag = excludeMode,
-                groupTitle = groupTitle,
-                onDismiss = { showTagsCatalog = null },
-            )
-        }
     }
 }
-

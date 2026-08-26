@@ -148,7 +148,8 @@
     <string name="by_name">名称（升序）</string>
     <string name="popular">热度（降序）</string>
     <string name="updated">更新</string>
-    <string name="sort_order">排序方式</string>
+	<string name="sort_order">排序方式</string>
+	<string name="sort_and_language">排序和语言</string>
     <string name="filter">筛选</string>
     <string name="theme">明暗模式</string>
     <string name="appearance_mode">明暗模式</string>
