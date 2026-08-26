@@ -151,6 +151,8 @@ fun KototoroTheme(
         LocalInterfaceStyle provides effectiveInterfaceStyle,
         LocalInterfaceStyleTokens provides styleTokens,
         LocalInterfaceStylePolicy provides stylePolicy,
+        LocalMotionStyle provides stylePolicy.motionStyle,
+        LocalSurfaceStyle provides stylePolicy.surfaceStyle,
         LocalBackgroundStyle provides backgroundStyle,
         LocalAmoledTheme provides effectiveAmoledTheme,
     ) {

@@ -9,6 +9,8 @@ data class InterfaceStylePolicy(
     val useExpressiveComponents: Boolean,
     val emphasizeNavigationSelection: Boolean,
     val useExpandedTouchTargets: Boolean,
+    val motionStyle: MotionStyle,
+    val surfaceStyle: SurfaceStyle,
 ) {
     companion object {
         fun from(style: InterfaceStyle): InterfaceStylePolicy = when (style) {
@@ -19,12 +21,16 @@ data class InterfaceStylePolicy(
                 useExpressiveComponents = true,
                 emphasizeNavigationSelection = true,
                 useExpandedTouchTargets = true,
+                motionStyle = MotionStyle.MATERIAL,
+                surfaceStyle = SurfaceStyle.MATERIAL,
             )
             InterfaceStyle.IOS -> InterfaceStylePolicy(
                 useLiquidGlass = true,
                 useExpressiveComponents = false,
                 emphasizeNavigationSelection = true,
                 useExpandedTouchTargets = true,
+                motionStyle = MotionStyle.IOS,
+                surfaceStyle = SurfaceStyle.BACKDROP,
             )
         }
     }

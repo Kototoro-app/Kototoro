@@ -124,6 +124,11 @@ import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.core.ui.theme.LocalMotionStyle
+import org.skepsun.kototoro.core.ui.theme.LocalSurfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalChromeScrollOverlap
+import org.skepsun.kototoro.core.ui.theme.MotionStyle
+import org.skepsun.kototoro.core.ui.theme.SurfaceStyle
 import androidx.compose.material3.Surface
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -961,6 +966,22 @@ fun KototoroApp(
         val activeLiquidGlassBackdrop = liquidGlassBackdropHost.backdropFor(expectedLiquidGlassOwnerKey)
         val glassPrefs = rememberGlassPrefs(appSettings)
         val railAnimationFactor = rememberRailAnimationFactor(appSettings)
+        val motionStyle = LocalMotionStyle.current
+        val surfaceStyle = LocalSurfaceStyle.current
+        // Content-overlap under the floating top chrome (0f at the top, 1f once the list has
+        // scrolled at least one top-bar-height). Deliberately position-derived (never velocity),
+        // smoothed with a short tween (Material: snappy, iOS: slightly longer).
+        val rawChromeScrollOverlap = if (topBarHeightPx > 0) {
+            (-chromeScrollState.totalContentScrollOffset.floatValue / topBarHeightPx.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+        val overlapTweenMillis = if (motionStyle == MotionStyle.IOS) 240 else 120
+        val chromeScrollOverlap by animateFloatAsState(
+            targetValue = rawChromeScrollOverlap,
+            animationSpec = tween(durationMillis = overlapTweenMillis),
+            label = "chrome_scroll_overlap",
+        )
         CompositionLocalProvider(
             LocalLiquidGlassBackdrop provides activeLiquidGlassBackdrop,
             LocalLiquidGlassLayerBackdrop provides activeLiquidGlassBackdrop,
@@ -968,6 +989,7 @@ fun KototoroApp(
             LocalRootGlassMenuHost provides rootGlassMenuHost,
             LocalGlassPrefs provides glassPrefs,
             LocalRailAnimationFactor provides railAnimationFactor,
+            LocalChromeScrollOverlap provides chromeScrollOverlap,
         ) {
             val immersiveStrength = ((LocalGlassPrefs.current?.immersiveStrengthPercent ?: 65).coerceIn(0, 100)) / 100f
             val immersiveBaseColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
@@ -1045,19 +1067,43 @@ fun KototoroApp(
                                     } else {
                                         0f
                                     }
-                                    alpha = resolveTopImmersiveAlpha(
-                                        contentScrollAlpha = contentScrollAlpha,
-                                        chromeAlpha = chromeAlpha,
-                                    )
+                                    alpha = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                        // iOS: the edge fade is overlap-driven (0 at the top, 1 once
+                                        // content passes under the floating chrome), gated by chrome
+                                        // visibility. Never velocity-driven.
+                                        chromeScrollOverlap * chromeAlpha
+                                    } else {
+                                        resolveTopImmersiveAlpha(
+                                            contentScrollAlpha = contentScrollAlpha,
+                                            chromeAlpha = chromeAlpha,
+                                        )
+                                    }
                                 },
                             height = topImmersiveHeight + ImmersiveEdgeFeatherExtension,
-                            colors = listOf(
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
-                                immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
-                                immersiveTransparent,
-                            ),
+                            colors = if (surfaceStyle == SurfaceStyle.BACKDROP) {
+                                // iOS: backdrop strength ramps 0.65 → 1.0 and the scrim lifts
+                                // 0.02 → 0.08 as overlap grows under the floating chrome.
+                                val overlap = chromeScrollOverlap
+                                val backdropStrength = immersiveStrength * lerpFloat(0.65f, 1f, overlap)
+                                val scrimLift = lerpFloat(0.02f, 0.08f, overlap)
+                                listOf(
+                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.72f, 0.98f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.56f, 0.82f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.32f, 0.52f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                    immersiveBaseColor.copy(alpha = (lerpFloat(0.12f, 0.22f, backdropStrength) + scrimLift).coerceIn(0f, 1f)),
+                                    immersiveTransparent,
+                                )
+                            } else {
+                                // Material: stable tonal surface — strength and scrim stay put,
+                                // only whole-gradient alpha responds with the short chrome tween.
+                                listOf(
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.72f, 0.98f, immersiveStrength)),
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.56f, 0.82f, immersiveStrength)),
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.32f, 0.52f, immersiveStrength)),
+                                    immersiveBaseColor.copy(alpha = lerpFloat(0.12f, 0.22f, immersiveStrength)),
+                                    immersiveTransparent,
+                                )
+                            },
                             stops = ImmersiveTopGradientStops,
                         )
 
