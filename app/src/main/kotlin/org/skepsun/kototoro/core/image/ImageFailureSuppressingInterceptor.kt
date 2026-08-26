@@ -11,13 +11,33 @@ import coil3.request.ImageResult
 import coil3.request.SuccessResult
 import coil3.util.DebugLogger
 import coil3.util.Logger
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Response
 import org.skepsun.kototoro.BuildConfig
-import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
+import org.skepsun.kototoro.core.exceptions.CloudFlareException
+import org.skepsun.kototoro.core.network.CloudflareHostCooldown
+import org.skepsun.kototoro.core.util.ext.bypassFailureCooldownKey
 import org.skepsun.kototoro.core.util.ext.mangaKey
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
-class ImageFailureSuppressingInterceptor : Interceptor {
+/**
+ * Coil interceptor that short-circuits clearly deterministic failures and applies a short,
+ * host-scoped Cloudflare cooldown to cover requests.
+ *
+ * Design notes (2026-08):
+ * - Blank data and missing local files are deterministic and short-circuited for every request.
+ * - Transient server errors (5xx) are NOT negatively cached: a weak VPN must be able to retry
+ *   the same cover as soon as the network recovers, instead of showing a blank placeholder for
+ *   ten minutes.
+ * - Cloudflare-protected 403s cool the whole host for a short window via [CloudflareHostCooldown]
+ *   instead of permanently failing one specific URL. While the host is cooling down, new cover
+ *   requests for that host are skipped without touching the network; after the window expires
+ *   the same covers are attempted again and can succeed.
+ * - User-initiated refreshes can bypass the cooldown by setting [bypassFailureCooldownKey].
+ */
+class ImageFailureSuppressingInterceptor(
+    private val cloudflareHostCooldown: CloudflareHostCooldown = CloudflareHostCooldown(),
+) : Interceptor {
 
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
         val request = chain.request
@@ -29,35 +49,50 @@ class ImageFailureSuppressingInterceptor : Interceptor {
             )
         }
         val identity = request.imageIdentity()
-        if (request.shouldShortCircuit(identity)) {
+        if (request.shouldDeterministicShortCircuit(identity)) {
             return ErrorResult(
                 image = request.error(),
                 request = request,
                 throwable = SuppressedImageRequestException(identity.orEmpty()),
             )
         }
+        val isCover = identity != null && request.isCoverRequest(identity)
+        val host = identity.hostOf()
+        val bypass = request.extras[bypassFailureCooldownKey] == true
+        if (isCover && !bypass && cloudflareHostCooldown.isInCooldown(host)) {
+            return ErrorResult(
+                image = request.error(),
+                request = request,
+                throwable = SuppressedImageRequestException("cloudflare host cooldown: $host"),
+            )
+        }
 
         val result = chain.proceed()
         logResult(request, result)
-        if (identity != null && result is ErrorResult && request.shouldRememberFailure(identity, result.throwable)) {
-            ImageFailureRegistry.mark(identity)
+        if (isCover && result is ErrorResult && result.throwable.isCloudflareProtected()) {
+            cloudflareHostCooldown.coolDown(host)
         }
         return result
     }
 
-    private fun ImageRequest.shouldShortCircuit(identity: String?): Boolean {
+    private fun ImageRequest.shouldDeterministicShortCircuit(identity: String?): Boolean {
         if (identity == null) {
             return false
         }
-        return isMissingAppCacheFile(identity) || ImageFailureRegistry.isSuppressed(identity)
+        return isMissingAppCacheFile(identity)
     }
 
-    private fun ImageRequest.shouldRememberFailure(identity: String?, error: Throwable): Boolean {
-        if (identity == null || !isCoverRequest(identity)) {
-            return false
+    private fun Throwable.isCloudflareProtected(): Boolean {
+        if (this is CloudFlareException) {
+            return true
         }
-        return error is CloudFlareProtectedException ||
-            (error is HttpException && (error.response.code == HTTP_FORBIDDEN || error.response.code >= HTTP_SERVER_ERROR_MIN))
+        if (this is HttpException && response.code == HTTP_FORBIDDEN) {
+            val delegate = response.delegate
+            if (delegate is Response) {
+                return delegate.message.contains("cloudflare", ignoreCase = true)
+            }
+        }
+        return false
     }
 
     private fun ImageRequest.isCoverRequest(identity: String): Boolean {
@@ -77,8 +112,9 @@ class ImageFailureSuppressingInterceptor : Interceptor {
         if (!identity.startsWith("file:", ignoreCase = true)) {
             return false
         }
-        val file = runCatching { Uri.parse(identity).path?.let(::File) }.getOrNull() ?: return false
-        return !file.isFile
+        // java.net.URI (rather than android.net.Uri) so this is also testable in JVM unit tests.
+        val path = runCatching { java.net.URI(identity).path }.getOrNull() ?: return false
+        return !File(path).isFile
     }
 
     private fun ImageRequest.hasBlankStringData(): Boolean = data is String && (data as String).isBlank()
@@ -88,6 +124,12 @@ class ImageFailureSuppressingInterceptor : Interceptor {
         is Uri -> value.toString()
         is File -> value.toUri().toString()
         else -> memoryCacheKey ?: diskCacheKey
+    }
+
+    private fun String?.hostOf(): String = when (this) {
+        null -> ""
+        // OkHttp (rather than android.net.Uri) so host extraction also works in JVM unit tests.
+        else -> runCatching { toHttpUrlOrNull()?.host }.getOrNull().orEmpty()
     }
 
     private fun logResult(request: ImageRequest, result: ImageResult) {
@@ -151,7 +193,6 @@ class ImageFailureSuppressingInterceptor : Interceptor {
 
     private companion object {
         private const val HTTP_FORBIDDEN = 403
-        private const val HTTP_SERVER_ERROR_MIN = 500
         private const val SHARED_COVER_KEY_PREFIX = "shared-cover#"
         private const val IMAGE_DIAG_TAG = "ImageRequestDiag"
         private val COVER_URL_MARKERS = listOf("/cover", "/covers", "/poster", "/posters", "cover.", "poster.")
@@ -178,23 +219,4 @@ class SuppressingCoilLogger : Logger {
 
 class SuppressedImageRequestException(
     identity: String,
-) : IllegalStateException("Image request suppressed after repeated failure: $identity")
-
-private object ImageFailureRegistry {
-
-    private const val SUPPRESSION_WINDOW_MS = 10 * 60 * 1000L
-
-    private val failures = ConcurrentHashMap<String, Long>()
-    fun isSuppressed(identity: String): Boolean {
-        val failedAt = failures[identity] ?: return false
-        val isActive = System.currentTimeMillis() - failedAt < SUPPRESSION_WINDOW_MS
-        if (!isActive) {
-            failures.remove(identity, failedAt)
-        }
-        return isActive
-    }
-
-    fun mark(identity: String) {
-        failures[identity] = System.currentTimeMillis()
-    }
-}
+) : IllegalStateException("Image request suppressed: $identity")

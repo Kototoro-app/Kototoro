@@ -51,11 +51,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import coil3.compose.AsyncImage
-import coil3.network.HttpException
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
@@ -96,7 +94,6 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.NONE
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
 import java.io.File
-import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "KototoroContentCard"
 
@@ -1261,14 +1258,12 @@ private fun rememberContentCoverRequest(
     manga: org.skepsun.kototoro.parsers.model.Content,
     allowCrossfade: Boolean = true,
 ): ImageRequest? {
-    var failureVersion by remember(coverUrl, manga.id, manga.source) { mutableStateOf(0) }
-    return remember(context, coverUrl, manga.id, manga.source, allowCrossfade, failureVersion) {
+    return remember(context, coverUrl, manga.id, manga.source, allowCrossfade) {
         buildContentCoverRequest(
             context = context,
             coverUrl = coverUrl,
             manga = manga,
             allowCrossfade = allowCrossfade,
-            onRecoverableFailure = { failureVersion++ },
         )
     }
 }
@@ -1278,12 +1273,11 @@ private fun buildContentCoverRequest(
     coverUrl: String?,
     manga: org.skepsun.kototoro.parsers.model.Content,
     allowCrossfade: Boolean = true,
-    onRecoverableFailure: () -> Unit = {},
 ): ImageRequest? {
     val normalizedUrl = coverUrl?.let(::normalizeCoverUrl)
     val cacheKey = contentCoverCacheKey(manga, normalizedUrl)
     val data = normalizedUrl?.takeUnless {
-        isMissingLocalFileCover(it) || cacheKey?.let(ContentCoverFailureRegistry::isSuppressed) == true
+        isMissingLocalFileCover(it)
     }
     val fallbackTvBoxSearchModel = manga.url
         .takeIf { it.startsWith("tvbox://item/") && coverUrl.isNullOrBlank() }
@@ -1319,14 +1313,6 @@ private fun buildContentCoverRequest(
         .diskCacheKey(cacheKey)
         .mangaExtra(manga)
         .crossfade(allowCrossfade)
-        .listener(
-            onError = { _, result ->
-                if (cacheKey != null && ContentCoverFailureRegistry.shouldSuppress(result.throwable)) {
-                    ContentCoverFailureRegistry.mark(cacheKey)
-                    onRecoverableFailure()
-                }
-            },
-        )
         .build()
 }
 
@@ -1341,30 +1327,4 @@ private fun isMissingLocalFileCover(url: String): Boolean {
     }
     val path = runCatching { Uri.parse(url).path }.getOrNull() ?: return false
     return !File(path).isFile
-}
-
-private object ContentCoverFailureRegistry {
-
-    private const val SUPPRESSION_WINDOW_MS = 10 * 60 * 1000L
-
-    private val failures = ConcurrentHashMap<String, Long>()
-
-    fun isSuppressed(key: String): Boolean {
-        val failedAt = failures[key] ?: return false
-        val isActive = System.currentTimeMillis() - failedAt < SUPPRESSION_WINDOW_MS
-        if (!isActive) {
-            failures.remove(key, failedAt)
-        }
-        return isActive
-    }
-
-    fun mark(key: String) {
-        failures[key] = System.currentTimeMillis()
-    }
-
-    fun shouldSuppress(error: Throwable): Boolean = when (error) {
-        is CloudFlareProtectedException -> true
-        is HttpException -> error.response.code == 403
-        else -> false
-    }
 }

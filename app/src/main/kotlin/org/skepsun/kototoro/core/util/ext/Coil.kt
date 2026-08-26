@@ -72,6 +72,13 @@ val mangaKey = Extras.Key<Content?>(null)
 val bookmarkKey = Extras.Key<Bookmark?>(null)
 val mangaSourceKey = Extras.Key<ContentSource?>(null)
 
+/** Set to bypass the Cloudflare host cooldown for this request (e.g. user-initiated refresh). */
+val bypassFailureCooldownKey = Extras.Key(false)
+
+fun ImageRequest.Builder.bypassFailureCooldown(): ImageRequest.Builder = apply {
+    extras[bypassFailureCooldownKey] = true
+}
+
 @CheckResult
 fun SourceFetchResult.copyWithNewSource(): SourceFetchResult = SourceFetchResult(
     source = ImageSource(
