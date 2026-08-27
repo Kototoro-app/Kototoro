@@ -43,10 +43,13 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroPullToRefreshBox
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
+import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
+import org.skepsun.kototoro.list.ui.compose.rememberRetainedPagingSnapshotState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -77,11 +80,25 @@ fun FeedScreen(
     selectedItemIds: Set<Long> = emptySet(),
     onFeedItemLongClick: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
+    host: RetainedPagingSnapshotHost? = null,
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberSaveable(saver = LazyListState.Saver) {
+    // Retained paging snapshot: keep the visible window and realign by anchor
+    // item id across a details-page round trip. The feed is a static window, so
+    // the snapshot replaces the live list until the live data contains the anchor.
+    val retainedState = host?.let { snapshotHost ->
+        rememberRetainedPagingSnapshotState(
+            host = snapshotHost,
+            retainEnabled = true,
+            leadingItems = items,
+            lazyPagingItems = null,
+            listMode = ListMode.LIST,
+        )
+    }
+    val listState = retainedState?.listState ?: rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
+    val displayedItems = retainedState?.displayedItems ?: items
     ScrollToTopEffect {
         listState.scrollToItem(0)
     }
@@ -172,7 +189,7 @@ fun FeedScreen(
         ) {
 
             itemsIndexed(
-                items = items,
+                items = displayedItems,
                 key = { index, item ->
                     when (item) {
                         is QuickFilter -> "feed_filters"
@@ -207,7 +224,19 @@ fun FeedScreen(
                         FeedItemCard(
                             item = item,
                             isSelected = item.id in selectedItemIds,
-                            onClick = { coverBounds -> onFeedItemClick(item, coverBounds) },
+                            onClick = { coverBounds ->
+                                retainedState?.let { state ->
+                                    state.captureOnNavigate(
+                                        item.id,
+                                        displayedItems,
+                                        state.listState.firstVisibleItemIndex,
+                                        state.listState.firstVisibleItemScrollOffset,
+                                        ListMode.LIST,
+                                        state.listState.firstVisibleItemIndex,
+                                    )
+                                }
+                                onFeedItemClick(item, coverBounds)
+                            },
                             onLongClick = { onFeedItemLongClick(item) },
                         )
                     }
@@ -216,7 +245,19 @@ fun FeedScreen(
                         UpdatedContentCarousel(
                             header = item,
                             prefs = carouselPrefs,
-                            onItemClick = onUpdatedContentItemClick,
+                            onItemClick = { contentItem, coverBounds ->
+                                retainedState?.let { state ->
+                                    state.captureOnNavigate(
+                                        contentItem.model.id,
+                                        displayedItems,
+                                        state.listState.firstVisibleItemIndex,
+                                        state.listState.firstVisibleItemScrollOffset,
+                                        ListMode.LIST,
+                                        state.listState.firstVisibleItemIndex,
+                                    )
+                                }
+                                onUpdatedContentItemClick(contentItem, coverBounds)
+                            },
                             onMoreClick = { onUpdatedContentMoreClick(item) }
                         )
                     }

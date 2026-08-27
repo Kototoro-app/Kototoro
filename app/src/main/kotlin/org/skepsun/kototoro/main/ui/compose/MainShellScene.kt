@@ -934,6 +934,7 @@ internal fun FeedTopLevelRouteContent(
             onQuickFilterOptionClick = viewModel::toggleFilterOption,
             selectedItemIds = selectedFeedItemIds,
             showCategoryFilterInline = true,
+            host = viewModel,
         )
     }
 }
@@ -1344,6 +1345,7 @@ internal fun UpdatedTopLevelRouteContent(
             },
             showQuickFilterInline = true,
             quickFilterOverride = headerQuickFilter,
+            retainPagingSnapshotOnDetailsNavigation = true,
         )
     }
 }
@@ -1550,6 +1552,7 @@ internal fun HistoryTopLevelRouteContent(
             isStatsEnabled = isStatsEnabled,
             gridScale = gridScale,
             selectedItemsIds = selectedItemsIds,
+            viewModel = viewModel,
             onRefresh = { viewModel.onRefresh() },
             onLoadMore = { viewModel.requestMoreItems() },
             onPrepareItemTransition = { _, _ -> },

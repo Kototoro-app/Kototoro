@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.rememberRetainedPagingSnapshotState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
@@ -68,6 +70,7 @@ fun HistoryScreen(
     showContinueReadingButton: Boolean,
     showQuickFilterInline: Boolean = true,
     showInlineSelectionTopBar: Boolean = true,
+    viewModel: ContentListViewModel? = null,
     modifier: Modifier = Modifier,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -77,13 +80,26 @@ fun HistoryScreen(
     val contentItems = remember(items) {
         items.filterNot { it is QuickFilter }
     }
-    val listState = rememberSaveable(saver = LazyListState.Saver) {
+    // Retained paging snapshot: keep the visible window and realign by anchor item
+    // id across a details-page round trip (details refresh invalidates the Room
+    // paging source while the list is off-screen; a plain index restore then
+    // points at the wrong generation).
+    val retainedState = viewModel?.let { vm ->
+        rememberRetainedPagingSnapshotState(
+            host = vm,
+            retainEnabled = true,
+            leadingItems = contentItems,
+            lazyPagingItems = pagingItems,
+            listMode = listMode,
+        )
+    }
+    val listState = retainedState?.listState ?: rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
-    val detailedListState = rememberSaveable(saver = LazyListState.Saver) {
+    val detailedListState = retainedState?.detailedListState ?: rememberSaveable(saver = LazyListState.Saver) {
         LazyListState()
     }
-    val gridState = rememberSaveable(saver = LazyGridState.Saver) {
+    val gridState = retainedState?.gridState ?: rememberSaveable(saver = LazyGridState.Saver) {
         LazyGridState()
     }
     LaunchedEffect(
@@ -122,10 +138,11 @@ fun HistoryScreen(
     KototoroContentListScreen(
         modifier = modifier,
         contentPadding = contentPadding,
-        items = contentItems,
-        pagingItems = pagingItems,
+        items = retainedState?.displayedItems ?: contentItems,
+        pagingItems = retainedState?.displayedPagingItems ?: pagingItems,
         listMode = listMode,
-        isRefreshing = isRefreshing,
+        isRefreshing = isRefreshing ||
+            (retainedState?.pagingIsRefreshing == true && retainedState.useRetainedPagingSnapshot == false),
         pullRefreshEnabled = pullRefreshEnabled,
         showRemoveOption = true,
         onRefresh = onRefresh,
@@ -136,6 +153,31 @@ fun HistoryScreen(
         onItemClick = { item ->
             if (selectedItemsIds.isNotEmpty()) {
                 hapticFeedback.performSelectionHapticFeedback()
+            }
+            retainedState?.let { state ->
+                val (firstVisibleIndex, firstVisibleScrollOffset) = when (listMode) {
+                    ListMode.GRID, ListMode.COMPACT_GRID ->
+                        state.gridState.firstVisibleItemIndex to state.gridState.firstVisibleItemScrollOffset
+                    ListMode.LIST ->
+                        state.listState.firstVisibleItemIndex to state.listState.firstVisibleItemScrollOffset
+                    ListMode.DETAILED_LIST ->
+                        state.detailedListState.firstVisibleItemIndex to state.detailedListState.firstVisibleItemScrollOffset
+                }
+                val snapshotItems = state.currentRetainedSnapshot
+                    ?.takeIf { state.useRetainedPagingSnapshot }
+                    ?.items
+                    ?: pagingItems?.itemSnapshotList?.items.orEmpty()
+                // History renders a section/list header row at layout index 0
+                // ahead of any leading `items` and the paging rows.
+                val pagingAnchorIndex = (firstVisibleIndex - contentItems.size - 1).coerceAtLeast(0)
+                state.captureOnNavigate(
+                    item.id,
+                    snapshotItems,
+                    firstVisibleIndex,
+                    firstVisibleScrollOffset,
+                    listMode,
+                    pagingAnchorIndex,
+                )
             }
             onItemClick(item)
         },

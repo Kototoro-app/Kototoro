@@ -9,8 +9,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import android.widget.Toast
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.BackHandler
@@ -130,6 +128,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     showQuickFilterInline: Boolean = true,
     quickFilterOverride: QuickFilter? = null,
     enableItemAnimations: Boolean = true,
+    retainPagingSnapshotOnDetailsNavigation: Boolean = false,
 ) {
     val pagingFlow = viewModel.pagingContent
     val lazyPagingItems = pagingFlow?.collectAsLazyPagingItems()
@@ -199,24 +198,33 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     val exceptionResolver = (activity as? BaseComposeActivity)?.exceptionResolver
     val loadedPagingItems = lazyPagingItems?.itemSnapshotList?.items.orEmpty()
     val quickFilter = remember(items) { items.firstOrNull { it is QuickFilter } as? QuickFilter }
-    val gridState = rememberSaveable(viewModel, saver = LazyGridState.Saver) {
-        LazyGridState()
-    }
-    val listState = rememberSaveable(viewModel, saver = LazyListState.Saver) {
-        LazyListState()
-    }
-    val detailedListState = rememberSaveable(viewModel, saver = LazyListState.Saver) {
-        LazyListState()
-    }
-
+    // 返回列表时先用"保留快照"渲染（displayedItems = items + snapshot.items），初始滚动
+    // 位置取快照内记录的 firstVisibleItemIndex：详情页刷新会让分页源失效重载，新旧数据
+    // 内容/排序错位时，若用【新加载数据】里 anchor 的 index 换算成布局位置去定位旧快照，
+    // 会先显示错误页面、之后再被 requestScrollToItem 兜底拉回（可见闪跳）。待切到真实
+    // 新数据时，共享控制器会用 anchor item 在新数据里重新对齐到目标位置。
+    val retainedPagingState = rememberRetainedPagingSnapshotState(
+        host = viewModel,
+        retainEnabled = retainPagingSnapshotOnDetailsNavigation,
+        leadingItems = items,
+        lazyPagingItems = lazyPagingItems,
+        listMode = listMode,
+    )
+    val gridState = retainedPagingState.gridState
+    val listState = retainedPagingState.listState
+    val detailedListState = retainedPagingState.detailedListState
     val selectionModels = remember(
-        items,
+        retainedPagingState.displayedItems,
         loadedPagingItems,
-        lazyPagingItems != null,
+        retainedPagingState.displayedPagingItems,
         currentSelectionIds,
     ) {
         prepareContentSelectionModels(
-            if (lazyPagingItems == null) items else loadedPagingItems,
+            if (retainedPagingState.displayedPagingItems == null) {
+                retainedPagingState.displayedItems
+            } else {
+                loadedPagingItems
+            },
             currentSelectionIds,
         )
     }
@@ -542,10 +550,10 @@ fun <VM : ContentListViewModel> AppContentListRoute(
 
     KototoroContentListScreen(
         contentPadding = contentPadding,
-        items = items,
-        pagingItems = lazyPagingItems,
+        items = retainedPagingState.displayedItems,
+        pagingItems = retainedPagingState.displayedPagingItems,
         listMode = listMode,
-        isRefreshing = isRefreshing || pagingIsRefreshing,
+        isRefreshing = isRefreshing || (retainedPagingState.pagingIsRefreshing && !retainedPagingState.useRetainedPagingSnapshot),
         pullRefreshEnabled = pullRefreshEnabled,
         showRemoveOption = showRemoveOption,
         sharedTransitionEnabled = sharedTransitionEnabled,
@@ -571,6 +579,32 @@ fun <VM : ContentListViewModel> AppContentListRoute(
             } else {
                 val content = item.toContentWithOverride()
                 if (viewModel.onContentClick(content)) return@itemClick
+                if (retainPagingSnapshotOnDetailsNavigation && lazyPagingItems != null) {
+                    val snapshotItems = retainedPagingState.currentRetainedSnapshot
+                        ?.takeIf { retainedPagingState.useRetainedPagingSnapshot }
+                        ?.items
+                        ?: loadedPagingItems
+                    val (firstVisibleIndex, firstVisibleScrollOffset) = when (listMode) {
+                        ListMode.GRID, ListMode.COMPACT_GRID ->
+                            retainedPagingState.gridState.firstVisibleItemIndex to
+                                retainedPagingState.gridState.firstVisibleItemScrollOffset
+                        ListMode.LIST ->
+                            retainedPagingState.listState.firstVisibleItemIndex to
+                                retainedPagingState.listState.firstVisibleItemScrollOffset
+                        ListMode.DETAILED_LIST ->
+                            retainedPagingState.detailedListState.firstVisibleItemIndex to
+                                retainedPagingState.detailedListState.firstVisibleItemScrollOffset
+                    }
+                    val firstVisiblePagingIndex = (firstVisibleIndex - items.size).coerceAtLeast(0)
+                    retainedPagingState.captureOnNavigate(
+                        item.id,
+                        snapshotItems,
+                        firstVisibleIndex,
+                        firstVisibleScrollOffset,
+                        listMode,
+                        firstVisiblePagingIndex,
+                    )
+                }
                 val sharedElementKey = contentListSharedElementKey(item, sharedElementInstanceKey)
                 val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
                 if (entityId != null) {

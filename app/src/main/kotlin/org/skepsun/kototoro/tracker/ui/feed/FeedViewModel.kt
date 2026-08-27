@@ -42,6 +42,8 @@ import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.toErrorState
+import org.skepsun.kototoro.list.ui.ContentListViewModel
+import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.UpdatesListQuickFilter
@@ -83,8 +85,42 @@ class FeedViewModel @Inject constructor(
     private val dataRepository: ContentDataRepository,
     private val workResolver: WorkResolver,
     spaceBrowseScope: SpaceBrowseScope,
-) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel {
+) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel,
+    RetainedPagingSnapshotHost {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
+
+    @Volatile
+    private var retainedPagingSnapshot: ContentListViewModel.RetainedPagingSnapshot? = null
+    @Volatile
+    private var retainedPagingSnapshotGeneration = 0L
+
+    override fun retainPagingSnapshot(
+        items: List<ListModel>,
+        anchorItemId: Long,
+        listMode: ListMode,
+        firstVisibleItemIndex: Int,
+        firstVisibleItemScrollOffset: Int,
+    ) {
+        if (items.isNotEmpty()) {
+            retainedPagingSnapshotGeneration += 1L
+            retainedPagingSnapshot = ContentListViewModel.RetainedPagingSnapshot(
+                generation = retainedPagingSnapshotGeneration,
+                items = items,
+                anchorItemId = anchorItemId,
+                listMode = listMode,
+                firstVisibleItemIndex = firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+            )
+        }
+    }
+
+    override fun peekRetainedPagingSnapshot(): ContentListViewModel.RetainedPagingSnapshot? = retainedPagingSnapshot
+
+    override fun clearRetainedPagingSnapshot(generation: Long) {
+        if (retainedPagingSnapshot?.generation == generation) {
+            retainedPagingSnapshot = null
+        }
+    }
 
     private data class HeaderParams(
         val hasHeader: Boolean,

@@ -110,5 +110,6 @@ fun KototoroFavoritesListScreen(
         showQuickFilterInline = true,
         quickFilterOverride = quickFilter,
         enableItemAnimations = false,
+        retainPagingSnapshotOnDetailsNavigation = true,
     )
 }
