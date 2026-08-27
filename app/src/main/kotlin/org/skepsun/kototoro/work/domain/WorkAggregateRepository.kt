@@ -2,7 +2,22 @@ package org.skepsun.kototoro.work.domain
 
 import androidx.paging.PagingSource
 import dagger.Reusable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_FAVOURITE_CATEGORIES
+import org.skepsun.kototoro.core.db.TABLE_MANGA
+import org.skepsun.kototoro.core.db.TABLE_MANGA_TAGS
+import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_TAGS
+import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
+import org.skepsun.kototoro.core.db.TABLE_WORK_STATS
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.model.FavouriteCategory
@@ -11,6 +26,7 @@ import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
+import org.skepsun.kototoro.favourites.data.FavouriteLibraryPagingRow
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
@@ -41,6 +57,7 @@ class WorkAggregateRepository @Inject constructor(
         filterOptions: Set<ListFilterOption>,
         spaceId: SpaceId?,
         groupTab: BrowseGroupTab,
+        includeTags: Boolean,
     ): PagingSource<Int, WorkAggregate> {
         val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
         val contentTypes = groupTab.allowedContentTypes()?.map(ContentType::name).orEmpty()
@@ -83,10 +100,78 @@ class WorkAggregateRepository @Inject constructor(
         )
         return BatchMappingPagingSource(delegate, diagnosticLabel = "favourites-aggregate") { entries ->
             filterFavouriteAggregates(
-                aggregates = buildFavouriteAggregates(entries, spaceId),
+                aggregates = buildFavouritePagingAggregates(entries, spaceId, includeTags),
                 filterOptions = filterOptions,
             )
         }
+    }
+
+    fun observeFavouriteAggregates(
+        categoryId: Long = FavouriteCategory.NO_ID,
+        order: ListSortOrder = ListSortOrder.UPDATED,
+        filterOptions: Set<ListFilterOption> = emptySet(),
+        spaceId: SpaceId? = null,
+        groupTab: BrowseGroupTab = BrowseGroupTab.All,
+    ): Flow<List<WorkAggregate>> {
+        return db.invalidationTracker.createFlow(
+            TABLE_WORK_FAVOURITES,
+            TABLE_FAVOURITE_CATEGORIES,
+            TABLE_ENTITY_GRAPH_BINDING,
+            TABLE_ENTITY_PREFERENCES,
+            TABLE_MANGA,
+            TABLE_TAGS,
+            TABLE_MANGA_TAGS,
+            TABLE_WORK_HISTORY,
+            TABLE_WORK_STATS,
+            TABLE_PREFERENCES,
+            "tracks",
+            "local_index",
+            emitInitialState = true,
+        ).mapLatest {
+            findFavouriteAggregates(
+                categoryId = categoryId,
+                order = order,
+                filterOptions = filterOptions,
+                spaceId = spaceId,
+                groupTab = groupTab,
+            )
+        }.distinctUntilChanged()
+    }
+
+    fun observeFavouriteLibraryAggregates(
+        categoryId: Long = FavouriteCategory.NO_ID,
+        order: ListSortOrder = ListSortOrder.UPDATED,
+        filterOptions: Set<ListFilterOption> = emptySet(),
+        spaceId: SpaceId? = null,
+        groupTab: BrowseGroupTab = BrowseGroupTab.All,
+        includeTags: Boolean = true,
+    ): Flow<List<WorkAggregate>> {
+        return db.invalidationTracker.createFlow(
+            TABLE_WORK_FAVOURITES,
+            TABLE_FAVOURITE_CATEGORIES,
+            TABLE_ENTITY_GRAPH_BINDING,
+            TABLE_ENTITY_PREFERENCES,
+            TABLE_MANGA,
+            TABLE_TAGS,
+            TABLE_MANGA_TAGS,
+            TABLE_WORK_HISTORY,
+            TABLE_PREFERENCES,
+            "tracks",
+            "local_index",
+            emitInitialState = true,
+        ).mapLatest {
+            if (canUseFavouriteLibraryProjection(filterOptions, spaceId, groupTab)) {
+                findFavouriteLibraryAggregates(categoryId, order, filterOptions, includeTags)
+            } else {
+                findFavouriteAggregates(
+                    categoryId = categoryId,
+                    order = order,
+                    filterOptions = filterOptions,
+                    spaceId = spaceId,
+                    groupTab = groupTab,
+                )
+            }
+        }.distinctUntilChanged()
     }
 
     fun createHistoryPagingSource(
@@ -367,17 +452,105 @@ class WorkAggregateRepository @Inject constructor(
         }
     }
 
+    private fun canUseFavouriteLibraryProjection(
+        filterOptions: Set<ListFilterOption>,
+        spaceId: SpaceId?,
+        groupTab: BrowseGroupTab,
+    ): Boolean {
+        return spaceId == null &&
+            groupTab == BrowseGroupTab.All &&
+            filterOptions.all { it == ListFilterOption.SFW }
+    }
+
+    private suspend fun findFavouriteLibraryAggregates(
+        categoryId: Long,
+        order: ListSortOrder,
+        filterOptions: Set<ListFilterOption>,
+        includeTags: Boolean,
+    ): List<WorkAggregate> = coroutineScope {
+        val representatives = db.getWorkFavouritesDao().findLibraryRepresentatives(categoryId)
+        if (representatives.isEmpty()) {
+            return@coroutineScope emptyList()
+        }
+        val entries = representatives.map { representative -> representative.favourite }
+        val entityIds = entries.map(WorkFavouriteEntity::entityId).distinct()
+        val bindingsDeferred = async {
+            entityIds.chunked(LIBRARY_QUERY_CHUNK_SIZE)
+                .flatMap { chunk -> db.getEntityGraphDao().findActiveLocalBindingsByEntities(chunk) }
+                .groupBy { binding -> binding.entityId }
+        }
+        val categoriesDeferred = async { findCategoriesByEntityId(entityIds) }
+        val historyDeferred = async { findHistoryByEntityId(entityIds) }
+        val trackingDeferred = async { findTrackingByEntityId(entityIds) }
+
+        val preferredMangaIdsByEntityId = representatives.associate { representative ->
+            representative.favourite.entityId to representative.preferredLocalMangaId
+        }
+        val projectionIds = buildSet {
+            entries.mapNotNullTo(this, WorkFavouriteEntity::anchorMangaId)
+            preferredMangaIdsByEntityId.values.mapNotNullTo(this) { preferredMangaId -> preferredMangaId }
+        }
+        val contentsById = if (includeTags) {
+            db.getMangaDao().findWithTagsByIds(projectionIds)
+                .associate { row -> row.manga.id to row.toContent() }
+        } else {
+            db.getMangaDao().findEntitiesByIds(projectionIds)
+                .associate { manga -> manga.id to manga.toContent(emptySet(), null) }
+        }
+        val bindingsByEntityId = bindingsDeferred.await()
+        val categoriesByEntityId = categoriesDeferred.await()
+        val historyByEntityId = historyDeferred.await()
+        val trackingByEntityId = trackingDeferred.await()
+
+        val aggregates = entries.mapNotNull { entry ->
+            val storedPreferredMangaId = preferredMangaIdsByEntityId[entry.entityId]
+            val displayProjection = storedPreferredMangaId?.let(contentsById::get)
+                ?: entry.anchorMangaId?.let(contentsById::get)
+                ?: return@mapNotNull null
+            val preferredMangaId = storedPreferredMangaId?.takeIf(contentsById::containsKey)
+                ?: displayProjection.id
+            val localMangaIds = buildSet {
+                add(preferredMangaId)
+                entry.anchorMangaId?.let(::add)
+                bindingsByEntityId[entry.entityId].orEmpty().mapNotNullTo(this) { binding ->
+                    binding.externalId.toLongOrNull()
+                }
+            }
+            val identity = WorkIdentity(
+                entityId = entry.entityId,
+                requestedMangaId = displayProjection.id,
+                preferredMangaId = preferredMangaId,
+                localMangaIds = localMangaIds,
+                migrationState = WorkMigrationState.VALID,
+            )
+            WorkAggregate(
+                identity = identity,
+                displayProjection = displayProjection,
+                projections = listOf(displayProjection),
+                categories = categoriesByEntityId[entry.entityId].orEmpty(),
+                favourite = entry,
+                history = historyByEntityId[entry.entityId],
+                tracking = trackingByEntityId[entry.entityId],
+                contentType = displayProjection.source.contentType,
+            )
+        }
+        filterFavouriteAggregates(aggregates, filterOptions)
+            .sortedWith(favouriteAggregateComparator(order))
+            .distinctBy { aggregate -> aggregate.identity.entityId }
+    }
+
     suspend fun findFavouriteAggregates(
         categoryId: Long = FavouriteCategory.NO_ID,
         order: ListSortOrder = ListSortOrder.UPDATED,
         filterOptions: Set<ListFilterOption> = emptySet(),
         limit: Int = Int.MAX_VALUE,
         spaceId: SpaceId? = null,
+        groupTab: BrowseGroupTab = BrowseGroupTab.All,
     ): List<WorkAggregate> {
         if (limit <= 0) {
             return emptyList()
         }
-        val entries = findFavouriteEntries(categoryId, order, filterOptions, limit, spaceId)
+        val entries = findFavouriteEntries(categoryId, order, filterOptions, limit, spaceId, groupTab)
         if (entries.isEmpty()) {
             return emptyList()
         }
@@ -463,22 +636,133 @@ class WorkAggregateRepository @Inject constructor(
     private fun String?.toScrobblingStatusOrNull(): ScrobblingStatus? =
         this?.let { value -> runCatching { ScrobblingStatus.valueOf(value) }.getOrNull() }
 
+    private suspend fun buildFavouritePagingAggregates(
+        rows: List<FavouriteLibraryPagingRow>,
+        spaceId: SpaceId?,
+        includeTags: Boolean,
+    ): List<WorkAggregate> = coroutineScope {
+        if (rows.isEmpty()) {
+            return@coroutineScope emptyList()
+        }
+        val entityIds = rows.map { row -> row.favourite.entityId }.distinct()
+        val bindingsDeferred = async {
+            db.getEntityGraphDao().findActiveLocalBindingsByEntities(entityIds)
+                .groupBy { binding -> binding.entityId }
+        }
+        val categoriesDeferred = async { findCategoriesByEntityId(entityIds) }
+        val bindingsByEntityId = bindingsDeferred.await()
+        val projectionIds = buildSet {
+            rows.forEach { row ->
+                row.favourite.anchorMangaId?.let(::add)
+                row.preferredLocalMangaId?.let(::add)
+            }
+            bindingsByEntityId.values.flatten().mapNotNullTo(this) { binding ->
+                binding.externalId.toLongOrNull()
+            }
+        }
+        val embeddedMangaById = rows.mapNotNull(FavouriteLibraryPagingRow::displayManga)
+            .associateBy { manga -> manga.id }
+        val projectionsById: Map<Long, Content>
+        val contentTypesById: Map<Long, ContentType?>
+        if (includeTags) {
+            val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
+            projectionsById = projectionRows.associate { row -> row.manga.id to row.toContent() }
+            contentTypesById = projectionRows.associate { row ->
+                row.manga.id to row.manga.contentType?.let(::parseContentType)
+            }
+        } else {
+            val remainingIds = projectionIds - embeddedMangaById.keys
+            val mangaById = embeddedMangaById + db.getMangaDao().findEntitiesByIds(remainingIds)
+                .associateBy { manga -> manga.id }
+            projectionsById = mangaById.mapValues { (_, manga) -> manga.toContent(emptySet(), null) }
+            contentTypesById = mangaById.mapValues { (_, manga) -> manga.contentType?.let(::parseContentType) }
+        }
+        val categoriesByEntityId = categoriesDeferred.await()
+        val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
+
+        rows.mapNotNull { row ->
+            val entry = row.favourite
+            val localMangaIds = buildSet {
+                entry.anchorMangaId?.let(::add)
+                bindingsByEntityId[entry.entityId].orEmpty().mapNotNullTo(this) { binding ->
+                    binding.externalId.toLongOrNull()
+                }
+            }
+            val preferredMangaId = row.preferredLocalMangaId?.takeIf { it in localMangaIds }
+                ?: localMangaIds.firstOrNull()
+            val identity = WorkIdentity(
+                entityId = entry.entityId,
+                requestedMangaId = row.displayManga?.id ?: entry.anchorMangaId,
+                preferredMangaId = preferredMangaId,
+                localMangaIds = localMangaIds,
+                migrationState = WorkMigrationState.VALID,
+            )
+            val displayProjection = resolveDisplayProjection(
+                identity = identity,
+                anchorId = entry.anchorMangaId,
+                cachedProjectionsById = projectionsById,
+                persistedContentTypesById = contentTypesById,
+                allowedContentTypes = allowedTypes,
+            ) ?: return@mapNotNull null
+            val projections = buildList {
+                preferredMangaId?.let(::add)
+                entry.anchorMangaId?.let(::add)
+                addAll(localMangaIds)
+            }.distinct()
+                .filter { id -> allowedTypes == null || contentTypesById[id] in allowedTypes }
+                .mapNotNull(projectionsById::get)
+                .distinctBy { content ->
+                    ProjectionIdentityKeys.contentCompactKey(
+                        source = content.source.name,
+                        id = content.id,
+                        url = content.url,
+                        publicUrl = content.publicUrl,
+                    )
+                }
+            WorkAggregate(
+                identity = identity,
+                displayProjection = displayProjection,
+                projections = projections,
+                categories = categoriesByEntityId[entry.entityId].orEmpty(),
+                favourite = entry,
+                history = row.history,
+                tracking = row.toTrackingSummary(),
+                contentType = contentTypesById[displayProjection.id],
+            )
+        }
+    }
+
+    private fun FavouriteLibraryPagingRow.toTrackingSummary(): WorkTrackingSummary? {
+        return WorkTrackingSummary(
+            anchorMangaId = trackingAnchorMangaId ?: return null,
+            lastChapterId = trackingLastChapterId ?: return null,
+            newChapters = trackingNewChapters ?: 0,
+            lastCheckTime = trackingLastCheckTime ?: 0L,
+            lastChapterDate = trackingLastChapterDate ?: 0L,
+        )
+    }
+
     private suspend fun buildFavouriteAggregates(
         entries: List<WorkFavouriteEntity>,
         spaceId: SpaceId?,
-    ): List<WorkAggregate> {
-        val projectionSet = resolveProjectionSet(
-            entityIds = entries.map(WorkFavouriteEntity::entityId),
-            anchorIds = entries.mapNotNull(WorkFavouriteEntity::anchorMangaId),
-        )
+    ): List<WorkAggregate> = coroutineScope {
         val entityIds = entries.map(WorkFavouriteEntity::entityId)
-        val categoriesByEntityId = findCategoriesByEntityId(entityIds)
-        val historyByEntityId = findHistoryByEntityId(entityIds)
-        val statsByEntityId = findStatsByEntityId(entityIds)
-        val trackingByEntityId = findTrackingByEntityId(entityIds)
+        val projectionSetDeferred = async {
+            resolveProjectionSet(
+                entityIds = entityIds,
+                anchorIds = entries.mapNotNull(WorkFavouriteEntity::anchorMangaId),
+            )
+        }
+        val categoriesDeferred = async { findCategoriesByEntityId(entityIds) }
+        val historyDeferred = async { findHistoryByEntityId(entityIds) }
+        val trackingDeferred = async { findTrackingByEntityId(entityIds) }
+        val projectionSet = projectionSetDeferred.await()
+        val categoriesByEntityId = categoriesDeferred.await()
+        val historyByEntityId = historyDeferred.await()
+        val trackingByEntityId = trackingDeferred.await()
         val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
 
-        return entries.mapNotNull { entry: WorkFavouriteEntity ->
+        entries.mapNotNull { entry: WorkFavouriteEntity ->
             val identity = projectionSet.identitiesByEntityId[entry.entityId] ?: return@mapNotNull null
             val displayProjection = resolveDisplayProjection(
                 identity = identity,
@@ -489,14 +773,13 @@ class WorkAggregateRepository @Inject constructor(
                 allowedContentTypes = allowedTypes,
             )
                 ?: return@mapNotNull null
-                WorkAggregate(
+            WorkAggregate(
                 identity = identity,
                 displayProjection = displayProjection,
                 projections = projectionSet.projectionsFor(identity, entry.anchorMangaId, allowedTypes),
-                    categories = categoriesByEntityId[entry.entityId].orEmpty(),
+                categories = categoriesByEntityId[entry.entityId].orEmpty(),
                 favourite = entry,
                 history = historyByEntityId[entry.entityId],
-                stats = statsByEntityId[entry.entityId],
                 tracking = trackingByEntityId[entry.entityId],
             )
         }
@@ -590,10 +873,18 @@ class WorkAggregateRepository @Inject constructor(
         filterOptions: Set<ListFilterOption>,
         limit: Int,
         spaceId: SpaceId?,
+        groupTab: BrowseGroupTab,
     ): List<WorkFavouriteEntity> {
-        if (spaceId != null) {
+        if (
+            limit == Int.MAX_VALUE &&
+            spaceId == null &&
+            filterOptions.all { it == ListFilterOption.SFW } &&
+            groupTab == BrowseGroupTab.All
+        ) {
+            return db.getWorkFavouritesDao().findListRepresentatives(categoryId)
+        }
+        if (limit != Int.MAX_VALUE && filterOptions.isEmpty() && groupTab == BrowseGroupTab.All && spaceId != null) {
             val queryLimit = when {
-                filterOptions.isNotEmpty() -> Int.MAX_VALUE
                 categoryId == FavouriteCategory.NO_ID ->
                     (limit * UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER).coerceAtLeast(limit)
                 else -> limit
@@ -618,7 +909,9 @@ class WorkAggregateRepository @Inject constructor(
                 )
             }
         }
-        val canLimitByWorkState = filterOptions.isEmpty() && limit != Int.MAX_VALUE
+        val canLimitByWorkState = filterOptions.isEmpty() &&
+            groupTab == BrowseGroupTab.All &&
+            limit != Int.MAX_VALUE
         if (canLimitByWorkState) {
             val queryLimit = if (categoryId == FavouriteCategory.NO_ID) {
                 (limit * UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER).coerceAtLeast(limit)
@@ -639,7 +932,45 @@ class WorkAggregateRepository @Inject constructor(
                 else -> findAllFavouriteEntries(categoryId)
             }
         }
-        return findAllFavouriteEntries(categoryId)
+        val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
+        val contentTypes = groupTab.allowedContentTypes()?.map(ContentType::name).orEmpty()
+        val publicationStates = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.PublicationState>()
+            .map { it.state.name }
+            .toSet()
+        val exactSources = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.Source>()
+            .map { it.mangaSource.name }
+            .toSet()
+        val tagIds = filterOptions.asSequence()
+            .filterIsInstance<ListFilterOption.Tag>()
+            .map(ListFilterOption.Tag::tagId)
+            .toSet()
+        val nsfwMode = when {
+            ListFilterOption.Macro.NSFW in filterOptions -> 1
+            filterOptions.any { it is ListFilterOption.Inverted && it.option == ListFilterOption.Macro.NSFW } -> 0
+            else -> -1
+        }
+        return db.getWorkFavouritesDao().findList(
+            categoryId = categoryId,
+            orderName = order.name,
+            applySpaceFilter = spaceId != null,
+            allowedTypes = spaceId?.let(::allowedTypeNames).orEmpty(),
+            classifiedTypes = classifiedTypeNames,
+            applySourceFilter = allowedSources != null,
+            allowedSources = allowedSources.orEmpty(),
+            applyContentTypeFilter = contentTypes.isNotEmpty(),
+            contentTypes = contentTypes,
+            applyPublicationStateFilter = publicationStates.isNotEmpty(),
+            publicationStates = publicationStates,
+            nsfwMode = nsfwMode,
+            requireDownloaded = ListFilterOption.Downloaded in filterOptions,
+            requireNewChapters = ListFilterOption.Macro.NEW_CHAPTERS in filterOptions,
+            applyExactSourceFilter = exactSources.isNotEmpty(),
+            exactSources = exactSources,
+            applyTagFilter = tagIds.isNotEmpty(),
+            tagIds = tagIds,
+        )
     }
 
     private suspend fun findAllFavouriteEntries(categoryId: Long): List<WorkFavouriteEntity> {
@@ -653,7 +984,7 @@ class WorkAggregateRepository @Inject constructor(
     private suspend fun resolveProjectionSet(
         entityIds: Collection<Long>,
         anchorIds: Collection<Long>,
-    ): WorkProjectionSet {
+    ): WorkProjectionSet = coroutineScope {
         val identitiesByEntityId = workResolver.resolveManyByEntityIds(entityIds)
         val projectionIds = LinkedHashSet<Long>()
         projectionIds += anchorIds
@@ -661,13 +992,17 @@ class WorkAggregateRepository @Inject constructor(
             identity.preferredMangaId?.let(projectionIds::add)
             projectionIds += identity.localMangaIds
         }
-        val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
+        val projectionRowsDeferred = async { db.getMangaDao().findWithTagsByIds(projectionIds) }
+        val contentTypesByEntityIdDeferred = async {
+            entityIds.distinct().takeIf { it.isNotEmpty() }
+                ?.let { ids -> db.getEntityGraphDao().findEntitiesByIds(ids) }
+                .orEmpty()
+                .associate { entity -> entity.id to entity.contentType?.let(::parseContentType) }
+        }
+        val projectionRows = projectionRowsDeferred.await()
+        val contentTypesByEntityId = contentTypesByEntityIdDeferred.await()
         val projectionsById = projectionRows.associate { it.manga.id to it.toContent() }
-        val contentTypesByEntityId = entityIds.distinct().takeIf { it.isNotEmpty() }
-            ?.let { ids -> db.getEntityGraphDao().findEntitiesByIds(ids) }
-            .orEmpty()
-            .associate { entity -> entity.id to entity.contentType?.let(::parseContentType) }
-        return WorkProjectionSet(
+        WorkProjectionSet(
             identitiesByEntityId = identitiesByEntityId,
             projectionsById = projectionsById,
             contentTypesById = projectionRows.associate { row ->
@@ -824,6 +1159,7 @@ class WorkAggregateRepository @Inject constructor(
             .flatMapTo(LinkedHashSet()) { context -> context.allowedContentTypes.map { it.name } }
 
     private companion object {
+        private const val LIBRARY_QUERY_CHUNK_SIZE = 500
         private const val UNCATEGORIZED_FAVOURITE_LIMIT_MULTIPLIER = 4
     }
 }

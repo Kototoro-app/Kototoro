@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.core.db.entity.TagEntity
 
+private const val FULL_LIST_PAGE_SIZE = 500
+
 @Dao
 abstract class WorkFavouritesDao {
 
@@ -48,13 +50,53 @@ abstract class WorkFavouritesDao {
 					LIMIT 1
 				)
 		)
-		SELECT selected.*
+		SELECT
+			selected.*,
+			ep.preferred_local_manga_id AS preferred_local_manga_id,
+			m.manga_id AS display_manga_id,
+			m.title AS display_title,
+			m.alt_title AS display_alt_title,
+			m.url AS display_url,
+			m.public_url AS display_public_url,
+			m.rating AS display_rating,
+			m.nsfw AS display_nsfw,
+			m.content_rating AS display_content_rating,
+			m.cover_url AS display_cover_url,
+			m.large_cover_url AS display_large_cover_url,
+			m.state AS display_state,
+			m.author AS display_author,
+			m.source AS display_source,
+			m.description AS display_description,
+			m.content_type AS display_content_type,
+			m.source_data AS display_source_data,
+			wh.entity_id AS history_entity_id,
+			wh.anchor_manga_id AS history_anchor_manga_id,
+			wh.created_at AS history_created_at,
+			wh.updated_at AS history_updated_at,
+			wh.chapter_id AS history_chapter_id,
+			wh.page AS history_page,
+			wh.scroll AS history_scroll,
+			wh.percent AS history_percent,
+			wh.deleted_at AS history_deleted_at,
+			wh.chapters AS history_chapters,
+			wh.parent_chapter_id AS history_parent_chapter_id,
+			tracking.anchor_manga_id AS tracking_anchor_manga_id,
+			tracking.last_chapter_id AS tracking_last_chapter_id,
+			tracking.new_chapters AS tracking_new_chapters,
+			tracking.last_check_time AS tracking_last_check_time,
+			tracking.last_chapter_date AS tracking_last_chapter_date
 		FROM selected
 		LEFT JOIN entity_preferences ep ON ep.entity_id = selected.entity_id
 		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, selected.anchor_manga_id)
 		LEFT JOIN work_history wh ON wh.entity_id = selected.entity_id AND wh.deleted_at = 0
 		LEFT JOIN (
-			SELECT entity_id, SUM(chapters_new) AS new_chapters, MAX(last_chapter_date) AS last_chapter_date
+			SELECT
+				entity_id,
+				MAX(manga_id) AS anchor_manga_id,
+				MAX(last_chapter_id) AS last_chapter_id,
+				SUM(chapters_new) AS new_chapters,
+				MAX(last_check_time) AS last_check_time,
+				MAX(last_chapter_date) AS last_chapter_date
 			FROM tracks
 			WHERE entity_id IS NOT NULL
 			GROUP BY entity_id
@@ -145,7 +187,126 @@ abstract class WorkFavouritesDao {
         exactSources: Collection<String>,
         applyTagFilter: Boolean,
         tagIds: Collection<Long>,
-    ): PagingSource<Int, WorkFavouriteEntity>
+    ): PagingSource<Int, FavouriteLibraryPagingRow>
+
+    suspend fun findList(
+        categoryId: Long,
+        orderName: String,
+        applySpaceFilter: Boolean,
+        allowedTypes: Collection<String>,
+        classifiedTypes: Collection<String>,
+        applySourceFilter: Boolean,
+        allowedSources: Collection<String>,
+        applyContentTypeFilter: Boolean,
+        contentTypes: Collection<String>,
+        applyPublicationStateFilter: Boolean,
+        publicationStates: Collection<String>,
+        nsfwMode: Int,
+        requireDownloaded: Boolean,
+        requireNewChapters: Boolean,
+        applyExactSourceFilter: Boolean,
+        exactSources: Collection<String>,
+        applyTagFilter: Boolean,
+        tagIds: Collection<Long>,
+    ): List<WorkFavouriteEntity> {
+        val source = pagingSource(
+            categoryId = categoryId,
+            orderName = orderName,
+            applySpaceFilter = applySpaceFilter,
+            allowedTypes = allowedTypes,
+            classifiedTypes = classifiedTypes,
+            applySourceFilter = applySourceFilter,
+            allowedSources = allowedSources,
+            applyContentTypeFilter = applyContentTypeFilter,
+            contentTypes = contentTypes,
+            applyPublicationStateFilter = applyPublicationStateFilter,
+            publicationStates = publicationStates,
+            nsfwMode = nsfwMode,
+            requireDownloaded = requireDownloaded,
+            requireNewChapters = requireNewChapters,
+            applyExactSourceFilter = applyExactSourceFilter,
+            exactSources = exactSources,
+            applyTagFilter = applyTagFilter,
+            tagIds = tagIds,
+        )
+        val result = ArrayList<WorkFavouriteEntity>()
+        var nextKey: Int? = null
+        var isRefresh = true
+        do {
+            val params = if (isRefresh) {
+                PagingSource.LoadParams.Refresh(nextKey, FULL_LIST_PAGE_SIZE, false)
+            } else {
+                PagingSource.LoadParams.Append(requireNotNull(nextKey), FULL_LIST_PAGE_SIZE, false)
+            }
+            when (val loaded = source.load(params)) {
+                is PagingSource.LoadResult.Page -> {
+                    result += loaded.data.map(FavouriteLibraryPagingRow::favourite)
+                    nextKey = loaded.nextKey
+                }
+                is PagingSource.LoadResult.Error -> throw loaded.throwable
+                is PagingSource.LoadResult.Invalid -> error("Favourite query invalidated while collecting the full list")
+            }
+            isRefresh = false
+        } while (nextKey != null)
+        return result
+    }
+
+    @Query(
+        """
+		SELECT wf.*
+		FROM work_favourites wf
+		WHERE wf.anchor_manga_id IS NOT NULL
+			AND wf.deleted_at = 0
+			AND (:categoryId = -1 OR wf.category_id = :categoryId)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM work_favourites candidate
+				WHERE candidate.entity_id = wf.entity_id
+					AND candidate.anchor_manga_id IS NOT NULL
+					AND candidate.deleted_at = 0
+					AND (:categoryId = -1 OR candidate.category_id = :categoryId)
+					AND (
+						candidate.pinned > wf.pinned
+						OR (candidate.pinned = wf.pinned AND candidate.created_at > wf.created_at)
+						OR (candidate.pinned = wf.pinned AND candidate.created_at = wf.created_at
+							AND candidate.updated_at > wf.updated_at)
+						OR (candidate.pinned = wf.pinned AND candidate.created_at = wf.created_at
+							AND candidate.updated_at = wf.updated_at AND candidate.category_id < wf.category_id)
+					)
+			)
+		ORDER BY wf.pinned DESC, wf.updated_at DESC, wf.entity_id ASC
+        """,
+    )
+    abstract suspend fun findListRepresentatives(categoryId: Long): List<WorkFavouriteEntity>
+
+    @Query(
+        """
+		SELECT wf.*, ep.preferred_local_manga_id
+		FROM work_favourites wf
+		LEFT JOIN entity_preferences ep ON ep.entity_id = wf.entity_id
+		WHERE wf.anchor_manga_id IS NOT NULL
+			AND wf.deleted_at = 0
+			AND (:categoryId = -1 OR wf.category_id = :categoryId)
+			AND NOT EXISTS (
+				SELECT 1
+				FROM work_favourites candidate
+				WHERE candidate.entity_id = wf.entity_id
+					AND candidate.anchor_manga_id IS NOT NULL
+					AND candidate.deleted_at = 0
+					AND (:categoryId = -1 OR candidate.category_id = :categoryId)
+					AND (
+						candidate.pinned > wf.pinned
+						OR (candidate.pinned = wf.pinned AND candidate.created_at > wf.created_at)
+						OR (candidate.pinned = wf.pinned AND candidate.created_at = wf.created_at
+							AND candidate.updated_at > wf.updated_at)
+						OR (candidate.pinned = wf.pinned AND candidate.created_at = wf.created_at
+							AND candidate.updated_at = wf.updated_at AND candidate.category_id < wf.category_id)
+					)
+			)
+		ORDER BY wf.pinned DESC, wf.updated_at DESC, wf.entity_id ASC
+        """,
+    )
+    abstract suspend fun findLibraryRepresentatives(categoryId: Long): List<FavouriteLibraryRepresentative>
 
     @Query(
         """

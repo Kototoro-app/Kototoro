@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.work.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
@@ -52,14 +53,20 @@ class DefaultWorkResolver @Inject constructor(
             if (workEntityIds.isEmpty()) {
                 return@withContext emptyMap()
             }
-            val bindingsByEntityId = workEntityIds
-                .chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
-                .flatMap { chunk -> dao.findActiveLocalBindingsByEntities(chunk) }
-                .groupBy { it.entityId }
-            val prefsByEntityId = workEntityIds
-                .chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
-                .flatMap { chunk -> dao.findEntityPrefsByIds(chunk) }
-                .associateBy { it.entityId }
+            val bindingsDeferred = async {
+                workEntityIds
+                    .chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
+                    .flatMap { chunk -> dao.findActiveLocalBindingsByEntities(chunk) }
+                    .groupBy { it.entityId }
+            }
+            val prefsDeferred = async {
+                workEntityIds
+                    .chunked(MAX_WORK_RESOLVER_QUERY_PARAMS)
+                    .flatMap { chunk -> dao.findEntityPrefsByIds(chunk) }
+                    .associateBy { it.entityId }
+            }
+            val bindingsByEntityId = bindingsDeferred.await()
+            val prefsByEntityId = prefsDeferred.await()
             workEntityIds.associateWithTo(LinkedHashMap()) { entityId ->
                 buildIdentity(
                     entityId = entityId,

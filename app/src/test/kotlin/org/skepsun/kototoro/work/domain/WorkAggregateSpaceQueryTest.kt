@@ -8,9 +8,11 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.favourites.data.WorkFavouritesDao
 import org.skepsun.kototoro.history.data.WorkHistoryDao
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.DefaultSpaceContentPolicy
@@ -35,6 +37,104 @@ class WorkAggregateSpaceQueryTest {
 		),
 		contentSourcesRepository = mockk<ContentSourcesRepository>(),
 	)
+
+	@Test
+	fun `unfiltered full favourite list uses representative fast path`() = runTest {
+		coEvery { favouritesDao.findListRepresentatives(-1L) } returns emptyList()
+
+		assertEquals(emptyList<WorkAggregate>(), repository.findFavouriteAggregates())
+
+		coVerify(exactly = 1) { favouritesDao.findListRepresentatives(-1L) }
+		coVerify(exactly = 0) {
+			favouritesDao.findList(
+				categoryId = any(),
+				orderName = any(),
+				applySpaceFilter = any(),
+				allowedTypes = any(),
+				classifiedTypes = any(),
+				applySourceFilter = any(),
+				allowedSources = any(),
+				applyContentTypeFilter = any(),
+				contentTypes = any(),
+				applyPublicationStateFilter = any(),
+				publicationStates = any(),
+				nsfwMode = any(),
+				requireDownloaded = any(),
+				requireNewChapters = any(),
+				applyExactSourceFilter = any(),
+				exactSources = any(),
+				applyTagFilter = any(),
+				tagIds = any(),
+			)
+		}
+	}
+
+	@Test
+	fun `default sfw setting keeps representative fast path`() = runTest {
+		coEvery { favouritesDao.findListRepresentatives(-1L) } returns emptyList()
+
+		assertEquals(
+			emptyList<WorkAggregate>(),
+			repository.findFavouriteAggregates(filterOptions = setOf(ListFilterOption.SFW)),
+		)
+
+		coVerify(exactly = 1) { favouritesDao.findListRepresentatives(-1L) }
+	}
+
+	@Test
+	fun `full favourite list pushes content type scope into dao`() = runTest {
+		coEvery {
+			favouritesDao.findList(
+				categoryId = any(),
+				orderName = any(),
+				applySpaceFilter = any(),
+				allowedTypes = any(),
+				classifiedTypes = any(),
+				applySourceFilter = any(),
+				allowedSources = any(),
+				applyContentTypeFilter = any(),
+				contentTypes = any(),
+				applyPublicationStateFilter = any(),
+				publicationStates = any(),
+				nsfwMode = any(),
+				requireDownloaded = any(),
+				requireNewChapters = any(),
+				applyExactSourceFilter = any(),
+				exactSources = any(),
+				applyTagFilter = any(),
+				tagIds = any(),
+			)
+		} returns emptyList()
+
+		assertEquals(
+			emptyList<WorkAggregate>(),
+			repository.findFavouriteAggregates(groupTab = BrowseGroupTab.Content),
+		)
+		coVerify {
+			favouritesDao.findList(
+				categoryId = -1L,
+				orderName = ListSortOrder.UPDATED.name,
+				applySpaceFilter = false,
+				allowedTypes = emptySet(),
+				classifiedTypes = any(),
+				applySourceFilter = false,
+				allowedSources = emptySet(),
+				applyContentTypeFilter = true,
+				contentTypes = match { types ->
+					ContentType.MANGA.name in types && ContentType.NOVEL.name !in types
+				},
+				applyPublicationStateFilter = false,
+				publicationStates = emptySet(),
+				nsfwMode = -1,
+				requireDownloaded = false,
+				requireNewChapters = false,
+				applyExactSourceFilter = false,
+				exactSources = emptySet(),
+				applyTagFilter = false,
+				tagIds = emptySet(),
+			)
+		}
+	}
 
 	@Test
 	fun `favourite query sends manga scope to dao before limiting`() = runTest {

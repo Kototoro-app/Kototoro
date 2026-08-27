@@ -15,7 +15,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
+import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 
 @RunWith(AndroidJUnit4::class)
 class WorkPagingDaoTest {
@@ -40,9 +40,9 @@ class WorkPagingDaoTest {
 	fun updatedContentPagesHaveStableUniqueEntityOrder() = runTest {
 		seedTracks()
 		val source = db.getTracksDao().pagingUpdatedContent(emptySet())
-		val first = source.load(refreshParams()) as PagingSource.LoadResult.Page
+		val first = source.load(refreshParams()).requirePage()
 		val second = source.load(appendParams(requireNotNull(first.nextKey)))
-			as PagingSource.LoadResult.Page
+			.requirePage()
 		assertEquals(64, first.data.size)
 		assertEquals(64, second.data.size)
 		val entities = (first.data + second.data).map { requireNotNull(it.entityId) }
@@ -54,12 +54,10 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
-	fun favouritesAndHistoryPageByUniqueEntity() = runTest {
-		val favourites = favouritePagingSource()
-		val favouriteFirst = favourites.load(refreshParams()) as PagingSource.LoadResult.Page
-		val favouriteSecond = favourites.load(appendParams(requireNotNull(favouriteFirst.nextKey)))
-			as PagingSource.LoadResult.Page
-		assertUniqueEntities(favouriteFirst.data.map { it.entityId }, favouriteSecond.data.map { it.entityId })
+	fun favouritesListAndHistoryPageByUniqueEntity() = runTest {
+		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
+		assertEquals(6_500, favourites.size)
+		assertEquals(6_500, favourites.map { it.entityId }.distinct().size)
 
 		val history = db.getWorkHistoryDao().pagingSource(
 			orderName = "LAST_READ",
@@ -71,41 +69,119 @@ class WorkPagingDaoTest {
 			applyTabFilter = false,
 			tabAllowedTypes = emptyList(),
 		)
-		val historyFirst = history.load(refreshParams()) as PagingSource.LoadResult.Page
+		val historyFirst = history.load(refreshParams()).requirePage()
 		val historySecond = history.load(appendParams(requireNotNull(historyFirst.nextKey)))
-			as PagingSource.LoadResult.Page
+			.requirePage()
 		assertUniqueEntities(historyFirst.data.map { it.entityId }, historySecond.data.map { it.entityId })
 	}
 
 	@Test
-	fun favouriteFirstScreenBenchmarkFitsBudget() = runTest {
-		// 6500 favourites + 3200 history are seeded in @Before. This measures the
-		// exact first-screen window the FavouriteLibraryPagingConfig prefetch
-		// distance (128) fills: initial 64 plus the two 64-row appends.
-		val favourites = favouritePagingSource()
-		val t0 = SystemClock.elapsedRealtime()
-		val first = favourites.load(refreshParams()) as PagingSource.LoadResult.Page
-		val t1 = SystemClock.elapsedRealtime()
-		val second = favourites.load(appendParams(requireNotNull(first.nextKey)))
-			as PagingSource.LoadResult.Page
-		val t2 = SystemClock.elapsedRealtime()
-		val third = favourites.load(appendParams(requireNotNull(second.nextKey)))
-			as PagingSource.LoadResult.Page
-		val t3 = SystemClock.elapsedRealtime()
-
-		Log.d("LibraryPaging", "favourites-bench Refresh rawItems=" + first.data.size + " firstPageMs=" + (t1 - t0))
-		Log.d(
-			"LibraryPaging",
-			"favourites-bench Append(64) ms=" + (t2 - t1) + " Append(128) ms=" + (t3 - t2) +
-				" total192Ms=" + (t3 - t0),
-		)
+	fun favouriteColdStartLoadsOnlyTheInitialWindow() = runTest {
+		val first = db.getWorkFavouritesDao().pagingSource(
+			categoryId = -1L,
+			orderName = "UPDATED",
+			applySpaceFilter = false,
+			allowedTypes = emptyList(),
+			classifiedTypes = emptyList(),
+			applySourceFilter = false,
+			allowedSources = emptyList(),
+			applyContentTypeFilter = false,
+			contentTypes = emptyList(),
+			applyPublicationStateFilter = false,
+			publicationStates = emptyList(),
+			nsfwMode = -1,
+			requireDownloaded = false,
+			requireNewChapters = false,
+			applyExactSourceFilter = false,
+			exactSources = emptyList(),
+			applyTagFilter = false,
+			tagIds = emptyList(),
+		).load(refreshParams()).requirePage()
 
 		assertEquals(64, first.data.size)
-		assertEquals(64, second.data.size)
-		assertEquals(64, third.data.size)
-		assertEquals(192, (first.data + second.data + third.data).map { it.entityId }.distinct().size)
-		// Loose budget: catches pathological regressions, not microsecond noise.
-		assertTrue("first favourite page took " + (t1 - t0) + "ms", t1 - t0 < 5_000)
+		assertEquals(64, first.data.map { it.favourite.entityId }.distinct().size)
+	}
+
+	@Test
+	fun favouritePageCarriesDisplayHistoryAndTrackingSummary() = runTest {
+		seedTracks()
+		val source = db.getWorkFavouritesDao().pagingSource(
+			categoryId = -1L,
+			orderName = "UPDATED",
+			applySpaceFilter = false,
+			allowedTypes = emptyList(),
+			classifiedTypes = emptyList(),
+			applySourceFilter = false,
+			allowedSources = emptyList(),
+			applyContentTypeFilter = false,
+			contentTypes = emptyList(),
+			applyPublicationStateFilter = false,
+			publicationStates = emptyList(),
+			nsfwMode = -1,
+			requireDownloaded = false,
+			requireNewChapters = false,
+			applyExactSourceFilter = false,
+			exactSources = emptyList(),
+			applyTagFilter = false,
+			tagIds = emptyList(),
+		)
+		// The UPDATED-desc window starts at the newest entities (id 6437..6500), while
+		// history is only seeded for entityId <= 3200. Walk pages until a history-backed
+		// row is found instead of assuming it lands in the first window.
+		var page = source.load(refreshParams()).requirePage()
+		var nextKey = page.nextKey
+		var historyRow = page.data.firstOrNull { it.favourite.entityId <= 3_200L }
+		while (historyRow == null && nextKey != null) {
+			page = source.load(appendParams(nextKey)).requirePage()
+			historyRow = page.data.firstOrNull { it.favourite.entityId <= 3_200L }
+			nextKey = page.nextKey
+		}
+
+		val row = requireNotNull(historyRow) { "no history-backed row found in favourites pages" }
+		assertEquals(row.favourite.anchorMangaId, row.displayManga?.id)
+		assertEquals(row.favourite.entityId, row.history?.entityId)
+		assertTrue((row.trackingNewChapters ?: 0) > 0)
+		assertNotNull(row.trackingLastChapterDate)
+	}
+
+	@Test
+	fun favouriteRepresentativeCarriesPreferredProjectionInTheSameQuery() = runTest {
+		db.getEntityGraphDao().upsertPrefsRecord(
+			EntityPrefsRecord(
+				entityId = 1L,
+				preferredLocalMangaId = 10_002L,
+				titleOverride = null,
+				coverUrlOverride = null,
+				contentRatingOverride = null,
+				readingStatus = null,
+				metadataSourceKind = null,
+				metadataBindingSource = null,
+				metadataBindingExternalId = null,
+				metadataSourceService = null,
+				metadataSourceRemoteId = null,
+				updatedAt = 1L,
+			),
+		)
+
+		val representative = db.getWorkFavouritesDao()
+			.findLibraryRepresentatives(-1L)
+			.single { it.favourite.entityId == 1L }
+
+		assertEquals(10_001L, representative.favourite.anchorMangaId)
+		assertEquals(10_002L, representative.preferredLocalMangaId)
+	}
+
+	@Test
+	fun favouriteFullListBenchmarkFitsBudget() = runTest {
+		// The library UI consumes the complete representative list, matching the
+		// Mihon/Komikku library contract rather than incrementally loading pages.
+		val t0 = SystemClock.elapsedRealtime()
+		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
+		val elapsed = SystemClock.elapsedRealtime() - t0
+
+		Log.d("LibraryList", "favourites-bench items=" + favourites.size + " fullListMs=" + elapsed)
+		assertEquals(6_500, favourites.size)
+		assertTrue("full favourite list took " + elapsed + "ms", elapsed < 5_000)
 	}
 
 	@Test
@@ -132,21 +208,21 @@ class WorkPagingDaoTest {
 		sql.execSQL("INSERT INTO tags VALUES (?, 'Action', 'action', 'TEST', 0)", arrayOf<Any?>(tagId))
 		sql.execSQL("INSERT INTO manga_tags VALUES (?, ?)", arrayOf<Any?>(secondaryMangaId, tagId))
 
-		assertEquals(64, firstPage(favouritePagingSource(exactSources = setOf("TEST"))).data.size)
-		assertTrue(firstPage(favouritePagingSource(exactSources = setOf("MISSING"))).data.isEmpty())
+		assertEquals(6_500, favouriteList(exactSources = setOf("TEST")).size)
+		assertTrue(favouriteList(exactSources = setOf("MISSING")).isEmpty())
 		assertEquals(
 			listOf(1L),
-			firstPage(favouritePagingSource(exactSources = setOf("MISSING", "SECONDARY"))).data.map { it.entityId },
+			favouriteList(exactSources = setOf("MISSING", "SECONDARY")).map { it.entityId },
 		)
-		assertEquals(64, firstPage(favouritePagingSource(contentTypes = setOf("MANGA"))).data.size)
-		assertTrue(firstPage(favouritePagingSource(contentTypes = setOf("NOVEL"))).data.isEmpty())
+		assertEquals(6_500, favouriteList(contentTypes = setOf("MANGA")).size)
+		assertTrue(favouriteList(contentTypes = setOf("NOVEL")).isEmpty())
 		assertEquals(
 			listOf(1L),
-			firstPage(favouritePagingSource(publicationStates = setOf("ONGOING"))).data.map { it.entityId },
+			favouriteList(publicationStates = setOf("ONGOING")).map { it.entityId },
 		)
-		assertEquals(listOf(1L), firstPage(favouritePagingSource(nsfwMode = 1)).data.map { it.entityId })
-		assertEquals(listOf(1L), firstPage(favouritePagingSource(requireDownloaded = true)).data.map { it.entityId })
-		assertEquals(listOf(1L), firstPage(favouritePagingSource(tagIds = setOf(tagId))).data.map { it.entityId })
+		assertEquals(listOf(1L), favouriteList(nsfwMode = 1).map { it.entityId })
+		assertEquals(listOf(1L), favouriteList(requireDownloaded = true).map { it.entityId })
+		assertEquals(listOf(1L), favouriteList(tagIds = setOf(tagId)).map { it.entityId })
 	}
 
 	@Test
@@ -173,7 +249,7 @@ class WorkPagingDaoTest {
 			tabAllowedTypes = emptyList(),
 		)
 		val t0 = SystemClock.elapsedRealtime()
-		val first = history.load(refreshParams()) as PagingSource.LoadResult.Page
+		val first = history.load(refreshParams()).requirePage()
 		val pageMs = SystemClock.elapsedRealtime() - t0
 		Log.d("LibraryPaging", "history-bench Refresh rawItems=" + first.data.size + " firstPageMs=" + pageMs)
 		assertEquals(64, first.data.size)
@@ -209,12 +285,7 @@ class WorkPagingDaoTest {
 		placeholdersEnabled = false,
 	)
 
-	private suspend fun firstPage(
-		source: PagingSource<Int, WorkFavouriteEntity>,
-	) =
-		source.load(refreshParams()) as PagingSource.LoadResult.Page
-
-	private fun favouritePagingSource(
+	private suspend fun favouriteList(
 		contentTypes: Set<String> = emptySet(),
 		publicationStates: Set<String> = emptySet(),
 		nsfwMode: Int = -1,
@@ -222,7 +293,7 @@ class WorkPagingDaoTest {
 		requireNewChapters: Boolean = false,
 		exactSources: Set<String> = emptySet(),
 		tagIds: Set<Long> = emptySet(),
-	) = db.getWorkFavouritesDao().pagingSource(
+	) = db.getWorkFavouritesDao().findList(
 		categoryId = -1L,
 		orderName = "NEWEST",
 		applySpaceFilter = false,
@@ -242,6 +313,10 @@ class WorkPagingDaoTest {
 		applyTagFilter = tagIds.isNotEmpty(),
 		tagIds = tagIds,
 	)
+
+	@Suppress("UNCHECKED_CAST")
+	private fun <T : Any> PagingSource.LoadResult<Int, T>.requirePage(): PagingSource.LoadResult.Page<Int, T> =
+		this as PagingSource.LoadResult.Page<Int, T>
 
 	private fun assertUniqueEntities(first: List<Long>, second: List<Long>) {
 		assertEquals(64, first.size)

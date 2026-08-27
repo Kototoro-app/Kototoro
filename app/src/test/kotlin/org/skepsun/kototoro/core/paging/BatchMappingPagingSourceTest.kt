@@ -41,35 +41,12 @@ class BatchMappingPagingSourceTest {
 	}
 
 	@Test
-	fun `favourite library paging config keeps a two page prefetch window`() {
+	fun `favourite cold start loads only the first 64 items`() {
 		assertEquals(64, FavouriteLibraryPagingConfig.pageSize)
 		assertEquals(64, FavouriteLibraryPagingConfig.initialLoadSize)
-		assertEquals(128, FavouriteLibraryPagingConfig.prefetchDistance)
+		assertEquals(64, FavouriteLibraryPagingConfig.prefetchDistance)
+		assertEquals(384, FavouriteLibraryPagingConfig.maxSize)
 		assertEquals(false, FavouriteLibraryPagingConfig.enablePlaceholders)
-	}
-
-	@Test
-	fun `favourite prefetch window pages stay aligned and unique`() = runTest {
-		// The favourite prefetch distance (128) is exactly two 64-row pages. The
-		// Pager fills that window by issuing append pages after the initial one;
-		// every page must stay aligned and unique so the UI never sees a hole
-		// between the visible page and the prefetched region.
-		val source = BatchMappingPagingSource(
-			delegate = RecordingEntityPagingSource((1L..10_000L).toList()),
-		) { page -> page }
-		val first = source.load(
-			PagingSource.LoadParams.Refresh(null, FavouriteLibraryPagingConfig.initialLoadSize, false),
-		) as PagingSource.LoadResult.Page
-		val pages = (1..2).scan(first) { previous, _ ->
-			source.load(
-				PagingSource.LoadParams.Append(previous.nextKey!!, FavouriteLibraryPagingConfig.pageSize, false),
-			) as PagingSource.LoadResult.Page
-		}
-		assertEquals(64, first.data.size)
-		assertEquals(192, pages.sumOf { it.data.size })
-		val all = pages.flatMap { it.data }
-		assertEquals(192, all.distinct().size)
-		assertTrue(pages.last().nextKey != null)
 	}
 
 	@Test
@@ -84,7 +61,7 @@ class BatchMappingPagingSourceTest {
 			raw.filter { it % 2L == 0L }
 		}
 		val snapshot = Pager(
-			config = FavouriteLibraryPagingConfig,
+			config = LargeLibraryPagingConfig,
 			initialKey = null,
 			pagingSourceFactory = { source },
 		).flow.asSnapshot()

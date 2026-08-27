@@ -22,6 +22,18 @@ abstract class TrackingSiteDao {
     @Query("SELECT * FROM tracking_site_items WHERE service = :service ORDER BY updated_at DESC, remote_id DESC")
     abstract suspend fun findItems(service: Int): List<TrackingSiteItemEntity>
 
+    @Query("SELECT * FROM tracking_site_items WHERE service = :service AND remote_id IN (:remoteIds)")
+    protected abstract suspend fun findItemsByRemoteIdsImpl(
+        service: Int,
+        remoteIds: Collection<Long>,
+    ): List<TrackingSiteItemEntity>
+
+    suspend fun findItems(service: Int, remoteIds: Collection<Long>): List<TrackingSiteItemEntity> {
+        return remoteIds.flatMapSqliteQueryChunks { chunk ->
+            findItemsByRemoteIdsImpl(service, chunk)
+        }
+    }
+
     @Upsert
     abstract suspend fun upsertItem(entity: TrackingSiteItemEntity)
 

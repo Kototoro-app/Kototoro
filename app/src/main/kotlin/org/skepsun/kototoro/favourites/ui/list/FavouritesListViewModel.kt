@@ -10,11 +10,12 @@ import dagger.assisted.AssistedInject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -22,8 +23,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
@@ -37,11 +36,10 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
-import org.skepsun.kototoro.core.ui.util.ReversibleAction
-import org.skepsun.kototoro.core.util.ext.call
-import org.skepsun.kototoro.core.util.ext.flattenLatest
 import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.paging.FavouriteLibraryPagingConfig
+import org.skepsun.kototoro.core.ui.util.ReversibleAction
+import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.FavoritesListQuickFilter
@@ -57,11 +55,9 @@ import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
-import org.skepsun.kototoro.list.ui.model.InfoModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
-import org.skepsun.kototoro.list.ui.model.toErrorState
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 import org.skepsun.kototoro.parsers.model.Content
@@ -71,9 +67,6 @@ import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
-
-private const val PAGE_SIZE = 32
 
 @HiltViewModel(assistedFactory = FavouritesListViewModel.Factory::class)
 class FavouritesListViewModel @AssistedInject constructor(
@@ -83,7 +76,6 @@ class FavouritesListViewModel @AssistedInject constructor(
     private val markAsReadUseCase: MarkAsReadUseCase,
     quickFilterFactory: FavoritesListQuickFilter.Factory,
     private val sourceGroupManager: SourceGroupManager,
-    private val workResolver: WorkResolver,
     private val workAggregateRepository: WorkAggregateRepository,
     private val appSettings: AppSettings,
     private val dataRepository: ContentDataRepository,
@@ -102,11 +94,10 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     private val quickFilter = quickFilterFactory.create(categoryId)
     private val refreshTrigger = MutableStateFlow(Any())
-    private val limit = MutableStateFlow(PAGE_SIZE)
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     private val activeSpaceScope = spaceBinding.spaceId
 
-    private data class PagingParams(
+    private data class FavouriteListParams(
         val order: ListSortOrder,
         val filters: Set<ListFilterOption>,
         val mode: ListMode,
@@ -115,16 +106,22 @@ class FavouritesListViewModel @AssistedInject constructor(
         val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
         val categoryIds: Set<Long>,
         val spaceId: SpaceId?,
+        val refreshToken: Any,
+    )
+
+    private data class FavouriteListResult(
+        val items: List<ListModel>,
+        val lookup: FavouriteItemLookup,
+    )
+
+    private data class FavouriteItemLookup(
+        val mangaIds: Map<Long, Set<Long>> = emptyMap(),
+        val entityIds: Map<Long, Long> = emptyMap(),
+        val preferredLocalIds: Map<Long, Long> = emptyMap(),
     )
 
     @Volatile
-    private var groupedFavoriteIds: Map<Long, Set<Long>> = emptyMap()
-
-    @Volatile
-    private var groupedEntityIds: Map<Long, Long> = emptyMap()
-
-    @Volatile
-    private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
+    private var itemLookup = FavouriteItemLookup()
 
     override val isFilterBarVisible = MutableStateFlow(false)
 
@@ -173,52 +170,22 @@ class FavouritesListViewModel @AssistedInject constructor(
         }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    private val preparedGroups = flowOf(PreparedGroupsState.Loading)
-
-    private val listContext = combine(
-        preparedGroups,
-        quickFilter.appliedOptions,
-        observeListModeWithTriggers(),
-    ) { groups, filters, mode ->
-        Triple(groups, filters, mode)
-    }
-
-    private val activeSelection = combine(
-        refreshTrigger,
-        currentGroupTab,
-        currentSourceTags,
-    ) { _, groupTab, sourceTags ->
-        Pair(groupTab, sourceTags)
-    }
-
-    private val listParams = combine(
-        listContext,
-        activeSelection,
-    ) { (groups, filters, mode), (groupTab, sourceTags) ->
-        ListParams(
-            groups = groups,
-            filters = filters,
-            mode = mode,
-            groupTab = groupTab,
-            sourceTags = sourceTags,
-        )
-    }
-
     override val content = flowOf(listOf<ListModel>(LoadingState))
         .stateIn(viewModelScope, SharingStarted.Eagerly, listOf(LoadingState))
 
     override val pagingContent = combine(
         sortOrder.filterNotNull(),
-        quickFilter.appliedOptions,
-        listMode,
+        quickFilter.appliedOptions.combineWithSettings(),
+        observeListModeWithTriggers(),
         currentGroupTab,
         currentSourceTags,
         activeSourcePreset,
         selectedCategoryIds,
         activeSpaceScope,
+        refreshTrigger,
     ) { values: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
-        PagingParams(
+        FavouriteListParams(
             order = values[0] as ListSortOrder,
             filters = values[1] as Set<ListFilterOption>,
             mode = values[2] as ListMode,
@@ -227,8 +194,10 @@ class FavouritesListViewModel @AssistedInject constructor(
             preset = values[5] as? org.skepsun.kototoro.explore.data.SourcePreset,
             categoryIds = values[6] as Set<Long>,
             spaceId = values[7] as? SpaceId,
+            refreshToken = requireNotNull(values[8]),
         )
-    }.flatMapLatest { params ->
+    }.distinctUntilChanged().flatMapLatest { params ->
+        itemLookup = FavouriteItemLookup()
         Pager(
             config = FavouriteLibraryPagingConfig,
             pagingSourceFactory = {
@@ -238,9 +207,16 @@ class FavouritesListViewModel @AssistedInject constructor(
                     filterOptions = params.filters,
                     spaceId = params.spaceId,
                     groupTab = params.groupTab,
+                    includeTags = params.mode == ListMode.LIST ||
+                        params.mode == ListMode.DETAILED_LIST ||
+                        settings.globalTagBlacklist.isNotEmpty() ||
+                        params.filters.any { it is ListFilterOption.Tag },
                 )
                 BatchMappingPagingSource(aggregateSource, diagnosticLabel = "favourites-ui") { aggregates ->
-                    mapFavouritePage(aggregates, params)
+                    mapFavouritePage(aggregates, params).let { result ->
+                        itemLookup = itemLookup.merge(result.lookup)
+                        result.items
+                    }
                 }
             },
         ).flow
@@ -291,11 +267,11 @@ class FavouritesListViewModel @AssistedInject constructor(
     }
 
     override fun resolveEntityIdForUiItemId(id: Long): Long? {
-        return groupedEntityIds[id]
+        return itemLookup.entityIds[id]
     }
 
     override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
-        return groupedPreferredLocalIds[id] ?: groupedFavoriteIds[id]?.firstOrNull()
+        return itemLookup.preferredLocalIds[id] ?: itemLookup.mangaIds[id]?.firstOrNull()
     }
 
     suspend fun isPinned(ids: Set<Long>): Boolean {
@@ -326,55 +302,71 @@ class FavouritesListViewModel @AssistedInject constructor(
         }
     }
 
-    fun requestMoreItems() {
-        // Paging prefetches from LazyPagingItems access.
-    }
-
     private suspend fun mapFavouritePage(
         aggregates: List<WorkAggregate>,
-        params: PagingParams,
-    ): List<ListModel> {
+        params: FavouriteListParams,
+    ): FavouriteListResult = coroutineScope {
         val hideAdult = settings.isFavouritesExcludeNsfw
         val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
-        val groups = aggregates.mapNotNull { aggregate ->
+        val entries = aggregates.mapNotNull { aggregate ->
             val representative = aggregate.displayProjection ?: return@mapNotNull null
             if (params.preset != null && representative.source.name !in params.preset.sources) return@mapNotNull null
             if (params.categoryIds.isNotEmpty() && aggregate.categories.none { it.id in params.categoryIds }) {
                 return@mapNotNull null
             }
-            val contentGroup = sourceGroupManager.getContentGroup(representative.source)
-            val originGroup = sourceGroupManager.getOriginGroup(representative.source)
-            // The persisted content type is authoritative; the source-group heuristic
-            // can mislabel local/anonymous projections, so accept the aggregate type too.
-            val typeMatches = aggregate.contentType?.let(params.groupTab::matchesContentType) == true
-            if ((!params.groupTab.matchesContentGroup(contentGroup) || !params.groupTab.matchesOriginGroup(originGroup)) && !typeMatches) {
+            if (params.groupTab != BrowseGroupTab.All || params.sourceTags.isNotEmpty()) {
+                val contentGroup = sourceGroupManager.getContentGroup(representative.source)
+                val originGroup = sourceGroupManager.getOriginGroup(representative.source)
+                // The persisted content type is authoritative; the source-group heuristic
+                // can mislabel local/anonymous projections, so accept the aggregate type too.
+                val typeMatches = aggregate.contentType?.let(params.groupTab::matchesContentType) == true
+                val sourceGroupMatches = params.groupTab.matchesContentGroup(contentGroup) &&
+                    params.groupTab.matchesOriginGroup(originGroup)
+                if (!sourceGroupMatches && !typeMatches) {
+                    return@mapNotNull null
+                }
+                val matchesSourceTags = params.sourceTags.isEmpty() || params.sourceTags.any { tag ->
+                    tag.matches(contentGroup, originGroup)
+                }
+                if (!matchesSourceTags) {
+                    return@mapNotNull null
+                }
+            }
+            if (hideAdult && representative.isNsfw()) {
                 return@mapNotNull null
             }
-            if (params.sourceTags.isNotEmpty() && params.sourceTags.none { it.matches(contentGroup, originGroup) }) {
-                return@mapNotNull null
-            }
-            if ((hideAdult && representative.isNsfw()) || representative in globalTagBlacklist) return@mapNotNull null
+            if (representative in globalTagBlacklist) return@mapNotNull null
             val entityId = aggregate.identity.entityId ?: return@mapNotNull null
-            VisibleFavouriteGroup(
-                uiId = entityId.toUiGroupId(representative.source.contentType.ordinal),
+            aggregate to VisibleFavouriteGroup(
                 entityId = entityId,
                 preferredLocalMangaId = aggregate.identity.preferredMangaId ?: representative.id,
-                metadataSourceSelection = null,
                 representative = representative,
-                mangaIds = aggregate.projections.mapTo(LinkedHashSet()) { it.id }.ifEmpty { setOf(representative.id) },
-                projectionCount = aggregate.projections.size.coerceAtLeast(1),
+                mangaIds = aggregate.identity.localMangaIds.toCollection(LinkedHashSet())
+                    .ifEmpty { setOf(representative.id) },
+                projectionCount = aggregate.identity.localMangaIds.size.coerceAtLeast(1),
             )
         }
-        if (groups.isEmpty()) return emptyList()
-        val metadataByEntity = dataRepository.getEntityMetadataSourceSelections(groups.mapNotNull { it.entityId })
-        val overridesByMangaId = dataRepository.getOverridesForWorkItems(
-            groups.associate { group -> group.representative.id to requireNotNull(group.entityId) },
-        )
+        if (entries.isEmpty()) {
+            return@coroutineScope FavouriteListResult(emptyList(), FavouriteItemLookup())
+        }
+
+        val groups = entries.map { (_, group) -> group }
+        val metadataByEntityDeferred = async {
+            dataRepository.getEntityMetadataSourceSelections(
+                groups.map(VisibleFavouriteGroup::entityId),
+            )
+        }
+        val overridesByMangaIdDeferred = async {
+            dataRepository.getOverridesForWorkItems(
+                groups.associate { group -> group.representative.id to group.entityId },
+            )
+        }
+        val metadataByEntity = metadataByEntityDeferred.await()
+        val overridesByMangaId = overridesByMangaIdDeferred.await()
         val requests = groups.map { group ->
-            val selection = group.entityId?.let(metadataByEntity::get)
             ContentListMapper.ListModelRequest(
                 manga = group.representative,
-                metadataSelectionOverride = selection,
+                metadataSelectionOverride = metadataByEntity[group.entityId],
                 useMetadataSelectionOverride = true,
                 manualOverride = overridesByMangaId[group.representative.id],
                 useManualOverride = true,
@@ -383,250 +375,50 @@ class FavouritesListViewModel @AssistedInject constructor(
         val models = mangaListMapper.toRequestedListModelList(
             requests = requests,
             mode = params.mode,
-            flags = ContentListMapper.NO_FAVORITE,
-            pinnedIds = groups.filter { group ->
-                aggregates.firstOrNull { it.identity.entityId == group.entityId }?.favourite?.isPinned == true
-            }.mapTo(LinkedHashSet()) { it.preferredLocalMangaId ?: it.representative.id },
+            flags = ContentListMapper.NO_FAVORITE or
+                ContentListMapper.NO_PROGRESS or
+                ContentListMapper.NO_COUNTER,
+            pinnedIds = entries.asSequence()
+                .filter { (aggregate, _) -> aggregate.favourite?.isPinned == true }
+                .mapTo(LinkedHashSet()) { (_, group) -> group.preferredLocalMangaId },
         )
-        val entityIds = groups.associate { it.uiId to requireNotNull(it.entityId) }
-        val preferredIds = groups.associate { it.uiId to (it.preferredLocalMangaId ?: it.representative.id) }
-        val favouriteIds = groups.associate { it.uiId to it.mangaIds }
-        groupedEntityIds = groupedEntityIds + entityIds
-        groupedPreferredLocalIds = groupedPreferredLocalIds + preferredIds
-        groupedFavoriteIds = groupedFavoriteIds + favouriteIds
-        return groups.mapIndexed { index, group ->
-            val aggregate = aggregates.first { it.identity.entityId == group.entityId }
+
+        val lookup = FavouriteItemLookup(
+            mangaIds = groups.associate { it.entityId to it.mangaIds },
+            entityIds = groups.associate { it.entityId to it.entityId },
+            preferredLocalIds = groups.associate { it.entityId to it.preferredLocalMangaId },
+        )
+        val items = entries.mapIndexed { index, (aggregate, group) ->
             val progress = aggregate.toReadingProgress() ?: models[index].progressOrNull()
             models[index].toGroupedListModel(
                 group = group,
                 isPinned = aggregate.favourite?.isPinned == true,
                 progress = progress,
-                counter = if (progress?.isCompleted() == true) 0 else aggregate.tracking?.newChapters ?: models[index].counter,
+                counter = if (progress?.isCompleted() == true) {
+                    0
+                } else {
+                    aggregate.tracking?.newChapters ?: models[index].counter
+                },
             )
         }
+        FavouriteListResult(items, lookup)
     }
 
-    private suspend fun prepareGroups(
-        list: List<Content>,
-        categoryIds: Set<Long>,
-        preset: org.skepsun.kototoro.explore.data.SourcePreset?,
-    ): List<PreparedFavouriteGroup> {
-        val presetFiltered = if (preset == null) {
-            list
-        } else {
-            list.filter { it.source.name in preset.sources }
-        }
-        if (presetFiltered.isEmpty()) {
-            return emptyList()
-        }
-        val categoriesByMangaId = if (categoryIds.isEmpty()) {
-            emptyMap<Long, Set<Long>>()
-        } else {
-            repository.getCategoriesIds(presetFiltered.map(Content::id))
-        }
-        val categoryFiltered = if (categoryIds.isEmpty()) {
-            presetFiltered
-        } else {
-            presetFiltered.filter { manga ->
-                val mangaCategories = categoriesByMangaId[manga.id].orEmpty()
-                categoryIds.any { it in mangaCategories }
-            }
-        }
-        return categoryFiltered.map { manga ->
-            val source = manga.source
-            PreparedFavouriteItem(
-                content = manga,
-                contentGroup = sourceGroupManager.getContentGroup(source),
-                originGroup = sourceGroupManager.getOriginGroup(source),
-                isNsfw = manga.isNsfw(),
-            )
-        }.aggregateByEntity()
-    }
-
-    private suspend fun mapList(
-        groups: List<PreparedFavouriteGroup>,
-        filters: Set<ListFilterOption>,
-        mode: ListMode,
-        groupTab: BrowseGroupTab,
-        sourceTags: Set<SourceTag>,
-    ): List<ListModel> {
-        val hideAdult = settings.isFavouritesExcludeNsfw
-        var hasHiddenAdultItems = false
-        val visibleGroups = groups.mapNotNull { group ->
-            val matchingItems = group.items.filter { item ->
-                val groupMatches = groupTab.matchesContentGroup(item.contentGroup) &&
-                    groupTab.matchesOriginGroup(item.originGroup)
-                val originMatches = sourceTags.isEmpty() ||
-                    sourceTags.any { it.matches(item.contentGroup, item.originGroup) }
-                groupMatches && originMatches
-            }
-            if (matchingItems.isEmpty()) {
-                return@mapNotNull null
-            }
-            val adultFilteredItems = if (hideAdult) {
-                matchingItems.filterNot(PreparedFavouriteItem::isNsfw)
-            } else {
-                matchingItems
-            }
-            if (hideAdult && adultFilteredItems.size != matchingItems.size) {
-                hasHiddenAdultItems = true
-            }
-            val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
-            val visibleItems = adultFilteredItems.filterNot { it.content in globalTagBlacklist }
-            if (visibleItems.isEmpty()) {
-                return@mapNotNull null
-            }
-            group.toVisibleGroup(visibleItems)
-        }
-
-        if (visibleGroups.isEmpty()) {
-            groupedFavoriteIds = emptyMap()
-            groupedEntityIds = emptyMap()
-            groupedPreferredLocalIds = emptyMap()
-            val models = mutableListOf<ListModel>()
-            quickFilter.filterItem(filters)?.let(models::add)
-            if (hasHiddenAdultItems) {
-                models += InfoModel(
-                    key = "hidden_nsfw_favourites",
-                    title = R.string.favourites_hidden_adult_title,
-                    text = R.string.favourites_hidden_adult_subtitle,
-                    icon = R.drawable.ic_eye_off,
-                )
-            }
-            models += if (filters.isEmpty() &&
-                groupTab == BrowseGroupTab.All &&
-                sourceTags.isEmpty() &&
-                currentCategoryIds.value.isEmpty()
-            ) {
-                getEmptyState(hasFilters = false)
-            } else {
-                getEmptyState(hasFilters = true)
-            }
-            return models
-        }
-
-        val filteredGroups = visibleGroups.filter { group ->
-            if (ListFilterOption.Macro.MULTI_PROJECTION !in filters) {
-                true
-            } else {
-                group.projectionCount > 1
-            }
-        }
-
-        if (filteredGroups.isEmpty()) {
-            groupedFavoriteIds = emptyMap()
-            groupedEntityIds = emptyMap()
-            groupedPreferredLocalIds = emptyMap()
-            val models = mutableListOf<ListModel>()
-            quickFilter.filterItem(filters)?.let(models::add)
-            if (hasHiddenAdultItems) {
-                models += InfoModel(
-                    key = "hidden_nsfw_favourites",
-                    title = R.string.favourites_hidden_adult_title,
-                    text = R.string.favourites_hidden_adult_subtitle,
-                    icon = R.drawable.ic_eye_off,
-                )
-            }
-            models += getEmptyState(hasFilters = true)
-            return models
-        }
-
-        groupedFavoriteIds = filteredGroups.associate { it.uiId to it.mangaIds }
-        groupedEntityIds = filteredGroups.mapNotNull { group ->
-            group.entityId?.let { group.uiId to it }
-        }.toMap()
-        groupedPreferredLocalIds = filteredGroups.mapNotNull { group ->
-            group.preferredLocalMangaId?.let { group.uiId to it }
-        }.toMap()
-
-        val result = ArrayList<ListModel>(filteredGroups.size + 1)
-        quickFilter.filterItem(filters)?.let(result::add)
-        val pinnedIds = repository.getPinnedIds(filteredGroups.map { it.preferredLocalMangaId ?: it.representative.id })
-        val aggregatesByEntityId = workAggregateRepository.findAggregatesByEntityIds(
-            filteredGroups.mapNotNull(VisibleFavouriteGroup::entityId),
+    private fun FavouriteItemLookup.merge(other: FavouriteItemLookup): FavouriteItemLookup {
+        return FavouriteItemLookup(
+            mangaIds = mangaIds + other.mangaIds,
+            entityIds = entityIds + other.entityIds,
+            preferredLocalIds = preferredLocalIds + other.preferredLocalIds,
         )
-        val models = mangaListMapper.toRequestedListModelList(
-            requests = filteredGroups.map { group ->
-                ContentListMapper.ListModelRequest(
-                    manga = group.representative,
-                    metadataSelectionOverride = group.metadataSourceSelection,
-                    useMetadataSelectionOverride = group.metadataSourceSelection != null,
-                )
-            },
-            mode = mode,
-            flags = ContentListMapper.NO_FAVORITE,
-            pinnedIds = pinnedIds,
-        )
-        for (index in filteredGroups.indices) {
-            val group = filteredGroups[index]
-            val model = models[index]
-            val aggregate = group.entityId?.let(aggregatesByEntityId::get)
-            val progress = aggregate?.toReadingProgress() ?: model.progressOrNull()
-            val counter = if (progress?.isCompleted() == true) {
-                0
-            } else {
-                aggregate?.tracking?.newChapters ?: model.counter
-            }
-            result += model.toGroupedListModel(
-                group = group,
-                isPinned = (group.preferredLocalMangaId ?: group.representative.id) in pinnedIds,
-                progress = progress,
-                counter = counter,
-            )
-        }
-        return result
-    }
-
-    private suspend fun List<PreparedFavouriteItem>.aggregateByEntity(): List<PreparedFavouriteGroup> {
-        if (isEmpty()) {
-            return emptyList()
-        }
-        val identitiesByMangaId = workResolver.resolveManyByMangaIds(map { it.content.id })
-        val resolvedEntityIdsByMangaId = identitiesByMangaId.mapValues { it.value.entityId }.filterValues { it != null }
-            .mapValues { requireNotNull(it.value) }
-        val resolvedEntityIds = resolvedEntityIdsByMangaId.values.distinct()
-        val preferredLocalIdsByEntity = identitiesByMangaId.values
-            .mapNotNull { identity -> identity.entityId?.let { it to identity.preferredMangaId } }
-            .toMap()
-        val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
-        val displayTypeOrdinalByEntity = this
-            .groupBy { resolvedEntityIdsByMangaId[it.content.id] }
-            .mapNotNull { (entityId, items) ->
-                entityId?.let {
-                    it to items.resolveDisplayContentTypeOrdinal()
-                }
-            }
-            .toMap()
-        val grouped = LinkedHashMap<FavouriteGroupKey, MutableList<PreparedFavouriteItem>>(size)
-        for (item in this) {
-            val entityId = resolvedEntityIdsByMangaId[item.content.id]
-            val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.content.source.contentType.ordinal
-            val key = FavouriteGroupKey(
-                uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.id,
-                contentTypeOrdinal = contentTypeOrdinal,
-            )
-            grouped.getOrPut(key) { ArrayList(1) }.add(item)
-        }
-        return grouped.map { (key, items) ->
-            val entityId = resolvedEntityIdsByMangaId[items.first().content.id]
-            val preferredLocalId = entityId?.let(preferredLocalIdsByEntity::get)
-            PreparedFavouriteGroup(
-                uiId = key.uiId,
-                entityId = entityId,
-                preferredLocalMangaId = preferredLocalId,
-                metadataSourceSelection = entityId?.let(metadataSelectionsByEntity::get),
-                items = items,
-            )
-        }
     }
 
     private fun Set<Long>.expandGroupedIds(): Set<Long> {
         return flatMapTo(LinkedHashSet()) { id ->
-            groupedFavoriteIds[id].orEmpty().ifEmpty { setOf(id) }
+            itemLookup.mangaIds[id].orEmpty().ifEmpty { setOf(id) }
         }
     }
 
-    private suspend fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(
+    private fun org.skepsun.kototoro.list.ui.model.ContentListModel.toGroupedListModel(
         group: VisibleFavouriteGroup,
         isPinned: Boolean,
         progress: ReadingProgress?,
@@ -635,7 +427,7 @@ class FavouritesListViewModel @AssistedInject constructor(
         val groupSuffix = group.groupSuffix()
         return when (this) {
             is ContentCompactListModel -> copy(
-                id = group.uiId,
+                id = group.listId,
                 subtitle = listOfNotNull(subtitle?.takeIf { it.isNotBlank() }, groupSuffix).joinToString(" · "),
                 counter = counter,
                 progress = progress,
@@ -644,7 +436,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             )
 
             is ContentDetailedListModel -> copy(
-                id = group.uiId,
+                id = group.listId,
                 subtitle = listOfNotNull(subtitle.takeIf { !it.isNullOrBlank() }, groupSuffix).joinToString(" · "),
                 counter = counter,
                 progress = progress,
@@ -653,7 +445,7 @@ class FavouritesListViewModel @AssistedInject constructor(
             )
 
             is ContentGridModel -> copy(
-                id = group.uiId,
+                id = group.listId,
                 counter = counter,
                 progress = progress,
                 projectionCount = group.projectionCount,
@@ -691,99 +483,18 @@ class FavouritesListViewModel @AssistedInject constructor(
         }
     }
 
-    private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
-
-    private data class PreparedFavouriteItem(
-        val content: Content,
-        val contentGroup: org.skepsun.kototoro.core.jsonsource.ContentGroup,
-        val originGroup: org.skepsun.kototoro.core.jsonsource.OriginGroup,
-        val isNsfw: Boolean,
-    )
-
-    private data class PreparedFavouriteGroup(
-        val uiId: Long,
-        val entityId: Long?,
-        val preferredLocalMangaId: Long?,
-        val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
-        val items: List<PreparedFavouriteItem>,
-    )
+    // Every favourite aggregate is entity-backed, so this remains stable when its
+    // representative projection, source, cover, or display type changes.
+    private val VisibleFavouriteGroup.listId: Long
+        get() = entityId
 
     private data class VisibleFavouriteGroup(
-        val uiId: Long,
         val representative: Content,
         val mangaIds: Set<Long>,
         val projectionCount: Int,
-        val entityId: Long?,
-        val preferredLocalMangaId: Long?,
-        val metadataSourceSelection: ContentDataRepository.MetadataSourceSelection?,
+        val entityId: Long,
+        val preferredLocalMangaId: Long,
     )
-
-    private data class FavouriteGroupKey(
-        val uiId: Long,
-        val contentTypeOrdinal: Int,
-    )
-
-    private data class ListParams(
-        val groups: PreparedGroupsState,
-        val filters: Set<ListFilterOption>,
-        val mode: ListMode,
-        val groupTab: BrowseGroupTab,
-        val sourceTags: Set<SourceTag>,
-    )
-
-    private sealed class PreparedGroupsState {
-        object Loading : PreparedGroupsState()
-        data class Ready(val groups: List<PreparedFavouriteGroup>) : PreparedGroupsState()
-    }
-
-    private fun preparedGroupsReady(groups: List<PreparedFavouriteGroup>): PreparedGroupsState {
-        return PreparedGroupsState.Ready(groups)
-    }
-
-    private fun PreparedFavouriteGroup.toVisibleGroup(items: List<PreparedFavouriteItem>): VisibleFavouriteGroup? {
-        if (items.isEmpty()) {
-            return null
-        }
-        val representative = items.firstOrNull { it.content.id == preferredLocalMangaId }?.content ?: items.first().content
-        return VisibleFavouriteGroup(
-            uiId = uiId,
-            representative = representative,
-            mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.content.id },
-            projectionCount = items.size,
-            entityId = entityId,
-            preferredLocalMangaId = preferredLocalMangaId?.takeIf { preferredId ->
-                items.any { it.content.id == preferredId }
-            } ?: representative.id,
-            metadataSourceSelection = metadataSourceSelection,
-        )
-    }
-
-    private val PreparedFavouriteItem.id: Long
-        get() = content.id
-
-    private fun List<PreparedFavouriteItem>.resolveDisplayContentTypeOrdinal(): Int {
-        return firstOrNull { !it.content.source.name.startsWith("TRACKING_") }?.content?.source?.contentType?.ordinal
-            ?: first().content.source.contentType.ordinal
-    }
-
-    private fun observeFavorites() = if (categoryId == NO_ID) {
-        combine(
-            sortOrder.filterNotNull(),
-            quickFilter.appliedOptions.combineWithSettings(),
-            limit,
-            activeSpaceScope,
-        ) { order, filters, limit, spaceId ->
-            repository.observeAllProjectionContents(order, filters, limit, spaceId)
-        }.flattenLatest()
-    } else {
-        combine(
-            quickFilter.appliedOptions.combineWithSettings(),
-            limit,
-            activeSpaceScope,
-        ) { filters, limit, spaceId ->
-            repository.observeAllProjectionContents(categoryId, filters, limit, spaceId)
-        }.flattenLatest()
-    }
 
     private fun getEmptyState(hasFilters: Boolean) = if (hasFilters) {
         EmptyState(

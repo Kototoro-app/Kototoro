@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -42,6 +44,58 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.sync.Semaphore
 
+private data class ContentSourceResolutionSnapshot(
+    val mihonChanges: Int,
+    val aniyomiChanges: Int,
+    val ireaderChanges: Int,
+    val tsundokuChanges: Int,
+    val jsonSources: Map<String, ContentSource>,
+)
+
+private val LocalContentSourceResolutionSnapshot =
+    staticCompositionLocalOf<ContentSourceResolutionSnapshot?> { null }
+
+/**
+ * Collects extension and JSON-source changes once for a themed Compose hierarchy.
+ * Individual cards only read this snapshot instead of starting their own collectors.
+ */
+@Composable
+fun ContentSourceResolutionProvider(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val entryPoint = remember(context.applicationContext) {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            BaseApp.BaseAppEntryPoint::class.java,
+        )
+    }
+    val mihonChanges by entryPoint.mihonExtensionManager().changes.collectAsStateWithLifecycle()
+    val aniyomiChanges by entryPoint.aniyomiExtensionManager().changes.collectAsStateWithLifecycle()
+    val ireaderChanges by entryPoint.ireaderExtensionManager().changes.collectAsStateWithLifecycle()
+    val tsundokuChanges by entryPoint.tsundokuExtensionManager().changes.collectAsStateWithLifecycle()
+    val jsonSourceEntities by entryPoint.jsonSourceManager()
+        .observeAllJsonSources()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val jsonSources = remember(jsonSourceEntities) {
+        jsonSourceEntities.associate { entity -> entity.id to JsonContentSource(entity) }
+    }
+    val snapshot = remember(
+        mihonChanges,
+        aniyomiChanges,
+        ireaderChanges,
+        tsundokuChanges,
+        jsonSources,
+    ) {
+        ContentSourceResolutionSnapshot(
+            mihonChanges = mihonChanges,
+            aniyomiChanges = aniyomiChanges,
+            ireaderChanges = ireaderChanges,
+            tsundokuChanges = tsundokuChanges,
+            jsonSources = jsonSources,
+        )
+    }
+    CompositionLocalProvider(LocalContentSourceResolutionSnapshot provides snapshot, content = content)
+}
+
 data class ContentSourceChipMeta(
     val iconRes: Int,
     val text: String,
@@ -57,24 +111,25 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
         return source
     }
     val context = LocalContext.current
+    val sharedSnapshot = LocalContentSourceResolutionSnapshot.current
     val entryPoint = remember(context) {
         EntryPointAccessors.fromApplication(
             context.applicationContext,
             BaseApp.BaseAppEntryPoint::class.java,
         )
     }
-    val mihonChanges by entryPoint.mihonExtensionManager().changes.collectAsStateWithLifecycle()
-    val aniyomiChanges by entryPoint.aniyomiExtensionManager().changes.collectAsStateWithLifecycle()
-    val ireaderChanges by entryPoint.ireaderExtensionManager().changes.collectAsStateWithLifecycle()
-    val tsundokuChanges by entryPoint.tsundokuExtensionManager().changes.collectAsStateWithLifecycle()
+    val mihonChanges = sharedSnapshot?.mihonChanges
+        ?: entryPoint.mihonExtensionManager().changes.value
+    val aniyomiChanges = sharedSnapshot?.aniyomiChanges
+        ?: entryPoint.aniyomiExtensionManager().changes.value
+    val ireaderChanges = sharedSnapshot?.ireaderChanges
+        ?: entryPoint.ireaderExtensionManager().changes.value
+    val tsundokuChanges = sharedSnapshot?.tsundokuChanges
+        ?: entryPoint.tsundokuExtensionManager().changes.value
     val jsonKey = remember(name) {
         name.takeIf { it.startsWith("JSON_") }
     }
-    val resolvedJsonSource by androidx.compose.runtime.produceState<ContentSource?>(initialValue = null, key1 = jsonKey) {
-        value = jsonKey?.let { key ->
-            runCatching { entryPoint.jsonSourceManager().getById(key)?.let(::JsonContentSource) }.getOrNull()
-        }
-    }
+    val resolvedJsonSource = jsonKey?.let { key -> sharedSnapshot?.jsonSources?.get(key) }
     return remember(
         name,
         mihonChanges,
@@ -85,7 +140,7 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
         resolvedJsonSource?.javaClass?.name,
     ) {
         when {
-            resolvedJsonSource is JsonContentSource -> resolvedJsonSource ?: source
+            resolvedJsonSource != null -> resolvedJsonSource
             else -> resolveDynamicContentSource(source, entryPoint) ?: source
         }
     }

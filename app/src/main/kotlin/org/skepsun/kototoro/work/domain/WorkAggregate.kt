@@ -41,6 +41,7 @@ internal fun WorkAggregate.matchesFavouriteMacroFilter(
 ): Boolean = when (option) {
     ListFilterOption.Macro.COMPLETED -> history?.percent?.let(ReadingProgress::isCompleted) == true
     ListFilterOption.Macro.NEW_CHAPTERS -> (tracking?.newChapters ?: 0) > 0
+    ListFilterOption.Macro.MULTI_PROJECTION -> identity.localMangaIds.size > 1
     ListFilterOption.Macro.BROKEN_PROJECTION -> projections
         .ifEmpty { listOfNotNull(displayProjection) }
         .any { it.source.name in brokenProjectionSourceNames }

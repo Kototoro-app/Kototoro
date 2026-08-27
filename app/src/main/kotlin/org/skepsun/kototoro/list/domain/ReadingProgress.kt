@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.list.domain
 
+import androidx.compose.runtime.Immutable
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_READ
@@ -8,6 +9,7 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
 import kotlin.math.ceil
 
+@Immutable
 data class ReadingProgress(
     val percent: Float,
     val totalChapters: Int,

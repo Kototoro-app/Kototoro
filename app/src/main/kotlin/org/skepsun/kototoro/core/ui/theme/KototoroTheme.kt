@@ -31,6 +31,7 @@ import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
+import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
@@ -156,24 +157,26 @@ fun KototoroTheme(
         LocalBackgroundStyle provides backgroundStyle,
         LocalAmoledTheme provides effectiveAmoledTheme,
     ) {
-        // Phase D: Material renders through the official MaterialExpressiveTheme when the
-        // expressive style is active; iOS keeps the classic MaterialTheme (glass chrome does not
-        // consume expressive shapes/motion). Both receive the same Kototoro color/typography.
-        if (expressiveComponents) {
-            MaterialExpressiveTheme(
-                colorScheme = colorScheme,
-                motionScheme = remember(expressiveComponents) { MotionScheme.expressive() },
-                shapes = shapes,
-                typography = typography,
-                content = content,
-            )
-        } else {
-            MaterialTheme(
-                colorScheme = colorScheme,
-                shapes = shapes,
-                typography = typography,
-                content = content,
-            )
+        ContentSourceResolutionProvider {
+            // Phase D: Material renders through the official MaterialExpressiveTheme when the
+            // expressive style is active; iOS keeps the classic MaterialTheme (glass chrome does not
+            // consume expressive shapes/motion). Both receive the same Kototoro color/typography.
+            if (expressiveComponents) {
+                MaterialExpressiveTheme(
+                    colorScheme = colorScheme,
+                    motionScheme = remember(expressiveComponents) { MotionScheme.expressive() },
+                    shapes = shapes,
+                    typography = typography,
+                    content = content,
+                )
+            } else {
+                MaterialTheme(
+                    colorScheme = colorScheme,
+                    shapes = shapes,
+                    typography = typography,
+                    content = content,
+                )
+            }
         }
     }
 }

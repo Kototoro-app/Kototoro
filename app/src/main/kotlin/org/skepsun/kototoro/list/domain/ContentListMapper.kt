@@ -106,9 +106,11 @@ class ContentListMapper @Inject constructor(
         val mangaIds = manga.map { it.id }
         val manualOverrides = dataRepository.getOverrides()
         val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
-        val counters = getCounters(mangaIds)
+        val counters = getCounters(mangaIds, options)
         val progress = getProgress(mangaIds, options)
-        val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
+        val trackingDetailsCache = prefetchTrackingDetails(
+            buildList { metadataSelections.forEach { _, selection -> add(selection) } },
+        )
         manga.mapTo(destination) {
             val metadataSelection = metadataSelections[it.id]
             toListModelImpl(
@@ -153,15 +155,18 @@ class ContentListMapper @Inject constructor(
         } else {
             dataRepository.getMetadataSourceSelections(metadataIds)
         }
-        val counters = getCounters(mangaIds)
+        val counters = getCounters(mangaIds, options)
         val progress = getProgress(mangaIds, options)
-        val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
-        requests.mapTo(destination) { request ->
-            val metadataSelection = if (request.useMetadataSelectionOverride) {
+        val resolvedMetadataSelections = requests.associate { request ->
+            request.manga.id to if (request.useMetadataSelectionOverride) {
                 request.metadataSelectionOverride
             } else {
                 metadataSelections[request.manga.id]
             }
+        }
+        val trackingDetailsCache = prefetchTrackingDetails(resolvedMetadataSelections.values)
+        requests.mapTo(destination) { request ->
+            val metadataSelection = resolvedMetadataSelections[request.manga.id]
             toListModelImpl(
                 manga = request.manga,
                 mode = mode,
@@ -234,7 +239,9 @@ class ContentListMapper @Inject constructor(
         val mangaIds = logItems.map { it.manga.id }
         val manualOverrides = dataRepository.getOverrides()
         val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
-        val trackingDetailsCache = HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>()
+        val trackingDetailsCache = prefetchTrackingDetails(
+            buildList { metadataSelections.forEach { _, selection -> add(selection) } },
+        )
         val chapterCounts = db.getChaptersDao().findAllByMangaIds(mangaIds)
             .groupBy { it.mangaId }
             .mapValues { it.value.size }
@@ -348,8 +355,8 @@ class ContentListMapper @Inject constructor(
         ListMode.COMPACT_GRID -> toGridModel(manga, options, pinnedIds, counters, progress, metadataTrackingService, override)
     }
 
-    private suspend fun getCounters(mangaIds: Collection<Long>): Map<Long, Int>? {
-        return if (settings.isTrackerEnabled) {
+    private suspend fun getCounters(mangaIds: Collection<Long>, @Options options: Int): Map<Long, Int>? {
+        return if (options.isBadgeEnabled(COUNTER)) {
             trackingRepository.getNewChaptersCounts(mangaIds)
         } else {
             null
@@ -357,7 +364,7 @@ class ContentListMapper @Inject constructor(
     }
 
     private suspend fun getCounter(mangaId: Long, @Options options: Int, counters: Map<Long, Int>?): Int {
-        return if (settings.isTrackerEnabled) {
+        return if (options.isBadgeEnabled(COUNTER)) {
             counters?.get(mangaId) ?: trackingRepository.getNewChaptersCount(mangaId)
         } else {
             0
@@ -404,6 +411,20 @@ class ContentListMapper @Inject constructor(
         return ScrobblerService.entries.firstOrNull { it.id == selection.serviceId }
     }
 
+    private suspend fun prefetchTrackingDetails(
+        selections: Collection<ContentDataRepository.MetadataSourceSelection?>,
+    ): HashMap<Pair<Int, Long>, TrackingSiteItemDetails?> {
+        val keys = selections.mapNotNull { selection ->
+            (selection as? ContentDataRepository.MetadataSourceSelection.Tracking)?.let {
+                it.serviceId to it.remoteId
+            }
+        }
+        return HashMap<Pair<Int, Long>, TrackingSiteItemDetails?>(keys.size).apply {
+            keys.forEach { key -> put(key, null) }
+            putAll(trackingSiteCacheRepository.readDetailsSummaries(keys))
+        }
+    }
+
     private suspend fun resolveDisplayOverride(
         manga: Content,
         manualOverride: ContentOverride?,
@@ -415,8 +436,12 @@ class ContentListMapper @Inject constructor(
                 val service = ScrobblerService.entries.firstOrNull { it.id == trackingSelection.serviceId }
                     ?: return@let null
                 val cacheKey = trackingSelection.serviceId to trackingSelection.remoteId
-                val details = trackingDetailsCache.getOrPut(cacheKey) {
-                    trackingSiteCacheRepository.readDetails(service, trackingSelection.remoteId)
+                val details = if (trackingDetailsCache.containsKey(cacheKey)) {
+                    trackingDetailsCache[cacheKey]
+                } else {
+                    trackingSiteCacheRepository.readDetails(service, trackingSelection.remoteId).also { loaded ->
+                        trackingDetailsCache[cacheKey] = loaded
+                    }
                 }
                 ContentOverride(
                     coverUrl = details?.coverUrl?.takeIf { it.isNotBlank() },
@@ -468,15 +493,18 @@ class ContentListMapper @Inject constructor(
     @SuppressLint("WrongConstant")
     private fun getOptions(@Flags flags: Int): Int {
         var options = settings.getContentListBadges() or PROGRESS
+        if (settings.isTrackerEnabled) {
+            options = options or COUNTER
+        }
         options = options and flags.inv()
         return options
     }
 
-    @IntDef(DEFAULTS, NO_SAVED, NO_PROGRESS, NO_FAVORITE, flag = true)
+    @IntDef(DEFAULTS, NO_SAVED, NO_PROGRESS, NO_FAVORITE, NO_COUNTER, flag = true)
     @Retention(AnnotationRetention.SOURCE)
     annotation class Flags
 
-    @IntDef(NONE, SAVED, FAVORITE, PROGRESS)
+    @IntDef(NONE, SAVED, FAVORITE, PROGRESS, COUNTER)
     @Retention(AnnotationRetention.SOURCE)
     private annotation class Options
 
@@ -486,10 +514,12 @@ class ContentListMapper @Inject constructor(
         private const val SAVED = 1
         private const val PROGRESS = 2
         private const val FAVORITE = 4
+        private const val COUNTER = 8
 
         const val DEFAULTS = NONE
         const val NO_SAVED = SAVED
         const val NO_PROGRESS = PROGRESS
         const val NO_FAVORITE = FAVORITE
+        const val NO_COUNTER = COUNTER
     }
 }

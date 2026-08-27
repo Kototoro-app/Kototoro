@@ -157,6 +157,22 @@ class ContentDataRepository @Inject constructor(
             if (dao.findEntity(entityId) == null) {
                 return@withTransaction
             }
+            val existing = dao.findEntityPrefs(entityId)
+            val trackingSelection = selection.toTrackingSelectionOrNull()
+            if (existing != null) {
+                val unchanged = existing.metadataSourceKind == selection.toMetadataSourceKind() &&
+                    existing.metadataBindingSource == trackingSelection?.serviceId?.toString() &&
+                    existing.metadataBindingExternalId == trackingSelection?.remoteId?.toString() &&
+                    existing.metadataSourceService == trackingSelection?.serviceId &&
+                    existing.metadataSourceRemoteId == trackingSelection?.remoteId
+                if (unchanged) {
+                    // No-op writes still touch entity_preferences.updated_at and
+                    // invalidate every query observing that table (favourites paging
+                    // reloads on every details visit because of it). Skip the write
+                    // when the persisted selection already matches.
+                    return@withTransaction
+                }
+            }
             dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))
             updateEntityMetadataSourceSelection(
                 entityId = entityId,
@@ -170,6 +186,10 @@ class ContentDataRepository @Inject constructor(
         db.withTransaction {
             val dao = db.getEntityGraphDao()
             if (dao.findEntity(entityId) == null) {
+                return@withTransaction
+            }
+            val existing = dao.findEntityPrefs(entityId)
+            if (existing != null && existing.preferredLocalMangaId == mangaId) {
                 return@withTransaction
             }
             dao.insertEntityPrefsIgnore(newEntityPrefs(entityId))

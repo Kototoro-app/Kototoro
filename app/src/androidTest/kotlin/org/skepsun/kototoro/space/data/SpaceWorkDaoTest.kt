@@ -55,6 +55,22 @@ class SpaceWorkDaoTest {
 		assertEquals(listOf(1L), favourites.map { it.entityId })
 	}
 
+	@Test
+	fun favouriteRepresentativesKeepOneStableRowPerEntity() = runTest {
+		val sql = db.openHelper.writableDatabase
+		sql.execSQL(
+			"INSERT INTO favourite_categories VALUES (2, 0, 0, 'Other', 'NEWEST', 0, 2, 0)",
+		)
+		sql.execSQL(
+			"INSERT INTO work_favourites VALUES (1, 2, 10, 0, 1, 1, 0, 2)",
+		)
+
+		val representatives = db.getWorkFavouritesDao().findListRepresentatives(-1L)
+
+		assertEquals(5, representatives.size)
+		assertEquals(2L, representatives.single { it.entityId == 1L }.categoryId)
+	}
+
 	private fun seedWorks() {
 		val sql = db.openHelper.writableDatabase
 		sql.execSQL(

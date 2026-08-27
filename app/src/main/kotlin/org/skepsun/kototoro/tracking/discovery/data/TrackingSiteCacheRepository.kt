@@ -102,6 +102,24 @@ class TrackingSiteCacheRepository @Inject constructor(
             ?.mergeRichPayload(readPersistedDetailsPayload(service, remoteId))
     }
 
+    suspend fun readDetailsSummaries(
+        keys: Collection<Pair<Int, Long>>,
+    ): Map<Pair<Int, Long>, TrackingSiteItemDetails> = withContext(Dispatchers.Default) {
+        if (keys.isEmpty()) {
+            return@withContext emptyMap()
+        }
+        val servicesById = ScrobblerService.entries.associateBy(ScrobblerService::id)
+        keys.distinct()
+            .groupBy(keySelector = Pair<Int, Long>::first, valueTransform = Pair<Int, Long>::second)
+            .flatMap { (serviceId, remoteIds) ->
+                if (servicesById[serviceId] == null) return@flatMap emptyList()
+                db.getTrackingSiteDao().findItems(serviceId, remoteIds).map { entity ->
+                    (serviceId to entity.remoteId) to entity.toTrackingDetails()
+                }
+            }
+            .toMap()
+    }
+
     suspend fun saveDetails(details: TrackingSiteItemDetails) {
         val now = System.currentTimeMillis()
         val payload = details.toPersistedPayload().toString()

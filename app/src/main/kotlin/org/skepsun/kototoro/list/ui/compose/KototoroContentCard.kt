@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.list.ui.compose
 
 import android.net.Uri
-import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -28,9 +27,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +36,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -83,9 +81,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
-import org.skepsun.kototoro.core.ui.compose.contentCoverIdentity
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
-import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.image.tvboxSearchCoverModel
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.CHAPTERS_LEFT
@@ -95,7 +91,52 @@ import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_LEFT
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode.PERCENT_READ
 import java.io.File
 
-private const val TAG = "KototoroContentCard"
+data class ContentCardSourceMetadata(
+    val originalSource: org.skepsun.kototoro.parsers.model.ContentSource,
+    val resolvedSource: org.skepsun.kototoro.parsers.model.ContentSource,
+    val languageText: String?,
+)
+
+internal fun contentCardSourceMetadata(
+    originalSource: org.skepsun.kototoro.parsers.model.ContentSource,
+    resolvedSource: org.skepsun.kototoro.parsers.model.ContentSource,
+): ContentCardSourceMetadata = ContentCardSourceMetadata(
+    originalSource = originalSource,
+    resolvedSource = resolvedSource,
+    languageText = resolvedSource.getLocale()
+        ?.language
+        ?.uppercase(Locale.ROOT)
+        ?.takeIf(String::isNotBlank),
+)
+
+internal class DeferredContentCoverBounds<T>(
+    private val resolveBounds: (T) -> Rect?,
+) {
+    private var coordinates: T? = null
+
+    fun updateCoordinates(value: T) {
+        coordinates = value
+    }
+
+    fun currentBounds(): Rect? = coordinates?.let(resolveBounds)
+}
+
+@Composable
+private fun rememberDeferredContentCoverBounds(): DeferredContentCoverBounds<LayoutCoordinates> = remember {
+    DeferredContentCoverBounds { coordinates ->
+        coordinates.takeIf(LayoutCoordinates::isAttached)?.unclippedBoundsInWindow()
+    }
+}
+
+@Composable
+private fun rememberContentCardSourceMetadata(
+    source: org.skepsun.kototoro.parsers.model.ContentSource,
+): ContentCardSourceMetadata {
+    val resolvedSource = rememberResolvedContentSource(source)
+    return remember(source, resolvedSource.name, resolvedSource.locale, resolvedSource.javaClass.name) {
+        contentCardSourceMetadata(source, resolvedSource)
+    }
+}
 
 @Immutable
 data class ContentCardBadgeMetrics(
@@ -241,6 +282,8 @@ fun KototoroContentCardGrid(
     }
 
     val manga = item.manga
+    val renderModel = remember(item) { item.toContentCardRenderModel() }
+    val sourceMetadata = rememberContentCardSourceMetadata(manga.source)
     val coverRequest = rememberContentCoverRequest(
         context = context,
         coverUrl = item.coverUrl,
@@ -251,7 +294,7 @@ fun KototoroContentCardGrid(
     val posterAspectRatio = remember(posterStyle.itemWidth, posterStyle.posterHeight) {
         posterStyle.itemWidth.value / posterStyle.posterHeight.value
     }
-    var coverBounds by remember { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
     val compactTitleHeight = remember(posterStyle.itemWidth) {
         (posterStyle.itemWidth.value * 0.48f).dp.coerceIn(50.dp, 66.dp)
@@ -263,11 +306,8 @@ fun KototoroContentCardGrid(
     val bottomBadgeLift = if (compactOverlay) compactTitleTextClearance else 0.dp
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedIdentity = remember(manga.id, manga.url, manga.publicUrl, item.coverUrl) {
-        contentCoverIdentity(manga, item.coverUrl)
-    }
-    val sharedKey = remember(manga.source.name, sharedIdentity, sharedElementInstanceKey) {
-        contentCoverSharedKey(manga.source.name, sharedIdentity, sharedElementInstanceKey)
+    val sharedKey = remember(item.id, sharedElementInstanceKey) {
+        contentListSharedElementKey(item, sharedElementInstanceKey)
     }
 
     val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
@@ -278,7 +318,7 @@ fun KototoroContentCardGrid(
             .fillMaxWidth()
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
             .combinedClickable(
-                onClick = { onClick(coverBounds) },
+                onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
             )
             .padding(cellContentPadding),
@@ -291,7 +331,7 @@ fun KototoroContentCardGrid(
                 .then(
                     if (sharedTransitionEnabled) {
                         Modifier.onGloballyPositioned { coordinates ->
-                            coverBounds = coordinates.unclippedBoundsInWindow()
+                            coverBounds.updateCoordinates(coordinates)
                         }
                     } else Modifier,
                 )
@@ -312,8 +352,9 @@ fun KototoroContentCardGrid(
         ) {
             ContentCardCoverImage(
                 coverRequest = coverRequest,
-                contentDescription = manga.title,
+                contentDescription = renderModel.title,
                 sharedKey = sharedKey,
+                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
             )
 
             if (isSelected) {
@@ -329,7 +370,8 @@ fun KototoroContentCardGrid(
             // Top Left Badges
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
-                item = item,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
@@ -337,28 +379,33 @@ fun KototoroContentCardGrid(
             )
 
             // Top Right Badges (includes counter if not handled by badges)
-            val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
+            val effectiveTopRightBadges = remember(
+                resolvedUiPrefs.badgesTopRight,
+                renderModel.counter,
+                renderModel.scoreText,
+            ) {
                 buildSet {
                     addAll(resolvedUiPrefs.badgesTopRight)
-                    if (item.counter > 0) {
+                    if (renderModel.counter > 0) {
                         add("counter")
                     }
-                    if (!item.scoreText.isNullOrBlank()) {
+                    if (!renderModel.scoreText.isNullOrBlank()) {
                         add("score")
                     }
                 }
             }
             ContentCardCornerBadges(
                 badges = effectiveTopRightBadges,
-                item = item,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopEnd,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.TopEnd),
             )
 
-            val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, item.manga) {
-                "nsfw" in resolvedUiPrefs.badgesBottomRight && item.manga.isNsfw()
+            val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
+                "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
             }
             val bottomBadgeHeight = with(density) { badgeMetrics.textSize.toDp() } +
                 (badgeMetrics.containerVerticalPadding * 2)
@@ -366,7 +413,8 @@ fun KototoroContentCardGrid(
             // Bottom Left Badges
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomLeft,
-                item = item,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.BottomStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
@@ -384,7 +432,8 @@ fun KototoroContentCardGrid(
             if (showBottomRightBadge) {
                 ContentCardCornerBadges(
                     badges = resolvedUiPrefs.badgesBottomRight,
-                    item = item,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
                     corner = Alignment.BottomEnd,
                     cardRadius = cardRadius,
                     metrics = badgeMetrics,
@@ -397,9 +446,9 @@ fun KototoroContentCardGrid(
                         ),
                 )
             }
-            if (item.progress != null) {
+            if (renderModel.progress != null) {
                 ContentCardReadingProgressIndicator(
-                    progress = item.progress,
+                    progress = renderModel.progress,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(
@@ -412,7 +461,7 @@ fun KototoroContentCardGrid(
 
             if (compactOverlay) {
                 CompactGridTitleOverlay(
-                    title = item.title,
+                    title = renderModel.title,
                     height = compactTitleHeight,
                     fontSize = titleFontSize,
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -422,7 +471,7 @@ fun KototoroContentCardGrid(
 
         if (!compactOverlay) {
             Text(
-                text = item.title,
+                text = renderModel.title,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontSize = titleFontSize,
                     lineHeight = (titleFontSize.value + 3f).sp,
@@ -436,7 +485,13 @@ fun KototoroContentCardGrid(
             )
         }
         if (!compactOverlay && resolvedUiPrefs.showExtraInfo) {
-            val infoText = remember(item.manga.state, item.manga.chapters?.size, item.manga.tags, item.scoreText, context) {
+            val infoText = remember(
+                item.manga.state,
+                item.manga.chapters?.size,
+                item.manga.tags,
+                renderModel.scoreText,
+                context,
+            ) {
                 item.buildInfoText(context)
             }
             infoText?.takeIf { it.isNotBlank() }?.let { info ->
@@ -452,9 +507,9 @@ fun KototoroContentCardGrid(
             )
         }
 
-        if (!item.subtitle.isNullOrBlank()) {
+        if (!renderModel.subtitle.isNullOrBlank()) {
             Text(
-                text = item.subtitle,
+                text = renderModel.subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -595,30 +650,32 @@ fun KototoroContentCardList(
         val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
         rememberContentCardUiPrefs(settings)
     }
-    var coverBounds by remember { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val coverRequest = rememberContentCoverRequest(
         context = context,
         coverUrl = item.coverUrl,
         manga = item.manga,
         allowCrossfade = !sharedTransitionEnabled,
     )
-    val badgeModel = remember(item) { item.asBadgeModel() }
+    val renderModel = remember(item) { item.toContentCardRenderModel() }
+    val sourceMetadata = rememberContentCardSourceMetadata(item.manga.source)
     val badgeMetrics = remember { contentCardBadgeMetricsFor(48.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedIdentity = remember(item.manga.id, item.manga.url, item.manga.publicUrl, item.coverUrl) {
-        contentCoverIdentity(item.manga, item.coverUrl)
+    val sharedKey = remember(item.id, sharedElementInstanceKey) {
+        contentListSharedElementKey(item, sharedElementInstanceKey)
     }
-    val sharedKey = remember(item.manga.source.name, sharedIdentity, sharedElementInstanceKey) {
-        contentCoverSharedKey(item.manga.source.name, sharedIdentity, sharedElementInstanceKey)
-    }
-    val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
+    val effectiveTopRightBadges = remember(
+        resolvedUiPrefs.badgesTopRight,
+        renderModel.counter,
+        renderModel.scoreText,
+    ) {
         buildSet {
             addAll(resolvedUiPrefs.badgesTopRight)
-            if (item.counter > 0) {
+            if (renderModel.counter > 0) {
                 add("counter")
             }
-            if (!item.scoreText.isNullOrBlank()) {
+            if (!renderModel.scoreText.isNullOrBlank()) {
                 add("score")
             }
         }
@@ -628,7 +685,7 @@ fun KototoroContentCardList(
             .fillMaxWidth()
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
             .combinedClickable(
-                onClick = { onClick(coverBounds) },
+                onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
             )
             .padding(horizontal = 16.dp, vertical = 8.dp),
@@ -640,7 +697,7 @@ fun KototoroContentCardList(
                 .then(
                     if (sharedTransitionEnabled) {
                         Modifier.onGloballyPositioned { coordinates ->
-                            coverBounds = coordinates.unclippedBoundsInWindow()
+                            coverBounds.updateCoordinates(coordinates)
                         }
                     } else Modifier,
                 )
@@ -661,12 +718,14 @@ fun KototoroContentCardList(
         ) {
             ContentCardCoverImage(
                 coverRequest = coverRequest,
-                contentDescription = item.title,
+                contentDescription = renderModel.title,
                 sharedKey = sharedKey,
+                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopStart,
                 cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -674,7 +733,8 @@ fun KototoroContentCardList(
             )
             ContentCardCornerBadges(
                 badges = effectiveTopRightBadges,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopEnd,
                 cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -682,7 +742,8 @@ fun KototoroContentCardList(
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomLeft,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.BottomStart,
                 cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -690,14 +751,15 @@ fun KototoroContentCardList(
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomRight,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.BottomEnd,
                 cardRadius = CompactContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
             ContentCardCoverProgressIndicator(
-                progress = badgeModel.progress,
+                progress = renderModel.progress,
                 bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
@@ -710,15 +772,15 @@ fun KototoroContentCardList(
                 .padding(start = 16.dp)
         ) {
             Text(
-                text = item.title,
+                text = renderModel.title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            if (!item.subtitle.isNullOrBlank()) {
+            if (!renderModel.subtitle.isNullOrBlank()) {
                 Text(
-                    text = item.subtitle,
+                    text = renderModel.subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -726,9 +788,9 @@ fun KototoroContentCardList(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            if (!item.supportingText.isNullOrBlank()) {
+            if (!renderModel.supportingText.isNullOrBlank()) {
                 Text(
-                    text = item.supportingText.orEmpty(),
+                    text = renderModel.supportingText.orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -744,6 +806,31 @@ fun KototoroContentCardList(
 fun ContentCardCornerBadges(
     badges: Set<String>,
     item: ContentGridModel,
+    sourceMetadata: ContentCardSourceMetadata? = null,
+    corner: Alignment,
+    cardRadius: androidx.compose.ui.unit.Dp,
+    metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
+    attachedToTitleEdge: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val effectiveSourceMetadata = sourceMetadata ?: rememberContentCardSourceMetadata(item.manga.source)
+    ContentCardCornerBadges(
+        badges = badges,
+        item = remember(item) { item.toContentCardRenderModel() },
+        sourceMetadata = effectiveSourceMetadata,
+        corner = corner,
+        cardRadius = cardRadius,
+        metrics = metrics,
+        attachedToTitleEdge = attachedToTitleEdge,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun ContentCardCornerBadges(
+    badges: Set<String>,
+    item: ContentCardRenderModel,
+    sourceMetadata: ContentCardSourceMetadata,
     corner: Alignment,
     cardRadius: androidx.compose.ui.unit.Dp,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
@@ -752,13 +839,8 @@ fun ContentCardCornerBadges(
 ) {
     if (badges.isEmpty()) return
 
-    val resolvedSource = rememberResolvedContentSource(item.manga.source)
-    val langText = remember(resolvedSource.name, resolvedSource.locale) {
-        resolvedSource.getLocale()
-            ?.language
-            ?.uppercase(Locale.ROOT)
-            ?.takeIf { it.isNotBlank() }
-    }
+    val resolvedSource = sourceMetadata.resolvedSource
+    val langText = sourceMetadata.languageText
     val showTracker = "tracker" in badges && item.metadataTrackingService != null
     val showFavorite = "favorite" in badges && item.isFavorite
     val showSaved = "saved" in badges && item.isSaved
@@ -768,7 +850,7 @@ fun ContentCardCornerBadges(
     val showProjectionCount = "projection_count" in badges && item.projectionCount > 1
     val showScore = "score" in badges && !item.scoreText.isNullOrBlank()
     val showPin = "pin" in badges && item.isPinned
-    val showNsfw = "nsfw" in badges && item.manga.isNsfw()
+    val showNsfw = "nsfw" in badges && item.isNsfw
     val showOnlyNsfw = showNsfw &&
         !showTracker &&
         !showFavorite &&
@@ -930,7 +1012,7 @@ fun ContentCardCornerBadges(
                     }
                 }
                 "nsfw" -> {
-                    if (item.manga.isNsfw()) {
+                    if (item.isNsfw) {
                         Text(
                             text = stringResource(R.string.badge_nsfw),
                             color = MaterialTheme.colorScheme.onError,
@@ -974,35 +1056,32 @@ fun KototoroContentCardDetailedList(
         val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
         rememberContentCardUiPrefs(settings)
     }
-    var coverBounds by remember { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val coverRequest = rememberContentCoverRequest(
         context = context,
         coverUrl = item.coverUrl,
         manga = item.manga,
         allowCrossfade = !sharedTransitionEnabled,
     )
-    val badgeModel = remember(item) {
-        item.asBadgeModel(
-            isFavorite = item.isFavorite,
-            isSaved = item.isSaved,
-        )
-    }
+    val renderModel = remember(item) { item.toContentCardRenderModel() }
+    val sourceMetadata = rememberContentCardSourceMetadata(item.manga.source)
     val badgeMetrics = remember { contentCardBadgeMetricsFor(80.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    val sharedIdentity = remember(item.manga.id, item.manga.url, item.manga.publicUrl, item.coverUrl) {
-        contentCoverIdentity(item.manga, item.coverUrl)
+    val sharedKey = remember(item.id, sharedElementInstanceKey) {
+        contentListSharedElementKey(item, sharedElementInstanceKey)
     }
-    val sharedKey = remember(item.manga.source.name, sharedIdentity, sharedElementInstanceKey) {
-        contentCoverSharedKey(item.manga.source.name, sharedIdentity, sharedElementInstanceKey)
-    }
-    val effectiveTopRightBadges = remember(resolvedUiPrefs.badgesTopRight, item.counter, item.scoreText) {
+    val effectiveTopRightBadges = remember(
+        resolvedUiPrefs.badgesTopRight,
+        renderModel.counter,
+        renderModel.scoreText,
+    ) {
         buildSet {
             addAll(resolvedUiPrefs.badgesTopRight)
-            if (item.counter > 0) {
+            if (renderModel.counter > 0) {
                 add("counter")
             }
-            if (!item.scoreText.isNullOrBlank()) {
+            if (!renderModel.scoreText.isNullOrBlank()) {
                 add("score")
             }
         }
@@ -1012,7 +1091,7 @@ fun KototoroContentCardDetailedList(
             .fillMaxWidth()
             .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
             .combinedClickable(
-                onClick = { onClick(coverBounds) },
+                onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
             )
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1023,7 +1102,7 @@ fun KototoroContentCardDetailedList(
                 .then(
                     if (sharedTransitionEnabled) {
                         Modifier.onGloballyPositioned { coordinates ->
-                            coverBounds = coordinates.unclippedBoundsInWindow()
+                            coverBounds.updateCoordinates(coordinates)
                         }
                     } else Modifier,
                 )
@@ -1044,12 +1123,14 @@ fun KototoroContentCardDetailedList(
         ) {
             ContentCardCoverImage(
                 coverRequest = coverRequest,
-                contentDescription = item.title,
+                contentDescription = renderModel.title,
                 sharedKey = sharedKey,
+                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopStart,
                 cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -1057,7 +1138,8 @@ fun KototoroContentCardDetailedList(
             )
             ContentCardCornerBadges(
                 badges = effectiveTopRightBadges,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.TopEnd,
                 cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -1065,7 +1147,8 @@ fun KototoroContentCardDetailedList(
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomLeft,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.BottomStart,
                 cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
@@ -1073,14 +1156,15 @@ fun KototoroContentCardDetailedList(
             )
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesBottomRight,
-                item = badgeModel,
+                item = renderModel,
+                sourceMetadata = sourceMetadata,
                 corner = Alignment.BottomEnd,
                 cardRadius = ContentCoverCornerRadius,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
             )
             ContentCardCoverProgressIndicator(
-                progress = badgeModel.progress,
+                progress = renderModel.progress,
                 bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
                 metrics = badgeMetrics,
                 modifier = Modifier.align(Alignment.BottomEnd),
@@ -1093,19 +1177,16 @@ fun KototoroContentCardDetailedList(
                 .padding(start = 16.dp)
         ) {
             Text(
-                text = item.title,
+                text = renderModel.title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
-            val authorText = remember(item.manga.authors) {
-                item.manga.authors.joinToString(", ")
-            }
-            if (!item.subtitle.isNullOrBlank()) {
+            if (!renderModel.subtitle.isNullOrBlank()) {
                 Text(
-                    text = item.subtitle.orEmpty(),
+                    text = renderModel.subtitle.orEmpty(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1113,9 +1194,9 @@ fun KototoroContentCardDetailedList(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            if (!item.supportingText.isNullOrBlank()) {
+            if (!renderModel.supportingText.isNullOrBlank()) {
                 Text(
-                    text = item.supportingText.orEmpty(),
+                    text = renderModel.supportingText.orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -1123,9 +1204,9 @@ fun KototoroContentCardDetailedList(
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            if (authorText.isNotBlank()) {
+            if (renderModel.authorText.isNotBlank()) {
                 Text(
-                    text = authorText,
+                    text = renderModel.authorText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1134,12 +1215,9 @@ fun KototoroContentCardDetailedList(
                 )
             }
 
-            val tagsText = remember(item.tags) {
-                item.tags.joinToString(", ") { it.title ?: "" }
-            }
-            if (tagsText.isNotBlank()) {
+            if (renderModel.tagsText.isNotBlank()) {
                 Text(
-                    text = tagsText,
+                    text = renderModel.tagsText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1154,27 +1232,24 @@ fun KototoroContentCardDetailedList(
 fun ContentListModel.asBadgeModel(
     isFavorite: Boolean = false,
     isSaved: Boolean = false,
-): ContentGridModel {
-    return ContentGridModel(
-        manga = manga,
-        override = override,
-        subtitle = null,
-        counter = counter,
-        projectionCount = projectionCount,
-        id = id,
-        progress = when (this) {
-            is ContentGridModel -> progress
-            is ContentDetailedListModel -> progress
-            is ContentCompactListModel -> progress
-            else -> null
-        },
-        isFavorite = isFavorite,
-        isSaved = isSaved,
-        isPinned = isPinned,
-        metadataTrackingService = metadataTrackingService,
-        scoreText = scoreText,
-    )
-}
+): ContentGridModel = ContentGridModel(
+    manga = manga,
+    override = override,
+    subtitle = null,
+    counter = counter,
+    projectionCount = projectionCount,
+    id = id,
+    progress = when (this) {
+        is ContentGridModel -> progress
+        is ContentDetailedListModel -> progress
+        is ContentCompactListModel -> progress
+    },
+    isFavorite = isFavorite,
+    isSaved = isSaved,
+    isPinned = isPinned,
+    metadataTrackingService = metadataTrackingService,
+    scoreText = scoreText,
+)
 
 @Composable
 fun ContentCardCoverProgressIndicator(
@@ -1236,6 +1311,7 @@ private fun BoxScope.ContentCardCoverImage(
     coverRequest: ImageRequest?,
     contentDescription: String,
     sharedKey: String,
+    retainSnapshot: Boolean,
 ) {
     if (coverRequest == null) {
         return
@@ -1245,11 +1321,16 @@ private fun BoxScope.ContentCardCoverImage(
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         modifier = Modifier.matchParentSize(),
-        onSuccess = { state ->
-            HeroCoverSnapshotStore.put(sharedKey, state.result.image)
+        onSuccess = if (retainSnapshot) {
+            { state -> HeroCoverSnapshotStore.put(sharedKey, state.result.image) }
+        } else {
+            null
         },
     )
 }
+
+internal fun shouldRetainContentCoverSnapshot(sharedTransitionEnabled: Boolean): Boolean =
+    sharedTransitionEnabled
 
 @Composable
 private fun rememberContentCoverRequest(
@@ -1285,10 +1366,6 @@ private fun buildContentCoverRequest(
     if (data.isNullOrBlank()) {
         if (fallbackTvBoxSearchModel != null) {
             val fallbackCacheKey = contentCoverCacheKey(manga, "tvbox-search-cover:${manga.url}")
-            Log.d(
-                TAG,
-                "Using deferred TVBox search cover: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} model=$fallbackTvBoxSearchModel",
-            )
             return ImageRequest.Builder(context)
                 .data(fallbackTvBoxSearchModel)
                 .memoryCacheKey(fallbackCacheKey)
@@ -1297,16 +1374,8 @@ private fun buildContentCoverRequest(
                 .crossfade(allowCrossfade)
                 .build()
         }
-        Log.w(
-            TAG,
-            "Cover request skipped: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} inputCover=${coverUrl ?: "<null>"} normalized=${normalizedUrl ?: "<null>"} cacheKey=${cacheKey ?: "<null>"}",
-        )
         return null
     }
-    Log.d(
-        TAG,
-        "Cover request ready: source=${manga.source.name} title=${manga.title} mangaUrl=${manga.url} data=$data",
-    )
     return ImageRequest.Builder(context)
         .data(data)
         .memoryCacheKey(cacheKey)
