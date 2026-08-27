@@ -815,7 +815,21 @@ private fun FloatingBottomNavRow(
     } else {
         MaterialTheme.colorScheme.onSecondaryContainer
     }
-    val pillHeightPx = with(density) { 40.dp.roundToPx() }
+    // Icon-and-label (labels-below) tabs are taller than the classic 40dp pill:
+    // the capsule must wrap the whole selected content (icon + label), not just
+    // the icon. Use the measured item height, capped at the sample 56dp
+    // full-tab size so the resting capsule stays inside the shell (it is
+    // centered on the tab and never crosses the bar while idle). Expressive
+    // (icon beside label) layouts keep the compact 40dp pill that already
+    // matches their content row.
+    val pillHeightPx = with(density) {
+        val idealPillHeight = 40.dp.roundToPx()
+        if (useSharedLiquidGlassPill && !useExpressivePill) {
+            selectedBounds?.size?.height?.coerceIn(idealPillHeight, 56.dp.roundToPx()) ?: idealPillHeight
+        } else {
+            idealPillHeight
+        }
+    }
     // Use the same relative magnification as the 56dp BiliPai indicator: the
     // compact 40dp expressive pill grows to about 56dp rather than nearly
     // doubling to 78dp. The growth happens while the pill is in motion and may
@@ -841,7 +855,7 @@ private fun FloatingBottomNavRow(
         ),
     )
     val targetIndicatorSize = if (targetIndicatorWidth > 0) {
-        IntSize(targetIndicatorWidth, with(density) { 40.dp.roundToPx() })
+        IntSize(targetIndicatorWidth, pillHeightPx)
     } else {
         IntSize.Zero
     }
