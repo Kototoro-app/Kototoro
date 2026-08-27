@@ -16,13 +16,42 @@ abstract class WorkHistoryDao {
 
     @Query(
         """
-		SELECT wh.*
+		SELECT
+			wh.*,
+			ep.preferred_local_manga_id AS preferred_local_manga_id,
+			m.manga_id AS display_manga_id,
+			m.title AS display_title,
+			m.alt_title AS display_alt_title,
+			m.url AS display_url,
+			m.public_url AS display_public_url,
+			m.rating AS display_rating,
+			m.nsfw AS display_nsfw,
+			m.content_rating AS display_content_rating,
+			m.cover_url AS display_cover_url,
+			m.large_cover_url AS display_large_cover_url,
+			m.state AS display_state,
+			m.author AS display_author,
+			m.source AS display_source,
+			m.description AS display_description,
+			m.content_type AS display_content_type,
+			m.source_data AS display_source_data,
+			tracking.anchor_manga_id AS tracking_anchor_manga_id,
+			tracking.last_chapter_id AS tracking_last_chapter_id,
+			tracking.new_chapters AS tracking_new_chapters,
+			tracking.last_check_time AS tracking_last_check_time,
+			tracking.last_chapter_date AS tracking_last_chapter_date
 		FROM work_history wh
 		LEFT JOIN entity e ON e.id = wh.entity_id
 		LEFT JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
 		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, wh.anchor_manga_id)
 		LEFT JOIN (
-			SELECT entity_id, SUM(chapters_new) AS new_chapters, MAX(last_chapter_date) AS last_chapter_date
+			SELECT
+				entity_id,
+				MAX(manga_id) AS anchor_manga_id,
+				MAX(last_chapter_id) AS last_chapter_id,
+				SUM(chapters_new) AS new_chapters,
+				MAX(last_check_time) AS last_check_time,
+				MAX(last_chapter_date) AS last_chapter_date
 			FROM tracks
 			WHERE entity_id IS NOT NULL
 			GROUP BY entity_id
@@ -94,7 +123,7 @@ abstract class WorkHistoryDao {
         allowedSources: Collection<String>,
         applyTabFilter: Boolean,
         tabAllowedTypes: Collection<String>,
-    ): PagingSource<Int, WorkHistoryEntity>
+    ): PagingSource<Int, HistoryLibraryPagingRow>
 
     @Query(
         """

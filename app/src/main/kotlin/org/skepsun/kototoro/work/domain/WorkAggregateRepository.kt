@@ -29,6 +29,7 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.favourites.data.FavouriteLibraryPagingRow
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
+import org.skepsun.kototoro.history.data.HistoryLibraryPagingRow
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -197,9 +198,116 @@ class WorkAggregateRepository @Inject constructor(
             applyTabFilter = tabAllowedTypes != null,
             tabAllowedTypes = tabAllowedTypes.orEmpty(),
         )
-        return BatchMappingPagingSource(delegate, diagnosticLabel = "history-aggregate") { histories ->
-            buildHistoryAggregates(histories, spaceId)
+        return BatchMappingPagingSource(delegate, diagnosticLabel = "history-aggregate") { rows ->
+            buildHistoryPagingAggregates(rows, spaceId)
         }
+    }
+
+    private suspend fun buildHistoryPagingAggregates(
+        rows: List<HistoryLibraryPagingRow>,
+        spaceId: SpaceId?,
+    ): List<WorkAggregate> = coroutineScope {
+        if (rows.isEmpty()) {
+            return@coroutineScope emptyList()
+        }
+        val entityIds = rows.map { row -> row.history.entityId }.distinct()
+        val bindingsDeferred = async {
+            db.getEntityGraphDao().findActiveLocalBindingsByEntities(entityIds)
+                .groupBy { binding -> binding.entityId }
+        }
+        // Categories feed HistoryRepository.favouriteCategoryIds, which the history
+        // page's FAVORITE quick filter still needs.
+        val categoriesDeferred = async { findCategoriesByEntityId(entityIds) }
+        // The persisted entity content type is authoritative for the type chips
+        // (Novel/Video), so it is loaded in one batch like resolveProjectionSet did.
+        val contentTypesByEntityIdDeferred = async {
+            db.getEntityGraphDao().findEntitiesByIds(entityIds)
+                .associate { entity -> entity.id to entity.contentType?.let(::parseContentType) }
+        }
+        val bindingsByEntityId = bindingsDeferred.await()
+        val projectionIds = buildSet {
+            rows.forEach { row ->
+                row.history.anchorMangaId.let(::add)
+                row.preferredLocalMangaId?.let(::add)
+            }
+            bindingsByEntityId.values.flatten().mapNotNullTo(this) { binding ->
+                binding.externalId.toLongOrNull()
+            }
+        }
+        // History supports the detailed list (tags rendered), so always load tags for
+        // the display projections in one batch instead of a per-page resolveProjectionSet.
+        val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
+        val projectionsById = projectionRows.associate { row -> row.manga.id to row.toContent() }
+        val contentTypesById = projectionRows.associate { row ->
+            row.manga.id to row.manga.contentType?.let(::parseContentType)
+        }
+        val categoriesByEntityId = categoriesDeferred.await()
+        val contentTypesByEntityId = contentTypesByEntityIdDeferred.await()
+        val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
+
+        rows.mapNotNull { row ->
+            val history = row.history
+            val localMangaIds = buildSet {
+                history.anchorMangaId.let(::add)
+                bindingsByEntityId[history.entityId].orEmpty().mapNotNullTo(this) { binding ->
+                    binding.externalId.toLongOrNull()
+                }
+            }
+            val preferredMangaId = row.preferredLocalMangaId?.takeIf { it in localMangaIds }
+                ?: localMangaIds.firstOrNull()
+            val identity = WorkIdentity(
+                entityId = history.entityId,
+                requestedMangaId = row.displayManga?.id ?: history.anchorMangaId,
+                preferredMangaId = preferredMangaId,
+                localMangaIds = localMangaIds,
+                migrationState = WorkMigrationState.VALID,
+            )
+            val displayProjection = resolveDisplayProjection(
+                identity = identity,
+                anchorId = history.anchorMangaId,
+                cachedProjectionsById = projectionsById,
+                persistedContentTypesById = contentTypesById,
+                fallbackContentType = contentTypesByEntityId[history.entityId],
+                allowedContentTypes = allowedTypes,
+            ) ?: return@mapNotNull null
+            val projections = buildList {
+                preferredMangaId?.let(::add)
+                history.anchorMangaId.let(::add)
+                addAll(localMangaIds)
+            }.distinct()
+                .filter { id -> allowedTypes == null || contentTypesById[id] in allowedTypes }
+                .mapNotNull(projectionsById::get)
+                .distinctBy { content ->
+                    ProjectionIdentityKeys.contentCompactKey(
+                        source = content.source.name,
+                        id = content.id,
+                        url = content.url,
+                        publicUrl = content.publicUrl,
+                    )
+                }
+            WorkAggregate(
+                identity = identity,
+                displayProjection = displayProjection,
+                projections = projections,
+                categories = categoriesByEntityId[history.entityId].orEmpty(),
+                history = history,
+                tracking = row.toTrackingSummary(),
+                // Anchor manga type first, entity type second: the persisted content
+                // type is authoritative for the Novel/Video chips.
+                contentType = contentTypesById[history.anchorMangaId]
+                    ?: contentTypesByEntityId[history.entityId],
+            )
+        }
+    }
+
+    private fun HistoryLibraryPagingRow.toTrackingSummary(): WorkTrackingSummary? {
+        return WorkTrackingSummary(
+            anchorMangaId = trackingAnchorMangaId ?: return null,
+            lastChapterId = trackingLastChapterId ?: return null,
+            newChapters = trackingNewChapters ?: 0,
+            lastCheckTime = trackingLastCheckTime ?: 0L,
+            lastChapterDate = trackingLastChapterDate ?: 0L,
+        )
     }
 
     suspend fun findFavouriteAggregates(
@@ -303,9 +411,11 @@ class WorkAggregateRepository @Inject constructor(
             entityIds = entityIds,
             anchorIds = anchorIds,
         )
-        val categoriesByEntityId = findCategoriesByEntityId(entityIds)
-        val statsByEntityId = findStatsByEntityId(entityIds)
-        val trackingByEntityId = findTrackingByEntityId(entityIds)
+        // The tracking summary is already the track in hand: group the rows (an
+        // entity may appear under several mangas) instead of re-querying tracks.
+        val trackingByEntityId = tracks.groupBy(TrackEntity::entityId)
+            .mapNotNull { (entityId, grouped) -> entityId?.let { it to grouped.toWorkTrackingSummary() } }
+            .toMap()
         return entityIds.mapNotNull { entityId ->
             val identity = projectionSet.identitiesByEntityId[entityId] ?: return@mapNotNull null
             val tracking = trackingByEntityId[entityId] ?: return@mapNotNull null
@@ -318,10 +428,9 @@ class WorkAggregateRepository @Inject constructor(
                 identity = identity,
                 displayProjection = displayProjection,
                 projections = projectionSet.projectionsFor(identity),
-                categories = categoriesByEntityId[entityId].orEmpty(),
-                history = db.getWorkHistoryDao().find(entityId)?.takeIf { it.deletedAt == 0L },
-                favourite = db.getWorkFavouritesDao().findActiveForEntity(entityId),
-                stats = statsByEntityId[entityId],
+                // The tracking path (updates / subscriptions / home) renders display +
+                // identity + tracking only; history, favourite, stats and categories are
+                // never consumed after toContentTracking(), so they are not loaded here.
                 tracking = tracking,
             )
         }.sortedWith(

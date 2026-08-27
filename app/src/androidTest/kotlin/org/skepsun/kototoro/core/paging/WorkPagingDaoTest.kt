@@ -72,7 +72,7 @@ class WorkPagingDaoTest {
 		val historyFirst = history.load(refreshParams()).requirePage()
 		val historySecond = history.load(appendParams(requireNotNull(historyFirst.nextKey)))
 			.requirePage()
-		assertUniqueEntities(historyFirst.data.map { it.entityId }, historySecond.data.map { it.entityId })
+		assertUniqueEntities(historyFirst.data.map { it.history.entityId }, historySecond.data.map { it.history.entityId })
 	}
 
 	@Test
@@ -254,6 +254,39 @@ class WorkPagingDaoTest {
 		Log.d("LibraryPaging", "history-bench Refresh rawItems=" + first.data.size + " firstPageMs=" + pageMs)
 		assertEquals(64, first.data.size)
 		assertTrue("first history page took " + pageMs + "ms", pageMs < 5_000)
+	}
+
+	@Test
+	fun historyPageCarriesDisplayLocalMangaAndTrackingSummary() = runTest {
+		seedTracks()
+		val source = db.getWorkHistoryDao().pagingSource(
+			orderName = "LAST_READ",
+			applySpaceFilter = false,
+			allowedTypes = emptyList(),
+			classifiedTypes = emptyList(),
+			applySourceFilter = false,
+			allowedSources = emptyList(),
+			applyTabFilter = false,
+			tabAllowedTypes = emptyList(),
+		)
+		// LAST_READ desc starts at the most recent seed rows (entityId 3200 downward),
+		// which all carry history + tracks; the display manga must be embedded in the
+		// same query instead of re-resolved per page.
+		var page = source.load(refreshParams()).requirePage()
+		var nextKey = page.nextKey
+		var seededRow = page.data.firstOrNull { it.history.entityId <= 3_200L }
+		while (seededRow == null && nextKey != null) {
+			page = source.load(appendParams(nextKey)).requirePage()
+			seededRow = page.data.firstOrNull { it.history.entityId <= 3_200L }
+			nextKey = page.nextKey
+		}
+
+		val row = requireNotNull(seededRow) { "no seeded history row found in history pages" }
+		assertEquals(row.history.entityId + 10_000L, row.history.anchorMangaId)
+		assertEquals(row.history.anchorMangaId, row.displayManga?.id)
+		assertTrue((row.trackingNewChapters ?: 0) > 0)
+		assertNotNull(row.trackingLastChapterDate)
+		assertEquals("MANGA", row.displayManga?.contentType)
 	}
 
 	private fun seedTracks() {
