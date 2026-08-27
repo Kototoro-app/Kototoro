@@ -17,7 +17,7 @@ class BottomNavLayoutSpecTest {
 	}
 
 	@Test
-	fun `five items with fab use compact density before minimum density`() {
+	fun `five items with fab use compact density and keep below labels`() {
 		resolveBottomNavLayout(
 			availableWidth = 360.dp,
 			itemCount = 5,
@@ -25,12 +25,14 @@ class BottomNavLayoutSpecTest {
 			showLabels = true,
 		).let { spec ->
 			spec.density shouldBe BottomNavDensity.COMPACT
-			spec.showLabels shouldBe false
+			// Labels below the icon take no horizontal width, so compact bars
+			// must keep them (master switch and always-visible still apply).
+			spec.showLabels shouldBe true
 		}
 	}
 
 	@Test
-	fun `narrow layout keeps minimum density without shrinking touch targets`() {
+	fun `narrow minimum density still keeps below labels when requested`() {
 		resolveBottomNavLayout(
 			availableWidth = 320.dp,
 			itemCount = 5,
@@ -40,6 +42,23 @@ class BottomNavLayoutSpecTest {
 			spec.density shouldBe BottomNavDensity.MINIMUM
 			spec.itemSpacing shouldBe 2.dp
 			spec.horizontalPadding shouldBe 0.dp
+			spec.showLabels shouldBe true
+		}
+	}
+
+	@Test
+	fun `narrow minimum density drops expressive labels that do not fit`() {
+		resolveBottomNavLayout(
+			availableWidth = 320.dp,
+			itemCount = 5,
+			fabWidth = 56.dp,
+			showLabels = true,
+			isExpressivePill = true,
+		).let { spec ->
+			spec.density shouldBe BottomNavDensity.MINIMUM
+			// The beside-icon pill label competes for width, so it is hidden
+			// once even the minimum spacing no longer fits it.
+			spec.showLabels shouldBe false
 		}
 	}
 

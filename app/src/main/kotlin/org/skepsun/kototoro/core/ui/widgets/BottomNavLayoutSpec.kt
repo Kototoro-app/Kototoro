@@ -93,7 +93,7 @@ internal fun resolveBottomNavLayout(
             horizontalPadding = CompactHorizontalPadding,
             outerHorizontalPadding = CompactOuterPadding,
             fabGap = CompactFabGap,
-            showLabels = showLabels && isExpressivePill,
+            showLabels = showLabels,
             labelScale = if (shouldShowExpressiveLabels) CompactExpressiveLabelScale else 1f,
             labelMaxWidth = CompactExpressiveLabelWidth.takeIf { shouldShowExpressiveLabels },
         )
@@ -103,13 +103,17 @@ internal fun resolveBottomNavLayout(
             horizontalPadding = MinimumHorizontalPadding,
             outerHorizontalPadding = MinimumOuterPadding,
             fabGap = MinimumFabGap,
-            showLabels = shouldShowExpressiveLabels && fits(
-                itemSpacing = MinimumItemSpacing,
-                horizontalPadding = MinimumHorizontalPadding,
-                outerPadding = MinimumOuterPadding,
-                fabGap = MinimumFabGap,
-                expressiveLabelWidth = MinimumExpressiveLabelWidth,
-            ),
+            showLabels = if (isExpressivePill) {
+                shouldShowExpressiveLabels && fits(
+                    itemSpacing = MinimumItemSpacing,
+                    horizontalPadding = MinimumHorizontalPadding,
+                    outerPadding = MinimumOuterPadding,
+                    fabGap = MinimumFabGap,
+                    expressiveLabelWidth = MinimumExpressiveLabelWidth,
+                )
+            } else {
+                showLabels
+            },
             labelScale = if (shouldShowExpressiveLabels) MinimumExpressiveLabelScale else 1f,
             labelMaxWidth = MinimumExpressiveLabelWidth.takeIf { shouldShowExpressiveLabels },
         )
