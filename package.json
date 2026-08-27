@@ -9,7 +9,7 @@
   },
   "overrides": {
     "vite": "6.4.3",
-    "postcss": "8.5.18"
+    "postcss": "8.5.26"
   },
   "devDependencies": {
     "vitepress": "^1.6.4"
