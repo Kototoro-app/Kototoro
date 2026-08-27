@@ -19,11 +19,13 @@ class InterfaceStyleTokensTest {
 	}
 
 	@Test
-	fun visibleTopBarControlsRemainStyleSpecific() {
+	fun topBarControlSizesAlignAcrossStylesAfterM3TokenRefactor() {
+		// c74e3ae1a aligned M3 control sizes with iOS; exact values stay pinned
+		// so a future sizing change surfaces in CI.
 		assertEquals(44.dp, InterfaceStyleTokens.Ios.topBarButtonSize)
 		assertEquals(22.dp, InterfaceStyleTokens.Ios.topBarIconSize)
-		assertEquals(48.dp, InterfaceStyleTokens.Material3Expressive.topBarButtonSize)
-		assertEquals(24.dp, InterfaceStyleTokens.Material3Expressive.topBarIconSize)
+		assertEquals(InterfaceStyleTokens.Ios.topBarButtonSize, InterfaceStyleTokens.Material3Expressive.topBarButtonSize)
+		assertEquals(InterfaceStyleTokens.Ios.topBarIconSize, InterfaceStyleTokens.Material3Expressive.topBarIconSize)
 	}
 
 	@Test

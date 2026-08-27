@@ -17,7 +17,10 @@ class InterfaceStylePolicyTest {
 		assertTrue(policy.useExpandedTouchTargets)
 		assertTrue(policy.emphasizeNavigationSelection)
 		assertFalse(policy.useLiquidGlass)
-		assertEquals(56, InterfaceStyle.MATERIAL_3_EXPRESSIVE.tokens().controlHeight.value.toInt())
+		// Control sizes were aligned with iOS (refactor(theme): align m3
+		// control-size tokens with ios); pinned here so a future sizing change
+		// surfaces in CI.
+		assertEquals(50, InterfaceStyle.MATERIAL_3_EXPRESSIVE.tokens().controlHeight.value.toInt())
 	}
 
 	@Test
@@ -37,6 +40,6 @@ class InterfaceStylePolicyTest {
 		assertEquals(InterfaceStyle.MATERIAL_3_EXPRESSIVE, migratedStyle)
 		assertTrue(policy.useExpressiveComponents)
 		assertTrue(policy.useExpandedTouchTargets)
-		assertEquals(56, migratedStyle.tokens().controlHeight.value.toInt())
+		assertEquals(50, migratedStyle.tokens().controlHeight.value.toInt())
 	}
 }
