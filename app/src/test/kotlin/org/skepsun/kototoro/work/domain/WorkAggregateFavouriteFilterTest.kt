@@ -31,6 +31,21 @@ class WorkAggregateFavouriteFilterTest {
 	}
 
 	@Test
+	fun `multi projection filter matches only entities with several local projections`() {
+		// localMangaIds is the entity's local projection set (WorkResolver
+		// semantics); the favourites anchor must not inflate it, or this filter
+		// degenerates into matching everything.
+		assertFalse(
+			aggregate(localMangaIds = setOf(2L))
+				.matchesFavouriteMacroFilter(ListFilterOption.Macro.MULTI_PROJECTION),
+		)
+		assertTrue(
+			aggregate(localMangaIds = setOf(2L, 3L))
+				.matchesFavouriteMacroFilter(ListFilterOption.Macro.MULTI_PROJECTION),
+		)
+	}
+
+	@Test
 	fun `broken filter matches when any associated projection source is unavailable`() {
 		val aggregate = aggregate(projectionSources = listOf("available", "missing"))
 
@@ -130,12 +145,13 @@ class WorkAggregateFavouriteFilterTest {
 		newChapters: Int? = null,
 		projectionSources: List<String> = emptyList(),
 		projections: List<Content>? = null,
+		localMangaIds: Set<Long> = setOf(2L),
 	): WorkAggregate = WorkAggregate(
 		identity = WorkIdentity(
 			entityId = 1L,
 			requestedMangaId = 2L,
 			preferredMangaId = 2L,
-			localMangaIds = setOf(2L),
+			localMangaIds = localMangaIds,
 			migrationState = WorkMigrationState.VALID,
 		),
 		displayProjection = projections?.firstOrNull() ?: projectionSources.firstOrNull()?.let { content(2L, it) },

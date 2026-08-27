@@ -791,8 +791,14 @@ class WorkAggregateRepository @Inject constructor(
 
         rows.mapNotNull { row ->
             val entry = row.favourite
+            // localMangaIds must match WorkResolver semantics (the set of local
+            // manga projections bound to the entity), NOT the favourites anchor:
+            // the anchor may reference a remote manga that is not a local binding,
+            // and unioning it in inflated the count to >1 for single-projection
+            // works, breaking the MULTI_PROJECTION filter (it then matched
+            // everything). The anchor is still used for display via
+            // resolveDisplayProjection(anchorId = ...).
             val localMangaIds = buildSet {
-                entry.anchorMangaId?.let(::add)
                 bindingsByEntityId[entry.entityId].orEmpty().mapNotNullTo(this) { binding ->
                     binding.externalId.toLongOrNull()
                 }
