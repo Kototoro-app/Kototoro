@@ -186,4 +186,23 @@ class ExternalBulkImportPlannerTest {
         assertEquals(1, newEntities.size)
         assertTrue(entry.isNewEntity)
     }
+
+    @Test
+    fun `existing local binding takes precedence over title attach and new entity`() {
+        val existingByName = existingEntity(id = 77L, primaryName = "Frieren")
+        val boundOwner = existingEntity(id = 88L, primaryName = "Sousou no Frieren (old title)")
+        val entry = BulkImportEntry(record("Frieren", "https://a/frieren"), mangaId = 1L)
+
+        val newEntities = planWorkEntityAssignment(
+            entries = listOf(entry),
+            existingEntitiesByHash = mapOf(computeNameHash("Frieren") to listOf(existingByName)),
+            now = 7L,
+            localBindingByMangaId = mapOf(1L to 88L),
+        )
+
+        assertTrue(newEntities.isEmpty())
+        assertFalse(entry.isNewEntity)
+        // local binding owner wins over the exact-name attach target
+        assertEquals(88L, entry.entityId)
+    }
 }

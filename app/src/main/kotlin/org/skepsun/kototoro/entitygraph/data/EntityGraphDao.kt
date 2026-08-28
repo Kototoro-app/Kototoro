@@ -202,6 +202,16 @@ abstract class EntityGraphDao {
 
     @Query(
         """
+		SELECT DISTINCT b.entity_id
+		FROM entity_binding b
+		WHERE b.source = 'local_manga'
+			AND b.created_by = 'IMPORT'
+        """
+    )
+    abstract suspend fun findImportProvisionalEntityIds(): List<Long>
+
+    @Query(
+        """
 		SELECT * FROM entity_binding
 		WHERE source IN (:sources) AND external_id IN (:externalIds)
         """

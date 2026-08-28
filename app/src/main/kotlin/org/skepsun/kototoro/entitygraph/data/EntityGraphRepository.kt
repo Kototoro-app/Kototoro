@@ -57,6 +57,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val ENTITY_SCAN_LIMIT = 120
+private const val MAX_CONSOLIDATION_QUERY_PARAMS = 500
 private const val RELATION_WEIGHT_DEFAULT = 1f
 private const val STALE_ENTITY_DAYS = 30L
 private const val STALE_ENTITY_ACCESS_THRESHOLD = 2
@@ -1048,6 +1049,103 @@ class EntityGraphRepository @Inject constructor(
             dao.deleteEntitiesByIds(entityIds.filterNot { it == targetEntityId })
             dao.touchEntity(targetEntityId, now)
             targetEntityId
+        }
+    }
+
+    /**
+     * Phase 2 of the external backup fast import: merges provisional entities (WORK
+     * entities whose local_manga binding was created by the bulk import, createdBy=IMPORT)
+     * that refer to the same work. Grouping is computed in memory by
+     * [buildConsolidationGroups] (strong projection keys + normalized title per content
+     * type); merging reuses the established remap path (work state, bindings, relations)
+     * and finally deletes the absorbed entity rows. Idempotent: with fewer than two
+     * provisional entities left it is a no-op.
+     */
+    suspend fun consolidateImportProvisionalEntities(): EntityConsolidationReport = withContext(Dispatchers.Default) {
+        val dao = db.getEntityGraphDao()
+        val provisionalEntityIds = dao.findImportProvisionalEntityIds()
+        if (provisionalEntityIds.size < 2) {
+            return@withContext EntityConsolidationReport.EMPTY
+        }
+        val entitiesById = provisionalEntityIds
+            .chunked(MAX_CONSOLIDATION_QUERY_PARAMS)
+            .flatMap { dao.findEntitiesByIds(it) }
+            .filter { it.type == EntityType.WORK.name }
+            .associateBy { it.id }
+        if (entitiesById.size < 2) {
+            return@withContext EntityConsolidationReport.EMPTY
+        }
+        val bindingsByEntityId = provisionalEntityIds
+            .chunked(MAX_CONSOLIDATION_QUERY_PARAMS)
+            .flatMap { dao.findActiveLocalBindingsByEntities(it) }
+            .groupBy { it.entityId }
+        val mangaById = bindingsByEntityId.values
+            .asSequence()
+            .flatten()
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .distinct()
+            .toList()
+            .let { ids -> db.getMangaDao().findEntitiesByIds(ids) }
+            .associateBy { it.id }
+        val inputs = entitiesById.values.map { record ->
+            val strongKeys = bindingsByEntityId[record.id].orEmpty()
+                .mapNotNull { it.externalId.toLongOrNull() }
+                .flatMap { mangaId -> buildConsolidationStrongKeys(mangaById[mangaId]) }
+                .toSet()
+            ConsolidationEntity(
+                entityId = record.id,
+                contentType = record.contentType,
+                primaryName = record.primaryName,
+                nameHash = record.nameHash,
+                strongKeys = strongKeys,
+            )
+        }
+        val groups = buildConsolidationGroups(inputs)
+        if (groups.isEmpty()) {
+            return@withContext EntityConsolidationReport.EMPTY
+        }
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            groups.forEach { group ->
+                group.absorbedEntityIds.forEach { absorbed ->
+                    remapWorkOwnedState(
+                        sourceEntityId = absorbed,
+                        targetEntityId = group.canonicalEntityId,
+                    )
+                    remapBindingsAndRelations(
+                        dao = dao,
+                        targetEntityId = group.canonicalEntityId,
+                        sourceEntityIds = listOf(absorbed),
+                    )
+                }
+                dao.deleteEntitiesByIds(group.absorbedEntityIds)
+                dao.touchEntity(group.canonicalEntityId, now)
+            }
+        }
+        EntityConsolidationReport(
+            groupCount = groups.size,
+            absorbedCount = groups.sumOf { it.absorbedEntityIds.size },
+        )
+    }
+
+    private fun buildConsolidationStrongKeys(manga: MangaEntity?): List<String> {
+        if (manga == null) {
+            return emptyList()
+        }
+        val normalizedSource = manga.source.trim()
+        return listOfNotNull(
+            manga.url.trim().takeIf { it.isNotEmpty() },
+            manga.publicUrl.trim().takeIf { it.isNotEmpty() },
+        ).distinct()
+            .map { "$normalizedSource|location|$it" }
+    }
+
+    data class EntityConsolidationReport(
+        val groupCount: Int,
+        val absorbedCount: Int,
+    ) {
+        companion object {
+            val EMPTY = EntityConsolidationReport(groupCount = 0, absorbedCount = 0)
         }
     }
 

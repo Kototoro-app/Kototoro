@@ -74,6 +74,21 @@ class ExternalBackupRepository @Inject constructor(
             // Pass 2 (memory + chunked batch queries): anchor each record to a WORK entity.
             // Exact-name matches attach to the existing entity; everything else becomes a
             // provisional entity (binding createdBy=IMPORT) merged later by phase 2.
+            // Pass 2 (memory + chunked batch queries): anchor each record to a WORK entity.
+            // Local-binding owners take precedence; exact-name matches attach to the
+            // existing entity; everything else becomes a provisional entity (binding
+            // createdBy=IMPORT) merged later by phase 2.
+            val localBindingByMangaId = HashMap<Long, Long>()
+            pending.map { it.mangaId.toString() }.distinct().chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
+                dao.findActiveBindingsBySources(
+                    sources = listOf("local_manga", "0"),
+                    externalIds = chunk,
+                ).forEach { binding ->
+                    binding.externalId.toLongOrNull()?.let { mangaId ->
+                        localBindingByMangaId.putIfAbsent(mangaId, binding.entityId)
+                    }
+                }
+            }
             val nameHashes = pending.map { computeNameHash(it.title) }.distinct()
             val existingByHash = LinkedHashMap<Long, List<EntityRecord>>()
             nameHashes.chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
@@ -86,6 +101,7 @@ class ExternalBackupRepository @Inject constructor(
                 entries = pending,
                 existingEntitiesByHash = existingByHash,
                 now = now,
+                localBindingByMangaId = localBindingByMangaId,
             )
 
             // Pass 3 (bulk writes, single transaction):

@@ -26,6 +26,7 @@ import org.skepsun.kototoro.core.util.ext.powerManager
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withPartialWakeLock
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import java.io.FileNotFoundException
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -43,6 +44,9 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
     @Inject
     lateinit var repository: ExternalBackupRepository
 
+    @Inject
+    lateinit var entityGraphRepository: EntityGraphRepository
+
     override suspend fun IntentJobContext.processIntent(intent: Intent) {
         val notification = buildNotification()
         setForeground(
@@ -57,7 +61,12 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
         powerManager.withPartialWakeLock(TAG) {
             val result = runCatching {
                 val payload = withContext(Dispatchers.IO) { decoder.decode(source, app) }
-                repository.import(payload)
+                val summary = repository.import(payload)
+                // Phase 2: consolidate provisional import entities (merge duplicate works
+                // across sources) before reporting completion, so the reported state is final.
+                runCatching { entityGraphRepository.consolidateImportProvisionalEntities() }
+                    .onFailure { it.printStackTraceDebug() }
+                summary
             }
             result.fold(
                 onSuccess = { summary ->

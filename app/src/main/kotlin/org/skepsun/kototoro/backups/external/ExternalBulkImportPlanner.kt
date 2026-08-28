@@ -127,9 +127,21 @@ internal fun planWorkEntityAssignment(
     existingEntitiesByHash: Map<Long, List<EntityRecord>>,
     now: Long,
     takenSlots: MutableSet<String> = HashSet(),
+    localBindingByMangaId: Map<Long, Long> = emptyMap(),
 ): List<EntityRecord> {
     val newEntities = ArrayList<EntityRecord>()
     for (entry in entries) {
+        // Highest precedence: a manga id that already carries a local binding belongs to
+        // that entity — re-anchoring it elsewhere would steal the (source, external_id)
+        // primary key from its current owner (the old per-record path checked
+        // findEntityByLocalMangaId first, this mirrors that).
+        val boundEntityId = localBindingByMangaId[entry.mangaId]
+        if (boundEntityId != null) {
+            entry.entityId = boundEntityId
+            entry.isNewEntity = false
+            entry.newEntityRecord = null
+            continue
+        }
         val contentTypeName = entry.record.contentType.name
         val baseHash = computeNameHash(entry.title)
         val attachTarget = existingEntitiesByHash[baseHash].orEmpty().firstOrNull { candidate ->
