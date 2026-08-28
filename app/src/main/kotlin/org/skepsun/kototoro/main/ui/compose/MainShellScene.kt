@@ -395,6 +395,7 @@ private fun MainShellTopLevelEntryContent(
             contentPadding = contentPadding,
             onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
             navigateToDetailsWithContent = navigateToDetailsWithContent,
+            navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
         )
         is org.skepsun.kototoro.main.ui.navigation3.ContentListNavKey -> {
             val pendingFilter = remember(key.sourceName) { PendingContentListNavigation.consumeFilter() }
@@ -1215,6 +1216,23 @@ internal fun BookmarksTopLevelRouteContent(
     )
 }
 
+internal fun navigateUpdatedEntityDetails(
+    entityId: Long,
+    preferredLocalMangaId: Long?,
+    initialProjectionLocalMangaId: Long,
+    sharedElementKey: String?,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
+) {
+    navigateToDetailsWithOrigin(
+        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
+            entityId = entityId,
+            preferredLocalMangaId = preferredLocalMangaId ?: initialProjectionLocalMangaId,
+            initialProjectionLocalMangaId = initialProjectionLocalMangaId,
+        ),
+        sharedElementKey,
+    )
+}
+
 @Composable
 internal fun UpdatedTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
@@ -1222,6 +1240,7 @@ internal fun UpdatedTopLevelRouteContent(
     contentPadding: androidx.compose.foundation.layout.PaddingValues,
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     navigateToDetailsWithContent: (Content, String?) -> Unit,
+    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>("updated")
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
@@ -1322,6 +1341,15 @@ internal fun UpdatedTopLevelRouteContent(
             onRemoveSelection = { ids -> viewModel.remove(ids) },
             onNavigateToDetails = { _, content, sharedKey ->
                 navigateToDetailsWithContent(content, sharedKey)
+            },
+            onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->
+                navigateUpdatedEntityDetails(
+                    entityId = entityId,
+                    preferredLocalMangaId = preferredLocalMangaId,
+                    initialProjectionLocalMangaId = content.id,
+                    sharedElementKey = sharedKey,
+                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
+                )
             },
             onFilterRailOverrideChanged = {},
             onAddMenuProvider = { _, _, _ ->
