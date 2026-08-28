@@ -548,6 +548,9 @@ abstract class WorkFavouritesDao {
     @Upsert
     abstract suspend fun upsert(entity: WorkFavouriteEntity)
 
+    @Upsert
+    abstract suspend fun upsert(entities: List<WorkFavouriteEntity>)
+
     @Query("UPDATE work_favourites SET deleted_at = :deletedAt, updated_at = :updatedAt WHERE entity_id = :entityId")
     abstract suspend fun setDeletedAt(entityId: Long, deletedAt: Long, updatedAt: Long)
 

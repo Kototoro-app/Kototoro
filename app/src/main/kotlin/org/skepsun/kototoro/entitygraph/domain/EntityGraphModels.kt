@@ -54,6 +54,13 @@ enum class EntityBindingCreatedBy {
     SYNC,
     MIGRATION,
     LEGACY,
+
+    /**
+     * Bindings created by the external backup fast-import (phase 1). Entities whose
+     * local_manga binding carries this marker are provisional: one per imported
+     * (source, url) record, pending consolidation in EntityConsolidationWorker.
+     */
+    IMPORT,
 }
 
 val EntityBinding.sourceKind: EntityBindingSourceKind

@@ -77,6 +77,10 @@ abstract class EntityGraphDao {
     @Insert
     abstract suspend fun insertEntity(entity: EntityRecord): Long
 
+    /** Bulk insert; returned ids are aligned with the input order. */
+    @Insert
+    abstract suspend fun insertEntities(entities: List<EntityRecord>): List<Long>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertEntityIgnore(entity: EntityRecord): Long
 
@@ -222,6 +226,9 @@ abstract class EntityGraphDao {
 
     @Upsert
     abstract suspend fun upsertBinding(binding: EntityBindingRecord)
+
+    @Upsert
+    abstract suspend fun upsertBindings(bindings: List<EntityBindingRecord>)
 
     @Query(
         """

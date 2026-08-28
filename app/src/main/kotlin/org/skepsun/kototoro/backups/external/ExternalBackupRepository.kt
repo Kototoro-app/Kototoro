@@ -9,20 +9,23 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
-import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.model.getTitle
+import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.EntityRecord
+import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
+import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
+import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.work.domain.WorkResolver
-import org.skepsun.kototoro.work.domain.WorkIdentity
-import org.skepsun.kototoro.work.domain.WorkIdentityProvenance
 import javax.inject.Inject
 
 @Reusable
@@ -30,17 +33,19 @@ class ExternalBackupRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: MangaDatabase,
     private val mihonExtensionManager: MihonExtensionManager,
-    private val workResolver: WorkResolver,
 ) {
 
     suspend fun import(payload: ExternalBackupPayload): ExternalBackupImportSummary {
         if (payload.records.isEmpty()) return ExternalBackupImportSummary(0, 0)
         return database.withTransaction {
+            val dao = database.getEntityGraphDao()
             val sourceMatcher = SourceMatcher(context, database, mihonExtensionManager)
             val externalCategories = ensureImportedCategories(payload.favoriteCategories)
             val defaultCategoryId = ensureDefaultCategoryId(externalCategories.values)
-            var favoritesImported = 0
-            var historyImported = 0
+            val now = System.currentTimeMillis()
+
+            // Pass 1 (memory only): resolve sources and merge duplicate manga ids.
+            val pendingById = LinkedHashMap<Long, BulkImportEntry>()
             val failedRecords = ArrayList<ExternalBackupFailedRecord>()
             val missingSourceNames = LinkedHashSet<String>()
             for (record in payload.records) {
@@ -57,69 +62,127 @@ class ExternalBackupRepository @Inject constructor(
                     }
                 }
                 val mangaId = generateContentId(resolvedRecord)
-                upsertContent(mangaId, resolvedRecord)
-                val workIdentity = resolveImportedWorkIdentity(mangaId) ?: continue
-                if (resolvedRecord.isFavorite) {
-                    val favoriteTimestamp = resolvedRecord.favoriteTimestamp ?: System.currentTimeMillis()
-                    val targetCategoryIds = resolvedRecord.favoriteCategoryOrders
+                val existing = pendingById[mangaId]
+                if (existing == null) {
+                    pendingById[mangaId] = BulkImportEntry(resolvedRecord, mangaId)
+                } else {
+                    existing.mergeFrom(resolvedRecord)
+                }
+            }
+            val pending = pendingById.values.toList()
+
+            // Pass 2 (memory + chunked batch queries): anchor each record to a WORK entity.
+            // Exact-name matches attach to the existing entity; everything else becomes a
+            // provisional entity (binding createdBy=IMPORT) merged later by phase 2.
+            val nameHashes = pending.map { computeNameHash(it.title) }.distinct()
+            val existingByHash = LinkedHashMap<Long, List<EntityRecord>>()
+            nameHashes.chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
+                dao.findEntitiesByTypeAndNameHashes(EntityType.WORK.name, chunk)
+                    .filter { it.type == EntityType.WORK.name }
+                    .groupBy { it.nameHash }
+                    .forEach { (hash, records) -> existingByHash.merge(hash, records) { old, new -> old + new } }
+            }
+            val newEntities = planWorkEntityAssignment(
+                entries = pending,
+                existingEntitiesByHash = existingByHash,
+                now = now,
+            )
+
+            // Pass 3 (bulk writes, single transaction):
+            var favorites = 0
+            var historyRows = 0
+            val insertedIds = dao.insertEntities(newEntities)
+            var insertIndex = 0
+            val tagsById = LinkedHashMap<Long, TagEntity>()
+            val favourites = ArrayList<WorkFavouriteEntity>()
+            val histories = ArrayList<WorkHistoryEntity>()
+            val bindings = ArrayList<EntityBindingRecord>(pending.size * 2)
+            for (entry in pending) {
+                if (entry.isNewEntity) {
+                    entry.entityId = insertedIds[insertIndex++]
+                }
+                entry.tags.forEach { tag -> tagsById.putIfAbsent(tag.id, tag) }
+            }
+            database.getTagsDao().upsert(tagsById.values.toList())
+            for (entry in pending) {
+                database.getMangaDao().upsert(entry.mangaEntity, entry.tags)
+            }
+            for (entry in pending) {
+                val entityId = entry.entityId
+                val resolved = entry.record
+                if (resolved.isFavorite) {
+                    val favoriteTimestamp = resolved.favoriteTimestamp ?: now
+                    val targetCategoryIds = resolved.favoriteCategoryOrders
                         .mapNotNull(externalCategories::get)
                         .ifEmpty { listOf(defaultCategoryId.toLong()) }
                     targetCategoryIds.distinct().forEach { categoryId ->
-                        database.getWorkFavouritesDao().upsert(
-                            WorkFavouriteEntity(
-                                entityId = workIdentity.entityId ?: return@forEach,
-                                categoryId = categoryId,
-                                anchorMangaId = mangaId,
-                                createdAt = favoriteTimestamp,
-                                sortKey = 0,
-                                deletedAt = 0L,
-                                isPinned = false,
-                                updatedAt = favoriteTimestamp,
-                            ),
+                        favourites += WorkFavouriteEntity(
+                            entityId = entityId,
+                            categoryId = categoryId,
+                            anchorMangaId = entry.mangaId,
+                            createdAt = favoriteTimestamp,
+                            sortKey = 0,
+                            deletedAt = 0L,
+                            isPinned = false,
+                            updatedAt = favoriteTimestamp,
                         )
-                        favoritesImported++
+                        favorites++
                     }
                 }
-                if (resolvedRecord.historyTimestamp != null && !resolvedRecord.historyChapterUrl.isNullOrBlank()) {
-                    val chapterId = generateChapterId(resolvedRecord, resolvedRecord.historyChapterUrl)
-                    val chaptersCount = resolvedRecord.chaptersCount.coerceAtLeast(0)
-                    val percent = resolvedRecord.progressPercent?.coerceIn(PROGRESS_NONE, 1f) ?: PROGRESS_NONE
-                    val history = HistoryEntity(
-                        mangaId = mangaId,
-                        createdAt = resolvedRecord.historyTimestamp,
-                        updatedAt = resolvedRecord.historyTimestamp,
+                if (resolved.historyTimestamp != null && !resolved.historyChapterUrl.isNullOrBlank()) {
+                    val chapterId = generateChapterId(resolved, resolved.historyChapterUrl)
+                    val percent = resolved.progressPercent?.coerceIn(PROGRESS_NONE, 1f) ?: PROGRESS_NONE
+                    histories += WorkHistoryEntity(
+                        entityId = entityId,
+                        anchorMangaId = entry.mangaId,
+                        createdAt = resolved.historyTimestamp,
+                        updatedAt = resolved.historyTimestamp,
                         chapterId = chapterId,
                         page = 0,
                         scroll = 0f,
                         percent = percent,
                         deletedAt = 0L,
-                        chaptersCount = chaptersCount,
+                        chaptersCount = resolved.chaptersCount.coerceAtLeast(0),
                         parentChapterId = null,
                     )
-                    workIdentity.entityId?.let { entityId ->
-                        val anchorMangaId = workIdentity.preferredMangaId ?: selectExistingLocalAnchor(entityId) ?: mangaId
-                        database.getWorkHistoryDao().upsert(
-                            WorkHistoryEntity(
-                                entityId = entityId,
-                                anchorMangaId = anchorMangaId,
-                                createdAt = history.createdAt,
-                                updatedAt = history.updatedAt,
-                                chapterId = history.chapterId,
-                                page = history.page,
-                                scroll = history.scroll,
-                                percent = history.percent,
-                                deletedAt = history.deletedAt,
-                                chaptersCount = history.chaptersCount,
-                                parentChapterId = history.parentChapterId,
-                            ),
-                        )
-                    }
-                    historyImported++
+                    historyRows++
+                }
+                bindings += EntityBindingRecord(
+                    entityId = entityId,
+                    source = "local_manga",
+                    externalId = entry.mangaId.toString(),
+                    confidence = 1f,
+                    isPrimary = entry.isNewEntity,
+                    sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+                    state = EntityBindingState.CONFIRMED.name,
+                    createdBy = EntityBindingCreatedBy.IMPORT.name,
+                    updatedAt = now,
+                )
+                val projectionKey = ProjectionIdentityKeys.bindingKey(
+                    url = resolved.url,
+                    publicUrl = resolved.publicUrl,
+                )
+                if (projectionKey != null) {
+                    bindings += EntityBindingRecord(
+                        entityId = entityId,
+                        source = resolved.sourceName,
+                        externalId = projectionKey,
+                        confidence = 1f,
+                        isPrimary = false,
+                        sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+                        state = EntityBindingState.CONFIRMED.name,
+                        createdBy = EntityBindingCreatedBy.IMPORT.name,
+                        updatedAt = now,
+                    )
                 }
             }
+            database.getWorkFavouritesDao().upsert(favourites)
+            database.getWorkHistoryDao().upsert(histories)
+            dao.upsertBindings(bindings)
+
             ExternalBackupImportSummary(
-                favoritesImported = favoritesImported,
-                historyImported = historyImported,
+                favoritesImported = favorites,
+                historyImported = historyRows,
                 failedCount = failedRecords.size,
                 failedTitles = failedRecords.map { it.title }.distinct(),
                 failedRecords = failedRecords.distinctBy { it.title to it.sourceCandidates to it.expectedSourceNames },
@@ -138,50 +201,6 @@ class ExternalBackupRepository @Inject constructor(
                 .filter { it.isNotEmpty() }
                 .distinct(),
             expectedSourceNames = expectedSourceNames.distinct(),
-        )
-    }
-
-    private suspend fun resolveImportedWorkIdentity(mangaId: Long): WorkIdentity? {
-        val manga = database.getMangaDao().find(mangaId)?.toContent() ?: return null
-        return workResolver.ensureForProjection(
-            content = manga,
-            provenance = WorkIdentityProvenance.IMPORT,
-        )
-    }
-
-    private suspend fun upsertContent(mangaId: Long, record: ExternalBackupContentRecord) {
-        val tags = record.tags
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .distinct()
-            .map { tag ->
-                TagEntity(
-                    id = "${record.sourceName}|tag|${tag.lowercase()}".hashCode().toLong() and Long.MAX_VALUE,
-                    title = tag,
-                    key = tag.lowercase().replace(" ", "_"),
-                    source = record.sourceName,
-                    isPinned = false,
-                )
-            }
-        database.getTagsDao().upsert(tags)
-        database.getMangaDao().upsert(
-            MangaEntity(
-                id = mangaId,
-                title = record.title.ifBlank { record.url },
-                altTitles = null,
-                url = record.url,
-                publicUrl = record.publicUrl.ifBlank { record.url },
-                rating = -1f,
-                isNsfw = false,
-                contentRating = null,
-                coverUrl = record.coverUrl.orEmpty(),
-                largeCoverUrl = record.coverUrl,
-                state = null,
-                authors = record.authors,
-                source = record.sourceName,
-                contentType = record.contentType.name,
-            ),
-            tags = tags,
         )
     }
 
@@ -232,17 +251,6 @@ class ExternalBackupRepository @Inject constructor(
 
     private fun generateContentId(record: ExternalBackupContentRecord): Long {
         return "${record.sourceName}|manga|${record.url}".hashCode().toLong() and Long.MAX_VALUE
-    }
-
-    private suspend fun selectExistingLocalAnchor(entityId: Long): Long? {
-        val identity = workResolver.resolveByEntityId(entityId) ?: return null
-        val preferredMangaId = identity.preferredMangaId
-        if (preferredMangaId != null && database.getMangaDao().contains(preferredMangaId)) {
-            return preferredMangaId
-        }
-        return identity.localMangaIds.firstOrNull { localId ->
-            database.getMangaDao().contains(localId)
-        }
     }
 
     private fun generateChapterId(record: ExternalBackupContentRecord, chapterUrl: String): Long {
@@ -438,6 +446,7 @@ class ExternalBackupRepository @Inject constructor(
     }
 
     private companion object {
+        private const val MAX_BATCH_QUERY_PARAMS = 500
         private val SOURCE_NORMALIZE_REGEX = Regex("[\\s\\p{Punct}_\\-]+")
         private val VENERA_SOURCE_MAP = buildVeneraSourceMap()
 

@@ -281,6 +281,12 @@ abstract class WorkHistoryDao {
         }
     }
 
+    /** Batch upsert preserving the single-entity update-else-insert semantics, in one transaction. */
+    @Transaction
+    open suspend fun upsert(entities: List<WorkHistoryEntity>) {
+        entities.forEach { upsert(it) }
+    }
+
     @Query("UPDATE work_history SET deleted_at = :deletedAt, updated_at = :deletedAt WHERE entity_id = :entityId")
     abstract suspend fun setDeletedAt(entityId: Long, deletedAt: Long)
 

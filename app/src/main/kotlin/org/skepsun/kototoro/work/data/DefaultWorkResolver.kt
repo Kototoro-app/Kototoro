@@ -341,7 +341,7 @@ class DefaultWorkResolver @Inject constructor(
 
     private fun WorkIdentityProvenance.toBindingCreatedBy(): EntityBindingCreatedBy = when (this) {
         WorkIdentityProvenance.USER -> EntityBindingCreatedBy.USER
-        WorkIdentityProvenance.IMPORT -> EntityBindingCreatedBy.SYNC
+        WorkIdentityProvenance.IMPORT -> EntityBindingCreatedBy.IMPORT
         WorkIdentityProvenance.MIGRATION -> EntityBindingCreatedBy.MIGRATION
         WorkIdentityProvenance.RESTORE -> EntityBindingCreatedBy.SYNC
     }
