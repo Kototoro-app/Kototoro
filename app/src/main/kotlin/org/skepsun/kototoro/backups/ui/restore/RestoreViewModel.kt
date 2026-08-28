@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runInterruptible
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
+import org.skepsun.kototoro.backups.data.BackupRepository
 import org.skepsun.kototoro.backups.data.model.BackupIndex
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
@@ -41,6 +42,7 @@ class RestoreViewModel @Inject constructor(
 
     val availableEntries = MutableStateFlow<List<BackupSectionModel>>(emptyList())
     val backupDate = MutableStateFlow<Date?>(null)
+    val restoreMode = MutableStateFlow(BackupRepository.RestoreMode.SNAPSHOT_REPLACE)
 
     fun initialize(uri: Uri, restoreFormat: BackupRestoreFormat) {
         if (this.uri != null) return
@@ -48,6 +50,10 @@ class RestoreViewModel @Inject constructor(
         launchLoadingJob(Dispatchers.Default) {
             loadBackupInfo(restoreFormat)
         }
+    }
+
+    fun onRestoreModeChange(mode: BackupRepository.RestoreMode) {
+        restoreMode.value = mode
     }
 
     private suspend fun loadBackupInfo(restoreFormat: BackupRestoreFormat) {

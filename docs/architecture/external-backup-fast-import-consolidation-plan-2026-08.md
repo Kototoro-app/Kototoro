@@ -123,3 +123,24 @@
 "合并"复用 `RestoreMode.MERGE` 的 entityIdMapping 重映射机制（清空逻辑按模式跳过），
 需验证 current-format 的 WORK_* / ENTITY_GRAPH_* 节在 MERGE 下的 id remap 正确性
 （现有 MERGE 分支多带 `isLegacySemanticSchema` 条件，需逐节梳理）。
+
+---
+
+## 实施状态（2026-08 已完成）
+
+- **阶段 1（批量导入）** ✅ `ExternalBulkImportPlanner`（纯内存构建 + 挂接/临时实体判定，
+  含既有 local_manga binding 优先挂接，防止 binding PK 被抢占）+ `ExternalBackupRepository.import`
+  单事务按表批量写；`EntityBindingCreatedBy.IMPORT` 枚举 + provenance 映射修正。
+  测试：`ExternalBulkImportPlannerTest`；全量 `:app:testDebugUnitTest` 通过。
+- **阶段 2（实体整理）** ✅ 按推荐方案 A 内联执行（`ExternalBackupImportService` 在阶段 1
+  完成后调用 `EntityGraphRepository.consolidateImportProvisionalEntities()`，完成通知前出结果，
+  未引入 Worker）。分组 = 强键 union-find + 规范化标题×contentType union-find（仅圈定
+  createdBy=IMPORT 的临时实体，既有实体绝不入组）；canonical 优先未加盐 nameHash，最小 id 兜底；
+  合并复用 `remapWorkOwnedState` + `remapBindingsAndRelations` + 删除被吸收行，幂等。
+  测试：`EntityConsolidationPlannerTest`；全量通过。手动触发入口待后续按需添加。
+- **可选工作流（替换/合并选择）** ✅ `RestoreService` 接受 `EXTRA_RESTORE_MODE`
+  （仅 KOTOTORO_CURRENT 生效，legacy 恒为 MERGE；checkpoint id 纳入模式避免串断点续传）；
+  `RestoreDialog` 对 KOTOTORO_CURRENT 显示「替换现有数据 / 与现有数据合并」单选（默认替换）。
+  MERGE 复用现有 entityIdMapping 机制——WORK_* 节按锚点重解析 + upsert、ENTITY_GRAPH_* 节
+  按映射重映射 + upsert，`clearRestoreTargets` 仅在 SNAPSHOT_REPLACE 触发，current-format
+  各节无 legacy-only 门，逐节梳理确认可用。

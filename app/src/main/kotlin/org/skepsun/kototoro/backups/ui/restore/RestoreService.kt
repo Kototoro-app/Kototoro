@@ -70,7 +70,15 @@ class RestoreService : BaseBackupRestoreService() {
         val restoreFormat = intent.getStringExtra(EXTRA_RESTORE_FORMAT)
             ?.let(BackupRestoreFormat::valueOf)
             ?: throw IllegalArgumentException("Missing restore format")
+        val requestedMode = intent.getStringExtra(EXTRA_RESTORE_MODE)
+            ?.let(BackupRepository.RestoreMode::valueOf)
         val sections = restoreFormat.sanitize(requestedSections)
+        val restoreMode = when (restoreFormat) {
+            BackupRestoreFormat.KOTOTORO_CURRENT ->
+                // User-selectable for current backups; legacy formats always merge.
+                requestedMode ?: BackupRepository.RestoreMode.SNAPSHOT_REPLACE
+            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO -> BackupRepository.RestoreMode.MERGE
+        }
         powerManager.withPartialWakeLock(TAG) {
             val wasGoogleDriveSyncEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.isSyncEnabled
             val progress = MutableStateFlow(Progress.INDETERMINATE)
@@ -98,11 +106,8 @@ class RestoreService : BaseBackupRestoreService() {
                         input = input,
                         sections = sections,
                         progress = progress,
-                        restoreMode = when (restoreFormat) {
-                            BackupRestoreFormat.KOTOTORO_CURRENT -> BackupRepository.RestoreMode.SNAPSHOT_REPLACE
-                            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO -> BackupRepository.RestoreMode.MERGE
-                        },
-                        checkpointId = restoreCheckpointId(source, restoreFormat, sections),
+                        restoreMode = restoreMode,
+                        checkpointId = restoreCheckpointId(source, restoreFormat, sections, restoreMode),
                     )
                 }
             } finally {
@@ -138,14 +143,16 @@ class RestoreService : BaseBackupRestoreService() {
     }
 
     /**
-     * 由来源 + 格式 + 节集合派生的稳定恢复会话 id：同一备份重试可断点续传。
+     * 由来源 + 格式 + 节集合 + 模式派生的稳定恢复会话 id：同一备份重试可断点续传。
      */
     private fun restoreCheckpointId(
         uri: Uri,
         format: BackupRestoreFormat,
         sections: Set<BackupSection>,
+        restoreMode: BackupRepository.RestoreMode,
     ): String {
-        val raw = uri.toString() + "|" + format.name + "|" + sections.sortedBy { it.ordinal }.joinToString(",")
+        val raw = uri.toString() + "|" + format.name + "|" + restoreMode.name + "|" +
+            sections.sortedBy { it.ordinal }.joinToString(",")
         val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray(Charsets.UTF_8))
         return "restore:" + digest.joinToString("") { "%02x".format(it) }
     }
@@ -190,6 +197,7 @@ class RestoreService : BaseBackupRestoreService() {
         private const val TAG = "RESTORE"
         private const val FOREGROUND_NOTIFICATION_ID = 39
         private const val EXTRA_RESTORE_FORMAT = "restore_format"
+        private const val EXTRA_RESTORE_MODE = "restore_mode"
 
         @CheckResult
         fun start(
@@ -197,11 +205,15 @@ class RestoreService : BaseBackupRestoreService() {
             uri: Uri,
             sections: Set<BackupSection>,
             restoreFormat: BackupRestoreFormat,
+            restoreMode: BackupRepository.RestoreMode? = null,
         ): Boolean = try {
             val intent = Intent(context, RestoreService::class.java)
             intent.putExtra(AppRouter.KEY_DATA, uri.toString())
             intent.putExtra(AppRouter.KEY_ENTRIES, sections.toTypedArray())
             intent.putExtra(EXTRA_RESTORE_FORMAT, restoreFormat.name)
+            if (restoreMode != null) {
+                intent.putExtra(EXTRA_RESTORE_MODE, restoreMode.name)
+            }
             intent.setData(uri)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             ContextCompat.startForegroundService(context, intent)
