@@ -28,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
-import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.home.ui.HomeRecentItem
 import org.skepsun.kototoro.home.ui.HomeRecommendationItem
@@ -48,12 +47,16 @@ internal fun HomeHighlightsSections(
     recommendationItems: List<HomeRecommendationItem>,
     recommendationsCount: Int,
     recentSearches: List<String>,
-    posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
-    listMode: ListMode,
+    historyStyle: HomeRailStyle,
+    updatesStyle: HomeRailStyle,
+    recommendationsStyle: HomeRailStyle,
     onItemClick: (Content, Rect?, String?) -> Unit,
     onViewAllRecentClick: () -> Unit,
     onViewAllUpdatesClick: () -> Unit,
     onViewAllRecommendationsClick: () -> Unit,
+    onConfigureHistoryClick: () -> Unit,
+    onConfigureUpdatesClick: () -> Unit,
+    onConfigureRecommendationsClick: () -> Unit,
     onRecentSearchClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -114,12 +117,12 @@ internal fun HomeHighlightsSections(
                     iconRes = R.drawable.ic_history,
                     items = historyDisplayItems,
                     count = recentHistoryCount,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
+                    railStyle = historyStyle,
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllRecentClick,
+                    onConfigureClick = onConfigureHistoryClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 2.dp),
                 )
             }
         }
@@ -131,12 +134,12 @@ internal fun HomeHighlightsSections(
                     iconRes = R.drawable.ic_updated,
                     items = updateDisplayItems,
                     count = unreadUpdatesCount,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
+                    railStyle = updatesStyle,
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllUpdatesClick,
+                    onConfigureClick = onConfigureUpdatesClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 2.dp),
                 )
             }
         }
@@ -148,12 +151,12 @@ internal fun HomeHighlightsSections(
                     iconRes = R.drawable.ic_suggestion,
                     items = recommendationDisplayItems,
                     count = recommendationsCount,
-                    posterStyle = posterStyle,
-                    listMode = listMode,
+                    railStyle = recommendationsStyle,
                     onItemClick = onItemClick,
                     onMoreClick = onViewAllRecommendationsClick,
+                    onConfigureClick = onConfigureRecommendationsClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 8.dp),
+                    modifier = Modifier.padding(vertical = 2.dp),
                 )
             }
         }

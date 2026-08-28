@@ -2,6 +2,7 @@ package org.skepsun.kototoro.list.ui.config
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,12 +20,16 @@ fun ListConfigRoute(
     onDismissRequest: () -> Unit,
     viewModel: ListConfigViewModel = hiltViewModel(key = "list-config-${section.hashCode()}"),
 ) {
-    LaunchedEffect(section) {
+    // SideEffect (not LaunchedEffect): re-assert the section on EVERY
+    // recomposition so this panel can never write into another section's
+    // prefs, even if the VM instance was reused from a previously open sheet.
+    SideEffect {
         viewModel.initialize(section)
     }
 
     val listMode by viewModel.listModeState.collectAsStateWithLifecycle(initialValue = ListMode.GRID)
     val gridSize by viewModel.gridSizeState.collectAsStateWithLifecycle(initialValue = 100)
+    val railRows by viewModel.railRowsState.collectAsStateWithLifecycle(initialValue = null)
     val sortOrders by viewModel.sortOrdersState.collectAsStateWithLifecycle(initialValue = emptyList())
     val selectedSortOrder by viewModel.selectedSortOrderState.collectAsStateWithLifecycle(initialValue = null)
     val supportsGrouping by viewModel.supportsGroupingState.collectAsStateWithLifecycle(initialValue = false)
@@ -62,11 +67,22 @@ fun ListConfigRoute(
             pendingListMode = it
             viewModel.updateListMode(it)
         },
-        supportsGridSizeSlider = pendingListMode == ListMode.GRID || pendingListMode == ListMode.COMPACT_GRID,
+        supportsGridSizeSlider = pendingListMode == ListMode.GRID ||
+            pendingListMode == ListMode.COMPACT_GRID ||
+            // Home rails keep the slider visible for every display style so
+            // all three sections expose grid size from both entry points
+            // (section header sheet and the home paged display options).
+            section == ListConfigSection.HomeHistory ||
+            section == ListConfigSection.HomeUpdates ||
+            section == ListConfigSection.HomeRecommendations,
         gridSize = pendingGridSize,
         onGridSizeChange = {
             pendingGridSize = it
             viewModel.updateGridSize(it)
+        },
+        railRows = railRows,
+        onRailRowsChange = railRows?.let { rows ->
+            { value: Int -> viewModel.updateRailRows(value) }
         },
         sortOrders = sortOrders,
         selectedSortOrder = pendingSelectedSortOrder,

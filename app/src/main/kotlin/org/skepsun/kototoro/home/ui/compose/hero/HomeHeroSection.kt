@@ -21,7 +21,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,7 +42,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,93 +124,81 @@ internal fun HomeHeroSection(
         val pagerWidthPx = with(density) { viewportWidth.toPx() }
         val cardWidthPx = with(density) { cardWidth.toPx() }
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-            HorizontalPager(
-                state = pagerState,
-                pageSize = PageSize.Fixed(cardWidth),
-                pageSpacing = pageSpacing,
-                beyondViewportPageCount = 1,
-                contentPadding = contentPadding,
-                key = { page ->
-                    entries.getOrNull(page)?.let { entry ->
-                        "home_hero_${entry.kind.name}_${entry.groupKey}_${entry.content.id}"
-                    } ?: "home_hero_pending_$page"
-                },
-                modifier = Modifier.width(viewportWidth),
-            ) { page ->
+        HorizontalPager(
+            state = pagerState,
+            pageSize = PageSize.Fixed(cardWidth),
+            pageSpacing = pageSpacing,
+            beyondViewportPageCount = 1,
+            contentPadding = contentPadding,
+            key = { page ->
                 entries.getOrNull(page)?.let { entry ->
-                    val presentation = resolveHomeHeroPresentation(
-                        mode = mode,
-                        fixedPresentation = fixedPresentation,
-                        signals = HomeHeroStyleSignals(
-                            contentType = entry.content.source.getContentType(),
-                            isResume = entry.kind == HomeHeroKind.RESUME,
-                            hasDistinctLargeCover = entry.content.hasDistinctLargeCover(),
-                            isRecommendation = entry.kind == HomeHeroKind.RECOMMENDATION,
-                        ),
-                        page = page,
-                        mixedSeed = mixedSeed,
-                    )
-                    HomeHeroCard(
-                        entry = entry,
-                        presentation = presentation,
-                        cardHeight = HOME_HERO_CARD_HEIGHT,
-                        panoramaPrefs = panoramaPrefs,
-                        onClick = onClick,
-                        modifier = Modifier
-                            .zIndex(if (page == selectedIndex) 1f else 0f)
-                            .graphicsLayer {
-                                val rawOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                                val signedOffset = rawOffset.coerceIn(-1f, 1f)
-                                val visualLeft = contentPadPx - rawOffset * stepPx
-                                val visualRight = visualLeft + cardWidthPx
-                                val focus = when {
-                                    visualRight <= 0f || visualLeft >= pagerWidthPx -> 0f
-                                    visualLeft >= 0f && visualRight <= pagerWidthPx -> 1f
-                                    visualLeft < 0f -> (visualRight / cardWidthPx).coerceIn(0f, 1f)
-                                    else -> ((pagerWidthPx - visualLeft) / cardWidthPx).coerceIn(0f, 1f)
-                                }
-                                val hOrigin = when {
-                                    signedOffset < -0.02f -> 0f
-                                    signedOffset > 0.02f -> 1f
-                                    else -> 0.5f
-                                }
-                                scaleX = 0.9f + (0.1f * focus)
-                                scaleY = 0.9f + (0.1f * focus)
-                                alpha = 0.64f + (0.36f * focus)
-                                transformOrigin = TransformOrigin(hOrigin, 0.5f)
-                            },
-                    )
-                }
-            }
-            }
-            if (entries.size > 1) {
-                val currentEntry = entries[selectedIndex]
-                val indicatorColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
-                HeroPagerIndicator(
-                    pageCount = entries.size,
-                    currentPage = selectedIndex,
-                    pageCounter = "${selectedIndex + 1} / ${entries.size}",
-                    counterColor = indicatorColor,
-                    trailingIcon = {
-                        Icon(
-                            painter = painterResource(currentEntry.kind.iconRes),
-                            contentDescription = null,
-                            tint = indicatorColor,
-                            modifier = Modifier.size(16.dp),
+                    "home_hero_${entry.kind.name}_${entry.groupKey}_${entry.content.id}"
+                } ?: "home_hero_pending_$page"
+            },
+            modifier = Modifier.width(viewportWidth),
+        ) { page ->
+            entries.getOrNull(page)?.let { entry ->
+                val presentation = resolveHomeHeroPresentation(
+                    mode = mode,
+                    fixedPresentation = fixedPresentation,
+                    signals = HomeHeroStyleSignals(
+                        contentType = entry.content.source.getContentType(),
+                        isResume = entry.kind == HomeHeroKind.RESUME,
+                        hasDistinctLargeCover = entry.content.hasDistinctLargeCover(),
+                        isRecommendation = entry.kind == HomeHeroKind.RECOMMENDATION,
+                    ),
+                    page = page,
+                    mixedSeed = mixedSeed,
+                )
+                HomeHeroCard(
+                    entry = entry,
+                    presentation = presentation,
+                    cardHeight = HOME_HERO_CARD_HEIGHT,
+                    panoramaPrefs = panoramaPrefs,
+                    indicator = if (entries.size > 1) {
+                        HeroIndicatorState(
+                            pageCount = entries.size,
+                            currentPage = selectedIndex,
                         )
+                    } else {
+                        null
                     },
-                    modifier = Modifier.padding(start = edgePadding, top = 6.dp),
+                    onClick = onClick,
+                    modifier = Modifier
+                        .zIndex(if (page == selectedIndex) 1f else 0f)
+                        .graphicsLayer {
+                            val rawOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                            val signedOffset = rawOffset.coerceIn(-1f, 1f)
+                            val visualLeft = contentPadPx - rawOffset * stepPx
+                            val visualRight = visualLeft + cardWidthPx
+                            val focus = when {
+                                visualRight <= 0f || visualLeft >= pagerWidthPx -> 0f
+                                visualLeft >= 0f && visualRight <= pagerWidthPx -> 1f
+                                visualLeft < 0f -> (visualRight / cardWidthPx).coerceIn(0f, 1f)
+                                else -> ((pagerWidthPx - visualLeft) / cardWidthPx).coerceIn(0f, 1f)
+                            }
+                            val hOrigin = when {
+                                signedOffset < -0.02f -> 0f
+                                signedOffset > 0.02f -> 1f
+                                else -> 0.5f
+                            }
+                            scaleX = 0.9f + (0.1f * focus)
+                            scaleY = 0.9f + (0.1f * focus)
+                            alpha = 0.64f + (0.36f * focus)
+                            transformOrigin = TransformOrigin(hOrigin, 0.5f)
+                        },
                 )
             }
         }
 
     }
 }
+
+/** State for the pager indicator rendered inside the hero card; null hides it. */
+internal data class HeroIndicatorState(
+    val pageCount: Int,
+    val currentPage: Int,
+)
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -221,6 +207,7 @@ private fun HomeHeroCard(
     presentation: HomeHeroPresentation,
     cardHeight: Dp,
     panoramaPrefs: PanoramaBackdropPrefs,
+    indicator: HeroIndicatorState?,
     onClick: (Content, Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -309,14 +296,25 @@ private fun HomeHeroCard(
         if (presentation.background == HomeHeroBackground.BLURRED_ARTWORK ||
             presentation.background == HomeHeroBackground.IMMERSIVE_ARTWORK
         ) {
+            // Slightly heavier at the bottom, where the in-card pager indicator
+            // and the info text sit.
             Box(Modifier.fillMaxSize().drawBehind {
-                drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.20f), Color.Black.copy(alpha = 0.52f))))
+                drawRect(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.20f),
+                        1f to Color.Black.copy(alpha = 0.56f),
+                    ),
+                )
             })
         }
         val textColor = if (presentation.background == HomeHeroBackground.PLAIN) {
             MaterialTheme.colorScheme.onSurface
         } else {
             Color.White
+        }
+        val isSplit = presentation.background == HomeHeroBackground.COVER_SPLIT
+        val indicatorPlacement = indicator?.let {
+            resolveHeroIndicatorPlacement(presentation.contentLayout, isSplit)
         }
         HomeHeroInfoLayout(
             entry = entry,
@@ -325,8 +323,25 @@ private fun HomeHeroCard(
             coverRequest = coverRequest,
             sharedElementKey = sharedElementKey,
             textColor = textColor,
+            bottomAvoidance = indicatorPlacement?.bottomAvoidance ?: 0.dp,
             onBoundsChanged = { coverBounds = it },
         )
+        if (indicator != null && indicatorPlacement != null) {
+            val onArtwork = presentation.background != HomeHeroBackground.PLAIN
+            HeroPagerIndicator(
+                pageCount = indicator.pageCount,
+                currentPage = indicator.currentPage,
+                activeColor = if (onArtwork) Color.White.copy(alpha = 0.92f) else MaterialTheme.colorScheme.primary,
+                inactiveColor = if (onArtwork) {
+                    Color.White.copy(alpha = 0.38f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.24f)
+                },
+                modifier = Modifier
+                    .align(indicatorPlacement.alignment)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 7.dp),
+            )
+        }
 
     }
 }
@@ -339,6 +354,7 @@ private fun HomeHeroInfoLayout(
     coverRequest: ImageRequest?,
     sharedElementKey: String,
     textColor: Color,
+    bottomAvoidance: Dp,
     onBoundsChanged: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -365,14 +381,18 @@ private fun HomeHeroInfoLayout(
                 HomeHeroText(entry, content, compact = false, textColor = textColor)
                 if (!isSplit) {
                     HomeHeroPoster(coverRequest, content, sharedElementKey, 54.dp, 72.dp, onBoundsChanged,
-                        modifier = Modifier.align(Alignment.End))
+                        modifier = Modifier.align(Alignment.End).padding(bottom = bottomAvoidance))
                 }
             }
             HomeHeroContentLayout.TEXT_QUOTE -> HomeHeroTextQuote(
-                entry, content, textColor = textColor, modifier = Modifier.fillMaxSize(),
+                entry, content, textColor = textColor,
+                bottomAvoidance = bottomAvoidance,
+                modifier = Modifier.fillMaxSize(),
             )
             HomeHeroContentLayout.MINIMAL_PROGRESS -> HomeHeroMinimal(
-                entry, content, textColor = textColor, modifier = Modifier.fillMaxSize(),
+                entry, content, textColor = textColor,
+                bottomAvoidance = bottomAvoidance,
+                modifier = Modifier.fillMaxSize(),
             )
             HomeHeroContentLayout.DETAILS -> Row(
                 modifier = Modifier.fillMaxSize().padding(14.dp),
@@ -479,12 +499,13 @@ private fun HomeHeroTextQuote(
     entry: HomeHeroEntry,
     content: Content,
     textColor: Color,
+    bottomAvoidance: Dp,
     modifier: Modifier = Modifier,
 ) {
     val parsedDescription = remember(content.description) { content.description?.toHeroExcerpt() }
     val excerpt = parsedDescription ?: entry.supportingText()
     Row(
-        modifier = modifier.padding(16.dp),
+        modifier = modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp + bottomAvoidance),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
@@ -540,10 +561,16 @@ private fun HomeHeroMinimal(
     entry: HomeHeroEntry,
     content: Content,
     textColor: Color,
+    bottomAvoidance: Dp,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.padding(18.dp),
+        modifier = modifier.padding(
+            start = 18.dp,
+            end = 18.dp,
+            top = 18.dp,
+            bottom = 18.dp + bottomAvoidance,
+        ),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         HomeBadge(text = stringResource(entry.kind.labelRes), iconRes = entry.kind.iconRes)

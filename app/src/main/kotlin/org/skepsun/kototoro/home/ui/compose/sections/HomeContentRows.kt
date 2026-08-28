@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.gestures.snapping.SnapPosition
@@ -19,6 +20,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +37,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +76,29 @@ import org.skepsun.kototoro.home.ui.compose.toHeroCountLabel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
+/**
+ * Per-section display style of a home rail: which card layout to use, how
+ * large the poster cards render and how many rows a list-mode page carries.
+ * Each rail (history / updates / recommendations) carries its own instance,
+ * configurable from the section header's settings button or the home more
+ * menu's paged display options sheet.
+ */
+@Immutable
+internal data class HomeRailStyle(
+    val listMode: ListMode,
+    val posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
+    val railRowsPerPage: Int = org.skepsun.kototoro.list.ui.compose.HOME_LIST_RAIL_ROWS_DEFAULT,
+    /** Grid scale (0.5..1.5); also scales list-mode row covers so the grid slider has an effect there. */
+    val gridScale: Float = 1f,
+) {
+    init {
+        require(railRowsPerPage in org.skepsun.kototoro.list.ui.compose.HOME_LIST_RAIL_ROWS_MIN..
+            org.skepsun.kototoro.list.ui.compose.HOME_LIST_RAIL_ROWS_MAX) {
+            "railRowsPerPage out of range: $railRowsPerPage"
+        }
+    }
+}
+
 @Composable
 internal fun HomeContentRowSection(
     title: String,
@@ -79,24 +106,26 @@ internal fun HomeContentRowSection(
     iconRes: Int,
     items: List<HomeCoverDisplayItem>,
     count: Int,
-    posterStyle: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
-    listMode: ListMode,
+    railStyle: HomeRailStyle,
     onItemClick: (Content, Rect?, String?) -> Unit,
     onMoreClick: () -> Unit,
     addTopSpacing: Boolean,
+    onConfigureClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
+    val listMode = railStyle.listMode
+    val posterStyle = railStyle.posterStyle
     val rowState = rememberLazyListState()
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val showMoreButton = true
-    val railPages = remember(items, listMode) {
+    val railPages = remember(items, listMode, railStyle.railRowsPerPage) {
         when (listMode) {
             ListMode.GRID,
             ListMode.COMPACT_GRID -> emptyList()
             ListMode.LIST,
-            ListMode.DETAILED_LIST -> items.chunked(HOME_LIST_RAIL_PAGE_SIZE)
+            ListMode.DETAILED_LIST -> items.chunked(railStyle.railRowsPerPage)
         }
     }
 
@@ -104,7 +133,7 @@ internal fun HomeContentRowSection(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = if (addTopSpacing) 6.dp else 0.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -128,6 +157,19 @@ internal fun HomeContentRowSection(
                     text = count.toHeroCountLabel(),
                     iconRes = iconRes,
                 )
+            }
+            if (onConfigureClick != null) {
+                IconButton(
+                    onClick = onConfigureClick,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_settings),
+                        contentDescription = stringResource(R.string.list_options),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
             if (showMoreButton) {
                 if (expressive) {
@@ -244,6 +286,7 @@ internal fun HomeContentRowSection(
                                 HomeListRailPage(
                                     items = pageItems,
                                     listMode = listMode,
+                                    gridScale = railStyle.gridScale,
                                     onItemClick = onItemClick,
                                     modifier = animatedModifier.width(pageWidth),
                                 )
@@ -279,17 +322,19 @@ private fun Modifier.extendHorizontalViewport(extension: Dp): Modifier = layout 
 private fun HomeListRailPage(
     items: List<HomeCoverDisplayItem>,
     listMode: ListMode,
+    gridScale: Float,
     onItemClick: (Content, Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         items.forEach { item ->
             HomeListRailRowItem(
                 item = item,
                 listMode = listMode,
+                gridScale = gridScale,
                 onClick = onItemClick,
             )
         }
@@ -301,6 +346,7 @@ private fun HomeListRailPage(
 private fun HomeListRailRowItem(
     item: HomeCoverDisplayItem,
     listMode: ListMode,
+    gridScale: Float,
     onClick: (Content, Rect?, String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -309,12 +355,16 @@ private fun HomeListRailRowItem(
         remember(context.applicationContext) { AppSettings(context.applicationContext) },
     )
     val content = item.content
-    val coverSize = when (listMode) {
-        ListMode.LIST -> HomeListRailCoverSize(52.dp, 78.dp)
-        ListMode.DETAILED_LIST -> HomeListRailCoverSize(72.dp, 108.dp)
+    // Grid size scales the row cover as well, so the grid-size slider has a
+    // visible effect in list modes (width only; height keeps the 2:3 ratio).
+    val baseWidth = when (listMode) {
+        ListMode.LIST -> 52.dp
+        ListMode.DETAILED_LIST -> 72.dp
         ListMode.GRID,
-        ListMode.COMPACT_GRID -> HomeListRailCoverSize(52.dp, 78.dp)
+        ListMode.COMPACT_GRID -> 52.dp
     }
+    val coverWidth = (baseWidth * gridScale).coerceIn(40.dp, 120.dp)
+    val coverSize = HomeListRailCoverSize(width = coverWidth, height = coverWidth * 1.5f)
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
@@ -517,6 +567,9 @@ private fun HomeCoverRowItem(
         sharedElementInstanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
         cardStyle = posterStyle,
         compactOverlay = listMode == ListMode.COMPACT_GRID,
+        // Tighter than the global grid default: rails sit on a shared screen
+        // where every vertical dp of padding compounds across sections.
+        cellContentPadding = PaddingValues(horizontal = 2.dp, vertical = 4.dp),
         onClick = { coverBounds -> onClick(coverBounds, sharedElementKey) },
         onLongClick = {},
         modifier = modifier.width(posterStyle.itemWidth),
@@ -565,8 +618,6 @@ internal data class HomeCoverSupportingText(
         fun Text(text: String) = HomeCoverSupportingText(text)
     }
 }
-
-private const val HOME_LIST_RAIL_PAGE_SIZE = 3
 
 private val HOME_LIST_RAIL_PAGE_MIN_WIDTH = 280.dp
 private val HOME_LIST_RAIL_PAGE_MAX_WIDTH = 320.dp

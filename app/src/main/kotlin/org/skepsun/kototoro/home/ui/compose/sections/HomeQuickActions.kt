@@ -56,7 +56,7 @@ internal fun QuickActionsSection(
     Column(
         modifier = modifier
             .fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
             text = stringResource(R.string.quick_access),
@@ -65,8 +65,8 @@ internal fun QuickActionsSection(
             color = MaterialTheme.colorScheme.onSurface,
         )
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val itemSpacing = 8.dp
-            val rowSpacing = if (isIosStyle) 7.dp else 8.dp
+            val itemSpacing = 6.dp
+            val rowSpacing = if (isIosStyle) 6.dp else 6.dp
             val preferredItemWidth = 68.dp
             val columns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
                 .toInt()

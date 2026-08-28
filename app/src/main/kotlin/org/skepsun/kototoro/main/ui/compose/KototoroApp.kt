@@ -391,6 +391,7 @@ fun KototoroApp(
     val onDeleteQuery = mainAppState.onDeleteQuery
     val onVoiceInput = mainAppState.onVoiceInput
     val onOpenListOptions = mainAppState.onOpenListOptions
+    val onHomeDisplayOptionsClick = mainAppState.onHomeDisplayOptionsClick
     val onSettingsClick = mainAppState.onSettingsClick
     val onHelpClick = mainAppState.onHelpClick
     val onSourceSettingsClick = mainAppState.onSourceSettingsClick
@@ -1147,6 +1148,7 @@ fun KototoroApp(
                             chromeState.setSearchOverlayVisible(true)
                         },
                         onOpenListOptions = onOpenListOptions,
+                        onDisplayOptionsClick = if (isHomeRoute) onHomeDisplayOptionsClick else null,
                         onSettingsClick = onSettingsClick,
                         onHelpClick = onHelpClick,
                         onSourceSettingsClick = onSourceSettingsClick,

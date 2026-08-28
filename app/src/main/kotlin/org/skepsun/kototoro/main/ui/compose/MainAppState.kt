@@ -63,6 +63,8 @@ data class MainAppState(
     val onDeleteQuery: (String) -> Unit = {},
     val onVoiceInput: () -> Unit = {},
     val onOpenListOptions: () -> Unit = {},
+    /** Opens the home three-section paged display options sheet (home ⋮ menu). */
+    val onHomeDisplayOptionsClick: () -> Unit = {},
     val onSettingsClick: () -> Unit = {},
     val onHelpClick: () -> Unit = {},
     val onSourceSettingsClick: () -> Unit = {},

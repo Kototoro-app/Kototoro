@@ -356,6 +356,9 @@ class MainActivity : BaseComposeActivity() {
                     onOpenListOptions = {
                         this.router.showListConfigSheet(org.skepsun.kototoro.list.ui.config.ListConfigSection.General)
                     },
+                    onHomeDisplayOptionsClick = {
+                        this.router.showHomeSectionsConfigSheet()
+                    },
                     onSettingsClick = {
                         this.router.openSettings()
                     },

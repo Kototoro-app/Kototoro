@@ -159,6 +159,10 @@ fun KototoroTopBar(
     onBrowseMoreTrackingRecommendationsChange: ((Boolean) -> Unit)? = null,
     showSourceSettingsEntry: Boolean = false,
     contextualMenuActions: List<KototoroTopBarMenuAction> = emptyList(),
+    // When set, the "display options" menu item routes to a destination-owned
+    // panel instead of the generic DisplayOptionsSheet (used by home to open
+    // its three-section paged config).
+    onDisplayOptionsClick: (() -> Unit)? = null,
     isIncognitoModeEnabled: Boolean = false,
     onIncognitoToggle: () -> Unit = {},
     isCollapsedFullyTransparent: Boolean = false,
@@ -358,7 +362,12 @@ fun KototoroTopBar(
                                             },
                                             onClick = {
                                                 isMoreMenuExpanded = false
-                                                showDisplayOptionsSheet = true
+                                                val override = onDisplayOptionsClick
+                                                if (override != null) {
+                                                    override()
+                                                } else {
+                                                    showDisplayOptionsSheet = true
+                                                }
                                             },
                                         )
 

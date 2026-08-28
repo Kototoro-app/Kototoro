@@ -8,6 +8,18 @@ sealed interface ListConfigSection : Parcelable {
     @Parcelize
     data object Home : ListConfigSection
 
+    /** Display style of the home screen's history rail. */
+    @Parcelize
+    data object HomeHistory : ListConfigSection
+
+    /** Display style of the home screen's updates rail. */
+    @Parcelize
+    data object HomeUpdates : ListConfigSection
+
+    /** Display style of the home screen's recommendations rail. */
+    @Parcelize
+    data object HomeRecommendations : ListConfigSection
+
     @Parcelize
     data object History : ListConfigSection
 

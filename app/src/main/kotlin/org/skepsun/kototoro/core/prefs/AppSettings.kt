@@ -282,6 +282,47 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_LIST_MODE_HOME, ListMode.DETAILED_LIST)
         set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE_HOME, value) }
 
+    // Per-section display styles for the home rails. Defaults mirror the
+    // reference home design: compact grid for history, list for updates and
+    // grid for recommendations. Until the user overrides a section's grid size
+    // it follows the global grid size.
+    var homeSectionListModeHistory: ListMode
+        get() = prefs.getEnumValue(KEY_HOME_SECTION_LIST_MODE_HISTORY, ListMode.COMPACT_GRID)
+        set(value) = prefs.edit { putEnumValue(KEY_HOME_SECTION_LIST_MODE_HISTORY, value) }
+
+    var homeSectionListModeUpdates: ListMode
+        get() = prefs.getEnumValue(KEY_HOME_SECTION_LIST_MODE_UPDATES, ListMode.LIST)
+        set(value) = prefs.edit { putEnumValue(KEY_HOME_SECTION_LIST_MODE_UPDATES, value) }
+
+    var homeSectionListModeRecommendations: ListMode
+        get() = prefs.getEnumValue(KEY_HOME_SECTION_LIST_MODE_RECOMMENDATIONS, ListMode.GRID)
+        set(value) = prefs.edit { putEnumValue(KEY_HOME_SECTION_LIST_MODE_RECOMMENDATIONS, value) }
+
+    var homeSectionGridSizeHistory: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, gridSize).coerceIn(50, 150)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_HISTORY, value.coerceIn(50, 150)) }
+
+    var homeSectionGridSizeUpdates: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, gridSize).coerceIn(50, 150)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_UPDATES, value.coerceIn(50, 150)) }
+
+    var homeSectionGridSizeRecommendations: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, gridSize).coerceIn(50, 150)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS, value.coerceIn(50, 150)) }
+
+    /** Rows per list-mode rail page (1..3); only meaningful for LIST modes. */
+    var homeSectionRailRowsHistory: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_RAIL_ROWS_HISTORY, 2).coerceIn(1, 3)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_RAIL_ROWS_HISTORY, value.coerceIn(1, 3)) }
+
+    var homeSectionRailRowsUpdates: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_RAIL_ROWS_UPDATES, 2).coerceIn(1, 3)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_RAIL_ROWS_UPDATES, value.coerceIn(1, 3)) }
+
+    var homeSectionRailRowsRecommendations: Int
+        get() = prefs.getSafeInt(KEY_HOME_SECTION_RAIL_ROWS_RECOMMENDATIONS, 2).coerceIn(1, 3)
+        set(value) = prefs.edit { putInt(KEY_HOME_SECTION_RAIL_ROWS_RECOMMENDATIONS, value.coerceIn(1, 3)) }
+
     var homeHeroStyle: HomeHeroStyle
         get() = prefs.getEnumValue(KEY_HOME_HERO_STYLE, HomeHeroStyle.CLASSIC)
         set(value) = prefs.edit { putEnumValue(KEY_HOME_HERO_STYLE, value) }
@@ -2640,6 +2681,15 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_LIST_MODE = "list_mode_2"
         const val KEY_LIST_MODE_BROWSE = "list_mode_browse"
         const val KEY_LIST_MODE_HOME = "list_mode_home"
+        const val KEY_HOME_SECTION_LIST_MODE_HISTORY = "home_section_list_mode_history"
+        const val KEY_HOME_SECTION_LIST_MODE_UPDATES = "home_section_list_mode_updates"
+        const val KEY_HOME_SECTION_LIST_MODE_RECOMMENDATIONS = "home_section_list_mode_recommendations"
+        const val KEY_HOME_SECTION_GRID_SIZE_HISTORY = "home_section_grid_size_history"
+        const val KEY_HOME_SECTION_GRID_SIZE_UPDATES = "home_section_grid_size_updates"
+        const val KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS = "home_section_grid_size_recommendations"
+        const val KEY_HOME_SECTION_RAIL_ROWS_HISTORY = "home_section_rail_rows_history"
+        const val KEY_HOME_SECTION_RAIL_ROWS_UPDATES = "home_section_rail_rows_updates"
+        const val KEY_HOME_SECTION_RAIL_ROWS_RECOMMENDATIONS = "home_section_rail_rows_recommendations"
         const val KEY_HOME_HERO_STYLE = "home_hero_style"
         const val KEY_HOME_HERO_MODE = "home_hero_mode"
         const val KEY_HOME_HERO_BACKGROUND = "home_hero_background"

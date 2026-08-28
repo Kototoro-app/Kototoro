@@ -142,6 +142,27 @@ internal fun HomeRoute(
                 mainNavigator.openTopLevel(SuggestionsNavKey)
             }
         }
+        val onHomeConfigureHistoryClick = remember(appRouter) {
+            {
+                appRouter.showListConfigSheet(
+                    org.skepsun.kototoro.list.ui.config.ListConfigSection.HomeHistory,
+                )
+            }
+        }
+        val onHomeConfigureUpdatesClick = remember(appRouter) {
+            {
+                appRouter.showListConfigSheet(
+                    org.skepsun.kototoro.list.ui.config.ListConfigSection.HomeUpdates,
+                )
+            }
+        }
+        val onHomeConfigureRecommendationsClick = remember(appRouter) {
+            {
+                appRouter.showListConfigSheet(
+                    org.skepsun.kototoro.list.ui.config.ListConfigSection.HomeRecommendations,
+                )
+            }
+        }
         val onHomeRecentSearchClick = remember(onOpenSearch) {
             { query: String ->
                 onOpenSearch(
@@ -184,6 +205,9 @@ internal fun HomeRoute(
             onHomeViewAllRecentClick,
             onHomeViewAllUpdatesClick,
             onHomeViewAllRecommendationsClick,
+            onHomeConfigureHistoryClick,
+            onHomeConfigureUpdatesClick,
+            onHomeConfigureRecommendationsClick,
             onHomeRecentSearchClick,
             onHomeSetupWizardClick,
             onHomeManageSourcesClick,
@@ -200,6 +224,9 @@ internal fun HomeRoute(
                 onViewAllRecentClick = onHomeViewAllRecentClick,
                 onViewAllUpdatesClick = onHomeViewAllUpdatesClick,
                 onViewAllRecommendationsClick = onHomeViewAllRecommendationsClick,
+                onConfigureHistoryClick = onHomeConfigureHistoryClick,
+                onConfigureUpdatesClick = onHomeConfigureUpdatesClick,
+                onConfigureRecommendationsClick = onHomeConfigureRecommendationsClick,
                 onRecentSearchClick = onHomeRecentSearchClick,
                 onSetupWizardClick = onHomeSetupWizardClick,
                 onManageSourcesClick = onHomeManageSourcesClick,

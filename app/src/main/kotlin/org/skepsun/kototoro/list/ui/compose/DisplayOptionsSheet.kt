@@ -67,6 +67,10 @@ fun DisplayOptionsSheet(
     isGroupingAvailable: Boolean = false,
     isGroupingEnabled: Boolean = false,
     onGroupingEnabledChange: (Boolean) -> Unit = {},
+    // Rows-per-page for the home list-mode rails; null hides the selector
+    // (non-home sections don't page their rails).
+    railRows: Int? = null,
+    onRailRowsChange: ((Int) -> Unit)? = null,
     extraContent: (@Composable () -> Unit)? = null,
     onDismissRequest: () -> Unit,
 ) {
@@ -188,6 +192,16 @@ fun DisplayOptionsSheet(
                             title = stringResource(R.string.grid_size),
                             value = gridSize,
                             onValueChange = onGridSizeChange,
+                        )
+                    }
+
+                    if (railRows != null && onRailRowsChange != null &&
+                        (currentListMode == ListMode.LIST || currentListMode == ListMode.DETAILED_LIST)
+                    ) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        RailRowsSelector(
+                            railRows = railRows,
+                            onRailRowsChange = onRailRowsChange,
                         )
                     }
 
@@ -373,7 +387,7 @@ private fun GroupingSection(
 }
 
 @Composable
-private fun DisplayModeChip(
+internal fun DisplayModeChip(
     iconRes: Int,
     label: String,
     selected: Boolean,
@@ -403,7 +417,7 @@ private fun DisplayModeChip(
 }
 
 @Composable
-private fun GridSizeSlider(
+internal fun GridSizeSlider(
     title: String,
     value: Int,
     onValueChange: (Int) -> Unit,

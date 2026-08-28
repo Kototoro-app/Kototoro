@@ -1185,6 +1185,19 @@ class AppRouter(
         }
     }
 
+    /** Paged display-options sheet for the three home rails (history/updates/recommendations). */
+    fun showHomeSectionsConfigSheet() {
+        val composeActivity = activity as? BaseComposeActivity
+        if (composeActivity != null) {
+            composeActivity.showComposeModal {
+                org.skepsun.kototoro.home.ui.compose.HomeSectionsConfigRoute(
+                    onDismissRequest = composeActivity::dismissComposeModal,
+                )
+            }
+            return
+        }
+    }
+
     fun showStatisticSheet(manga: Content) {
         val composeActivity = activity as? BaseComposeActivity
         if (composeActivity != null) {

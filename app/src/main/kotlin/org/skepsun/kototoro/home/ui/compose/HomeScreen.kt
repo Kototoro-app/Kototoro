@@ -47,11 +47,13 @@ import org.skepsun.kototoro.details.ui.compose.rememberPanoramaBackdropPrefs
 import org.skepsun.kototoro.home.ui.HomeSummaryState
 import org.skepsun.kototoro.parsers.model.Content
 
+import org.skepsun.kototoro.home.ui.compose.hero.HOME_HERO_CARD_HEIGHT
 import org.skepsun.kototoro.home.ui.compose.hero.HomeHeroPresentation
 import org.skepsun.kototoro.home.ui.compose.hero.HomeHeroSection
 import org.skepsun.kototoro.home.ui.compose.hero.buildHomeHeroEntries
 import org.skepsun.kototoro.home.ui.compose.sections.HomeHighlightsSections
 import org.skepsun.kototoro.home.ui.compose.sections.HomeQuickAction
+import org.skepsun.kototoro.home.ui.compose.sections.HomeRailStyle
 import org.skepsun.kototoro.home.ui.compose.sections.QuickActionsSection
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -59,10 +61,18 @@ import androidx.compose.runtime.setValue
 @Immutable
 private data class HomeScreenPrefs(
     val gridScale: Float,
-    val listMode: ListMode,
     val heroMode: HomeHeroMode,
     val heroBackground: HomeHeroBackground,
     val heroContentLayout: HomeHeroContentLayout,
+    val historyListMode: ListMode,
+    val updatesListMode: ListMode,
+    val recommendationsListMode: ListMode,
+    val historyGridScale: Float,
+    val updatesGridScale: Float,
+    val recommendationsGridScale: Float,
+    val historyRailRows: Int,
+    val updatesRailRows: Int,
+    val recommendationsRailRows: Int,
 )
 
 @Stable
@@ -72,6 +82,9 @@ data class HomeScreenActions(
     val onViewAllRecentClick: () -> Unit,
     val onViewAllUpdatesClick: () -> Unit,
     val onViewAllRecommendationsClick: () -> Unit,
+    val onConfigureHistoryClick: () -> Unit,
+    val onConfigureUpdatesClick: () -> Unit,
+    val onConfigureRecommendationsClick: () -> Unit,
     val onRecentSearchClick: (String) -> Unit,
     val onSetupWizardClick: () -> Unit,
     val onManageSourcesClick: () -> Unit,
@@ -105,25 +118,76 @@ fun HomeScreen(
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
     val screenPrefs by settings.observeAsState(
         AppSettings.KEY_GRID_SIZE,
-        AppSettings.KEY_LIST_MODE_HOME,
         AppSettings.KEY_HOME_HERO_STYLE,
         AppSettings.KEY_HOME_HERO_MODE,
         AppSettings.KEY_HOME_HERO_BACKGROUND,
         AppSettings.KEY_HOME_HERO_CONTENT_LAYOUT,
+        AppSettings.KEY_HOME_SECTION_LIST_MODE_HISTORY,
+        AppSettings.KEY_HOME_SECTION_LIST_MODE_UPDATES,
+        AppSettings.KEY_HOME_SECTION_LIST_MODE_RECOMMENDATIONS,
+        AppSettings.KEY_HOME_SECTION_GRID_SIZE_HISTORY,
+        AppSettings.KEY_HOME_SECTION_GRID_SIZE_UPDATES,
+        AppSettings.KEY_HOME_SECTION_GRID_SIZE_RECOMMENDATIONS,
+        AppSettings.KEY_HOME_SECTION_RAIL_ROWS_HISTORY,
+        AppSettings.KEY_HOME_SECTION_RAIL_ROWS_UPDATES,
+        AppSettings.KEY_HOME_SECTION_RAIL_ROWS_RECOMMENDATIONS,
     ) {
         HomeScreenPrefs(
             gridScale = gridSize / 100f,
-            listMode = homeListMode,
             heroMode = homeHeroMode,
             heroBackground = homeHeroBackground,
             heroContentLayout = homeHeroContentLayout,
+            historyListMode = homeSectionListModeHistory,
+            updatesListMode = homeSectionListModeUpdates,
+            recommendationsListMode = homeSectionListModeRecommendations,
+            historyGridScale = homeSectionGridSizeHistory / 100f,
+            updatesGridScale = homeSectionGridSizeUpdates / 100f,
+            recommendationsGridScale = homeSectionGridSizeRecommendations / 100f,
+            historyRailRows = homeSectionRailRowsHistory,
+            updatesRailRows = homeSectionRailRowsUpdates,
+            recommendationsRailRows = homeSectionRailRowsRecommendations,
         )
     }
     val gridScale = screenPrefs.gridScale
-    val listMode = screenPrefs.listMode
     val heroMode = screenPrefs.heroMode
     val heroBackground = screenPrefs.heroBackground
     val heroContentLayout = screenPrefs.heroContentLayout
+    val historyRailStyle = remember(
+        screenPrefs.historyListMode,
+        screenPrefs.historyGridScale,
+        screenPrefs.historyRailRows,
+    ) {
+        HomeRailStyle(
+            listMode = screenPrefs.historyListMode,
+            posterStyle = compactPosterCardStyle(screenPrefs.historyGridScale),
+            railRowsPerPage = screenPrefs.historyRailRows,
+            gridScale = screenPrefs.historyGridScale,
+        )
+    }
+    val updatesRailStyle = remember(
+        screenPrefs.updatesListMode,
+        screenPrefs.updatesGridScale,
+        screenPrefs.updatesRailRows,
+    ) {
+        HomeRailStyle(
+            listMode = screenPrefs.updatesListMode,
+            posterStyle = compactPosterCardStyle(screenPrefs.updatesGridScale),
+            railRowsPerPage = screenPrefs.updatesRailRows,
+            gridScale = screenPrefs.updatesGridScale,
+        )
+    }
+    val recommendationsRailStyle = remember(
+        screenPrefs.recommendationsListMode,
+        screenPrefs.recommendationsGridScale,
+        screenPrefs.recommendationsRailRows,
+    ) {
+        HomeRailStyle(
+            listMode = screenPrefs.recommendationsListMode,
+            posterStyle = compactPosterCardStyle(screenPrefs.recommendationsGridScale),
+            railRowsPerPage = screenPrefs.recommendationsRailRows,
+            gridScale = screenPrefs.recommendationsGridScale,
+        )
+    }
     val posterStyle = remember(gridScale) { compactPosterCardStyle(gridScale) }
     val panoramaPrefs = rememberPanoramaBackdropPrefs(settings)
     val homeHeroPanoramaPrefs = remember(panoramaPrefs) {
@@ -165,7 +229,10 @@ fun HomeScreen(
     } else {
         0.dp
     }
-    val estimatedHeroPx = with(density) { (340.dp + topInset).roundToPx() }
+    // The hero sits below the top chrome again (full-bleed looked vertically
+    // stretched); only the pager indicator moved inside the card, so the
+    // measured height is just the card height.
+    val estimatedHeroPx = with(density) { (HOME_HERO_CARD_HEIGHT + topInset + 8.dp).roundToPx() }
     var heroPx by rememberSaveable { mutableIntStateOf(estimatedHeroPx) }
     val heroHeightDp by remember(heroPx, density) {
         derivedStateOf { with(density) { heroPx.toDp() } }
@@ -206,12 +273,16 @@ fun HomeScreen(
                         recommendationItems = state.recommendations,
                         recommendationsCount = state.recommendationsCount,
                         recentSearches = recentSearches,
-                        posterStyle = posterStyle,
-                        listMode = listMode,
+                        historyStyle = historyRailStyle,
+                        updatesStyle = updatesRailStyle,
+                        recommendationsStyle = recommendationsRailStyle,
                         onItemClick = onContentClick,
                         onViewAllRecentClick = actions.onViewAllRecentClick,
                         onViewAllUpdatesClick = actions.onViewAllUpdatesClick,
                         onViewAllRecommendationsClick = actions.onViewAllRecommendationsClick,
+                        onConfigureHistoryClick = actions.onConfigureHistoryClick,
+                        onConfigureUpdatesClick = actions.onConfigureUpdatesClick,
+                        onConfigureRecommendationsClick = actions.onConfigureRecommendationsClick,
                         onRecentSearchClick = actions.onRecentSearchClick,
                     )
                 }
