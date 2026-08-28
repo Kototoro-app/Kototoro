@@ -6,7 +6,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
+import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
+import org.skepsun.kototoro.core.db.TABLE_READING_SESSIONS
+import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
+import org.skepsun.kototoro.core.db.TABLE_WORK_STATS
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
@@ -37,6 +43,30 @@ class StatsRepository @Inject constructor(
     private val workResolver: WorkResolver,
     private val workAggregateRepository: WorkAggregateRepository,
 ) {
+
+    /**
+     * Reactive dashboard for summaries: recomputes whenever reading sessions,
+     * stats rows or entity identities change.
+     */
+    fun observeDashboard(
+        period: StatsPeriod,
+        categories: Set<Long> = emptySet(),
+        kind: StatsContentKind = StatsContentKind.ALL,
+    ): Flow<StatsDashboard> {
+        val invalidations = db.invalidationTracker.createFlow(
+            tables = arrayOf(
+                TABLE_READING_SESSIONS,
+                TABLE_WORK_STATS,
+                TABLE_WORK_HISTORY,
+                TABLE_ENTITY_GRAPH_BINDING,
+                TABLE_ENTITY_PREFERENCES,
+            ),
+            emitInitialState = true,
+        )
+        return invalidations.mapLatest {
+            getDashboard(period, categories, kind)
+        }.distinctUntilChanged()
+    }
 
     suspend fun getReadingStats(period: StatsPeriod, categories: Set<Long>): List<StatsRecord> {
         val fromDate = if (period == StatsPeriod.ALL) {

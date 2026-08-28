@@ -27,11 +27,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.exceptions.EmptyHistoryException
-import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.getTitle
-import org.skepsun.kototoro.core.model.looksLikeLocalVideoContent
-import org.skepsun.kototoro.core.model.looksLikeVideoUrl
 import org.skepsun.kototoro.core.model.ContentHistory
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -39,7 +35,6 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
-import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.calculateTimeAgo
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.history.data.HistoryRepository
@@ -73,7 +68,6 @@ import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.paging.LargeLibraryPagingConfig
 import org.skepsun.kototoro.core.model.isLocal
-import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
@@ -87,6 +81,9 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
+import org.skepsun.kototoro.stats.data.StatsRepository
+import org.skepsun.kototoro.stats.domain.StatsDashboard
+import org.skepsun.kototoro.stats.domain.StatsPeriod
 
 private const val PAGE_SIZE = 32
 
@@ -134,7 +131,6 @@ class HistoryListViewModel @Inject constructor(
     private val quickFilter: HistoryListQuickFilter,
     private val sourceGroupManager: SourceGroupManager,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
-    private val networkState: NetworkState,
     private val dataRepository: ContentDataRepository,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
@@ -142,6 +138,7 @@ class HistoryListViewModel @Inject constructor(
     private val historyPreviewCache: HistoryPreviewCache,
         private val workResolver: WorkResolver,
         private val workAggregateRepository: WorkAggregateRepository,
+    private val statsRepository: StatsRepository,
     spaceBrowseScope: SpaceBrowseScope,
 ) : ContentListViewModel(settings, dataRepository, localStorageChanges), QuickFilterListener, SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
@@ -154,7 +151,6 @@ class HistoryListViewModel @Inject constructor(
 
     @Volatile
     private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
-    val onOpenReader = MutableEventFlow<Content>()
 
     override val isFilterBarVisible = MutableStateFlow(true)
     private val refreshTrigger = MutableStateFlow(Any())
@@ -204,12 +200,16 @@ class HistoryListViewModel @Inject constructor(
         valueProducer = { isStatsEnabled },
     )
 
-    val isResumeEnabled = combine(
-        activeSpaceScope.flatMapLatest(repository::observeLast),
-        networkState,
-    ) { last, isOnline ->
-        last != null && (isOnline || last.isLocal)
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.WhileSubscribed(5000), false)
+    /** Reading statistics summary shown at the top of the history page. */
+    val statsSummary: StateFlow<StatsDashboard?> = isStatsEnabled
+        .flatMapLatest { enabled ->
+            if (enabled) {
+                statsRepository.observeDashboard(StatsPeriod.WEEK)
+            } else {
+                flowOf(null)
+            }
+        }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
     val headerQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
         .flatMapLatest { selectedOptions ->
@@ -432,25 +432,6 @@ class HistoryListViewModel @Inject constructor(
             val model = models[index].toGroupedListModel(group) as ContentListModel
             group.representative.history.header(params.order)?.let { pagingHeaders[model.id] = it }
             model
-        }
-    }
-
-    fun openLastReader() {
-        launchLoadingJob(Dispatchers.Default) {
-            val content = repository.getLastOrNull(activeSpaceScope.value) ?: throw EmptyHistoryException()
-            val manga = content.let {
-                if (it.looksLikeLocalVideoContent()) {
-                    it.copy(
-                        source = LocalVideoSource,
-                        chapters = it.chapters?.map { chapter ->
-                            if (chapter.url.looksLikeVideoUrl()) chapter.copy(source = LocalVideoSource) else chapter
-                        },
-                    )
-                } else {
-                    it
-                }
-            }
-            onOpenReader.call(manga)
         }
     }
 

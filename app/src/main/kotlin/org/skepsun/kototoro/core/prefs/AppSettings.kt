@@ -2385,7 +2385,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_PAGES_SAVE_ASK, value) }
 
     var isStatsEnabled: Boolean
-        get() = prefs.getBoolean(KEY_STATS_ENABLED, false)
+        get() = prefs.getBoolean(KEY_STATS_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_STATS_ENABLED, value) }
 
     val isAutoLocalChaptersCleanupEnabled: Boolean

@@ -1422,7 +1422,7 @@ internal fun HistoryTopLevelRouteContent(
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
-    val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
+    val statsSummary by viewModel.statsSummary.collectAsStateWithLifecycle()
     val gridScale by viewModel.gridScale.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -1523,14 +1523,6 @@ internal fun HistoryTopLevelRouteContent(
                     LayeredTopBarOverrideState(),
                 ),
             )
-        }
-    }
-
-    LaunchedEffect(viewModel.onOpenReader, appRouter) {
-        viewModel.onOpenReader.collect { event ->
-            event?.consume { content ->
-                appRouter.openReader(content)
-            }
         }
     }
 
@@ -1653,11 +1645,10 @@ internal fun HistoryTopLevelRouteContent(
                 }
             },
             onStatsClick = { appRouter.openStatistic() },
-            onContinueReadingClick = { viewModel.openLastReader() },
             onQuickFilterOptionClick = viewModel::toggleFilterOption,
-            showContinueReadingButton = isResumeEnabled,
             showQuickFilterInline = true,
             showInlineSelectionTopBar = false,
+            statsSummary = statsSummary,
         )
 
         if (showClearDialog) {

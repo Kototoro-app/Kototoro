@@ -1,17 +1,14 @@
 package org.skepsun.kototoro.history.ui.compose
 
 import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -21,11 +18,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.compose.KototoroContentListScreen
@@ -65,12 +61,11 @@ fun HistoryScreen(
     onClearSelection: () -> Unit,
     onSelectionAction: (SelectionAction) -> Unit,
     onStatsClick: () -> Unit,
-    onContinueReadingClick: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
-    showContinueReadingButton: Boolean,
     showQuickFilterInline: Boolean = true,
     showInlineSelectionTopBar: Boolean = true,
     viewModel: ContentListViewModel? = null,
+    statsSummary: org.skepsun.kototoro.stats.domain.StatsDashboard? = null,
     modifier: Modifier = Modifier,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
@@ -109,14 +104,13 @@ fun HistoryScreen(
         listMode,
         isRefreshing,
         selectedItemsIds.size,
-        showContinueReadingButton,
         contentPadding,
     ) {
         Log.d(
             MainRouteFlickerLogTag,
             "history screen state items=${items.size} contentItems=${contentItems.size} " +
                 "quickItems=${quickFilter?.items?.size ?: -1} listMode=$listMode refreshing=$isRefreshing " +
-                "selected=${selectedItemsIds.size} continue=$showContinueReadingButton " +
+                "selected=${selectedItemsIds.size} " +
                 "paddingTop=${contentPadding.calculateTopPadding()} paddingBottom=${contentPadding.calculateBottomPadding()} " +
                 "visibleGrid=${contentItems.contentAtVisibleIndex(gridState.firstVisibleItemIndex)} " +
                 "visibleList=${contentItems.contentAtVisibleIndex(listState.firstVisibleItemIndex)} " +
@@ -193,9 +187,8 @@ fun HistoryScreen(
                 quickFilter = quickFilter.takeIf { showQuickFilterInline },
                 isStatsEnabled = isStatsEnabled,
                 onStatsClick = onStatsClick,
-                showContinueReadingButton = showContinueReadingButton && selectedItemsIds.isEmpty(),
-                onContinueReadingClick = onContinueReadingClick,
                 onQuickFilterOptionClick = onQuickFilterOptionClick,
+                statsSummary = statsSummary,
             )
         },
     )
@@ -206,47 +199,21 @@ private fun HistoryHeader(
     quickFilter: QuickFilter?,
     isStatsEnabled: Boolean,
     onStatsClick: () -> Unit,
-    showContinueReadingButton: Boolean,
-    onContinueReadingClick: () -> Unit,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
+    statsSummary: org.skepsun.kototoro.stats.domain.StatsDashboard?,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            if (isStatsEnabled) {
-                AssistChip(
-                    onClick = onStatsClick,
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_bar_chart),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    },
-                    label = { Text(stringResource(R.string.statistics)) }
-                )
-            }
-            if (showContinueReadingButton) {
-                AssistChip(
-                    onClick = onContinueReadingClick,
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_read),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 4.dp),
-                        )
-                    },
-                    label = { Text(stringResource(R.string._continue)) },
-                )
-            }
+        if (isStatsEnabled && statsSummary != null && statsSummary.hasAnyActivity()) {
+            HistoryStatsSummaryCard(
+                dashboard = statsSummary,
+                onClick = onStatsClick,
+                modifier = Modifier.padding(horizontal = AppLayoutTokens.screenHorizontalPadding),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
         }
 
         if (quickFilter != null) {
@@ -256,6 +223,10 @@ private fun HistoryHeader(
             )
         }
     }
+}
+
+private fun org.skepsun.kototoro.stats.domain.StatsDashboard.hasAnyActivity(): Boolean {
+    return totalDuration > 0L || sessionCount > 0 || workCount > 0 || activeDays > 0
 }
 
 private fun QuickFilter.withMacroOptionsFirst(): QuickFilter {
