@@ -29,29 +29,103 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.local.data.LocalStorageChanges
 import org.skepsun.kototoro.local.domain.model.LocalContent
 
 /**
- * Host for the retained paging snapshot used to stabilise the list scroll
- * position across a details-page round trip. Implemented by [ContentListViewModel]
- * (favourites / history / updates) and by static-window lists such as the
- * subscriptions Feed view model.
+ * A bounded immutable window captured before navigating to details. The anchor
+ * keeps its model identity contract so paging and static lists use the same
+ * restoration path without feature-specific id handling.
  */
-interface RetainedPagingSnapshotHost {
-    fun retainPagingSnapshot(
-        items: List<ListModel>,
-        anchorItemId: Long,
-        listMode: ListMode,
-        firstVisibleItemIndex: Int,
-        firstVisibleItemScrollOffset: Int,
-    )
+internal const val RETAINED_PAGING_SNAPSHOT_MAX_ITEMS = 192
+private const val RETAINED_PAGING_SNAPSHOT_ITEMS_BEFORE_ANCHOR = 64
 
-    fun peekRetainedPagingSnapshot(): ContentListViewModel.RetainedPagingSnapshot?
+data class RetainedPagingSnapshot(
+    val generation: Long,
+    val items: List<ListModel>,
+    val anchorItem: ListModel,
+    val anchorItemIndex: Int,
+    val listMode: ListMode,
+    val firstVisibleItemIndex: Int,
+    val firstVisibleItemScrollOffset: Int,
+    val liveLayoutOffset: Int,
+)
+
+internal fun List<ListModel>.indexOfSameItem(anchor: ListModel): Int {
+    return indexOfFirst { candidate -> areSameRetainedItem(anchor, candidate) }
+}
+
+private fun areSameRetainedItem(anchor: ListModel, candidate: ListModel): Boolean {
+    return if (anchor is ContentListModel && candidate is ContentListModel) {
+        anchor.id == candidate.id
+    } else {
+        anchor.areItemsTheSame(candidate)
+    }
+}
+
+internal fun createRetainedPagingSnapshot(
+    loadedItems: List<ListModel>,
+    clickedItem: ListModel,
+    listMode: ListMode,
+    layoutFirstVisibleIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    pagingAnchorIndex: Int,
+): RetainedPagingSnapshot? {
+    if (loadedItems.isEmpty()) return null
+
+    val viewportItemIndex = pagingAnchorIndex.coerceAtLeast(0)
+    val viewportItem = loadedItems.getOrNull(viewportItemIndex)
+    val viewportItemIsStable = viewportItem != null && areSameRetainedItem(viewportItem, viewportItem)
+    val anchorItem = viewportItem.takeIf { viewportItemIsStable } ?: clickedItem
+    val anchorItemIndex = if (viewportItemIsStable) {
+        viewportItemIndex
+    } else {
+        loadedItems.indexOfSameItem(clickedItem)
+    }
+    if (anchorItemIndex < 0) return null
+
+    val windowStart = (anchorItemIndex - RETAINED_PAGING_SNAPSHOT_ITEMS_BEFORE_ANCHOR).coerceAtLeast(0)
+    val windowEnd = (windowStart + RETAINED_PAGING_SNAPSHOT_MAX_ITEMS).coerceAtMost(loadedItems.size)
+    return RetainedPagingSnapshot(
+        generation = 0,
+        items = loadedItems.subList(windowStart, windowEnd).toList(),
+        anchorItem = anchorItem,
+        anchorItemIndex = anchorItemIndex - windowStart,
+        listMode = listMode,
+        firstVisibleItemIndex = (layoutFirstVisibleIndex - windowStart).coerceAtLeast(0),
+        firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
+        liveLayoutOffset = (layoutFirstVisibleIndex - anchorItemIndex).coerceAtLeast(0),
+    )
+}
+
+interface RetainedPagingSnapshotHost {
+    fun retainPagingSnapshot(snapshot: RetainedPagingSnapshot)
+
+    fun peekRetainedPagingSnapshot(): RetainedPagingSnapshot?
 
     fun clearRetainedPagingSnapshot(generation: Long)
+}
+
+class RetainedPagingSnapshotStore : RetainedPagingSnapshotHost {
+    private var snapshot: RetainedPagingSnapshot? = null
+    private var generation = 0L
+
+    @Synchronized
+    override fun retainPagingSnapshot(snapshot: RetainedPagingSnapshot) {
+        generation += 1L
+        this.snapshot = snapshot.copy(generation = generation)
+    }
+
+    @Synchronized
+    override fun peekRetainedPagingSnapshot(): RetainedPagingSnapshot? = snapshot
+
+    @Synchronized
+    override fun clearRetainedPagingSnapshot(generation: Long) {
+        if (snapshot?.generation == generation) snapshot = null
+    }
 }
 
 abstract class ContentListViewModel(
@@ -59,28 +133,9 @@ abstract class ContentListViewModel(
     private val mangaDataRepository: ContentDataRepository,
     @param:LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
 ) : BaseViewModel(), RetainedPagingSnapshotHost {
-
-    /**
-     * Immutable capture of the last visible paging window taken when the user
-     * navigates away to details. On return the list renders this snapshot
-     * (instead of the blank/loading refresh state) and then realigns to the
-     * anchor item by stable id once the live paging data has loaded it, so an
-     * in-flight Room invalidation (details refresh) can no longer shift the
-     * viewport by restoring an absolute index into a different generation.
-     */
-    data class RetainedPagingSnapshot(
-        val generation: Long,
-        val items: List<ListModel>,
-        val anchorItemId: Long,
-        val listMode: ListMode,
-        val firstVisibleItemIndex: Int,
-        val firstVisibleItemScrollOffset: Int,
-    )
-
     abstract val content: StateFlow<List<ListModel>>
     open val pagingContent: Flow<PagingData<ListModel>>? = null
-    private var retainedPagingSnapshot: RetainedPagingSnapshot? = null
-    private var retainedPagingSnapshotGeneration = 0L
+    private val retainedPagingSnapshotStore = RetainedPagingSnapshotStore()
     open val hasMoreItems: StateFlow<Boolean> = flowOf(true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
     open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
@@ -137,36 +192,14 @@ abstract class ContentListViewModel(
 
     open fun resolveEntityIdForUiItemId(id: Long): Long? = null
 
-    @Synchronized
-    override fun retainPagingSnapshot(
-        items: List<ListModel>,
-        anchorItemId: Long,
-        listMode: ListMode,
-        firstVisibleItemIndex: Int,
-        firstVisibleItemScrollOffset: Int,
-    ) {
-        if (items.isNotEmpty()) {
-            retainedPagingSnapshotGeneration += 1L
-            retainedPagingSnapshot = RetainedPagingSnapshot(
-                generation = retainedPagingSnapshotGeneration,
-                items = items,
-                anchorItemId = anchorItemId,
-                listMode = listMode,
-                firstVisibleItemIndex = firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
-            )
-        }
-    }
+    override fun retainPagingSnapshot(snapshot: RetainedPagingSnapshot) =
+        retainedPagingSnapshotStore.retainPagingSnapshot(snapshot)
 
-    @Synchronized
-    override fun peekRetainedPagingSnapshot(): RetainedPagingSnapshot? = retainedPagingSnapshot
+    override fun peekRetainedPagingSnapshot(): RetainedPagingSnapshot? =
+        retainedPagingSnapshotStore.peekRetainedPagingSnapshot()
 
-    @Synchronized
-    override fun clearRetainedPagingSnapshot(generation: Long) {
-        if (retainedPagingSnapshot?.generation == generation) {
-            retainedPagingSnapshot = null
-        }
-    }
+    override fun clearRetainedPagingSnapshot(generation: Long) =
+        retainedPagingSnapshotStore.clearRetainedPagingSnapshot(generation)
 
     open fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
 

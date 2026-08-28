@@ -171,7 +171,7 @@ fun HistoryScreen(
                 // ahead of any leading `items` and the paging rows.
                 val pagingAnchorIndex = (firstVisibleIndex - contentItems.size - 1).coerceAtLeast(0)
                 state.captureOnNavigate(
-                    item.id,
+                    item,
                     snapshotItems,
                     firstVisibleIndex,
                     firstVisibleScrollOffset,

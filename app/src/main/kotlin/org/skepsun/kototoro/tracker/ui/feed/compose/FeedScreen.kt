@@ -93,6 +93,7 @@ fun FeedScreen(
             leadingItems = items,
             lazyPagingItems = null,
             listMode = ListMode.LIST,
+            staticRefreshSettled = !isRefreshing && items.none { it is LoadingState },
         )
     }
     val listState = retainedState?.listState ?: rememberSaveable(saver = LazyListState.Saver) {
@@ -227,7 +228,7 @@ fun FeedScreen(
                             onClick = { coverBounds ->
                                 retainedState?.let { state ->
                                     state.captureOnNavigate(
-                                        item.id,
+                                        item,
                                         displayedItems,
                                         state.listState.firstVisibleItemIndex,
                                         state.listState.firstVisibleItemScrollOffset,
@@ -248,7 +249,7 @@ fun FeedScreen(
                             onItemClick = { contentItem, coverBounds ->
                                 retainedState?.let { state ->
                                     state.captureOnNavigate(
-                                        contentItem.model.id,
+                                        item,
                                         displayedItems,
                                         state.listState.firstVisibleItemIndex,
                                         state.listState.firstVisibleItemScrollOffset,

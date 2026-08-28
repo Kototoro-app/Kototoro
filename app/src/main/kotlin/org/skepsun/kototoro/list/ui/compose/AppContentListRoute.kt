@@ -597,7 +597,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                     }
                     val firstVisiblePagingIndex = (firstVisibleIndex - items.size).coerceAtLeast(0)
                     retainedPagingState.captureOnNavigate(
-                        item.id,
+                        item,
                         snapshotItems,
                         firstVisibleIndex,
                         firstVisibleScrollOffset,

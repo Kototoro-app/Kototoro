@@ -18,9 +18,10 @@ import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
-import org.skepsun.kototoro.list.ui.ContentListViewModel
+import org.skepsun.kototoro.list.ui.RetainedPagingSnapshot
 import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
-import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.list.ui.createRetainedPagingSnapshot
+import org.skepsun.kototoro.list.ui.indexOfSameItem
 import org.skepsun.kototoro.list.ui.model.ListModel
 
 /**
@@ -39,7 +40,7 @@ import org.skepsun.kototoro.list.ui.model.ListModel
  * `... restore original viewport on return ...` and removed by the paging perf
  * refactor):
  * 1. On navigate-away the caller captures [RetainedPagingSnapshot] into the
- *    [ContentListViewModel] (visible window + anchor item id + list mode +
+ *    [RetainedPagingSnapshotHost] (bounded window + anchor model + list mode +
  *    the raw layout index/offset).
  * 2. On return, while the live data has not yet (re)loaded the anchor, this
  *    renders the retained window (`displayedItems` = leading + snapshot) and
@@ -66,17 +67,17 @@ internal data class RetainedPagingSnapshotState(
     /** True when the live paging refresh is running (drives the refresh spinner). */
     val pagingIsRefreshing: Boolean,
     /** The snapshot currently being rendered (non-null only while retained). */
-    val currentRetainedSnapshot: ContentListViewModel.RetainedPagingSnapshot?,
+    val currentRetainedSnapshot: RetainedPagingSnapshot?,
     /**
      * Capture the current visible window before navigating to details.
-     * [clickedItemId] is a stable list-model id used as the anchor fallback;
+     * [clickedItem] provides the stable model identity used as the anchor fallback;
      * [layoutFirstVisibleIndex] is the raw index reported by the grid/list
      * state; [pagingAnchorIndex] is the index (within [loadedItems], paging
      * space) of the first visible item, so screens with section headers can
      * adjust for them.
      */
     val captureOnNavigate: (
-        clickedItemId: Long,
+        clickedItem: ListModel,
         loadedItems: List<ListModel>,
         layoutFirstVisibleIndex: Int,
         firstVisibleScrollOffset: Int,
@@ -104,10 +105,6 @@ internal fun shouldUseRetainedPagingSnapshot(
         (!retainedAnchorPrefixIsReady || !returnTransitionSettled)
 }
 
-private fun List<ListModel>.contentIndexOf(itemId: Long): Int {
-    return indexOfFirst { model -> model is ContentListModel && model.id == itemId }
-}
-
 @Composable
 internal fun rememberRetainedPagingSnapshotState(
     host: RetainedPagingSnapshotHost,
@@ -115,6 +112,7 @@ internal fun rememberRetainedPagingSnapshotState(
     leadingItems: List<ListModel>,
     lazyPagingItems: LazyPagingItems<ListModel>?,
     listMode: ListMode,
+    staticRefreshSettled: Boolean = true,
 ): RetainedPagingSnapshotState {
     val initialRetainedPagingSnapshot = remember(host, retainEnabled) {
         if (retainEnabled) host.peekRetainedPagingSnapshot() else null
@@ -125,17 +123,12 @@ internal fun rememberRetainedPagingSnapshotState(
 
     val restoredViewportIndex = initialRetainedPagingSnapshot?.firstVisibleItemIndex ?: 0
     val restoredViewportOffset = initialRetainedPagingSnapshot?.firstVisibleItemScrollOffset ?: 0
-    val restoreGridViewport = initialRetainedPagingSnapshot?.listMode == ListMode.GRID ||
-        initialRetainedPagingSnapshot?.listMode == ListMode.COMPACT_GRID
-    val restoreListViewport = initialRetainedPagingSnapshot?.listMode == ListMode.LIST
-    val restoreDetailedListViewport = initialRetainedPagingSnapshot?.listMode == ListMode.DETAILED_LIST
-
     val gridState = if (initialRetainedPagingSnapshot != null) {
         key("retained_paging_grid", initialRetainedPagingSnapshot.generation) {
             rememberSaveable(saver = LazyGridState.Saver) {
                 LazyGridState(
-                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreGridViewport } ?: 0,
-                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreGridViewport } ?: 0,
+                    firstVisibleItemIndex = restoredViewportIndex,
+                    firstVisibleItemScrollOffset = restoredViewportOffset,
                 )
             }
         }
@@ -148,8 +141,8 @@ internal fun rememberRetainedPagingSnapshotState(
         key("retained_paging_list", initialRetainedPagingSnapshot.generation) {
             rememberSaveable(saver = LazyListState.Saver) {
                 LazyListState(
-                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreListViewport } ?: 0,
-                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreListViewport } ?: 0,
+                    firstVisibleItemIndex = restoredViewportIndex,
+                    firstVisibleItemScrollOffset = restoredViewportOffset,
                 )
             }
         }
@@ -162,8 +155,8 @@ internal fun rememberRetainedPagingSnapshotState(
         key("retained_paging_detailed_list", initialRetainedPagingSnapshot.generation) {
             rememberSaveable(saver = LazyListState.Saver) {
                 LazyListState(
-                    firstVisibleItemIndex = restoredViewportIndex.takeIf { restoreDetailedListViewport } ?: 0,
-                    firstVisibleItemScrollOffset = restoredViewportOffset.takeIf { restoreDetailedListViewport } ?: 0,
+                    firstVisibleItemIndex = restoredViewportIndex,
+                    firstVisibleItemScrollOffset = restoredViewportOffset,
                 )
             }
         }
@@ -197,13 +190,12 @@ internal fun rememberRetainedPagingSnapshotState(
     val isStaticList = lazyPagingItems == null
     // Static lists (feed) pass their whole window as `leadingItems`; paging lists
     // feed content exclusively through `lazyPagingItems`.
-    val liveListItems = if (isStaticList) leadingItems else lazyPagingItems?.itemSnapshotList?.items.orEmpty()
-    val retainedAnchorIndex = retainedPagingSnapshot?.let { retained ->
-        retained.items.contentIndexOf(retained.anchorItemId)
-    } ?: -1
-    val liveAnchorIndex = retainedPagingSnapshot?.let { retained ->
-        liveListItems.contentIndexOf(retained.anchorItemId)
-    } ?: -1
+    val liveListItems = if (isStaticList) leadingItems else lazyPagingItems.itemSnapshotList.items
+    val liveListIdentity = System.identityHashCode(liveListItems)
+    val retainedAnchorIndex = retainedPagingSnapshot?.anchorItemIndex ?: -1
+    val liveAnchorIndex = remember(retainedPagingSnapshot?.generation, liveListIdentity, liveListItems.size) {
+        retainedPagingSnapshot?.let { liveListItems.indexOfSameItem(it.anchorItem) } ?: -1
+    }
     val retainedAnchorIsLoaded = liveAnchorIndex >= 0
     // Static lists (feed) load their whole window in one shot, so the prefix is
     // never "paging"; paging lists report end-of-pagination via prepend state.
@@ -214,8 +206,7 @@ internal fun rememberRetainedPagingSnapshotState(
     val pagingRefreshSettled = if (lazyPagingItems != null) {
         lazyPagingItems.loadState.refresh is LoadState.NotLoading
     } else {
-        // Static list (feed): "refresh settled" the moment there is live data.
-        true
+        staticRefreshSettled
     }
     val useRetainedPagingSnapshot = shouldUseRetainedPagingSnapshot(
         retentionEnabled = retainEnabled,
@@ -243,13 +234,13 @@ internal fun rememberRetainedPagingSnapshotState(
             liveAnchorIndex in 0 until retainedAnchorIndex &&
             !pagingPrependExhausted
         ) {
-            lazyPagingItems?.get(0)
+            lazyPagingItems.get(0)
         }
     }
 
     val displayedItems = remember(
-        leadingItems,
-        retainedPagingSnapshot,
+        System.identityHashCode(leadingItems),
+        retainedPagingSnapshot?.generation,
         useRetainedPagingSnapshot,
         isStaticList,
     ) {
@@ -265,12 +256,11 @@ internal fun rememberRetainedPagingSnapshotState(
     }
     val displayedPagingItems = if (useRetainedPagingSnapshot) null else lazyPagingItems
 
-    // Re-align to the anchor by stable item id once the live data has loaded it.
-    LaunchedEffect(useRetainedPagingSnapshot, liveListItems.size) {
+    // Re-align to the anchor by stable model identity once live data has loaded it.
+    LaunchedEffect(useRetainedPagingSnapshot, liveListItems.size, liveAnchorIndex) {
         val snapshot = retainedPagingSnapshot ?: return@LaunchedEffect
         if (useRetainedPagingSnapshot) return@LaunchedEffect
         if (liveListItems.isEmpty()) return@LaunchedEffect
-        val liveAnchorIndex = liveListItems.contentIndexOf(snapshot.anchorItemId)
         if (liveAnchorIndex < 0) {
             // The refreshed dataset removed the anchor; just stop retaining.
             host.clearRetainedPagingSnapshot(snapshot.generation)
@@ -281,21 +271,19 @@ internal fun rememberRetainedPagingSnapshotState(
         // rows + section headers, e.g. favourites quick-filter row or the
         // history/updated header row). Restores the same visual offset the user
         // left, independent of how the list reordered.
-        val layoutOffset = (snapshot.firstVisibleItemIndex -
-            snapshot.items.contentIndexOf(snapshot.anchorItemId)).coerceAtLeast(0)
-        val targetLayoutIndex = layoutOffset + liveAnchorIndex
+        val targetLayoutIndex = snapshot.liveLayoutOffset + liveAnchorIndex
         when (listMode) {
             ListMode.GRID, ListMode.COMPACT_GRID -> gridState.requestScrollToItem(
                 index = targetLayoutIndex,
-                scrollOffset = gridState.firstVisibleItemScrollOffset,
+                scrollOffset = snapshot.firstVisibleItemScrollOffset,
             )
             ListMode.LIST -> listState.requestScrollToItem(
                 index = targetLayoutIndex,
-                scrollOffset = listState.firstVisibleItemScrollOffset,
+                scrollOffset = snapshot.firstVisibleItemScrollOffset,
             )
             ListMode.DETAILED_LIST -> detailedListState.requestScrollToItem(
                 index = targetLayoutIndex,
-                scrollOffset = detailedListState.firstVisibleItemScrollOffset,
+                scrollOffset = snapshot.firstVisibleItemScrollOffset,
             )
         }
         host.clearRetainedPagingSnapshot(snapshot.generation)
@@ -304,24 +292,22 @@ internal fun rememberRetainedPagingSnapshotState(
 
     val pagingIsRefreshing = lazyPagingItems?.loadState?.refresh is LoadState.Loading
     val captureOnNavigate: (
-        clickedItemId: Long,
+        clickedItem: ListModel,
         loadedItems: List<ListModel>,
         layoutFirstVisibleIndex: Int,
         firstVisibleScrollOffset: Int,
         mode: ListMode,
         pagingAnchorIndex: Int,
     ) -> Unit = if (retainEnabled) {
-        { clickedItemId, loadedItems, index, offset, mode, pagingAnchorIndex ->
-            val firstVisiblePagingIndex = pagingAnchorIndex.coerceAtLeast(0)
-            val anchorItemId = (loadedItems.getOrNull(firstVisiblePagingIndex) as? ContentListModel)?.id
-                ?: clickedItemId
-            host.retainPagingSnapshot(
-                items = loadedItems,
-                anchorItemId = anchorItemId,
+        { clickedItem, loadedItems, index, offset, mode, pagingAnchorIndex ->
+            createRetainedPagingSnapshot(
+                loadedItems = loadedItems,
+                clickedItem = clickedItem,
                 listMode = mode,
-                firstVisibleItemIndex = index,
+                layoutFirstVisibleIndex = index,
                 firstVisibleItemScrollOffset = offset,
-            )
+                pagingAnchorIndex = pagingAnchorIndex,
+            )?.let(host::retainPagingSnapshot)
         }
     } else {
         { _, _, _, _, _, _ -> }
