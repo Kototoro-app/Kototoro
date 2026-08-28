@@ -6,6 +6,7 @@ import org.skepsun.kototoro.list.ui.ListModelDiffCallback
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.util.ifNullOrEmpty
+import java.time.Instant
 
 data class FeedItem(
     val id: Long,
@@ -13,6 +14,7 @@ data class FeedItem(
     val preferredLocalMangaId: Long?,
     private val override: ContentOverride?,
     val manga: Content,
+    val createdAt: Instant,
     val count: Int,
     val isNew: Boolean,
     val totalChapters: Int = 0,

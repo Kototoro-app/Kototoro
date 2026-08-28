@@ -54,6 +54,34 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
+	fun feedTrackLogsLoadOneWindowThenAppendWithoutRepeatingRows() = runTest {
+		seedTrackLogs(500)
+		val source = db.getTrackLogsDao().pagingAll(limit = 500, filterOptions = emptySet())
+		val first = source.load(refreshParams()).requirePage()
+		val second = source.load(appendParams(requireNotNull(first.nextKey))).requirePage()
+
+		assertEquals(64, first.data.size)
+		assertEquals(64, second.data.size)
+		assertEquals(128, (first.data + second.data).map { it.id }.distinct().size)
+		assertEquals(
+			(first.data + second.data).map { it.createdAt }.sortedDescending(),
+			(first.data + second.data).map { it.createdAt },
+		)
+	}
+
+	@Test
+	fun feedAllTracksLoadOneWindowThenAppendWithoutRepeatingRows() = runTest {
+		seedTracks()
+		val source = db.getTracksDao().pagingAllTracks(limit = 500, filterOptions = emptySet())
+		val first = source.load(refreshParams()).requirePage()
+		val second = source.load(appendParams(requireNotNull(first.nextKey))).requirePage()
+
+		assertEquals(64, first.data.size)
+		assertEquals(64, second.data.size)
+		assertEquals(128, (first.data + second.data).map { it.mangaId }.distinct().size)
+	}
+
+	@Test
 	fun favouritesListAndHistoryPageByUniqueEntity() = runTest {
 		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
 		assertEquals(6_500, favourites.size)
@@ -298,6 +326,24 @@ class WorkPagingDaoTest {
 				sql.execSQL(
 					"INSERT INTO tracks VALUES (?, ?, ?, 0, ?, ?, ?, 1, NULL)",
 					arrayOf<Any?>(entityId, mangaId, entityId, entityId % 7 + 1, entityId * 1000L, entityId * 1000L),
+				)
+			}
+			sql.setTransactionSuccessful()
+		} finally {
+			sql.endTransaction()
+		}
+	}
+
+	private fun seedTrackLogs(count: Int) {
+		val sql = db.openHelper.writableDatabase
+		sql.beginTransaction()
+		try {
+			(1L..count.toLong()).forEach { entityId ->
+				val mangaId = entityId + 10_000L
+				sql.execSQL(
+					"INSERT INTO track_logs(id, owner_id, manga_id, entity_id, chapters, created_at, unread) " +
+						"VALUES (?, ?, ?, ?, 'New chapters', ?, 1)",
+					arrayOf<Any?>(entityId, entityId, mangaId, entityId, entityId * 1000L),
 				)
 			}
 			sql.setTransactionSuccessful()

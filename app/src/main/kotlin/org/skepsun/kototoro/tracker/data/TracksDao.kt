@@ -89,22 +89,23 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             .build(),
     )
 
-    fun observeAllTracks(
-        limit: Int,
-        filterOptions: Set<ListFilterOption>,
-    ): Flow<List<TrackEntity>> = observeContentImpl(
-        MangaQueryBuilder("tracks", this)
-            .filters(filterOptions)
-            .limit(limit)
-            .orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC")
-            .build(),
-    )
-
     fun pagingUpdatedContent(filterOptions: Set<ListFilterOption>): PagingSource<Int, TrackEntity> =
         pagingContentImpl(
             MangaQueryBuilder("tracks", this)
                 .where("chapters_new > 0")
                 .filters(filterOptions)
+                .orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC, tracks.entity_id ASC, tracks.manga_id ASC")
+                .build(),
+        )
+
+    fun pagingAllTracks(
+        limit: Int,
+        filterOptions: Set<ListFilterOption>,
+    ): PagingSource<Int, TrackEntity> =
+        pagingContentImpl(
+            MangaQueryBuilder("tracks", this)
+                .filters(filterOptions)
+                .limit(limit)
                 .orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC, tracks.entity_id ASC, tracks.manga_id ASC")
                 .build(),
         )

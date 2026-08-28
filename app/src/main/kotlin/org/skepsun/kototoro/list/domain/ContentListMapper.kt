@@ -227,6 +227,7 @@ class ContentListMapper @Inject constructor(
             metadataSelection = dataRepository.getMetadataSourceSelection(logItem.manga.id),
             trackingDetailsCache = HashMap(1),
         ),
+        createdAt = logItem.createdAt,
         count = logItem.count ?: logItem.chapters.size,
         manga = logItem.manga,
         isNew = logItem.isNew,
@@ -237,7 +238,7 @@ class ContentListMapper @Inject constructor(
             return emptyList()
         }
         val mangaIds = logItems.map { it.manga.id }
-        val manualOverrides = dataRepository.getOverrides()
+        val manualOverrides = dataRepository.getOverrides(mangaIds)
         val metadataSelections = dataRepository.getMetadataSourceSelections(mangaIds)
         val trackingDetailsCache = prefetchTrackingDetails(
             buildList { metadataSelections.forEach { _, selection -> add(selection) } },
@@ -256,6 +257,7 @@ class ContentListMapper @Inject constructor(
                     metadataSelection = metadataSelections[logItem.manga.id],
                     trackingDetailsCache = trackingDetailsCache,
                 ),
+                createdAt = logItem.createdAt,
                 count = logItem.count ?: logItem.chapters.size,
                 manga = logItem.manga,
                 isNew = logItem.isNew,

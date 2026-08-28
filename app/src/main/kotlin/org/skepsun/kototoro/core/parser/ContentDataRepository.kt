@@ -111,13 +111,10 @@ class ContentDataRepository @Inject constructor(
     suspend fun getMetadataSourceSelections(mangaIds: Collection<Long>): LongObjectMap<MetadataSourceSelection> {
         if (mangaIds.isEmpty()) return MutableLongObjectMap(0)
         val map = MutableLongObjectMap<MetadataSourceSelection>(mangaIds.size)
-        val entityIdsByMangaId = mangaIds.associateWith { mangaId ->
-            db.getEntityGraphDao().findActiveBinding("local_manga", mangaId.toString())?.entityId
-                ?: db.getEntityGraphDao().findActiveBinding("0", mangaId.toString())?.entityId
-        }
-        val entitySelections = getEntityMetadataSourceSelections(entityIdsByMangaId.values.filterNotNull().distinct())
+        val entityIdsByMangaId = findActiveEntityIdsByMangaId(mangaIds)
+        val entitySelections = getEntityMetadataSourceSelections(entityIdsByMangaId.values.distinct())
         entityIdsByMangaId.forEach { (mangaId, entityId) ->
-            val selection = entityId?.let(entitySelections::get) ?: return@forEach
+            val selection = entitySelections[entityId] ?: return@forEach
             map[mangaId] = selection
         }
         val remainingMangaIds = mangaIds.filterNot { map.containsKey(it) }
@@ -243,6 +240,26 @@ class ContentDataRepository @Inject constructor(
         return map
     }
 
+    suspend fun getOverrides(mangaIds: Collection<Long>): LongObjectMap<ContentOverride> {
+        if (mangaIds.isEmpty()) return MutableLongObjectMap(0)
+        val distinctMangaIds = mangaIds.distinct()
+        val result = MutableLongObjectMap<ContentOverride>(distinctMangaIds.size)
+        val entityIdsByMangaId = findActiveEntityIdsByMangaId(distinctMangaIds)
+        val overridesByEntityId = db.getEntityGraphDao()
+            .findEntityPrefsByIds(entityIdsByMangaId.values.distinct())
+            .mapNotNull { prefs -> prefs.getOverrideOrNull()?.let { prefs.entityId to it } }
+            .toMap()
+        entityIdsByMangaId.forEach { (mangaId, entityId) ->
+            overridesByEntityId[entityId]?.let { result[mangaId] = it }
+        }
+        db.getPreferencesDao().findByIds(distinctMangaIds).forEach { prefs ->
+            if (!result.containsKey(prefs.mangaId)) {
+                prefs.getOverrideOrNull()?.let { result[prefs.mangaId] = it }
+            }
+        }
+        return result
+    }
+
     suspend fun getOverridesForWorkItems(
         entityIdsByMangaId: Map<Long, Long>,
     ): LongObjectMap<ContentOverride> {
@@ -261,6 +278,30 @@ class ContentDataRepository @Inject constructor(
             }
         }
         return result
+    }
+
+    private suspend fun findActiveEntityIdsByMangaId(mangaIds: Collection<Long>): Map<Long, Long> {
+        val distinctMangaIds = mangaIds.distinct()
+        if (distinctMangaIds.isEmpty()) return emptyMap()
+        val dao = db.getEntityGraphDao()
+        return buildMap(distinctMangaIds.size) {
+            val bestSourceByMangaId = HashMap<Long, String>(distinctMangaIds.size)
+            distinctMangaIds.map(Long::toString).chunked(900).forEach { externalIds ->
+                dao.findActiveBindingsBySources(
+                    sources = listOf("local_manga", "0"),
+                    externalIds = externalIds,
+                ).forEach { binding ->
+                    val mangaId = binding.externalId.toLongOrNull() ?: return@forEach
+                    val currentSource = bestSourceByMangaId[mangaId]
+                    if (currentSource == null ||
+                        currentSource != "local_manga" && binding.source == "local_manga"
+                    ) {
+                        put(mangaId, binding.entityId)
+                        bestSourceByMangaId[mangaId] = binding.source
+                    }
+                }
+            }
+        }
     }
 
     suspend fun getReadingStatus(mangaId: Long): ScrobblingStatus? {

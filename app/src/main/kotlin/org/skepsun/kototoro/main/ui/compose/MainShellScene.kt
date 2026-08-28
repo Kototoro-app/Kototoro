@@ -733,7 +733,12 @@ internal fun FeedTopLevelRouteContent(
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>("feed")
-    val items by viewModel.content.collectAsStateWithLifecycle()
+    val leadingItems by viewModel.leadingContent.collectAsStateWithLifecycle()
+    val fallbackItems by viewModel.fallbackContent.collectAsStateWithLifecycle()
+    val feedPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
+    val loadedFeedItems = feedPagingItems.itemSnapshotList.items
+        .filterIsInstance<FeedItem>()
+        .ifEmpty { fallbackItems.filterIsInstance<FeedItem>() }
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
@@ -793,8 +798,8 @@ internal fun FeedTopLevelRouteContent(
     }
 
     var selectedFeedItemIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
-    val selectedFeedItems = remember(items, selectedFeedItemIds) {
-        items.filterIsInstance<FeedItem>().filter { it.id in selectedFeedItemIds }
+    val selectedFeedItems = remember(loadedFeedItems, selectedFeedItemIds) {
+        loadedFeedItems.filter { it.id in selectedFeedItemIds }
     }
 
     BackHandler(enabled = selectedFeedItemIds.isNotEmpty()) {
@@ -822,8 +827,7 @@ internal fun FeedTopLevelRouteContent(
                         onActionClick = { action ->
                             when (action) {
                                 SelectionAction.SELECT_ALL -> {
-                                    selectedFeedItemIds = items
-                                        .filterIsInstance<FeedItem>()
+                                    selectedFeedItemIds = loadedFeedItems
                                         .mapTo(linkedSetOf()) { it.id }
                                 }
                                 SelectionAction.REMOVE -> {
@@ -867,10 +871,11 @@ internal fun FeedTopLevelRouteContent(
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
         org.skepsun.kototoro.tracker.ui.feed.compose.FeedScreen(
             contentPadding = contentPadding,
-            items = items,
+            leadingItems = leadingItems,
+            fallbackItems = fallbackItems,
+            pagingItems = feedPagingItems,
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.update() },
-            onLoadMore = { viewModel.requestMoreItems() },
             onFeedItemClick = { item, _ ->
                 if (selectedFeedItemIds.isNotEmpty()) {
                     selectedFeedItemIds = if (item.id in selectedFeedItemIds) {

@@ -154,7 +154,7 @@ class UpdatesViewModel @Inject constructor(
 
     init {
         launchJob(Dispatchers.Default) {
-            repository.gc()
+            repository.gcIfNeeded()
         }
     }
 

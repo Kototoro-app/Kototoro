@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.paging.PagingSource
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 import org.skepsun.kototoro.core.db.MangaQueryBuilder
@@ -14,14 +15,14 @@ import org.skepsun.kototoro.tracker.data.TrackLogEntity
 @Dao
 abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 
-    fun observeAll(
+    fun pagingAll(
         limit: Int,
         filterOptions: Set<ListFilterOption>,
-    ): Flow<List<TrackLogEntity>> = observeAllImpl(
+    ): PagingSource<Int, TrackLogEntity> = pagingAllImpl(
         MangaQueryBuilder("track_logs", this)
             .filters(filterOptions)
             .limit(limit)
-            .orderBy("${pinnedSortExpr("track_logs.manga_id")} DESC, created_at DESC")
+            .orderBy("${pinnedSortExpr("track_logs.manga_id")} DESC, created_at DESC, track_logs.id DESC")
             .build(),
     )
 
@@ -155,7 +156,7 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
     abstract suspend fun ensureUnreadUpdateLogs()
 
     @RawQuery(observedEntities = [TrackLogEntity::class])
-    protected abstract fun observeAllImpl(query: SupportSQLiteQuery): Flow<List<TrackLogEntity>>
+    protected abstract fun pagingAllImpl(query: SupportSQLiteQuery): PagingSource<Int, TrackLogEntity>
 
     override fun getCondition(option: ListFilterOption): String? = when (option) {
         ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("track_logs.manga_id")

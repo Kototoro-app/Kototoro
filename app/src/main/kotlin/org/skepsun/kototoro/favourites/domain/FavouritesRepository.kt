@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.favourites.domain
 
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.room.withTransaction
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +20,7 @@ import org.skepsun.kototoro.core.db.TABLE_PREFERENCES
 import org.skepsun.kototoro.core.db.TABLE_TAGS
 import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
+import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
@@ -645,28 +647,50 @@ class FavouritesRepository @Inject constructor(
             }
     }
 
-    private suspend fun buildWorkFavouriteCategoryIdsByFeedKey(): Map<String, Set<Long>> {
+    @VisibleForTesting
+    internal suspend fun buildWorkFavouriteCategoryIdsByFeedKey(): Map<String, Set<Long>> {
+        val entries = db.getWorkFavouritesDao().findActive()
+        if (entries.isEmpty()) {
+            return emptyMap()
+        }
+
+        val mangaDao = db.getMangaDao()
+        val anchorIds = entries.mapNotNull(WorkFavouriteEntity::anchorMangaId).distinct()
+        val mangaById = mangaDao.findEntitiesByIds(anchorIds).associateBy(MangaEntity::id).toMutableMap()
+        val unresolvedEntityIds = entries.asSequence()
+            .filter { entry -> entry.anchorMangaId?.let(mangaById::containsKey) != true }
+            .map(WorkFavouriteEntity::entityId)
+            .distinct()
+            .toList()
+        val identitiesByEntityId = if (unresolvedEntityIds.isEmpty()) {
+            emptyMap()
+        } else {
+            workResolver.resolveManyByEntityIds(unresolvedEntityIds)
+        }
+        val fallbackIds = identitiesByEntityId.values.flatMap { identity ->
+            buildList {
+                identity.preferredMangaId?.let(::add)
+                addAll(identity.localMangaIds)
+            }
+        }.distinct()
+        if (fallbackIds.isNotEmpty()) {
+            mangaById += mangaDao.findEntitiesByIds(fallbackIds).associateBy(MangaEntity::id)
+        }
+
         val result = LinkedHashMap<String, LinkedHashSet<Long>>()
-        for (entry in db.getWorkFavouritesDao().findActive()) {
-            val content = resolveWorkFavouriteContent(entry) ?: continue
-            result.getOrPut(content.feedLookupKey()) { linkedSetOf() } += entry.categoryId
+        for (entry in entries) {
+            val manga = entry.anchorMangaId?.let(mangaById::get) ?: identitiesByEntityId[entry.entityId]
+                ?.let { identity ->
+                    sequenceOf(identity.preferredMangaId)
+                        .plus(identity.localMangaIds.asSequence())
+                        .filterNotNull()
+                        .mapNotNull(mangaById::get)
+                        .firstOrNull()
+                }
+                ?: continue
+            result.getOrPut(manga.feedLookupKey()) { linkedSetOf() } += entry.categoryId
         }
         return result
-    }
-
-    private suspend fun resolveWorkFavouriteContent(entry: WorkFavouriteEntity): Content? {
-        entry.anchorMangaId?.let { anchorId ->
-            db.getMangaDao().find(anchorId)?.toContent()?.let { return it }
-        }
-        val identity = workResolver.resolveByEntityId(entry.entityId)
-        val candidateIds = buildList {
-            identity?.preferredMangaId?.let(::add)
-            identity?.localMangaIds.orEmpty().forEach(::add)
-        }.distinct()
-        for (mangaId in candidateIds) {
-            db.getMangaDao().find(mangaId)?.toContent()?.let { return it }
-        }
-        return null
     }
 
     private fun matchesFavouriteFilters(
@@ -694,8 +718,8 @@ class FavouritesRepository @Inject constructor(
         }
     }
 
-    private fun Content.feedLookupKey(): String {
-        return "${source.name}|$url"
+    private fun MangaEntity.feedLookupKey(): String {
+        return "$source|$url"
     }
 
     suspend fun getMostUpdatedCategories(limit: Int): List<FavouriteCategory> {
