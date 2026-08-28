@@ -1833,9 +1833,15 @@ class UnifiedSourcesViewModel @Inject constructor(
             .mapNotNull { it.source.name.substringAfter('_', "").toLongOrNull() }
             .toSet()
         val nativeSourceNames = allSources.mapTo(HashSet()) { it.source.name }
-        val missingCandidates = candidates.filter { (origin, id, _) ->
-            id !in installedSourceIds && origin.kind == "MIHON" &&
-                MihonForkBuiltinSources.nativeSourceNameForId(id)?.let(nativeSourceNames::contains) != true
+        val missingCandidates = candidates.filter { (_, id, kind) ->
+            if (id in installedSourceIds) {
+                return@filter false
+            }
+            if (kind != UnifiedSourceKind.MIHON) {
+                // Anime sources have no fork-builtin native fallback table.
+                return@filter true
+            }
+            MihonForkBuiltinSources.nativeSourceNameForId(id)?.let(nativeSourceNames::contains) != true
         }
         if (missingCandidates.isEmpty()) {
             return copy(
@@ -1858,10 +1864,17 @@ class UnifiedSourcesViewModel @Inject constructor(
                 MissingSourceHint(kind = kind, sourceKey = origin.sourceKey, displayName = origin.displayName)
             }
         val suggestedKinds = missingSourcesWithoutMatch.map { it.kind }.toSet()
-        val configuredUrls = repositories.mapTo(HashSet()) { it.url }
+        // Only actually configured repos count: the repository list always contains the
+        // recommended presets (isConfigured=false) under the very same URL, so comparing
+        // against all items would filter out every suggestion.
+        val configuredUrls = repositories.filterTo(HashSet()) { it.isConfigured }.mapTo(HashSet()) { it.url }
         val suggestedRepositoriesForMissing = suggestedKinds
             .flatMap(UnifiedRecommendedRepositories::byKind)
-            .filter { it.url !in configuredUrls }
+            .filter { suggestion ->
+                configuredUrls.none { configured ->
+                    normalizeRepositoryUrlForAction(configured) == normalizeRepositoryUrlForAction(suggestion.url)
+                }
+            }
             .distinctBy { it.url }
         return copy(
             recommendedPackages = recommendedPackages,
