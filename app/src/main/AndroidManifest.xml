@@ -491,6 +491,11 @@
 			android:name="org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService"
 			android:foregroundServiceType="dataSync"
 			android:label="@string/import_backup_from_other_apps" />
+		<activity
+			android:name="org.skepsun.kototoro.backups.ui.restore.ExternalImportResultActivity"
+			android:excludeFromRecents="true"
+			android:exported="false"
+			android:theme="@style/Theme.Kototoro.ExternalImportResult" />
 		<service
 			android:name="org.skepsun.kototoro.local.ui.ImportService"
 			android:foregroundServiceType="dataSync"

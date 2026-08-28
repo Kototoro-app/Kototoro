@@ -387,11 +387,13 @@ class ExternalBackupDecoder @Inject constructor(
     }
 
     private fun MihonBackup.toPayload(app: ExternalBackupApp): ExternalBackupPayload {
+        val sourceNamesById = buildSourceNamesById(backupSources)
         return ExternalBackupPayload(
             records = backupManga.mapNotNull { manga ->
                 manga.toRecord(
                     app = app,
                     sourceName = "MIHON_${manga.source}",
+                    sourceDisplayName = sourceNamesById[manga.source],
                     contentType = ContentType.MANGA,
                     totalCount = manga.chapters.size,
                     completedCount = manga.chapters.count { it.read },
@@ -402,10 +404,12 @@ class ExternalBackupDecoder @Inject constructor(
     }
 
     private fun AniyomiBackup.toPayload(app: ExternalBackupApp): ExternalBackupPayload {
+        val sourceNamesById = buildSourceNamesById(backupSources + backupAnimeSources)
         val mangaRecords = backupManga.mapNotNull { manga ->
             manga.toRecord(
                 app = app,
                 sourceName = "MIHON_${manga.source}",
+                sourceDisplayName = sourceNamesById[manga.source],
                 contentType = ContentType.MANGA,
                 totalCount = manga.chapters.size,
                 completedCount = manga.chapters.count { it.read },
@@ -424,6 +428,7 @@ class ExternalBackupDecoder @Inject constructor(
                 ExternalBackupContentRecord(
                     app = app,
                     sourceName = "ANIYOMI_${anime.source}",
+                    sourceDisplayName = sourceNamesById[anime.source],
                     contentType = ContentType.VIDEO,
                     url = anime.url,
                     title = anime.title,
@@ -453,12 +458,21 @@ class ExternalBackupDecoder @Inject constructor(
         )
     }
 
+    private fun buildSourceNamesById(
+        sources: List<MihonBackupSource>,
+    ): Map<Long, String> {
+        return sources
+            .filter { it.sourceId != 0L && it.name.isNotBlank() }
+            .associate { it.sourceId to it.name }
+    }
+
     private fun MihonBackupManga.toRecord(
         app: ExternalBackupApp,
         sourceName: String,
         contentType: ContentType,
         totalCount: Int,
         completedCount: Int,
+        sourceDisplayName: String? = null,
     ): ExternalBackupContentRecord? {
         val favoriteTimestamp = resolveFavoriteTimestamp(favoriteModifiedAt, dateAdded, lastModifiedAt)
         val history = history.maxByOrNull { it.lastRead }
@@ -472,6 +486,7 @@ class ExternalBackupDecoder @Inject constructor(
         return ExternalBackupContentRecord(
             app = app,
             sourceName = sourceName,
+            sourceDisplayName = sourceDisplayName,
             contentType = contentType,
             url = url,
             title = title,
@@ -501,6 +516,7 @@ class ExternalBackupDecoder @Inject constructor(
         contentType: ContentType,
         totalCount: Int,
         completedCount: Int,
+        sourceDisplayName: String? = null,
     ): ExternalBackupContentRecord? {
         val favoriteTimestamp = resolveFavoriteTimestamp(favoriteModifiedAt, dateAdded, lastModifiedAt)
         val history = history.maxByOrNull { it.lastRead }
@@ -515,6 +531,7 @@ class ExternalBackupDecoder @Inject constructor(
         return ExternalBackupContentRecord(
             app = app,
             sourceName = sourceName,
+            sourceDisplayName = sourceDisplayName,
             contentType = contentType,
             url = url,
             title = title,

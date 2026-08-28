@@ -9,6 +9,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.CheckResult
 import androidx.core.app.NotificationCompat
+import androidx.core.app.PendingIntentCompat
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -70,8 +71,16 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
             }
             result.fold(
                 onSuccess = { summary ->
-                    withContext(Dispatchers.Main) {
-                        showImportSummaryToast(summary)
+                    // Prefer a foreground summary dialog; fall back to toast + notification
+                    // when the app is backgrounded (Android blocks background activity starts).
+                    val dialogShown = ExternalImportResultActivity.startIfAppInForeground(
+                        this@ExternalBackupImportService,
+                        summary,
+                    )
+                    if (!dialogShown) {
+                        withContext(Dispatchers.Main) {
+                            showImportSummaryToast(summary)
+                        }
                     }
                     showExternalImportResultNotification(source, summary)
                 },
@@ -152,8 +161,15 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
         } else {
             ""
         }
+        val uninstalledText = if (summary.uninstalledSources.isNotEmpty()) {
+            "\nNot installed: " + summary.uninstalledSources.joinToString(", ") { source ->
+                (source.displayName ?: source.sourceKey) + " (" + source.recordCount + ")"
+            }
+        } else {
+            ""
+        }
         val message = "Imported ${summary.favoritesImported} favorites and ${summary.historyImported} history. " +
-            "Failed ${summary.failedCount} unmatched titles.$missingSourceText\n$failedText"
+            "Failed ${summary.failedCount} unmatched titles.$missingSourceText$uninstalledText\n$failedText"
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setContentTitle(getString(R.string.import_backup_from_other_apps))
             .setContentText("Imported with ${summary.failedCount} unmatched titles")
@@ -162,6 +178,15 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
             .setDefaults(0)
             .setSilent(true)
             .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntentCompat.getActivity(
+                    applicationContext,
+                    0,
+                    ExternalImportResultActivity.createIntent(applicationContext, summary),
+                    0,
+                    false,
+                ),
+            )
             .setBigText(getString(R.string.import_backup_from_other_apps), message)
             .build()
         notificationManager.notify(notificationTag, startId, notification)

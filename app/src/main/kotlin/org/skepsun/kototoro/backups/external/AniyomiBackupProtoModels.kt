@@ -8,6 +8,9 @@ data class AniyomiBackup(
     @ProtoNumber(1) val backupManga: List<AniyomiBackupManga> = emptyList(),
     @ProtoNumber(2) val backupCategories: List<MihonBackupCategory> = emptyList(),
     @ProtoNumber(501) val backupAnime: List<AniyomiBackupAnime> = emptyList(),
+    // Aniyomi Backup.kt: manga sources at 101, anime sources at 103.
+    @ProtoNumber(101) val backupSources: List<MihonBackupSource> = emptyList(),
+    @ProtoNumber(103) val backupAnimeSources: List<MihonBackupSource> = emptyList(),
 )
 
 @Serializable

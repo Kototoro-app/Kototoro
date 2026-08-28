@@ -1097,6 +1097,11 @@
     <string name="restore_mode_merge_with_existing_summary">Keep current data and add or update entries from the backup; nothing is deleted</string>
     <string name="import_kotatsu_or_legacy_backup">Import Kotatsu or legacy Kototoro backup</string>
     <string name="import_kotatsu_or_legacy_backup_summary">Import a Kotatsu-family backup or a Kototoro backup using semantic schema v1/v2. Source and app settings are always ignored.</string>
+    <string name="external_import_result_title">External backup imported</string>
+    <string name="external_import_result_summary">Imported %1$d favorites and %2$d history entries.</string>
+    <string name="external_import_result_uninstalled_header">Sources not installed — favorites were imported as-is. Install the matching extension to re-link them:</string>
+    <string name="external_import_result_uninstalled_item">• %1$s — %2$d entries</string>
+    <string name="external_import_result_failed">%1$d entries could not be matched to any source and were skipped.</string>
     <string name="webtoon_zoom_summary">Allow zoom in gesture in webtoon mode</string>
     <string name="pull_to_prev_chapter">Release to open previous chapter</string>
     <string name="pull_to_next_chapter">Release to open next chapter</string>

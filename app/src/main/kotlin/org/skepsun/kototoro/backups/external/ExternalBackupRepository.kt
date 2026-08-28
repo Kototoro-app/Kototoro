@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.db.entity.SourceOriginEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
@@ -23,6 +24,7 @@ import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
+import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
 import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.list.domain.ReadingProgress.Companion.PROGRESS_NONE
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -33,13 +35,14 @@ class ExternalBackupRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: MangaDatabase,
     private val mihonExtensionManager: MihonExtensionManager,
+    private val aniyomiExtensionManager: AniyomiExtensionManager,
 ) {
 
     suspend fun import(payload: ExternalBackupPayload): ExternalBackupImportSummary {
         if (payload.records.isEmpty()) return ExternalBackupImportSummary(0, 0)
         return database.withTransaction {
             val dao = database.getEntityGraphDao()
-            val sourceMatcher = SourceMatcher(context, database, mihonExtensionManager)
+            val sourceMatcher = SourceMatcher(context, database, mihonExtensionManager, aniyomiExtensionManager)
             val externalCategories = ensureImportedCategories(payload.favoriteCategories)
             val defaultCategoryId = ensureDefaultCategoryId(externalCategories.values)
             val now = System.currentTimeMillis()
@@ -48,6 +51,7 @@ class ExternalBackupRepository @Inject constructor(
             val pendingById = LinkedHashMap<Long, BulkImportEntry>()
             val failedRecords = ArrayList<ExternalBackupFailedRecord>()
             val missingSourceNames = LinkedHashSet<String>()
+            val uninstalledSources = LinkedHashMap<String, UninstalledSourceAggregator>()
             for (record in payload.records) {
                 val resolvedRecord = when (val result = sourceMatcher.resolve(record)) {
                     is SourceResolveResult.Resolved -> result.record
@@ -59,6 +63,24 @@ class ExternalBackupRepository @Inject constructor(
                     SourceResolveResult.Unmatched -> {
                         failedRecords += record.toFailedRecord()
                         continue
+                    }
+                    is SourceResolveResult.UnmatchedExtensionSource -> {
+                        // The extension for this source is not installed: import anyway with
+                        // the verbatim key (same as before), but track it for the summary and
+                        // register a source_origins row so the UI can label it later.
+                        uninstalledSources.getOrPut(result.record.sourceName) {
+                            UninstalledSourceAggregator(
+                                contentType = result.record.contentType.name,
+                                sourceId = result.record.sourceName
+                                    .substringAfter('_', "").takeIf { it.toLongOrNull() != null },
+                            )
+                        }.also { aggregator ->
+                            aggregator.recordCount++
+                            if (aggregator.displayName == null) {
+                                aggregator.displayName = result.record.sourceDisplayName
+                            }
+                        }
+                        result.record
                     }
                 }
                 val mangaId = generateContentId(resolvedRecord)
@@ -196,6 +218,8 @@ class ExternalBackupRepository @Inject constructor(
             database.getWorkHistoryDao().upsert(histories)
             dao.upsertBindings(bindings)
 
+            registerUninstalledSourceOrigins(uninstalledSources, now)
+
             ExternalBackupImportSummary(
                 favoritesImported = favorites,
                 historyImported = historyRows,
@@ -203,6 +227,54 @@ class ExternalBackupRepository @Inject constructor(
                 failedTitles = failedRecords.map { it.title }.distinct(),
                 failedRecords = failedRecords.distinctBy { it.title to it.sourceCandidates to it.expectedSourceNames },
                 missingSourceNames = missingSourceNames.toList(),
+                uninstalledSources = uninstalledSources.map { (key, aggregator) ->
+                    ExternalBackupUninstalledSource(
+                        sourceKey = key,
+                        displayName = aggregator.displayName,
+                        recordCount = aggregator.recordCount,
+                    )
+                },
+            )
+        }
+    }
+
+    private class UninstalledSourceAggregator(
+        val contentType: String,
+        val sourceId: String?,
+        var displayName: String? = null,
+        var recordCount: Int = 0,
+    )
+
+    /**
+     * Persists a `source_origins` row for every imported source whose extension is not
+     * installed, so the UI can show the human-readable name from the backup instead of a
+     * generic "Mihon"/"Aniyomi" label. Existing richer rows (e.g. restored backups with a
+     * repository locator) are preserved; only missing display names are filled in.
+     */
+    private suspend fun registerUninstalledSourceOrigins(
+        uninstalledSources: Map<String, UninstalledSourceAggregator>,
+        now: Long,
+    ) {
+        if (uninstalledSources.isEmpty()) return
+        val dao = database.getSourceOriginsDao()
+        for ((sourceKey, aggregator) in uninstalledSources) {
+            val existing = dao.getByKey(sourceKey)
+            val displayName = aggregator.displayName ?: existing?.displayName
+            dao.upsert(
+                SourceOriginEntity(
+                    sourceKey = sourceKey,
+                    kind = if (sourceKey.startsWith("ANIYOMI_")) "ANIYOMI" else "MIHON",
+                    displayName = displayName,
+                    contentType = aggregator.contentType,
+                    sourceId = aggregator.sourceId ?: existing?.sourceId,
+                    repositoryUrl = existing?.repositoryUrl,
+                    repositoryName = existing?.repositoryName,
+                    locator = existing?.locator,
+                    versionName = existing?.versionName,
+                    versionCode = existing?.versionCode,
+                    lastSeenAt = now,
+                    updatedAt = now,
+                ),
             )
         }
     }
@@ -281,17 +353,24 @@ class ExternalBackupRepository @Inject constructor(
         private val context: Context,
         private val database: MangaDatabase,
         private val mihonExtensionManager: MihonExtensionManager,
+        private val aniyomiExtensionManager: AniyomiExtensionManager,
     ) {
         private var cachedCandidates: List<SourceCandidate>? = null
+        private var cachedAniyomiSources: List<SourceCandidate>? = null
 
         suspend fun resolve(record: ExternalBackupContentRecord): SourceResolveResult {
-            if (record.sourceName.startsWith("MIHON_")) {
+            if (record.sourceName.startsWith("MIHON_") || record.sourceName.startsWith("ANIYOMI_")) {
                 // Mihon-family forks (TachiyomiSY, Komikku, Neko, ...) bundle some sources
                 // in-app with ids that never match a Mihon extension. Remap those to the
                 // native Kotatsu parser source when available; everything else stays
-                // verbatim as MIHON_<id>.
+                // verbatim as MIHON_<id> / ANIYOMI_<id>.
                 resolveMihonFamilySource(record)?.let { return it }
-                return SourceResolveResult.Resolved(record)
+                return when {
+                    isInstalledExtensionSource(record.sourceName) ->
+                        SourceResolveResult.Resolved(record)
+
+                    else -> SourceResolveResult.UnmatchedExtensionSource(record)
+                }
             }
             if (record.app != ExternalBackupApp.VENERA) {
                 return SourceResolveResult.Resolved(record)
@@ -373,8 +452,31 @@ class ExternalBackupRepository @Inject constructor(
                 return null
             }
             return SourceResolveResult.Resolved(
-                record.copy(sourceName = matches.first().sourceName),
+                record.copy(sourceName = matches.first().sourceName, sourceDisplayName = null),
             )
+        }
+
+        private suspend fun isInstalledExtensionSource(sourceName: String): Boolean {
+            return when {
+                sourceName.startsWith("ANIYOMI_") ->
+                    aniyomiSources().any { it.sourceName == sourceName }
+
+                else -> candidates().any { it.sourceName == sourceName && it.kind == SourceKind.MIHON }
+            }
+        }
+
+        private suspend fun aniyomiSources(): List<SourceCandidate> {
+            cachedAniyomiSources?.let { return it }
+            val sources = aniyomiExtensionManager.getAniyomiAnimeSources()
+                .flatMap { source ->
+                    listOf(
+                        SourceCandidate(source.name, normalizeSourceName(source.name), SourceKind.MIHON),
+                        SourceCandidate(source.name, normalizeSourceName(source.displayName), SourceKind.MIHON),
+                    )
+                }
+                .filter { it.normalizedName.isNotEmpty() }
+            cachedAniyomiSources = sources
+            return sources
         }
 
         private fun resolveFixedMapping(
@@ -454,6 +556,13 @@ class ExternalBackupRepository @Inject constructor(
         data class Resolved(val record: ExternalBackupContentRecord) : SourceResolveResult
         data class MissingFixedSource(val expectedSourceNames: List<String>) : SourceResolveResult
         data object Unmatched : SourceResolveResult
+
+        /**
+         * A `MIHON_<id>` / `ANIYOMI_<id>` source whose extension is not installed and which
+         * could not be remapped to a native parser source. The record still imports with the
+         * verbatim key; the import reports it and registers a `source_origins` row.
+         */
+        data class UnmatchedExtensionSource(val record: ExternalBackupContentRecord) : SourceResolveResult
     }
 
     private sealed interface FixedSourceResolveResult {

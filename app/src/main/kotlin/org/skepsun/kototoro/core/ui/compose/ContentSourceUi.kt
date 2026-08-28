@@ -50,6 +50,8 @@ private data class ContentSourceResolutionSnapshot(
     val ireaderChanges: Int,
     val tsundokuChanges: Int,
     val jsonSources: Map<String, ContentSource>,
+    /** sourceKey -> display name for sources whose extension is gone (e.g. imported backups). */
+    val originNames: Map<String, String> = emptyMap(),
 )
 
 private val LocalContentSourceResolutionSnapshot =
@@ -78,12 +80,22 @@ fun ContentSourceResolutionProvider(content: @Composable () -> Unit) {
     val jsonSources = remember(jsonSourceEntities) {
         jsonSourceEntities.associate { entity -> entity.id to JsonContentSource(entity) }
     }
+    val originNames by entryPoint.database().get()
+        .getSourceOriginsDao()
+        .observeAll()
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val originNamesMap = remember(originNames) {
+        originNames.mapNotNull { origin ->
+            origin.displayName?.takeIf { it.isNotBlank() }?.let { origin.sourceKey to it }
+        }.toMap()
+    }
     val snapshot = remember(
         mihonChanges,
         aniyomiChanges,
         ireaderChanges,
         tsundokuChanges,
         jsonSources,
+        originNamesMap,
     ) {
         ContentSourceResolutionSnapshot(
             mihonChanges = mihonChanges,
@@ -91,6 +103,7 @@ fun ContentSourceResolutionProvider(content: @Composable () -> Unit) {
             ireaderChanges = ireaderChanges,
             tsundokuChanges = tsundokuChanges,
             jsonSources = jsonSources,
+            originNames = originNamesMap,
         )
     }
     CompositionLocalProvider(LocalContentSourceResolutionSnapshot provides snapshot, content = content)
@@ -146,6 +159,24 @@ fun rememberResolvedContentSource(source: ContentSource): ContentSource {
     }
 }
 
+/**
+ * Display name persisted in `source_origins` for sources whose extension is not
+ * installed (e.g. favorites imported from an external backup). Returns `null` when
+ * the source is not a dynamic-extension key or no origin name is registered.
+ */
+@Composable
+private fun rememberOriginDisplayName(source: ContentSource): String? {
+    val name = source.name
+    if (!name.startsWith("MIHON_") && !name.startsWith("ANIYOMI_") &&
+        !name.startsWith("IREADER_") && !name.startsWith("CLOUDSTREAM_") &&
+        !name.startsWith("TSUNDOKU_")
+    ) {
+        return null
+    }
+    val snapshot = LocalContentSourceResolutionSnapshot.current ?: return null
+    return remember(name, snapshot.originNames) { snapshot.originNames[name] }
+}
+
 @Composable
 fun rememberResolvedSourceTitle(source: ContentSource): String {
     val context = LocalContext.current
@@ -156,12 +187,17 @@ fun rememberResolvedSourceTitle(source: ContentSource): String {
         )
     }
     val resolvedSource = rememberResolvedContentSource(source)
-    return remember(source.name, resolvedSource.javaClass.name) {
-        resolveSourceTitleForUi(
-            context = context,
-            source = resolvedSource,
-            entryPoint = entryPoint,
-        )
+    val originName = rememberOriginDisplayName(source)
+    val unresolved = resolvedSource === source
+    return remember(source.name, resolvedSource.javaClass.name, originName, unresolved) {
+        when {
+            unresolved && originName != null -> originName
+            else -> resolveSourceTitleForUi(
+                context = context,
+                source = resolvedSource,
+                entryPoint = entryPoint,
+            )
+        }
     }
 }
 
@@ -169,15 +205,20 @@ fun rememberResolvedSourceTitle(source: ContentSource): String {
 fun rememberSourceChipMeta(source: ContentSource): ContentSourceChipMeta? {
     val context = LocalContext.current
     val resolvedSource = rememberResolvedContentSource(source)
-    return remember(source.name, resolvedSource.javaClass.name, resolvedSource.locale) {
+    val originName = rememberOriginDisplayName(source)
+    val unresolved = resolvedSource === source
+    return remember(source.name, resolvedSource.javaClass.name, resolvedSource.locale, originName, unresolved) {
         val locale = resolvedSource.getLocale()
             ?.language
             ?.takeIf { it.isNotBlank() }
             ?.uppercase(Locale.ROOT)
             .orEmpty()
-        val origin = resolvedSource.getOriginLabel(context)
-            ?: source.getOriginLabel(context)
-            .orEmpty()
+        val origin = when {
+            unresolved && originName != null -> originName
+            else -> resolvedSource.getOriginLabel(context)
+                ?: source.getOriginLabel(context)
+                .orEmpty()
+        }
         val text = when {
             locale.isNotBlank() -> locale
             origin.isNotBlank() -> origin

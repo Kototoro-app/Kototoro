@@ -7,6 +7,16 @@ import kotlinx.serialization.protobuf.ProtoNumber
 data class MihonBackup(
     @ProtoNumber(1) val backupManga: List<MihonBackupManga> = emptyList(),
     @ProtoNumber(2) val backupCategories: List<MihonBackupCategory> = emptyList(),
+    // Source registry written by Mihon/TachiyomiSY/Komikku (mihon Backup.kt field 101):
+    // maps numeric source ids to human-readable source names, including sources whose
+    // extension is not installed on the importing device.
+    @ProtoNumber(101) val backupSources: List<MihonBackupSource> = emptyList(),
+)
+
+@Serializable
+data class MihonBackupSource(
+    @ProtoNumber(1) val name: String = "",
+    @ProtoNumber(2) val sourceId: Long = 0L,
 )
 
 @Serializable
