@@ -1103,7 +1103,10 @@
     <string name="external_import_result_uninstalled_item">• %1$s — %2$d entries</string>
     <string name="external_import_result_failed">%1$d entries could not be matched to any source and were skipped.</string>
     <string name="packages_recommended_header">Recommended</string>
+    <string name="packages_recommended_count">%1$d packages</string>
+    <string name="packages_recommended_missing_count">%1$d missing sources</string>
     <string name="packages_recommended_caption">Extensions covering sources missing from your imported backups</string>
+    <string name="packages_recommended_covers">Covers missing: %1$s</string>
     <string name="packages_missing_sources_hint">%1$d missing sources are not covered by your repositories:</string>
     <string name="packages_missing_sources_add_repo">Add a repository to find them, for example:</string>
     <string name="webtoon_zoom_summary">Allow zoom in gesture in webtoon mode</string>

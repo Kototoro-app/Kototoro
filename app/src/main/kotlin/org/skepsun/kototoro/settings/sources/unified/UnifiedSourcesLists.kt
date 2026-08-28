@@ -1,8 +1,12 @@
 package org.skepsun.kototoro.settings.sources.unified
 
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +28,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -753,7 +762,7 @@ internal fun UnifiedPackageList(
     modifier: Modifier = Modifier,
     listState: LazyListState,
     packages: List<UnifiedSourcePackageItem>,
-    recommendedPackages: List<UnifiedSourcePackageItem> = emptyList(),
+    recommendedPackages: List<RecommendedPackageItem> = emptyList(),
     missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
     suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
     updateAllInProgress: Boolean,
@@ -765,6 +774,7 @@ internal fun UnifiedPackageList(
     onImportLocalJar: () -> Unit,
     onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit = {},
 ) {
+    var recommendedExpanded by rememberSaveable { mutableStateOf(true) }
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -774,35 +784,33 @@ internal fun UnifiedPackageList(
         ) {
             if (recommendedPackages.isNotEmpty() || missingSourcesWithoutMatch.isNotEmpty()) {
                 item(key = "recommended_header") {
-                    Column(modifier = Modifier.padding(top = 4.dp)) {
-                        Text(
-                            text = stringResource(R.string.packages_recommended_header),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = stringResource(R.string.packages_recommended_caption),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                items(recommendedPackages, key = { "recommended_" + it.id }) { item ->
-                    UnifiedPackageRow(
-                        item = item,
-                        onPrimaryAction = { onPackagePrimaryAction(item.id) },
-                        onSystemInstall = { onPackageSystemInstall(item.id) },
-                        onUninstall = { onPackageUninstall(item.id) },
-                        onCancelInstall = { onPackageCancelInstall(item.id) },
+                    RecommendedSectionHeader(
+                        missingCount = missingSourcesWithoutMatch.size,
+                        recommendedCount = recommendedPackages.size,
+                        expanded = recommendedExpanded,
+                        onToggle = { recommendedExpanded = !recommendedExpanded },
                     )
                 }
-                if (missingSourcesWithoutMatch.isNotEmpty()) {
-                    item(key = "missing_sources_hint") {
-                        MissingSourcesCard(
-                            missingSources = missingSourcesWithoutMatch,
-                            suggestedRepositories = suggestedRepositoriesForMissing,
-                            onAddRepository = onAddRecommendedRepository,
+                if (recommendedExpanded) {
+                    items(recommendedPackages, key = { "recommended_" + it.item.id }) { recommended ->
+                        UnifiedPackageRow(
+                            item = recommended.item,
+                            coverageLabel = recommended.coversMissingSources.joinToString(", "),
+                            isHighlighted = true,
+                            onPrimaryAction = { onPackagePrimaryAction(recommended.item.id) },
+                            onSystemInstall = { onPackageSystemInstall(recommended.item.id) },
+                            onUninstall = { onPackageUninstall(recommended.item.id) },
+                            onCancelInstall = { onPackageCancelInstall(recommended.item.id) },
                         )
+                    }
+                    if (missingSourcesWithoutMatch.isNotEmpty()) {
+                        item(key = "missing_sources_hint") {
+                            MissingSourcesCard(
+                                missingSources = missingSourcesWithoutMatch,
+                                suggestedRepositories = suggestedRepositoriesForMissing,
+                                onAddRepository = onAddRecommendedRepository,
+                            )
+                        }
                     }
                 }
             }
@@ -857,38 +865,157 @@ internal fun UnifiedPackageList(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
+private fun RecommendedSectionHeader(
+    missingCount: Int,
+    recommendedCount: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val style = rememberUnifiedSourcesVisualStyle()
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 0f else -90f,
+        animationSpec = tween(durationMillis = 180),
+        label = "recommended_chevron",
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(style.cardShape)
+            .clickable(onClick = onToggle)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, style.iconShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.packages_recommended_header),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (recommendedCount > 0) {
+                    CompactTag(stringResource(R.string.packages_recommended_count, recommendedCount))
+                }
+            }
+            Text(
+                text = stringResource(R.string.packages_recommended_caption),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (missingCount > 0) {
+            CompactTag(
+                text = stringResource(R.string.packages_recommended_missing_count, missingCount),
+                isWarning = true,
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ExpandMore,
+            contentDescription = stringResource(
+                if (expanded) R.string.collapse else R.string.expand,
+            ),
+            modifier = Modifier
+                .size(22.dp)
+                .rotate(chevronRotation),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun MissingSourcesCard(
     missingSources: List<MissingSourceHint>,
     suggestedRepositories: List<UnifiedRecommendedRepository>,
     onAddRepository: (UnifiedRecommendedRepository) -> Unit,
 ) {
+    val style = rememberUnifiedSourcesVisualStyle()
     Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = style.cardShape,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = stringResource(R.string.packages_missing_sources_hint, missingSources.size),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = missingSources.take(8).joinToString("、") { it.label },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, style.iconShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SearchOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.packages_missing_sources_hint, missingSources.size),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                missingSources.take(10).forEach { source ->
+                    CompactTag(source.label)
+                }
+                if (missingSources.size > 10) {
+                    CompactTag("+" + (missingSources.size - 10))
+                }
+            }
             if (suggestedRepositories.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f))
                 Text(
                     text = stringResource(R.string.packages_missing_sources_add_repo),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     suggestedRepositories.forEach { repo ->
                         CompactActionChip(
                             onClick = { onAddRepository(repo) },
-                            label = { Text(repo.name, style = MaterialTheme.typography.labelMedium) },
+                            label = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Add,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(repo.name, style = MaterialTheme.typography.labelMedium)
+                                }
+                            },
                         )
                     }
                 }
@@ -904,11 +1031,19 @@ private fun UnifiedPackageRow(
     onSystemInstall: () -> Unit,
     onUninstall: () -> Unit,
     onCancelInstall: () -> Unit,
+    coverageLabel: String? = null,
+    isHighlighted: Boolean = false,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val style = rememberUnifiedSourcesVisualStyle()
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = if (isHighlighted) {
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), style.cardShape)
+        } else {
+            Modifier.fillMaxWidth()
+        },
         shape = style.cardShape,
         colors = CardDefaults.elevatedCardColors(
             containerColor = if (expressive) {
@@ -952,6 +1087,26 @@ private fun UnifiedPackageRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (coverageLabel != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = stringResource(R.string.packages_recommended_covers, coverageLabel),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
                 if (item.installProgressPercent != null) {

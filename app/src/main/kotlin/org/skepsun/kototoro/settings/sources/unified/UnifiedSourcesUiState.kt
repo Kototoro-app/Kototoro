@@ -74,13 +74,22 @@ sealed interface UnifiedSourcesUiState {
         val availableLocationTypes: List<UnifiedRepositoryLocationType>,
         val availableLanguages: List<String>,
         /** Store packages whose sources cover sources missing from imported backups. */
-        val recommendedPackages: List<UnifiedSourcePackageItem> = emptyList(),
+        val recommendedPackages: List<RecommendedPackageItem> = emptyList(),
         /** Missing sources (recorded at import time) that no configured repository covers. */
         val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
         /** Suggested repositories that may carry the unmatched missing sources. */
         val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
     ) : UnifiedSourcesUiState
 }
+
+/**
+ * A store package shown in the Recommended section together with the display names of the
+ * missing imported sources it covers (sorted by coverage, best matches first).
+ */
+data class RecommendedPackageItem(
+    val item: UnifiedSourcePackageItem,
+    val coversMissingSources: List<String>,
+)
 
 /**
  * A source recorded in `source_origins` by an external backup import whose extension is

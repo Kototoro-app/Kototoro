@@ -1851,12 +1851,27 @@ class UnifiedSourcesViewModel @Inject constructor(
             )
         }
         val candidateIds = missingCandidates.mapTo(HashSet()) { it.second }
-        val recommendedPackages = allPackages.filter { item ->
-            !item.isInstalled && item.installPayload?.sourceIds.orEmpty().any { it in candidateIds }
+        val labelById = HashMap<Long, String>()
+        missingCandidates.forEach { (origin, id, _) ->
+            labelById[id] = origin.displayName?.takeIf { it.isNotBlank() } ?: origin.sourceKey
         }
+        val recommendedPackages = allPackages
+            .filter { item ->
+                !item.isInstalled && item.installPayload?.sourceIds.orEmpty().any { it in candidateIds }
+            }
+            .map { item ->
+                val covered = item.installPayload?.sourceIds.orEmpty()
+                    .mapNotNull(labelById::get)
+                    .distinct()
+                RecommendedPackageItem(item = item, coversMissingSources = covered)
+            }
+            .sortedWith(
+                compareByDescending<RecommendedPackageItem> { it.coversMissingSources.size }
+                    .thenBy { it.item.name.lowercase() },
+            )
         val coveredIds = recommendedPackages
             .asSequence()
-            .flatMap { it.installPayload?.sourceIds.orEmpty().asSequence() }
+            .flatMap { it.item.installPayload?.sourceIds.orEmpty().asSequence() }
             .toSet()
         val missingSourcesWithoutMatch = missingCandidates
             .filter { (_, id, _) -> id !in coveredIds }
