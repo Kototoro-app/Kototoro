@@ -203,6 +203,7 @@
     <string name="text_local_holder_secondary">Save something from an online catalog or import it from a file.</string>
     <string name="manga_shelf">Shelf</string>
     <string name="recent_manga">Recent</string>
+    <string name="continue_reading">Continue reading</string>
     <string name="pages_animation">Page animation</string>
     <string name="manga_save_location">Manga downloads folder</string>
     <string name="novel_save_location">Novel downloads folder</string>

@@ -912,6 +912,10 @@ internal fun FeedTopLevelRouteContent(
                     selectedFeedItemIds + item.id
                 }
             },
+            onFeedItemContinueReading = { item ->
+                viewModel.onItemClick(item)
+                appRouter.openReader(item.toContentWithOverride())
+            },
             onUpdatedContentItemClick = { contentItem, _ ->
                 val content = contentItem.model.toContentWithOverride()
                 val sharedElementKey = contentCoverSharedKey(

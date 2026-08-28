@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,6 +35,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -62,6 +64,7 @@ fun FeedItemCard(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    onContinueReading: (() -> Unit)? = null,
 ) {
     var coverBounds by remember(item.id) { mutableStateOf<Rect?>(null) }
     val badgeMetrics = remember { contentCardBadgeMetricsFor(40.dp) }
@@ -197,6 +200,20 @@ fun FeedItemCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+
+        if (onContinueReading != null) {
+            Spacer(modifier = Modifier.width(12.dp))
+            FilledTonalIconButton(
+                onClick = onContinueReading,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_read),
+                    contentDescription = stringResource(R.string.continue_reading),
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }

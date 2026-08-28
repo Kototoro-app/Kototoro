@@ -80,6 +80,7 @@ fun FeedScreen(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     selectedItemIds: Set<Long> = emptySet(),
     onFeedItemLongClick: (FeedItem) -> Unit = {},
+    onFeedItemContinueReading: (FeedItem) -> Unit = {},
     showCategoryFilterInline: Boolean = true,
     host: RetainedPagingSnapshotHost? = null,
     modifier: Modifier = Modifier
@@ -220,6 +221,7 @@ fun FeedScreen(
                     onQuickFilterOptionClick = onQuickFilterOptionClick,
                     onFeedItemClick = onFeedItemClick,
                     onFeedItemLongClick = onFeedItemLongClick,
+                    onFeedItemContinueReading = onFeedItemContinueReading,
                     onUpdatedContentItemClick = onUpdatedContentItemClick,
                     onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                     onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -241,6 +243,7 @@ fun FeedScreen(
                         onQuickFilterOptionClick = onQuickFilterOptionClick,
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
+                        onFeedItemContinueReading = onFeedItemContinueReading,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -261,6 +264,7 @@ fun FeedScreen(
                         onQuickFilterOptionClick = onQuickFilterOptionClick,
                         onFeedItemClick = onFeedItemClick,
                         onFeedItemLongClick = onFeedItemLongClick,
+                        onFeedItemContinueReading = onFeedItemContinueReading,
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
@@ -300,6 +304,7 @@ private fun FeedListItemContent(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     onFeedItemClick: (FeedItem, Rect?) -> Unit,
     onFeedItemLongClick: (FeedItem) -> Unit,
+    onFeedItemContinueReading: (FeedItem) -> Unit,
     onUpdatedContentItemClick: (UpdatedContentHeaderItem, Rect?) -> Unit,
     onUpdatedContentMoreClick: (UpdatedContentHeader) -> Unit,
     onCaptureNavigationSnapshot: (ListModel) -> Unit,
@@ -321,6 +326,11 @@ private fun FeedListItemContent(
                 onFeedItemClick(item, coverBounds)
             },
             onLongClick = { onFeedItemLongClick(item) },
+            onContinueReading = if (selectedItemIds.isEmpty()) {
+                { onFeedItemContinueReading(item) }
+            } else {
+                null
+            },
         )
         is UpdatedContentHeader -> UpdatedContentCarousel(
             header = item,
