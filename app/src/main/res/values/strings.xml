@@ -1102,6 +1102,10 @@
     <string name="external_import_result_uninstalled_header">Sources not installed — favorites were imported as-is. Install the matching extension to re-link them:</string>
     <string name="external_import_result_uninstalled_item">• %1$s — %2$d entries</string>
     <string name="external_import_result_failed">%1$d entries could not be matched to any source and were skipped.</string>
+    <string name="packages_recommended_header">Recommended</string>
+    <string name="packages_recommended_caption">Extensions covering sources missing from your imported backups</string>
+    <string name="packages_missing_sources_hint">%1$d missing sources are not covered by your repositories:</string>
+    <string name="packages_missing_sources_add_repo">Add a repository to find them, for example:</string>
     <string name="webtoon_zoom_summary">Allow zoom in gesture in webtoon mode</string>
     <string name="pull_to_prev_chapter">Release to open previous chapter</string>
     <string name="pull_to_next_chapter">Release to open next chapter</string>

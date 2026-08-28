@@ -341,6 +341,9 @@ fun UnifiedSourcesRoute(
         onImportLocalJar = {
             activeDialog = UnifiedSourcesDialogState.ThirdPartyDisclaimer(UnifiedThirdPartyAction.OpenLocalJar)
         },
+        onAddRecommendedRepository = { repo ->
+            viewModel.addRepositoryFromUrl(repo.kind, repo.url, repo.name)
+        },
         onPullRefresh = { tab ->
             when (tab) {
                 UNIFIED_SOURCES_TAB_SOURCES -> viewModel.refreshInstalledSources()

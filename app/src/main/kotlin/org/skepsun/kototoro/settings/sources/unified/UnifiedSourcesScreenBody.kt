@@ -96,6 +96,7 @@ fun UnifiedSourcesScreen(
     onPackageUninstall: (String) -> Unit,
     onPackageCancelInstall: (String) -> Unit,
     onImportLocalJar: () -> Unit,
+    onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit,
     onPullRefresh: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -268,6 +269,9 @@ fun UnifiedSourcesScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     listState = packageListState,
                                     packages = state.packages,
+                                    recommendedPackages = state.recommendedPackages,
+                                    missingSourcesWithoutMatch = state.missingSourcesWithoutMatch,
+                                    suggestedRepositoriesForMissing = state.suggestedRepositoriesForMissing,
                                     updateAllInProgress = updateAllInProgress,
                                     onUpdateAllPackages = onUpdateAllPackages,
                                     onPackagePrimaryAction = onPackagePrimaryAction,
@@ -275,6 +279,7 @@ fun UnifiedSourcesScreen(
                                     onPackageUninstall = onPackageUninstall,
                                     onPackageCancelInstall = onPackageCancelInstall,
                                     onImportLocalJar = onImportLocalJar,
+                                    onAddRecommendedRepository = onAddRecommendedRepository,
                                 )
                             }
                         }

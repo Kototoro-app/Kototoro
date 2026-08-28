@@ -10,6 +10,8 @@ data class RepoAvailableExtension(
     val lang: String,
     val isNsfw: Boolean,
     val sourceNames: List<String>,
+    /** Numeric source ids declared by the index, when the repo format exposes them. */
+    val sourceIds: List<Long> = emptyList(),
     val archiveName: String,
     val archiveUrl: String? = null,
     val iconUrl: String,

@@ -8,11 +8,14 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -749,6 +753,9 @@ internal fun UnifiedPackageList(
     modifier: Modifier = Modifier,
     listState: LazyListState,
     packages: List<UnifiedSourcePackageItem>,
+    recommendedPackages: List<UnifiedSourcePackageItem> = emptyList(),
+    missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
+    suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
     updateAllInProgress: Boolean,
     onUpdateAllPackages: () -> Unit,
     onPackagePrimaryAction: (String) -> Unit,
@@ -756,6 +763,7 @@ internal fun UnifiedPackageList(
     onPackageUninstall: (String) -> Unit,
     onPackageCancelInstall: (String) -> Unit,
     onImportLocalJar: () -> Unit,
+    onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit = {},
 ) {
     Box(modifier = modifier) {
         LazyColumn(
@@ -764,6 +772,40 @@ internal fun UnifiedPackageList(
             contentPadding = unifiedCardListPadding,
             verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
         ) {
+            if (recommendedPackages.isNotEmpty() || missingSourcesWithoutMatch.isNotEmpty()) {
+                item(key = "recommended_header") {
+                    Column(modifier = Modifier.padding(top = 4.dp)) {
+                        Text(
+                            text = stringResource(R.string.packages_recommended_header),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(R.string.packages_recommended_caption),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                items(recommendedPackages, key = { "recommended_" + it.id }) { item ->
+                    UnifiedPackageRow(
+                        item = item,
+                        onPrimaryAction = { onPackagePrimaryAction(item.id) },
+                        onSystemInstall = { onPackageSystemInstall(item.id) },
+                        onUninstall = { onPackageUninstall(item.id) },
+                        onCancelInstall = { onPackageCancelInstall(item.id) },
+                    )
+                }
+                if (missingSourcesWithoutMatch.isNotEmpty()) {
+                    item(key = "missing_sources_hint") {
+                        MissingSourcesCard(
+                            missingSources = missingSourcesWithoutMatch,
+                            suggestedRepositories = suggestedRepositoriesForMissing,
+                            onAddRepository = onAddRecommendedRepository,
+                        )
+                    }
+                }
+            }
             item(key = "package_actions") {
                 LazyRow(
                     modifier = Modifier
@@ -810,6 +852,48 @@ internal fun UnifiedPackageList(
             alwaysVisible = true,
             endInset = 4.dp,
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MissingSourcesCard(
+    missingSources: List<MissingSourceHint>,
+    suggestedRepositories: List<UnifiedRecommendedRepository>,
+    onAddRepository: (UnifiedRecommendedRepository) -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.packages_missing_sources_hint, missingSources.size),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = missingSources.take(8).joinToString("、") { it.label },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (suggestedRepositories.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.packages_missing_sources_add_repo),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    suggestedRepositories.forEach { repo ->
+                        CompactActionChip(
+                            onClick = { onAddRepository(repo) },
+                            label = { Text(repo.name, style = MaterialTheme.typography.labelMedium) },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

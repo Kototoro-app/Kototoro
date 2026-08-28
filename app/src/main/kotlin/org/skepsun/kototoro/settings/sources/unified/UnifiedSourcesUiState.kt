@@ -73,6 +73,26 @@ sealed interface UnifiedSourcesUiState {
         val availableContentTypes: List<ContentType>,
         val availableLocationTypes: List<UnifiedRepositoryLocationType>,
         val availableLanguages: List<String>,
+        /** Store packages whose sources cover sources missing from imported backups. */
+        val recommendedPackages: List<UnifiedSourcePackageItem> = emptyList(),
+        /** Missing sources (recorded at import time) that no configured repository covers. */
+        val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
+        /** Suggested repositories that may carry the unmatched missing sources. */
+        val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
     ) : UnifiedSourcesUiState
+}
+
+/**
+ * A source recorded in `source_origins` by an external backup import whose extension is
+ * not installed and which no configured repository index covers.
+ */
+data class MissingSourceHint(
+    val kind: UnifiedSourceKind,
+    /** Persisted binding key, e.g. `MIHON_123456789`. */
+    val sourceKey: String,
+    /** Human-readable name from the backup's source registry, when known. */
+    val displayName: String?,
+) {
+    val label: String get() = displayName?.takeIf { it.isNotBlank() } ?: sourceKey
 }
 

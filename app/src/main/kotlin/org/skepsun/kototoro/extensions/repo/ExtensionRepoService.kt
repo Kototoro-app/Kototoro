@@ -395,6 +395,7 @@ class ExtensionRepoService @Inject constructor(
             lang = lang,
             isNsfw = nsfw == 1,
             sourceNames = sources.orEmpty().map { it.name },
+            sourceIds = sources.orEmpty().mapNotNull { it.id?.toLongOrNull() },
             archiveName = apk,
             archiveUrl = null,
             iconUrl = applyMirror(if (repo.type == ExternalExtensionType.IREADER) "${repo.baseUrl}/icon/${apk.replace(".apk", ".png")}" else "${repo.baseUrl}/icon/$pkg.png"),
@@ -482,6 +483,7 @@ class ExtensionRepoService @Inject constructor(
             lang = languages.singleOrNull() ?: "all",
             isNsfw = contentWarning >= ExtensionStoreIndex.ContentWarning.MIXED,
             sourceNames = sources.map { it.name },
+            sourceIds = sources.map { it.id },
             archiveName = archiveUrl.substringAfterLast('/').substringBefore('?').ifBlank { "$packageName.apk" },
             archiveUrl = archiveUrl,
             iconUrl = applyMirror(resources.iconUrl),
@@ -822,6 +824,7 @@ class ExtensionRepoService @Inject constructor(
     @Serializable
     private data class ExtensionSourceDto(
         val name: String,
+        val id: String? = null,
     )
 
     @Keep
