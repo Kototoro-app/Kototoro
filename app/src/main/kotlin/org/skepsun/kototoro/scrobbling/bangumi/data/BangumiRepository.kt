@@ -59,8 +59,9 @@ import java.util.concurrent.ConcurrentHashMap
 private const val REDIRECT_URI = "kototoro://bangumi-auth"
 private const val OFFICIAL_WEB_URL = "https://bangumi.tv/"
 private const val OFFICIAL_API_URL = "https://api.bgm.tv/"
-private const val BANGUMI_LOL_WEB_URL = "https://bangumi.lol/"
-private const val BANGUMI_LOL_API_URL = "https://api.bangumi.lol/"
+// bangumi.lol was taken over (bgm.tv/group/topic/462456); the mirror now lives at bangumi.pro.
+private const val BANGUMI_PRO_WEB_URL = "https://bangumi.pro/"
+private const val BANGUMI_PRO_API_URL = "https://api.bangumi.pro/"
 
 @Singleton
 class BangumiRepository @Inject constructor(
@@ -79,18 +80,22 @@ class BangumiRepository @Inject constructor(
     private val publicEndpoints: BangumiEndpointUrls
         get() = when (settings.bangumiMirror) {
             AppSettings.BangumiMirror.BANGUMI_LOL -> BangumiEndpointUrls(
-                webBaseUrl = BANGUMI_LOL_WEB_URL,
-                apiBaseUrl = BANGUMI_LOL_API_URL,
+                webBaseUrl = BANGUMI_PRO_WEB_URL,
+                apiBaseUrl = BANGUMI_PRO_API_URL,
             )
             AppSettings.BangumiMirror.NATIVE -> BangumiEndpointUrls(
                 webBaseUrl = OFFICIAL_WEB_URL,
                 apiBaseUrl = OFFICIAL_API_URL,
             )
             AppSettings.BangumiMirror.CUSTOM -> {
-                val webBaseUrl = normalizeBangumiBaseUrl(settings.bangumiMirrorCustomBase, BANGUMI_LOL_WEB_URL)
+                val webBaseUrl = normalizeBangumiBaseUrl(settings.bangumiMirrorCustomBase, BANGUMI_PRO_WEB_URL)
+                val apiBaseUrl = settings.bangumiMirrorCustomApiBase
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { normalizeBangumiBaseUrl(it, inferBangumiApiBaseUrl(webBaseUrl)) }
+                    ?: inferBangumiApiBaseUrl(webBaseUrl)
                 BangumiEndpointUrls(
                     webBaseUrl = webBaseUrl,
-                    apiBaseUrl = inferBangumiApiBaseUrl(webBaseUrl),
+                    apiBaseUrl = apiBaseUrl,
                 )
             }
         }
@@ -1342,7 +1347,8 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
         val host = uri.host?.takeIf { it.isNotBlank() } ?: return OFFICIAL_API_URL
         when (host) {
             "bgmmi.anibt.net" -> return OFFICIAL_API_URL
-            "bangumi.lol" -> return BANGUMI_LOL_API_URL
+            // Legacy bangumi.lol folded into the bangumi.pro mirror.
+            "bangumi.lol", "bangumi.pro" -> return BANGUMI_PRO_API_URL
         }
         val apiHost = if (host.startsWith("api.")) host else "api.$host"
         return "$scheme://$apiHost/"

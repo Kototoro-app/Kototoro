@@ -3333,7 +3333,9 @@
     <string name="pref_bangumi_mirror">Bangumi Mirror</string>
     <string name="pref_bangumi_mirror_summary">Use a mirror for public Bangumi search, browsing, and details. OAuth authorization still uses the official site.</string>
     <string name="pref_bangumi_mirror_custom_base">Custom Bangumi mirror base URL</string>
-    <string name="pref_bangumi_mirror_custom_base_summary">Enter the web base URL, for example https://bangumi.one. The API host is inferred as api.&lt;host&gt;.</string>
+    <string name="pref_bangumi_mirror_custom_base_summary">Enter the web base URL, for example https://bangumi.pro. The API host is inferred as api.&lt;host&gt; unless you set it below.</string>
+    <string name="pref_bangumi_mirror_custom_api_base">Custom Bangumi mirror API URL</string>
+    <string name="pref_bangumi_mirror_custom_api_base_summary">Optional API base URL, for example https://api.bangumi.pro. Leave blank to infer it from the web base URL.</string>
     <string-array name="pref_huggingface_mirror_entries">
         <item>Direct Native (Default)</item>
         <item>hf-mirror.com</item>

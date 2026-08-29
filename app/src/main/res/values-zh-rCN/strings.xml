@@ -2369,7 +2369,9 @@
     <string name="pref_bangumi_mirror">Bangumi 镜像</string>
     <string name="pref_bangumi_mirror_summary">使用镜像站点进行 Bangumi 公开搜索、浏览和详情查看。OAuth 授权仍使用官方站点。</string>
     <string name="pref_bangumi_mirror_custom_base">自定义 Bangumi 镜像基础 URL</string>
-    <string name="pref_bangumi_mirror_custom_base_summary">输入 Web 基础 URL，例如 https://bangumi.one。API 主机名将自动推断为 api.&lt;host&gt;。</string>
+    <string name="pref_bangumi_mirror_custom_base_summary">输入 Web 基础 URL，例如 https://bangumi.pro。除非在下方单独填写，否则 API 主机名将自动推断为 api.&lt;host&gt;。</string>
+    <string name="pref_bangumi_mirror_custom_api_base">自定义 Bangumi 镜像 API URL</string>
+    <string name="pref_bangumi_mirror_custom_api_base_summary">可选：API 基础 URL，例如 https://api.bangumi.pro。留空时从 Web 基础 URL 自动推断。</string>
     <string name="pref_glass_effect">毛玻璃模糊</string>
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背后的内容</string>
     <string name="pref_material_expressive_components">Material 3 Expressive 组件</string>

@@ -71,6 +71,9 @@ fun StorageAndNetworkSettingsRoute(
     val bangumiMirrorCustomBase = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR_CUSTOM_BASE) {
         bangumiMirrorCustomBase.orEmpty()
     }.value
+    val bangumiMirrorCustomApiBase = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR_CUSTOM_API_BASE) {
+        bangumiMirrorCustomApiBase.orEmpty()
+    }.value
     val sslBypass = settings.observeAsState(AppSettings.KEY_SSL_BYPASS) { isSSLBypassEnabled }.value
     val offlineDisabled = settings.observeAsState(AppSettings.KEY_OFFLINE_DISABLED) { isOfflineCheckDisabled }.value
     val adBlock = settings.observeAsState(AppSettings.KEY_ADBLOCK) { isAdBlockEnabled }.value
@@ -130,8 +133,8 @@ fun StorageAndNetworkSettingsRoute(
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.HF_MIRROR, "hf-mirror.com"),
     )
     val bangumiMirrorOptions = listOf(
-        SettingsChoiceOption(AppSettings.BangumiMirror.BANGUMI_LOL, "bangumi.lol (Default)"),
-        SettingsChoiceOption(AppSettings.BangumiMirror.NATIVE, "Official"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.NATIVE, "Official (Default)"),
+        SettingsChoiceOption(AppSettings.BangumiMirror.BANGUMI_LOL, "bangumi.pro"),
         SettingsChoiceOption(AppSettings.BangumiMirror.CUSTOM, "Custom"),
     )
 
@@ -280,8 +283,18 @@ fun StorageAndNetworkSettingsRoute(
                         iconRes = R.drawable.ic_web,
                         value = bangumiMirrorCustomBase,
                         summary = context.getString(R.string.pref_bangumi_mirror_custom_base_summary),
-                        placeholder = "https://bangumi.lol",
+                        placeholder = "https://bangumi.pro",
                         onValueChange = { settings.bangumiMirrorCustomBase = it },
+                    )
+                }
+                item {
+                    SettingsTextInputPreference(
+                        title = context.getString(R.string.pref_bangumi_mirror_custom_api_base),
+                        iconRes = R.drawable.ic_dns,
+                        value = bangumiMirrorCustomApiBase,
+                        summary = context.getString(R.string.pref_bangumi_mirror_custom_api_base_summary),
+                        placeholder = "https://api.bangumi.pro",
+                        onValueChange = { settings.bangumiMirrorCustomApiBase = it },
                     )
                 }
             }

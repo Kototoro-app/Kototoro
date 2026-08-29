@@ -789,25 +789,34 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putString(KEY_HUGGINGFACE_MIRROR, value.value) }
 
     enum class BangumiMirror(val value: String) {
-        BANGUMI_LOL("bangumi_lol"),
         NATIVE("native"),
+        // Stored key kept as "bangumi_lol" for compatibility; the mirror now points to bangumi.pro.
+        BANGUMI_LOL("bangumi_lol"),
         CUSTOM("custom");
 
         companion object {
             fun fromValue(value: String?): BangumiMirror = when (value) {
                 "bangumi_one", "bgmmi_anibt" -> BANGUMI_LOL
-                else -> entries.find { it.value == value } ?: BANGUMI_LOL
+                else -> entries.find { it.value == value } ?: NATIVE
             }
         }
     }
 
     var bangumiMirror: BangumiMirror
-        get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.BANGUMI_LOL.value))
+        get() = BangumiMirror.fromValue(prefs.getString(KEY_BANGUMI_MIRROR, BangumiMirror.NATIVE.value))
         set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR, value.value) }
 
     var bangumiMirrorCustomBase: String?
         get() = prefs.getString(KEY_BANGUMI_MIRROR_CUSTOM_BASE, null)
         set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR_CUSTOM_BASE, value?.trim()?.takeIf { it.isNotBlank() }) }
+
+    /**
+     * Optional custom Bangumi mirror API base URL. When blank, the API host is inferred
+     * from [bangumiMirrorCustomBase] (e.g. `api.<host>`).
+     */
+    var bangumiMirrorCustomApiBase: String?
+        get() = prefs.getString(KEY_BANGUMI_MIRROR_CUSTOM_API_BASE, null)
+        set(value) = prefs.edit { putString(KEY_BANGUMI_MIRROR_CUSTOM_API_BASE, value?.trim()?.takeIf { it.isNotBlank() }) }
 
     var extensionLanguages: Set<String>
         get() = prefs.getStringSet(KEY_EXTENSION_LANGUAGES, null) ?: emptySet()
@@ -3009,6 +3018,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"
         const val KEY_BANGUMI_MIRROR = "bangumi_mirror"
         const val KEY_BANGUMI_MIRROR_CUSTOM_BASE = "bangumi_mirror_custom_base"
+        const val KEY_BANGUMI_MIRROR_CUSTOM_API_BASE = "bangumi_mirror_custom_api_base"
         const val KEY_LNREADER_REPOS = "lnreader_repository_urls"
         const val KEY_LEGADO_REPOS = "legado_repository_urls"
         const val KEY_TVBOX_REPOS = "tvbox_repository_urls"
