@@ -156,6 +156,7 @@ class ContentSourcesRepository @Inject constructor(
                         "mihon=${mihonExtensionManager.installedExtensions.value.size} " +
                         "aniyomi=${aniyomiExtensionManager.installedExtensions.value.size} " +
                         "ireader=${ireaderExtensionManager.installedExtensions.value.size} " +
+                        "tsundoku=${tsundokuExtensionManager.installedExtensions.value.size} " +
                         "cloudstream=${cloudstreamRuntimeManager.sources.value.size}"
                 }
                 cachedKotatsuSources.clear()
@@ -345,6 +346,21 @@ class ContentSourcesRepository @Inject constructor(
             observeIsNsfwDisabled()
         ) { _, _ ->
             getEnabledIReaderSources()
+        }
+    }
+
+    /**
+     * Observes all Tsundoku novel sources.
+     *
+     * Mirrors [observeIReaderSources]: re-emits whenever the installed Tsundoku
+     * extension pool or the NSFW content setting changes.
+     */
+    private fun observeTsundokuSources(): Flow<List<org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource>> {
+        return combine(
+            tsundokuExtensionManager.installedExtensions,
+            observeIsNsfwDisabled()
+        ) { _, _ ->
+            getEnabledTsundokuNovelSources()
         }
     }
 
@@ -720,7 +736,8 @@ class ContentSourcesRepository @Inject constructor(
             mihonExtensionManager.installedExtensions,
             aniyomiExtensionManager.installedExtensions,
             ireaderExtensionManager.installedExtensions,
-        ) { _, _, _ ->
+            tsundokuExtensionManager.installedExtensions,
+        ) { _, _, _, _ ->
             Unit
         }
     }
@@ -838,8 +855,23 @@ class ContentSourcesRepository @Inject constructor(
                     list.add(ContentSourceInfo(ireaderSource, isEnabled = true, isPinned = false))
                 }
             }
+            snapshot.copy(sources = list).also {
+                traceBrowseSources { "ireader_stage extensions=${ireaderSources.size} total=${it.sources.size}" }
+            }
+        }
+        .combine(observeTsundokuSources()) { snapshot, tsundokuSources ->
+            val list = ArrayList<ContentSourceInfo>()
+            list.addAll(snapshot.sources)
+
+            val existingNames = snapshot.sources.mapToSet { it.mangaSource.name }
+            tsundokuSources.forEach { tsundokuSource ->
+                val isVisible = if (snapshot.allEnabled) true else tsundokuSource.name in snapshot.enabledNames
+                if (isVisible && tsundokuSource.name !in existingNames && tsundokuSource.name !in snapshot.disabledNames) {
+                    list.add(ContentSourceInfo(tsundokuSource, isEnabled = true, isPinned = false))
+                }
+            }
             canonicalizeSourceInfosByName(list).also {
-                traceBrowseSources { "ireader_stage extensions=${ireaderSources.size} total=${it.size}" }
+                traceBrowseSources { "tsundoku_stage extensions=${tsundokuSources.size} total=${it.size}" }
             }
         }
         .combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
@@ -1132,6 +1164,7 @@ class ContentSourcesRepository @Inject constructor(
             addAll(getEnabledMihonSources())
             addAll(getEnabledAniyomiSources())
             addAll(getEnabledIReaderSources())
+            addAll(getEnabledTsundokuNovelSources())
         }
         for (source in totalSources) {
             if (source.name !in existing) {
@@ -1294,6 +1327,7 @@ class ContentSourcesRepository @Inject constructor(
                                 source is org.skepsun.kototoro.mihon.model.MihonMangaSource ||
                                 source is org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource ||
                                 source is org.skepsun.kototoro.ireader.model.IReaderMangaSource ||
+                                source is org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource ||
                                 source is org.skepsun.kototoro.core.jsonsource.JsonContentSource
 
             if (isKnownSource) {

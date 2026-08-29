@@ -2,6 +2,7 @@ package org.skepsun.kototoro.core.jsonsource
 
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.TvType
+import eu.kanade.tachiyomi.source.Source
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.serialization.json.Json
@@ -12,6 +13,7 @@ import org.skepsun.kototoro.core.db.entity.JsonSourceSummary
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.tsundoku.model.TsundokuNovelSource
 
 class SourceGroupManagerTest {
 
@@ -58,6 +60,32 @@ class SourceGroupManagerTest {
 	@Test
 	fun `anonymous ireader source is classified as novel group`() {
 		val source = ContentSource("IREADER_123")
+
+		val result = sourceGroupManager.getContentGroup(source)
+
+		assertEquals(ContentGroup.NOVEL, result)
+	}
+
+	@Test
+	fun `anonymous tsundoku source is classified as novel group`() {
+		val source = ContentSource("TSUNDOKU_42")
+
+		val result = sourceGroupManager.getContentGroup(source)
+
+		assertEquals(ContentGroup.NOVEL, result)
+	}
+
+	@Test
+	fun `tsundoku novel source is classified as novel group`() {
+		val source = TsundokuNovelSource(
+			upstreamSource = object : Source {
+				override val id: Long = 42L
+				override val name: String = "Example Novel"
+				override val lang: String = "en"
+			},
+			pkgName = "org.tsundoku.test",
+			isNsfw = false,
+		)
 
 		val result = sourceGroupManager.getContentGroup(source)
 
