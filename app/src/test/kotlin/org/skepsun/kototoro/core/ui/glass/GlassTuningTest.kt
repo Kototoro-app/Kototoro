@@ -49,8 +49,21 @@ class GlassTuningTest {
             mapOf((GlassTuningScope.GLOBAL to GlassTuningParam.BLUR_RADIUS_DP) to 20f),
         )
 
-        assertTrue(original.value(GlassTuningScope.GLOBAL, GlassTuningParam.BLUR_RADIUS_DP) == 8f)
+        assertTrue(original.value(GlassTuningScope.GLOBAL, GlassTuningParam.BLUR_RADIUS_DP) == 2f)
         assertTrue(preview.value(GlassTuningScope.GLOBAL, GlassTuningParam.BLUR_RADIUS_DP) == 20f)
+    }
+
+    @Test
+    fun `fresh install defaults to the refraction preset`() {
+        val configs = GlassTuningScope.entries.associateWith { GlassTuning.defaultConfig(it) }
+        val state = GlassTuningState(configs)
+
+        assertTrue(GlassPreset.REFRACTION.matches(state))
+        assertTrue(GlassTuning.defaultConfig(GlassTuningScope.GLOBAL).values == GlassTuning.refractionPresetValues)
+        // Every role follows the flat refraction baseline.
+        GlassTuningScope.entries.filter { it != GlassTuningScope.GLOBAL }.forEach { scope ->
+            assertTrue(state.config(scope).followGlobal.containsAll(GlassTuningParam.entries.map { it.key }))
+        }
     }
 
     @Test

@@ -983,33 +983,9 @@ enum class GlassPreset(
                 GlassTuningParam.PRESS_SCALE_PERCENT.key to 4f,
                 GlassTuningParam.PRESS_LENS_STRENGTH.key to 0f,
             )
-            REFRACTION -> mapOf(
-                GlassTuningParam.GLASS_ENABLED.key to 1f,
-                GlassTuningParam.VIBRANCY.key to 1f,
-                GlassTuningParam.SATURATION.key to 1f,
-                GlassTuningParam.BRIGHTNESS.key to 0f,
-                GlassTuningParam.BLUR_RADIUS_DP.key to 2f,
-                GlassTuningParam.LENS_HEIGHT_DP.key to 16f,
-                GlassTuningParam.LENS_AMOUNT_DP.key to 44f,
-                GlassTuningParam.DEPTH_EFFECT.key to 0f,
-                GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
-                GlassTuningParam.SURFACE_ALPHA.key to 0.40f,
-                GlassTuningParam.RIM_ENABLED.key to 0f,
-                GlassTuningParam.RIM_ALPHA.key to 0.5f,
-                GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
-                GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
-                GlassTuningParam.HAIRLINE_ALPHA.key to 0.25f,
-                GlassTuningParam.SHADOW_ENABLED.key to 1f,
-                GlassTuningParam.SHADOW_RADIUS_DP.key to 4f,
-                GlassTuningParam.SHADOW_OFFSET_DP.key to 2f,
-                GlassTuningParam.SHADOW_ALPHA.key to 0.10f,
-                GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 1f,
-                GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 8f,
-                GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 0.8f,
-                GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 0f,
-                GlassTuningParam.PRESS_SCALE_PERCENT.key to 6f,
-                GlassTuningParam.PRESS_LENS_STRENGTH.key to 1f,
-            )
+            // Single source of truth: the refraction values double as the
+            // fresh-install default config (see GlassTuning.defaultConfig).
+            REFRACTION -> GlassTuning.refractionPresetValues
             READER -> mapOf(
                 GlassTuningParam.GLASS_ENABLED.key to 1f,
                 GlassTuningParam.VIBRANCY.key to 1f,

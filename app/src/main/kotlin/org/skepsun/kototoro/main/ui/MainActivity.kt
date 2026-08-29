@@ -6,6 +6,8 @@ import android.content.pm.PackageManager.PERMISSION_GRANTED
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -30,6 +32,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
 import org.skepsun.kototoro.browser.AdListUpdateService
 import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.os.VoiceInputContract
 import org.skepsun.kototoro.core.parser.ContentDataRepository
@@ -49,6 +52,7 @@ import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
+import org.skepsun.kototoro.extensions.install.ExtensionInstallService
 import org.skepsun.kototoro.local.ui.LocalIndexUpdateService
 import org.skepsun.kototoro.local.ui.LocalStorageCleanupWorker
 import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
@@ -83,11 +87,35 @@ import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
-class MainActivity : BaseComposeActivity() {
+class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
 
     companion object {
         const val EXTRA_RESUME_SPACE_ID = "main_activity.resume_space_id"
         const val EXTRA_RESTORE_IMMERSIVE_SPACE_ID = "main_activity.restore_immersive_space_id"
+    }
+
+    @Inject
+    lateinit var installService: ExtensionInstallService
+
+    private val systemInstallLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {
+        if (::installService.isInitialized) {
+            installService.onInstallerActivityReturned()
+        }
+    }
+
+    override fun launchSystemInstall(intent: Intent) {
+        runCatching { systemInstallLauncher.launch(intent) }.onFailure { error ->
+            if (::installService.isInitialized) {
+                installService.onInstallerActivityReturned()
+            }
+            Toast.makeText(
+                this,
+                getString(R.string.welcome_install_system_launch_failed, error.message.orEmpty()),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
     }
 
     @Inject

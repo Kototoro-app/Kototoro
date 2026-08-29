@@ -205,30 +205,53 @@ object GlassTuning {
         if (raw.isNullOrBlank()) emptyList()
         else runCatching { json.decodeFromString<List<GlassCustomPreset>>(raw) }.getOrDefault(emptyList())
 
-    /** Default config for a scope — materialized lazily on first read. */
+    /**
+     * The "折射 / Refraction" glass preset — the default finish for fresh
+     * installs: a crisp low-blur surface with a strong refractive lens.
+     * Kept in core so the default materialization, the reset target and the
+     * preset pickers (Settings + setup wizard) all share one source of truth.
+     */
+    val refractionPresetValues: Map<String, Float> = mapOf(
+        GlassTuningParam.GLASS_ENABLED.key to 1f,
+        GlassTuningParam.VIBRANCY.key to 1f,
+        GlassTuningParam.SATURATION.key to 1f,
+        GlassTuningParam.BRIGHTNESS.key to 0f,
+        GlassTuningParam.BLUR_RADIUS_DP.key to 2f,
+        GlassTuningParam.LENS_HEIGHT_DP.key to 16f,
+        GlassTuningParam.LENS_AMOUNT_DP.key to 44f,
+        GlassTuningParam.DEPTH_EFFECT.key to 0f,
+        GlassTuningParam.CHROMATIC_ABERRATION.key to 0f,
+        GlassTuningParam.SURFACE_ALPHA.key to 0.40f,
+        GlassTuningParam.RIM_ENABLED.key to 0f,
+        GlassTuningParam.RIM_ALPHA.key to 0.5f,
+        GlassTuningParam.HIGHLIGHT_STYLE.key to 0f,
+        GlassTuningParam.HAIRLINE_ENABLED.key to 1f,
+        GlassTuningParam.HAIRLINE_ALPHA.key to 0.25f,
+        GlassTuningParam.SHADOW_ENABLED.key to 1f,
+        GlassTuningParam.SHADOW_RADIUS_DP.key to 4f,
+        GlassTuningParam.SHADOW_OFFSET_DP.key to 2f,
+        GlassTuningParam.SHADOW_ALPHA.key to 0.10f,
+        GlassTuningParam.PRESS_HIGHLIGHT_ALPHA.key to 1f,
+        GlassTuningParam.PRESS_INNER_SHADOW_RADIUS_DP.key to 8f,
+        GlassTuningParam.PRESS_INNER_SHADOW_ALPHA.key to 0.8f,
+        GlassTuningParam.PRESS_CHROMATIC_ABERRATION.key to 0f,
+        GlassTuningParam.PRESS_SCALE_PERCENT.key to 6f,
+        GlassTuningParam.PRESS_LENS_STRENGTH.key to 1f,
+    )
+
+    /**
+     * Default config for a scope — materialized lazily on first read.
+     * Defaults to the "折射 / Refraction" preset: the Global scope carries the
+     * refraction values and every role follows it (the preset is flat).
+     */
     fun defaultConfig(scope: GlassTuningScope): GlassScopeConfig {
         if (scope == GlassTuningScope.GLOBAL) {
             return GlassScopeConfig(
                 initialized = true,
-                values = GlassTuningParam.entries.associate { it.key to it.fallback },
+                values = refractionPresetValues,
             )
         }
-        val follow = uniformParams.mapTo(mutableSetOf()) { it.key }
-        val overrides = mutableMapOf<String, Float>()
-        overrides[GlassTuningParam.SURFACE_ALPHA.key] = legacyFallback(scope, GlassTuningParam.SURFACE_ALPHA)
-        overrides[GlassTuningParam.DEPTH_EFFECT.key] = legacyFallback(scope, GlassTuningParam.DEPTH_EFFECT)
-        overrides[GlassTuningParam.RIM_ENABLED.key] = legacyFallback(scope, GlassTuningParam.RIM_ENABLED)
-        overrides[GlassTuningParam.HAIRLINE_ENABLED.key] = legacyFallback(
-            scope,
-            GlassTuningParam.HAIRLINE_ENABLED,
-        )
-        overrides[GlassTuningParam.HAIRLINE_ALPHA.key] = legacyFallback(scope, GlassTuningParam.HAIRLINE_ALPHA)
-        overrides[GlassTuningParam.SHADOW_ALPHA.key] = legacyFallback(scope, GlassTuningParam.SHADOW_ALPHA)
-        return GlassScopeConfig(
-            values = overrides,
-            followGlobal = follow,
-            initialized = true,
-        )
+        return GlassScopeConfig().followAll()
     }
 
     /**

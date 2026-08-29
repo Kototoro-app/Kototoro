@@ -64,6 +64,7 @@ import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
 import org.skepsun.kototoro.core.nav.applyHorizontalRouteCloseTransition
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.network.BaseHttpClient
@@ -166,7 +167,20 @@ import kotlin.coroutines.cancellation.CancellationException
 
 @AndroidEntryPoint
 class SettingsActivity :
-    BaseComposeActivity() {
+    BaseComposeActivity(),
+    SystemInstallLauncherHost {
+
+    override fun launchSystemInstall(intent: Intent) {
+        runCatching { unifiedSourcesInstallLauncher.launch(intent) }
+            .onFailure { error ->
+                unifiedSourcesViewModel.onInstallerActivityReturned()
+                Toast.makeText(
+                    this,
+                    getString(R.string.welcome_install_system_launch_failed, error.message.orEmpty()),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+    }
 
     private val initialEntityOrganizeSelection: Set<Long> by lazy(LazyThreadSafetyMode.NONE) {
         parseEntityOrganizeSelection(intent?.getStringExtra(EXTRA_ENTITY_ORGANIZE_SELECTION).orEmpty())
