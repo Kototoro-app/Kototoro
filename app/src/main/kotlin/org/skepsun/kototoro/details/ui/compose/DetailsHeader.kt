@@ -2,6 +2,7 @@ package org.skepsun.kototoro.details.ui.compose
 
 
 import android.text.format.Formatter
+import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,6 +69,7 @@ import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
+import org.skepsun.kototoro.core.util.ext.copyToClipboard
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.core.util.ext.toLocaleOrNull
@@ -506,6 +508,16 @@ fun DetailsHeader(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    DetailsHeaderIconButton(
+                        iconRes = R.drawable.ic_copy,
+                        onClick = {
+                            context.copyToClipboard(displayTitle, displayTitle)
+                            Toast.makeText(context, R.string.details_title_copied, Toast.LENGTH_SHORT).show()
+                        },
+                        contentDescription = stringResource(R.string.details_copy_title),
+                        buttonSize = 32.dp,
+                        iconSize = 17.dp,
+                    )
                     if (showWorkActions) {
                         DetailsHeaderIconButton(
                             iconRes = if (isFavourite) R.drawable.ic_heart else R.drawable.ic_heart_outline,

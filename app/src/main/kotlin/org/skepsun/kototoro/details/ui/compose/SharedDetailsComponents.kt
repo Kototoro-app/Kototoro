@@ -419,6 +419,7 @@ fun DetailsHeaderIconButton(
     filled: Boolean = false,
     buttonSize: androidx.compose.ui.unit.Dp = 42.dp,
     iconSize: androidx.compose.ui.unit.Dp = 18.dp,
+    contentDescription: String? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
@@ -452,7 +453,7 @@ fun DetailsHeaderIconButton(
             ) {
                 Icon(
                     painter = rememberSafePainter(iconRes),
-                    contentDescription = null,
+                    contentDescription = contentDescription,
                     modifier = Modifier.size(iconSize),
                     tint = if (expressive) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -489,7 +490,7 @@ fun DetailsHeaderIconButton(
             ) {
                 Icon(
                     painter = rememberSafePainter(iconRes),
-                    contentDescription = null,
+                    contentDescription = contentDescription,
                     modifier = Modifier.size(iconSize),
                     tint = MaterialTheme.colorScheme.onSurface,
                 )

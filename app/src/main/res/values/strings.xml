@@ -3544,6 +3544,8 @@
     <string name="clear_crash_logs_confirm">Delete all recorded crash logs?</string>
     <string name="crash_logs_cleared">Crash logs cleared</string>
     <string name="copy">Copy</string>
+    <string name="details_copy_title">Copy title</string>
+    <string name="details_title_copied">Title copied to clipboard</string>
     <!-- Title translation (#133) -->
     <string name="translate_title">Translate title</string>
     <string name="details_translate_title_and_description_hint">Translate title and description</string>
