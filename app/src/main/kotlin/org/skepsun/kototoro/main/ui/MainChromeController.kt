@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui
 
 import android.view.View
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +61,13 @@ class MainChromeController(
         private set
     var enabledSourceTags by mutableStateOf(SourceTag.quickFilterEntries.toSet())
         private set
+    /**
+     * Optional page-provided content for the source-tag filter popup, derived from
+     * [currentFilterCallback]. Kept as snapshot state so the shell recomposes even when
+     * the other filter states are unchanged by a callback registration.
+     */
+    var filterPanelContent by mutableStateOf<(@Composable ((close: () -> Unit) -> Unit))?>(null)
+        private set
     var enabledContentTypes by mutableStateOf(allTopBarContentTypes())
         private set
 
@@ -82,6 +90,7 @@ class MainChromeController(
 
     fun refreshFilters() {
         val callback = currentFilterCallback ?: return
+        filterPanelContent = callback.getFilterPanelContent()
         val sourceTagEntries = callback.getSourceTagEntries()
         availableSourceTags = sourceTagEntries
         isLanguagePresetFilterVisible = callback.isLanguagePresetFilterVisible() && settings.isShowLanguagePresetFilter
@@ -166,6 +175,7 @@ class MainChromeController(
     fun clearActiveFilters() {
         activeFilterCallbacks.clear()
         currentFilterCallback = null
+        filterPanelContent = null
         activeFilterContentType = if (settings.isShowContentTypeFilter) {
             null
         } else {

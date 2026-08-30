@@ -47,8 +47,9 @@ abstract class ContentListQuickFilter(
 
     suspend fun filterItem(
         selectedOptions: Set<ListFilterOption>,
+        ignoreVisibilitySetting: Boolean = false,
     ): QuickFilter? {
-        if (!settings.isQuickFilterEnabled) {
+        if (!ignoreVisibilitySetting && !settings.isQuickFilterEnabled) {
             return null
         }
         val availableOptions = availableFilterOptions.getOrNull().orEmpty()

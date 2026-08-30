@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui
 
 import android.view.View
+import androidx.compose.runtime.Composable
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 
@@ -40,4 +41,13 @@ interface SearchBarFilterCallback {
     fun getSourceTagIconRes(): Int = 0
     /** Return true to consume the click and prevent default popup */
     fun onFilterIconClicked(anchor: View): Boolean = false
+
+    /**
+     * Optional page-provided filter panel that replaces the default source-tag dropdown
+     * in the top bar (the "content source type" filter button). The returned composable
+     * is rendered inside the same anchored popup, so it must fit a dropdown layout.
+     * [close] dismisses the popup (e.g. from a "Done" row). When null, the default
+     * single-tag menu is shown as before.
+     */
+    fun getFilterPanelContent(): (@Composable (close: () -> Unit) -> Unit)? = null
 }

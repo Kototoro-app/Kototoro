@@ -65,6 +65,10 @@ import org.skepsun.kototoro.space.domain.SpaceId
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
 import org.skepsun.kototoro.space.ui.scopedToSpace
+import org.skepsun.kototoro.tracker.domain.TrackingRepository
+import org.skepsun.kototoro.tracker.work.TrackWorker
+import org.skepsun.kototoro.tracker.work.UpdateCheckRequest
+import org.skepsun.kototoro.tracker.work.messageRes
 import org.skepsun.kototoro.work.domain.WorkAggregate
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 
@@ -84,6 +88,8 @@ class FavouritesListViewModel @AssistedInject constructor(
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
     @ApplicationContext private val appContext: Context,
     spaceBrowseScope: SpaceBrowseScope,
+    private val trackingRepository: TrackingRepository,
+    private val trackWorkerScheduler: TrackWorker.Scheduler,
 ) : ContentListViewModel(appSettings, dataRepository, localStorageChanges), QuickFilterListener,
     SpaceBindableViewModel {
 
@@ -150,6 +156,16 @@ class FavouritesListViewModel @AssistedInject constructor(
     val topQuickFilter = quickFilter.appliedOptions
         .combineWithSettings()
         .mapLatest { filters -> quickFilter.filterItem(filters) }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null as QuickFilter?)
+
+    /**
+     * Like [topQuickFilter] but ignores the "show quick filters" appearance setting, so the
+     * top-bar filter panel can keep offering the same options even when the inline tab bar
+     * (QuickFilterSection) is hidden by the user.
+     */
+    val popupQuickFilter = quickFilter.appliedOptions
+        .combineWithSettings()
+        .mapLatest { filters -> quickFilter.filterItem(filters, ignoreVisibilitySetting = true) }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null as QuickFilter?)
 
     val sortOrder: StateFlow<ListSortOrder?> = if (categoryId == NO_ID) {
@@ -226,6 +242,46 @@ class FavouritesListViewModel @AssistedInject constructor(
 
     override fun onRefresh() {
         refreshTrigger.value = Any()
+    }
+
+    /**
+     * Pull-to-refresh entry point: re-queries the local list and requests a new-chapter
+     * update check through the shared gate ([TrackWorker.Scheduler.requestCheckNow], the
+     * same one used by the Updates and Feed pages), finishing with a summary toast. If the
+     * gate refuses the request (check already running / checked too recently / tracker
+     * disabled) the corresponding prompt toast is shown instead.
+     */
+    fun checkForUpdates() {
+        refreshTrigger.value = Any()
+        launchLoadingJob(Dispatchers.Default) {
+            when (val request = trackWorkerScheduler.requestCheckNow()) {
+                UpdateCheckRequest.Started -> {
+                    onContentMessage.call(appContext.getString(R.string.checking_for_updates))
+                    val finished = trackWorkerScheduler.awaitOneShot(UPDATE_CHECK_AWAIT_MS)
+                    val message = if (finished) {
+                        val summary = trackingRepository.getFavouriteUpdatesSummary()
+                        if (summary.worksWithUpdates > 0) {
+                            appContext.getString(
+                                R.string.favourites_updates_found,
+                                summary.worksWithUpdates,
+                                summary.newChapters,
+                            )
+                        } else {
+                            appContext.getString(R.string.favourites_no_updates)
+                        }
+                    } else {
+                        appContext.getString(R.string.updates_check_still_running)
+                    }
+                    onContentMessage.call(message)
+                    refreshTrigger.value = Any()
+                }
+                UpdateCheckRequest.InFlight,
+                UpdateCheckRequest.TooSoon,
+                UpdateCheckRequest.TrackerDisabled -> {
+                    onContentMessage.call(appContext.getString(request.messageRes()))
+                }
+            }
+        }
     }
 
     override fun onRetry() = Unit
@@ -514,5 +570,15 @@ class FavouritesListViewModel @AssistedInject constructor(
             },
             actionStringRes = 0,
         )
+    }
+
+    private companion object {
+
+        /**
+         * How long the pull-to-refresh spinner waits for the one-shot update check before
+         * giving up on a result toast. The worker keeps running in the background (and
+         * reports via its own notification) if the check is simply slow.
+         */
+        const val UPDATE_CHECK_AWAIT_MS = 60_000L
     }
 }

@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.tracker.ui.feed
 
+import android.content.Context
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.paging.Pager
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
@@ -58,6 +60,8 @@ import org.skepsun.kototoro.tracker.ui.feed.model.FeedItem
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 import org.skepsun.kototoro.tracker.work.TrackWorker
+import org.skepsun.kototoro.tracker.work.UpdateCheckRequest
+import org.skepsun.kototoro.tracker.work.messageRes
 import org.skepsun.kototoro.core.prefs.TriStateOption
 import org.skepsun.kototoro.download.ui.worker.DownloadTask
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
@@ -87,6 +91,7 @@ internal fun observeFeedCategoryIdsForSelection(
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val settings: AppSettings,
     private val repository: TrackingRepository,
     private val scheduler: TrackWorker.Scheduler,
@@ -262,6 +267,7 @@ class FeedViewModel @Inject constructor(
         .flatMapLatest { repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it) }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
     val onActionDone = MutableEventFlow<ReversibleAction>()
+    val onMessage = MutableEventFlow<String>()
 
     val pagingContent: Flow<PagingData<ListModel>> = combine(
         showAllUpdates,
@@ -288,12 +294,19 @@ class FeedViewModel @Inject constructor(
         ).flow.map { pagingData -> pagingData.applyFeedPagingPresentation() }
     }.cachedIn(viewModelScope)
 
-    val leadingContent = combine(observeHeader(), quickFilter.appliedOptions) { header, filters ->
-        buildList<ListModel> {
-            quickFilter.filterItem(filters)?.let(::add)
-            header?.let(::add)
+    val leadingContent = combine(
+        quickFilter.appliedOptions,
+        // Re-emit when the quick-filter visibility toggle changes so filterItem()
+        // re-evaluates against the fresh setting (hides/shows the inline bar).
+        settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+    ) { filters, _ -> filters }
+        .combine(observeHeader()) { filters, header ->
+            buildList<ListModel> {
+                quickFilter.filterItem(filters)?.let(::add)
+                header?.let(::add)
+            }
         }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
     val fallbackContent = combine(
         updatedContent,
@@ -351,8 +364,19 @@ class FeedViewModel @Inject constructor(
     }
 
     fun update() {
-        manualRefreshRequested.value = true
-        scheduler.startNow()
+        launchJob(Dispatchers.Default) {
+            when (val request = scheduler.requestCheckNow()) {
+                UpdateCheckRequest.Started -> {
+                    manualRefreshRequested.value = true
+                    onMessage.call(appContext.getString(request.messageRes()))
+                }
+                UpdateCheckRequest.InFlight,
+                UpdateCheckRequest.TooSoon,
+                UpdateCheckRequest.TrackerDisabled -> {
+                    onMessage.call(appContext.getString(request.messageRes()))
+                }
+            }
+        }
     }
 
     fun setHeaderEnabled(value: Boolean) {
@@ -559,13 +583,18 @@ class FeedViewModel @Inject constructor(
         ) { skipNsfwGlobally, skipNsfwInFeed ->
             skipNsfwGlobally || skipNsfwInFeed
         }
-        return combine(skipNsfwInFeed) { filters, skipNsfw ->
+        val nsfwCombined = combine(skipNsfwInFeed) { filters, skipNsfw ->
             if (skipNsfw) {
                 filters + ListFilterOption.SFW
             } else {
                 filters
             }
         }
+        // Re-emit (unchanged filters) when the quick-filter visibility toggle changes.
+        return combine(
+            nsfwCombined,
+            settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+        ) { filters, _ -> filters }
     }
 }
 

@@ -85,6 +85,13 @@ class FavouritesContainerViewModel @Inject constructor(
     val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 
+    val isQuickFilterEnabled = settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.isQuickFilterEnabled)
+
+    fun setQuickFilterEnabled(enabled: Boolean) {
+        settings.isQuickFilterEnabled = enabled
+    }
+
     val allFavoritesSortOrder = settings.observeAsFlow(AppSettings.KEY_FAVORITES_ORDER) {
         allFavoritesSortOrder
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.allFavoritesSortOrder)
@@ -114,14 +121,20 @@ class FavouritesContainerViewModel @Inject constructor(
         globalFavoritesState.resetFilters(clearGroupTab = spaceBinding.spaceId.value == null)
     }
 
-    private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> = combine(
-        settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
-    ) { filters, skipNsfw ->
-        if (skipNsfw) {
-            filters + ListFilterOption.SFW
-        } else {
-            filters
+    private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> {
+        val nsfwCombined = combine(
+            settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
+        ) { filters, skipNsfw ->
+            if (skipNsfw) {
+                filters + ListFilterOption.SFW
+            } else {
+                filters
+            }
         }
+        return combine(
+            nsfwCombined,
+            settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+        ) { filters, _ -> filters }
     }
 
     data class ImportSource(

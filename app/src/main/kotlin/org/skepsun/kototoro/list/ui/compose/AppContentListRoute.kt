@@ -119,6 +119,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
     emitFilterRailOverride: Boolean = true,
     pullRefreshEnabled: Boolean = true,
+    /**
+     * Optional override for the pull-to-refresh action. By default paging lists call
+     * `LazyPagingItems.refresh()` and static lists call [ContentListViewModel.onRefresh].
+     * Some pages (e.g. favourites) want extra work on pull — like kicking off an update
+     * check — so they provide their own callback.
+     */
+    pullRefreshAction: (() -> Unit)? = null,
     onLoadMore: () -> Unit = {},
     loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
@@ -558,7 +565,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
         showRemoveOption = showRemoveOption,
         sharedTransitionEnabled = sharedTransitionEnabled,
         sharedElementInstanceKey = sharedElementInstanceKey,
-        onRefresh = {
+        onRefresh = pullRefreshAction ?: {
             if (lazyPagingItems == null) {
                 viewModel.onRefresh()
             } else {

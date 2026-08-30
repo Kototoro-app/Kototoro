@@ -305,6 +305,12 @@
     <string name="clear_feed">Clear feed</string>
     <string name="text_clear_updates_feed_prompt">Clear all update history permanently?</string>
     <string name="check_for_new_chapters">Check for new chapters</string>
+    <string name="checking_for_updates">Checking for updates…</string>
+    <string name="favourites_updates_found">Found new chapters in %1$d works (%2$d total)</string>
+    <string name="favourites_no_updates">No new chapters found</string>
+    <string name="updates_check_still_running">Update check is still running in the background</string>
+    <string name="updates_check_in_progress">An update check is already in progress</string>
+    <string name="updates_check_too_soon">Checked recently, please try again in a moment</string>
     <string name="reverse">Reverse</string>
     <string name="chapters_grid_view">Grid view</string>
     <string name="hide_read_chapters">Hide read chapters</string>

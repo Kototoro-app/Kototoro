@@ -211,7 +211,12 @@ class HistoryListViewModel @Inject constructor(
         }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    val headerQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
+    val headerQuickFilter: StateFlow<QuickFilter?> = combine(
+        quickFilter.appliedOptions,
+        // Re-emit when the quick-filter visibility toggle changes so the flatMapLatest
+        // below re-evaluates against the fresh setting (hides/shows the inline bar).
+        settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+    ) { filters, _ -> filters }
         .flatMapLatest { selectedOptions ->
             flow {
                 if (!settings.isQuickFilterEnabled) {

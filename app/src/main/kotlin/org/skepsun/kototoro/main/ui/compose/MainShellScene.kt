@@ -33,10 +33,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import dagger.hilt.android.EntryPointAccessors
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.compose.runtime.State
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
+import org.skepsun.kototoro.favourites.ui.compose.FavoritesFilterPanelRoute
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
+import org.skepsun.kototoro.favourites.ui.list.FavouritesListViewModel
 import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
@@ -741,6 +744,15 @@ internal fun FeedTopLevelRouteContent(
         .ifEmpty { fallbackItems.filterIsInstance<FeedItem>() }
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
+
+    val messageContext = LocalContext.current
+    LaunchedEffect(viewModel.onMessage) {
+        viewModel.onMessage.collect { event ->
+            event?.consume(eventCollector { message ->
+                android.widget.Toast.makeText(messageContext, message, android.widget.Toast.LENGTH_SHORT).show()
+            })
+        }
+    }
     val selectedCategoryId by viewModel.currentCategoryId.collectAsStateWithLifecycle()
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.currentSourceTags.collectAsStateWithLifecycle()
@@ -1726,6 +1738,10 @@ internal fun FavoritesTopLevelRouteContent(
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The active category's list view model is created by the pager page inside
+    // KototoroFavoritesHostRoute; this shell-owned ref lets this scene's filter callback
+    // build the popup filter panel against the same instance.
+    val activeFavouritesViewModelRef = remember { mutableStateOf<FavouritesListViewModel?>(null) }
     var nextFavoritesDialogId by remember { mutableLongStateOf(0L) }
     var pendingFavoritesDialog by remember { mutableStateOf<PendingFavoritesDialog?>(null) }
     var favoritesSelectionDialog by remember { mutableStateOf<FavoritesSelectionDialogState?>(null) }
@@ -1977,6 +1993,15 @@ internal fun FavoritesTopLevelRouteContent(
                     }
                 }
             }
+
+            override fun getFilterPanelContent(): (@Composable (close: () -> Unit) -> Unit)? =
+                { close ->
+                    FavoritesFilterPanelRoute(
+                        containerViewModel = viewModel,
+                        activeViewModelRef = activeFavouritesViewModelRef,
+                        close = close,
+                    )
+                }
         }
         mainChromeController?.setActiveFilterCallback(callback)
         onDispose {
@@ -2000,6 +2025,7 @@ internal fun FavoritesTopLevelRouteContent(
                 navigateToDetailsWithOrigin(origin, sharedKey)
             },
             registerFilterCallback = false,
+            activeFavouritesViewModelRef = activeFavouritesViewModelRef,
             onTopBarOverrideChanged = {
                 onExploreSourceSelectionTopBarChanged(
                     RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FAVORITES, it),

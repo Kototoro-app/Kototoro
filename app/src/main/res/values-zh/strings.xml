@@ -567,6 +567,12 @@
     <string name="chapters_will_removed_background">章节内容将在后台进行删除</string>
     <string name="check_for_new_chapters">章节检查更新</string>
     <string name="check_for_new_chapters_disabled">章节检查更新功能已禁用</string>
+    <string name="checking_for_updates">正在检查更新…</string>
+    <string name="favourites_updates_found">发现 %1$d 部作品的新章节（共 %2$d 章）</string>
+    <string name="favourites_no_updates">暂无新章节</string>
+    <string name="updates_check_still_running">更新检查仍在后台进行</string>
+    <string name="updates_check_in_progress">更新检查正在进行中…</string>
+    <string name="updates_check_too_soon">刚刚检查过，请稍后再试</string>
     <string name="check_for_updates">检查更新</string>
     <string name="check_new_chapters_title">检查作品新章节并接收通知</string>
     <string name="check_updates">检查更新</string>

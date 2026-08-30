@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.ui.container.FavouriteTabModel
 import org.skepsun.kototoro.favourites.ui.container.FavouritesContainerViewModel
+import org.skepsun.kototoro.favourites.ui.list.FavouritesListViewModel
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
@@ -64,8 +66,11 @@ import org.skepsun.kototoro.main.ui.compose.ContentSelectionTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
+import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
+import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
+import org.skepsun.kototoro.space.ui.spaceViewModelKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,16 +87,48 @@ fun KototoroFavoritesHostRoute(
     consumeOrganizeMessages: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     viewModel: FavouritesContainerViewModel = hiltViewModel(),
+    /**
+     * When the favourites page is hosted inside the main shell, the shell registers the
+     * filter callback itself and owns the popup panel, so it passes in its own stable
+     * reference for the active category's list view model. Standalone hosts (e.g.
+     * [org.skepsun.kototoro.favourites.ui.FavouritesActivity]) leave this null and keep a
+     * private ref instead.
+     */
+    activeFavouritesViewModelRef: androidx.compose.runtime.MutableState<FavouritesListViewModel?>? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val mainChromeController = LocalMainChromeController.current
     val context = LocalContext.current
+    val spaceId = LocalBrowseSpaceId.current
     val globalState = viewModel.globalFavoritesState
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by globalState.selectedSourceTags.collectAsStateWithLifecycle()
     val allFavoritesSortOrder by viewModel.allFavoritesSortOrder.collectAsStateWithLifecycle()
 
-    DisposableEffect(mainChromeController, globalState, selectedGroupTab, selectedSourceTags, registerFilterCallback) {
+    // The top-bar filter popup is opened from the shared shell chrome, outside this route's
+    // ViewModelStore, so the active category's list view model (already created by the pager
+    // page with the same key) has to be handed over through a stable state ref.
+    val resolvedActiveFavouritesViewModelRef = remember {
+        activeFavouritesViewModelRef ?: mutableStateOf<FavouritesListViewModel?>(null)
+    }
+    val filterPanelContent: (@Composable (close: () -> Unit) -> Unit)? = remember(viewModel) {
+        { close ->
+            FavoritesFilterPanelRoute(
+                containerViewModel = viewModel,
+                activeViewModelRef = resolvedActiveFavouritesViewModelRef,
+                close = close,
+            )
+        }
+    }
+
+    DisposableEffect(
+        mainChromeController,
+        globalState,
+        selectedGroupTab,
+        selectedSourceTags,
+        registerFilterCallback,
+        filterPanelContent,
+    ) {
         if (!registerFilterCallback) {
             onDispose { }
         } else {
@@ -115,6 +152,8 @@ fun KototoroFavoritesHostRoute(
                         else -> globalState.setSelectedSourceTags(selectedSourceTags + tag)
                     }
                 }
+
+                override fun getFilterPanelContent(): (@Composable (close: () -> Unit) -> Unit)? = filterPanelContent
             }
             mainChromeController?.setActiveFilterCallback(callback)
             onDispose { mainChromeController?.clearActiveFilterCallback(callback) }
@@ -159,6 +198,19 @@ fun KototoroFavoritesHostRoute(
         allFavoritesSortOrder
     } else {
         activeCategory?.order ?: allFavoritesSortOrder
+    }
+
+    val activeFavouritesViewModel = activeCategoryId?.let { categoryId ->
+        hiltViewModel<FavouritesListViewModel, FavouritesListViewModel.Factory>(
+            key = spaceViewModelKey("favorites-$categoryId", spaceId),
+        ) { factory ->
+            factory.create(categoryId)
+        }
+    }
+    LaunchedEffect(activeFavouritesViewModel) {
+        if (resolvedActiveFavouritesViewModelRef.value !== activeFavouritesViewModel) {
+            resolvedActiveFavouritesViewModelRef.value = activeFavouritesViewModel
+        }
     }
 
     LaunchedEffect(uiState.isLoading, displayCategories, initialCategoryId, initialSelectionApplied) {
@@ -329,6 +381,46 @@ fun KototoroFavoritesHostRoute(
             }
         }
     }
+
+/**
+ * Bridges the favourites container + the active category's list view model to the shared
+ * [FavoritesFilterPanelContent] that lives inside the top-bar filter popup. Reads the
+ * popup-targeted quick filter (which ignores the inline visibility setting) and forwards
+ * toggles to the same quick-filter state that drives the pager.
+ */
+@Composable
+internal fun FavoritesFilterPanelRoute(
+    containerViewModel: FavouritesContainerViewModel,
+    activeViewModelRef: State<FavouritesListViewModel?>,
+    close: () -> Unit,
+) {
+    val activeVm = activeViewModelRef.value
+    val quickFilter by activeVm?.popupQuickFilter?.collectAsStateWithLifecycle()
+        ?: remember { mutableStateOf<QuickFilter?>(null) }
+    val selectedSourceTags by containerViewModel.selectedSourceTags.collectAsStateWithLifecycle()
+    val sourceTagEntries by containerViewModel.availableSourceTags.collectAsStateWithLifecycle()
+    val isInlineQuickFilterEnabled by containerViewModel.isQuickFilterEnabled.collectAsStateWithLifecycle()
+
+    FavoritesFilterPanelContent(
+        quickFilter = quickFilter,
+        onQuickFilterOptionClick = { option -> activeVm?.toggleFilterOption(option) },
+        onResetFilters = { activeVm?.clearFilter() ?: containerViewModel.resetFilters() },
+        selectedSourceTags = selectedSourceTags,
+        sourceTagEntries = sourceTagEntries.toList(),
+        enabledSourceTags = sourceTagEntries,
+        onSourceTagSelected = { tag ->
+            val global = containerViewModel.globalFavoritesState
+            when {
+                tag == null -> global.clearSourceTags()
+                tag in selectedSourceTags -> global.setSelectedSourceTags(selectedSourceTags - tag)
+                else -> global.setSelectedSourceTags(selectedSourceTags + tag)
+            }
+        },
+        isInlineQuickFilterEnabled = isInlineQuickFilterEnabled,
+        onInlineQuickFilterEnabledChange = containerViewModel::setQuickFilterEnabled,
+        close = close,
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

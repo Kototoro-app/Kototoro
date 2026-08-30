@@ -416,6 +416,7 @@ fun KototoroApp(
     val isSourceTagFilterVisible = mainAppState.isSourceTagFilterVisible
     val onSourceTagFilterClick = mainAppState.onSourceTagFilterClick
     val onSourceTagSelected = mainAppState.onSourceTagSelected
+    val sourceTagCustomMenuContent = mainAppState.sourceTagCustomMenuContent
     val onTopBarHeightChanged = mainAppState.onTopBarHeightChanged
     val onBottomNavHeightChanged = mainAppState.onBottomNavHeightChanged
     val onContentInsetsChanged = mainAppState.onContentInsetsChanged
@@ -1175,6 +1176,7 @@ fun KototoroApp(
                         isSourceTagFilterVisible = effectiveSourceTagFilterVisible,
                         onSourceTagFilterClick = onSourceTagFilterClick,
                         onSourceTagSelected = onSourceTagSelected,
+                        sourceTagCustomMenuContent = sourceTagCustomMenuContent,
                         supportsDisplayModeMenu = supportsDisplayModeMenu,
                         currentListMode = when {
                             showBrowseSourceSettingsEntry -> browseListMode

@@ -218,14 +218,23 @@ abstract class ContentListViewModel(
         this
     }
 
-    protected fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> = combine(
-        settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
-    ) { filters, skipNsfw ->
-        if (skipNsfw) {
-            filters + ListFilterOption.SFW
-        } else {
-            filters
+    protected fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> {
+        val nsfwCombined = combine(
+            settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
+        ) { filters, skipNsfw ->
+            if (skipNsfw) {
+                filters + ListFilterOption.SFW
+            } else {
+                filters
+            }
         }
+        // Layered combine: re-emit (unchanged filters) when the quick-filter visibility
+        // toggle changes so downstream mapLatest steps re-evaluate filterItem() against
+        // the fresh setting.
+        return combine(
+            nsfwCombined,
+            settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+        ) { filters, _ -> filters }
     }
 
     protected fun observeListModeWithTriggers(): Flow<ListMode> = combine(

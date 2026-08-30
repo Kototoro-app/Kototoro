@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.annotation.CheckResult
 import androidx.core.app.NotificationChannelCompat
@@ -32,14 +33,21 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dagger.assisted.AssistedFactory
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.BuildConfig
@@ -75,6 +83,34 @@ import javax.inject.Inject
 import javax.inject.Provider
 import kotlin.math.roundToInt
 import androidx.appcompat.R as appcompatR
+
+/**
+ * Result of asking [TrackWorker.Scheduler.requestCheckNow] to start a new-chapter check.
+ * Every page that can trigger a manual check (favourites, updates, feed) shares the same
+ * gate so an in-flight check is never restarted and a freshly-finished check is not
+ * re-triggered within the cooldown window.
+ */
+sealed interface UpdateCheckRequest {
+    /** A new one-shot check was started. */
+    data object Started : UpdateCheckRequest
+
+    /** A check is already queued/running (shared state) — the request was rejected. */
+    data object InFlight : UpdateCheckRequest
+
+    /** The last check finished less than the cooldown window ago — the request was rejected. */
+    data object TooSoon : UpdateCheckRequest
+
+    /** New-chapter tracking is disabled in settings — nothing was started. */
+    data object TrackerDisabled : UpdateCheckRequest
+}
+
+/** The toast prompt a page shows for a given check request outcome. */
+fun UpdateCheckRequest.messageRes(): Int = when (this) {
+    UpdateCheckRequest.Started -> R.string.checking_for_updates
+    UpdateCheckRequest.InFlight -> R.string.updates_check_in_progress
+    UpdateCheckRequest.TooSoon -> R.string.updates_check_too_soon
+    UpdateCheckRequest.TrackerDisabled -> R.string.check_for_new_chapters_disabled
+}
 
 @HiltWorker
 class TrackWorker @AssistedInject constructor(
@@ -318,6 +354,20 @@ class TrackWorker @AssistedInject constructor(
         private val dbProvider: Provider<MangaDatabase>,
     ) : PeriodicWorkScheduler {
 
+        private val requestMutex = Mutex()
+        private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        /**
+         * Elapsed realtime (see [SystemClock.elapsedRealtime]) of the last one-shot check
+         * that finished successfully. Shared across every page; feeds the cooldown gate.
+         */
+        @Volatile
+        private var lastFinishedRealtimeMs = 0L
+
+        init {
+            observerScope.launch { observeOneShotCompletions() }
+        }
+
         override suspend fun schedule() {
             val frequency = settings.trackerFrequencyFactor
             if (frequency <= 0f) {
@@ -373,6 +423,78 @@ class TrackWorker @AssistedInject constructor(
                 }
         }
 
+        /**
+         * Blocks until the one-shot update check enqueued by [startNow] reaches a finished
+         * state (SUCCEEDED / FAILED / CANCELLED). Returns `false` when [timeoutMs] elapses
+         * first — e.g. the device is offline and the work is still queued, or the library is
+         * large and the worker continues in the background (it reports via its own
+         * foreground notification).
+         */
+        suspend fun awaitOneShot(timeoutMs: Long): Boolean {
+            val deadline = System.currentTimeMillis() + timeoutMs
+            while (System.currentTimeMillis() < deadline) {
+                val works = workManager.awaitUniqueWorkInfoByName(TAG_ONESHOT)
+                if (works.isNotEmpty() && works.all { it.state.isFinished }) {
+                    return true
+                }
+                delay(500)
+            }
+            return false
+        }
+
+        /**
+         * Shared gate for every manual "check for new chapters" trigger (favourites,
+         * updates and feed pages). Serializes concurrent requests, refuses to restart a
+         * check that is already queued/running, and refuses to re-start one that finished
+         * within [cooldownMs] (only successful runs feed the cooldown, so a failed check —
+         * e.g. after a captcha resolution retry — can be retried immediately).
+         */
+        suspend fun requestCheckNow(
+            cooldownMs: Long = DEFAULT_CHECK_COOLDOWN_MS,
+        ): UpdateCheckRequest = requestMutex.withLock {
+            when {
+                !settings.isTrackerEnabled -> UpdateCheckRequest.TrackerDisabled
+                isOneShotActive() -> UpdateCheckRequest.InFlight
+                else -> {
+                    val now = SystemClock.elapsedRealtime()
+                    val sinceFinished = now - lastFinishedRealtimeMs
+                    if (lastFinishedRealtimeMs != 0L && sinceFinished < cooldownMs) {
+                        UpdateCheckRequest.TooSoon
+                    } else {
+                        startNow()
+                        UpdateCheckRequest.Started
+                    }
+                }
+            }
+        }
+
+        private suspend fun isOneShotActive(): Boolean {
+            val works = workManager.awaitUniqueWorkInfoByName(TAG_ONESHOT)
+            return works.any { !it.state.isFinished }
+        }
+
+        /**
+         * Records the moment the one-shot check finishes successfully so that [requestCheckNow]
+         * can apply its cooldown regardless of which page started the check (and even if the
+         * starting page was destroyed while the worker kept running).
+         */
+        private suspend fun observeOneShotCompletions() {
+            var wasRunning = false
+            workManager.getWorkInfosForUniqueWorkFlow(TAG_ONESHOT)
+                .map { infos ->
+                    // `infos` may contain pruned history for the unique name; the current
+                    // run is reflected by the non-finished entry.
+                    infos.any { !it.state.isFinished } to infos.any { it.state == WorkInfo.State.SUCCEEDED }
+                }
+                .distinctUntilChanged()
+                .collect { (running, anySucceeded) ->
+                    if (wasRunning && !running && anySucceeded) {
+                        lastFinishedRealtimeMs = SystemClock.elapsedRealtime()
+                    }
+                    wasRunning = running
+                }
+        }
+
         private fun createConstraints() = Constraints.Builder()
             .setRequiredNetworkType(if (settings.isTrackerWifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .build()
@@ -387,6 +509,12 @@ class TrackWorker @AssistedInject constructor(
         const val MAX_PARALLELISM = 6
         val BATCH_SIZE = if (BuildConfig.DEBUG) 20 else 46
         const val SETTINGS_ACTION_CODE = 5
+
+        /**
+         * Minimum pause between two manual new-chapter checks once the previous one has
+         * finished. Shared by every page that can trigger a check.
+         */
+        const val DEFAULT_CHECK_COOLDOWN_MS = 60_000L
     }
 
     @AssistedFactory

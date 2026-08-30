@@ -469,6 +469,7 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                             topBarController.refreshFilters()
                         }
                     },
+                    sourceTagCustomMenuContent = topBarController.filterPanelContent,
                 ),
             )
             }

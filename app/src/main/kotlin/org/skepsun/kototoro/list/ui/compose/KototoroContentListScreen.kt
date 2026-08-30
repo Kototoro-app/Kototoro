@@ -1219,7 +1219,7 @@ private fun SkeletonBlock(
 }
 
 @Composable
-private fun chipIcon(chip: ChipModel): (@Composable () -> Unit)? {
+internal fun chipIcon(chip: ChipModel): (@Composable () -> Unit)? {
     if (chip.isChecked) {
         return {
             Icon(
@@ -1253,7 +1253,7 @@ private fun chipIcon(chip: ChipModel): (@Composable () -> Unit)? {
 }
 
 @Composable
-private fun buildChipLabel(
+internal fun buildChipLabel(
     context: android.content.Context,
     chip: ChipModel,
     entryPoint: BaseApp.BaseAppEntryPoint?,

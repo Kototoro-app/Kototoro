@@ -50,6 +50,24 @@ import javax.inject.Inject
 
 private const val NO_ID = 0L
 
+/**
+ * Post-update-check summary scoped to tracked favourite works.
+ */
+data class FavouriteUpdatesSummary(
+    val worksWithUpdates: Int,
+    val newChapters: Int,
+)
+
+/**
+ * Counts pending updates from raw favourite track rows: how many works have new chapters
+ * and how many new chapters there are in total. Extracted so it can be unit tested without
+ * a database.
+ */
+internal fun summarizeFavouriteTracks(tracks: List<TrackEntity>): FavouriteUpdatesSummary = FavouriteUpdatesSummary(
+    worksWithUpdates = tracks.count { it.newChapters > 0 },
+    newChapters = tracks.sumOf { it.newChapters.coerceAtLeast(0) },
+)
+
 @Reusable
 class TrackingRepository @Inject constructor(
     private val db: MangaDatabase,
@@ -151,6 +169,20 @@ class TrackingRepository @Inject constructor(
         return workAggregateRepository
             .buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))
             .mapNotNull { aggregate -> aggregate.toContentTracking() }
+    }
+
+    /**
+     * Counts tracked favourite works that currently have new chapters and the total number
+     * of pending new chapters, scoped to favourite categories with tracking enabled
+     * (the same scope [TrackWorker] checks). Read by the favourites pull-to-refresh flow
+     * to build a result toast after the one-shot update check finishes.
+     */
+    suspend fun getFavouriteUpdatesSummary(): FavouriteUpdatesSummary {
+        val entityIds = db.getWorkFavouritesDao().findTrackedEntityIds()
+        if (entityIds.isEmpty()) {
+            return FavouriteUpdatesSummary(worksWithUpdates = 0, newChapters = 0)
+        }
+        return summarizeFavouriteTracks(db.getTracksDao().findByEntityIds(entityIds))
     }
 
     fun observeTrackDebugItems(): Flow<List<TrackDebugItem>> {

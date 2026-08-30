@@ -147,6 +147,11 @@ fun KototoroTopBar(
     isSourceTagFilterVisible: Boolean = true,
     onSourceTagFilterClick: (android.view.View?) -> Boolean = { false },
     onSourceTagSelected: (SourceTag?) -> Unit = {},
+    /**
+     * Optional page-provided content for the source-tag filter popup. When non-null it
+     * replaces the default single-tag menu; [close] dismisses the popup.
+     */
+    sourceTagCustomMenuContent: (@Composable ((close: () -> Unit) -> Unit))? = null,
     supportsDisplayModeMenu: Boolean = false,
     currentListMode: ListMode = ListMode.GRID,
     onListModeSelected: (ListMode) -> Unit = {},
@@ -300,6 +305,7 @@ fun KototoroTopBar(
                                     onTagSelected = onSourceTagSelected,
                                     buttonSize = topBarControlHeight,
                                     iconSize = topBarIconSize,
+                                    customMenuContent = sourceTagCustomMenuContent,
                                 )
                             }
                             if (showMoreActions) {

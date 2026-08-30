@@ -36,6 +36,11 @@ private val CompactSourceTagIconSize = 18.dp
  *
  * The icon tint changes to primary when a tag is actively selected,
  * and shows the specific tag's icon when exactly one is selected.
+ *
+ * When [customMenuContent] is provided (e.g. the favourites page's combined
+ * filter panel), it replaces the default single-tag menu. The receiver's
+ * [close] parameter dismisses the popup, keeping the anchor button's press
+ * gloss (via `anchorTapThrough`).
  */
 @Composable
 fun SourceTagDropdown(
@@ -47,6 +52,7 @@ fun SourceTagDropdown(
     modifier: Modifier = Modifier,
     buttonSize: Dp = CompactTopBarCompactButtonSize,
     iconSize: Dp = CompactSourceTagIconSize,
+    customMenuContent: (@Composable ((close: () -> Unit) -> Unit))? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var anchorBounds by remember { mutableStateOf<Rect?>(null) }
@@ -97,52 +103,57 @@ fun SourceTagDropdown(
             anchorTapThrough = true,
             anchorBounds = anchorBounds,
         ) {
-            CompactDropdownMenuItem(
-                text = { CompactDropdownMenuText(stringResource(R.string.all)) },
-                onClick = {
-                    expanded = false
-                    onTagSelected(null)
-                },
-                leadingIcon = {
-                    Checkbox(
-                        checked = selectedTags.isEmpty(),
-                        onCheckedChange = null,
-                        modifier = Modifier.size(24.dp),
-                    )
-                },
-            )
-
-            sortedEntries.forEach { tag ->
+            if (customMenuContent != null) {
+                val close = { expanded = false }
+                customMenuContent(close)
+            } else {
                 CompactDropdownMenuItem(
-                    text = { CompactDropdownMenuText(stringResource(tag.titleRes)) },
+                    text = { CompactDropdownMenuText(stringResource(R.string.all)) },
                     onClick = {
                         expanded = false
-                        onTagSelected(tag)
+                        onTagSelected(null)
                     },
-                    enabled = tag in enabledTags,
                     leadingIcon = {
-                        Icon(
-                            painter = rememberSafePainter(tag.iconRes),
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = if (tag in selectedTags) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
+                        Checkbox(
+                            checked = selectedTags.isEmpty(),
+                            onCheckedChange = null,
+                            modifier = Modifier.size(24.dp),
                         )
                     },
-                    trailingIcon = {
-                        if (tag in selectedTags) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_check),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    },
                 )
+
+                sortedEntries.forEach { tag ->
+                    CompactDropdownMenuItem(
+                        text = { CompactDropdownMenuText(stringResource(tag.titleRes)) },
+                        onClick = {
+                            expanded = false
+                            onTagSelected(tag)
+                        },
+                        enabled = tag in enabledTags,
+                        leadingIcon = {
+                            Icon(
+                                painter = rememberSafePainter(tag.iconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (tag in selectedTags) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        },
+                        trailingIcon = {
+                            if (tag in selectedTags) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_check),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
+                    )
+                }
             }
         }
     }

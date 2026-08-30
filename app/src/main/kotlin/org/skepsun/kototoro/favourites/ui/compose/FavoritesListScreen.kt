@@ -66,7 +66,8 @@ fun KototoroFavoritesListScreen(
         sharedTransitionEnabled = sharedTransitionEnabled,
         sharedElementInstanceKey = "main_favorites_$categoryId",
         registerFilterCallback = false,
-        pullRefreshEnabled = false,
+        pullRefreshEnabled = true,
+        pullRefreshAction = { viewModel.checkForUpdates() },
         onNavigateToDetails = { _, content, sharedKey ->
             if (onNavigateToDetails != null) {
                 onNavigateToDetails(content, sharedKey)

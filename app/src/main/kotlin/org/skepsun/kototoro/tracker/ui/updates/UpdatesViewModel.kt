@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.calculateDateGroup
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
@@ -55,6 +56,8 @@ import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.domain.UpdatesListQuickFilter
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.work.TrackWorker
+import org.skepsun.kototoro.tracker.work.UpdateCheckRequest
+import org.skepsun.kototoro.tracker.work.messageRes
 import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -110,7 +113,12 @@ class UpdatesViewModel @Inject constructor(
 
     override val hasMoreItems = MutableStateFlow(false)
 
-    val headerQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
+    val headerQuickFilter: StateFlow<QuickFilter?> = combine(
+        quickFilter.appliedOptions,
+        // Re-emit when the quick-filter visibility toggle changes so filterItem()
+        // re-evaluates against the fresh setting (hides/shows the inline bar).
+        settings.observeAsFlow(AppSettings.KEY_QUICK_FILTER) { isQuickFilterEnabled },
+    ) { filters, _ -> filters }
         .mapLatest { filters -> quickFilter.filterItem(filters) }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
@@ -159,8 +167,11 @@ class UpdatesViewModel @Inject constructor(
     }
 
     override fun onRefresh() {
-        scheduler.startNow()
         refreshTrigger.value = Any()
+        launchJob(Dispatchers.Default) {
+            val request = scheduler.requestCheckNow()
+            onContentMessage.call(appContext.getString(request.messageRes()))
+        }
     }
 
     override fun onRetry() = Unit
