@@ -601,7 +601,16 @@ private fun Modifier.mainNavBackdrop(
     pressProgress: () -> Float = { 0f },
     magnifyScale: Float = 1f,
 ): Modifier {
-    return then(if (enabled && backdrop != null) {
+    // Capturing the page backdrop into the pill is only meaningful while the
+    // liquid glass effect is active. When it is off (glass toggled off, reduced
+    // visual effects, or a non-iOS style that provides no backdrop) drawing the
+    // captured layer would turn the capsule into a transparent window into the
+    // content behind the bar. Fall back to the flat translucent pill: it keeps
+    // the selected icon/label visible through it (the pill floats above the
+    // items) without ever becoming a see-through window.
+    val useBackdropCapture = enabled && backdrop != null &&
+        rememberGlassPrefsOrFallback().isGlassEffectEnabled
+    return then(if (useBackdropCapture) {
         Modifier.drawBackdrop(
             backdrop = backdrop,
             shape = { shape },
@@ -657,6 +666,9 @@ private fun Modifier.mainNavBackdrop(
             },
         )
     } else {
+        // Translucent flat pill (same as the non-iOS labels-below look): the
+        // selection tint is subtle enough that the icon and label stay fully
+        // visible through it while the capsule no longer captures the page.
         Modifier.background(selectionTint, shape)
     })
 }
