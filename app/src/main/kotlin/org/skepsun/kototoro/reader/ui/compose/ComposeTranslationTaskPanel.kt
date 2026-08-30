@@ -248,6 +248,7 @@ private enum class TranslationTaskFilter(val label: Int) {
     ALL(R.string.reader_translation_task_filter_all),
     FAILED(R.string.reader_translation_task_filter_failed),
     OCR_EMPTY(R.string.reader_translation_task_filter_ocr_empty),
+    OCR_ENGINE_FAILED(R.string.reader_translation_task_filter_ocr_engine),
     TRANSLATE_EMPTY(R.string.reader_translation_task_filter_translate_empty),
     RENDER_FILTERED(R.string.reader_translation_task_filter_render_filtered),
     PROCESS_EXCEPTION(R.string.reader_translation_task_filter_exception),
@@ -257,6 +258,7 @@ private enum class TranslationTaskFilter(val label: Int) {
         ALL -> true
         FAILED -> item.state == TranslationLayerState.FAILED
         OCR_EMPTY -> item.failCode == "OCR_EMPTY"
+        OCR_ENGINE_FAILED -> item.failCode == "OCR_ENGINE_FAILED"
         TRANSLATE_EMPTY -> item.failCode == "TRANSLATE_EMPTY"
         RENDER_FILTERED -> item.failCode == "RENDER_FILTERED"
         PROCESS_EXCEPTION -> item.failCode == "PROCESS_EXCEPTION"

@@ -1954,6 +1954,7 @@
     <string name="reader_translation_task_filter_all">All</string>
     <string name="reader_translation_task_filter_failed">Failed</string>
     <string name="reader_translation_task_filter_ocr_empty">OCR empty</string>
+    <string name="reader_translation_task_filter_ocr_engine">OCR engine failed</string>
     <string name="reader_translation_task_filter_translate_empty">Translation empty</string>
     <string name="reader_translation_task_filter_render_filtered">Render filtered</string>
     <string name="reader_translation_task_filter_exception">Exception</string>

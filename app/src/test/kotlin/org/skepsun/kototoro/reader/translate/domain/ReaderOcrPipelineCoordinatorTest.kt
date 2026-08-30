@@ -67,4 +67,82 @@ class ReaderOcrPipelineCoordinatorTest {
         assertEquals(listOf(fragment), result.textFragments)
         assertEquals(true, result.pageOcr?.cacheHit)
     }
+
+    @Test
+    fun `empty page without engine error is classified as OCR empty`() = runTest {
+        val coordinator = ReaderOcrPipelineCoordinator(
+            loadPageText = { _, _, _ ->
+                PageOcrLoadResult(
+                    textBlocks = emptyList(),
+                    cacheHit = false,
+                    durationMs = 1L,
+                    hadOcrEngineError = false,
+                )
+            },
+            mergePageTextBlocks = { _, _ -> emptyList() },
+        )
+
+        val result = coordinator.execute(
+            sourceUri = testUri,
+            sourceLang = "ja",
+            pageId = 3L,
+            bitmap = mockk<Bitmap>(relaxed = true),
+        )
+
+        assertEquals(ReaderTranslationFailCode.OCR_EMPTY, result.failCode)
+    }
+
+    @Test
+    fun `empty page from engine failure is classified as OCR engine failed`() = runTest {
+        val coordinator = ReaderOcrPipelineCoordinator(
+            loadPageText = { _, _, _ ->
+                PageOcrLoadResult(
+                    textBlocks = emptyList(),
+                    cacheHit = false,
+                    durationMs = 1L,
+                    hadOcrEngineError = true,
+                )
+            },
+            mergePageTextBlocks = { _, _ -> emptyList() },
+        )
+
+        val result = coordinator.execute(
+            sourceUri = testUri,
+            sourceLang = "ja",
+            pageId = 4L,
+            bitmap = mockk<Bitmap>(relaxed = true),
+        )
+
+        assertEquals(ReaderTranslationFailCode.OCR_ENGINE_FAILED, result.failCode)
+        assertEquals(true, result.pageOcr?.hadOcrEngineError)
+    }
+
+    @Test
+    fun `non-empty page carries no fail code even when engine had an earlier error`() = runTest {
+        val block = OcrTextBlock("文字", Rect(0, 0, 10, 10))
+        val coordinator = ReaderOcrPipelineCoordinator(
+            loadPageText = { _, _, _ ->
+                PageOcrLoadResult(
+                    textBlocks = listOf(block),
+                    cacheHit = false,
+                    durationMs = 1L,
+                    hadOcrEngineError = true,
+                )
+            },
+            mergePageTextBlocks = { blocks, _ ->
+                listOf(TextFragment(Rect(0, 0, 10, 10), blocks.first().text))
+            },
+        )
+
+        val result = coordinator.execute(
+            sourceUri = testUri,
+            sourceLang = "ja",
+            pageId = 5L,
+            bitmap = mockk<Bitmap>(relaxed = true),
+        )
+
+        assertNotNull(result.pageOcr)
+        assertEquals(null, result.failCode)
+        assertEquals(1, result.textFragments.size)
+    }
 }

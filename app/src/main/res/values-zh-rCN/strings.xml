@@ -1801,6 +1801,7 @@
     <string name="reader_translation_task_filter_all">全部</string>
     <string name="reader_translation_task_filter_failed">失败</string>
     <string name="reader_translation_task_filter_ocr_empty">OCR 为空</string>
+    <string name="reader_translation_task_filter_ocr_engine">OCR 引擎失败</string>
     <string name="reader_translation_task_filter_translate_empty">翻译为空</string>
     <string name="reader_translation_task_filter_render_filtered">渲染被过滤</string>
     <string name="reader_translation_task_filter_exception">异常</string>

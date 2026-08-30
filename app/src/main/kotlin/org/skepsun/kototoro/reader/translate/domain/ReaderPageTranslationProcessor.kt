@@ -333,7 +333,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
                     Log.d(LOG_TAG, "process debug: pipeline failed page=${page.id} err=${it.javaClass.simpleName}: ${it.message.orEmpty()}")
                     it.printStackTraceDebug()
                     appendPageLog(page.id, "process failed: ${it.javaClass.simpleName}: ${it.message.orEmpty()}")
-                    appendPageLog(page.id, "fail_code=$FAIL_CODE_PROCESS_EXCEPTION")
+                    appendPageLog(page.id, "fail_code=${ReaderTranslationFailCode.PROCESS_EXCEPTION}")
                 }.getOrDefault(sourceUri).also { result ->
                     Log.d(LOG_TAG, "process debug: pipeline returned page=${page.id} translated=${result != sourceUri}")
                 }
@@ -408,9 +408,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 renderedBubbleCount = preparedBubbles.size
                 if (preparedBubbles.isEmpty()) {
                     val failCode = if (nonEmptyTranslatedCount == 0) {
-                        FAIL_CODE_TRANSLATE_EMPTY
+                        ReaderTranslationFailCode.TRANSLATE_EMPTY
                     } else {
-                        FAIL_CODE_RENDER_FILTERED
+                        ReaderTranslationFailCode.RENDER_FILTERED
                     }
                     renderDurationMs = SystemClock.elapsedRealtime() - renderStartMs
                     log { "fail_code=$failCode" }
@@ -436,7 +436,7 @@ class ReaderPageTranslationProcessor @Inject constructor(
             ocrBlocks = ocrPipeline.pageTextBlocks.size
             log { "metric.ocr.fragments=${ocrPipeline.textFragments.size}" }
             if (ocrPipeline.textFragments.isEmpty()) {
-                log { "fail_code=$FAIL_CODE_OCR_EMPTY" }
+                log { "fail_code=${ocrPipeline.failCode}" }
                 bitmap.recycle()
                 return sourceUri
             }
@@ -478,9 +478,9 @@ class ReaderPageTranslationProcessor @Inject constructor(
             renderedBubbleCount = preparedBubbles.size
             if (preparedBubbles.isEmpty()) {
                 val failCode = if (nonEmptyTranslatedCount == 0) {
-                    FAIL_CODE_TRANSLATE_EMPTY
+                    ReaderTranslationFailCode.TRANSLATE_EMPTY
                 } else {
-                    FAIL_CODE_RENDER_FILTERED
+                    ReaderTranslationFailCode.RENDER_FILTERED
                 }
                 renderDurationMs = SystemClock.elapsedRealtime() - renderStartMs
                 log { "fail_code=$failCode" }
@@ -525,7 +525,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
                 durationMs = SystemClock.elapsedRealtime() - startMs,
             )
         }
-        val textBlocks = recognizeTextWithFallback(sourceUri, sourceLang, pageId)
+        val outcome = recognizeTextWithFallback(sourceUri, sourceLang, pageId)
+        val textBlocks = outcome.blocks
         if (textBlocks.isNotEmpty()) {
             textCache[ocrCacheKey] = serializeOcrBlocks(textBlocks)
         }
@@ -534,10 +535,15 @@ class ReaderPageTranslationProcessor @Inject constructor(
             textBlocks = textBlocks,
             cacheHit = false,
             durationMs = SystemClock.elapsedRealtime() - startMs,
+            hadOcrEngineError = outcome.hadEngineError,
         )
     }
 
-    private suspend fun recognizeTextWithFallback(sourceUri: Uri, sourceLang: String, pageId: Long): List<OcrTextBlock> {
+    private suspend fun recognizeTextWithFallback(
+        sourceUri: Uri,
+        sourceLang: String,
+        pageId: Long,
+    ): OcrRecognitionOutcome {
         val minAcceptableBlocks = when {
             isJapaneseSourceLanguage(sourceLang) -> 3
             sourceLang.startsWith("zh") || sourceLang.startsWith("ko") -> 2
@@ -547,17 +553,22 @@ class ReaderPageTranslationProcessor @Inject constructor(
         lastResolvedOcrPipelineStrategy = OCR_STRATEGY_PAGE_DET_REC
         var bestResult: List<OcrTextBlock> = emptyList()
         var bestRoute: PageOcrRoute? = null
+        var hadEngineError = false
         for (route in order) {
             val attemptStartMs = SystemClock.elapsedRealtime()
-            val result = runCatching {
+            val attemptResult = runCatching {
                 recognizeTextByRoute(route, sourceUri, sourceLang, pageId)
-            }.onFailure {
-                it.printStackTraceDebug()
+            }
+            val failure = attemptResult.exceptionOrNull()
+            val result = attemptResult.getOrDefault(emptyList())
+            if (failure != null) {
+                hadEngineError = true
+                failure.printStackTraceDebug()
                 log {
                     "metric.ocr.attempt.${route.metricKey}.error=" +
-                        "${it.javaClass.simpleName}:${it.message.orEmpty().take(160)}"
+                        "${failure.javaClass.simpleName}:${failure.message.orEmpty().take(160)}"
                 }
-            }.getOrDefault(emptyList())
+            }
             val attemptDurationMs = SystemClock.elapsedRealtime() - attemptStartMs
             log { "metric.ocr.attempt.${route.metricKey}.ms=$attemptDurationMs" }
             log { "metric.ocr.attempt.${route.metricKey}.blocks=${result.size}" }
@@ -575,7 +586,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
                     log { "metric.ocr.selected_engine=${route.metricKey}" }
                     log { "metric.ocr.selected_blocks=${result.size}" }
                     log { "ocr route=${route.metricKey} blocks=${result.size}" }
-                    return result
+                    return OcrRecognitionOutcome(
+                        blocks = result,
+                        hadEngineError = hadEngineError,
+                    )
                 }
                 if (qualityIssue != null) {
                     log { "ocr route=${route.metricKey} low_quality ${qualityIssue.toLogString()}, trying fallback" }
@@ -595,7 +609,10 @@ class ReaderPageTranslationProcessor @Inject constructor(
             log { "metric.ocr.selected_blocks=${bestResult.size}" }
             log { "ocr fallback use best route=${bestRoute?.metricKey} blocks=${bestResult.size}" }
         }
-        return bestResult
+        return OcrRecognitionOutcome(
+            blocks = bestResult,
+            hadEngineError = hadEngineError,
+        )
     }
 
     private fun isBetterOcrResult(candidate: List<OcrTextBlock>, current: List<OcrTextBlock>): Boolean {
@@ -3683,10 +3700,8 @@ class ReaderPageTranslationProcessor @Inject constructor(
         const val LOG_TAG = "ReaderTranslate"
         const val MAX_PAGE_LOG_LINES = 500
         const val NO_LOGGING_PAGE_ID = Long.MIN_VALUE
-        const val FAIL_CODE_OCR_EMPTY = "OCR_EMPTY"
-        const val FAIL_CODE_TRANSLATE_EMPTY = "TRANSLATE_EMPTY"
-        const val FAIL_CODE_RENDER_FILTERED = "RENDER_FILTERED"
-        const val FAIL_CODE_PROCESS_EXCEPTION = "PROCESS_EXCEPTION"
+        // Fail codes moved to ReaderTranslationFailCode (shared with the OCR pipeline
+        // coordinator) so engine failures can be distinguished from empty results.
         const val LOW_OCR_CONFIDENCE_THRESHOLD = 0.45f
         const val MIN_AVERAGE_OCR_CONFIDENCE = 0.35f
         const val SOFT_AVERAGE_OCR_CONFIDENCE = 0.45f
@@ -3729,6 +3744,11 @@ class ReaderPageTranslationProcessor @Inject constructor(
             val metricKey: String
                 get() = "${detector.name.lowercase()}_${recognizer.name.lowercase()}"
         }
+
+        private data class OcrRecognitionOutcome(
+            val blocks: List<OcrTextBlock>,
+            val hadEngineError: Boolean,
+        )
 
         const val OCR_STRATEGY_PAGE_DET_REC = "page_det_rec"
 
