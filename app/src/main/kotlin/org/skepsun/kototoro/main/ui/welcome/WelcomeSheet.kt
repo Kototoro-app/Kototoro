@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -54,10 +53,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SheetValue
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -115,6 +111,19 @@ private const val REPO_KOTOTORO =
 private const val REPO_REDO =
     "https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json"
 
+/**
+ * Stable setup-wizard page order. Permissions and the look-and-feel
+ * (appearance / spaces) come before repository configuration so the user
+ * picks those up first; repository config, batch install and the done summary
+ * follow.
+ */
+private const val WIZARD_PAGE_INTRO = 0
+private const val WIZARD_PAGE_PERMISSIONS = 1
+private const val WIZARD_PAGE_APPEARANCE = 2
+private const val WIZARD_PAGE_SOURCES = 3
+private const val WIZARD_PAGE_BATCH_INSTALL = 4
+private const val WIZARD_PAGE_DONE = 5
+
 /** Stable order the wizard presents source types in. */
 private val WELCOME_REPO_KIND_ORDER = listOf(
     UnifiedSourceKind.JAR,
@@ -144,13 +153,6 @@ internal fun WelcomeRoute(
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    // The wizard must not be dismissed by a swipe-down gesture (easy to trigger
-    // accidentally while panning the pager); only an explicit tap (scrim,
-    // back button) can close it.
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true,
-        confirmValueChange = { it != SheetValue.Hidden },
-    )
     val backupSelectLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -167,11 +169,10 @@ internal fun WelcomeRoute(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismissRequest,
-        sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
-    ) {
+    // Custom Dialog + AnchoredDraggableState sheet (mihon pattern): only the
+    // top drag handle can move the panel (pull down to dismiss); the content
+    // area just scrolls and can never drag or dismiss the wizard.
+    WelcomeBottomSheet(onDismissRequest = onDismissRequest) {
         KototoroTheme {
             WelcomeContent(
                 viewModel = viewModel,
@@ -242,7 +243,7 @@ private fun WelcomeContent(
     // Recompute the install plan whenever the user is on the batch-install page,
     // so the counts reflect the latest configured repos and selected languages.
     LaunchedEffect(pagerState.currentPage, locales.selectedItems) {
-        if (pagerState.currentPage == 2 && !isInstallingPackages && !isInitializing) {
+        if (pagerState.currentPage == WIZARD_PAGE_BATCH_INSTALL && !isInstallingPackages && !isInitializing) {
             viewModel.refreshInstallPlan()
         }
     }
@@ -263,13 +264,36 @@ private fun WelcomeContent(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 when (page) {
-                    0 -> {
+                    WIZARD_PAGE_INTRO -> {
                         WelcomeIntroStep(onContinue = {
-                            scope.launch { pagerState.animateScrollToPage(1) }
+                            scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_PERMISSIONS) }
                         })
                     }
 
-                    1 -> {
+                    WIZARD_PAGE_PERMISSIONS -> WelcomePermissionsStep()
+
+                    WIZARD_PAGE_APPEARANCE -> {
+                        WelcomeAppearanceStep(
+                            interfaceStyle = interfaceStyle,
+                            listToDetailsTransition = listToDetailsTransition,
+                            panoramaAnimationEnabled = panoramaAnimationEnabled,
+                            glassPreset = activeGlassPreset,
+                            onGlassPresetChange = { preset ->
+                                glassTuningController.applyPreset(preset.config, preset.roleOverrides)
+                            },
+                            onInterfaceStyleChange = viewModel::setInterfaceStyle,
+                            onListToDetailsTransitionChange = viewModel::setListToDetailsTransition,
+                            onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
+                        )
+                        WelcomeSpacesStep(
+                            spacesEnabled = spacesEnabled,
+                            onSpacesEnabledChange = viewModel::setSpacesEnabled,
+                            spaceSwitcherPosition = spaceSwitcherPosition,
+                            onSpaceSwitcherPositionChange = viewModel::setSpaceSwitcherPosition,
+                        )
+                    }
+
+                    WIZARD_PAGE_SOURCES -> {
                         WelcomeHero(expressive = expressive)
                         WelcomeSourcesStep(
                             recommendedRepos = recommendedRepos,
@@ -291,7 +315,7 @@ private fun WelcomeContent(
                         )
                     }
 
-                    2 -> WelcomeBatchInstallStep(
+                    WIZARD_PAGE_BATCH_INSTALL -> WelcomeBatchInstallStep(
                         configuredKinds = configuredInstallKinds,
                         selectedKinds = selectedInstallKinds,
                         onKindToggle = viewModel::toggleInstallKind,
@@ -311,38 +335,15 @@ private fun WelcomeContent(
                         onCancelInstall = viewModel::cancelInstall,
                         onSkip = {
                             viewModel.setInstallSkipped(true)
-                            scope.launch { pagerState.animateScrollToPage(3) }
+                            scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_DONE) }
                         },
                     )
 
-                    3 -> WelcomeDoneStep(
+                    WIZARD_PAGE_DONE -> WelcomeDoneStep(
                         installState = installState,
                         skipped = installSkipped,
                         onOpenExtensionManagement = onOpenExtensionManagement,
                     )
-
-                    4 -> WelcomePermissionsStep()
-
-                    5 -> {
-                        WelcomeAppearanceStep(
-                            interfaceStyle = interfaceStyle,
-                            listToDetailsTransition = listToDetailsTransition,
-                            panoramaAnimationEnabled = panoramaAnimationEnabled,
-                            glassPreset = activeGlassPreset,
-                            onGlassPresetChange = { preset ->
-                                glassTuningController.applyPreset(preset.config, preset.roleOverrides)
-                            },
-                            onInterfaceStyleChange = viewModel::setInterfaceStyle,
-                            onListToDetailsTransitionChange = viewModel::setListToDetailsTransition,
-                            onPanoramaAnimationChange = viewModel::setPanoramaAnimationEnabled,
-                        )
-                        WelcomeSpacesStep(
-                            spacesEnabled = spacesEnabled,
-                            onSpacesEnabledChange = viewModel::setSpacesEnabled,
-                            spaceSwitcherPosition = spaceSwitcherPosition,
-                            onSpaceSwitcherPositionChange = viewModel::setSpaceSwitcherPosition,
-                        )
-                    }
                 }
             }
         }
@@ -440,7 +441,7 @@ private fun WelcomeContent(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.consumeReposConfiguredEvent()
-                    scope.launch { pagerState.animateScrollToPage(2) }
+                    scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL) }
                 }) { Text(stringResource(R.string.welcome_repos_configured_next)) }
             },
             dismissButton = {
@@ -469,7 +470,7 @@ private fun WelcomeContent(
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.consumeInstallFinishedEvent()
-                    scope.launch { pagerState.animateScrollToPage(3) }
+                    scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_DONE) }
                 }) {
                     Text(stringResource(R.string.confirm))
                 }

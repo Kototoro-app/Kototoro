@@ -12,6 +12,8 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -158,6 +160,7 @@ class WelcomeViewModel @Inject constructor(
     private val supportedContentTypes = listOf(ContentType.MANGA, ContentType.NOVEL, ContentType.VIDEO)
 
     private var updateJob: Job? = null
+    private var planJob: Job? = null
     private val installCancelFlag = AtomicBoolean(false)
     private var installSelectionInitialized = false
     private val handledInstallKeys = Collections.synchronizedSet(mutableSetOf<String>())
@@ -227,7 +230,7 @@ class WelcomeViewModel @Inject constructor(
     val types = MutableStateFlow(
         FilterProperty(
             availableItems = supportedContentTypes,
-            selectedItems = setOf(ContentType.MANGA),
+            selectedItems = supportedContentTypes.toSet(),
             isLoading = true,
             error = null,
         ),
@@ -401,6 +404,7 @@ class WelcomeViewModel @Inject constructor(
 
     fun setIncludeNsfw(enabled: Boolean) {
         _includeNsfw.value = enabled
+        refreshInstallPlan()
     }
 
     fun toggleInstallKind(kind: UnifiedSourceKind, checked: Boolean) {
@@ -411,14 +415,23 @@ class WelcomeViewModel @Inject constructor(
         } else {
             snapshot - kind
         }
+        refreshInstallPlan()
     }
 
     fun setInstallSkipped(skipped: Boolean) {
         _installSkipped.value = skipped
     }
 
+    /**
+     * Recomputes the batch-install plan from the current filters (kinds,
+     * content types, languages, NSFW). Plan recomputes are serialized: the
+     * previous in-flight recompute is cancelled so a stale (older filter)
+     * result can never overwrite the latest one and the displayed install
+     * count always matches the chip state the user just picked.
+     */
     fun refreshInstallPlan() {
-        launchJob(Dispatchers.IO) {
+        planJob?.cancel()
+        planJob = launchJob(Dispatchers.IO) {
             recomputeInstallPlan()
             if (_installPlan.value.isEmpty() && _installState.value.phase == WizardInstallPhase.IDLE) {
                 _installState.value = WizardInstallState()
@@ -589,6 +602,8 @@ class WelcomeViewModel @Inject constructor(
         }
 
         val plan = buildInstallPlan()
+        // Never publish a plan computed by a stale (already cancelled) recompute.
+        currentCoroutineContext().ensureActive()
         _installPlan.value = plan
     }
 
@@ -596,10 +611,16 @@ class WelcomeViewModel @Inject constructor(
         val languages = installLanguages()
         val selected = _selectedInstallKinds.value
         val includeNsfw = _includeNsfw.value
+        val selectedTypes = installTypes()
         val plan = mutableListOf<WizardInstallItem>()
 
         for (kind in WIZARD_INSTALL_KIND_ORDER) {
+            currentCoroutineContext().ensureActive()
             if (kind !in selected) {
+                continue
+            }
+            if (WelcomeInstallFilter.excludesKind(kind, selectedTypes)) {
+                // No selected content type matches this ecosystem — filter it out.
                 continue
             }
             when (kind) {
@@ -696,6 +717,13 @@ class WelcomeViewModel @Inject constructor(
         }
         return selectedLocales.mapTo(HashSet()) { it.language.lowercase(Locale.ROOT) }
     }
+
+    /**
+     * Content types selected by the user, expanded with their adult variants.
+     * An empty selection means "no filter" (install everything).
+     */
+    private fun installTypes(): Set<ContentType> =
+        WelcomeInstallFilter.expandTypes(types.value.selectedItems)
 
     private fun matchesInstallLanguage(langCode: String, languages: Set<String>): Boolean {
         if (languages.isEmpty()) {
@@ -850,6 +878,7 @@ class WelcomeViewModel @Inject constructor(
             prevJob?.join()
             commit()
         }
+        refreshInstallPlan()
     }
 
     fun setSpacesEnabled(enabled: Boolean) {
