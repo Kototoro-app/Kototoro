@@ -388,6 +388,10 @@ class ReaderActivity :
                         settings.readerDoublePagesSensitivity = value
                         composeReaderController.updateOptions { copy(doublePageSensitivity = value) }
                     },
+                    onChapterTitleAtBottomChanged = { enabled ->
+                        settings.isReaderChapterTitleAtBottom = enabled
+                        composeReaderController.updateOptions { copy(chapterTitleAtBottom = enabled) }
+                    },
                     onSuperResolutionChanged = { enabled ->
                         settings.isReaderSuperResolutionEnabled = enabled
                         composeReaderController.updateOptions { copy(superResolution = enabled) }
@@ -1043,6 +1047,7 @@ class ReaderActivity :
                 doublePageCover = settings.isReaderDoubleCoverPage,
                 splitPages = settings.isReaderSplitPagesEnabled,
                 doublePageSensitivity = settings.readerDoublePagesSensitivity,
+                chapterTitleAtBottom = settings.isReaderChapterTitleAtBottom,
                 superResolution = settings.isReaderSuperResolutionEnabled,
                 background = settings.readerBackground,
                 colorFilter = viewModel.readerSettingsProducer.value.colorFilter,

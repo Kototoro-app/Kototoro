@@ -2054,6 +2054,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isReaderChapterToastEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_CHAPTER_TOAST, true)
 
+    /**
+     * 章节标题（作品名 + 章节名）放在底部进度条上方，而不是顶部栏中间。
+     * 顶部那颗标题药丸只有「看」的作用，单手够不到；想要它顺手就打开这个（issue #509）。
+     */
+    var isReaderChapterTitleAtBottom: Boolean
+        get() = prefs.getBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, false)
+        set(value) = prefs.edit { putBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, value) }
+
     var isReaderSuperResolutionEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, value).apply()
@@ -2935,6 +2943,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_BAR_LAYOUT = "reader_bar_layout"
         const val KEY_READER_BAR_CUTOUT_AVOIDANCE = "reader_bar_cutout_avoidance"
         const val KEY_READER_CHAPTER_TOAST = "reader_chapter_toast"
+        const val KEY_READER_CHAPTER_TITLE_BOTTOM = "reader_chapter_title_bottom"
         const val KEY_READER_SUPER_RESOLUTION_ENABLED = "reader_super_resolution_enabled"
         const val KEY_READER_SUPER_RESOLUTION_ENGINE = "reader_super_resolution_engine"
         const val KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE = "reader_super_resolution_anime4k_mode"

@@ -575,12 +575,23 @@ internal fun ComposeReaderActivityScaffold(
                 .navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 4.dp),
         ) {
-            ReaderProgressDock(isIosStyle = isIosStyle) {
-                ReaderProgressControl(
-                    state = state.actions,
-                    callbacks = callbacks.actions,
-                    isIosStyle = isIosStyle,
-                )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (state.options.chapterTitleAtBottom) {
+                    ReaderChapterTitleChip(
+                        state = state,
+                        onChapters = callbacks.actions.onPages,
+                    )
+                }
+                ReaderProgressDock(isIosStyle = isIosStyle) {
+                    ReaderProgressControl(
+                        state = state.actions,
+                        callbacks = callbacks.actions,
+                        isIosStyle = isIosStyle,
+                    )
+                }
             }
         }
 
@@ -1572,7 +1583,6 @@ private fun ReaderComposeTopBar(
     onOptions: () -> Unit,
 ) {
     val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-    val chapterControlShape = RoundedRectangle(24.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1593,35 +1603,12 @@ private fun ReaderComposeTopBar(
                 )
             }
         }
-        ReaderTopControlSurface(
-            shape = chapterControlShape,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .widthIn(min = 148.dp, max = 176.dp)
-                .height(48.dp),
-            contentModifier = Modifier
-                .clip(chapterControlShape)
-                .clickable(onClick = onChapters),
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
-            ) {
-                Text(
-                    text = state.title,
-                    color = contentColor,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
-                    maxLines = 1,
-                )
-                if (state.subtitle.isNotEmpty()) {
-                    Text(
-                        text = state.subtitle,
-                        color = contentColor.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                        maxLines = 1,
-                    )
-                }
-            }
+        if (!state.options.chapterTitleAtBottom) {
+            ReaderChapterTitleChip(
+                state = state,
+                onChapters = onChapters,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
         ReaderTopControlSurface(
             shape = Capsule(),
@@ -1634,6 +1621,50 @@ private fun ReaderComposeTopBar(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = stringResource(R.string.options),
                     tint = contentColor,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The work title + current chapter, opening the chapter list on tap. Shown in the top bar,
+ * or above the progress dock when [ComposeReaderOptionsState.chapterTitleAtBottom] is on —
+ * one-handed readers reach the bottom of the screen, not the top (issue #509).
+ */
+@Composable
+private fun ReaderChapterTitleChip(
+    state: ComposeReaderChromeState,
+    onChapters: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+    val chapterControlShape = RoundedRectangle(24.dp)
+    ReaderTopControlSurface(
+        shape = chapterControlShape,
+        modifier = modifier
+            .widthIn(min = 148.dp, max = 176.dp)
+            .height(48.dp),
+        contentModifier = Modifier
+            .clip(chapterControlShape)
+            .clickable(onClick = onChapters),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
+        ) {
+            Text(
+                text = state.title,
+                color = contentColor,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
+                maxLines = 1,
+            )
+            if (state.subtitle.isNotEmpty()) {
+                Text(
+                    text = state.subtitle,
+                    color = contentColor.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                    maxLines = 1,
                 )
             }
         }

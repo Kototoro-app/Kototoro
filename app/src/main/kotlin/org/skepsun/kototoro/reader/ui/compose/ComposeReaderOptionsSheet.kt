@@ -75,6 +75,7 @@ internal data class ComposeReaderOptionsState(
     val doublePageCover: Boolean = false,
     val splitPages: Boolean = false,
     val doublePageSensitivity: Float = 0.5f,
+    val chapterTitleAtBottom: Boolean = false,
     val superResolution: Boolean = false,
     val appearancePreviewOriginalUri: String? = null,
     val appearancePreviewProcessedUri: String? = null,
@@ -93,6 +94,7 @@ internal data class ComposeReaderOptionsCallbacks(
     val onDoublePageCoverChanged: (Boolean) -> Unit = {},
     val onSplitPagesChanged: (Boolean) -> Unit = {},
     val onDoublePageSensitivityChanged: (Float) -> Unit = {},
+    val onChapterTitleAtBottomChanged: (Boolean) -> Unit = {},
     val onSuperResolutionChanged: (Boolean) -> Unit = {},
     val onBackgroundChanged: (ReaderBackground) -> Unit = {},
     val onImageServerChanged: (String?) -> Unit = {},
@@ -433,6 +435,15 @@ private fun ReaderMiscOptionsPage(
                     selected = labels.getOrElse(selected) { automatic },
                     options = labels,
                     onSelected = { callbacks.onImageServerChanged(imageServer.entries[it].value) },
+                )
+            }
+        }
+        item {
+            ReaderOptionGroup {
+                ReaderOptionSwitchRow(
+                    label = stringResource(R.string.reader_chapter_title_at_bottom),
+                    checked = state.chapterTitleAtBottom,
+                    onCheckedChange = callbacks.onChapterTitleAtBottomChanged,
                 )
             }
         }
