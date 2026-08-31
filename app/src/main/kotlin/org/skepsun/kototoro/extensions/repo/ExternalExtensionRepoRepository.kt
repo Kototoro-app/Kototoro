@@ -37,7 +37,7 @@ class ExternalExtensionRepoRepository @Inject constructor(
             is PrepareAddRepoResult.DuplicateFingerprint -> AddRepoResult.DuplicateFingerprint(prepared.existingRepo)
             is PrepareAddRepoResult.FetchFailed -> AddRepoResult.FetchFailed(prepared.error)
             PrepareAddRepoResult.InvalidUrl -> AddRepoResult.InvalidUrl
-            PrepareAddRepoResult.RepoAlreadyExists -> AddRepoResult.RepoAlreadyExists
+            is PrepareAddRepoResult.RepoAlreadyExists -> AddRepoResult.RepoAlreadyExists
         }
     }
 
@@ -47,9 +47,10 @@ class ExternalExtensionRepoRepository @Inject constructor(
             .also { Log.d(TAG, "prepareAddRepo:invalidUrl type=$type input=$indexUrl") }
         val baseUrl = service.baseUrlFromIndexUrl(normalizedIndexUrl)
         Log.d(TAG, "prepareAddRepo:normalized type=$type normalizedIndexUrl=$normalizedIndexUrl baseUrl=$baseUrl")
-        if (dao.get(type, baseUrl) != null) {
+        val existingByBaseUrl = dao.get(type, baseUrl)
+        if (existingByBaseUrl != null) {
             Log.d(TAG, "prepareAddRepo:duplicateBaseUrl type=$type baseUrl=$baseUrl")
-            return PrepareAddRepoResult.RepoAlreadyExists
+            return PrepareAddRepoResult.RepoAlreadyExists(existingByBaseUrl.toDomain())
         }
         val repo = runCatching { service.fetchRepoDetails(baseUrl, type) }
             .onFailure { error ->
@@ -58,9 +59,10 @@ class ExternalExtensionRepoRepository @Inject constructor(
             .getOrElse { error ->
                 return PrepareAddRepoResult.FetchFailed(error)
             }
-        if (dao.get(type, repo.baseUrl) != null) {
+        val existingResolvedRepo = dao.get(type, repo.baseUrl)
+        if (existingResolvedRepo != null) {
             Log.d(TAG, "prepareAddRepo:duplicateResolvedBaseUrl type=$type baseUrl=${repo.baseUrl}")
-            return PrepareAddRepoResult.RepoAlreadyExists
+            return PrepareAddRepoResult.RepoAlreadyExists(existingResolvedRepo.toDomain())
         }
         val duplicate = dao.getByFingerprint(type, repo.signingKeyFingerprint)
         if (duplicate != null) {
@@ -133,8 +135,13 @@ class ExternalExtensionRepoRepository @Inject constructor(
     }
 
     suspend fun getCatalogExtensions(type: ExternalExtensionType): List<RepoAvailableExtension> = coroutineScope {
-        upgradeLegacyCloudstreamReposIfNeeded(type)
-        getByType(type)
+        getCatalogExtensions(getByType(type))
+    }
+
+    suspend fun getCatalogExtensions(
+        repositories: Collection<ExternalExtensionRepo>,
+    ): List<RepoAvailableExtension> = coroutineScope {
+        repositories
             .map { repo -> async { fetchCatalogExtensions(repo) } }
             .awaitAll()
             .flatten()
@@ -144,13 +151,15 @@ class ExternalExtensionRepoRepository @Inject constructor(
     }
 
     private suspend fun fetchCatalogExtensions(repo: ExternalExtensionRepo): List<RepoAvailableExtension> {
-        return runCatching {
-            service.fetchAvailableExtensionsOrThrow(repo)
-        }.onSuccess {
-            clearCatalogRefreshError(repo)
-        }.onFailure { error ->
+        return try {
+            service.fetchAvailableExtensionsOrThrow(repo).also {
+                clearCatalogRefreshError(repo)
+            }
+        } catch (error: Throwable) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
             markCatalogRefreshFailed(repo, error)
-        }.getOrDefault(emptyList())
+            emptyList()
+        }
     }
 
     private suspend fun upgradeLegacyCloudstreamReposIfNeeded(type: ExternalExtensionType) {
@@ -222,7 +231,7 @@ class ExternalExtensionRepoRepository @Inject constructor(
         data class DuplicateFingerprint(val existingRepo: ExternalExtensionRepo) : PrepareAddRepoResult
         data class FetchFailed(val error: Throwable) : PrepareAddRepoResult
         data object InvalidUrl : PrepareAddRepoResult
-        data object RepoAlreadyExists : PrepareAddRepoResult
+        data class RepoAlreadyExists(val existingRepo: ExternalExtensionRepo) : PrepareAddRepoResult
     }
 
     private companion object {

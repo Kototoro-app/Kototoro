@@ -271,6 +271,16 @@ internal fun RepoAvailableExtension.normalizeExtensionLanguageCode(): String {
     return pkgName.inferIReaderLanguageCode().normalizeExtensionLanguageCode()
 }
 
+internal fun RepoAvailableExtension.normalizeExtensionLanguageCodes(): Set<String> {
+    val declared = languageCodes.mapTo(LinkedHashSet()) { language ->
+        language.normalizeExtensionLanguageCode()
+    }.filterNotTo(LinkedHashSet(), String::isBlank)
+    if (declared.isNotEmpty()) {
+        return declared
+    }
+    return normalizeExtensionLanguageCode().takeIf(String::isNotBlank)?.let(::setOf).orEmpty()
+}
+
 internal fun Iterable<String>.selectExtensionLanguageCode(): String {
     val languages = map { it.normalizeExtensionLanguageCode() }
         .filter { it.isNotBlank() }

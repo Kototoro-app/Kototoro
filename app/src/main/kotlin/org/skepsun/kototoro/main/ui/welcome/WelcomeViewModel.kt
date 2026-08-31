@@ -4,14 +4,18 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.core.os.ConfigurationCompat
+import androidx.lifecycle.SavedStateHandle
 import dagger.hilt.android.lifecycle.HiltViewModel
+import eu.kanade.tachiyomi.network.awaitSuccess
 import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,6 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.supervisorScope
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
@@ -36,16 +41,17 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.BaseViewModel
-import org.skepsun.kototoro.core.util.LocaleComparator
-import org.skepsun.kototoro.core.util.ext.sortedWithSafe
 import org.skepsun.kototoro.core.util.ext.toList
+import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.extensions.install.ExtensionInstallDownloadState
 import org.skepsun.kototoro.extensions.install.ExtensionInstallMode
 import org.skepsun.kototoro.extensions.install.ExtensionInstallResult
 import org.skepsun.kototoro.extensions.install.ExtensionInstallService
+import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepo
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionRepoRepository
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
+import org.skepsun.kototoro.extensions.repo.JarExtensionMetadataProbe
 import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
 import org.skepsun.kototoro.extensions.repo.toInstalledPackageName
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -55,10 +61,10 @@ import org.skepsun.kototoro.mihon.MihonExtensionManager
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCode
+import org.skepsun.kototoro.settings.sources.extensions.normalizeExtensionLanguageCodes
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepositories
 import org.skepsun.kototoro.settings.sources.unified.UnifiedRecommendedRepository
 import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
-import org.skepsun.kototoro.settings.sources.unified.labelResId
 import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 
 /** Kinds whose packages (JAR/APK/Cloudstream) are installed from repos. */
@@ -104,6 +110,16 @@ enum class WizardInstallPhase {
     FINISHED,
 }
 
+enum class WizardSetupPhase {
+    CONFIGURATION,
+    CONFIGURING,
+    BUILDING_PLAN,
+    READY_TO_INSTALL,
+    INSTALLING,
+    FINISHED,
+    SKIPPED,
+}
+
 /** What a single wizard install entry actually installs. */
 sealed interface WizardInstallTarget {
     data class Extension(val extension: RepoAvailableExtension) : WizardInstallTarget
@@ -122,6 +138,7 @@ data class WizardInstallItem(
     val isNsfw: Boolean,
     val state: WizardPackageState = WizardPackageState.QUEUED,
     val progressPercent: Int? = null,
+    val errorMessage: String? = null,
     val target: WizardInstallTarget,
 )
 
@@ -142,11 +159,18 @@ data class ReposConfiguredInfo(
     val kinds: List<UnifiedSourceKind>,
 )
 
+private data class WizardCatalogSnapshot(
+    val externalPackages: Map<UnifiedSourceKind, List<RepoAvailableExtension>>,
+    val lnReaderPlugins: List<LNReaderPluginInfo>,
+)
+
 @HiltViewModel
 class WelcomeViewModel @Inject constructor(
+    private val savedStateHandle: SavedStateHandle,
     private val repository: ContentSourcesRepository,
     private val settings: AppSettings,
     private val repoRepository: ExternalExtensionRepoRepository,
+    private val jarMetadataProbe: JarExtensionMetadataProbe,
     private val installService: ExtensionInstallService,
     private val mihonExtensionManager: MihonExtensionManager,
     private val aniyomiExtensionManager: AniyomiExtensionManager,
@@ -161,25 +185,34 @@ class WelcomeViewModel @Inject constructor(
 
     private var updateJob: Job? = null
     private var planJob: Job? = null
+    @Volatile
+    private var currentInstallTask: Deferred<Unit>? = null
+    private var planGeneration: Long = 0L
     private val installCancelFlag = AtomicBoolean(false)
     private var installSelectionInitialized = false
     private val handledInstallKeys = Collections.synchronizedSet(mutableSetOf<String>())
+    private val discoveredSourceLocales = MutableStateFlow<Set<Locale>>(emptySet())
+    private var wizardExternalRepositories: Map<UnifiedSourceKind, List<ExternalExtensionRepo>> = emptyMap()
+    private var wizardJsonRepositories: Map<UnifiedSourceKind, List<UnifiedRecommendedRepository>> = emptyMap()
 
     private val lnReaderRepository = LNReaderRepository(okHttpClient, jsonSourceManager)
 
     private val _isInitializingPlugins = MutableStateFlow(false)
     val isInitializingPlugins = _isInitializingPlugins.asStateFlow()
 
+    private val _setupPhase = MutableStateFlow(WizardSetupPhase.CONFIGURATION)
+    val setupPhase = _setupPhase.asStateFlow()
+
     private val _reposConfiguredEvent = MutableStateFlow<ReposConfiguredInfo?>(null)
     val reposConfiguredEvent = _reposConfiguredEvent.asStateFlow()
 
-    private val _systemInstallMode = MutableStateFlow(false)
+    private val _systemInstallMode = MutableStateFlow(savedStateHandle[KEY_SYSTEM_INSTALL_MODE] ?: false)
     val systemInstallMode = _systemInstallMode.asStateFlow()
 
     private val _hasApkRepos = MutableStateFlow(false)
     val hasApkRepos = _hasApkRepos.asStateFlow()
 
-    private val _includeNsfw = MutableStateFlow(false)
+    private val _includeNsfw = MutableStateFlow(savedStateHandle[KEY_INCLUDE_NSFW] ?: false)
     val includeNsfw = _includeNsfw.asStateFlow()
 
     private val _configuredInstallKinds = MutableStateFlow<List<UnifiedSourceKind>>(emptyList())
@@ -206,6 +239,18 @@ class WelcomeViewModel @Inject constructor(
     /** SYSTEM-mode install intents the UI must launch via the host activity. */
     private val _systemInstallRequests = MutableSharedFlow<Intent>(extraBufferCapacity = 8)
     val systemInstallRequests = _systemInstallRequests.asSharedFlow()
+
+    // After process death, return at most to repository selection because runtime catalog/install
+    // jobs cannot be reconstructed safely from a Bundle. Configuration changes keep this ViewModel.
+    private val _currentPage = MutableStateFlow((savedStateHandle[KEY_CURRENT_PAGE] ?: 0).coerceIn(0, 3))
+    val currentPage = _currentPage.asStateFlow()
+
+    private val _selectedRepositoryKeys = MutableStateFlow(
+        savedStateHandle.get<ArrayList<String>>(KEY_SELECTED_REPOSITORIES)?.toSet()
+            ?: WelcomeDefaults.defaultRepositories(UnifiedRecommendedRepositories.all)
+                .mapTo(LinkedHashSet(), ::repoKeyForWelcome),
+    )
+    val selectedRepositoryKeys = _selectedRepositoryKeys.asStateFlow()
 
     private val _spacesEnabled = MutableStateFlow(settings.isEntitySpaceEnabled)
     val spacesEnabled = _spacesEnabled.asStateFlow()
@@ -258,16 +303,21 @@ class WelcomeViewModel @Inject constructor(
         updateJob = launchJob(Dispatchers.Default) {
             val allSourcesSnapshot = repository.queryAllSources(includeDisabledSources = true)
             val localesGroupsSnapshot = allSourcesSnapshot.groupBy { it.getLocale() ?: Locale.ROOT }
+            discoveredSourceLocales.value = localesGroupsSnapshot.keys
 
             types.value = types.value.copy(
                 availableItems = supportedContentTypes,
                 isLoading = false,
             )
             val previouslySelectedLanguages = settings.contentLanguages
+            val availableLocales = WelcomeDefaults.availableLocales(
+                repositoryLanguages = previouslySelectedLanguages,
+                discovered = localesGroupsSnapshot.keys,
+            )
             val selectedLocales = if (previouslySelectedLanguages.isNotEmpty()) {
-                localesGroupsSnapshot.keys.filterTo(HashSet()) { it.language in previouslySelectedLanguages }
+                availableLocales.filterTo(LinkedHashSet()) { it.language in previouslySelectedLanguages }
             } else {
-                val languagesMap = localesGroupsSnapshot.keys.associateBy { x -> x.language }
+                val languagesMap = availableLocales.associateBy { locale -> locale.language }
                 val set = HashSet<Locale>(2)
                 ConfigurationCompat.getLocales(context.resources.configuration).toList()
                     .firstNotNullOfOrNull { lc -> languagesMap[lc.language] }
@@ -276,7 +326,7 @@ class WelcomeViewModel @Inject constructor(
                 set
             }
             locales.value = locales.value.copy(
-                availableItems = localesGroupsSnapshot.keys.sortedWithSafe(LocaleComparator()),
+                availableItems = availableLocales,
                 selectedItems = selectedLocales,
                 isLoading = false,
             )
@@ -306,6 +356,9 @@ class WelcomeViewModel @Inject constructor(
         android.util.Log.d("KototoroInit", "WelcomeViewModel initializePlugins triggered! Args: mirror=$mirrorOriginalPosition, repos=$repos")
         launchJob(Dispatchers.IO) {
             _isInitializingPlugins.value = true
+            _setupPhase.value = WizardSetupPhase.CONFIGURING
+            wizardExternalRepositories = emptyMap()
+            wizardJsonRepositories = emptyMap()
             android.util.Log.d("KototoroInit", "Coroutine launched, isInitializing=true")
             try {
                 val newMirror = AppSettings.GitHubMirror.entries.getOrElse(mirrorOriginalPosition) { AppSettings.GitHubMirror.NATIVE }
@@ -313,7 +366,8 @@ class WelcomeViewModel @Inject constructor(
                 android.util.Log.d("KototoroInit", "Proxy mirror set to $newMirror")
 
                 val configuredKinds = LinkedHashSet<UnifiedSourceKind>()
-                val touchedExternalTypes = LinkedHashSet<ExternalExtensionType>()
+                val selectedExternalRepositories = LinkedHashMap<UnifiedSourceKind, MutableList<ExternalExtensionRepo>>()
+                val selectedJsonRepositories = LinkedHashMap<UnifiedSourceKind, MutableList<UnifiedRecommendedRepository>>()
 
                 for (repo in repos.distinctBy { repoKeyForWelcome(it) }) {
                     android.util.Log.d("KototoroInit", "Preparing Repo type=${repo.kind} url=${repo.url}")
@@ -321,63 +375,90 @@ class WelcomeViewModel @Inject constructor(
                         UnifiedSourceKind.LEGADO -> {
                             if (repo.url !in settings.legadoRepoUrls) {
                                 settings.legadoRepoUrls = settings.legadoRepoUrls + repo.url
-                                configuredKinds += UnifiedSourceKind.LEGADO
                             }
+                            selectedJsonRepositories.getOrPut(repo.kind, ::mutableListOf) += repo
+                            configuredKinds += repo.kind
                         }
                         UnifiedSourceKind.TVBOX -> {
                             if (repo.url !in settings.tvBoxRepoUrls) {
                                 settings.tvBoxRepoUrls = settings.tvBoxRepoUrls + repo.url
-                                configuredKinds += UnifiedSourceKind.TVBOX
                             }
+                            selectedJsonRepositories.getOrPut(repo.kind, ::mutableListOf) += repo
+                            configuredKinds += repo.kind
                         }
                         UnifiedSourceKind.LNREADER -> {
                             if (repo.url !in settings.lnReaderRepoUrls) {
                                 settings.lnReaderRepoUrls = settings.lnReaderRepoUrls + repo.url
-                                configuredKinds += UnifiedSourceKind.LNREADER
                             }
+                            selectedJsonRepositories.getOrPut(repo.kind, ::mutableListOf) += repo
+                            configuredKinds += repo.kind
                         }
                         else -> {
                             val type = repo.kind.toExternalType() ?: continue
-                            when (val prep = repoRepository.prepareAddRepo(type, repo.url)) {
+                            val configuredRepo = when (val prep = repoRepository.prepareAddRepo(type, repo.url)) {
                                 is ExternalExtensionRepoRepository.PrepareAddRepoResult.Ready -> {
-                                    if (repoRepository.confirmAddRepo(prep.repo) is ExternalExtensionRepoRepository.AddRepoResult.Success) {
-                                        touchedExternalTypes += type
-                                        configuredKinds += repo.kind
-                                        android.util.Log.d("KototoroInit", "Repo configured successfully: ${prep.repo.displayName}")
+                                    when (val result = repoRepository.confirmAddRepo(prep.repo)) {
+                                        is ExternalExtensionRepoRepository.AddRepoResult.Success -> result.repo
+                                        is ExternalExtensionRepoRepository.AddRepoResult.DuplicateFingerprint -> result.existingRepo
+                                        ExternalExtensionRepoRepository.AddRepoResult.RepoAlreadyExists -> prep.repo
+                                        is ExternalExtensionRepoRepository.AddRepoResult.FetchFailed,
+                                        ExternalExtensionRepoRepository.AddRepoResult.InvalidUrl,
+                                        -> null
                                     }
                                 }
-                                else -> {
-                                    android.util.Log.d("KototoroInit", "Repo skipped or already prepared: $prep")
-                                }
+                                is ExternalExtensionRepoRepository.PrepareAddRepoResult.DuplicateFingerprint -> prep.existingRepo
+                                is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> prep.existingRepo
+                                is ExternalExtensionRepoRepository.PrepareAddRepoResult.FetchFailed,
+                                ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl,
+                                -> null
+                            }
+                            if (configuredRepo != null) {
+                                selectedExternalRepositories.getOrPut(repo.kind, ::mutableListOf) += configuredRepo
+                                configuredKinds += repo.kind
+                                android.util.Log.d(
+                                    "KototoroInit",
+                                    "Repo selected for wizard: ${configuredRepo.displayName}",
+                                )
                             }
                         }
                     }
                 }
 
-                // Refresh every touched external catalog so package discovery works on the batch-install page.
-                touchedExternalTypes.forEach { type -> repoRepository.refresh(type) }
+                wizardExternalRepositories = selectedExternalRepositories.mapValues { (_, repositories) ->
+                    repositories.distinctBy { repository -> repository.type to repository.baseUrl }
+                }
+                wizardJsonRepositories = selectedJsonRepositories.mapValues { (_, repositories) ->
+                    repositories.distinctBy(::repoKeyForWelcome)
+                }
+                installSelectionInitialized = false
+
+                // Refresh only the repositories selected in this wizard run. Existing unselected
+                // repositories remain configured globally but must not leak into the batch plan.
+                wizardExternalRepositories.values.flatten().forEach { repository ->
+                    repoRepository.refresh(repository)
+                }
                 GlobalExtensionManager.initialize(context)
 
-                // Home the install plan is recomputed so the batch-install page is ready immediately.
-                refreshInstallPlan()
+                // Publish the configured scope and its plan atomically before opening the next page.
+                _setupPhase.value = WizardSetupPhase.BUILDING_PLAN
+                recomputeInstallPlan()
                 android.util.Log.d("KototoroInit", "All repository configuration work finished.")
 
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
-                    val message = if (configuredKinds.isEmpty()) {
-                        context.getString(org.skepsun.kototoro.R.string.welcome_plugins_configured_none)
+                    if (configuredKinds.isEmpty()) {
+                        _setupPhase.value = WizardSetupPhase.CONFIGURATION
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(org.skepsun.kototoro.R.string.welcome_plugins_configured_none),
+                            android.widget.Toast.LENGTH_LONG,
+                        ).show()
                     } else {
-                        context.getString(
-                            org.skepsun.kototoro.R.string.welcome_plugins_configured,
-                            configuredKinds.size,
-                            configuredKinds.joinToString(", ") { kind -> context.getString(kind.labelResId()) },
-                        )
-                    }
-                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
-                    if (configuredKinds.isNotEmpty()) {
+                        _setupPhase.value = WizardSetupPhase.READY_TO_INSTALL
                         _reposConfiguredEvent.value = ReposConfiguredInfo(configuredKinds.toList())
                     }
                 }
             } catch (e: Exception) {
+                _setupPhase.value = WizardSetupPhase.CONFIGURATION
                 android.util.Log.e("KototoroInit", "CRITICAL ERROR inside initializePlugins: ${e.message}", e)
                 e.printStackTrace()
                 kotlinx.coroutines.withContext(Dispatchers.Main) {
@@ -400,11 +481,42 @@ class WelcomeViewModel @Inject constructor(
 
     fun setSystemInstallMode(enabled: Boolean) {
         _systemInstallMode.value = enabled
+        savedStateHandle[KEY_SYSTEM_INSTALL_MODE] = enabled
     }
 
     fun setIncludeNsfw(enabled: Boolean) {
         _includeNsfw.value = enabled
+        savedStateHandle[KEY_INCLUDE_NSFW] = enabled
         refreshInstallPlan()
+    }
+
+    fun setCurrentPage(page: Int) {
+        val normalized = page.coerceIn(0, 5)
+        _currentPage.value = normalized
+        savedStateHandle[KEY_CURRENT_PAGE] = normalized
+    }
+
+    fun toggleRepository(repository: UnifiedRecommendedRepository) {
+        val key = repoKeyForWelcome(repository)
+        updateSelectedRepositoryKeys { selected ->
+            if (key in selected) selected - key else selected + key
+        }
+    }
+
+    fun selectRepositories(repositories: Collection<UnifiedRecommendedRepository>) {
+        val keys = repositories.mapTo(LinkedHashSet(), ::repoKeyForWelcome)
+        updateSelectedRepositoryKeys { selected -> selected + keys }
+    }
+
+    fun clearRepositories(kind: UnifiedSourceKind) {
+        val prefix = "${kind.name}:"
+        updateSelectedRepositoryKeys { selected -> selected.filterNotTo(LinkedHashSet()) { it.startsWith(prefix) } }
+    }
+
+    private fun updateSelectedRepositoryKeys(transform: (Set<String>) -> Set<String>) {
+        val updated = transform(_selectedRepositoryKeys.value)
+        _selectedRepositoryKeys.value = updated
+        savedStateHandle[KEY_SELECTED_REPOSITORIES] = ArrayList(updated)
     }
 
     fun toggleInstallKind(kind: UnifiedSourceKind, checked: Boolean) {
@@ -420,6 +532,9 @@ class WelcomeViewModel @Inject constructor(
 
     fun setInstallSkipped(skipped: Boolean) {
         _installSkipped.value = skipped
+        if (skipped) {
+            _setupPhase.value = WizardSetupPhase.SKIPPED
+        }
     }
 
     /**
@@ -430,11 +545,22 @@ class WelcomeViewModel @Inject constructor(
      * count always matches the chip state the user just picked.
      */
     fun refreshInstallPlan() {
+        if (_setupPhase.value == WizardSetupPhase.INSTALLING || _setupPhase.value == WizardSetupPhase.FINISHED) {
+            return
+        }
         planJob?.cancel()
+        val generation = ++planGeneration
         planJob = launchJob(Dispatchers.IO) {
-            recomputeInstallPlan()
-            if (_installPlan.value.isEmpty() && _installState.value.phase == WizardInstallPhase.IDLE) {
-                _installState.value = WizardInstallState()
+            _setupPhase.value = WizardSetupPhase.BUILDING_PLAN
+            try {
+                recomputeInstallPlan()
+                if (_installPlan.value.isEmpty() && _installState.value.phase == WizardInstallPhase.IDLE) {
+                    _installState.value = WizardInstallState()
+                }
+            } finally {
+                if (generation == planGeneration && _setupPhase.value == WizardSetupPhase.BUILDING_PLAN) {
+                    _setupPhase.value = WizardSetupPhase.READY_TO_INSTALL
+                }
             }
         }
     }
@@ -454,34 +580,66 @@ class WelcomeViewModel @Inject constructor(
         }
         installCancelFlag.set(false)
         _installSkipped.value = false
+        startInstall(plan, mode)
+    }
+
+    fun retryFailedPackages() {
+        if (_isInstallingPackages.value) return
+        val retryItems = _installState.value.items.map { item ->
+            if (item.state == WizardPackageState.FAILED) {
+                item.copy(
+                    state = WizardPackageState.QUEUED,
+                    progressPercent = null,
+                    errorMessage = null,
+                )
+            } else {
+                item
+            }
+        }
+        if (retryItems.none { item -> item.state == WizardPackageState.QUEUED }) return
+        installCancelFlag.set(false)
+        _installSkipped.value = false
+        val mode = if (_systemInstallMode.value) ExtensionInstallMode.SYSTEM else ExtensionInstallMode.LOCAL_APK
+        startInstall(retryItems, mode)
+    }
+
+    private fun startInstall(plan: List<WizardInstallItem>, mode: ExtensionInstallMode) {
+        if (_isInstallingPackages.value) return
+        _isInstallingPackages.value = true
         launchJob(Dispatchers.IO) {
-            _isInstallingPackages.value = true
-            _installState.value = WizardInstallState(phase = WizardInstallPhase.INSTALLING, items = plan)
+            _setupPhase.value = WizardSetupPhase.INSTALLING
+            publishInstallItems(WizardInstallPhase.INSTALLING, plan)
             val downloadCollector = launchJob {
                 installService.downloadStates.collect(::applyDownloadStates)
             }
             try {
                 for (item in plan) {
+                    if (item.state != WizardPackageState.QUEUED) continue
                     if (installCancelFlag.get()) {
                         markRemainingCancelled()
                         break
                     }
                     markState(item.key, WizardPackageState.DOWNLOADING)
                     try {
-                        when (val target = item.target) {
-                            is WizardInstallTarget.Extension -> {
-                                installExtension(target.extension, mode, item.key)
+                        supervisorScope {
+                            currentInstallTask = async {
+                                when (val target = item.target) {
+                                    is WizardInstallTarget.Extension -> {
+                                        installExtension(target.extension, mode, item.key)
+                                    }
+                                    is WizardInstallTarget.JsonRepo -> {
+                                        importJsonRepo(target)
+                                        markState(item.key, WizardPackageState.COMPLETED)
+                                        handledInstallKeys += item.key
+                                    }
+                                    is WizardInstallTarget.LnReaderPlugin -> {
+                                        lnReaderRepository.installPlugin(target.plugin).getOrThrow()
+                                        markState(item.key, WizardPackageState.COMPLETED)
+                                        handledInstallKeys += item.key
+                                    }
+                                }
                             }
-                            is WizardInstallTarget.JsonRepo -> {
-                                importJsonRepo(target)
-                                markState(item.key, WizardPackageState.COMPLETED)
-                                handledInstallKeys += item.key
-                            }
-                            is WizardInstallTarget.LnReaderPlugin -> {
-                                lnReaderRepository.installPlugin(target.plugin).getOrThrow()
-                                markState(item.key, WizardPackageState.COMPLETED)
-                                handledInstallKeys += item.key
-                            }
+                            currentInstallTask?.await()
                         }
                     } catch (e: CancellationException) {
                         if (installCancelFlag.get()) {
@@ -489,10 +647,16 @@ class WelcomeViewModel @Inject constructor(
                             markRemainingCancelled()
                             break
                         }
-                        markState(item.key, WizardPackageState.FAILED)
+                        throw e
                     } catch (e: Throwable) {
                         android.util.Log.e("KototoroInit", "install ${item.name} failed: ${e.message}", e)
-                        markState(item.key, WizardPackageState.FAILED)
+                        markState(
+                            key = item.key,
+                            newState = WizardPackageState.FAILED,
+                            errorMessage = e.getDisplayMessage(context.resources),
+                        )
+                    } finally {
+                        currentInstallTask = null
                     }
                 }
             } finally {
@@ -500,16 +664,34 @@ class WelcomeViewModel @Inject constructor(
                 _isInstallingPackages.value = false
             }
 
-            reloadInstalledManagers()
-            refreshState()
-            recomputeInstallPlan()
-            _installState.value = _installState.value.copy(phase = WizardInstallPhase.FINISHED)
-            _installFinishedEvent.value = true
+            try {
+                reloadInstalledManagers()
+                // Newly installed sources must immediately inherit the language/content choices made
+                // before installation. A selected language with no matching source simply enables none.
+                commit()
+                refreshState()
+                recomputeInstallPlan()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                android.util.Log.e("KototoroInit", "post-install refresh failed: ${e.message}", e)
+            } finally {
+                _installState.value = _installState.value.copy(phase = WizardInstallPhase.FINISHED)
+                _setupPhase.value = WizardSetupPhase.FINISHED
+                _installFinishedEvent.value = true
+            }
         }
     }
 
     fun cancelInstall() {
         installCancelFlag.set(true)
+        val currentTarget = _installState.value.items.firstOrNull { item ->
+            item.state == WizardPackageState.DOWNLOADING || item.state == WizardPackageState.INSTALLING
+        }?.target
+        if (currentTarget is WizardInstallTarget.Extension) {
+            installService.cancelDownload(currentTarget.extension.pkgName)
+        }
+        currentInstallTask?.cancel()
     }
 
     private suspend fun installExtension(
@@ -563,31 +745,15 @@ class WelcomeViewModel @Inject constructor(
 
     private suspend fun fetchRemoteText(url: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(url).build()
-        okHttpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                error("HTTP ${response.code}: ${response.message}")
-            }
-            response.body?.string() ?: error("Empty response")
+        okHttpClient.newCall(request).awaitSuccess().use { response ->
+            response.body.string()
         }
     }
 
     private suspend fun recomputeInstallPlan() {
-        val configured = buildList {
-            INSTALLABLE_EXTERNAL_KINDS.forEach { kind ->
-                val type = kind.toExternalType() ?: return@forEach
-                if (repoRepository.getByType(type).isNotEmpty()) {
-                    add(kind)
-                }
-            }
-            if (settings.legadoRepoUrls.isNotEmpty()) {
-                add(UnifiedSourceKind.LEGADO)
-            }
-            if (settings.tvBoxRepoUrls.isNotEmpty()) {
-                add(UnifiedSourceKind.TVBOX)
-            }
-            if (settings.lnReaderRepoUrls.isNotEmpty()) {
-                add(UnifiedSourceKind.LNREADER)
-            }
+        val configured = WIZARD_INSTALL_KIND_ORDER.filter { kind ->
+            wizardExternalRepositories[kind].orEmpty().isNotEmpty() ||
+                wizardJsonRepositories[kind].orEmpty().isNotEmpty()
         }
         _configuredInstallKinds.value = configured
         _hasApkRepos.value = configured.any { it in APK_INSTALL_KINDS }
@@ -601,14 +767,74 @@ class WelcomeViewModel @Inject constructor(
             _selectedInstallKinds.value = kept
         }
 
-        val plan = buildInstallPlan()
+        val catalog = loadCatalogSnapshot(configured)
+        updateAvailableLocales(catalog)
+        val plan = buildInstallPlan(catalog)
         // Never publish a plan computed by a stale (already cancelled) recompute.
         currentCoroutineContext().ensureActive()
         _installPlan.value = plan
     }
 
-    private suspend fun buildInstallPlan(): List<WizardInstallItem> {
-        val languages = installLanguages()
+    private suspend fun loadCatalogSnapshot(configured: List<UnifiedSourceKind>): WizardCatalogSnapshot {
+        val externalPackages = INSTALLABLE_EXTERNAL_KINDS
+            .filter { kind -> kind in configured }
+            .associateWith { kind ->
+                val repositories = wizardExternalRepositories[kind].orEmpty()
+                val packages = try {
+                    repoRepository.getCatalogExtensions(repositories)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+                if (kind == UnifiedSourceKind.JAR) {
+                    packages.map { extension -> jarMetadataProbe.resolve(extension) }
+                } else {
+                    packages
+                }
+            }
+        val lnReaderPlugins = if (UnifiedSourceKind.LNREADER in configured) {
+            wizardJsonRepositories[UnifiedSourceKind.LNREADER].orEmpty().flatMap { repository ->
+                val url = repository.url
+                try {
+                    lnReaderRepository.fetchPluginIndex(url).getOrDefault(emptyList())
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    emptyList()
+                }
+            }
+        } else {
+            emptyList()
+        }
+        return WizardCatalogSnapshot(externalPackages, lnReaderPlugins)
+    }
+
+    private fun updateAvailableLocales(catalog: WizardCatalogSnapshot) {
+        val repositoryLanguages = buildSet {
+            catalog.externalPackages.values.asSequence()
+                .flatten()
+                .flatMap { extension -> extension.normalizeExtensionLanguageCodes().asSequence() }
+                .forEach(::add)
+            catalog.lnReaderPlugins.asSequence()
+                .map { plugin -> plugin.lang.normalizeExtensionLanguageCode() }
+                .filter(String::isNotBlank)
+                .forEach(::add)
+            locales.value.selectedItems.mapTo(this) { locale -> locale.language }
+            addAll(settings.contentLanguages)
+        }
+        val snapshot = locales.value
+        locales.value = snapshot.copy(
+            availableItems = WelcomeDefaults.availableLocales(
+                repositoryLanguages = repositoryLanguages,
+                discovered = discoveredSourceLocales.value,
+            ),
+            isLoading = false,
+        )
+    }
+
+    private suspend fun buildInstallPlan(catalog: WizardCatalogSnapshot): List<WizardInstallItem> {
+        val languageSelection = installLanguageSelection()
         val selected = _selectedInstallKinds.value
         val includeNsfw = _includeNsfw.value
         val selectedTypes = installTypes()
@@ -626,10 +852,8 @@ class WelcomeViewModel @Inject constructor(
             when (kind) {
                 UnifiedSourceKind.LEGADO,
                 UnifiedSourceKind.TVBOX -> {
-                    val urls = when (kind) {
-                        UnifiedSourceKind.LEGADO -> settings.legadoRepoUrls
-                        UnifiedSourceKind.TVBOX -> settings.tvBoxRepoUrls
-                        else -> emptySet()
+                    val urls = wizardJsonRepositories[kind].orEmpty().mapTo(LinkedHashSet()) { repository ->
+                        repository.url
                     }
                     for (url in urls) {
                         val key = jsonRepoKey(kind, url)
@@ -650,35 +874,33 @@ class WelcomeViewModel @Inject constructor(
                     }
                 }
                 UnifiedSourceKind.LNREADER -> {
-                    for (url in settings.lnReaderRepoUrls) {
-                        val plugins = try {
-                            lnReaderRepository.fetchPluginIndex(url).getOrDefault(emptyList())
-                        } catch (e: Throwable) {
-                            emptyList()
-                        }
-                        for (plugin in plugins) {
-                            val lang = plugin.lang.normalizeExtensionLanguageCode()
-                            if (!matchesInstallLanguage(lang, languages)) {
-                                continue
-                            }
-                            val key = "LNREADER:${plugin.id}"
-                            if (key in handledInstallKeys) {
-                                continue
-                            }
-                            plan += WizardInstallItem(
-                                key = key,
-                                kind = UnifiedSourceKind.LNREADER,
-                                name = plugin.name,
-                                isNsfw = false,
-                                target = WizardInstallTarget.LnReaderPlugin(plugin),
+                    for (plugin in catalog.lnReaderPlugins) {
+                        val lang = plugin.lang.normalizeExtensionLanguageCode()
+                        if (!WelcomeInstallFilter.matchesLanguages(
+                                packageLanguages = setOf(lang).filterTo(LinkedHashSet(), String::isNotBlank),
+                                packageIncludesUniversalLanguage = lang.isBlank(),
+                                isPackageMetadataKnown = plugin.lang.isNotBlank(),
+                                selection = languageSelection,
                             )
+                        ) {
+                            continue
                         }
+                        val key = "LNREADER:${plugin.id}"
+                        if (key in handledInstallKeys) {
+                            continue
+                        }
+                        plan += WizardInstallItem(
+                            key = key,
+                            kind = UnifiedSourceKind.LNREADER,
+                            name = plugin.name,
+                            isNsfw = false,
+                            target = WizardInstallTarget.LnReaderPlugin(plugin),
+                        )
                     }
                 }
                 else -> {
                     val type = kind.toExternalType() ?: continue
-                    val extensions = runCatching { repoRepository.getCatalogExtensions(type) }
-                        .getOrDefault(emptyList())
+                    val extensions = catalog.externalPackages[kind].orEmpty()
                     for (extension in extensions) {
                         if (!extension.isCompatible) {
                             continue
@@ -686,7 +908,13 @@ class WelcomeViewModel @Inject constructor(
                         if (extension.isNsfw && !includeNsfw) {
                             continue
                         }
-                        if (!matchesInstallLanguage(extension.normalizeExtensionLanguageCode(), languages)) {
+                        if (!WelcomeInstallFilter.matchesLanguages(
+                                packageLanguages = extension.normalizeExtensionLanguageCodes(),
+                                packageIncludesUniversalLanguage = extension.includesUniversalLanguage,
+                                isPackageMetadataKnown = extension.isLanguageMetadataKnown,
+                                selection = languageSelection,
+                            )
+                        ) {
                             continue
                         }
                         if (isAlreadyInstalled(type, extension)) {
@@ -710,33 +938,22 @@ class WelcomeViewModel @Inject constructor(
         return plan
     }
 
-    private fun installLanguages(): Set<String> {
+    private fun installLanguageSelection(): WelcomeInstallFilter.LanguageSelection {
         val selectedLocales = locales.value.selectedItems
-        if (selectedLocales.isEmpty() || selectedLocales.any { it == Locale.ROOT }) {
-            return emptySet()
-        }
-        return selectedLocales.mapTo(HashSet()) { it.language.lowercase(Locale.ROOT) }
+        return WelcomeInstallFilter.LanguageSelection(
+            languageCodes = selectedLocales.asSequence()
+                .filter { locale -> locale != Locale.ROOT }
+                .mapTo(LinkedHashSet()) { locale -> locale.language.lowercase(Locale.ROOT) },
+            includesUniversalLanguage = Locale.ROOT in selectedLocales,
+        )
     }
 
     /**
      * Content types selected by the user, expanded with their adult variants.
-     * An empty selection means "no filter" (install everything).
+     * An empty selection means no content family is installed or enabled.
      */
     private fun installTypes(): Set<ContentType> =
         WelcomeInstallFilter.expandTypes(types.value.selectedItems)
-
-    private fun matchesInstallLanguage(langCode: String, languages: Set<String>): Boolean {
-        if (languages.isEmpty()) {
-            return true
-        }
-        val lang = langCode.lowercase(Locale.ROOT)
-        if (lang.isBlank() || lang == "all") {
-            return true
-        }
-        return languages.any {
-            it == lang || lang.startsWith("$it-") || it.startsWith("$lang-")
-        }
-    }
 
     private fun isAlreadyInstalled(type: ExternalExtensionType, extension: RepoAvailableExtension): Boolean {
         return when (type) {
@@ -800,7 +1017,11 @@ class WelcomeViewModel @Inject constructor(
         }
     }
 
-    private fun markState(key: String, newState: WizardPackageState) {
+    private fun markState(
+        key: String,
+        newState: WizardPackageState,
+        errorMessage: String? = null,
+    ) {
         _installState.update { state ->
             val items = state.items.map { item ->
                 if (item.key != key) {
@@ -809,6 +1030,7 @@ class WelcomeViewModel @Inject constructor(
                     item.copy(
                         state = newState,
                         progressPercent = if (newState == WizardPackageState.COMPLETED) 100 else item.progressPercent,
+                        errorMessage = errorMessage,
                     )
                 }
             }
@@ -819,6 +1041,16 @@ class WelcomeViewModel @Inject constructor(
                 cancelled = items.count { it.state == WizardPackageState.CANCELLED },
             )
         }
+    }
+
+    private fun publishInstallItems(phase: WizardInstallPhase, items: List<WizardInstallItem>) {
+        _installState.value = WizardInstallState(
+            phase = phase,
+            items = items,
+            completed = items.count { item -> item.state == WizardPackageState.COMPLETED },
+            failed = items.count { item -> item.state == WizardPackageState.FAILED },
+            cancelled = items.count { item -> item.state == WizardPackageState.CANCELLED },
+        )
     }
 
     private fun markRemainingCancelled() {
@@ -938,6 +1170,13 @@ class WelcomeViewModel @Inject constructor(
             }
         repository.setSourcesEnabledExclusive(enabledSources)
         settings.contentLanguages = languages
+    }
+
+    private companion object {
+        const val KEY_CURRENT_PAGE = "welcome.current_page"
+        const val KEY_SELECTED_REPOSITORIES = "welcome.selected_repositories"
+        const val KEY_INCLUDE_NSFW = "welcome.include_nsfw"
+        const val KEY_SYSTEM_INSTALL_MODE = "welcome.system_install_mode"
     }
 }
 

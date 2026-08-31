@@ -64,4 +64,18 @@ class UnifiedRecommendedRepositoriesTest {
         )
         assertTrue(recommendation.url.endsWith("index.pb"))
     }
+
+    @Test
+    fun `recommended repositories exclude defunct KudoAni`() {
+        assertTrue(UnifiedRecommendedRepositories.all.none { item -> item.name == "KudoAni" })
+    }
+
+    @Test
+    fun `LNReader official remains a named recommendation`() {
+        val recommendation = UnifiedRecommendedRepositories.all.single { item ->
+            item.kind == UnifiedSourceKind.LNREADER
+        }
+
+        assertEquals("LNReader Official", recommendation.name)
+    }
 }

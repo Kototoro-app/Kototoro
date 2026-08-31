@@ -44,6 +44,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -59,10 +60,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,6 +81,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -105,11 +109,6 @@ import org.skepsun.kototoro.settings.sources.unified.labelResId
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.roundToInt
-
-private const val REPO_KOTOTORO =
-    "https://raw.githubusercontent.com/skepsun/kototoro-parsers/repo/index.min.json"
-private const val REPO_REDO =
-    "https://raw.githubusercontent.com/skepsun/k-parsers-r/repo/index.min.json"
 
 /**
  * Stable setup-wizard page order. Permissions and the look-and-feel
@@ -206,6 +205,7 @@ private fun WelcomeContent(
     val panoramaAnimationEnabled by viewModel.panoramaAnimationEnabled.collectAsStateWithLifecycle()
     val spaceSwitcherPosition by viewModel.spaceSwitcherPosition.collectAsStateWithLifecycle()
     val isInitializing by viewModel.isInitializingPlugins.collectAsStateWithLifecycle()
+    val setupPhase by viewModel.setupPhase.collectAsStateWithLifecycle()
     val reposConfiguredEvent by viewModel.reposConfiguredEvent.collectAsStateWithLifecycle()
     val systemInstallMode by viewModel.systemInstallMode.collectAsStateWithLifecycle()
     val hasApkRepos by viewModel.hasApkRepos.collectAsStateWithLifecycle()
@@ -217,34 +217,53 @@ private fun WelcomeContent(
     val configuredInstallKinds by viewModel.configuredInstallKinds.collectAsStateWithLifecycle()
     val selectedInstallKinds by viewModel.selectedInstallKinds.collectAsStateWithLifecycle()
     val installSkipped by viewModel.installSkipped.collectAsStateWithLifecycle()
+    val savedCurrentPage by viewModel.currentPage.collectAsStateWithLifecycle()
+    val selectedRepositoryKeys by viewModel.selectedRepositoryKeys.collectAsStateWithLifecycle()
     // Glass finish preset state, shared with Settings → Appearance → glass tuner.
     val appContext = LocalContext.current.applicationContext
     val glassSettings = remember(appContext) { AppSettings(appContext) }
     val glassTuning = rememberGlassTuning(glassSettings)
     val glassTuningController = remember { GlassTuningController(glassSettings) }
     val activeGlassPreset = GlassPreset.entries.firstOrNull { it.matches(glassTuning) }
-    val pagerState = rememberPagerState(pageCount = { 6 })
+    val pagerState = rememberPagerState(initialPage = savedCurrentPage, pageCount = { 6 })
     val scope = rememberCoroutineScope()
     val recommendedRepos = remember { UnifiedRecommendedRepositories.all }
-    val defaultRepoUrls = remember { setOf(REPO_KOTOTORO, REPO_REDO) }
-    val selectedRepos = remember {
-        mutableStateListOf<UnifiedRecommendedRepository>().apply {
-            addAll(recommendedRepos.filter { it.url in defaultRepoUrls })
-        }
+    val selectedRepos = remember(recommendedRepos, selectedRepositoryKeys) {
+        recommendedRepos.filter { repository -> repoKey(repository) in selectedRepositoryKeys }
     }
     var expandedKinds by remember { mutableStateOf(setOf(UnifiedSourceKind.JAR)) }
     var selectedMirrorIndex by rememberSaveable { mutableIntStateOf(0) }
     var showDisclaimer by rememberSaveable { mutableStateOf(false) }
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
-    BackHandler(enabled = pagerState.currentPage > 0 && !isInitializing) {
-        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    val navigationLocked = setupPhase == WizardSetupPhase.CONFIGURING ||
+        setupPhase == WizardSetupPhase.BUILDING_PLAN ||
+        setupPhase == WizardSetupPhase.INSTALLING
+    BackHandler(enabled = pagerState.currentPage > 0 || navigationLocked) {
+        if (!navigationLocked && pagerState.currentPage > 0) {
+            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+        }
     }
 
     // Recompute the install plan whenever the user is on the batch-install page,
     // so the counts reflect the latest configured repos and selected languages.
     LaunchedEffect(pagerState.currentPage, locales.selectedItems) {
+        viewModel.setCurrentPage(pagerState.currentPage)
         if (pagerState.currentPage == WIZARD_PAGE_BATCH_INSTALL && !isInstallingPackages && !isInitializing) {
             viewModel.refreshInstallPlan()
+        }
+    }
+
+    LaunchedEffect(reposConfiguredEvent) {
+        if (reposConfiguredEvent != null) {
+            viewModel.consumeReposConfiguredEvent()
+            pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL)
+        }
+    }
+
+    LaunchedEffect(installFinishedEvent) {
+        if (installFinishedEvent == true) {
+            viewModel.consumeInstallFinishedEvent()
+            pagerState.animateScrollToPage(WIZARD_PAGE_DONE)
         }
     }
 
@@ -253,7 +272,7 @@ private fun WelcomeContent(
     ) {
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = !isInitializing,
+            userScrollEnabled = false,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             Column(
@@ -264,11 +283,7 @@ private fun WelcomeContent(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
                 when (page) {
-                    WIZARD_PAGE_INTRO -> {
-                        WelcomeIntroStep(onContinue = {
-                            scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_PERMISSIONS) }
-                        })
-                    }
+                    WIZARD_PAGE_INTRO -> WelcomeIntroStep()
 
                     WIZARD_PAGE_PERMISSIONS -> WelcomePermissionsStep()
 
@@ -298,6 +313,7 @@ private fun WelcomeContent(
                         WelcomeSourcesStep(
                             recommendedRepos = recommendedRepos,
                             selectedRepos = selectedRepos,
+                            selectedRepositoryKeys = selectedRepositoryKeys,
                             expandedKinds = expandedKinds,
                             onKindToggled = { kind ->
                                 expandedKinds = if (kind in expandedKinds) {
@@ -309,6 +325,9 @@ private fun WelcomeContent(
                             mirrorEntries = mirrorEntries,
                             selectedMirrorIndex = selectedMirrorIndex,
                             onMirrorSelected = { selectedMirrorIndex = it },
+                            onRepositoryToggled = viewModel::toggleRepository,
+                            onRepositoriesSelected = viewModel::selectRepositories,
+                            onRepositoriesCleared = viewModel::clearRepositories,
                             isInitializing = isInitializing,
                             onInitialize = { showDisclaimer = true },
                             onRestoreBackup = onRestoreBackup,
@@ -331,6 +350,7 @@ private fun WelcomeContent(
                         installPlan = installPlan,
                         installState = installState,
                         isInstallingPackages = isInstallingPackages,
+                        isBuildingInstallPlan = setupPhase == WizardSetupPhase.BUILDING_PLAN,
                         onInstall = viewModel::installMatchingPackages,
                         onCancelInstall = viewModel::cancelInstall,
                         onSkip = {
@@ -342,6 +362,10 @@ private fun WelcomeContent(
                     WIZARD_PAGE_DONE -> WelcomeDoneStep(
                         installState = installState,
                         skipped = installSkipped,
+                        onRetryFailed = {
+                            scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL) }
+                            viewModel.retryFailedPackages()
+                        },
                         onOpenExtensionManagement = onOpenExtensionManagement,
                     )
                 }
@@ -383,7 +407,12 @@ private fun WelcomeContent(
                                 scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
                             }
                         },
-                        enabled = !isInitializing,
+                        enabled = !navigationLocked && when (pagerState.currentPage) {
+                            WIZARD_PAGE_SOURCES -> setupPhase == WizardSetupPhase.READY_TO_INSTALL
+                            WIZARD_PAGE_BATCH_INSTALL -> setupPhase == WizardSetupPhase.FINISHED ||
+                                setupPhase == WizardSetupPhase.SKIPPED
+                            else -> true
+                        },
                         modifier = Modifier.height(48.dp),
                     ) {
                         Text(
@@ -423,66 +452,6 @@ private fun WelcomeContent(
         )
     }
 
-    reposConfiguredEvent?.let { info ->
-        val context = LocalContext.current
-        val kindsLabel = info.kinds.joinToString(", ") { context.getString(it.labelResId()) }
-        AlertDialog(
-            onDismissRequest = { viewModel.consumeReposConfiguredEvent() },
-            title = { Text(stringResource(R.string.welcome_repos_configured_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.welcome_repos_configured_message,
-                        info.kinds.size,
-                        kindsLabel,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.consumeReposConfiguredEvent()
-                    scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL) }
-                }) { Text(stringResource(R.string.welcome_repos_configured_next)) }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    viewModel.consumeReposConfiguredEvent()
-                    onOpenExtensionManagement()
-                }) { Text(stringResource(R.string.welcome_open_extension_management)) }
-            },
-        )
-    }
-
-    if (installFinishedEvent == true) {
-        AlertDialog(
-            onDismissRequest = { viewModel.consumeInstallFinishedEvent() },
-            title = { Text(stringResource(R.string.welcome_install_done_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.welcome_install_done_message,
-                        installState.completed,
-                        installState.failed,
-                        installState.cancelled,
-                    ),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.consumeInstallFinishedEvent()
-                    scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_DONE) }
-                }) {
-                    Text(stringResource(R.string.confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    viewModel.consumeInstallFinishedEvent()
-                    onOpenExtensionManagement()
-                }) { Text(stringResource(R.string.welcome_open_extension_management)) }
-            },
-        )
-    }
 }
 
 @Composable
@@ -515,12 +484,16 @@ private fun WelcomeHero(expressive: Boolean) {
 @Composable
 private fun WelcomeSourcesStep(
     recommendedRepos: List<UnifiedRecommendedRepository>,
-    selectedRepos: MutableList<UnifiedRecommendedRepository>,
+    selectedRepos: List<UnifiedRecommendedRepository>,
+    selectedRepositoryKeys: Set<String>,
     expandedKinds: Set<UnifiedSourceKind>,
     onKindToggled: (UnifiedSourceKind) -> Unit,
     mirrorEntries: List<String>,
     selectedMirrorIndex: Int,
     onMirrorSelected: (Int) -> Unit,
+    onRepositoryToggled: (UnifiedRecommendedRepository) -> Unit,
+    onRepositoriesSelected: (Collection<UnifiedRecommendedRepository>) -> Unit,
+    onRepositoriesCleared: (UnifiedSourceKind) -> Unit,
     isInitializing: Boolean,
     onInitialize: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -547,12 +520,13 @@ private fun WelcomeSourcesStep(
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
     )
+    val selectedKinds = WelcomeDefaults.selectedRepositoryKinds(selectedRepos)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         welcomeRepoKinds(recommendedRepos).forEach { kind ->
             val selectedCount = recommendedRepos.count { it.kind == kind && it in selectedRepos }
             val kindLabel = stringResource(kind.labelResId())
             FilterChip(
-                selected = kind in expandedKinds,
+                selected = kind in selectedKinds,
                 onClick = { onKindToggled(kind) },
                 enabled = !isInitializing,
                 label = {
@@ -560,6 +534,17 @@ private fun WelcomeSourcesStep(
                         text = if (selectedCount > 0) "$kindLabel · $selectedCount" else kindLabel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                trailingIcon = {
+                    Icon(
+                        imageVector = if (kind in expandedKinds) {
+                            Icons.Default.KeyboardArrowUp
+                        } else {
+                            Icons.Default.KeyboardArrowDown
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
                     )
                 },
             )
@@ -580,10 +565,10 @@ private fun WelcomeSourcesStep(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = { selectAllRepos(kindRepos, selectedRepos) }, enabled = !isInitializing) {
+            TextButton(onClick = { onRepositoriesSelected(kindRepos) }, enabled = !isInitializing) {
                 Text(stringResource(R.string.select_all))
             }
-            TextButton(onClick = { selectedRepos.removeAll { it.kind == kind } }, enabled = !isInitializing) {
+            TextButton(onClick = { onRepositoriesCleared(kind) }, enabled = !isInitializing) {
                 Text(stringResource(R.string.clear))
             }
         }
@@ -591,7 +576,8 @@ private fun WelcomeSourcesStep(
             kindRepos.forEach { repo ->
                 RepoChip(
                     repo = repo,
-                    selectedRepos = selectedRepos,
+                    selected = repoKey(repo) in selectedRepositoryKeys,
+                    onToggle = { onRepositoryToggled(repo) },
                     enabled = !isInitializing,
                 )
             }
@@ -608,14 +594,6 @@ private fun WelcomeSourcesStep(
         Spacer(Modifier.width(8.dp))
         Text(stringResource(R.string.restore_backup))
     }
-}
-
-private fun selectAllRepos(
-    kindRepos: List<UnifiedRecommendedRepository>,
-    selectedRepos: MutableList<UnifiedRecommendedRepository>,
-) {
-    val selectedKeys = selectedRepos.mapTo(HashSet()) { repoKey(it) }
-    kindRepos.filter { repoKey(it) !in selectedKeys }.forEach { selectedRepos.add(it) }
 }
 
 @Composable
@@ -635,10 +613,12 @@ private fun WelcomeBatchInstallStep(
     installPlan: List<WizardInstallItem>,
     installState: WizardInstallState,
     isInstallingPackages: Boolean,
+    isBuildingInstallPlan: Boolean,
     onInstall: () -> Unit,
     onCancelInstall: () -> Unit,
     onSkip: () -> Unit,
 ) {
+    val controlsEnabled = !isInstallingPackages && !isBuildingInstallPlan
     SectionHeader(
         title = stringResource(R.string.welcome_install_step_title),
         summary = stringResource(R.string.welcome_install_step_summary),
@@ -666,7 +646,7 @@ private fun WelcomeBatchInstallStep(
                 FilterChip(
                     selected = kind in selectedKinds,
                     onClick = { onKindToggle(kind, kind !in selectedKinds) },
-                    enabled = !isInstallingPackages,
+                    enabled = controlsEnabled,
                     label = {
                         Text(
                             text = label,
@@ -683,7 +663,7 @@ private fun WelcomeBatchInstallStep(
         title = stringResource(R.string.welcome_source_formats_title),
         summary = stringResource(R.string.welcome_source_formats_summary),
     )
-    ContentTypeChips(types = types, onTypeToggle = onTypeToggle)
+    ContentTypeChips(types = types, enabled = controlsEnabled, onTypeToggle = onTypeToggle)
 
     SectionHeader(
         title = stringResource(R.string.languages),
@@ -694,6 +674,7 @@ private fun WelcomeBatchInstallStep(
         selectedItems = locales.selectedItems,
         label = { it.getDisplayName(LocalContext.current) },
         onToggle = onLocaleToggle,
+        enabled = controlsEnabled,
     )
     if (locales.isLoading || types.isLoading) {
         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -704,6 +685,7 @@ private fun WelcomeBatchInstallStep(
             .fillMaxWidth()
             .toggleable(
                 value = includeNsfw,
+                enabled = controlsEnabled,
                 role = Role.Switch,
                 onValueChange = onIncludeNsfwChange,
             )
@@ -728,6 +710,7 @@ private fun WelcomeBatchInstallStep(
         }
         Switch(
             checked = includeNsfw,
+            enabled = controlsEnabled,
             onCheckedChange = null,
         )
     }
@@ -745,15 +728,15 @@ private fun WelcomeBatchInstallStep(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(
-                selected = !systemInstallMode,
-                onClick = { onSystemInstallModeChange(false) },
-                enabled = !isInstallingPackages,
+            selected = !systemInstallMode,
+            onClick = { onSystemInstallModeChange(false) },
+            enabled = controlsEnabled,
                 label = { Text(stringResource(R.string.welcome_install_mode_sideload)) },
             )
             FilterChip(
-                selected = systemInstallMode,
-                onClick = { onSystemInstallModeChange(true) },
-                enabled = !isInstallingPackages,
+            selected = systemInstallMode,
+            onClick = { onSystemInstallModeChange(true) },
+            enabled = controlsEnabled,
                 label = { Text(stringResource(R.string.welcome_install_mode_system)) },
             )
         }
@@ -764,6 +747,7 @@ private fun WelcomeBatchInstallStep(
         summary = stringResource(R.string.welcome_install_section_summary),
     )
     when {
+        isBuildingInstallPlan -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         isInstallingPackages || installState.phase == WizardInstallPhase.FINISHED -> {
             WizardInstallProgressPanel(
                 installState = installState,
@@ -806,7 +790,7 @@ private fun WelcomeBatchInstallStep(
     if (installState.phase != WizardInstallPhase.FINISHED) {
         TextButton(
             onClick = onSkip,
-            enabled = !isInstallingPackages,
+            enabled = controlsEnabled,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.welcome_install_skip))
@@ -815,7 +799,7 @@ private fun WelcomeBatchInstallStep(
 }
 
 @Composable
-private fun WelcomeIntroStep(onContinue: () -> Unit) {
+private fun WelcomeIntroStep() {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -868,18 +852,6 @@ private fun WelcomeIntroStep(onContinue: () -> Unit) {
             )
         }
 
-        Button(
-            onClick = onContinue,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(stringResource(R.string.welcome_intro_continue))
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
-        }
     }
 }
 
@@ -910,6 +882,7 @@ private fun IntroConceptCard(title: String, summary: String) {
 private fun WelcomeDoneStep(
     installState: WizardInstallState,
     skipped: Boolean,
+    onRetryFailed: () -> Unit,
     onOpenExtensionManagement: () -> Unit,
 ) {
     SectionHeader(
@@ -950,6 +923,15 @@ private fun WelcomeDoneStep(
         }
     }
 
+    if (!skipped && installState.failed > 0) {
+        Button(
+            onClick = onRetryFailed,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.retry))
+        }
+    }
+
     SectionHeader(
         title = stringResource(R.string.welcome_done_advice_title),
         summary = stringResource(R.string.welcome_done_advice_summary),
@@ -977,17 +959,30 @@ private fun WelcomeDoneStep(
 @Composable
 private fun WelcomePermissionsStep() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var permissionRefreshToken by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionRefreshToken++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     SectionHeader(
         title = stringResource(R.string.welcome_permissions_title),
         summary = stringResource(R.string.welcome_permissions_summary),
     )
 
     // Notifications
-    val notificationGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
-    } else {
-        true
+    val notificationGranted = remember(permissionRefreshToken) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
     }
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -1017,7 +1012,9 @@ private fun WelcomePermissionsStep() {
 
     // Battery optimization / background survival
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-    val ignoringBatteryOptimizations = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    val ignoringBatteryOptimizations = remember(permissionRefreshToken) {
+        powerManager.isIgnoringBatteryOptimizations(context.packageName)
+    }
     WelcomePermissionRow(
         icon = rememberSafePainter(R.drawable.ic_battery_outline),
         title = stringResource(R.string.welcome_permissions_battery_title),
@@ -1154,6 +1151,15 @@ private fun WizardInstallProgressPanel(
                                 LinearProgressIndicator(
                                     progress = { item.progressPercent / 100f },
                                     modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            item.errorMessage?.let { errorMessage ->
+                                Text(
+                                    text = errorMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -1417,20 +1423,13 @@ private fun SectionHeader(title: String, summary: String) {
 @Composable
 private fun RepoChip(
     repo: UnifiedRecommendedRepository,
-    selectedRepos: MutableList<UnifiedRecommendedRepository>,
+    selected: Boolean,
+    onToggle: () -> Unit,
     enabled: Boolean,
 ) {
-    val key = repoKey(repo)
-    val selected = selectedRepos.any { repoKey(it) == key }
     FilterChip(
         selected = selected,
-        onClick = {
-            if (selected) {
-                selectedRepos.removeAll { repoKey(it) == key }
-            } else {
-                selectedRepos.add(repo)
-            }
-        },
+        onClick = onToggle,
         enabled = enabled,
         label = { Text(repo.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         leadingIcon = if (selected) {
@@ -1480,6 +1479,7 @@ private fun MirrorDropdown(
 @Composable
 private fun ContentTypeChips(
     types: FilterProperty<ContentType>,
+    enabled: Boolean,
     onTypeToggle: (ContentType, Boolean) -> Unit,
 ) {
     FilterChipGroup(
@@ -1494,6 +1494,7 @@ private fun ContentTypeChips(
             }
         },
         onToggle = onTypeToggle,
+        enabled = enabled,
     )
 }
 
@@ -1504,6 +1505,7 @@ private fun <T> FilterChipGroup(
     label: @Composable (T) -> String,
     onToggle: (T, Boolean) -> Unit,
     leadingIcon: ((T) -> Int)? = null,
+    enabled: Boolean = true,
 ) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { item ->
@@ -1511,6 +1513,7 @@ private fun <T> FilterChipGroup(
             FilterChip(
                 selected = selected,
                 onClick = { onToggle(item, !selected) },
+                enabled = enabled,
                 label = { Text(label(item)) },
                 leadingIcon = when {
                     leadingIcon != null -> {

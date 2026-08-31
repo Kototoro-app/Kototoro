@@ -854,8 +854,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         set(value) = prefs.edit { putBoolean(KEY_LOCAL_APK_HOT_RELOAD, value) }
 
     var lnReaderRepoUrls: Set<String>
-        get() = prefs.getStringSet(KEY_LNREADER_REPOS, null)
-            ?: setOf(org.skepsun.kototoro.core.lnreader.LNReaderRepository.OFFICIAL_REPO_URL)
+        get() = prefs.getStringSet(KEY_LNREADER_REPOS, null) ?: emptySet()
         set(value) = prefs.edit { putStringSet(KEY_LNREADER_REPOS, value) }
 
     var legadoRepoUrls: Set<String>

@@ -125,15 +125,19 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         ) { external, lnReader, legado, tvBox, jsonSources ->
             val configured = external.map { it.toUnifiedRepositoryItem(isPreset = false) } +
                 lnReader.map { url ->
+                    val preset = UnifiedRecommendedRepositories.all.firstOrNull { item ->
+                        item.kind == UnifiedSourceKind.LNREADER &&
+                            normalizeRepositoryUrl(item.url) == normalizeRepositoryUrl(url)
+                    }
                     UnifiedSourceRepositoryItem(
                         id = repositoryId(UnifiedSourceKind.LNREADER, url),
                         kind = UnifiedSourceKind.LNREADER,
-                        name = repositoryTitleFromUrl(url, fallback = "LNReader"),
+                        name = preset?.name ?: repositoryTitleFromUrl(url, fallback = "LNReader"),
                         url = url,
                         locationType = resolveLocationType(url),
                         website = url,
                         isConfigured = true,
-                        isPreset = false,
+                        isPreset = preset != null,
                         capabilities = setOf(
                             UnifiedRepositoryCapability.REFRESH,
                             UnifiedRepositoryCapability.VERSIONED_INDEX,

@@ -8,6 +8,12 @@ data class RepoAvailableExtension(
     val versionCode: Long,
     val libVersion: Double,
     val lang: String,
+    /** Concrete languages declared for sources inside this package. */
+    val languageCodes: Set<String> = emptySet(),
+    /** Whether the package contains sources explicitly marked as universal/multilingual. */
+    val includesUniversalLanguage: Boolean = false,
+    /** Distinguishes known universal coverage from missing or failed metadata discovery. */
+    val isLanguageMetadataKnown: Boolean = languageCodes.isNotEmpty() || includesUniversalLanguage,
     val isNsfw: Boolean,
     val sourceNames: List<String>,
     /** Numeric source ids declared by the index, when the repo format exposes them. */

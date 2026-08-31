@@ -10,9 +10,14 @@ import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
  */
 internal object WelcomeInstallFilter {
 
+    data class LanguageSelection(
+        val languageCodes: Set<String>,
+        val includesUniversalLanguage: Boolean,
+    )
+
     /**
      * Expands the user-selected content types with their adult variants.
-     * An empty selection means "no filter" (install everything).
+     * An empty selection means no content families are enabled.
      */
     fun expandTypes(selectedTypes: Set<ContentType>): Set<ContentType> {
         if (selectedTypes.isEmpty()) {
@@ -31,14 +36,41 @@ internal object WelcomeInstallFilter {
     /**
      * Whether [kind] should be skipped from the install plan because none of
      * its typical content types is covered by [expandedSelectedTypes].
-     * An empty expanded selection disables filtering (equals "select all").
+     * An empty expanded selection excludes every ecosystem with a known content family.
      */
     fun excludesKind(kind: UnifiedSourceKind, expandedSelectedTypes: Set<ContentType>): Boolean {
         if (expandedSelectedTypes.isEmpty()) {
-            return false
+            return contentTypesOf(kind).isNotEmpty()
         }
         val kindTypes = contentTypesOf(kind)
         return kindTypes.isNotEmpty() && kindTypes.none { it in expandedSelectedTypes }
+    }
+
+    /**
+     * Unknown metadata is kept to avoid false negatives and is filtered after installation from
+     * the real sources. Known packages must intersect a concrete language selection or contain a
+     * universal source when the user selected the multilingual chip.
+     */
+    fun matchesLanguages(
+        packageLanguages: Set<String>,
+        packageIncludesUniversalLanguage: Boolean,
+        isPackageMetadataKnown: Boolean,
+        selection: LanguageSelection,
+    ): Boolean {
+        if (selection.languageCodes.isEmpty() && !selection.includesUniversalLanguage) {
+            return false
+        }
+        if (!isPackageMetadataKnown) {
+            return true
+        }
+        if (packageIncludesUniversalLanguage && selection.includesUniversalLanguage) return true
+        return packageLanguages.any { packageLanguage ->
+            selection.languageCodes.any { selectedLanguage ->
+                packageLanguage == selectedLanguage ||
+                    packageLanguage.startsWith("$selectedLanguage-") ||
+                    selectedLanguage.startsWith("$packageLanguage-")
+            }
+        }
     }
 
     /**
@@ -57,7 +89,7 @@ internal object WelcomeInstallFilter {
         -> setOf(ContentType.VIDEO)
         UnifiedSourceKind.IREADER -> setOf(ContentType.MANGA, ContentType.NOVEL)
         UnifiedSourceKind.LNREADER -> setOf(ContentType.MANGA, ContentType.NOVEL)
-        UnifiedSourceKind.TSUNDOKU -> setOf(ContentType.MANGA, ContentType.VIDEO)
+        UnifiedSourceKind.TSUNDOKU -> setOf(ContentType.NOVEL)
         UnifiedSourceKind.JS,
         UnifiedSourceKind.NATIVE,
         -> emptySet()

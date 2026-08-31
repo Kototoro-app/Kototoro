@@ -26,14 +26,6 @@ class LNReaderRepository(
         /** Official LNReader plugin repository (preset/recommended). */
         const val OFFICIAL_REPO_URL =
             "https://raw.githubusercontent.com/LNReader/lnreader-plugins/plugins/v3.0.0/.dist/plugins.min.json"
-
-        /** Recommended repositories — always shown even if user hasn't added them. */
-        val PRESET_REPOS = listOf(
-            RepoEntry(
-                url = OFFICIAL_REPO_URL,
-                label = "LNReader Official",
-            ),
-        )
     }
 
     /**
@@ -136,12 +128,4 @@ data class LNReaderPluginInfo(
     val version: String,
     val url: String,
     val iconUrl: String,
-)
-
-/**
- * A preset repository entry.
- */
-data class RepoEntry(
-    val url: String,
-    val label: String,
 )

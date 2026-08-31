@@ -233,13 +233,6 @@ object UnifiedRecommendedRepositories {
             capabilities = extensionRepoCapabilities,
         ),
         UnifiedRecommendedRepository(
-            kind = UnifiedSourceKind.ANIYOMI,
-            name = "KudoAni",
-            url = "https://raw.githubusercontent.com/KudoAni/aniyomi-extensions/repo/index.min.json",
-            locationType = UnifiedRepositoryLocationType.REMOTE_URL,
-            capabilities = extensionRepoCapabilities,
-        ),
-        UnifiedRecommendedRepository(
             kind = UnifiedSourceKind.IREADER,
             name = "IReader Official",
             url = "https://raw.githubusercontent.com/IReaderorg/IReader-extensions/repov2/index.min.json",

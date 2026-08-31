@@ -1298,7 +1298,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             ExternalExtensionRepoRepository.PrepareAddRepoResult.InvalidUrl -> emitMessage(
                 appContext.getString(R.string.extension_repo_invalid_url_message),
             )
-            ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> emitMessage(
+            is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> emitMessage(
                 appContext.getString(R.string.extension_repo_already_exists_message),
             )
         }

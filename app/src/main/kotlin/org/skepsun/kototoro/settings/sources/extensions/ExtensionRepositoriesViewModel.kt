@@ -106,7 +106,7 @@ class ExtensionRepositoriesViewModel @Inject constructor(
                     onMessage.call(appContext.getString(R.string.extension_repo_invalid_url_message))
                 }
 
-                ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> {
+                is ExternalExtensionRepoRepository.PrepareAddRepoResult.RepoAlreadyExists -> {
                     Log.d(TAG, "addRepo:alreadyExists type=$type input=$indexUrl")
                     onMessage.call(appContext.getString(R.string.extension_repo_already_exists_message))
                 }

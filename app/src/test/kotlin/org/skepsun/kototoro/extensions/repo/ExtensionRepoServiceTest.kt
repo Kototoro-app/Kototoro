@@ -284,6 +284,12 @@ class ExtensionRepoServiceTest : FunSpec({
 									language = "en",
 									homeUrl = "https://asura.example",
 								),
+								ExtensionStoreIndex.Source(
+									id = 2,
+									name = "Asura Scans 中文",
+									language = "zh",
+									homeUrl = "https://asura.example/zh",
+								),
 							),
 						),
 					),
@@ -311,7 +317,8 @@ class ExtensionRepoServiceTest : FunSpec({
 			extensions.first().archiveUrl shouldBe "https://cdn.example/asura.apk"
 			extensions.first().iconUrl shouldBe "https://cdn.example/asura.png"
 			extensions.first().isNsfw.shouldBeTrue()
-			extensions.first().sourceNames shouldBe listOf("Asura Scans")
+			extensions.first().sourceNames shouldBe listOf("Asura Scans", "Asura Scans 中文")
+			extensions.first().languageCodes shouldBe setOf("en", "zh")
 			server.takeRequest().path shouldBe "/mihon/index.pb"
 			server.takeRequest().path shouldBe "/mihon/index.pb"
 		}

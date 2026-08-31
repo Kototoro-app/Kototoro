@@ -24,6 +24,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 
+private fun String.isUniversalLanguageLabel(): Boolean = when (trim().lowercase()) {
+    "",
+    "all",
+    "multi",
+    "multilingual",
+    "various",
+    "mixed",
+    -> true
+    else -> false
+}
+
 @Singleton
 class ExtensionRepoService @Inject constructor(
     @ContentHttpClient private val httpClient: OkHttpClient,
@@ -384,6 +395,15 @@ class ExtensionRepoService @Inject constructor(
             ExternalExtensionType.JAR -> name
             ExternalExtensionType.CLOUDSTREAM -> name
         }
+        val declaredLanguages = sources.orEmpty()
+            .mapNotNull { source -> source.lang?.takeIf(String::isNotBlank) }
+        val concreteLanguages = declaredLanguages
+            .filterNotTo(LinkedHashSet(), String::isUniversalLanguageLabel)
+            .ifEmpty { setOf(lang).filterNotTo(LinkedHashSet(), String::isUniversalLanguageLabel) }
+        val hasUniversalSources = declaredLanguages.any(String::isUniversalLanguageLabel) ||
+            (repo.type != ExternalExtensionType.JAR && declaredLanguages.isEmpty() && lang.isUniversalLanguageLabel())
+        val hasLanguageMetadata = declaredLanguages.isNotEmpty() ||
+            (repo.type != ExternalExtensionType.JAR && lang.isNotBlank())
 
         return RepoAvailableExtension(
             type = repo.type,
@@ -393,6 +413,9 @@ class ExtensionRepoService @Inject constructor(
             versionCode = code,
             libVersion = libVersion,
             lang = lang,
+            languageCodes = concreteLanguages,
+            includesUniversalLanguage = hasUniversalSources,
+            isLanguageMetadataKnown = hasLanguageMetadata,
             isNsfw = nsfw == 1,
             sourceNames = sources.orEmpty().map { it.name },
             sourceIds = sources.orEmpty().mapNotNull { it.id?.toLongOrNull() },
@@ -471,7 +494,10 @@ class ExtensionRepoService @Inject constructor(
                 libVersion in AniyomiExtensionLoader.LIB_VERSION_MIN..AniyomiExtensionLoader.LIB_VERSION_MAX
             else -> true
         }
-        val languages = sources.map { it.language }.toSet()
+        val declaredLanguages = sources.mapNotNullTo(LinkedHashSet()) { source ->
+            source.language.takeIf(String::isNotBlank)
+        }
+        val languages = declaredLanguages.filterNotTo(LinkedHashSet(), String::isUniversalLanguageLabel)
         val archiveUrl = applyMirror(resources.apkUrl)
         return RepoAvailableExtension(
             type = repo.type,
@@ -481,6 +507,9 @@ class ExtensionRepoService @Inject constructor(
             versionCode = versionCode,
             libVersion = libVersion,
             lang = languages.singleOrNull() ?: "all",
+            languageCodes = languages,
+            includesUniversalLanguage = declaredLanguages.any(String::isUniversalLanguageLabel),
+            isLanguageMetadataKnown = sources.isNotEmpty(),
             isNsfw = contentWarning >= ExtensionStoreIndex.ContentWarning.MIXED,
             sourceNames = sources.map { it.name },
             sourceIds = sources.map { it.id },
@@ -520,6 +549,9 @@ class ExtensionRepoService @Inject constructor(
             versionCode = code,
             libVersion = libVersion,
             lang = lang,
+            languageCodes = setOf(lang).filterNotTo(LinkedHashSet()) { it.isUniversalLanguageLabel() },
+            includesUniversalLanguage = lang.isUniversalLanguageLabel(),
+            isLanguageMetadataKnown = lang.isNotBlank(),
             isNsfw = nsfw,
             sourceNames = emptyList(), // IReader plugins don't declare subset sources natively
             archiveName = apk,
@@ -549,6 +581,10 @@ class ExtensionRepoService @Inject constructor(
             versionCode = version.toLong(),
             libVersion = apiVersion.toDouble(),
             lang = normalizedLanguage,
+            languageCodes = setOf(normalizedLanguage)
+                .filterNotTo(LinkedHashSet()) { it.isUniversalLanguageLabel() },
+            includesUniversalLanguage = normalizedLanguage.isUniversalLanguageLabel(),
+            isLanguageMetadataKnown = true,
             isNsfw = false,
             sourceNames = listOf(name),
             archiveName = archiveName,
@@ -774,6 +810,10 @@ class ExtensionRepoService @Inject constructor(
             versionCode = id,
             libVersion = 0.0,
             lang = "all",
+            // Resolved from DEX class names by JarExtensionMetadataProbe before wizard filtering.
+            languageCodes = emptySet(),
+            includesUniversalLanguage = false,
+            isLanguageMetadataKnown = false,
             isNsfw = false,
             sourceNames = emptyList(),
             archiveName = name,
@@ -825,6 +865,7 @@ class ExtensionRepoService @Inject constructor(
     private data class ExtensionSourceDto(
         val name: String,
         val id: String? = null,
+        val lang: String? = null,
     )
 
     @Keep
