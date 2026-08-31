@@ -74,6 +74,13 @@ internal fun resolveReaderInitialPagePosition(pages: List<ReaderPage>, state: Re
     }.takeIf { it >= 0 } ?: 0
 }
 
+internal fun resolveReaderRestoredState(contentState: ReaderState?, currentState: ReaderState?): ReaderState? = when {
+    contentState == null -> currentState
+    currentState == null -> contentState
+    contentState.chapterId != currentState.chapterId -> contentState
+    else -> currentState
+}
+
 internal fun resolveReaderCurrentPagePosition(
     pages: List<ReaderPage>,
     currentPageKey: Long?,

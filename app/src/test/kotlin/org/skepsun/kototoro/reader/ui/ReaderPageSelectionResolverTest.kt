@@ -67,6 +67,26 @@ class ReaderPageSelectionResolverTest {
 	}
 
 	@Test
+	fun `rotation restores the live page instead of the stale content anchor`() {
+		val restoredState = resolveReaderRestoredState(
+			contentState = ReaderState(chapterId = 183L, page = 0, scroll = 0),
+			currentState = ReaderState(chapterId = 183L, page = 4, scroll = 0),
+		)
+
+		assertEquals(ReaderState(chapterId = 183L, page = 4, scroll = 0), restoredState)
+	}
+
+	@Test
+	fun `manual chapter switch keeps the atomic content target`() {
+		val restoredState = resolveReaderRestoredState(
+			contentState = ReaderState(chapterId = 184L, page = 2, scroll = 0),
+			currentState = ReaderState(chapterId = 183L, page = 4, scroll = 0),
+		)
+
+		assertEquals(ReaderState(chapterId = 184L, page = 2, scroll = 0), restoredState)
+	}
+
+	@Test
 	fun `live compose page wins over stale persisted state during layout switch`() {
 		val pages = listOf(
 			page(chapterId = 183L, index = 0),

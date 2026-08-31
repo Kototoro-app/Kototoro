@@ -21,6 +21,7 @@ import org.skepsun.kototoro.reader.ui.ReaderViewModel
 import org.skepsun.kototoro.reader.domain.TapGridArea
 import org.skepsun.kototoro.reader.ui.resolveVisiblePageSelection
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
+import org.skepsun.kototoro.reader.ui.resolveReaderRestoredState
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 
 /**
@@ -83,10 +84,9 @@ fun ComposeReaderScreenRoot(
     val readerImageColorFilter = remember(readerSettings.colorFilter) {
         readerSettings.colorFilter.toComposeColorFilter()
     }
-    // content.state is published atomically with the page window and always carries the target of
-    // the latest manual chapter switch, so prefer it over the (possibly asynchronous) readingState
-    // when both are available.
-    val restoredState = content.state ?: viewModel.getCurrentState()
+    // A different-chapter content state is the atomic target of a manual chapter switch. Within the
+    // same chapter, readingState is newer because content.state can still hold the entry-page anchor.
+    val restoredState = resolveReaderRestoredState(content.state, viewModel.getCurrentState())
     val initialPosition = resolveReaderInitialPagePosition(content.pages, restoredState)
     val requestedPage = resolvePageKeyPosition(content.pages.map { it.readerKey }, requestedPageKey)
     val readerModifier = modifier.readerTapGestures(
