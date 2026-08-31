@@ -49,12 +49,24 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
             deleteReadChaptersUseCase.invoke()
         }
         retryPendingEntityConsolidation()
+        repairWorkStateAnchors()
         dataRepository.cleanupDatabase()
         return if (localContentRepository.cleanup()) {
             dataRepository.cleanupLocalContent()
             Result.success()
         } else {
             Result.retry()
+        }
+    }
+
+    /**
+     * 修复 anchor 与本地绑定漂移出来的收藏行（issue #510）：一旦库里出现这种行，
+     * 分类里就会躺着「其实没收藏」的作品——列表按 anchor 画卡片，收藏状态按绑定判断。
+     */
+    private suspend fun repairWorkStateAnchors() {
+        val repaired = entityGraphRepository.repairDetachedWorkStateAnchors()
+        if (repaired > 0) {
+            Log.w(TAG, "Repaired $repaired work favourites rows with a detached anchor")
         }
     }
 

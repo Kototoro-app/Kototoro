@@ -81,4 +81,47 @@ class EntityConsolidationPlannerTest {
         assertTrue(buildConsolidationGroups(emptyList()).isEmpty())
         assertTrue(buildConsolidationGroups(listOf(entity(1L, "Lone"))).isEmpty())
     }
+
+    @Test
+    fun `leftover duplicate of an existing work is absorbed into the existing entity`() {
+        val leftover = entity(id = 7L, name = "One Piece", nameHash = 987654321L) // 导入时加了盐
+        val anchors = mapOf(consolidationTitleKey("MANGA", "One Piece") to 3L)
+
+        val groups = buildAnchorAbsorptionGroups(listOf(leftover), anchors)
+
+        assertEquals(1, groups.size)
+        assertEquals(3L, groups[0].canonicalEntityId)
+        assertEquals(listOf(7L), groups[0].absorbedEntityIds)
+    }
+
+    @Test
+    fun `several leftovers of one title collapse into a single anchor group`() {
+        val inputs = listOf(
+            entity(id = 8L, name = "One Piece", nameHash = 11L),
+            entity(id = 5L, name = "  one   piece ", nameHash = 22L),
+            entity(id = 9L, name = "Berserk", nameHash = 33L),
+        )
+        val anchors = mapOf(consolidationTitleKey("MANGA", "One Piece") to 3L)
+
+        val groups = buildAnchorAbsorptionGroups(inputs, anchors)
+
+        assertEquals(1, groups.size)
+        assertEquals(3L, groups[0].canonicalEntityId)
+        assertEquals(listOf(5L, 8L), groups[0].absorbedEntityIds)
+    }
+
+    @Test
+    fun `an entity that is its own anchor and an empty anchor map produce no groups`() {
+        val anchors = mapOf(consolidationTitleKey("MANGA", "One Piece") to 7L)
+
+        assertTrue(buildAnchorAbsorptionGroups(listOf(entity(7L, "One Piece")), anchors).isEmpty())
+        assertTrue(buildAnchorAbsorptionGroups(listOf(entity(7L, "One Piece")), emptyMap()).isEmpty())
+    }
+
+    @Test
+    fun `anchor lookup respects content type`() {
+        val anchors = mapOf(consolidationTitleKey("VIDEO", "Fate") to 3L)
+
+        assertTrue(buildAnchorAbsorptionGroups(listOf(entity(7L, "Fate", contentType = "MANGA")), anchors).isEmpty())
+    }
 }

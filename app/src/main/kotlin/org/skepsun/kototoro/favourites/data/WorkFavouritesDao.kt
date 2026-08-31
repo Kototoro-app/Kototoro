@@ -607,6 +607,28 @@ abstract class WorkFavouritesDao {
         updatedAt: Long,
     ): Int
 
+    /**
+     * Active rows whose anchor projection is not (or no longer) an active local binding of
+     * the row's own entity. Categories render through the anchor while "is this work
+     * favourited" is answered from the bindings, so once the two drift apart a work turns
+     * up in a category the user never favourited — the second half of issue #510.
+     */
+    @Query(
+        """
+		SELECT * FROM work_favourites
+		WHERE deleted_at = 0
+			AND anchor_manga_id IS NOT NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM entity_binding eb
+				WHERE eb.entity_id = work_favourites.entity_id
+					AND eb.external_id = CAST(work_favourites.anchor_manga_id AS TEXT)
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			)
+        """,
+    )
+    abstract suspend fun findActiveWithDetachedAnchor(): List<WorkFavouriteEntity>
+
     @Query("DELETE FROM work_favourites")
     abstract suspend fun deleteAll()
 
