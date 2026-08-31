@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -27,6 +28,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.local.domain.DeleteReadChaptersUseCase
 import java.util.concurrent.TimeUnit
@@ -39,12 +41,14 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
     private val localContentRepository: LocalMangaRepository,
     private val dataRepository: ContentDataRepository,
     private val deleteReadChaptersUseCase: DeleteReadChaptersUseCase,
+    private val entityGraphRepository: EntityGraphRepository,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
         if (settings.isAutoLocalChaptersCleanupEnabled) {
             deleteReadChaptersUseCase.invoke()
         }
+        retryPendingEntityConsolidation()
         dataRepository.cleanupDatabase()
         return if (localContentRepository.cleanup()) {
             dataRepository.cleanupLocalContent()
@@ -52,6 +56,24 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
         } else {
             Result.retry()
         }
+    }
+
+    /**
+     * 外部备份导入后「同名作品实体合并」失败过的重试钩子（issue #510）。
+     * 合并没跑完时，同一部作品会以多个 WORK 实体的形式重复出现在收藏/分类里。
+     */
+    private suspend fun retryPendingEntityConsolidation() {
+        if (!settings.isEntityConsolidationPending) {
+            return
+        }
+        runCatching { entityGraphRepository.consolidateImportProvisionalEntities() }
+            .onSuccess {
+                settings.isEntityConsolidationPending = false
+                Log.i(TAG, "Retried pending entity consolidation")
+            }
+            .onFailure { e ->
+                Log.w(TAG, "Pending entity consolidation retry failed again", e)
+            }
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {

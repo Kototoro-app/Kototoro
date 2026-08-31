@@ -270,6 +270,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean("has_seen_plugin_welcome", false)
         set(value) = prefs.edit { putBoolean("has_seen_plugin_welcome", value) }
 
+    /**
+     * 外部备份导入后的「同名作品实体合并」失败过、尚未成功重跑。
+     *
+     * 该失败此前被静默吞掉（issue #510）：库里会长期留着同一部作品的多个 WORK 实体，
+     * 表现为「收藏/分类里同一部漫画重复出现、且出现在不同分类」。
+     * 由 LocalStorageCleanupWorker 在下次启动维护时重试。
+     */
+    var isEntityConsolidationPending: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_ENTITY_CONSOLIDATION, false)
+        set(value) = prefs.edit { putBoolean(KEY_PENDING_ENTITY_CONSOLIDATION, value) }
+
     var listMode: ListMode
         get() = prefs.getEnumValue(KEY_LIST_MODE, ListMode.GRID)
         set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE, value) }
@@ -2731,6 +2742,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_COOKIES_CLEAR = "cookies_clear"
         const val KEY_CHAPTERS_CLEAR = "chapters_clear"
         const val KEY_CHAPTERS_CLEAR_AUTO = "chapters_clear_auto"
+        const val KEY_PENDING_ENTITY_CONSOLIDATION = "pending_entity_consolidation"
         const val KEY_THUMBS_CACHE_CLEAR = "thumbs_cache_clear"
         const val KEY_LOCAL_MANGA_CLEAR = "local_manga_clear"
         const val KEY_LOCAL_NOVELS_CLEAR = "local_novels_clear"
