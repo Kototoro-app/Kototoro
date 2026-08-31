@@ -49,7 +49,7 @@ class LocalContentDirOutput(
             }
         }
         runInterruptible(Dispatchers.IO) {
-            val target = rootFile.findFile(name) ?: checkNotNull(rootFile.createFile(name))
+            val target = rootFile.createFileOrThrow(name)
             file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
         }
         index.setCoverEntry(name)
@@ -166,7 +166,7 @@ class LocalContentDirOutput(
             zip.close()
         }
         if (e == null) {
-            val target = rootFile.findFile(targetName) ?: checkNotNull(rootFile.createFile(targetName))
+            val target = rootFile.createFileOrThrow(targetName)
             zip.file.inputStream().use { input -> target.openOutputStream().use(input::copyTo) }
             zip.file.delete()
         } else {
@@ -200,7 +200,7 @@ class LocalContentDirOutput(
     }
 
     private suspend fun flushIndex() = runInterruptible(Dispatchers.IO) {
-        val target = rootFile.findFile(ENTRY_NAME_INDEX) ?: checkNotNull(rootFile.createFile(ENTRY_NAME_INDEX))
+        val target = rootFile.createFileOrThrow(ENTRY_NAME_INDEX)
         target.openOutputStream().bufferedWriter().use { it.write(index.toString()) }
     }
 
@@ -273,7 +273,7 @@ class LocalContentDirOutput(
         // 第二步：保存EPUB文件（保持.epub扩展名，Requirement 1.1 & 1.2）
         // Generate filename that preserves .epub extension
         val chapterFileName = generateEpubChapterFileName(chapter, epubFile)
-        val targetFile = rootFile.findFile(chapterFileName) ?: checkNotNull(rootFile.createFile(chapterFileName))
+        val targetFile = rootFile.createFileOrThrow(chapterFileName)
 
         android.util.Log.i("LocalContentDirOutput", "addEpubChapter: Target file=${targetFile.uri}")
 

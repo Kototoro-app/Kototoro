@@ -211,6 +211,7 @@
     <string name="not_available">Not available</string>
     <string name="not_set">Not set</string>
     <string name="cannot_find_available_storage">No available storage</string>
+<string name="error_cannot_write_to_storage">Cannot write to the download directory. Check its access permission, free space, or pick another folder in settings</string>
     <string name="other_storage">Other storage</string>
     <string name="done">Done</string>
     <string name="all_favourites">All favorites</string>

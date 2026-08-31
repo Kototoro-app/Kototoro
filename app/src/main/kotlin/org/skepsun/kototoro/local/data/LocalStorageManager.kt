@@ -456,24 +456,28 @@ class LocalStorageManager @Inject constructor(
     fun getPreferredNovelDownloadDir(): File? = resolveStorageUriToFile(settings.novelStorageUri, settings.novelStorageDir)
 
     @WorkerThread
-    private fun getFallbackNovelStorageDir(): File? {
-        return context.getExternalFilesDir(DIR_NAME_NOVEL) ?: File(context.filesDir, DIR_NAME_NOVEL).takeIf {
-            it.exists() || it.mkdirs()
-        }
-    }
+    private fun getFallbackNovelStorageDir(): File? = fallbackDir(DIR_NAME_NOVEL)
 
     @WorkerThread
-    private fun getFallbackStorageDir(): File? {
-        return context.getExternalFilesDir(DIR_NAME) ?: File(context.filesDir, DIR_NAME).takeIf {
-            it.exists() || it.mkdirs()
-        }
-    }
+    private fun getFallbackStorageDir(): File? = fallbackDir(DIR_NAME)
 
     @WorkerThread
-    private fun getFallbackVideoStorageDir(): File? {
-        return context.getExternalFilesDir(DIR_NAME_VIDEO) ?: File(context.filesDir, DIR_NAME_VIDEO).takeIf {
-            it.exists() || it.mkdirs()
-        }
+    private fun getFallbackVideoStorageDir(): File? = fallbackDir(DIR_NAME_VIDEO)
+
+    /**
+     * 下载根目录的末级兜底：优先应用外部私有目录，其次内部 filesDir。
+     *
+     * 旧实现只有在 `getExternalFilesDir` 返回 null 时才试内部目录；外部目录**存在但不可写**
+     * （卷未挂载、权限状态异常）时会直接把它交出去，或导致「一个可用根都没有」。
+     */
+    @WorkerThread
+    private fun fallbackDir(dirName: String): File? {
+        val candidates = listOfNotNull(
+            context.getExternalFilesDir(dirName),
+            File(context.filesDir, dirName),
+        )
+        return candidates.firstOrNull { (it.exists() || it.mkdirs()) && it.canWrite() }
+            ?: candidates.firstOrNull()
     }
 
     @WorkerThread

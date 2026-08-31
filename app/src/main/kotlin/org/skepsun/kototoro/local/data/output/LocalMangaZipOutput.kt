@@ -158,12 +158,18 @@ class LocalContentZipOutput(
 
         suspend fun filterChapters(file: File, manga: Content, idsToRemove: Set<Long>) =
             runInterruptible(Dispatchers.IO) {
-                val subject = LocalContentZipOutput(checkNotNull(UniFile.fromFile(file)), manga, file.parentFile ?: file)
+                val subject = LocalContentZipOutput(
+                    checkNotNull(UniFile.fromFile(file)) { "Cannot resolve UniFile for $file" },
+                    manga,
+                    file.parentFile ?: file,
+                )
                 try {
                     ZipFile(file).use { zip ->
                         val index = ContentIndex(zip.readText(zip.getEntry(ENTRY_NAME_INDEX)))
                         idsToRemove.forEach { id -> index.removeChapter(id) }
-                        val patterns = requireNotNull(index.getContentInfo()?.chapters)
+                        val patterns = requireNotNull(index.getContentInfo()?.chapters) {
+                            "Corrupted content index in $file: no chapters found"
+                        }
                             .filter { it.id !in idsToRemove }
                             .map {
                                 index.getChapterNamesPattern(it)

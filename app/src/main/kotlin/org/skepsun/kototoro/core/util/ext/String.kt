@@ -39,9 +39,20 @@ fun String.transliterate(skipMissing: Boolean): String {
     }
 }
 
+private const val FALLBACK_FILE_NAME = "untitled"
+private val fileNameIllegalChars = Regex("[^a-z0-9_\\-\u4e00-\u9fa5]", arraySetOf(RegexOption.IGNORE_CASE))
+private val fileNameWhitespace = Regex("\\s+")
+
+/**
+ * 结果永不为空：纯 emoji / 纯标点 / 不支持的语种（日文假名、韩文、西里尔之外的符号等）
+ * 会被全部替换掉，此前会产出空串或仅剩下划线，而 `UniFile.createDirectory("")` 与
+ * `createFile(".cbz")` 的失败方式是**返回 null**（不抛异常），下游的裸 `checkNotNull`
+ * 于是抛出无上下文的 "Required value was null."。
+ */
 fun String.toFileNameSafe(): String = this.transliterate(false)
-    .replace(Regex("[^a-z0-9_\\-\u4e00-\u9fa5]", arraySetOf(RegexOption.IGNORE_CASE)), " ")
-    .replace(Regex("\\s+"), "_")
+    .replace(fileNameIllegalChars, " ")
+    .replace(fileNameWhitespace, "_")
+    .ifBlank { FALLBACK_FILE_NAME }
 
 fun CharSequence.sanitize(): CharSequence {
     return filterNot { c -> c.isReplacement() }

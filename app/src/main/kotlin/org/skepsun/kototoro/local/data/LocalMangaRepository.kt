@@ -310,8 +310,30 @@ class LocalMangaRepository @Inject constructor(
     override suspend fun getRelated(seed: Content): List<Content> = emptyList()
 
     suspend fun getOutputDir(manga: Content, fallback: Uri?): LocalStorageRoot? {
-        val isVideo = manga.source?.getContentType() == ContentType.VIDEO
-        val isNovel = manga.source?.getContentType() == ContentType.NOVEL
+        val candidates = getOutputDirCandidates(manga, fallback)
+        val defaultDir = candidates.firstOrNull()
+        if (defaultDir != null && LocalContentOutput.get(defaultDir, manga, App.getInstance().cacheDir) != null) {
+            return defaultDir
+        }
+        return candidates
+            .drop(1)
+            .firstOrNull {
+                LocalContentOutput.get(it, manga, App.getInstance().cacheDir) != null
+            } ?: defaultDir
+    }
+
+    /**
+     * 有序的下载根目录候选：首个是首选（fallback / 用户配置的下载目录），其余是同类型下
+     * 其余可写根。
+     *
+     * 注意 `LocalStorageRoot.isWriteable()` 对 SAF 树 URI 只查元数据标志位，授权被系统回收后
+     * 它仍可能返回 true；真正的判定只能靠实际创建文件（UniFile 失败时返回 null，见
+     * StorageWriteException）。下载侧应遍历候选逐个尝试，见 DownloadWorker。
+     */
+    suspend fun getOutputDirCandidates(manga: Content, fallback: Uri?): List<LocalStorageRoot> {
+        val contentType = manga.source?.getContentType()
+        val isVideo = contentType == ContentType.VIDEO
+        val isNovel = contentType == ContentType.NOVEL
 
         val defaultDir = fallback?.let { storageManager.resolveRoot(it) }?.takeIf(LocalStorageRoot::isWriteable) ?: when {
             isVideo -> storageManager.getDefaultVideoWriteableRoot()
@@ -319,20 +341,17 @@ class LocalMangaRepository @Inject constructor(
             else -> storageManager.getDefaultWriteableRoot()
         }
 
-        if (defaultDir != null && LocalContentOutput.get(defaultDir, manga, App.getInstance().cacheDir) != null) {
-            return defaultDir
-        }
-
         val writeableDirs = when {
             isVideo -> storageManager.getVideoWriteableRoots()
             isNovel -> storageManager.getNovelWriteableRoots()
             else -> storageManager.getWriteableRoots()
         }
-
-        return writeableDirs
-            .firstOrNull {
-                LocalContentOutput.get(it, manga, App.getInstance().cacheDir) != null
-            } ?: defaultDir
+        return buildList {
+            if (defaultDir != null) {
+                add(defaultDir)
+            }
+            addAll(writeableDirs.filterNot { it == defaultDir })
+        }
     }
 
     suspend fun cleanup(): Boolean {

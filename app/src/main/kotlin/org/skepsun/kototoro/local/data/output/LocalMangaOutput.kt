@@ -6,6 +6,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okio.Closeable
+import org.skepsun.kototoro.core.exceptions.StorageWriteException
 import org.skepsun.kototoro.core.prefs.DownloadFormat
 import org.skepsun.kototoro.core.util.ext.MimeType
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
@@ -59,7 +60,12 @@ sealed class LocalContentOutput(
             } else {
                 format
             }
-            checkNotNull(getImpl(root, manga, onlyIfExists = false, format = targetFormat, cacheDir = cacheDir))
+            getImpl(root, manga, onlyIfExists = false, format = targetFormat, cacheDir = cacheDir)
+                ?: throw StorageWriteException(
+                    rootUri = runCatching { root.uri.toString() }.getOrNull(),
+                    targetName = manga.title.toFileNameSafe(),
+                    targetIsDirectory = targetFormat == DownloadFormat.MULTIPLE_CBZ,
+                )
         }
 
         suspend fun get(root: LocalStorageRoot, manga: Content, cacheDir: File): LocalContentOutput? = withContext(Dispatchers.IO) {
@@ -99,10 +105,10 @@ sealed class LocalContentOutput(
                         !onlyIfExists -> when (format) {
                             DownloadFormat.AUTOMATIC -> null
                             DownloadFormat.SINGLE_CBZ -> LocalContentZipOutput(
-                                checkNotNull(root.file.createFile("$fileName.cbz")), manga, cacheDir,
+                                root.file.createFileOrThrow("$fileName.cbz"), manga, cacheDir,
                             )
                             DownloadFormat.MULTIPLE_CBZ -> LocalContentDirOutput(
-                                checkNotNull(root.file.createDirectory(fileName)), manga, cacheDir,
+                                root.file.createDirectoryOrThrow(fileName), manga, cacheDir,
                             )
                         }
 
