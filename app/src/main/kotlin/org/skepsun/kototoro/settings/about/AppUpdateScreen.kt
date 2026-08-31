@@ -57,13 +57,12 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.AppVersion
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.FileSize
 
 data class AppUpdateMirrorOption(
-    val mirror: AppSettings.GitHubMirror,
+    val id: String,
     val label: String,
 )
 
@@ -87,11 +86,11 @@ fun AppUpdateScreen(
     updateMessage: String?,
     operationErrorMessage: String?,
     mirrorOptions: List<AppUpdateMirrorOption>,
-    selectedMirror: AppSettings.GitHubMirror,
+    selectedMirror: String,
     selectedSource: AppUpdateSource,
     sourceProbes: Map<AppUpdateSource, AppUpdateSourceProbe>,
     onSourceSelected: (AppUpdateSource) -> Unit,
-    onMirrorSelected: (AppSettings.GitHubMirror) -> Unit,
+    onMirrorSelected: (String) -> Unit,
     onCancel: () -> Unit,
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
@@ -146,7 +145,7 @@ fun AppUpdateScreen(
                 AnimatedVisibility(visible = selectedSource == AppUpdateSource.GITHUB) {
                     MirrorSelector(
                         options = mirrorOptions,
-                        selectedMirror = selectedMirror,
+                        selectedId = selectedMirror,
                         onMirrorSelected = onMirrorSelected,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -406,8 +405,8 @@ private fun sourceProbeColor(probe: AppUpdateSourceProbe?) = when {
 @Composable
 private fun MirrorSelector(
     options: List<AppUpdateMirrorOption>,
-    selectedMirror: AppSettings.GitHubMirror,
-    onMirrorSelected: (AppSettings.GitHubMirror) -> Unit,
+    selectedId: String,
+    onMirrorSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ElevatedCard(
@@ -441,8 +440,8 @@ private fun MirrorSelector(
             ) {
                 options.forEach { option ->
                     FilterChip(
-                        selected = option.mirror == selectedMirror,
-                        onClick = { onMirrorSelected(option.mirror) },
+                        selected = option.id == selectedId,
+                        onClick = { onMirrorSelected(option.id) },
                         label = { Text(option.label) },
                     )
                 }
@@ -580,7 +579,7 @@ private fun AppUpdateScreenPreview() {
             updateMessage = null,
             operationErrorMessage = null,
             mirrorOptions = emptyList(),
-            selectedMirror = AppSettings.GitHubMirror.NATIVE,
+            selectedMirror = "native",
             selectedSource = AppUpdateSource.GITCODE,
             sourceProbes = emptyMap(),
             onSourceSelected = {},

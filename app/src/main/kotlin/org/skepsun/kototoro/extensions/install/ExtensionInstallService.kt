@@ -18,8 +18,12 @@ import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibility
 import org.skepsun.kototoro.cloudstream.runtime.CloudstreamPluginCompatibilityChecker
 import org.skepsun.kototoro.core.exceptions.IncompatiblePluginException
 import org.skepsun.kototoro.core.exceptions.MissingPluginHostClassesException
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.extensions.repo.RepoAvailableExtension
+import org.skepsun.kototoro.extensions.repo.gitHubArchiveCandidates
 import org.skepsun.kototoro.extensions.repo.toInstalledPackageName
 import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
@@ -29,13 +33,12 @@ import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
-import org.skepsun.kototoro.core.prefs.AppSettings
-
 @Singleton
 class ExtensionInstallService @Inject constructor(
     @ApplicationContext private val context: Context,
     @ContentHttpClient private val httpClient: OkHttpClient,
     private val settings: AppSettings,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val systemPackageInstaller: SystemPackageInstaller,
 ) {
@@ -54,18 +57,6 @@ class ExtensionInstallService @Inject constructor(
         }
     }
 
-    private fun applyMirror(url: String): String {
-        if (url.startsWith("https://raw.githubusercontent.com/")) {
-            return when (settings.gitHubMirror) {
-                AppSettings.GitHubMirror.NATIVE -> url
-                AppSettings.GitHubMirror.KKGITHUB -> url.replace("raw.githubusercontent.com", "raw.kkgithub.com")
-                AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
-                AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
-            }
-        }
-        return url
-    }
-
     private val activeCalls = ConcurrentHashMap<String, Call>()
     private val _downloadStates = MutableStateFlow<Map<String, ExtensionInstallDownloadState>>(emptyMap())
 
@@ -75,36 +66,49 @@ class ExtensionInstallService @Inject constructor(
         extension: RepoAvailableExtension,
         mode: ExtensionInstallMode = ExtensionInstallMode.LOCAL_APK,
     ): ExtensionInstallResult {
-        val archiveUrl = extension.archiveUrl?.let(::applyMirror) ?: when (extension.type) {
-            ExternalExtensionType.CLOUDSTREAM -> applyMirror("${extension.repoUrl}/${extension.archiveName}")
-            else -> applyMirror("${extension.repoUrl}/apk/${extension.archiveName}")
+        val rawUrl = extension.archiveUrl ?: when (extension.type) {
+            ExternalExtensionType.CLOUDSTREAM -> "${extension.repoUrl}/${extension.archiveName}"
+            else -> "${extension.repoUrl}/apk/${extension.archiveName}"
         }
+        val mirrorEntry = mirrorRepository.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE
+        val candidates = gitHubArchiveCandidates(rawUrl, mirrorEntry, mirrorRepository.entries.value)
         val outputDir = File(context.cacheDir, "extension-installs").apply { mkdirs() }
         val archiveExtension = extension.archiveName.substringAfterLast('.', missingDelimiterValue = "apk")
         val outputFile = File(outputDir, "${extension.pkgName}-${extension.versionCode}.$archiveExtension")
-        val call = downloadClient(archiveUrl)
-            .newCachelessCallWithProgress(GET(archiveUrl), ExtensionInstallProgressListener(extension.pkgName))
-        check(activeCalls.putIfAbsent(extension.pkgName, call) == null) {
-            "Extension install download already in progress for ${extension.pkgName}"
-        }
-        updateDownloadState(extension.pkgName, bytesRead = 0L, contentLength = -1L)
-        try {
-            call.awaitSuccess().use { response ->
-                val body = requireNotNull(response.body) { "Missing APK response body" }
-                outputFile.outputStream().use { output ->
-                    body.byteStream().use { input ->
-                        input.copyTo(output)
+        var lastError: Exception? = null
+        var downloaded = false
+        for (archiveUrl in candidates) {
+            val call = downloadClient(archiveUrl)
+                .newCachelessCallWithProgress(GET(archiveUrl), ExtensionInstallProgressListener(extension.pkgName))
+            check(activeCalls.putIfAbsent(extension.pkgName, call) == null) {
+                "Extension install download already in progress for ${extension.pkgName}"
+            }
+            updateDownloadState(extension.pkgName, bytesRead = 0L, contentLength = -1L)
+            try {
+                call.awaitSuccess().use { response ->
+                    val body = requireNotNull(response.body) { "Missing APK response body" }
+                    outputFile.outputStream().use { output ->
+                        body.byteStream().use { input ->
+                            input.copyTo(output)
+                        }
                     }
                 }
+                downloaded = true
+                break
+            } catch (e: IOException) {
+                if (call.isCanceled()) {
+                    throw CancellationException("Extension install download cancelled for ${extension.pkgName}", e)
+                }
+                // Mirror miss (blocked host / 404 through a proxy): fall through to the next candidate.
+                android.util.Log.w("KototoroInit", "install download via $archiveUrl failed: ${e.message}")
+                lastError = e
+            } finally {
+                activeCalls.remove(extension.pkgName)
+                _downloadStates.update { it - extension.pkgName }
             }
-        } catch (e: IOException) {
-            if (call.isCanceled()) {
-                throw CancellationException("Extension install download cancelled for ${extension.pkgName}", e)
-            }
-            throw e
-        } finally {
-            activeCalls.remove(extension.pkgName)
-            _downloadStates.update { it - extension.pkgName }
+        }
+        if (!downloaded) {
+            throw lastError ?: IOException("No download candidate succeeded for ${extension.pkgName}")
         }
 
         if (extension.type == org.skepsun.kototoro.extensions.repo.ExternalExtensionType.JAR) {

@@ -16,8 +16,10 @@ import okhttp3.Protocol
 import okio.BufferedSource
 import okio.buffer
 import okio.gzip
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.mihon.MihonExtensionLoader
 import org.skepsun.kototoro.aniyomi.AniyomiExtensionLoader
 import javax.inject.Inject
@@ -40,6 +42,7 @@ class ExtensionRepoService @Inject constructor(
     @ContentHttpClient private val httpClient: OkHttpClient,
     private val json: Json,
     private val settings: AppSettings,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
 ) {
     private val githubHttpClient by lazy {
         httpClient.newBuilder()
@@ -48,15 +51,8 @@ class ExtensionRepoService @Inject constructor(
     }
 
     private fun applyMirror(url: String): String {
-        if (url.startsWith("https://raw.githubusercontent.com/")) {
-            return when (settings.gitHubMirror) {
-                AppSettings.GitHubMirror.NATIVE -> url
-                AppSettings.GitHubMirror.KKGITHUB -> url.replace("raw.githubusercontent.com", "raw.kkgithub.com")
-                AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
-                AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
-            }
-        }
-        return url
+        val entry = mirrorRepository.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE
+        return applyGitHubMirror(url, entry)
     }
 
     private fun deriveRepoName(baseUrl: String, defaultName: String): String {

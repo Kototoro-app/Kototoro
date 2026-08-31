@@ -1,23 +1,34 @@
 package org.skepsun.kototoro.core.lnreader
 
 import android.util.Log
+import eu.kanade.tachiyomi.network.awaitSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.jsonsource.JsonSourceManager
+import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.extensions.repo.gitHubArchiveCandidates
 
 /**
  * Manages LNReader plugin repositories.
  *
  * Fetches plugin index (plugins.min.json), downloads individual JS bundles,
- * and installs them via JsonSourceManager.
+ * and installs them via JsonSourceManager. Both network paths honour the
+ * user's GitHub mirror (with fallback candidates) and run as cancellable
+ * coroutine calls — a blocking `execute()` used to leave the wizard stuck on
+ * "downloading" because cancelling could not interrupt it.
  */
 class LNReaderRepository(
     private val httpClient: OkHttpClient,
     private val jsonSourceManager: JsonSourceManager,
+    private val settings: AppSettings,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
 ) {
 
     companion object {
@@ -28,33 +39,35 @@ class LNReaderRepository(
             "https://raw.githubusercontent.com/LNReader/lnreader-plugins/plugins/v3.0.0/.dist/plugins.min.json"
     }
 
+    /** Mirror-aware download candidates for a plugin index / JS bundle URL. */
+    private fun downloadCandidates(url: String): List<String> {
+        val entry = mirrorRepository.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE
+        return gitHubArchiveCandidates(url, entry, mirrorRepository.entries.value)
+    }
+
     /**
      * Fetch and parse the plugin index from a repository URL.
      * Returns a list of available plugins.
      */
     suspend fun fetchPluginIndex(repoUrl: String): Result<List<LNReaderPluginInfo>> =
         withContext(Dispatchers.IO) {
-            try {
-                val request = Request.Builder().url(repoUrl).build()
-                val response = httpClient.newCall(request).execute()
-
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        RuntimeException("HTTP ${response.code}: ${response.message}")
-                    )
+            var lastError: Throwable? = null
+            for (url in downloadCandidates(repoUrl)) {
+                try {
+                    val body = httpClient.newCall(Request.Builder().url(url).build())
+                        .awaitSuccess()
+                        .use { response -> response.body?.string() ?: error("Empty response") }
+                    val plugins = parsePluginIndex(body)
+                    Log.d(TAG, "Fetched ${plugins.size} plugins from $url")
+                    return@withContext Result.success(plugins)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "Plugin index fetch via $url failed: ${e.message}")
                 }
-
-                val body = response.body?.string()
-                    ?: return@withContext Result.failure(RuntimeException("Empty response"))
-                response.close()
-
-                val plugins = parsePluginIndex(body)
-                Log.d(TAG, "Fetched ${plugins.size} plugins from $repoUrl")
-                Result.success(plugins)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch plugin index from $repoUrl", e)
-                Result.failure(e)
             }
+            Result.failure(lastError ?: RuntimeException("No plugin index candidate succeeded"))
         }
 
     /**
@@ -62,22 +75,14 @@ class LNReaderRepository(
      */
     suspend fun installPlugin(plugin: LNReaderPluginInfo): Result<Int> =
         withContext(Dispatchers.IO) {
-            try {
-                val request = Request.Builder().url(plugin.url).build()
-                val response = httpClient.newCall(request).execute()
-
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        RuntimeException("HTTP ${response.code}: ${response.message}")
-                    )
-                }
-
-                val jsContent = response.body?.string()
-                    ?: return@withContext Result.failure(RuntimeException("Empty JS bundle"))
-                    response.close()
-
+            var lastError: Throwable? = null
+            for (url in downloadCandidates(plugin.url)) {
+                try {
+                    val jsContent = httpClient.newCall(Request.Builder().url(url).build())
+                        .awaitSuccess()
+                        .use { response -> response.body?.string() ?: error("Empty JS bundle") }
                     Log.d(TAG, "Downloaded plugin ${plugin.id} (${jsContent.length} bytes)")
-                    jsonSourceManager.importLNReaderPlugin(
+                    return@withContext jsonSourceManager.importLNReaderPlugin(
                         jsContent = jsContent,
                         metadataOverride = LNReaderPluginMetadata(
                             id = plugin.id,
@@ -88,11 +93,15 @@ class LNReaderRepository(
                             icon = plugin.iconUrl,
                         ),
                     )
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to install plugin ${plugin.id}", e)
-                    Result.failure(e)
+                    lastError = e
+                    Log.w(TAG, "Plugin ${plugin.id} download via $url failed: ${e.message}")
                 }
             }
+            Result.failure(lastError ?: RuntimeException("No plugin download candidate succeeded"))
+        }
 
     private fun parsePluginIndex(json: String): List<LNReaderPluginInfo> {
         val array = JSONArray(json)

@@ -15,6 +15,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.ResponseBody.Companion.toResponseBody
 import io.mockk.mockk
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
@@ -37,6 +38,7 @@ class ExtensionRepoServiceTest : FunSpec({
 				coerceInputValues = true
 			},
 			settings = mockk<AppSettings>(relaxed = true),
+			mirrorRepository = mockk<GitHubMirrorCatalogRepository>(relaxed = true),
 		)
 	}
 
@@ -581,6 +583,7 @@ class ExtensionRepoServiceTest : FunSpec({
 					coerceInputValues = true
 				},
 				settings = mockk<AppSettings>(relaxed = true),
+				mirrorRepository = mockk<GitHubMirrorCatalogRepository>(relaxed = true),
 			)
 
 			val repo = discoveryService.fetchRepoDetails(

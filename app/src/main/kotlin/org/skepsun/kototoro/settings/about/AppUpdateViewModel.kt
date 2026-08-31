@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Environment
 import androidx.core.net.toUri
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -12,29 +13,40 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateRepository
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.prefs.displayName
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.requireValue
+import org.skepsun.kototoro.extensions.repo.applyGitHubMirror
 import javax.inject.Inject
 
 @HiltViewModel
 class AppUpdateViewModel @Inject constructor(
     private val repository: AppUpdateRepository,
     private val settings: AppSettings,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
     @ApplicationContext private val context: Context,
 ) : BaseViewModel() {
 
     val nextVersion = repository.observeAvailableUpdate()
     val selectedSource = MutableStateFlow(repository.defaultSource)
     val sourceProbes = MutableStateFlow<Map<AppUpdateSource, AppUpdateSourceProbe>>(emptyMap())
-    val selectedMirror = MutableStateFlow(settings.gitHubMirror)
+    val selectedMirror = MutableStateFlow(settings.gitHubMirrorId)
+    val mirrorOptions = mirrorRepository.entries.map { entries ->
+        entries.map { entry -> AppUpdateMirrorOption(entry.id, entry.displayName(context)) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val downloadProgress = MutableStateFlow(-1f)
     val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
     val installIntent = MutableStateFlow<Intent?>(null)
@@ -78,8 +90,8 @@ class AppUpdateViewModel @Inject constructor(
         }
     }
 
-    fun setMirror(mirror: AppSettings.GitHubMirror) {
-        settings.gitHubMirror = mirror
+    fun setMirror(mirror: String) {
+        settings.gitHubMirrorId = mirror
         selectedMirror.value = mirror
     }
 
@@ -143,16 +155,7 @@ class AppUpdateViewModel @Inject constructor(
     }
 
     private fun applyMirror(url: String): String {
-        if (!url.startsWith("https://github.com/") && !url.startsWith("https://raw.githubusercontent.com/")) {
-            return url
-        }
-        return when (selectedMirror.value) {
-            AppSettings.GitHubMirror.NATIVE -> url
-            AppSettings.GitHubMirror.KKGITHUB -> url
-                .replace("https://raw.githubusercontent.com/", "https://raw.kkgithub.com/")
-                .replace("https://github.com/", "https://kkgithub.com/")
-            AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
-            AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
-        }
+        val entry = mirrorRepository.entry(selectedMirror.value) ?: GitHubMirrorCatalog.NATIVE
+        return applyGitHubMirror(url, entry)
     }
 }

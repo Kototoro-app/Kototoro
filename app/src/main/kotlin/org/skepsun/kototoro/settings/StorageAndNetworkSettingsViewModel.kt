@@ -6,6 +6,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.Cache
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogMeta
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
+import org.skepsun.kototoro.core.github.GitHubMirrorSyncState
+import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.computeSize
 import org.skepsun.kototoro.local.data.CacheDir
@@ -19,10 +25,37 @@ import javax.inject.Inject
 class StorageAndNetworkSettingsViewModel @Inject constructor(
     private val storageManager: LocalStorageManager,
     private val httpCache: Cache,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
 ) : BaseViewModel() {
 
     private val _storageUsage = MutableStateFlow<StorageUsage?>(null)
     val storageUsage: StateFlow<StorageUsage?> = _storageUsage.asStateFlow()
+
+    val mirrorEntries: StateFlow<List<GitHubMirrorEntry>> = mirrorRepository.entries
+
+    val mirrorSyncState: StateFlow<GitHubMirrorSyncState> = mirrorRepository.syncState
+
+    val mirrorCatalogMeta: StateFlow<GitHubMirrorCatalogMeta> = mirrorRepository.meta
+
+    val mirrorProbeState: StateFlow<GitHubMirrorProbeState> = mirrorRepository.probeState
+
+    val mirrorProbeResults: StateFlow<Map<String, GitHubMirrorProbeResult>> = mirrorRepository.probeResults
+
+    fun refreshMirrorCatalog() {
+        mirrorRepository.refresh()
+    }
+
+    fun cancelMirrorCatalogSync() {
+        mirrorRepository.cancelSync()
+    }
+
+    fun probeMirrors() {
+        mirrorRepository.probeMirrors()
+    }
+
+    fun cancelMirrorProbes() {
+        mirrorRepository.cancelProbes()
+    }
 
     init {
         refreshStorageUsage()

@@ -2975,20 +2975,32 @@
     <string name="selected_count">%d selected</string>
 
     <!-- Mirrors -->
+    <string name="github_mirror_native">Direct connection (no mirror)</string>
     <string name="pref_github_mirror">GitHub Download Mirror</string>
     <string name="pref_github_mirror_summary">Select a proxy mirror if GitHub Raw is blocked in your network.</string>
-    <string-array name="pref_github_mirror_entries">
-        <item>Direct Native (Default)</item>
-        <item>KKGithub Proxy</item>
-        <item>Ghproxy.com</item>
-        <item>Ghproxy.net</item>
-    </string-array>
-    <string-array name="pref_github_mirror_values">
-        <item>native</item>
-        <item>kkgithub</item>
-        <item>ghproxy</item>
-        <item>ghproxy_net</item>
-    </string-array>
+    <string name="mirror_sync_term">Update mirror list</string>
+    <string name="mirror_sync_action">Refresh</string>
+    <string name="mirror_sync_cancel">Cancel sync</string>
+    <string name="mirror_sync_in_progress">Syncing mirror list…</string>
+    <string name="mirror_sync_keep_last">Sync failed; keeping the last list</string>
+    <string name="mirror_sync_never">Mirror list not synced yet</string>
+    <string name="mirror_sync_last_updated">Last synced: list v%1$s</string>
+    <string name="mirror_sync_success">Mirror list updated: v%1$s (%2$d mirrors)</string>
+    <string name="mirror_sync_no_manifest">No mirror list published for this branch yet — using the built-in list</string>
+    <string name="mirror_sync_no_manifest_summary">No published list yet (built-in list in use)</string>
+    <string name="mirror_sync_failed_summary">Sync failed</string>
+    <string name="mirror_sync_failed">Mirror list sync failed: %1$s</string>
+    <string name="mirror_probe_action">Test mirror connectivity</string>
+    <string name="mirror_probe_short_action">Test</string>
+    <string name="mirror_probe_cancel">Cancel test</string>
+    <string name="mirror_probe_summary">Fetch a tiny file through each mirror to measure latency.</string>
+    <string name="mirror_probe_running">Testing mirrors (%1$d/%2$d)…</string>
+    <string name="mirror_probe_finished">Fastest: %1$s (%2$d ms) · %3$d/%4$d reachable</string>
+    <string name="mirror_probe_none_available">No mirror reachable</string>
+    <string name="mirror_probe_timeout">timeout</string>
+    <string name="mirror_sync_url_title">Mirror list URL (optional)</string>
+    <string name="mirror_sync_url_summary">Leave blank to use the default non-GitHub address (jsDelivr).</string>
+    <string name="mirror_sync_url_default">Default: %1$s</string>
     
     <!-- Welcome Init UI -->
     <string name="welcome_plugins_title">Initialize Plugin Sources</string>
@@ -3056,6 +3068,39 @@
     <string name="welcome_done_advice_title">If a source does not work</string>
     <string name="welcome_done_advice_summary">A short troubleshooting path, so the right people see the report.</string>
     <string name="welcome_done_advice_body">1. Confirm the issue using the original host app of the extension — for example a Mihon-type source should be tested in the Mihon app.\n2. If the problem also happens there, it belongs to the repository that maintains the extension: open an issue at the repository\'s own URL.\n3. If it only happens in Kototoro, report it in the Kototoro project repository and include the source name, the extension version and what you tried.</string>
+
+    <!-- Wizard unified header / bottom bar -->
+    <string name="welcome_step_counter">Step %1$d of %2$d</string>
+    <string name="welcome_action_configure_repos">Configure selected repositories</string>
+    <string name="welcome_action_install_count">Install %1$d extensions</string>
+    <string name="welcome_action_cancel_install">Cancel installation</string>
+    <string name="welcome_action_retry_failed">Retry failed</string>
+
+    <!-- Wizard section / repository groups -->
+    <string name="welcome_repos_selected_count">%1$d / %2$d selected</string>
+    <string name="welcome_mirror_summary">Applied to GitHub repository and download links.</string>
+    <string name="welcome_status_reading_repos">Configuring repositories…</string>
+    <string name="welcome_repo_fetch_failed">Fetch failed</string>
+    <string name="welcome_config_cancelled">Repository configuration cancelled</string>
+
+    <!-- Wizard batch install -->
+    <string name="welcome_languages_summary_more">%1$s and %2$d more</string>
+    <string name="welcome_languages_edit">Choose languages</string>
+    <string name="welcome_languages_dialog_title">Select languages</string>
+    <string name="welcome_languages_search_hint">Search languages</string>
+    <string name="welcome_languages_selected_count">%1$d selected</string>
+    <string name="welcome_languages_group_multilingual">Multilingual</string>
+    <string name="welcome_languages_group_other">Other languages</string>
+    <string name="welcome_status_analyzing">Analyzing available languages and content types…</string>
+    <string name="welcome_status_building_plan">Building the install plan…</string>
+    <string name="welcome_install_plan_conditions">%1$d language(s) · %2$d content format(s)</string>
+
+    <!-- Wizard done page -->
+    <string name="welcome_done_success_title">All set</string>
+    <string name="welcome_done_partial_title">Finished with some failures</string>
+    <string name="welcome_done_skipped_title">Setup finished</string>
+    <string name="welcome_done_success_detail">%1$d extensions installed. Matching sources are enabled.</string>
+    <string name="welcome_done_partial_detail">Succeeded %1$d · Failed %2$d · Cancelled %3$d. You can retry the failed items.</string>
 
     <string name="welcome_permissions_title">Permissions &amp; background survival</string>
     <string name="welcome_permissions_summary">A few optional permissions keep downloads, updates and the server-like features reliable.</string>

@@ -1596,20 +1596,9 @@
     <string name="pref_browse_panorama_gradient_alpha">瀏覽頁全景封面漸變強度</string>
     <string name="pref_doh_custom_ips">自定義 DoH Bootstrap IPs (逗號分隔)</string>
     <string name="pref_doh_custom_url">自定義 DoH URL</string>
+    <string name="github_mirror_native">原生直連（不使用鏡像）</string>
     <string name="pref_github_mirror">GitHub 網絡加速鏡像</string>
     <string name="pref_github_mirror_summary">如果您身處國內導致 GitHub 直連報錯，請選擇一個加速鏡像路線解決。</string>
-    <string-array name="pref_github_mirror_entries">
-        <item>原生直連 (默認)</item>
-        <item>KKGithub (推薦)</item>
-        <item>GHProxy 路線 1</item>
-        <item>GHProxy 路線 2</item>
-    </string-array>
-    <string-array name="pref_github_mirror_values">
-        <item>native</item>
-        <item>kkgithub</item>
-        <item>ghproxy</item>
-        <item>ghproxy_net</item>
-    </string-array>
     <string name="pref_glass_effect">毛玻璃模糊</string>
     <string name="pref_glass_effect_summary">模糊支持的 Compose 容器背後的內容</string>
     <string name="pref_haze_opacity">玻璃容器不透明度</string>

@@ -28,9 +28,10 @@ class LNReaderRepoViewModel @Inject constructor(
     private val jsonSourceManager: JsonSourceManager,
     @JsonSourceHttpClient private val okHttpClient: OkHttpClient,
     private val appSettings: AppSettings,
+    private val mirrorRepository: org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository,
 ) : BaseViewModel() {
 
-    private val repository = LNReaderRepository(okHttpClient, jsonSourceManager)
+    private val repository = LNReaderRepository(okHttpClient, jsonSourceManager, appSettings, mirrorRepository)
 
     private val _plugins = MutableStateFlow<List<LNReaderPluginInfo>>(emptyList())
 

@@ -16,7 +16,9 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import org.skepsun.kototoro.core.network.ContentHttpClient
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 
 /**
  * Resolves JAR source languages without installing the extension or loading its classes.
@@ -29,6 +31,7 @@ class JarExtensionMetadataProbe @Inject constructor(
     @ApplicationContext private val context: Context,
     @ContentHttpClient private val httpClient: OkHttpClient,
     private val settings: AppSettings,
+    private val mirrorRepository: GitHubMirrorCatalogRepository,
 ) {
 
     private val cacheMutex = Mutex()
@@ -78,32 +81,30 @@ class JarExtensionMetadataProbe @Inject constructor(
         val temporary = File(cacheDir, "${extension.pkgName}-${extension.versionCode}.download")
         val rawUrl = extension.archiveUrl
             ?: "${extension.repoUrl.trimEnd('/')}/apk/${extension.archiveName}"
-        val url = applyMirror(rawUrl)
-        val client = if (url.isGitHubUrl()) githubHttpClient else httpClient
-        try {
-            client.newCall(GET(url)).awaitSuccess().use { response ->
-                val body = response.body
-                temporary.outputStream().use { output -> body.byteStream().use { input -> input.copyTo(output) } }
+        val entry = mirrorRepository.entry(settings.gitHubMirrorId) ?: GitHubMirrorCatalog.NATIVE
+        // Same fallback chain as the installer: jsDelivr-style mirrors cannot serve
+        // GitHub release assets, so other mirrors are tried before giving up.
+        var lastError: Exception? = null
+        for (url in gitHubArchiveCandidates(rawUrl, entry, mirrorRepository.entries.value)) {
+            val client = if (url.isGitHubUrl()) githubHttpClient else httpClient
+            try {
+                client.newCall(GET(url)).awaitSuccess().use { response ->
+                    val body = response.body
+                    temporary.outputStream().use { output -> body.byteStream().use { input -> input.copyTo(output) } }
+                }
+                if (!temporary.renameTo(target)) {
+                    temporary.copyTo(target, overwrite = true)
+                }
+                return target
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+            } finally {
+                temporary.delete()
             }
-            if (!temporary.renameTo(target)) {
-                temporary.copyTo(target, overwrite = true)
-            }
-        } finally {
-            temporary.delete()
         }
-        return target
-    }
-
-    private fun applyMirror(url: String): String {
-        if (!url.startsWith("https://raw.githubusercontent.com/")) {
-            return url
-        }
-        return when (settings.gitHubMirror) {
-            AppSettings.GitHubMirror.NATIVE -> url
-            AppSettings.GitHubMirror.KKGITHUB -> url.replace("raw.githubusercontent.com", "raw.kkgithub.com")
-            AppSettings.GitHubMirror.GHPROXY -> "https://mirror.ghproxy.com/$url"
-            AppSettings.GitHubMirror.GHPROXY_NET -> "https://ghproxy.net/$url"
-        }
+        throw lastError ?: java.io.IOException("No download candidate succeeded for ${extension.pkgName}")
     }
 
     private fun String.isGitHubUrl(): Boolean {

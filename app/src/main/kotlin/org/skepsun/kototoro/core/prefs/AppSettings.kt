@@ -760,7 +760,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         NATIVE("native"),
         KKGITHUB("kkgithub"),
         GHPROXY("ghproxy"),
-        GHPROXY_NET("ghproxy_net");
+        GHPROXY_NET("ghproxy_net"),
+        GHFAST_TOP("ghfast_top"),
+        GH_PROXY_COM("gh_proxy_com"),
+        MOEYY("moeyy"),
+        JSDMIRROR("jsdmirror");
         companion object {
             fun fromValue(value: String?): GitHubMirror =
                 entries.find { it.value == value } ?: NATIVE
@@ -768,8 +772,29 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     }
 
     var gitHubMirror: GitHubMirror
-        get() = GitHubMirror.fromValue(prefs.getString(KEY_GITHUB_MIRROR, GitHubMirror.NATIVE.value))
+        get() = GitHubMirror.fromValue(gitHubMirrorId)
         set(value) = prefs.edit { putString(KEY_GITHUB_MIRROR, value.value) }
+
+    /**
+     * The currently selected GitHub mirror as a free-form id string (defaults
+     * to the built-in `native`). Remote manifests can introduce ids that are
+     * not enum members, so selection is stored as a string while
+     * [gitHubMirror] remains a backward-compatible built-in view.
+     */
+    var gitHubMirrorId: String
+        get() = prefs.getString(KEY_GITHUB_MIRROR, GitHubMirror.NATIVE.value)
+            .orEmpty()
+            .ifBlank { GitHubMirror.NATIVE.value }
+        set(value) = prefs.edit { putString(KEY_GITHUB_MIRROR, value) }
+
+    /** Optional remote mirror-manifest URL; falls back to the built-in default when null/blank. */
+    var githubMirrorSyncUrl: String?
+        get() = prefs.getString(KEY_GITHUB_MIRROR_SYNC_URL, null)?.takeIf(String::isNotBlank)
+        set(value) = if (value.isNullOrBlank()) {
+            prefs.edit { remove(KEY_GITHUB_MIRROR_SYNC_URL) }
+        } else {
+            prefs.edit { putString(KEY_GITHUB_MIRROR_SYNC_URL, value) }
+        }
 
     var appUpdateSource: AppUpdateSource?
         get() = AppUpdateSource.fromValue(prefs.getString(KEY_APP_UPDATE_SOURCE, null))
@@ -3012,6 +3037,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_EXTENSION_INSTALL_POLICIES = "extension_install_policies"
         const val KEY_LOCAL_APK_HOT_RELOAD = "local_apk_hot_reload"
         const val KEY_GITHUB_MIRROR = "github_mirror"
+        const val KEY_GITHUB_MIRROR_SYNC_URL = "github_mirror_sync_url"
         const val KEY_APP_UPDATE_SOURCE = "app_update_source"
         const val KEY_SHOW_EXTRA_INFO_ON_CARDS = "show_extra_info_on_cards"
         const val KEY_HUGGINGFACE_MIRROR = "huggingface_mirror"

@@ -118,6 +118,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     private val tsundokuExtensionManager: TsundokuExtensionManager,
     private val cloudstreamRuntimeManager: org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager,
     private val database: org.skepsun.kototoro.core.db.MangaDatabase,
+    private val mirrorRepository: org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository,
     private val savedStateHandle: SavedStateHandle,
 ) : BaseViewModel() {
 
@@ -133,7 +134,7 @@ class UnifiedSourcesViewModel @Inject constructor(
     ) { plugins, installingIds, jsonPackages ->
         AvailablePackageSnapshot(plugins, installingIds, jsonPackages)
     }
-    private val lnReaderRepository = LNReaderRepository(okHttpClient, jsonSourceManager)
+    private val lnReaderRepository = LNReaderRepository(okHttpClient, jsonSourceManager, settings, mirrorRepository)
     private val batchUpdateState = ExtensionBatchUpdateStateMachine()
     private val filterState = MutableStateFlow(
         UnifiedSourcesFilterState(

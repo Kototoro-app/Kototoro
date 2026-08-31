@@ -2085,20 +2085,32 @@
     <string name="episode_number_format">第 %1$s 话\n\n%2$s</string>
 
     <!-- Mirrors -->
+    <string name="github_mirror_native">原生直连（不使用镜像）</string>
     <string name="pref_github_mirror">GitHub 网络加速镜像</string>
     <string name="pref_github_mirror_summary">如果您身处国内导致 GitHub 直连报错，请选择一个加速镜像路线解决。</string>
-    <string-array name="pref_github_mirror_entries">
-        <item>原生直连 (默认)</item>
-        <item>KKGithub (推荐)</item>
-        <item>GHProxy 路线 1</item>
-        <item>GHProxy 路线 2</item>
-    </string-array>
-    <string-array name="pref_github_mirror_values">
-        <item>native</item>
-        <item>kkgithub</item>
-        <item>ghproxy</item>
-        <item>ghproxy_net</item>
-    </string-array>
+    <string name="mirror_sync_term">刷新镜像列表</string>
+    <string name="mirror_sync_action">刷新</string>
+    <string name="mirror_sync_cancel">取消同步</string>
+    <string name="mirror_sync_in_progress">正在同步镜像列表…</string>
+    <string name="mirror_sync_keep_last">同步失败，已保留上次列表</string>
+    <string name="mirror_sync_never">尚未同步过镜像列表</string>
+    <string name="mirror_sync_last_updated">上次同步：清单 v%1$s</string>
+    <string name="mirror_sync_success">镜像列表已更新：v%1$s（%2$d 个镜像）</string>
+    <string name="mirror_sync_no_manifest">该分支尚未发布镜像列表，正在使用内置列表</string>
+    <string name="mirror_sync_no_manifest_summary">暂无已发布列表（使用内置列表）</string>
+    <string name="mirror_sync_failed_summary">同步失败</string>
+    <string name="mirror_sync_failed">镜像列表同步失败：%1$s</string>
+    <string name="mirror_probe_action">测试镜像连通性</string>
+    <string name="mirror_probe_short_action">测试</string>
+    <string name="mirror_probe_cancel">取消测试</string>
+    <string name="mirror_probe_summary">通过每个镜像拉取一个小文件以测量延迟。</string>
+    <string name="mirror_probe_running">正在测试镜像（%1$d/%2$d）…</string>
+    <string name="mirror_probe_finished">最快：%1$s（%2$d 毫秒）· %3$d/%4$d 可用</string>
+    <string name="mirror_probe_none_available">无可达镜像</string>
+    <string name="mirror_probe_timeout">超时</string>
+    <string name="mirror_sync_url_title">镜像列表地址（可选）</string>
+    <string name="mirror_sync_url_summary">留空使用默认的非 GitHub 地址（jsDelivr）。</string>
+    <string name="mirror_sync_url_default">默认：%1$s</string>
 
     <!-- Welcome Init UI -->
     <string name="welcome_plugins_title">初始化插件源</string>
@@ -2170,6 +2182,39 @@
     <string name="welcome_done_advice_title">如果内容源出问题</string>
     <string name="welcome_done_advice_summary">按这条路径排查，把问题反馈给对的人。</string>
     <string name="welcome_done_advice_body">1. 先用拓展对应的原始宿主应用确认是否同样有问题——例如 Mihon 类型的源应先在 Mihon 应用中测试。\n2. 如果宿主应用里也一样，问题属于维护该拓展的仓库：到该仓库自己的地址提 Issue。\n3. 如果只在 Kototoro 中出现，请到 Kototoro 项目仓库提 Issue，并附上源名称、拓展版本和你尝试过的内容。</string>
+
+    <!-- Wizard unified header / bottom bar -->
+    <string name="welcome_step_counter">第 %1$d / %2$d 步</string>
+    <string name="welcome_action_configure_repos">配置所选仓库</string>
+    <string name="welcome_action_install_count">安装 %1$d 个扩展</string>
+    <string name="welcome_action_cancel_install">取消安装</string>
+    <string name="welcome_action_retry_failed">重试失败项</string>
+
+    <!-- Wizard section / repository groups -->
+    <string name="welcome_repos_selected_count">已选 %1$d / %2$d</string>
+    <string name="welcome_mirror_summary">对 GitHub 仓库与下载链接生效。</string>
+    <string name="welcome_status_reading_repos">正在配置仓库……</string>
+    <string name="welcome_repo_fetch_failed">拉取失败</string>
+    <string name="welcome_config_cancelled">已取消仓库配置</string>
+
+    <!-- Wizard batch install -->
+    <string name="welcome_languages_summary_more">%1$s 等 %2$d 项</string>
+    <string name="welcome_languages_edit">选择语言</string>
+    <string name="welcome_languages_dialog_title">选择语言</string>
+    <string name="welcome_languages_search_hint">搜索语言</string>
+    <string name="welcome_languages_selected_count">已选择 %1$d 项</string>
+    <string name="welcome_languages_group_multilingual">多语言</string>
+    <string name="welcome_languages_group_other">其他语言</string>
+    <string name="welcome_status_analyzing">正在分析可用语言与内容类型……</string>
+    <string name="welcome_status_building_plan">正在生成安装计划……</string>
+    <string name="welcome_install_plan_conditions">%1$d 种语言 · %2$d 种内容类型</string>
+
+    <!-- Wizard done page -->
+    <string name="welcome_done_success_title">全部完成</string>
+    <string name="welcome_done_partial_title">部分项目安装失败</string>
+    <string name="welcome_done_skipped_title">设置完成</string>
+    <string name="welcome_done_success_detail">已安装 %1$d 个扩展，匹配的源已启用。</string>
+    <string name="welcome_done_partial_detail">成功 %1$d · 失败 %2$d · 取消 %3$d。可以重试失败的项目。</string>
 
     <string name="welcome_permissions_title">权限与后台存活</string>
     <string name="welcome_permissions_summary">几个可选权限能让下载、更新与后台功能更可靠。</string>

@@ -27,9 +27,15 @@ import javax.inject.Inject
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.network.DoHProvider
+import org.skepsun.kototoro.core.github.GitHubMirrorCatalogMeta
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
+import org.skepsun.kototoro.core.github.GitHubMirrorSyncState
+import org.skepsun.kototoro.core.github.latencyLabel
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.CloudflareStrategy
+import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
 import org.skepsun.kototoro.core.prefs.NetworkPolicy
+import org.skepsun.kototoro.core.prefs.displayName
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
@@ -65,7 +71,7 @@ fun StorageAndNetworkSettingsRoute(
     val dohCustomUrl = settings.observeAsState(AppSettings.KEY_DOH_CUSTOM_URL) { dohCustomUrl.orEmpty() }.value
     val dohCustomIps = settings.observeAsState(AppSettings.KEY_DOH_CUSTOM_IPS) { dohCustomIps.orEmpty() }.value
     val imagesProxy = settings.observeAsState(AppSettings.KEY_IMAGES_PROXY) { imagesProxy }.value
-    val gitHubMirror = settings.observeAsState(AppSettings.KEY_GITHUB_MIRROR) { gitHubMirror }.value
+    val gitHubMirrorId = settings.observeAsState(AppSettings.KEY_GITHUB_MIRROR) { gitHubMirrorId }.value
     val huggingFaceMirror = settings.observeAsState(AppSettings.KEY_HUGGINGFACE_MIRROR) { huggingFaceMirror }.value
     val bangumiMirror = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR) { bangumiMirror }.value
     val bangumiMirrorCustomBase = settings.observeAsState(AppSettings.KEY_BANGUMI_MIRROR_CUSTOM_BASE) {
@@ -104,6 +110,44 @@ fun StorageAndNetworkSettingsRoute(
         }
     }
 
+    val githubMirrorSyncState = viewModel.mirrorSyncState.collectAsStateWithLifecycle().value
+    val githubMirrorSyncMeta = viewModel.mirrorCatalogMeta.collectAsStateWithLifecycle().value
+    val githubMirrorProbeState = viewModel.mirrorProbeState.collectAsStateWithLifecycle().value
+    val githubMirrorProbeResults = viewModel.mirrorProbeResults.collectAsStateWithLifecycle().value
+    val githubMirrorEntries = viewModel.mirrorEntries.collectAsStateWithLifecycle().value
+    val githubMirrorSyncUrl = settings.observeAsState(AppSettings.KEY_GITHUB_MIRROR_SYNC_URL) {
+        githubMirrorSyncUrl.orEmpty()
+    }.value
+
+    LaunchedEffect(githubMirrorSyncState) {
+        when (val sync = githubMirrorSyncState) {
+            is GitHubMirrorSyncState.Success -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.mirror_sync_success, sync.version, sync.mirrorCount),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            is GitHubMirrorSyncState.Failed -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.mirror_sync_failed, sync.error.orEmpty()),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            // Nothing published for this branch is a known state, not an error:
+            // reporting it as a failure made a working feature look broken.
+            is GitHubMirrorSyncState.NoManifest -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.mirror_sync_no_manifest),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+            else -> Unit
+        }
+    }
+
     val networkOptions = listOf(
         SettingsChoiceOption(NetworkPolicy.ALWAYS, context.getString(R.string.always)),
         SettingsChoiceOption(NetworkPolicy.NON_METERED, context.getString(R.string.only_using_wifi)),
@@ -122,12 +166,9 @@ fun StorageAndNetworkSettingsRoute(
         SettingsChoiceOption(0, imageProxyLabels[1]),
         SettingsChoiceOption(1, imageProxyLabels[2]),
     )
-    val gitHubMirrorOptions = listOf(
-        SettingsChoiceOption(AppSettings.GitHubMirror.NATIVE, "Direct Native (Default)"),
-        SettingsChoiceOption(AppSettings.GitHubMirror.KKGITHUB, "KKGithub Proxy"),
-        SettingsChoiceOption(AppSettings.GitHubMirror.GHPROXY, "Ghproxy.com"),
-        SettingsChoiceOption(AppSettings.GitHubMirror.GHPROXY_NET, "Ghproxy.net"),
-    )
+    val gitHubMirrorOptions = githubMirrorEntries.map { entry ->
+        SettingsChoiceOption(entry.id, entry.displayName(context) + githubMirrorProbeResults[entry.id].latencyLabel(context))
+    }
     val huggingFaceMirrorOptions = listOf(
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.NATIVE, "Direct Native (Default)"),
         SettingsChoiceOption(AppSettings.HuggingFaceMirror.HF_MIRROR, "hf-mirror.com"),
@@ -244,10 +285,58 @@ fun StorageAndNetworkSettingsRoute(
                 SettingsChoicePreference(
                     title = context.getString(R.string.pref_github_mirror),
                     iconRes = R.drawable.ic_code,
-                    value = gitHubMirror,
+                    value = gitHubMirrorId,
                     options = gitHubMirrorOptions,
                     summary = context.getString(R.string.pref_github_mirror_summary),
-                    onValueChange = { settings.gitHubMirror = it },
+                    onValueChange = { settings.gitHubMirrorId = it },
+                )
+            }
+            item {
+                val syncing = githubMirrorSyncState is GitHubMirrorSyncState.Refreshing
+                SettingsActionPreference(
+                    title = context.getString(
+                        if (syncing) R.string.mirror_sync_cancel else R.string.mirror_sync_term,
+                    ),
+                    summary = mirrorSyncSummary(context, githubMirrorSyncState, githubMirrorSyncMeta),
+                    iconRes = R.drawable.ic_sync,
+                    enabled = true,
+                    showChevron = false,
+                    onClick = {
+                        if (syncing) {
+                            viewModel.cancelMirrorCatalogSync()
+                        } else {
+                            viewModel.refreshMirrorCatalog()
+                        }
+                    },
+                )
+            }
+            item {
+                val probing = githubMirrorProbeState is GitHubMirrorProbeState.Running
+                SettingsActionPreference(
+                    title = context.getString(
+                        if (probing) R.string.mirror_probe_cancel else R.string.mirror_probe_action,
+                    ),
+                    summary = mirrorProbeSummary(context, githubMirrorProbeState, githubMirrorEntries),
+                    iconRes = R.drawable.ic_wifi,
+                    enabled = true,
+                    showChevron = false,
+                    onClick = {
+                        if (probing) {
+                            viewModel.cancelMirrorProbes()
+                        } else {
+                            viewModel.probeMirrors()
+                        }
+                    },
+                )
+            }
+            item {
+                SettingsTextInputPreference(
+                    title = context.getString(R.string.mirror_sync_url_title),
+                    value = githubMirrorSyncUrl,
+                    summary = context.getString(R.string.mirror_sync_url_summary),
+                    placeholder = context.getString(R.string.mirror_sync_url_default, mirrorSyncDefaultUrl(context)),
+                    iconRes = R.drawable.ic_edit,
+                    onValueChange = { settings.githubMirrorSyncUrl = it },
                 )
             }
         },
@@ -520,4 +609,53 @@ private fun buildProxySummary(
         address.isNullOrEmpty() || port == 0 -> context.getString(R.string.invalid_proxy_configuration)
         else -> "$address:$port"
     }
+}
+
+private fun mirrorSyncDefaultUrl(context: android.content.Context): String {
+    val repo = context.getString(R.string.github_updates_repo)
+    return "https://cdn.jsdmirror.com/gh/$repo@main/docs/github-mirrors.json"
+}
+
+private fun mirrorSyncSummary(
+    context: android.content.Context,
+    state: GitHubMirrorSyncState,
+    meta: GitHubMirrorCatalogMeta,
+): String = when (state) {
+    is GitHubMirrorSyncState.Refreshing -> context.getString(R.string.mirror_sync_in_progress)
+    is GitHubMirrorSyncState.Success -> context.getString(R.string.mirror_sync_success, state.version, state.mirrorCount)
+    is GitHubMirrorSyncState.Failed -> context.getString(R.string.mirror_sync_failed_summary)
+    is GitHubMirrorSyncState.NoManifest -> context.getString(R.string.mirror_sync_no_manifest_summary)
+    GitHubMirrorSyncState.Idle -> {
+        if (meta.lastRefreshAt > 0L) {
+            context.getString(R.string.mirror_sync_last_updated, meta.version.orEmpty())
+        } else {
+            context.getString(R.string.mirror_sync_never)
+        }
+    }
+}
+
+private fun mirrorProbeSummary(
+    context: android.content.Context,
+    state: GitHubMirrorProbeState,
+    entries: List<GitHubMirrorEntry>,
+): String = when (state) {
+    is GitHubMirrorProbeState.Running -> context.getString(R.string.mirror_probe_running, state.completed, state.total)
+    is GitHubMirrorProbeState.Finished -> when {
+        state.total == 0 -> context.getString(R.string.mirror_probe_summary)
+        state.available == 0 -> context.getString(R.string.mirror_probe_none_available)
+        else -> {
+            val fastestName = state.fastestId
+                ?.let { id -> entries.firstOrNull { it.id == id } }
+                ?.let { it.displayName(context) }
+                ?: state.fastestId.orEmpty()
+            context.getString(
+                R.string.mirror_probe_finished,
+                fastestName,
+                state.fastestMillis ?: 0L,
+                state.available,
+                state.total,
+            )
+        }
+    }
+    GitHubMirrorProbeState.Idle -> context.getString(R.string.mirror_probe_summary)
 }

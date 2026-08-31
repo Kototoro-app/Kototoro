@@ -1,0 +1,195 @@
+{
+  "version": "2.0.0",
+  "updatedAt": "2026-08-31",
+  "source": "Built-in catalog: reachable public mirrors from github.com/XIU2/UserScript",
+  "mirrors": [
+    {
+      "id": "gh_proxy_com",
+      "name": "gh-proxy.com",
+      "strategy": "PREFIX",
+      "host": "gh-proxy.com"
+    },
+    {
+      "id": "ghfast_top",
+      "name": "ghfast.top",
+      "strategy": "PREFIX",
+      "host": "ghfast.top",
+      "note": "Unreachable outside CN in the 2026-08 sweep; kept as it may serve CN users."
+    },
+    {
+      "id": "moeyy",
+      "name": "github.moeyy.xyz",
+      "strategy": "PREFIX",
+      "host": "github.moeyy.xyz",
+      "note": "Unreachable outside CN in the 2026-08 sweep; kept as it may serve CN users."
+    },
+    {
+      "id": "gh_proxy_org",
+      "name": "gh-proxy.org",
+      "strategy": "PREFIX",
+      "host": "gh-proxy.org",
+      "note": "XIU2 · US"
+    },
+    {
+      "id": "cdn_gh_proxy_org",
+      "name": "cdn.gh-proxy.org",
+      "strategy": "PREFIX",
+      "host": "cdn.gh-proxy.org",
+      "note": "XIU2 · Fastly"
+    },
+    {
+      "id": "edgeone_gh_proxy_org",
+      "name": "edgeone.gh-proxy.org",
+      "strategy": "PREFIX",
+      "host": "edgeone.gh-proxy.org",
+      "note": "XIU2 · EdgeOne"
+    },
+    {
+      "id": "github_boki_moe",
+      "name": "github.boki.moe",
+      "strategy": "PREFIX",
+      "host": "github.boki.moe",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_jasonzeng_dev",
+      "name": "gh.jasonzeng.dev",
+      "strategy": "PREFIX",
+      "host": "gh.jasonzeng.dev",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_monlor_com",
+      "name": "gh.monlor.com",
+      "strategy": "PREFIX",
+      "host": "gh.monlor.com",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "github_geekery_cn",
+      "name": "github.geekery.cn",
+      "strategy": "PREFIX",
+      "host": "github.geekery.cn",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "github_ednovas_xyz",
+      "name": "github.ednovas.xyz",
+      "strategy": "PREFIX",
+      "host": "github.ednovas.xyz",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "ghfile_geekertao_top",
+      "name": "ghfile.geekertao.top",
+      "strategy": "PREFIX",
+      "host": "ghfile.geekertao.top",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "ghp_keleyaa_com",
+      "name": "ghp.keleyaa.com",
+      "strategy": "PREFIX",
+      "host": "ghp.keleyaa.com",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_chjina_com",
+      "name": "gh.chjina.com",
+      "strategy": "PREFIX",
+      "host": "gh.chjina.com",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "ghpxy_hwinzniej_top",
+      "name": "ghpxy.hwinzniej.top",
+      "strategy": "PREFIX",
+      "host": "ghpxy.hwinzniej.top",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "cdn_crashmc_com",
+      "name": "cdn.crashmc.com",
+      "strategy": "PREFIX",
+      "host": "cdn.crashmc.com",
+      "note": "XIU2 · US CF"
+    },
+    {
+      "id": "git_yylx_win",
+      "name": "git.yylx.win",
+      "strategy": "PREFIX",
+      "host": "git.yylx.win",
+      "note": "XIU2 · US CF"
+    },
+    {
+      "id": "gitproxy_mrhjx_cn",
+      "name": "gitproxy.mrhjx.cn",
+      "strategy": "PREFIX",
+      "host": "gitproxy.mrhjx.cn",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "ghproxy_cxkpro_top",
+      "name": "ghproxy.cxkpro.top",
+      "strategy": "PREFIX",
+      "host": "ghproxy.cxkpro.top",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_xxooo_cf",
+      "name": "gh.xxooo.cf",
+      "strategy": "PREFIX",
+      "host": "gh.xxooo.cf",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_idayer_com",
+      "name": "gh.idayer.com",
+      "strategy": "PREFIX",
+      "host": "gh.idayer.com",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "gh_zwy_one",
+      "name": "gh.zwy.one",
+      "strategy": "PREFIX",
+      "host": "gh.zwy.one",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "ghproxy_monkeyray_net",
+      "name": "ghproxy.monkeyray.net",
+      "strategy": "PREFIX",
+      "host": "ghproxy.monkeyray.net",
+      "note": "XIU2 · US Cloudflare"
+    },
+    {
+      "id": "wget_la",
+      "name": "wget.la",
+      "strategy": "PREFIX",
+      "host": "wget.la",
+      "note": "XIU2 · HK/JP/US CDN"
+    },
+    {
+      "id": "hk_gh_proxy_org",
+      "name": "hk.gh-proxy.org",
+      "strategy": "PREFIX",
+      "host": "hk.gh-proxy.org",
+      "note": "XIU2 · HK"
+    },
+    {
+      "id": "gh_catmak_name",
+      "name": "gh.catmak.name",
+      "strategy": "PREFIX",
+      "host": "gh.catmak.name",
+      "note": "XIU2 · KR"
+    },
+    {
+      "id": "g_blfrp_cn",
+      "name": "g.blfrp.cn",
+      "strategy": "PREFIX",
+      "host": "g.blfrp.cn",
+      "note": "XIU2 · JP"
+    }
+  ]
+}

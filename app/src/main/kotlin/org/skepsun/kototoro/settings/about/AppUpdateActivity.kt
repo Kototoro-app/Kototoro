@@ -20,7 +20,6 @@ import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.util.ext.observeEvent
@@ -72,6 +71,7 @@ class AppUpdateActivity : BaseComposeActivity() {
             val downloadProgress = viewModel.downloadProgress.collectAsStateWithLifecycle().value
             val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
             val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
+            val mirrorOptions = viewModel.mirrorOptions.collectAsStateWithLifecycle().value
             val selectedSource = viewModel.selectedSource.collectAsStateWithLifecycle().value
             val sourceProbes = viewModel.sourceProbes.collectAsStateWithLifecycle().value
             val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
@@ -83,7 +83,7 @@ class AppUpdateActivity : BaseComposeActivity() {
                 downloadState = downloadState,
                 updateMessage = updateMessage,
                 operationErrorMessage = operationErrorMessage,
-                mirrorOptions = rememberMirrorOptions(),
+                mirrorOptions = mirrorOptions,
                 selectedMirror = selectedMirror,
                 selectedSource = selectedSource,
                 sourceProbes = sourceProbes,
@@ -98,17 +98,6 @@ class AppUpdateActivity : BaseComposeActivity() {
     override fun onDestroy() {
         unregisterReceiver(downloadReceiver)
         super.onDestroy()
-    }
-
-    private fun rememberMirrorOptions(): List<AppUpdateMirrorOption> {
-        val labels = resources.getStringArray(R.array.pref_github_mirror_entries)
-        val values = resources.getStringArray(R.array.pref_github_mirror_values)
-        return values.mapIndexedNotNull { index, value ->
-            AppUpdateMirrorOption(
-                mirror = AppSettings.GitHubMirror.fromValue(value),
-                label = labels.getOrNull(index).orEmpty(),
-            )
-        }
     }
 
     private fun doUpdate() {
