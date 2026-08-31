@@ -307,6 +307,10 @@ internal fun rememberRetainedPagingSnapshotState(
                 layoutFirstVisibleIndex = index,
                 firstVisibleItemScrollOffset = offset,
                 pagingAnchorIndex = pagingAnchorIndex,
+                gridSpanCount = when (mode) {
+                    ListMode.GRID, ListMode.COMPACT_GRID -> gridState.layoutInfo.maxSpan
+                    ListMode.LIST, ListMode.DETAILED_LIST -> 1
+                },
             )?.let(host::retainPagingSnapshot)
         }
     } else {

@@ -29,6 +29,7 @@ import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
 import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.parsers.model.Content
@@ -66,6 +67,23 @@ private fun areSameRetainedItem(anchor: ListModel, candidate: ListModel): Boolea
     }
 }
 
+private fun alignRetainedGridWindowStart(
+    items: List<ListModel>,
+    desiredWindowStart: Int,
+    gridSpanCount: Int,
+): Int {
+    if (items.getOrNull(desiredWindowStart) !is ContentGridModel) {
+        return desiredWindowStart
+    }
+    var gridRunStart = desiredWindowStart
+    while (gridRunStart > 0 && items[gridRunStart - 1] is ContentGridModel) {
+        gridRunStart -= 1
+    }
+    val spanCount = gridSpanCount.coerceAtLeast(1)
+    val offsetInGridRun = desiredWindowStart - gridRunStart
+    return desiredWindowStart - offsetInGridRun % spanCount
+}
+
 internal fun createRetainedPagingSnapshot(
     loadedItems: List<ListModel>,
     clickedItem: ListModel,
@@ -73,6 +91,7 @@ internal fun createRetainedPagingSnapshot(
     layoutFirstVisibleIndex: Int,
     firstVisibleItemScrollOffset: Int,
     pagingAnchorIndex: Int,
+    gridSpanCount: Int = 1,
 ): RetainedPagingSnapshot? {
     if (loadedItems.isEmpty()) return null
 
@@ -87,7 +106,16 @@ internal fun createRetainedPagingSnapshot(
     }
     if (anchorItemIndex < 0) return null
 
-    val windowStart = (anchorItemIndex - RETAINED_PAGING_SNAPSHOT_ITEMS_BEFORE_ANCHOR).coerceAtLeast(0)
+    val unalignedWindowStart =
+        (anchorItemIndex - RETAINED_PAGING_SNAPSHOT_ITEMS_BEFORE_ANCHOR).coerceAtLeast(0)
+    val windowStart = when (listMode) {
+        ListMode.GRID, ListMode.COMPACT_GRID -> {
+            // Full-span headers reset the grid row. Align within the current contiguous
+            // card run so a bounded snapshot keeps the live list's exact column phase.
+            alignRetainedGridWindowStart(loadedItems, unalignedWindowStart, gridSpanCount)
+        }
+        ListMode.LIST, ListMode.DETAILED_LIST -> unalignedWindowStart
+    }
     val windowEnd = (windowStart + RETAINED_PAGING_SNAPSHOT_MAX_ITEMS).coerceAtMost(loadedItems.size)
     return RetainedPagingSnapshot(
         generation = 0,
