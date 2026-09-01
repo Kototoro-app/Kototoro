@@ -2356,6 +2356,7 @@
     <string name="all_sources_enabled">All sources are enabled</string>
     <string name="reader_chapter_toast">Show chapter change popup</string>
     <string name="reader_chapter_toast_summary">Show a pop-up message with a chapter title when it is changed</string>
+    <string name="reader_chapter_title_at_bottom_summary">Moves the work and chapter title from the top bar to above the progress bar, within thumb reach</string>
     <string name="reader_chapter_title_at_bottom">Show chapter title at the bottom</string>
     <string name="reader_info_bar_transparent">Transparent reader information bar</string>
     <string name="backup_restored_background">The backup will be restored in the background</string>

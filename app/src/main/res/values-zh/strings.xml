@@ -1659,6 +1659,8 @@
     <string name="reader_actions_summary">配置屏幕点按区域的操作</string>
     <string name="reader_autoscroll_pause_on_tap">点击屏幕时中断并弹出控制面板</string>
     <string name="reader_chapter_toast">显示章节切换提示</string>
+    <string name="reader_chapter_title_at_bottom">章节标题显示在底部</string>
+    <string name="reader_chapter_title_at_bottom_summary">把顶部栏里的作品名与章节名移到进度条上方，单手更够得着</string>
     <string name="reader_chapter_toast_summary">切换章节时显示包含章节标题的弹出提示</string>
     <string name="reader_control_ltr">人性化操作</string>
     <string name="reader_control_ltr_summary">硬件输入设备控制下，翻页方向将不随阅读模式调整。例：按下右键总是翻到下一页</string>

@@ -372,6 +372,7 @@ class SettingsSearchHelper @Inject constructor(
             "reader_bar_cutout_avoidance" to R.string.reader_info_bar_cutout_avoidance,
             "reader_bar_transparent" to R.string.reader_info_bar_transparent,
             "reader_chapter_toast" to R.string.reader_chapter_toast,
+            "reader_chapter_title_bottom" to R.string.reader_chapter_title_at_bottom,
             "reader_background" to R.string.background,
             "pages_numbers" to R.string.show_pages_numbers,
             "pages_preload" to R.string.preload_pages,

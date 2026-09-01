@@ -887,6 +887,19 @@ private fun ReaderMangaSettingsPage(
         }
         item {
             SettingsSwitchPreference(
+                title = stringResource(R.string.reader_chapter_title_at_bottom),
+                summary = stringResource(R.string.reader_chapter_title_at_bottom_summary),
+                iconRes = R.drawable.ic_format_size,
+                checked = settings.observeAsState(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM) {
+                    isReaderChapterTitleAtBottom
+                }.value,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM, it) }
+                },
+            )
+        }
+        item {
+            SettingsSwitchPreference(
                 title = stringResource(R.string.show_pages_numbers),
                 summary = stringResource(R.string.show_pages_numbers_summary),
                 iconRes = R.drawable.ic_list_detailed,
