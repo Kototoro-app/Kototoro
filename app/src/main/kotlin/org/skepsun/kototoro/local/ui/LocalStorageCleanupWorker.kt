@@ -49,6 +49,7 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
             deleteReadChaptersUseCase.invoke()
         }
         retryPendingEntityConsolidation()
+        repairPreferredLocalProjections()
         repairWorkStateAnchors()
         dataRepository.cleanupDatabase()
         return if (localContentRepository.cleanup()) {
@@ -67,6 +68,19 @@ class LocalStorageCleanupWorker @AssistedInject constructor(
         val repaired = entityGraphRepository.repairDetachedWorkStateAnchors()
         if (repaired > 0) {
             Log.w(TAG, "Repaired $repaired work favourites rows with a detached anchor")
+        }
+    }
+
+    /**
+     * 修复「显示投影」漂移（issue #510 的另一半）：`entity_preferences.preferred_local_manga_id`
+     * 指向了不属于本实体、已失效或已删除的投影。收藏/历史 SQL 原样拿它当显示行来排序和过滤，
+     * 而 Kotlin 侧会拒绝它并改用别的投影——于是卡片显示的是 A，排序按的是 B，
+     * 任何一次刷新都会把列表重新洗一遍。
+     */
+    private suspend fun repairPreferredLocalProjections() {
+        val repaired = entityGraphRepository.repairOrphanPreferredLocalProjections()
+        if (repaired > 0) {
+            Log.w(TAG, "Repaired $repaired entity_preferences rows with an orphan preferred projection")
         }
     }
 

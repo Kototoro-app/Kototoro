@@ -185,6 +185,19 @@ class ContentDataRepository @Inject constructor(
             if (dao.findEntity(entityId) == null) {
                 return@withTransaction
             }
+            // `preferred_local_manga_id` is the favourites/history SQL display row
+            // (`COALESCE(ep.preferred_local_manga_id, wf.anchor_manga_id)`), so it must
+            // stay an active local binding of *this* entity. The other writer of the
+            // same column, EntityGraphRepository.selectPreferredLocalWorkProjection,
+            // already enforces this; without the same guard here the column can point
+            // at another entity's projection, a CANDIDATE/REJECTED binding or a deleted
+            // manga row. SQL then sorts and filters on that row while
+            // WorkAggregateRepository drops it (`takeIf { it in localMangaIds }`) and
+            // renders a different one, so the card you see is not the card that was
+            // ordered - the list visibly reorders on the next refresh.
+            if (mangaId != null && !dao.isLocalProjectionOwnedBy(entityId, mangaId.toString())) {
+                return@withTransaction
+            }
             val existing = dao.findEntityPrefs(entityId)
             if (existing != null && existing.preferredLocalMangaId == mangaId) {
                 return@withTransaction

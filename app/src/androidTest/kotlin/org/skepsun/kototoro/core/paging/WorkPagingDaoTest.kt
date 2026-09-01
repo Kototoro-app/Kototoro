@@ -9,6 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -263,6 +264,107 @@ class WorkPagingDaoTest {
 		assertEquals("TEST", db.getWorkFavouritesDao().findQuickFilterSourceNames(-1L).first())
 		assertEquals(tagId, db.getWorkFavouritesDao().findQuickFilterTags(-1L, 3).first().id)
 	}
+
+	@Test
+	fun preferredProjectionOwnershipGuardRejectsForeignAndInactiveProjections() = runTest {
+		val sql = db.openHelper.writableDatabase
+		val dao = db.getEntityGraphDao()
+		// entity 1 owns 10_001; entity 2 owns 30_001; 40_001 is bound to entity 1 but
+		// only as a CANDIDATE, which every active-binding query excludes.
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '10001', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+		sql.execSQL(
+			"""
+			INSERT INTO manga (
+				manga_id, title, alt_title, url, public_url, rating, nsfw, content_rating,
+				cover_url, large_cover_url, state, author, source, description, content_type
+			) VALUES (40001, 'Candidate', NULL, '', '', 0, 0, NULL, '', NULL, NULL, NULL, 'TEST', NULL, 'MANGA')
+			""".trimIndent(),
+		)
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '40001', 1, 0, 'UNKNOWN', 'CANDIDATE', 'MATCHER', 0)",
+		)
+		sql.execSQL(
+			"""
+			INSERT INTO manga (
+				manga_id, title, alt_title, url, public_url, rating, nsfw, content_rating,
+				cover_url, large_cover_url, state, author, source, description, content_type
+			) VALUES (30001, 'Foreign', NULL, '', '', 0, 0, NULL, '', NULL, NULL, NULL, 'TEST', NULL, 'MANGA')
+			""".trimIndent(),
+		)
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (2, 'local_manga', '30001', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+
+		assertTrue(dao.isLocalProjectionOwnedBy(entityId = 1L, externalId = "10001"))
+		// entity_binding's PK is (source, external_id), so a projection belongs to at
+		// most one entity - accepting another entity's row is what let the favourites
+		// SQL sort and filter on a projection the card does not render.
+		assertFalse(dao.isLocalProjectionOwnedBy(entityId = 1L, externalId = "30001"))
+		assertFalse(dao.isLocalProjectionOwnedBy(entityId = 1L, externalId = "40001"))
+		assertFalse(dao.isLocalProjectionOwnedBy(entityId = 1L, externalId = "99999"))
+	}
+
+	@Test
+	fun orphanPreferredLocalDetectionFindsOnlyDriftedRows() = runTest {
+		val sql = db.openHelper.writableDatabase
+		val dao = db.getEntityGraphDao()
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '10001', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+		// entity 2 has a preference pointing at a projection it does not actively bind.
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (2, 'local_manga', '20002', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+		dao.upsertPrefsRecord(prefs(entityId = 1L, preferredLocalMangaId = 10_001L))
+		dao.upsertPrefsRecord(prefs(entityId = 2L, preferredLocalMangaId = 99_002L))
+
+		val orphans = dao.findWithOrphanPreferredLocal()
+		assertEquals(listOf(2L), orphans.map { it.entityId })
+		assertEquals(99_002L, orphans.single().preferredLocalMangaId)
+	}
+
+	@Test
+	fun localBindingFallbackOrderIsDeterministic() = runTest {
+		val sql = db.openHelper.writableDatabase
+		// Inserted high-id-first on purpose: with no ORDER BY the fallback representative
+		// used to follow physical row order, so a card could flip cover/title between two
+		// loads with no user action at all.
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '30003', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '20002', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+		sql.execSQL(
+			"INSERT INTO entity_binding VALUES (1, 'local_manga', '10001', 1, 0, 'UNKNOWN', 'CONFIRMED', 'LEGACY', 0)",
+		)
+
+		repeat(3) {
+			val bindings = db.getEntityGraphDao().findActiveLocalBindingsByEntities(listOf(1L))
+			assertEquals(
+				"active local bindings must come back in a stable order (attempt $it)",
+				listOf("10001", "20002", "30003"),
+				bindings.map { it.externalId },
+			)
+		}
+	}
+
+	private fun prefs(entityId: Long, preferredLocalMangaId: Long?) = EntityPrefsRecord(
+		entityId = entityId,
+		preferredLocalMangaId = preferredLocalMangaId,
+		titleOverride = null,
+		coverUrlOverride = null,
+		contentRatingOverride = null,
+		readingStatus = null,
+		metadataSourceKind = null,
+		metadataBindingSource = null,
+		metadataBindingExternalId = null,
+		metadataSourceService = null,
+		metadataSourceRemoteId = null,
+		updatedAt = 1L,
+	)
 
 	@Test
 	fun historyFirstScreenBenchmarkFitsBudget() = runTest {

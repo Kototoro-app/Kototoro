@@ -1206,6 +1206,42 @@ class EntityGraphRepository @Inject constructor(
         detached.size
     }
 
+    /**
+     * Re-point `entity_preferences.preferred_local_manga_id` at a live local projection of its
+     * own entity, and clear it when the entity has none left.
+     *
+     * The favourites/history SQL honours this column verbatim
+     * (`COALESCE(ep.preferred_local_manga_id, wf.anchor_manga_id)`) for both its display row and
+     * every `m.*` sort/filter key, while WorkAggregateRepository rejects it unless it is an
+     * active binding (`takeIf { it in localMangaIds }`). Once the two drift apart, a card is
+     * ordered and filtered by one projection but rendered as another, so any refresh visibly
+     * reshuffles the list - and the drift is self-perpetuating, because the stale value keeps
+     * passing the "already correct" early-return in every writer.
+     *
+     * `inspectRepairIssues` has long reported this as [EntityGraphRepairIssueKind.ORPHAN_PREFERRED_LOCAL]
+     * but nothing consumed it; `repairDetachedWorkStateAnchors` above is the same fix for the
+     * anchor half of the drift. Returns the number of rows that were touched.
+     */
+    suspend fun repairOrphanPreferredLocalProjections(): Int = withContext(Dispatchers.Default) {
+        val entityDao = db.getEntityGraphDao()
+        val orphans = entityDao.findWithOrphanPreferredLocal()
+        if (orphans.isEmpty()) {
+            return@withContext 0
+        }
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            orphans.forEach { prefs ->
+                val candidate = findWorkStateAnchorCandidate(entityDao, prefs.entityId)
+                entityDao.updateEntityPreferredLocalMangaId(
+                    entityId = prefs.entityId,
+                    preferredLocalMangaId = candidate,
+                    updatedAt = now,
+                )
+            }
+        }
+        orphans.size
+    }
+
     private fun buildConsolidationStrongKeys(manga: MangaEntity?): List<String> {
         if (manga == null) {
             return emptyList()

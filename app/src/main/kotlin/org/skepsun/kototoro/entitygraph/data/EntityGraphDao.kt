@@ -164,6 +164,35 @@ abstract class EntityGraphDao {
 
     @Query(
         """
+		SELECT EXISTS (
+			SELECT 1 FROM entity_binding
+			WHERE entity_id = :entityId
+				AND source IN ('local_manga', '0')
+				AND external_id = :externalId
+				AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		)
+        """
+    )
+    abstract suspend fun isLocalProjectionOwnedBy(entityId: Long, externalId: String): Boolean
+
+    @Query(
+        """
+		SELECT * FROM entity_preferences
+		WHERE preferred_local_manga_id IS NOT NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM entity_binding eb
+				WHERE eb.entity_id = entity_preferences.entity_id
+					AND eb.external_id = CAST(entity_preferences.preferred_local_manga_id AS TEXT)
+					AND eb.source IN ('local_manga', '0')
+					AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+			)
+		ORDER BY entity_id ASC
+        """
+    )
+    abstract suspend fun findWithOrphanPreferredLocal(): List<EntityPrefsRecord>
+
+    @Query(
+        """
 		SELECT * FROM entity_binding
 		WHERE entity_id = :entityId
 			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
@@ -186,6 +215,7 @@ abstract class EntityGraphDao {
 		WHERE entity_id = :entityId
 			AND source IN ('local_manga', '0')
 			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		ORDER BY external_id ASC
         """
     )
     abstract suspend fun findActiveLocalBindingsByEntity(entityId: Long): List<EntityBindingRecord>
@@ -196,6 +226,7 @@ abstract class EntityGraphDao {
 		WHERE entity_id IN (:entityIds)
 			AND source IN ('local_manga', '0')
 			AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
+		ORDER BY entity_id ASC, external_id ASC
         """
     )
     abstract suspend fun findActiveLocalBindingsByEntities(entityIds: List<Long>): List<EntityBindingRecord>
