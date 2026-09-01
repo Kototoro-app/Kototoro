@@ -41,15 +41,6 @@ class BatchMappingPagingSourceTest {
 	}
 
 	@Test
-	fun `favourite cold start loads only the first 64 items`() {
-		assertEquals(64, FavouriteLibraryPagingConfig.pageSize)
-		assertEquals(64, FavouriteLibraryPagingConfig.initialLoadSize)
-		assertEquals(64, FavouriteLibraryPagingConfig.prefetchDistance)
-		assertEquals(384, FavouriteLibraryPagingConfig.maxSize)
-		assertEquals(false, FavouriteLibraryPagingConfig.enablePlaceholders)
-	}
-
-	@Test
 	fun `filtered paging never washes out already loaded rows as later pages land`() = runTest {
 		// Mirrors a large favourites library (5000+) with an active quick filter
 		// (e.g. Downloaded / SFW) that drops half of every raw page: the user sits

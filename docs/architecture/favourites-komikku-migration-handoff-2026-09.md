@@ -15,8 +15,8 @@
 | 3 纯内存派生 | ✅ 完成 | `FavouriteLibraryDeriver`（visibility/quickFilters/groupAndSort 三阶段）；16 用例 |
 | 4 Container 接管状态 | ✅ 完成（管线侧） | `libraryState` StateFlow + `buildFavouriteLibraryUiState` 纯函数 + debug shadow comparison 挂点；6 用例 |
 | 5 UI 切静态 List | ✅ 完成（渲染侧） | `FavouritesCardMapper` + `FavouriteContentResolver`；`pagingContent = null`；详见 §4 |
-| 6 actions 迁移/删逐分类 VM | ✅ 完成（待设备回归） | `ContentListHost` seam + `FavouritesListHost` 适配器；`FavouritesListViewModel`/`Factory` 删除；quick filter chips 与 metadata authority 一并转内存/快照；详见 §4.6 |
-| 7 删除收藏 Paging 代码 | ⬜ 未开始 | |
+| 6 actions 迁移/删逐分类 VM | ✅ 完成（待设备回归） | `ContentListHost` seam + `FavouritesListHost` 适配器；`FavouritesListViewModel`/`Factory` 删除；quick filter chips 与 metadata authority 一并转内存/快照；详见 §4.5 |
+| 7 删除收藏 Paging 代码 | ✅ 完成（设备待补测） | `FavouriteLibraryPagingRow`/`WorkFavouritesDao.pagingSource`/`createFavouritePagingSource`/`observeFavouriteAggregates`/`FavouriteLibraryPagingConfig` 与两个旧链路测试套删除；`findList` 改成直接投影 entity；详见 §4.6 |
 | 8 验收收敛 | ⬜ 未开始 | |
 
 **性能实测**（Xiaomi M332BF / Android 16 / debug 变体 / Room in-memory）：
@@ -61,6 +61,12 @@ app/src/main/kotlin/org/skepsun/kototoro/
   favourites/ui/list/FavouritesListHost.kt     # 逐分类适配器（非 VM）：切片 + 动作转调 Container
   favourites/domain/library/FavouritesQuickFilterOptions.kt # buildFavouritesFilterOptions 纯函数（chips 无 DAO）
   favourites/ui/list/FavouritesListViewModel.kt # 删除（连同 @AssistedInject Factory）
+  # Phase 7（删收藏 Paging，2026-09-02）
+  favourites/data/FavouriteLibraryPagingRow.kt  # 删除（宽行随收藏 Paging 退休）
+  favourites/data/WorkFavouritesDao.kt          # 删 pagingSource / 全量收集包装 / findQuickFilter*；findList 改直接投影 entity
+  work/domain/WorkAggregateRepository.kt        # 删 createFavouritePagingSource / observeFavouriteAggregates / buildFavouritePagingAggregates
+  core/paging/BatchMappingPagingSource.kt       # 删 FavouriteLibraryPagingConfig（历史页仍用 LargeLibraryPagingConfig + BatchMappingPagingSource）
+  # 测试删除：FavouriteLibrarySemanticsCharacterizationTest(24)、FavouriteLibraryBaselineBenchmarkTest(3)
 ```
 
 测试：
@@ -73,16 +79,16 @@ app/src/test/kotlin/org/skepsun/kototoro/favourites/
   domain/library/FavouritesCardMapperTest.kt              # JVM，11 用例（Phase 5 卡片映射契约）
 app/src/androidTest/kotlin/org/skepsun/kototoro/favourites/
   data/FavouriteLibrarySeed.kt                            # 共享种子助手（raw SQL）
-  data/FavouriteLibrarySemanticsCharacterizationTest.kt   # 24 用例（旧 SQL 语义，Phase 7 后删除）
   data/FavouriteLibraryReadDaoTest.kt                     # 10 用例
   data/FavouriteLibraryReadDaoScaleTest.kt                # 2 用例（10k）
-  data/FavouriteLibraryBaselineBenchmarkTest.kt           # 3 用例（旧链路基线，Phase 8 后可删）
   domain/FavouriteLibraryAggregateChainCharacterizationTest.kt  # 12 用例（旧聚合链语义）
   domain/library/FavouriteLibrarySnapshotStoreTest.kt     # 9 用例
   domain/library/FavouriteLibrarySnapshotStoreScaleTest.kt# 1 用例（10k=202ms）
 ```
 
 ## 3. 必须保留的语义（已 characterization 固化）
+
+> 2026-09-02（Phase 7）：pin 这些语义的旧 SQL characterization 套已随收藏 Paging 一起删除，现在由新链路的 `FavouriteLibraryReadDaoTest` / `FavouriteLibrarySnapshotStoreTest` / `FavouriteLibraryDeriverTest` + 改写后 `findList` 的 `WorkPagingDaoTest` 用例固化，对应关系见 §4.6。
 
 1. **isPinned 恒定所有排序之首**；`entity_id` 恒定 tie-breaker。
 2. 代表 membership 选择：`pinned DESC, created_at DESC, updated_at DESC, category_id ASC`（DAO 用 NOT EXISTS 反连接实现——**Room SQL 解析器不支持 `ROW_NUMBER() OVER`**，别改回窗口函数）。
@@ -95,7 +101,7 @@ app/src/androidTest/kotlin/org/skepsun/kototoro/favourites/
 9. 软删除分类下的 membership 仍可见（与 `repairActiveDanglingCategoryRefs` 维护路径一致）。
 10. readingStatus：entity prefs 显式 > history percent（≥0.999=COMPLETED，>0=READING，null=PLANNED）。
 
-## 4. Phase 5/6 已完成：UI 切静态 List + 唯一状态持有者（2026-09-02）
+## 4. Phase 5/6/7 已完成：UI 切静态 List + 唯一状态持有者 + 删收藏 Paging（2026-09-02）
 
 目标达成：收藏渲染路径不再产生 `PagingData`、`WorkAggregate` 或收藏 DAO 读取；每页卡片由 Container 的共享快照在内存里映射。
 
@@ -128,8 +134,8 @@ Container.libraryState (StateFlow<FavouriteLibraryUiState>)
 
 ### 4.4 有意留下的偏差 / 待办（重要）
 
-1. ~~**metadata authority（tracking 站点）派生的标题/封面 override 与 `metadataTrackingService` badge 丢失**~~ → **Phase 6 已修复**（见 §4.6），原文如下。旧链路 `resolveDisplayOverride` 会把「显示元数据权威=某追踪站点」的作品换成 tracking 缓存里的 title/cover，并画一个服务 badge；row 里没有这些列。修复方式：给 `observeFavouriteCardBaseRows()` 增补 `ep.metadata_source_service/remote_id` 并 `LEFT JOIN tracking_site_items`（PK=(service,remote_id)，最多一行，不会放大基数）→ row 加 3 个原语字段 → mapper 按 manual > tracking 合并。Room KSP 会静态校验该 SQL；仍需真机跑 `FavouriteLibraryReadDaoTest`/`SnapshotStoreTest`（androidTest 里构造 `FavouriteCardBaseRow` 的测试要同步加参数，`compileDebugAndroidTestKotlin` 可先验编译）。
-2. ~~**Quick Filter chips 仍逐分类查 DAO**~~ → **Phase 6 已改为内存派生**（见 §4.6），原文如下。（`FavoritesListQuickFilter`，`suspendLazy` 每 VM 一次，切分类会新建 VM→新查询），且它 `init{}` 里的「离线时自动勾选 Downloaded」副作用要一并迁移；Filter Panel 仍走 `activeFavouritesViewModelRef` 桥接。→ 与 Phase 6 一起做：chips 由 `snapshot.quickFilterMetadata`（+分类切片）在内存派生。
+1. ~~**metadata authority（tracking 站点）派生的标题/封面 override 与 `metadataTrackingService` badge 丢失**~~ → **Phase 6 已修复**（见 §4.5），原文如下。旧链路 `resolveDisplayOverride` 会把「显示元数据权威=某追踪站点」的作品换成 tracking 缓存里的 title/cover，并画一个服务 badge；row 里没有这些列。修复方式：给 `observeFavouriteCardBaseRows()` 增补 `ep.metadata_source_service/remote_id` 并 `LEFT JOIN tracking_site_items`（PK=(service,remote_id)，最多一行，不会放大基数）→ row 加 3 个原语字段 → mapper 按 manual > tracking 合并。Room KSP 会静态校验该 SQL；仍需真机跑 `FavouriteLibraryReadDaoTest`/`SnapshotStoreTest`（androidTest 里构造 `FavouriteCardBaseRow` 的测试要同步加参数，`compileDebugAndroidTestKotlin` 可先验编译）。
+2. ~~**Quick Filter chips 仍逐分类查 DAO**~~ → **Phase 6 已改为内存派生**（见 §4.5），原文如下。（`FavoritesListQuickFilter`，`suspendLazy` 每 VM 一次，切分类会新建 VM→新查询），且它 `init{}` 里的「离线时自动勾选 Downloaded」副作用要一并迁移；Filter Panel 仍走 `activeFavouritesViewModelRef` 桥接。→ 与 Phase 6 一起做：chips 由 `snapshot.quickFilterMetadata`（+分类切片）在内存派生。
 3. **reorder 场景没有 semantic anchor**（计划 §6.1 第 4 点，明确列为 Phase 8 按需项）：详情返回用普通 saveable 索引恢复，列表未变化时精确；筛选/排序变化后按新顺序从同一 offset 开始。
 4. ~~`getEmptyState()` 仍是私有死代码~~ → 随逐分类 VM 一起删除。
 
@@ -165,9 +171,35 @@ Container.libraryState (StateFlow<FavouriteLibraryUiState>)
 
 `observeFavouriteCardBaseRows()` 增补 `ep.metadata_source_kind/service/remote_id` 并 `LEFT JOIN tracking_site_items ON (service, remote_id)`（PK 唯一，不放大基数；join 条件带 `metadata_source_kind = 'tracking'`，权威切回本地时列全 NULL）。`FavouriteCardBaseRow` 加 `metadataTrackingService/Title/CoverUrl`，`FavouriteCardRow` 同名三字段；mapper 优先级 `manual override > tracking 站点缓存 > 投影`，tracking 的 service 也用于详情 badge。JVM：`FavouriteCardModelTest`/`FavouritesCardMapperTest` 覆盖 manual>tracking 与「无缓存行→全 NULL」；androidTest：`FavouriteLibrarySeed.insertPrefs(metadataSourceKind/metadataService/metadataRemoteId)` + `insertTrackingSiteItem`，`FavouriteLibraryReadDaoTest.metadataAuthorityReadsTheCachedSiteItem` 覆盖 tracking 命中 / 缓存缺失 / kind=base 的守卫。
 
-### 4.6 下一步（Phase 7 → 8）
+### 4.6 Phase 7 已完成：删除收藏 Paging 链路（2026-09-02）
 
-Phase 6 已完成（见 §4.5）。Phase 7：按计划 §8 Phase 7 清单删除收藏 Paging 代码（删前 `rg` 确认无其他调用方；**不得删除**历史/更新页面仍在用的 Paging 基础设施）。Phase 8：跑计划 §11 全部基准 + 与 Komikku 并列对照 + 删 shadow comparison/临时日志 + 更新 `large-library-performance-handoff-2026-08.md`。
+计划 §8 Phase 7 清单按「只删确认无其他调用方」执行，结果分两类。
+
+**已删除（主代码）**
+
+- `favourites/data/FavouriteLibraryPagingRow.kt`（整文件）：宽行（内嵌整个 `MangaEntity` + `WorkHistoryEntity` + tracking 列）随收藏 Paging 一起退休。
+- `WorkFavouritesDao.pagingSource()`（含那段宽 `@Query`）、`FULL_LIST_PAGE_SIZE`、`import androidx.paging.PagingSource`；顺带删掉 Phase 6 起就无主代码调用方的 `findQuickFilterTags()` / `findQuickFilterSourceNames()`（chips 已内存派生）。
+- `WorkAggregateRepository.createFavouritePagingSource()`、`observeFavouriteAggregates()`（两者零调用方）、`buildFavouritePagingAggregates()`、`FavouriteLibraryPagingRow.toTrackingSummary()`。
+- `core/paging/BatchMappingPagingSource.kt` 里的 `FavouriteLibraryPagingConfig`（`LargeLibraryPagingConfig` 与 `BatchMappingPagingSource` 本身留给历史页）。
+- 收藏页删掉 `retainPagingSnapshotOnDetailsNavigation = false`（路由默认已是 false，收藏不再启用 retained window）。
+
+**改写而非删除**
+
+- `WorkFavouritesDao.findList(...)`：**签名不变**，但不再是「`pagingSource` + 全量翻页收集」的包装，而是同一个 `@Query` 直接把投影从 `selected.*, ep…, m…, wh…, tracking…` 收窄成 `selected.*`，返回 `List<WorkFavouriteEntity>`。原因：`findList` 不是「只服务收藏 UI 分页」的包装——它撑着 `findFavouriteEntries → findFavouriteAggregates/findFavouriteContents`，而后者仍被 `FavouritesRepository.getAllContent/getLastContent/buildWorkFavourite*Contents/Covers`（小组件、备份、通知等）使用；那些调用方从来只要 entity 行。Room KSP 已静态校验改写后的 SQL。
+
+**测试**
+
+- 删除 `FavouriteLibrarySemanticsCharacterizationTest`（24 用例）与 `FavouriteLibraryBaselineBenchmarkTest`（3 用例）：它们 pin 的是被删掉的宽行分页 SQL 与旧链路基准（基准数字已归档在 §1）。
+- `WorkPagingDaoTest`：删 `favouriteColdStartLoadsOnlyTheInitialWindow`、`favouritePageCarriesDisplayHistoryAndTrackingSummary`（用 `pagingSource`）与 `favouriteQuickFilterMetadataUsesDatabaseAggregation`（用已删的 chips 查询）。**保留** `favouritesListAndHistoryPageByUniqueEntity`、`favouriteRepresentativeCarriesPreferredProjectionInTheSameQuery`、`favouriteFullListBenchmarkFitsBudget`、`favouriteFiltersAreAppliedBeforePaging`——最后一组经 `favouriteList()` 助手直接跑改写后的 `findList`，是它现在的实机覆盖。历史/更新页的 Paging 用例与 `BatchMappingPagingSourceTest` 其余用例不动（只删了 favourites config 断言）。
+- §3 的语义现在由新链路自己固化：代表 membership 与排序在 `FavouriteLibraryReadDaoTest`（11）+ `FavouriteLibraryDeriverTest`（18），快照组装语义（binding-based 投影、broken row 保留、override 优先级、readingStatus）在 `FavouriteLibrarySnapshotStoreTest`（9），`findList` 侧仍在 `WorkPagingDaoTest`。
+
+**没删（计划明令保留）**：`WorkAggregateRepository` 其余领域用途（`observeFavouriteLibraryAggregates` 还撑 Phase 8 的 shadow comparison、`findFavouriteAggregates`/`findFavouriteContents` 撑小组件与备份）、历史页 Paging 基础设施、`RetainedPagingSnapshotController` 与通用 semantic anchor、Room 表/备份格式/entity identity。
+
+**与计划的一处偏差**：§8 要求「`rg` 确认 favourites 包无 Paging import」。实际剩一处：`FavouritesListHost.pagingContent = null` 需要 `androidx.paging.PagingData` 才能满足 `ContentListHost` 契约（共享路由的接口成员，收藏永远不填它）。
+
+### 4.7 下一步（Phase 8）
+
+Phase 6 已完成（见 §4.5）、Phase 7 已完成（见 §4.6，设备侧 `WorkPagingDaoTest` 待补跑）。Phase 8：跑计划 §11 全部基准 + 与 Komikku 并列对照 + 删 shadow comparison/临时日志 + 更新 `large-library-performance-handoff-2026-08.md`。
 
 设备必测（Phase 5/6 改动直接覆盖收藏页，见 §5 流程）：收藏四模式渲染、分类/快筛/排序切换（logcat 确认 `FavouriteLibraryReadDao` 不重复查询）、详情返回、置顶/移除/标记完成/分享/下载/分类对话框/编辑 override/实体整理、broken row 显示与跳转、多分类下 pin badge 只在本分类出现。
 
@@ -185,7 +217,8 @@ Phase 6 追加：切分类/旋转后卡片不重置（host 由容器缓存）、
   adb shell am instrument -w -e class <全限定类名> org.skepsun.kototoro.debug.test/org.skepsun.kototoro.HiltTestRunner
   ```
 - **Gradle `connectedDebugAndroidTest` 一定失败**：`pm path androidx.test.services` 为空 → AGP shell executor 的 `app_process` 直接 SIGABRT（`StatusCode: 134` / `Starting 0 tests`），而且这次运行会**顺手卸掉主 APK**，之后 `am instrument` 报 `Unable to find instrumentation target package: org.skepsun.kototoro.debug`。用上面的 `am instrument` 流程；若 target 丢了就重新 `adb install -r -t app-arm64-v8a-debug.apk`（用 `pm path org.skepsun.kototoro.debug` 确认装上了）。
-- **交互 UI 验证在 adb 侧不可做**：`adb shell input` 抛 `SecurityException`（MIUI 需另开「USB 调试(安全设置)」并登录账号），`android layout --pretty` 会挂死（>150s 无输出），`adb shell wm dismiss-keyguard` + `svc power stayon true` 只能把屏幕从 Dozing 叫醒、锁屏 PIN 仍在（screencap 得到锁屏图）。所以 §4.6 的设备清单必须人工在手机上进；自动侧能做到的上限是 Room/无 UI 的 androidTest（`FavouriteLibraryReadDaoTest` 11 用例、`FavouriteLibrarySnapshotStoreTest` 9 用例在 0.5s 内跑完）。
+- `adb: device 'xxx' not found` 之后若所有 adb 调用都变成 `failed to check server version: protocol fault (couldn't read status)`，说明 5037 上留下了无人拥有的半死监听套接字（`ss -ltnp | grep 5037` 有 LISTEN 但 `pgrep adb` 为空、`adb kill-server` 无效）。不必重启机器：换端口起一个新 server 即可——`ANDROID_ADB_SERVER_PORT=5039 adb devices`（后续 adb 命令都带上这个环境变量）。
+- **交互 UI 验证在 adb 侧不可做**：`adb shell input` 抛 `SecurityException`（MIUI 需另开「USB 调试(安全设置)」并登录账号），`android layout --pretty` 会挂死（>150s 无输出），`adb shell wm dismiss-keyguard` + `svc power stayon true` 只能把屏幕从 Dozing 叫醒、锁屏 PIN 仍在（screencap 得到锁屏图）。所以 §4.7 的设备清单必须人工在手机上进；自动侧能做到的上限是 Room/无 UI 的 androidTest（`FavouriteLibraryReadDaoTest` 11 用例、`FavouriteLibrarySnapshotStoreTest` 9 用例在 0.5s 内跑完）。
 - **JVM 单测**的 `assertEquals` 解析到 JUnit4 `org.junit.Assert`：message 必须放**最后**：`assertEquals(expected, actual, "msg")`。
 - **种子数据**：`preferences` 表 7 个 NOT NULL 无默认值列（manga_id/mode/cf_brightness/cf_contrast/cf_invert/cf_grayscale/cf_book）必须显式 INSERT；`manga.cover_url` NOT NULL。
 - Room DAO 测试用 `Room.inMemoryDatabaseBuilder(...).build()` + raw SQL 种子（见 `FavouriteLibrarySeed`），不要用 Hilt 真库。
@@ -218,11 +251,13 @@ Phase 6 追加：切分类/旋转后卡片不重置（host 由容器缓存）、
 # 设备（见 §5 流程）：
 #   FavouriteLibraryReadDaoTest / FavouriteLibraryReadDaoScaleTest
 #   FavouriteLibrarySnapshotStoreTest / FavouriteLibrarySnapshotStoreScaleTest
-#   FavouriteLibrarySemanticsCharacterizationTest / FavouriteLibraryAggregateChainCharacterizationTest
-#   FavouriteLibraryBaselineBenchmarkTest
+#   FavouriteLibraryAggregateChainCharacterizationTest / WorkPagingDaoTest
+#   （FavouriteLibrarySemanticsCharacterizationTest 与 FavouriteLibraryBaselineBenchmarkTest 已在 Phase 7 删除）
 ```
 
-Phase 6 之后（2026-09-02，接了手机但只能跑无 UI 的 androidTest）：`compileDebugKotlin` ✓、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 **2148/2148** ✓（favourites 包 90：新增 `FavouritesQuickFilterOptionsTest` 4、`FavouritesCardMapperTest` 14）。设备（`am instrument` 直跑，见 §5）：`FavouriteLibraryReadDaoTest` **11/11**（含 `metadataAuthorityReadsTheCachedSiteItem`）、`FavouriteLibrarySnapshotStoreTest` **9/9**。冷启动新 APK 无 crash（`adb install` + monkey 起 `MainActivity`，logcat 无 AndroidRuntime FATAL）。§4.6 的交互清单（含 Phase 6 追加项）仍需人工在手机上跑——本会话 adb 无法注入输入（见 §5）。
+Phase 6 之后（2026-09-02，接了手机但只能跑无 UI 的 androidTest）：`compileDebugKotlin` ✓、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 **2148/2148** ✓（favourites 包 90：新增 `FavouritesQuickFilterOptionsTest` 4、`FavouritesCardMapperTest` 14）。设备（`am instrument` 直跑，见 §5）：`FavouriteLibraryReadDaoTest` **11/11**（含 `metadataAuthorityReadsTheCachedSiteItem`）、`FavouriteLibrarySnapshotStoreTest` **9/9**。冷启动新 APK 无 crash（`adb install` + monkey 起 `MainActivity`，logcat 无 AndroidRuntime FATAL）。§4.7 的交互清单（含 Phase 6 追加项）仍需人工在手机上跑——本会话 adb 无法注入输入（见 §5）。
+
+Phase 7 之后（2026-09-02）：`compileDebugKotlin` ✓（Room KSP 校验改写后的 `findList` SQL）、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 ✓（删了 `BatchMappingPagingSourceTest` 的 favourites config 断言）。设备侧本轮没跑成——手机在装机后从 adb 掉线（`adb: device not found`），`WorkPagingDaoTest` 留在下一次接机补跑（它现在也负责改写后 `findList` 的实机覆盖）。
 
 全部通过状态（2026-09-01）：JVM 32/32（契约 10 + deriver 16 + UiState 6），设备 58/58（SQL 24 + 聚合链 12 + DAO 10+2 + Store 9+1 + 基准 3——基准 3 含在其中）。
 

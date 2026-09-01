@@ -53,6 +53,8 @@ class FavouritesListHost internal constructor(
     override val listMode: StateFlow<ListMode> = container.listMode
     override val gridScale: StateFlow<Float> = container.gridScale
     override val hasMoreItems = MutableStateFlow(false)
+    /** Always null: the slice is a static list. The member only exists for the route's
+     * paging-capable contract, which the favourites page never exercises. */
     override val pagingContent: Flow<PagingData<ListModel>>? = null
     override val currentSourceTags: StateFlow<Set<SourceTag>> = container.selectedSourceTags
     override val currentGroupTab: StateFlow<BrowseGroupTab> = container.currentGroupTab

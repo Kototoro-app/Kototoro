@@ -3,9 +3,9 @@ package org.skepsun.kototoro.favourites.data
 import androidx.room.ColumnInfo
 
 /**
- * One row per active favourite entity — the narrow card read model that replaces the
- * wide `FavouriteLibraryPagingRow` (which embedded a full `MangaEntity`, a full
- * `WorkHistoryEntity` and tracking columns for every row).
+ * One row per active favourite entity: the narrow card read model of the favourites
+ * library. It replaced the wide paging row that used to embed a full `MangaEntity`, a
+ * full `WorkHistoryEntity` and tracking columns for every row (deleted in Phase 7).
  *
  * Field budget is pinned by `FavouriteCardFieldContractTest` (Phase 0): every column
  * here has a real consumer in GRID / COMPACT_GRID / LIST / DETAILED_LIST, a sort order,

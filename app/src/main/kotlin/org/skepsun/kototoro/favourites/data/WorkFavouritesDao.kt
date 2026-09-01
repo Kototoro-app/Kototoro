@@ -4,14 +4,12 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
-import androidx.paging.PagingSource
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.core.db.entity.TagEntity
 
-private const val FULL_LIST_PAGE_SIZE = 500
 
 @Dao
 abstract class WorkFavouritesDao {
@@ -31,6 +29,14 @@ abstract class WorkFavouritesDao {
     )
     abstract fun observeCategoryCountEntries(): Flow<List<FavouriteCategoryCountEntry>>
 
+    /**
+     * The favourites of one slice in list order: one representative membership per entity
+     * (the `selected` anti-join keeps the `pinned DESC, created_at DESC, updated_at DESC,
+     * category_id ASC` ranking) sorted by the requested order. Phase 7 cut the joined
+     * display / history / tracking columns out of the projection - the domain callers of
+     * this query only ever consumed the entity rows, and the paged favourites UI that
+     * needed the wide row (together with the wide row itself) is gone with the snapshot.
+     */
     @Query(
         """
 		WITH selected AS (
@@ -51,40 +57,7 @@ abstract class WorkFavouritesDao {
 				)
 		)
 		SELECT
-			selected.*,
-			ep.preferred_local_manga_id AS preferred_local_manga_id,
-			m.manga_id AS display_manga_id,
-			m.title AS display_title,
-			m.alt_title AS display_alt_title,
-			m.url AS display_url,
-			m.public_url AS display_public_url,
-			m.rating AS display_rating,
-			m.nsfw AS display_nsfw,
-			m.content_rating AS display_content_rating,
-			m.cover_url AS display_cover_url,
-			m.large_cover_url AS display_large_cover_url,
-			m.state AS display_state,
-			m.author AS display_author,
-			m.source AS display_source,
-			m.description AS display_description,
-			m.content_type AS display_content_type,
-			m.source_data AS display_source_data,
-			wh.entity_id AS history_entity_id,
-			wh.anchor_manga_id AS history_anchor_manga_id,
-			wh.created_at AS history_created_at,
-			wh.updated_at AS history_updated_at,
-			wh.chapter_id AS history_chapter_id,
-			wh.page AS history_page,
-			wh.scroll AS history_scroll,
-			wh.percent AS history_percent,
-			wh.deleted_at AS history_deleted_at,
-			wh.chapters AS history_chapters,
-			wh.parent_chapter_id AS history_parent_chapter_id,
-			tracking.anchor_manga_id AS tracking_anchor_manga_id,
-			tracking.last_chapter_id AS tracking_last_chapter_id,
-			tracking.new_chapters AS tracking_new_chapters,
-			tracking.last_check_time AS tracking_last_check_time,
-			tracking.last_chapter_date AS tracking_last_chapter_date
+			selected.*
 		FROM selected
 		LEFT JOIN entity_preferences ep ON ep.entity_id = selected.entity_id
 		LEFT JOIN manga m ON m.manga_id = COALESCE(ep.preferred_local_manga_id, selected.anchor_manga_id)
@@ -168,7 +141,7 @@ abstract class WorkFavouritesDao {
 			selected.entity_id ASC
         """,
     )
-    abstract fun pagingSource(
+    abstract suspend fun findList(
         categoryId: Long,
         orderName: String,
         applySpaceFilter: Boolean,
@@ -187,69 +160,7 @@ abstract class WorkFavouritesDao {
         exactSources: Collection<String>,
         applyTagFilter: Boolean,
         tagIds: Collection<Long>,
-    ): PagingSource<Int, FavouriteLibraryPagingRow>
-
-    suspend fun findList(
-        categoryId: Long,
-        orderName: String,
-        applySpaceFilter: Boolean,
-        allowedTypes: Collection<String>,
-        classifiedTypes: Collection<String>,
-        applySourceFilter: Boolean,
-        allowedSources: Collection<String>,
-        applyContentTypeFilter: Boolean,
-        contentTypes: Collection<String>,
-        applyPublicationStateFilter: Boolean,
-        publicationStates: Collection<String>,
-        nsfwMode: Int,
-        requireDownloaded: Boolean,
-        requireNewChapters: Boolean,
-        applyExactSourceFilter: Boolean,
-        exactSources: Collection<String>,
-        applyTagFilter: Boolean,
-        tagIds: Collection<Long>,
-    ): List<WorkFavouriteEntity> {
-        val source = pagingSource(
-            categoryId = categoryId,
-            orderName = orderName,
-            applySpaceFilter = applySpaceFilter,
-            allowedTypes = allowedTypes,
-            classifiedTypes = classifiedTypes,
-            applySourceFilter = applySourceFilter,
-            allowedSources = allowedSources,
-            applyContentTypeFilter = applyContentTypeFilter,
-            contentTypes = contentTypes,
-            applyPublicationStateFilter = applyPublicationStateFilter,
-            publicationStates = publicationStates,
-            nsfwMode = nsfwMode,
-            requireDownloaded = requireDownloaded,
-            requireNewChapters = requireNewChapters,
-            applyExactSourceFilter = applyExactSourceFilter,
-            exactSources = exactSources,
-            applyTagFilter = applyTagFilter,
-            tagIds = tagIds,
-        )
-        val result = ArrayList<WorkFavouriteEntity>()
-        var nextKey: Int? = null
-        var isRefresh = true
-        do {
-            val params = if (isRefresh) {
-                PagingSource.LoadParams.Refresh(nextKey, FULL_LIST_PAGE_SIZE, false)
-            } else {
-                PagingSource.LoadParams.Append(requireNotNull(nextKey), FULL_LIST_PAGE_SIZE, false)
-            }
-            when (val loaded = source.load(params)) {
-                is PagingSource.LoadResult.Page -> {
-                    result += loaded.data.map(FavouriteLibraryPagingRow::favourite)
-                    nextKey = loaded.nextKey
-                }
-                is PagingSource.LoadResult.Error -> throw loaded.throwable
-                is PagingSource.LoadResult.Invalid -> error("Favourite query invalidated while collecting the full list")
-            }
-            isRefresh = false
-        } while (nextKey != null)
-        return result
-    }
+    ): List<WorkFavouriteEntity>
 
     @Query(
         """
@@ -307,62 +218,6 @@ abstract class WorkFavouritesDao {
         """,
     )
     abstract suspend fun findLibraryRepresentatives(categoryId: Long): List<FavouriteLibraryRepresentative>
-
-    @Query(
-        """
-		WITH favorite_projections AS (
-			SELECT wf.entity_id, wf.anchor_manga_id AS manga_id
-			FROM work_favourites wf
-			WHERE wf.anchor_manga_id IS NOT NULL
-				AND wf.deleted_at = 0
-				AND (:categoryId = -1 OR wf.category_id = :categoryId)
-			UNION
-			SELECT wf.entity_id, CAST(eb.external_id AS INTEGER) AS manga_id
-			FROM work_favourites wf
-			INNER JOIN entity_binding eb ON eb.entity_id = wf.entity_id
-			WHERE wf.anchor_manga_id IS NOT NULL
-				AND wf.deleted_at = 0
-				AND (:categoryId = -1 OR wf.category_id = :categoryId)
-				AND eb.source IN ('local_manga', '0')
-				AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-		)
-		SELECT m.source
-		FROM favorite_projections fp
-		INNER JOIN manga m ON m.manga_id = fp.manga_id
-		GROUP BY m.source
-		ORDER BY COUNT(DISTINCT fp.entity_id) DESC, m.source ASC
-        """,
-    )
-    abstract suspend fun findQuickFilterSourceNames(categoryId: Long): List<String>
-
-    @Query(
-        """
-		WITH favorite_projections AS (
-			SELECT wf.entity_id, wf.anchor_manga_id AS manga_id
-			FROM work_favourites wf
-			WHERE wf.anchor_manga_id IS NOT NULL
-				AND wf.deleted_at = 0
-				AND (:categoryId = -1 OR wf.category_id = :categoryId)
-			UNION
-			SELECT wf.entity_id, CAST(eb.external_id AS INTEGER) AS manga_id
-			FROM work_favourites wf
-			INNER JOIN entity_binding eb ON eb.entity_id = wf.entity_id
-			WHERE wf.anchor_manga_id IS NOT NULL
-				AND wf.deleted_at = 0
-				AND (:categoryId = -1 OR wf.category_id = :categoryId)
-				AND eb.source IN ('local_manga', '0')
-				AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-		)
-		SELECT tags.*
-		FROM favorite_projections fp
-		INNER JOIN manga_tags mt ON mt.manga_id = fp.manga_id
-		INNER JOIN tags ON tags.tag_id = mt.tag_id
-		GROUP BY tags.tag_id
-		ORDER BY COUNT(DISTINCT fp.entity_id) DESC, tags.title COLLATE NOCASE ASC
-		LIMIT :limit
-        """,
-    )
-    abstract suspend fun findQuickFilterTags(categoryId: Long, limit: Int): List<TagEntity>
 
     @Query(
         """

@@ -104,8 +104,5 @@ fun KototoroFavoritesListScreen(
         showQuickFilterInline = true,
         quickFilterOverride = quickFilter,
         enableItemAnimations = false,
-        // The whole slice is a ViewModel-owned list now: there is no paging window to
-        // hand over, so the plain saveable scroll state is the single source of truth.
-        retainPagingSnapshotOnDetailsNavigation = false,
     )
 }

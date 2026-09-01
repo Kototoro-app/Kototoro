@@ -14,15 +14,6 @@ val LargeLibraryPagingConfig = androidx.paging.PagingConfig(
     enablePlaceholders = false,
 )
 
-/** Loads one screen first while retaining two pages of scroll prefetch. */
-val FavouriteLibraryPagingConfig = androidx.paging.PagingConfig(
-    pageSize = 64,
-    initialLoadSize = 64,
-    prefetchDistance = 64,
-    enablePlaceholders = false,
-    maxSize = 384,
-)
-
 /** Maps a Room positional page as one batch so downstream joins stay O(pages), not O(items). */
 class BatchMappingPagingSource<Input : Any, Output : Any>(
     private val delegate: PagingSource<Int, Input>,

@@ -105,75 +105,6 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
-	fun favouriteColdStartLoadsOnlyTheInitialWindow() = runTest {
-		val first = db.getWorkFavouritesDao().pagingSource(
-			categoryId = -1L,
-			orderName = "UPDATED",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-			applyContentTypeFilter = false,
-			contentTypes = emptyList(),
-			applyPublicationStateFilter = false,
-			publicationStates = emptyList(),
-			nsfwMode = -1,
-			requireDownloaded = false,
-			requireNewChapters = false,
-			applyExactSourceFilter = false,
-			exactSources = emptyList(),
-			applyTagFilter = false,
-			tagIds = emptyList(),
-		).load(refreshParams()).requirePage()
-
-		assertEquals(64, first.data.size)
-		assertEquals(64, first.data.map { it.favourite.entityId }.distinct().size)
-	}
-
-	@Test
-	fun favouritePageCarriesDisplayHistoryAndTrackingSummary() = runTest {
-		seedTracks()
-		val source = db.getWorkFavouritesDao().pagingSource(
-			categoryId = -1L,
-			orderName = "UPDATED",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-			applyContentTypeFilter = false,
-			contentTypes = emptyList(),
-			applyPublicationStateFilter = false,
-			publicationStates = emptyList(),
-			nsfwMode = -1,
-			requireDownloaded = false,
-			requireNewChapters = false,
-			applyExactSourceFilter = false,
-			exactSources = emptyList(),
-			applyTagFilter = false,
-			tagIds = emptyList(),
-		)
-		// The UPDATED-desc window starts at the newest entities (id 6437..6500), while
-		// history is only seeded for entityId <= 3200. Walk pages until a history-backed
-		// row is found instead of assuming it lands in the first window.
-		var page = source.load(refreshParams()).requirePage()
-		var nextKey = page.nextKey
-		var historyRow = page.data.firstOrNull { it.favourite.entityId <= 3_200L }
-		while (historyRow == null && nextKey != null) {
-			page = source.load(appendParams(nextKey)).requirePage()
-			historyRow = page.data.firstOrNull { it.favourite.entityId <= 3_200L }
-			nextKey = page.nextKey
-		}
-
-		val row = requireNotNull(historyRow) { "no history-backed row found in favourites pages" }
-		assertEquals(row.favourite.anchorMangaId, row.displayManga?.id)
-		assertEquals(row.favourite.entityId, row.history?.entityId)
-		assertTrue((row.trackingNewChapters ?: 0) > 0)
-		assertNotNull(row.trackingLastChapterDate)
-	}
-
-	@Test
 	fun favouriteRepresentativeCarriesPreferredProjectionInTheSameQuery() = runTest {
 		db.getEntityGraphDao().upsertPrefsRecord(
 			EntityPrefsRecord(
@@ -252,17 +183,6 @@ class WorkPagingDaoTest {
 		assertEquals(listOf(1L), favouriteList(nsfwMode = 1).map { it.entityId })
 		assertEquals(listOf(1L), favouriteList(requireDownloaded = true).map { it.entityId })
 		assertEquals(listOf(1L), favouriteList(tagIds = setOf(tagId)).map { it.entityId })
-	}
-
-	@Test
-	fun favouriteQuickFilterMetadataUsesDatabaseAggregation() = runTest {
-		val sql = db.openHelper.writableDatabase
-		val tagId = 92L
-		sql.execSQL("INSERT INTO tags VALUES (?, 'Drama', 'drama', 'TEST', 0)", arrayOf<Any?>(tagId))
-		sql.execSQL("INSERT INTO manga_tags VALUES (?, ?)", arrayOf<Any?>(10_001L, tagId))
-
-		assertEquals("TEST", db.getWorkFavouritesDao().findQuickFilterSourceNames(-1L).first())
-		assertEquals(tagId, db.getWorkFavouritesDao().findQuickFilterTags(-1L, 3).first().id)
 	}
 
 	@Test
