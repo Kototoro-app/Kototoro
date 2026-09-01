@@ -86,10 +86,42 @@ internal object FavouriteLibrarySeed {
         readingStatus: String? = null,
         titleOverride: String? = null,
         coverOverride: String? = null,
+        metadataSourceKind: String? = null,
+        metadataService: Int? = null,
+        metadataRemoteId: Long? = null,
+    ) {
+        // entity_preferences column order (see EntityPrefsRecord): the five metadata_*
+        // columns sit between reading_status and updated_at. The production writer keeps
+        // the binding strings and the numeric columns in step, so the seed does too.
+        sql.execSQL(
+            "INSERT INTO entity_preferences VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 0)",
+            arrayOf<Any?>(
+                entityId,
+                preferredLocalMangaId,
+                titleOverride,
+                coverOverride,
+                readingStatus,
+                metadataSourceKind,
+                metadataService?.toString(),
+                metadataRemoteId?.toString(),
+                metadataService,
+                metadataRemoteId,
+            ),
+        )
+    }
+
+    /** Cached tracking site item: the payload behind a 'tracking' display authority. */
+    fun insertTrackingSiteItem(
+        sql: SupportSQLiteDatabase,
+        service: Int,
+        remoteId: Long,
+        title: String,
+        coverUrl: String?,
     ) {
         sql.execSQL(
-            "INSERT INTO entity_preferences VALUES (?, ?, ?, ?, NULL, ?, NULL, NULL, NULL, NULL, NULL, 0)",
-            arrayOf<Any?>(entityId, preferredLocalMangaId, titleOverride, coverOverride, readingStatus),
+            "INSERT INTO tracking_site_items (service, remote_id, title, cover_url, cached_at, updated_at)" +
+                " VALUES (?, ?, ?, ?, 0, 0)",
+            arrayOf<Any?>(service, remoteId, title, coverUrl),
         )
     }
 

@@ -30,15 +30,22 @@ data class FavouriteLibraryDerivationInput(
 /**
  * The result of the derivation: entity id lists per category (and the "all" slice),
  * guaranteed duplicate-free and referencing only snapshot rows.
+ *
+ * [pinnedIdsByCategory] carries the *membership* pinned flag per slice (pinned is a
+ * property of the `(entityId, categoryId)` pair, so a work pinned in one category is
+ * not pinned in another) — the card mapping needs it for the pin badge while the
+ * slices themselves stay id-only.
  */
 data class FavouriteLibraryDerivedState(
     val visibleIdsByCategory: Map<Long, List<Long>>,
     val allVisibleIds: List<Long>,
+    val pinnedIdsByCategory: Map<Long, Set<Long>>,
 ) {
     companion object {
         val Empty = FavouriteLibraryDerivedState(
             visibleIdsByCategory = emptyMap(),
             allVisibleIds = emptyList(),
+            pinnedIdsByCategory = emptyMap(),
         )
     }
 }
@@ -87,6 +94,15 @@ internal class FavouriteOrderingContext private constructor(
     fun createdAt(entityId: Long): Long = createdAtByEntity[entityId] ?: 0L
     fun updatedAt(entityId: Long): Long = updatedAtByEntity[entityId] ?: 0L
     fun row(entityId: Long): FavouriteCardRow? = rows[entityId]
+
+    /** Membership-pinned subset of [ids], in the order they are given. */
+    fun pinnedIds(ids: Collection<Long>): Set<Long> {
+        val result = LinkedHashSet<Long>(ids.size)
+        for (id in ids) {
+            if (pinned(id)) result.add(id)
+        }
+        return result
+    }
 }
 
 /**
@@ -223,26 +239,30 @@ internal fun groupAndSort(
     }
 
     val byCategory = HashMap<Long, MutableList<Long>>(snapshot.membershipsByCategory.size + 1)
+    val pinnedByCategory = HashMap<Long, Set<Long>>(snapshot.membershipsByCategory.size + 1)
 
     val allContext = FavouriteOrderingContext.forAllSlice(snapshot)
-    byCategory[FavouriteLibraryAllCategoryId] = visible
-        .sortedWith(input.defaultOrder.comparator(allContext))
-        .toMutableList()
+    val allIds = visible.sortedWith(input.defaultOrder.comparator(allContext))
+    byCategory[FavouriteLibraryAllCategoryId] = allIds.toMutableList()
+    pinnedByCategory[FavouriteLibraryAllCategoryId] = allContext.pinnedIds(allIds)
 
     for ((categoryId, memberships) in snapshot.membershipsByCategory) {
         val order = input.ordersByCategory[categoryId] ?: input.defaultOrder
         val context = FavouriteOrderingContext.forCategorySlice(snapshot, memberships)
-        byCategory[categoryId] = memberships.asSequence()
+        val ids = memberships.asSequence()
             .map(FavouriteMembership::entityId)
             .filter { it in visible }
             .distinct()
             .sortedWith(order.comparator(context))
             .toMutableList()
+        byCategory[categoryId] = ids
+        pinnedByCategory[categoryId] = context.pinnedIds(ids)
     }
 
     return FavouriteLibraryDerivedState(
         visibleIdsByCategory = byCategory,
         allVisibleIds = byCategory.getValue(FavouriteLibraryAllCategoryId),
+        pinnedIdsByCategory = pinnedByCategory,
     )
 }
 

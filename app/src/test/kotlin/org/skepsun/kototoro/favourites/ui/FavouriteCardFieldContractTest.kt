@@ -175,7 +175,7 @@ class FavouriteCardFieldContractTest {
             detailed(renamed).toContentCardRenderModel().subtitle,
         )
         // The compact subtitle is the joined tag list (the favourites group suffix is
-        // appended on top of it by FavouritesListViewModel.toGroupedListModel).
+        // appended on top of it by FavouritesCardMapper.toGroupedListModel).
         assertEquals(
             compact(fullContent).toContentCardRenderModel().subtitle,
             compact(renamed).toContentCardRenderModel().subtitle,

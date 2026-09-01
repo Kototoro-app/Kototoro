@@ -24,11 +24,9 @@ import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.toEntities
 import org.skepsun.kototoro.core.db.entity.toEntity
 import org.skepsun.kototoro.core.db.entity.toContent
-import org.skepsun.kototoro.core.db.entity.toContentTag
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
-import org.skepsun.kototoro.core.model.toContentSources
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
@@ -44,7 +42,6 @@ import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.search.domain.SearchKind
 import org.skepsun.kototoro.work.domain.WorkAggregateRepository
@@ -79,11 +76,6 @@ class FavouritesRepository @Inject constructor(
     private val settings: AppSettings,
     private val sourceTrackerEvents: SourceTrackerEventEmitter,
 ) {
-
-    data class QuickFilterMetadata(
-        val tags: List<ContentTag>,
-        val sources: List<ContentSource>,
-    )
 
     private data class WorkFavouriteNormalizationKey(
         val entityId: Long,
@@ -356,14 +348,6 @@ class FavouritesRepository @Inject constructor(
 
     suspend fun getCategoriesIdsByWork(mangaId: Long): Set<Long> {
         return findWorkCategoryIds(mangaId)
-    }
-
-    suspend fun findQuickFilterMetadata(categoryId: Long, tagLimit: Int): QuickFilterMetadata {
-        val dao = db.getWorkFavouritesDao()
-        return QuickFilterMetadata(
-            tags = dao.findQuickFilterTags(categoryId, tagLimit).map { it.toContentTag() },
-            sources = dao.findQuickFilterSourceNames(categoryId).toContentSources(),
-        )
     }
 
     suspend fun createCategory(

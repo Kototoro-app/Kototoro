@@ -107,7 +107,7 @@ internal fun shouldUseRetainedPagingSnapshot(
 
 @Composable
 internal fun rememberRetainedPagingSnapshotState(
-    host: RetainedPagingSnapshotHost,
+    host: RetainedPagingSnapshotHost?,
     retainEnabled: Boolean,
     leadingItems: List<ListModel>,
     lazyPagingItems: LazyPagingItems<ListModel>?,
@@ -115,7 +115,7 @@ internal fun rememberRetainedPagingSnapshotState(
     staticRefreshSettled: Boolean = true,
 ): RetainedPagingSnapshotState {
     val initialRetainedPagingSnapshot = remember(host, retainEnabled) {
-        if (retainEnabled) host.peekRetainedPagingSnapshot() else null
+        if (retainEnabled) host?.peekRetainedPagingSnapshot() else null
     }
     var retainedPagingSnapshot by remember(host, retainEnabled) {
         mutableStateOf(initialRetainedPagingSnapshot)
@@ -268,7 +268,7 @@ internal fun rememberRetainedPagingSnapshotState(
         if (liveListItems.isEmpty()) return@LaunchedEffect
         if (liveAnchorIndex < 0) {
             // The refreshed dataset removed the anchor; just stop retaining.
-            host.clearRetainedPagingSnapshot(snapshot.generation)
+            host?.clearRetainedPagingSnapshot(snapshot.generation)
             retainedPagingSnapshot = null
             return@LaunchedEffect
         }
@@ -291,7 +291,7 @@ internal fun rememberRetainedPagingSnapshotState(
                 scrollOffset = snapshot.firstVisibleItemScrollOffset,
             )
         }
-        host.clearRetainedPagingSnapshot(snapshot.generation)
+        host?.clearRetainedPagingSnapshot(snapshot.generation)
         retainedPagingSnapshot = null
     }
 
@@ -316,7 +316,7 @@ internal fun rememberRetainedPagingSnapshotState(
                     ListMode.GRID, ListMode.COMPACT_GRID -> gridState.layoutInfo.maxSpan
                     ListMode.LIST, ListMode.DETAILED_LIST -> 1
                 },
-            )?.let(host::retainPagingSnapshot)
+            )?.let { host?.retainPagingSnapshot(it) }
         }
     } else {
         { _, _, _, _, _, _ -> }

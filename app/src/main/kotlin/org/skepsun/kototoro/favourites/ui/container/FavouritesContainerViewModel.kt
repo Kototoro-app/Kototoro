@@ -15,6 +15,14 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
+import org.skepsun.kototoro.core.prefs.observeAsStateFlow
+import org.skepsun.kototoro.favourites.domain.library.FavouritesCardMapper
+import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
+import org.skepsun.kototoro.list.ui.ContentActionHostRequest
+import org.skepsun.kototoro.local.data.LocalStorageChanges
+import org.skepsun.kototoro.local.domain.model.LocalContent
+import org.skepsun.kototoro.tracker.work.UpdateCheckRequest
+import org.skepsun.kototoro.tracker.work.messageRes
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
@@ -28,6 +36,7 @@ import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.parsers.exception.AuthRequiredException
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.core.model.unwrap
 import org.skepsun.kototoro.core.model.isLocal
@@ -57,7 +66,8 @@ class FavouritesContainerViewModel @Inject constructor(
     private val favouritesRepository: FavouritesRepository,
     private val sourcesRepository: ContentSourcesRepository,
     private val mangaRepositoryFactory: ContentRepository.Factory,
-    mangaDataRepository: ContentDataRepository,
+    private val mangaDataRepository: ContentDataRepository,
+    @LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
     networkState: NetworkState,
     internal val globalFavoritesState: GlobalFavoritesState,
     private val sourceGroupManager: SourceGroupManager,
@@ -67,12 +77,22 @@ class FavouritesContainerViewModel @Inject constructor(
     private val spaceContentPolicy: org.skepsun.kototoro.space.domain.SpaceContentPolicy,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     private val workAggregateRepository: org.skepsun.kototoro.work.domain.WorkAggregateRepository,
+    private val cardMapper: FavouritesCardMapper,
+    private val contentResolver: org.skepsun.kototoro.favourites.domain.library.FavouriteContentResolver,
+    private val quickFilterFactory: FavoritesListQuickFilter.Factory,
+    private val markAsReadUseCase: org.skepsun.kototoro.history.domain.MarkAsReadUseCase,
+    private val trackingRepository: org.skepsun.kototoro.tracker.domain.TrackingRepository,
+    private val trackWorkerScheduler: org.skepsun.kototoro.tracker.work.TrackWorker.Scheduler,
 ) : BaseViewModel(), SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     init {
         launchJob(Dispatchers.IO) {
             sourcesRepository.getAllAvailableSourcesUnfiltered()
         }
+        // Offline means "only what is on the device": the Downloaded quick filter follows
+        // the connectivity state once per favourites page (it used to be applied by every
+        // per-category child view model, i.e. once per tab).
+        globalFavoritesState.setFilterOption(ListFilterOption.Downloaded, !networkState.value)
     }
 
     data class FavoritesHostUiState(
@@ -175,6 +195,177 @@ class FavouritesContainerViewModel @Inject constructor(
             FavouriteLibraryUiState(),
         )
 
+
+    // ---------------------------------------------------------------------
+    // Per-category list hosts (favourites-komikku-alignment Phase 6): the favourites
+    // page has a single state holder — this view model. What a category page needs is a
+    // thin [FavouritesListHost] adapter that slices [libraryState] into cards and
+    // forwards selection / quick-filter callbacks here.
+    // ---------------------------------------------------------------------
+
+    /** Scope every favourites derivation and list action runs on. */
+    internal val listScope = viewModelScope + Dispatchers.Default
+
+    internal val gridScale = settings.observeAsStateFlow(
+        scope = listScope,
+        key = AppSettings.KEY_GRID_SIZE,
+        valueProducer = { gridSize / 100f },
+    )
+
+    /** Toasts and host requests raised by list actions, collected by the shared route. */
+    internal val onContentMessage = MutableEventFlow<String>()
+    internal val onContentActionHostRequest = MutableEventFlow<ContentActionHostRequest>()
+
+    private val listHosts = HashMap<Long, FavouritesListHost>()
+
+    /**
+     * The list host of one category page, cached: the same instance — and the cards it
+     * mapped — is reused across recompositions, tab switches and configuration changes,
+     * and goes away with the screen. There is no per-category child ViewModel anymore.
+     */
+    @Synchronized
+    internal fun listHost(categoryId: Long): FavouritesListHost = listHosts.getOrPut(categoryId) {
+        FavouritesListHost(
+            categoryId = categoryId,
+            container = this,
+            cardMapper = cardMapper,
+            quickFilter = quickFilterFactory.create(categoryId, libraryState),
+        )
+    }
+
+    /**
+     * Re-map trigger for the card lists: the display mode plus everything that changes
+     * what a card shows (badges, progress indicators, tracker state, overrides,
+     * favourites, local storage). Library data itself arrives through the snapshot.
+     */
+    internal fun observeListModeWithTriggers(): Flow<ListMode> = combine(
+        listMode,
+        merge(
+            mangaDataRepository.observeOverridesTrigger(emitInitialState = true).map { Unit },
+            mangaDataRepository.observeFavoritesTrigger(emitInitialState = true).map { Unit },
+            localStorageChanges.onStart { emit(null) }.map { Unit },
+        ),
+        settings.observeChanges().filter { key ->
+            key == AppSettings.KEY_PROGRESS_INDICATORS
+                || key == AppSettings.KEY_TRACKER_ENABLED
+                || key == AppSettings.KEY_QUICK_FILTER
+                || key == AppSettings.KEY_MANGA_LIST_BADGES
+        }.onStart { emit("") },
+    ) { mode, _, _ ->
+        mode
+    }
+
+    // ------------------------------------------------------------ list actions
+
+    /** Remove the selection (entity row ids) from favourites or from one category. */
+    internal fun removeFromFavourites(categoryId: Long, ids: Set<Long>) {
+        if (ids.isEmpty()) {
+            return
+        }
+        launchJob(Dispatchers.Default) {
+            val mangaIds = expandToMangaIds(ids)
+            val handle = if (categoryId == NO_ID) {
+                favouritesRepository.removeFromFavourites(mangaIds)
+            } else {
+                favouritesRepository.removeFromCategory(categoryId, mangaIds)
+            }
+            onActionDone.call(ReversibleAction(R.string.removed_from_favourites, handle))
+        }
+    }
+
+    internal suspend fun isPinned(ids: Set<Long>): Boolean =
+        favouritesRepository.isPinned(expandToMangaIds(ids))
+
+    internal fun setPinned(ids: Set<Long>, isPinned: Boolean) {
+        launchJob(Dispatchers.Default) {
+            favouritesRepository.setPinned(expandToMangaIds(ids), isPinned)
+        }
+    }
+
+    internal fun togglePinned(ids: Set<Long>) {
+        launchJob(Dispatchers.Default) {
+            val currentlyPinned = favouritesRepository.isPinned(expandToMangaIds(ids))
+            favouritesRepository.setPinned(expandToMangaIds(ids), !currentlyPinned)
+        }
+    }
+
+    /** Mark the selected entities as read through their stored projections. */
+    internal fun markAsRead(entityIds: Collection<Long>) {
+        if (entityIds.isEmpty()) return
+        launchLoadingJob(Dispatchers.Default) {
+            val contents = resolveSelectedContents(entityIds)
+            if (contents.isNotEmpty()) {
+                markAsReadUseCase(contents)
+            }
+        }
+    }
+
+    /** Stored projections of the selection, for the actions that cannot use the card stub. */
+    internal suspend fun resolveSelectedContents(ids: Collection<Long>): List<Content> =
+        contentResolver.resolveByDisplayMangaIds(
+            ids.mapNotNullTo(ArrayList(ids.size)) { libraryState.value.rowsByEntityId[it]?.displayMangaId },
+        )
+
+    internal fun resolveSelectionToMangaIds(ids: Set<Long>): Set<Long> = expandToMangaIds(ids)
+
+    /**
+     * Pull-to-refresh entry point: requests a new-chapter update check through the shared
+     * gate ([TrackWorker.Scheduler.requestCheckNow], the same one used by the Updates and
+     * Feed pages), finishing with a summary toast. If the gate refuses the request (check
+     * already running / checked too recently / tracker disabled) the corresponding prompt
+     * toast is shown instead.
+     */
+    internal fun checkForUpdates() {
+        launchLoadingJob(Dispatchers.Default) {
+            when (val request = trackWorkerScheduler.requestCheckNow()) {
+                UpdateCheckRequest.Started -> {
+                    onContentMessage.call(appContext.getString(R.string.checking_for_updates))
+                    val finished = trackWorkerScheduler.awaitOneShot(UPDATE_CHECK_AWAIT_MS)
+                    val message = if (finished) {
+                        val summary = trackingRepository.getFavouriteUpdatesSummary()
+                        if (summary.worksWithUpdates > 0) {
+                            appContext.getString(
+                                R.string.favourites_updates_found,
+                                summary.worksWithUpdates,
+                                summary.newChapters,
+                            )
+                        } else {
+                            appContext.getString(R.string.favourites_no_updates)
+                        }
+                    } else {
+                        appContext.getString(R.string.updates_check_still_running)
+                    }
+                    onContentMessage.call(message)
+                }
+
+                UpdateCheckRequest.InFlight,
+                UpdateCheckRequest.TooSoon,
+                UpdateCheckRequest.TrackerDisabled,
+                -> {
+                    onContentMessage.call(appContext.getString(request.messageRes()))
+                }
+            }
+        }
+    }
+
+    /**
+     * Entity ids of a selection expanded to the projections the favourite DAOs address
+     * rows by. A row without any projection keeps the entity id (it has no manga to
+     * address, and the legacy chain dropped such rows instead of acting on them).
+     */
+    private fun expandToMangaIds(ids: Collection<Long>): Set<Long> {
+        val rows = libraryState.value.rowsByEntityId
+        return ids.flatMapTo(LinkedHashSet()) { entityId ->
+            val row = rows[entityId]
+            when {
+                row == null -> setOf(entityId)
+                row.localMangaIds.isNotEmpty() -> row.localMangaIds
+                row.displayMangaId != null -> setOf(row.displayMangaId)
+                else -> setOf(entityId)
+            }
+        }
+    }
+
     /**
      * Debug-only shadow comparison (favourites-komikku-alignment Phase 4): derives the
      * visible entity ids of the legacy aggregate chain next to the new snapshot path
@@ -219,7 +410,10 @@ class FavouritesContainerViewModel @Inject constructor(
         globalFavoritesState.resetFilters(clearGroupTab = spaceBinding.spaceId.value == null)
     }
 
-    private fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> {
+    /** Whether the current space scopes the group tab, i.e. whether clearing keeps it. */
+    internal fun isSpaceBound(): Boolean = activeSpaceId.value != null
+
+    internal fun Flow<Set<ListFilterOption>>.combineWithSettings(): Flow<Set<ListFilterOption>> {
         val nsfwCombined = combine(
             settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
         ) { filters, skipNsfw ->
@@ -335,6 +529,16 @@ class FavouritesContainerViewModel @Inject constructor(
     val isEmpty = uiState
         .map { it.isEmpty }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
+
+    private companion object {
+
+        /**
+         * How long the pull-to-refresh spinner waits for the one-shot update check before
+         * giving up on a result toast. The worker keeps running in the background (and
+         * reports via its own notification) if the check is simply slow.
+         */
+        const val UPDATE_CHECK_AWAIT_MS = 60_000L
+    }
 
     private fun buildActiveCategoryCounts(
         entries: List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>,

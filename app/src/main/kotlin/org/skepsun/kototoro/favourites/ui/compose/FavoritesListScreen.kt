@@ -2,15 +2,13 @@ package org.skepsun.kototoro.favourites.ui.compose
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
-import org.skepsun.kototoro.favourites.ui.list.FavouritesListViewModel
+import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
@@ -19,12 +17,11 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.space.ui.LocalBrowseSpaceId
-import org.skepsun.kototoro.space.ui.spaceViewModelKey
 
 @Composable
 fun KototoroFavoritesListScreen(
     categoryId: Long,
+    listHost: FavouritesListHost,
     appRouter: AppRouter,
     contentPadding: PaddingValues,
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
@@ -37,19 +34,12 @@ fun KototoroFavoritesListScreen(
     modifier: Modifier = Modifier,
 ) {
     val mainActivity = LocalContext.current as? MainActivity
-    val spaceId = LocalBrowseSpaceId.current
-    val viewModel = hiltViewModel<FavouritesListViewModel, FavouritesListViewModel.Factory>(
-        key = spaceViewModelKey("favorites-$categoryId", spaceId),
-    ) { factory ->
-        factory.create(categoryId)
-    }
-    LaunchedEffect(viewModel, spaceId) {
-        viewModel.bindSpace(spaceId)
-    }
-    val quickFilter by viewModel.topQuickFilter.collectAsStateWithLifecycle()
+    // The state holder is the favourites container, handed in as a per-category slice:
+    // there is no page-level ViewModel and no space binding to do here (Phase 6).
+    val quickFilter by listHost.topQuickFilter.collectAsStateWithLifecycle()
 
     AppContentListRoute(
-        viewModel = viewModel,
+        viewModel = listHost,
         contentPadding = contentPadding,
         appRouter = appRouter,
         showRemoveOption = true,
@@ -67,7 +57,7 @@ fun KototoroFavoritesListScreen(
         sharedElementInstanceKey = "main_favorites_$categoryId",
         registerFilterCallback = false,
         pullRefreshEnabled = true,
-        pullRefreshAction = { viewModel.checkForUpdates() },
+        pullRefreshAction = { listHost.checkForUpdates() },
         onNavigateToDetails = { _, content, sharedKey ->
             if (onNavigateToDetails != null) {
                 onNavigateToDetails(content, sharedKey)
@@ -87,30 +77,35 @@ fun KototoroFavoritesListScreen(
             }
         },
         onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->
+            // Item ids are entity ids now, so only a real display projection may seed the page.
+            val preferred = preferredLocalMangaId ?: content.id.takeIf { it != entityId }
             val origin = DetailsOrigin.EntityGraph(
                 entityId = entityId,
-                preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+                preferredLocalMangaId = preferred,
             )
             if (onNavigateToEntityDetails != null) {
                 onNavigateToEntityDetails(origin, sharedKey)
             } else {
                 appRouter.openEntityDetails(
                     entityId = entityId,
-                    preferredLocalMangaId = preferredLocalMangaId ?: content.id,
+                    preferredLocalMangaId = preferred,
                     sharedElementKey = sharedKey,
                 )
             }
         },
-        onRemoveSelection = { ids -> viewModel.removeFromFavourites(ids) },
-        onPinSelection = { ids -> viewModel.togglePinned(ids) },
-        onMarkAsCompletedSelection = { items -> viewModel.markAsRead(items.map { it.manga }.toSet()) },
+        onRemoveSelection = { ids -> listHost.removeFromFavourites(ids) },
+        onPinSelection = { ids -> listHost.togglePinned(ids) },
+        onMarkAsCompletedSelection = { items -> listHost.markAsRead(items.map { it.id }) },
+        onResolveSelectionContents = { ids -> listHost.resolveSelectedContents(ids) },
         onFixSelection = { ids ->
-            onEntityOrganizeSelection?.invoke(viewModel.resolveSelectionToMangaIds(ids))
+            onEntityOrganizeSelection?.invoke(listHost.resolveSelectionToMangaIds(ids))
         },
         fixSelectionActionTitleRes = R.string.entity_organize_title,
         showQuickFilterInline = true,
         quickFilterOverride = quickFilter,
         enableItemAnimations = false,
-        retainPagingSnapshotOnDetailsNavigation = true,
+        // The whole slice is a ViewModel-owned list now: there is no paging window to
+        // hand over, so the plain saveable scroll state is the single source of truth.
+        retainPagingSnapshotOnDetailsNavigation = false,
     )
 }

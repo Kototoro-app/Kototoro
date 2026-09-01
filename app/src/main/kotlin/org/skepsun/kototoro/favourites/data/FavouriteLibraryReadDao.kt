@@ -78,7 +78,10 @@ abstract class FavouriteLibraryReadDao {
             wh.chapters AS history_chapters,
             wh.updated_at AS history_updated_at,
             tracking.new_chapters AS tracking_new_chapters,
-            tracking.last_chapter_date AS tracking_last_chapter_date
+            tracking.last_chapter_date AS tracking_last_chapter_date,
+            metadata.service AS metadata_tracking_service,
+            metadata.title AS metadata_tracking_title,
+            metadata.cover_url AS metadata_tracking_cover_url
         FROM selected
         INNER JOIN entity e ON e.id = selected.entity_id
         LEFT JOIN entity_preferences ep ON ep.entity_id = selected.entity_id
@@ -93,6 +96,17 @@ abstract class FavouriteLibraryReadDao {
             WHERE entity_id IS NOT NULL
             GROUP BY entity_id
         ) tracking ON tracking.entity_id = selected.entity_id
+        -- display metadata authority (`ContentDataRepository.getMetadataSourceSelections`):
+        -- only a 'tracking' selection has a cached site item, whose primary key is
+        -- (service, remote_id), so this join can never multiply base rows. The numeric
+        -- preference columns mirror the binding ones written by the same code path.
+        LEFT JOIN tracking_site_items metadata ON metadata.service = COALESCE(
+                CAST(ep.metadata_binding_source AS INTEGER), ep.metadata_source_service
+            )
+            AND metadata.remote_id = COALESCE(
+                CAST(ep.metadata_binding_external_id AS INTEGER), ep.metadata_source_remote_id
+            )
+            AND ep.metadata_source_kind = 'tracking'
         """,
     )
     abstract fun observeFavouriteCardBaseRows(): Flow<List<FavouriteCardBaseRow>>
@@ -152,6 +166,8 @@ abstract class FavouriteLibraryReadDao {
             wf.entity_id AS entity_id,
             mt.tag_id AS tag_id,
             t.title AS tag_title,
+            t.key AS tag_key,
+            t.source AS tag_source,
             mt.manga_id AS manga_id
         FROM (
             SELECT DISTINCT entity_id
@@ -211,6 +227,8 @@ abstract class FavouriteLibraryReadDao {
             wf.entity_id AS entity_id,
             mt.tag_id AS tag_id,
             t.title AS tag_title,
+            t.key AS tag_key,
+            t.source AS tag_source,
             mt.manga_id AS manga_id
         FROM work_favourites wf
         INNER JOIN manga_tags mt ON mt.manga_id = wf.anchor_manga_id

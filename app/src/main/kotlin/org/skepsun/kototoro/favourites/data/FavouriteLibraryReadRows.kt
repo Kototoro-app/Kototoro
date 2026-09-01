@@ -36,6 +36,10 @@ data class FavouriteTagFacetRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,
     @ColumnInfo(name = "tag_id") val tagId: Long,
     @ColumnInfo(name = "tag_title") val tagTitle: String,
+    // tag identity: ListFilterOption.Tag is built from (key, source) and its id must
+    // equal tagId, which is what the in-memory filter matches on
+    @ColumnInfo(name = "tag_key") val tagKey: String,
+    @ColumnInfo(name = "tag_source") val tagSource: String,
     @ColumnInfo(name = "manga_id") val mangaId: Long,
 )
 

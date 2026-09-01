@@ -68,6 +68,7 @@
     <string name="favourites_entity_aggregation_subtitle">Multiple works from different sources are folded into one entity entry. Multi-select acts on the entity rows behind these projections.</string>
     <string name="favourites_entity_current_projection">Current projection: %1$s</string>
     <string name="favourites_entity_current_projection_with_count">Current projection: %1$s · %2$d projections</string>
+    <string name="favourites_broken_projection_title">Missing projection</string>
     <string name="search_local_entity_suggestion_meta">%1$d projections · %2$d sources</string>
     <string name="add_to_favourites">Favorite this</string>
     <string name="favourite_duplicate_candidate_title">Possible duplicate</string>

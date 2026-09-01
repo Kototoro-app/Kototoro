@@ -68,6 +68,9 @@ class FavouriteLibraryUiStateTest {
         hasBrokenProjection = false,
         overrideTitle = null,
         overrideCoverUrl = null,
+        metadataTrackingService = null,
+        metadataTrackingTitle = null,
+        metadataTrackingCoverUrl = null,
         isPinned = false,
         createdAt = 100L - entityId,
         updatedAt = 100L - entityId,
@@ -208,5 +211,34 @@ class FavouriteLibraryUiStateTest {
             spacePolicy,
         )
         assertEquals(listOf(1L), state.visibleIdsByCategory.getValue(org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryAllCategoryId))
+    }
+
+    @Test
+    fun `pinned ids reach the ui state per slice`() {
+        // The card mapping reads the pin badge from this map, so it has to be the
+        // membership flag of the slice and not the representative one of the entity.
+        val rows = listOf(row(1), row(2))
+        val snapshot = FavouriteLibrarySnapshot(
+            rowsByEntityId = rows.associateBy { it.entityId },
+            allEntityIds = listOf(1L, 2L),
+            membershipsByCategory = mapOf(
+                10L to listOf(
+                    FavouriteMembership(1L, 10L, true, 0, 1L, 1L),
+                    FavouriteMembership(2L, 10L, false, 0, 2L, 2L),
+                ),
+                11L to listOf(
+                    FavouriteMembership(1L, 11L, false, 0, 1L, 1L),
+                    FavouriteMembership(2L, 11L, true, 0, 2L, 2L),
+                ),
+            ),
+            quickFilterMetadata = FavouriteQuickFilterMetadata.Empty,
+        )
+        val state = buildFavouriteLibraryUiState(snapshot, FavouriteLibraryParams(), spacePolicy)
+        assertEquals(setOf(1L), state.pinnedIdsByCategory.getValue(10L))
+        assertEquals(setOf(2L), state.pinnedIdsByCategory.getValue(11L))
+        assertEquals(
+            emptySet<Long>(),
+            state.pinnedIdsByCategory.getValue(org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryAllCategoryId),
+        )
     }
 }

@@ -39,7 +39,7 @@ import org.skepsun.kototoro.explore.ui.compose.KototoroExploreHostRoute
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
 import org.skepsun.kototoro.favourites.ui.compose.FavoritesFilterPanelRoute
 import org.skepsun.kototoro.favourites.ui.compose.KototoroFavoritesHostRoute
-import org.skepsun.kototoro.favourites.ui.list.FavouritesListViewModel
+import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
@@ -1738,10 +1738,10 @@ internal fun FavoritesTopLevelRouteContent(
     val selectedGroupTab by viewModel.currentGroupTab.collectAsStateWithLifecycle()
     val selectedSourceTags by viewModel.globalFavoritesState.selectedSourceTags.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    // The active category's list view model is created by the pager page inside
+    // The active category's list host is created by the pager page inside
     // KototoroFavoritesHostRoute; this shell-owned ref lets this scene's filter callback
     // build the popup filter panel against the same instance.
-    val activeFavouritesViewModelRef = remember { mutableStateOf<FavouritesListViewModel?>(null) }
+    val activeFavouritesHostRef = remember { mutableStateOf<FavouritesListHost?>(null) }
     var nextFavoritesDialogId by remember { mutableLongStateOf(0L) }
     var pendingFavoritesDialog by remember { mutableStateOf<PendingFavoritesDialog?>(null) }
     var favoritesSelectionDialog by remember { mutableStateOf<FavoritesSelectionDialogState?>(null) }
@@ -1998,7 +1998,7 @@ internal fun FavoritesTopLevelRouteContent(
                 { close ->
                     FavoritesFilterPanelRoute(
                         containerViewModel = viewModel,
-                        activeViewModelRef = activeFavouritesViewModelRef,
+                        activeHostRef = activeFavouritesHostRef,
                         close = close,
                     )
                 }
@@ -2025,7 +2025,7 @@ internal fun FavoritesTopLevelRouteContent(
                 navigateToDetailsWithOrigin(origin, sharedKey)
             },
             registerFilterCallback = false,
-            activeFavouritesViewModelRef = activeFavouritesViewModelRef,
+            activeFavouritesHostRef = activeFavouritesHostRef,
             onTopBarOverrideChanged = {
                 onExploreSourceSelectionTopBarChanged(
                     RouteScopedTopBarOverrideState(TOP_BAR_OWNER_FAVORITES, it),

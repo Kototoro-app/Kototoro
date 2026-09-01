@@ -68,6 +68,31 @@ class FavouriteLibraryReadDaoTest {
     }
 
     @Test
+    fun metadataAuthorityReadsTheCachedSiteItem() = runTest {
+        val byEntity = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
+
+        // 'tracking' authority with a cached item: service + title + cover arrive together
+        val tracking = byEntity.getValue(25L)
+        assertEquals(3, tracking.metadataTrackingService)
+        assertEquals("Site Title", tracking.metadataTrackingTitle)
+        assertEquals("https://site/cover.jpg", tracking.metadataTrackingCoverUrl)
+
+        // authority without a cached item stays entirely null (no half-resolved display)
+        val missing = byEntity.getValue(26L)
+        assertNull(missing.metadataTrackingService)
+        assertNull(missing.metadataTrackingTitle)
+        assertNull(missing.metadataTrackingCoverUrl)
+
+        // 'base' authority never joins, even when a site item would match by id
+        val base = byEntity.getValue(27L)
+        assertNull(base.metadataTrackingService)
+        assertNull(base.metadataTrackingTitle)
+
+        // no prefs row at all
+        assertNull(byEntity.getValue(1L).metadataTrackingService)
+    }
+
+    @Test
     fun displayMangaFollowsPreferredThenAnchorAndKeepsBrokenRows() = runTest {
         val byEntity = dao.observeFavouriteCardBaseRows().first().associateBy { it.entityId }
 
@@ -378,6 +403,31 @@ class FavouriteLibraryReadDaoTest {
             FavouriteLibrarySeed.insertManga(sql, 24001, "Chi")
             FavouriteLibrarySeed.insertFavourite(sql, 24, 12, 24001, createdAt = 10, updatedAt = 10)
             FavouriteLibrarySeed.insertBinding(sql, 24, 24001)
+
+            // Display metadata authority (the tracking site behind the card title/cover):
+            // E25 has a cached site item, E26 points at a missing one, E27 chooses the
+            // local base projection as authority.
+            FavouriteLibrarySeed.insertEntity(sql, 25, "E25")
+            FavouriteLibrarySeed.insertManga(sql, 25001, "Psi projection")
+            FavouriteLibrarySeed.insertFavourite(sql, 25, 10, 25001, createdAt = 10, updatedAt = 10)
+            FavouriteLibrarySeed.insertBinding(sql, 25, 25001)
+            FavouriteLibrarySeed.insertPrefs(sql, 25, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 777L)
+            FavouriteLibrarySeed.insertTrackingSiteItem(sql, 3, 777L, "Site Title", "https://site/cover.jpg")
+
+            FavouriteLibrarySeed.insertEntity(sql, 26, "E26")
+            FavouriteLibrarySeed.insertManga(sql, 26001, "Omega projection")
+            FavouriteLibrarySeed.insertFavourite(sql, 26, 10, 26001, createdAt = 10, updatedAt = 10)
+            FavouriteLibrarySeed.insertBinding(sql, 26, 26001)
+            FavouriteLibrarySeed.insertPrefs(sql, 26, metadataSourceKind = "tracking", metadataService = 3, metadataRemoteId = 778L)
+
+            FavouriteLibrarySeed.insertEntity(sql, 27, "E27")
+            FavouriteLibrarySeed.insertManga(sql, 27001, "Phi projection")
+            FavouriteLibrarySeed.insertFavourite(sql, 27, 10, 27001, createdAt = 10, updatedAt = 10)
+            FavouriteLibrarySeed.insertBinding(sql, 27, 27001)
+            // Stale numeric columns with kind='base': the kind guard, not the id match,
+            // decides, so the card must keep the projection display.
+            FavouriteLibrarySeed.insertPrefs(sql, 27, metadataSourceKind = "base", metadataService = 3, metadataRemoteId = 779L)
+            FavouriteLibrarySeed.insertTrackingSiteItem(sql, 3, 779L, "Phi site title", "https://site/phi.jpg")
 
             sql.setTransactionSuccessful()
         } finally {

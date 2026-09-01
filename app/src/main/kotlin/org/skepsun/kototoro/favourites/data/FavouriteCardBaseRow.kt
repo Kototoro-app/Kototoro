@@ -44,6 +44,13 @@ data class FavouriteCardBaseRow(
     // tracks summary (new chapters sort + counter badge + quick filter)
     @ColumnInfo(name = "tracking_new_chapters") val trackingNewChapters: Int?,
     @ColumnInfo(name = "tracking_last_chapter_date") val trackingLastChapterDate: Long?,
+    // display metadata authority: the cached site item behind the entity's 'tracking'
+    // metadata selection (contract field `metadataTrackingService` + the title/cover the
+    // legacy chain rendered through ContentListMapper.resolveDisplayOverride). Null when
+    // the entity has no tracking authority or the cache holds nothing for it.
+    @ColumnInfo(name = "metadata_tracking_service") val metadataTrackingService: Int?,
+    @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
+    @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
 ) {
     /** True when the display projection itself is missing (dangling preferred/anchor). */
     val hasDisplay: Boolean

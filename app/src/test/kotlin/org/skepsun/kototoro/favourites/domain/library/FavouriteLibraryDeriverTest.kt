@@ -53,6 +53,9 @@ class FavouriteLibraryDeriverTest {
         hasBrokenProjection: Boolean = false,
         overrideTitle: String? = null,
         overrideCoverUrl: String? = null,
+        metadataTrackingService: Int? = null,
+        metadataTrackingTitle: String? = null,
+        metadataTrackingCoverUrl: String? = null,
         isPinned: Boolean = false,
         createdAt: Long = entityId,
         updatedAt: Long = entityId,
@@ -87,6 +90,9 @@ class FavouriteLibraryDeriverTest {
         hasBrokenProjection = hasBrokenProjection,
         overrideTitle = overrideTitle,
         overrideCoverUrl = overrideCoverUrl,
+        metadataTrackingService = metadataTrackingService,
+        metadataTrackingTitle = metadataTrackingTitle,
+        metadataTrackingCoverUrl = metadataTrackingCoverUrl,
         isPinned = isPinned,
         createdAt = createdAt,
         updatedAt = updatedAt,
@@ -150,6 +156,43 @@ class FavouriteLibraryDeriverTest {
             assertEquals(2L, first, "order $order: pinned first in all")
             assertEquals(2L, state.visibleIdsByCategory.getValue(10L).first(), "order $order: pinned first in category")
         }
+    }
+
+    @Test
+    fun `pinned ids carry the membership flag of each slice`() {
+        // Pinned is a property of the (entity, category) pair: the card mapping must see
+        // the slice's own flag instead of the representative membership of the entity.
+        val snap = snapshot(
+            rows = listOf(row(1), row(2), row(3)),
+            membershipsByCategory = mapOf(
+                10L to listOf(membership(1, 10), membership(2, 10, pinned = true), membership(3, 10)),
+                11L to listOf(membership(1, 11), membership(2, 11), membership(3, 11, pinned = true)),
+            ),
+        )
+        val state = deriveFavouriteLibraryState(snap, FavouriteLibraryDerivationInput())
+        assertEquals(
+            emptySet<Long>(),
+            state.pinnedIdsByCategory.getValue(FavouriteLibraryAllCategoryId),
+            "the all slice follows the representative membership, which is unpinned here",
+        )
+        assertEquals(setOf(2L), state.pinnedIdsByCategory.getValue(10L))
+        assertEquals(setOf(3L), state.pinnedIdsByCategory.getValue(11L))
+    }
+
+    @Test
+    fun `pinned ids skip the entries quick filters hid`() {
+        val snap = snapshot(
+            rows = listOf(row(1, isDownloaded = true), row(2)),
+            membershipsByCategory = mapOf(
+                10L to listOf(membership(1, 10), membership(2, 10, pinned = true)),
+            ),
+        )
+        val state = deriveFavouriteLibraryState(
+            snap,
+            FavouriteLibraryDerivationInput(filters = setOf(ListFilterOption.Downloaded)),
+        )
+        assertEquals(listOf(1L), state.visibleIdsByCategory.getValue(10L))
+        assertEquals(emptySet<Long>(), state.pinnedIdsByCategory.getValue(10L))
     }
 
     // ---------------------------------------------------------------- sorting

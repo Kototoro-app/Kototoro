@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.FlowCollector
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.main.ui.SearchBarFilterCallback
+import org.skepsun.kototoro.list.ui.ContentListHost
+import org.skepsun.kototoro.list.ui.RetainedPagingSnapshotHost
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.main.ui.LocalMainChromeController
 import org.skepsun.kototoro.main.ui.MainActivity
@@ -28,6 +30,7 @@ import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.alternatives.ui.AutoFixService
 import org.skepsun.kototoro.core.util.ShareHelper
 import org.skepsun.kototoro.core.model.isLocal
+import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
@@ -90,8 +93,8 @@ private fun prepareContentSelectionModels(
 }
 
 @Composable
-fun <VM : ContentListViewModel> AppContentListRoute(
-    viewModel: VM,
+fun AppContentListRoute(
+    viewModel: ContentListHost,
     contentPadding: PaddingValues,
     appRouter: AppRouter,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
@@ -111,6 +114,14 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     onFixSelection: ((Set<Long>) -> Unit)? = null,
     onPinSelection: ((Set<Long>) -> Unit)? = null,
     onMarkAsCompletedSelection: ((List<ContentListModel>) -> Unit)? = null,
+    /**
+     * Resolves the stored projections behind the selected cards before an action needs a
+     * real [org.skepsun.kototoro.parsers.model.Content] (share, download, category dialog,
+     * override editor). The favourites library maps its cards from a narrow snapshot whose
+     * content is display-only, so that page resolves by entity id on demand instead of
+     * handing the stub to these actions.
+     */
+    onResolveSelectionContents: (suspend (Set<Long>) -> List<Content>)? = null,
     preferredSelectionInlineActions: List<SelectionAction>? = null,
     removeSelectionActionIconRes: Int? = null,
     removeSelectionActionTitleRes: Int? = null,
@@ -130,7 +141,7 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     loadMoreVisibleThreshold: Int = 4,
     onNavigateToDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, String?) -> Unit)? = null,
     onNavigateToEntityDetails: ((ContentListModel, org.skepsun.kototoro.parsers.model.Content, Long, Long?, String?) -> Unit)? = null,
-    onAddMenuProvider: ((androidx.activity.ComponentActivity, VM, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
+    onAddMenuProvider: ((androidx.activity.ComponentActivity, ContentListHost, androidx.lifecycle.LifecycleOwner) -> androidx.core.view.MenuProvider?)? = null,
     listHeader: (@Composable () -> Unit)? = null,
     showQuickFilterInline: Boolean = true,
     quickFilterOverride: QuickFilter? = null,
@@ -211,7 +222,9 @@ fun <VM : ContentListViewModel> AppContentListRoute(
     // 会先显示错误页面、之后再被 requestScrollToItem 兜底拉回（可见闪跳）。待切到真实
     // 新数据时，共享控制器会用 anchor item 在新数据里重新对齐到目标位置。
     val retainedPagingState = rememberRetainedPagingSnapshotState(
-        host = viewModel,
+        // Only paging view models retain a snapshot across details navigation; pages
+        // driven by a plain host (the favourites library) pass retainEnabled = false.
+        host = viewModel as? RetainedPagingSnapshotHost,
         retainEnabled = retainPagingSnapshotOnDetailsNavigation,
         leadingItems = items,
         lazyPagingItems = lazyPagingItems,
@@ -301,6 +314,13 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                         fixActionTitleRes = fixSelectionActionTitleRes,
                         onClearSelection = { updateSelection(emptySet()) },
                         onActionClick = { action ->
+                            // Actions that need a real projection: a page whose cards are
+                            // display-only (the favourites library) resolves the stored
+                            // projections by id on demand, every other page already
+                            // carries the full Content on the card itself.
+                            val resolveContents: suspend (Set<Long>) -> List<Content> = { ids ->
+                                onResolveSelectionContents?.invoke(ids) ?: selectedModels.map { it.manga }
+                            }
                             when (action) {
                                 SelectionAction.SELECT_ALL -> {
                                     hapticFeedback.performSelectionHapticFeedback()
@@ -313,26 +333,39 @@ fun <VM : ContentListViewModel> AppContentListRoute(
                                 }
 
                                 SelectionAction.SHARE -> {
+                                    val ids = currentSelectionIds
                                     if (onShareSelection != null) {
-                                        onShareSelection(currentSelectionIds)
+                                        onShareSelection(ids)
                                     } else {
-                                        ShareHelper(context).shareContentLinks(selectedModels.map { it.manga })
+                                        coroutineScope.launch {
+                                            ShareHelper(context).shareContentLinks(resolveContents(ids))
+                                        }
                                     }
                                     updateSelection(emptySet())
                                 }
 
                                 SelectionAction.FAVOURITE -> {
-                                    appRouter.showFavoriteDialog(selectedModels.map { it.manga })
+                                    val ids = currentSelectionIds
+                                    coroutineScope.launch {
+                                        appRouter.showFavoriteDialog(resolveContents(ids))
+                                    }
                                     updateSelection(emptySet())
                                 }
 
                                 SelectionAction.SAVE -> {
-                                    appRouter.showDownloadDialog(selectedModels.map { it.manga })
+                                    val ids = currentSelectionIds
+                                    coroutineScope.launch {
+                                        appRouter.showDownloadDialog(resolveContents(ids))
+                                    }
                                     updateSelection(emptySet())
                                 }
 
                                 SelectionAction.EDIT_OVERRIDE -> {
-                                    selectedModels.singleOrNull()?.manga?.let(appRouter::openContentOverrideConfig)
+                                    val ids = currentSelectionIds
+                                    coroutineScope.launch {
+                                        resolveContents(ids).singleOrNull()
+                                            ?.let(appRouter::openContentOverrideConfig)
+                                    }
                                     updateSelection(emptySet())
                                 }
 

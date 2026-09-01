@@ -14,8 +14,8 @@
 | 2 快照深模块 | ✅ 完成 | `FavouriteLibrarySnapshotStore` + `FavouriteLibrarySnapshot`/`FavouriteCardRow` 等；9+1 用例 |
 | 3 纯内存派生 | ✅ 完成 | `FavouriteLibraryDeriver`（visibility/quickFilters/groupAndSort 三阶段）；16 用例 |
 | 4 Container 接管状态 | ✅ 完成（管线侧） | `libraryState` StateFlow + `buildFavouriteLibraryUiState` 纯函数 + debug shadow comparison 挂点；6 用例 |
-| 5 UI 切静态 List | ⬜ 未开始 | 见 §4 |
-| 6 actions 迁移/删逐分类 VM | ⬜ 未开始 | |
+| 5 UI 切静态 List | ✅ 完成（渲染侧） | `FavouritesCardMapper` + `FavouriteContentResolver`；`pagingContent = null`；详见 §4 |
+| 6 actions 迁移/删逐分类 VM | ✅ 完成（待设备回归） | `ContentListHost` seam + `FavouritesListHost` 适配器；`FavouritesListViewModel`/`Factory` 删除；quick filter chips 与 metadata authority 一并转内存/快照；详见 §4.6 |
 | 7 删除收藏 Paging 代码 | ⬜ 未开始 | |
 | 8 验收收敛 | ⬜ 未开始 | |
 
@@ -45,6 +45,22 @@ app/src/main/kotlin/org/skepsun/kototoro/
   core/db/MangaDatabase.kt             # + getFavouriteLibraryReadDao()（修改）
   core/model/GlobalTagBlacklist.kt     # + containsTagTitle(title)（修改）
   favourites/ui/container/FavouritesContainerViewModel.kt  # + libraryState/startLibraryShadowComparison（修改）
+  # Phase 5（渲染切换，2026-09-02）
+  favourites/domain/library/
+    FavouritesCardMapper.kt            # row → ContentListModel（@Reusable，纯核心 buildFavouriteCardModel）
+    FavouriteContentResolver.kt        # 选中项按 displayMangaId 批量解析真实 projection
+  favourites/ui/compose/FavoritesListScreen.kt    # 静态渲染、onResolveSelectionContents
+  favourites/ui/compose/FavoritesHostScreen.kt    # 每页注入 viewModel.listHost(categoryId)
+  list/ui/compose/AppContentListRoute.kt          # + onResolveSelectionContents（分享/下载/分类/override）
+  list/domain/ContentListMapper.kt               # + tagTint(title)
+  core/prefs/... / res/values/strings.xml         # + favourites_broken_projection_title
+  favourites/domain/library/FavouriteLibraryDeriver.kt      # + pinnedIdsByCategory（membership 语义）
+  favourites/ui/container/FavouriteLibraryUiState.kt        # + pinnedIdsByCategory
+  # Phase 6（唯一状态持有者，2026-09-02）
+  list/ui/ContentListHost.kt                   # 路由所需的 state-holder 契约（ContentListViewModel 实现它）
+  favourites/ui/list/FavouritesListHost.kt     # 逐分类适配器（非 VM）：切片 + 动作转调 Container
+  favourites/domain/library/FavouritesQuickFilterOptions.kt # buildFavouritesFilterOptions 纯函数（chips 无 DAO）
+  favourites/ui/list/FavouritesListViewModel.kt # 删除（连同 @AssistedInject Factory）
 ```
 
 测试：
@@ -52,8 +68,9 @@ app/src/main/kotlin/org/skepsun/kototoro/
 ```text
 app/src/test/kotlin/org/skepsun/kototoro/favourites/
   ui/FavouriteCardFieldContractTest.kt                    # JVM，10 用例
-  domain/library/FavouriteLibraryDeriverTest.kt           # JVM，16 用例
-  ui/container/FavouriteLibraryUiStateTest.kt             # JVM，6 用例
+  domain/library/FavouriteLibraryDeriverTest.kt           # JVM，18 用例（Phase 5 +pinned 2）
+  ui/container/FavouriteLibraryUiStateTest.kt             # JVM，7 用例（Phase 5 +pinned 1）
+  domain/library/FavouritesCardMapperTest.kt              # JVM，11 用例（Phase 5 卡片映射契约）
 app/src/androidTest/kotlin/org/skepsun/kototoro/favourites/
   data/FavouriteLibrarySeed.kt                            # 共享种子助手（raw SQL）
   data/FavouriteLibrarySemanticsCharacterizationTest.kt   # 24 用例（旧 SQL 语义，Phase 7 后删除）
@@ -78,24 +95,83 @@ app/src/androidTest/kotlin/org/skepsun/kototoro/favourites/
 9. 软删除分类下的 membership 仍可见（与 `repairActiveDanglingCategoryRefs` 维护路径一致）。
 10. readingStatus：entity prefs 显式 > history percent（≥0.999=COMPLETED，>0=READING，null=PLANNED）。
 
-## 4. 下一步：Phase 5（UI 切静态 List）实施指南
+## 4. Phase 5/6 已完成：UI 切静态 List + 唯一状态持有者（2026-09-02）
 
-目标：`FavoritesListScreen` 消费 Container 的 `libraryState`，`FavouritesListViewModel.pagingContent` 停用（Phase 6 删除）。
+目标达成：收藏渲染路径不再产生 `PagingData`、`WorkAggregate` 或收藏 DAO 读取；每页卡片由 Container 的共享快照在内存里映射。
 
-建议顺序：
+### 4.1 渲染链
 
-1. **卡片模型映射**：新增 `FavouritesCardMapper`（favourites/domain/library/）：`FavouriteCardRow` → 三种 `ContentListModel`（GRID/COMPACT_GRID/LIST/DETAILED_LIST）。注意：
-   - `manga: Content` 参数：卡片渲染需要 `Content` 对象（title/cover/tags/source/chapters=空/url）。从 row 构造**轻量 Content**（`chapters=null`、`description=null`、`sourceData=null`）；item id 用 `entityId`（现有 `ContentListModel.id` 即 list id）。
-   - `subtitle`：compact=displayTags.joinToString；grid/detailed=`altTitle`。
-   - favourites 专属后缀（`favourites_entity_current_projection`，见 `FavouritesListViewModel.groupSuffix`）拼进 subtitle。
-   - `counter`=newChapters（completed 时 0）；`progress`=ReadingProgress(percent, chapters, mode)（history null 时不显示）；`projectionCount`/`isPinned`(membership)/`isSaved`=isDownloaded；`isFavorite`=true（或在 favourites 页传 NO_FAVORITE flags）。
-   - `override` = ContentOverride(overrideTitle/overrideCoverUrl/null)。
-2. **HorizontalPager 页面**：`FavoritesHostScreen` 每页从 Container 取 `visibleIdsByCategory[categoryId]` + `rowsByEntityId` 映射 ListModel；`AppContentListRoute` 走静态路径（`viewModel.content` 已有静态分支——给收藏新建薄 `ContentListViewModel` 子类或改造 `FavouritesListViewModel.content` 指向共享 state，`pagingContent` 返回 null）。
-3. **滚动恢复**：保留每 category 的 LazyListState/LazyGridState saveable + `entityId+offset` 语义 anchor；`retainPagingSnapshotOnDetailsNavigation = false`（收藏不再需要 retained window）。
-4. **Filter Panel**：`FavoritesFilterPanelRoute` 改读 Container（quickFilterMetadata 派生 chips；toggle 直接进 `globalFavoritesState`），删除 `activeFavouritesViewModelRef` 桥接。
-5. **验证**：切换 category/filter/sort 时 `FavouriteLibraryReadDao` 无新查询（logcat 或 Room query counter）；详情返回列表即时存在。
+```text
+Container.libraryState (StateFlow<FavouriteLibraryUiState>)
+    ├─ FavoritesHostScreen：activeFavouritesHostRef（顶栏 filter panel 指向当前分类的 host）
+    └─ KototoroFavoritesListScreen(categoryId, listHost)
+         └─ Container.listHost(categoryId) → FavouritesListHost（缓存的适配器，不是 VM）
+              content = combine(libraryState, container.observeListModeWithTriggers())
+                        .flowOn(Default) → FavouritesCardMapper.map(rows, Slice(mode, pinnedIds))
+         └─ AppContentListRoute(viewModel: ContentListHost；pagingContent == null → 静态 items 分支)
+```
 
-Phase 5 完成后 → Phase 6（actions 用 `FavouriteItemRef(entityId, displayMangaId, localMangaIds)`；删除 `FavouritesListViewModel.Factory`/每 category Hilt key/`activeFavouritesViewModelRef`）→ Phase 7（按计划 §8 Phase 7 清单删除，删前 `rg` 确认无其他调用方；**不得删除**历史/更新页面仍在用的 Paging 基础设施）→ Phase 8（跑 §11 全部基准 + 与 Komikku 并列对照 + 删 shadow comparison/临时日志 + 更新 `large-library-performance-handoff-2026-08.md`）。
+- **`FavouritesCardMapper`**（`favourites/domain/library/`）：`FavouriteCardRow` → GRID/COMPACT_GRID(`ContentGridModel`)/LIST(`ContentCompactListModel`)/DETAILED_LIST(`ContentDetailedListModel`)。纯核心是 `buildFavouriteCardModel(FavouriteCardModelRequest)`（无 Android/无 I/O，`FavouritesCardMapperTest` 11 用例覆盖）。字段规则：`id = entityId`、`counter = newChapters`（reading 完成时 0）、`progress` 来自 work history（无 history → null）、`projectionCount` binding-based、`isSaved = isDownloaded`、`isFavorite = false`、`isPinned` 用 **membership** 标志、`override = ContentOverride(overrideCoverUrl, overrideTitle, null)`；subtitle：grid=`altTitle`、detailed=`altTitle · 后缀`、compact=`tags.join(", ") · 后缀`（后缀=`favourites_entity_current_projection[_with_count]`，与旧 `groupSuffix` 等价）。
+- **stub `Content`**：title/altTitle/cover/author/state/tags/source 全部来自 row，`chapters=null`、`description=null`、`sourceData=null`、`url=publicUrl=""`；`contentRating` 显式置 ADULT/SAFE，使 NSFW badge 与 row 的持久化标志（也是 NSFW 快筛依据）一致。
+- **broken row 不再消失**：`displayMangaId == null` 的 row 以 `R.string.favourites_broken_projection_title` 为标题显示（旧链路在 map 阶段 `return@mapNotNull null` 直接丢弃），点击仍走 entity details → entity organize 可达。
+- **per-slice pinned**：`FavouriteLibraryDerivedState.pinnedIdsByCategory` / `FavouriteLibraryUiState.pinnedIdsByCategory`（membership 的 pinned 才是卡片标志；All 切片用代表 membership）。deriver 2 用例 + UiState 1 用例。
+
+### 4.2 卡片 stub 与真实 projection 的边界
+
+`AppContentListRoute` 新增可选参数 `onResolveSelectionContents: suspend (Set<Long>) -> List<Content>`；收藏页传入 `FavouriteContentResolver.resolveByDisplayMangaIds`（`MangaDao.findWithTagsByIds` 一次批量查询，保持选择顺序）。分享 / 下载 / 分类对话框 / 编辑 override 都先解析再执行；`MARK_AS_COMPLETED` 改成传 entity ids 由 VM 解析（`MarkAsReadUseCase` 需要真实 projection）。置顶 / 移除 / entity organize 选择继续用 `row.localMangaIds`（空则回退 displayMangaId→entityId），与旧 `expandGroupedIds()` 等价。
+
+### 4.3 其余改动
+
+- `FavouritesListViewModel`：删掉 `Pager`/`BatchMappingPagingSource`/`WorkAggregateRepository`/`ContentListMapper`/`SourceGroupManager`/`SourcePresetsRepository`/`FavouriteItemLookup`/`refreshTrigger`/`mapFavouritePage`/`toGroupedListModel`/`groupSuffix`/`sortOrder`/`setSortOrder(order)`；`pagingContent = null`、`hasMoreItems = false`、`onRefresh()` 变成 no-op（Room invalidation 驱动）；Factory 变成 `create(categoryId, libraryState)`；Quick Filters（`FavoritesListQuickFilter`）与 space 绑定原样保留。
+- `FavoritesListScreen`：`retainPagingSnapshotOnDetailsNavigation = false`（不再有 retained window；saveable 的 LazyListState/LazyGridState 是唯一真相），详情跳转 `initialProjectionLocalMangaId = preferred ?: content.id.takeIf { it != entityId }`。
+- `ContentListMapper.tagTint(title)` 公开（原来只有私有 `getTagTint(ContentTag)`），供详细列表 tag chips 复用同一份 warn-list 着色。
+
+### 4.4 有意留下的偏差 / 待办（重要）
+
+1. ~~**metadata authority（tracking 站点）派生的标题/封面 override 与 `metadataTrackingService` badge 丢失**~~ → **Phase 6 已修复**（见 §4.6），原文如下。旧链路 `resolveDisplayOverride` 会把「显示元数据权威=某追踪站点」的作品换成 tracking 缓存里的 title/cover，并画一个服务 badge；row 里没有这些列。修复方式：给 `observeFavouriteCardBaseRows()` 增补 `ep.metadata_source_service/remote_id` 并 `LEFT JOIN tracking_site_items`（PK=(service,remote_id)，最多一行，不会放大基数）→ row 加 3 个原语字段 → mapper 按 manual > tracking 合并。Room KSP 会静态校验该 SQL；仍需真机跑 `FavouriteLibraryReadDaoTest`/`SnapshotStoreTest`（androidTest 里构造 `FavouriteCardBaseRow` 的测试要同步加参数，`compileDebugAndroidTestKotlin` 可先验编译）。
+2. ~~**Quick Filter chips 仍逐分类查 DAO**~~ → **Phase 6 已改为内存派生**（见 §4.6），原文如下。（`FavoritesListQuickFilter`，`suspendLazy` 每 VM 一次，切分类会新建 VM→新查询），且它 `init{}` 里的「离线时自动勾选 Downloaded」副作用要一并迁移；Filter Panel 仍走 `activeFavouritesViewModelRef` 桥接。→ 与 Phase 6 一起做：chips 由 `snapshot.quickFilterMetadata`（+分类切片）在内存派生。
+3. **reorder 场景没有 semantic anchor**（计划 §6.1 第 4 点，明确列为 Phase 8 按需项）：详情返回用普通 saveable 索引恢复，列表未变化时精确；筛选/排序变化后按新顺序从同一 offset 开始。
+4. ~~`getEmptyState()` 仍是私有死代码~~ → 随逐分类 VM 一起删除。
+
+### 4.5 Phase 6 已完成：容器是唯一状态持有者（2026-09-02）
+
+计划 §11 Phase 6 的退出条件（收藏页只有一个 screen-level state holder）达成：逐分类 `FavouritesListViewModel` 与其 `@AssistedInject Factory`、`spaceViewModelKey("favorites-$categoryId", spaceId)` 逐分类 Hilt key、`getEmptyState()` 死代码全部删除。
+
+**4.5.1 共享路由的 host seam**
+
+`AppContentListRoute` 原本硬性要求 `VM : ContentListViewModel`（一个 ViewModel）。抽出接口 `list/ui/ContentListHost.kt`——只声明路由真正用到的成员（content/pagingContent/hasMoreItems/isLoading/listMode/gridScale/onError/onContentMessage/onContentActionHostRequest/currentSourceTags/currentGroupTab + onRefresh/onRetry/onContentClick/setSelected*/resolve*IdForUiItemId），`ContentListViewModel` 实现它，路由参数改为 `viewModel: ContentListHost`。其余页面（history/updates/search/recommend…）继续传 ViewModel，行为不变。`rememberRetainedPagingSnapshotState` 的 `host` 参数改为可空，路由传 `viewModel as? RetainedPagingSnapshotHost`（收藏页 `retainPagingSnapshotOnDetailsNavigation = false`，本就不需要 retained window）。
+
+**4.5.2 `FavouritesListHost`（`favourites/ui/list/`）取代逐分类 VM**
+
+普通类（非 ViewModel、无 Hilt），实现 `ContentListHost + QuickFilterListener`，只做切片：`content = combine(container.libraryState, container.observeListModeWithTriggers()) → FavouritesCardMapper.map(...)`、`topQuickFilter` / `popupQuickFilter`、`resolveEntityIdForUiItemId(id) = id`、`resolvePreferredLocalMangaIdForUiItemId`。所有动作转调 Container。实例由 `FavouritesContainerViewModel.listHost(categoryId)` 缓存（`@Synchronized getOrPut`），因此卡片映射在重组、切分类、旋转后都复用，随容器（= 收藏屏，且 shell 用 space-scoped key 取容器 → 换 space 会重建）一起销毁。
+
+**4.5.3 容器吸收的东西**
+
+- 新增注入：`FavouritesCardMapper`、`FavouriteContentResolver`、`FavoritesListQuickFilter.Factory`、`MarkAsReadUseCase`、`TrackingRepository`、`TrackWorker.Scheduler`、`@LocalStorageChanges SharedFlow<LocalContent?>`（`mangaDataRepository` 改为字段）。
+- 新增成员：`listScope`（viewModelScope+Default）、`gridScale`、`onContentMessage`/`onContentActionHostRequest`（路由收集的消息/宿主请求）、`observeListModeWithTriggers()`（模式 + badges/progress/tracker/overrides/favorites/local-storage 触发器）、`isSpaceBound()`。
+- 新增动作（原逐分类 VM 的动作，entity-id 语义不变）：`removeFromFavourites(categoryId, ids)`、`isPinned/setPinned/togglePinned`、`markAsRead`、`resolveSelectedContents`、`resolveSelectionToMangaIds`、`checkForUpdates()`（`TrackWorker.Scheduler.requestCheckNow` 闸口 + 汇总 toast）、私有 `expandToMangaIds`（localMangaIds → displayMangaId → entityId 回退链）。
+- Space：改由屏级绑定——`FavoritesHostScreen` 里 `LaunchedEffect(viewModel, spaceId) { viewModel.bindSpace(spaceId) }`（shell 已用 `spaceBoundHiltViewModel` 绑过一次，重复 set 同一 id 是 no-op）；逐分类 `spaceBinding` 消失，group tab 的 space 作用域只剩容器一份。
+
+**4.5.4 Quick Filter chips 改内存派生（§4.4.2）**
+
+- 纯函数 `favourites/domain/library/FavouritesQuickFilterOptions.kt`：`buildFavouritesFilterOptions(FavouritesQuickFilterInput)`，无 DAO、无 I/O；JVM 测试 `FavouritesQuickFilterOptionsTest`（tag top-3、分类只统计本分类 membership、chip 的 `tagId` 与 deriver 匹配的 id 同一个、settings 门）。
+- 快照 facet 现在带 tag 身份：`FavouriteFacetTag(tagId, title, key, source)`（`toContentTag()` 必须回到同一个 `tagId`），tag facet 查询多 select `t.key/t.source`。
+- `FavouriteLibraryUiState` 增加 `membershipsByCategory` / `allEntityIds`（直接引用快照字段，零拷贝）：chips 统计的是**未经快筛**的分类 membership，所以点掉一个 chip 不会让兄弟 chip 消失。
+- tag chips 保留旧查询的 3 个上限与 `数量 DESC, 标题(忽略大小写) ASC` 排序；source chips 按 `数量 DESC, 名称 ASC`。有意偏离一处：两者都按**过滤器真正匹配的字段**计数（row 的 tagIds / 显示投影 source），旧 SQL 用 anchor∪binding 并集计数，可能给出过滤后为空的 chip。
+- `FavoritesListQuickFilter` 不再查 DAO（`create(categoryId, libraryState)`）；`FavouritesRepository.findQuickFilterMetadata` 与其 `QuickFilterMetadata` 类型删除。`WorkFavouritesDao.findQuickFilterTags/findQuickFilterSourceNames` 至此无主代码调用方（只剩 `WorkPagingDaoTest` 的 characterization 用例）→ Phase 7 一起删。
+- 「离线自动勾选 Downloaded」从每分类 VM 的 `init{}` 上移到容器 `init`（一次/屏，而不是每 tab 一次）。
+
+**4.5.5 显示元数据权威（§4.4.1）**
+
+`observeFavouriteCardBaseRows()` 增补 `ep.metadata_source_kind/service/remote_id` 并 `LEFT JOIN tracking_site_items ON (service, remote_id)`（PK 唯一，不放大基数；join 条件带 `metadata_source_kind = 'tracking'`，权威切回本地时列全 NULL）。`FavouriteCardBaseRow` 加 `metadataTrackingService/Title/CoverUrl`，`FavouriteCardRow` 同名三字段；mapper 优先级 `manual override > tracking 站点缓存 > 投影`，tracking 的 service 也用于详情 badge。JVM：`FavouriteCardModelTest`/`FavouritesCardMapperTest` 覆盖 manual>tracking 与「无缓存行→全 NULL」；androidTest：`FavouriteLibrarySeed.insertPrefs(metadataSourceKind/metadataService/metadataRemoteId)` + `insertTrackingSiteItem`，`FavouriteLibraryReadDaoTest.metadataAuthorityReadsTheCachedSiteItem` 覆盖 tracking 命中 / 缓存缺失 / kind=base 的守卫。
+
+### 4.6 下一步（Phase 7 → 8）
+
+Phase 6 已完成（见 §4.5）。Phase 7：按计划 §8 Phase 7 清单删除收藏 Paging 代码（删前 `rg` 确认无其他调用方；**不得删除**历史/更新页面仍在用的 Paging 基础设施）。Phase 8：跑计划 §11 全部基准 + 与 Komikku 并列对照 + 删 shadow comparison/临时日志 + 更新 `large-library-performance-handoff-2026-08.md`。
+
+设备必测（Phase 5/6 改动直接覆盖收藏页，见 §5 流程）：收藏四模式渲染、分类/快筛/排序切换（logcat 确认 `FavouriteLibraryReadDao` 不重复查询）、详情返回、置顶/移除/标记完成/分享/下载/分类对话框/编辑 override/实体整理、broken row 显示与跳转、多分类下 pin badge 只在本分类出现。
+
+Phase 6 追加：切分类/旋转后卡片不重置（host 由容器缓存）、top-bar filter panel 的快筛仍作用于**当前** tab（`activeFavouritesHostRef`）、切 space 后容器重建且列表按 space 作用域、离线时进入收藏页自动勾选 Downloaded（现在一次/屏而不是每 tab 一次）、tracking 权威作品的标题/封面与站点 badge。
 
 ## 5. 设备/构建备忘（踩过的坑）
 
@@ -108,6 +184,8 @@ Phase 5 完成后 → Phase 6（actions 用 `FavouriteItemRef(entityId, displayM
   adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
   adb shell am instrument -w -e class <全限定类名> org.skepsun.kototoro.debug.test/org.skepsun.kototoro.HiltTestRunner
   ```
+- **Gradle `connectedDebugAndroidTest` 一定失败**：`pm path androidx.test.services` 为空 → AGP shell executor 的 `app_process` 直接 SIGABRT（`StatusCode: 134` / `Starting 0 tests`），而且这次运行会**顺手卸掉主 APK**，之后 `am instrument` 报 `Unable to find instrumentation target package: org.skepsun.kototoro.debug`。用上面的 `am instrument` 流程；若 target 丢了就重新 `adb install -r -t app-arm64-v8a-debug.apk`（用 `pm path org.skepsun.kototoro.debug` 确认装上了）。
+- **交互 UI 验证在 adb 侧不可做**：`adb shell input` 抛 `SecurityException`（MIUI 需另开「USB 调试(安全设置)」并登录账号），`android layout --pretty` 会挂死（>150s 无输出），`adb shell wm dismiss-keyguard` + `svc power stayon true` 只能把屏幕从 Dozing 叫醒、锁屏 PIN 仍在（screencap 得到锁屏图）。所以 §4.6 的设备清单必须人工在手机上进；自动侧能做到的上限是 Room/无 UI 的 androidTest（`FavouriteLibraryReadDaoTest` 11 用例、`FavouriteLibrarySnapshotStoreTest` 9 用例在 0.5s 内跑完）。
 - **JVM 单测**的 `assertEquals` 解析到 JUnit4 `org.junit.Assert`：message 必须放**最后**：`assertEquals(expected, actual, "msg")`。
 - **种子数据**：`preferences` 表 7 个 NOT NULL 无默认值列（manga_id/mode/cf_brightness/cf_contrast/cf_invert/cf_grayscale/cf_book）必须显式 INSERT；`manga.cover_url` NOT NULL。
 - Room DAO 测试用 `Room.inMemoryDatabaseBuilder(...).build()` + raw SQL 种子（见 `FavouriteLibrarySeed`），不要用 Hilt 真库。
@@ -126,7 +204,7 @@ Phase 5 完成后 → Phase 6（actions 用 `FavouriteItemRef(entityId, displayM
 
 **留在工作区不提交**（用户自己的未提交改动，Phase 7/8 处理）：
 - `core/paging/BatchMappingPagingSource.kt`（enablePlaceholders=true 实验）
-- `list/ui/ContentListViewModel.kt` / `list/ui/compose/RetainedPagingSnapshotController.kt`（K510G debug 日志）
+- ~~`list/ui/ContentListViewModel.kt` / `list/ui/compose/RetainedPagingSnapshotController.kt`（K510G debug 日志）~~ → 工作区里这两个文件现在的 diff **全部是 Phase 6 的改动**（`ContentListHost` 实现 + retained host 可空），debug 日志已不在。
 - `backups/external/*`、`core/AppModule.kt`、`details/ui/compose/*`、`docs/.vitepress/config.mts`、`docs/index.md`、`backups/external/MihonBackupSourceIdPreservationTest.kt`、`core/paging/BatchMappingPagingSourceTest.kt`
 - `docs/architecture/komikku-library-list-architecture-research-2026-09.md`、`docs/architecture/paging3-lazy-list-alternatives-research-2026-09.md`（研究文档，归属由用户决定）
 
@@ -134,7 +212,9 @@ Phase 5 完成后 → Phase 6（actions 用 `FavouriteItemRef(entityId, displayM
 
 ```bash
 ./gradlew :app:compileDebugKotlin
+./gradlew :app:compileDebugAndroidTestKotlin   # androidTest 只需编译（本会话无设备）
 ./gradlew :app:testDebugUnitTest --no-daemon
+./gradlew :app:testDebugUnitTest --tests "org.skepsun.kototoro.favourites.*" --no-daemon
 # 设备（见 §5 流程）：
 #   FavouriteLibraryReadDaoTest / FavouriteLibraryReadDaoScaleTest
 #   FavouriteLibrarySnapshotStoreTest / FavouriteLibrarySnapshotStoreScaleTest
@@ -142,4 +222,8 @@ Phase 5 完成后 → Phase 6（actions 用 `FavouriteItemRef(entityId, displayM
 #   FavouriteLibraryBaselineBenchmarkTest
 ```
 
+Phase 6 之后（2026-09-02，接了手机但只能跑无 UI 的 androidTest）：`compileDebugKotlin` ✓、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 **2148/2148** ✓（favourites 包 90：新增 `FavouritesQuickFilterOptionsTest` 4、`FavouritesCardMapperTest` 14）。设备（`am instrument` 直跑，见 §5）：`FavouriteLibraryReadDaoTest` **11/11**（含 `metadataAuthorityReadsTheCachedSiteItem`）、`FavouriteLibrarySnapshotStoreTest` **9/9**。冷启动新 APK 无 crash（`adb install` + monkey 起 `MainActivity`，logcat 无 AndroidRuntime FATAL）。§4.6 的交互清单（含 Phase 6 追加项）仍需人工在手机上跑——本会话 adb 无法注入输入（见 §5）。
+
 全部通过状态（2026-09-01）：JVM 32/32（契约 10 + deriver 16 + UiState 6），设备 58/58（SQL 24 + 聚合链 12 + DAO 10+2 + Store 9+1 + 基准 3——基准 3 含在其中）。
+
+Phase 5 之后（2026-09-02，无设备会话）：`compileDebugKotlin` ✓、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 **2141/2141** ✓（其中 favourites 包 83：新增 mapper 11、deriver pinned 2、UiState pinned 1）。androidTest 仅验证编译；§4.5 的设备清单是下一次接手机的入口（Phase 6 之后还需加测：切分类/旋转后卡片不重置、filter panel 的快筛仍作用于当前 tab、离线自动 Downloaded）。

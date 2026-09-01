@@ -5,6 +5,7 @@ import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow
 import org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshot
+import org.skepsun.kototoro.favourites.domain.library.FavouriteMembership
 import org.skepsun.kototoro.favourites.domain.library.FavouriteQuickFilterMetadata
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -23,6 +24,14 @@ data class FavouriteLibraryUiState(
     val isInitialized: Boolean = false,
     val rowsByEntityId: Map<Long, FavouriteCardRow> = emptyMap(),
     val visibleIdsByCategory: Map<Long, List<Long>> = emptyMap(),
+    val pinnedIdsByCategory: Map<Long, Set<Long>> = emptyMap(),
+    /**
+     * Memberships of the (unfiltered) snapshot per category plus every favourite entity:
+     * what the quick-filter chips count, so applying a chip never hides its siblings.
+     * Direct snapshot references — the maps are shared, never copied.
+     */
+    val membershipsByCategory: Map<Long, List<FavouriteMembership>> = emptyMap(),
+    val allEntityIds: List<Long> = emptyList(),
     val categoryCounts: Map<Long, Int> = emptyMap(),
     val totalCount: Int = 0,
     val quickFilterMetadata: FavouriteQuickFilterMetadata = FavouriteQuickFilterMetadata.Empty,
@@ -79,6 +88,9 @@ internal fun buildFavouriteLibraryUiState(
         isInitialized = true,
         rowsByEntityId = snapshot.rowsByEntityId,
         visibleIdsByCategory = derived.visibleIdsByCategory,
+        pinnedIdsByCategory = derived.pinnedIdsByCategory,
+        membershipsByCategory = snapshot.membershipsByCategory,
+        allEntityIds = snapshot.allEntityIds,
         categoryCounts = derived.visibleIdsByCategory.mapValues { it.value.size },
         totalCount = derived.allVisibleIds.size,
         quickFilterMetadata = snapshot.quickFilterMetadata,

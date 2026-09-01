@@ -600,6 +600,8 @@ favourites/domain/library/FavouriteLibraryDeriver.kt
 
 退出条件：收藏运行时不收集 `PagingData`，详情返回没有 snapshot handoff。
 
+> 状态（2026-09-02）：**已完成渲染切换**。工作项 1~4、7、8 落地；工作项 5 以「list item id 即 `entityId` + row 的 `displayMangaId`」实现，`FavouriteItemRef` 类型留给 Phase 6；工作项 6 的 semantic anchor 按 §6.1 的说明推迟到 Phase 8（未变化时 saveable 索引即精确）。实施记录、有意偏差（tracking metadata authority 的显示覆盖与 badge、快筛 chips 仍查 DAO）见 [`favourites-komikku-migration-handoff-2026-09.md`](./favourites-komikku-migration-handoff-2026-09.md) §4。
+
 ### Phase 6：迁移 actions 与删除逐分类 ViewModel
 
 目标：去掉通用 `Content` contract 对窄 row 的反向污染。

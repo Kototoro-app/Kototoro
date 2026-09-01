@@ -168,18 +168,18 @@ abstract class ContentListViewModel(
     protected val settings: AppSettings,
     private val mangaDataRepository: ContentDataRepository,
     @param:LocalStorageChanges private val localStorageChanges: SharedFlow<LocalContent?>,
-) : BaseViewModel(), RetainedPagingSnapshotHost {
-    abstract val content: StateFlow<List<ListModel>>
-    open val pagingContent: Flow<PagingData<ListModel>>? = null
+) : BaseViewModel(), RetainedPagingSnapshotHost, ContentListHost {
+    abstract override val content: StateFlow<List<ListModel>>
+    override val pagingContent: Flow<PagingData<ListModel>>? = null
     private val retainedPagingSnapshotStore = RetainedPagingSnapshotStore()
-    open val hasMoreItems: StateFlow<Boolean> = flowOf(true)
+    override val hasMoreItems: StateFlow<Boolean> = flowOf(true)
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-    open val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
+    override val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { listMode }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
     val onActionDone = MutableEventFlow<ReversibleAction>()
-    val onContentMessage = MutableEventFlow<String>()
-    val onContentActionHostRequest = MutableEventFlow<ContentActionHostRequest>()
-    val gridScale = settings.observeAsStateFlow(
+    override val onContentMessage = MutableEventFlow<String>()
+    override val onContentActionHostRequest = MutableEventFlow<ContentActionHostRequest>()
+    override val gridScale = settings.observeAsStateFlow(
         scope = viewModelScope + Dispatchers.Default,
         key = AppSettings.KEY_GRID_SIZE,
         valueProducer = { gridSize / 100f },
@@ -189,13 +189,13 @@ abstract class ContentListViewModel(
      * Currently selected browse group tab (Content Type)
      */
     protected val selectedGroupTab = MutableStateFlow<BrowseGroupTab>(BrowseGroupTab.All)
-    open val currentGroupTab: StateFlow<BrowseGroupTab> get() = selectedGroupTab
+    override val currentGroupTab: StateFlow<BrowseGroupTab> get() = selectedGroupTab
 
     /**
      * Currently selected source tags (Source Origin)
      */
     protected val selectedSourceTags = MutableStateFlow<Set<SourceTag>>(emptySet())
-    open val currentSourceTags: StateFlow<Set<SourceTag>> get() = selectedSourceTags
+    override val currentSourceTags: StateFlow<Set<SourceTag>> get() = selectedSourceTags
 
     /**
      * Currently selected category IDs
@@ -214,11 +214,11 @@ abstract class ContentListViewModel(
      */
     open val isFilterBarVisible: StateFlow<Boolean> = flowOf(false).stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    open fun setSelectedGroupTab(tab: BrowseGroupTab) {
+    override fun setSelectedGroupTab(tab: BrowseGroupTab) {
         selectedGroupTab.value = tab
     }
 
-    open fun setSelectedSourceTags(tags: Set<SourceTag>) {
+    override fun setSelectedSourceTags(tags: Set<SourceTag>) {
         selectedSourceTags.value = tags
     }
 
@@ -226,7 +226,7 @@ abstract class ContentListViewModel(
         selectedCategoryIds.value = ids
     }
 
-    open fun resolveEntityIdForUiItemId(id: Long): Long? = null
+    override fun resolveEntityIdForUiItemId(id: Long): Long? = null
 
     override fun retainPagingSnapshot(snapshot: RetainedPagingSnapshot) =
         retainedPagingSnapshotStore.retainPagingSnapshot(snapshot)
@@ -237,16 +237,16 @@ abstract class ContentListViewModel(
     override fun clearRetainedPagingSnapshot(generation: Long) =
         retainedPagingSnapshotStore.clearRetainedPagingSnapshot(generation)
 
-    open fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
+    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
 
     val isIncognitoModeEnabled: Boolean
         get() = settings.isIncognitoModeEnabled
 
-    abstract fun onRefresh()
+    abstract override fun onRefresh()
 
-    abstract fun onRetry()
+    abstract override fun onRetry()
 
-    open fun onContentClick(content: Content): Boolean = false
+    override fun onContentClick(content: Content): Boolean = false
 
     protected fun List<Content>.skipNsfwIfNeeded() = if (settings.isNsfwContentDisabled) {
         filterNot { it.isNsfw() }

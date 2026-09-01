@@ -3,33 +3,30 @@ package org.skepsun.kototoro.favourites.domain
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.CancellationException
-import org.skepsun.kototoro.core.os.NetworkState
+import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ContentListQuickFilter
-import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.widgets.ChipModel
+import org.skepsun.kototoro.favourites.domain.library.FavouritesQuickFilterInput
+import org.skepsun.kototoro.favourites.domain.library.buildFavouritesFilterOptions
+import org.skepsun.kototoro.favourites.ui.container.FavouriteLibraryUiState
 import org.skepsun.kototoro.list.ui.model.QuickFilter
-import org.skepsun.kototoro.parsers.model.ContentState
-import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
+/**
+ * Quick filters of one favourites category (favourites-komikku-alignment Phase 6).
+ *
+ * The chips are derived from the shared library snapshot
+ * ([buildFavouritesFilterOptions]) instead of a per-category database query, so switching
+ * a tab or toggling a filter never reads the database. Selection itself stays in
+ * [GlobalFavoritesState] — the filter object is stateless apart from the base class.
+ */
 class FavoritesListQuickFilter @AssistedInject constructor(
     @Assisted private val categoryId: Long,
+    @Assisted private val libraryState: StateFlow<FavouriteLibraryUiState>,
     private val settings: AppSettings,
-    private val repository: FavouritesRepository,
-    networkState: NetworkState,
     private val globalFilterState: GlobalFavoritesState,
 ) : ContentListQuickFilter(settings) {
-
-    init {
-        // Sync initial state if needed, or rely on global state.
-        // Note: ContentListQuickFilter sets 'Downloaded' based on network in init.
-        // We might want to apply that to global state ONLY if it's the first init?
-        // Or just let user control.
-        // For now, let's keep the network logic but apply it to global state
-        globalFilterState.setFilterOption(ListFilterOption.Downloaded, !networkState.value)
-    }
 
     override val appliedOptions = globalFilterState.appliedFilter
 
@@ -48,35 +45,27 @@ class FavoritesListQuickFilter @AssistedInject constructor(
     override fun createFilterModel(chips: List<ChipModel>): QuickFilter =
         buildFavoritesQuickFilter(chips)
 
-    override suspend fun getAvailableFilterOptions(): List<ListFilterOption> = buildList {
-        add(ListFilterOption.Downloaded)
-        if (!settings.isFavouritesExcludeNsfw) {
-            add(ListFilterOption.SFW)          // 全年龄
-            add(ListFilterOption.Macro.NSFW)   // R18
-        }
-        if (settings.isTrackerEnabled) {
-            add(ListFilterOption.Macro.NEW_CHAPTERS)
-        }
-        add(ListFilterOption.Macro.MULTI_PROJECTION)
-        add(ListFilterOption.Macro.BROKEN_PROJECTION)
-        ScrobblingStatus.entries.mapTo(this) { ListFilterOption.ReadingStatus(it) }
-        ContentState.entries.mapTo(this) { ListFilterOption.PublicationState(it) }
-        val hideNsfw = settings.isFavouritesExcludeNsfw
-        try {
-            val metadata = repository.findQuickFilterMetadata(categoryId, tagLimit = 3)
-            metadata.tags.mapTo(this) { ListFilterOption.Tag(it) }
-            metadata.sources
-                .filterNot { hideNsfw && it.isNsfw() }
-                .mapTo(this) { ListFilterOption.Source(it) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-        }
+    override suspend fun getAvailableFilterOptions(): List<ListFilterOption> {
+        val library = libraryState.value
+        return buildFavouritesFilterOptions(
+            FavouritesQuickFilterInput(
+                categoryId = categoryId,
+                membershipsByCategory = library.membershipsByCategory,
+                allEntityIds = library.allEntityIds,
+                rows = library.rowsByEntityId,
+                metadata = library.quickFilterMetadata,
+                excludeNsfw = settings.isFavouritesExcludeNsfw,
+                isTrackerEnabled = settings.isTrackerEnabled,
+            ),
+        )
     }
 
     @AssistedFactory
     interface Factory {
 
-        fun create(categoryId: Long): FavoritesListQuickFilter
+        fun create(
+            categoryId: Long,
+            libraryState: StateFlow<FavouriteLibraryUiState>,
+        ): FavoritesListQuickFilter
     }
 }

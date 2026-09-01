@@ -274,6 +274,12 @@ class ContentListMapper @Inject constructor(
         )
     }
 
+    /** Warning tint of a tag title (the raw warn-list dictionary), `0` when harmless. */
+    @ColorRes
+    fun tagTint(title: String): Int = if (isTagWarning(title)) R.color.warning else 0
+
+    private fun isTagWarning(title: String) = settings.isTagsWarningsEnabled && title.lowercase() in dict
+
     private suspend fun toCompactListModel(
         manga: Content,
         @Options options: Int,
@@ -469,11 +475,7 @@ class ContentListMapper @Inject constructor(
 
     @ColorRes
     private fun getTagTint(tag: ContentTag): Int {
-        return if (settings.isTagsWarningsEnabled && tag.title.lowercase() in dict) {
-            R.color.warning
-        } else {
-            0
-        }
+        return if (isTagWarning(tag.title)) R.color.warning else 0
     }
 
     private fun readTagsDict(context: Context): ScatterSet<String> =

@@ -90,9 +90,19 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
         val tagIdsByEntity = HashMap<Long, LinkedHashSet<Long>>(baseRows.size)
         val displayTagsByEntity = HashMap<Long, LinkedHashMap<Long, String>>(baseRows.size)
         val tagEntityPresence = HashMap<Long, MutableSet<Long>>(256)
+        val facetTagsById = HashMap<Long, FavouriteFacetTag>(256)
         for (facet in tagFacets) {
             tagIdsByEntity.getOrPut(facet.entityId) { LinkedHashSet() }.add(facet.tagId)
             displayTagsByEntity.getOrPut(facet.entityId) { LinkedHashMap() }.putIfAbsent(facet.tagId, facet.tagTitle)
+            facetTagsById.putIfAbsent(
+                facet.tagId,
+                FavouriteFacetTag(
+                    tagId = facet.tagId,
+                    title = facet.tagTitle,
+                    key = facet.tagKey,
+                    source = facet.tagSource,
+                ),
+            )
             tagEntityPresence.getOrPut(facet.tagId) { LinkedHashSet() }.add(facet.entityId)
         }
 
@@ -152,6 +162,9 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                     ?: legacyOverride?.titleOverride?.takeIf { it.isNotBlank() },
                 overrideCoverUrl = base.coverOverride?.takeIf { it.isNotBlank() }
                     ?: legacyOverride?.coverOverride?.takeIf { it.isNotBlank() },
+                metadataTrackingService = base.metadataTrackingService,
+                metadataTrackingTitle = base.metadataTrackingTitle?.takeIf { it.isNotBlank() },
+                metadataTrackingCoverUrl = base.metadataTrackingCoverUrl?.takeIf { it.isNotBlank() },
                 isPinned = base.representativePinned,
                 createdAt = base.representativeCreatedAt,
                 updatedAt = base.representativeUpdatedAt,
@@ -178,10 +191,10 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
         // ---- quick filter metadata from facets (ordered by entity count desc, then title)
         val tags = tagEntityPresence.entries
             .mapNotNull { (tagId, entities) ->
-                val title = displayTagsByEntity.values.firstNotNullOfOrNull { it[tagId] } ?: return@mapNotNull null
-                FavouriteCardTag(tagId, title) to entities.size
+                val tag = facetTagsById[tagId] ?: return@mapNotNull null
+                tag to entities.size
             }
-            .sortedWith(compareByDescending<Pair<FavouriteCardTag, Int>> { it.second }.thenBy { it.first.title })
+            .sortedWith(compareByDescending<Pair<FavouriteFacetTag, Int>> { it.second }.thenBy { it.first.title })
         val sources = projectionSourcePresence.entries
             .map { it.key to it.value.size }
             .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })

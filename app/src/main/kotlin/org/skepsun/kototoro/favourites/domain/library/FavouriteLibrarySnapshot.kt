@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.favourites.domain.library
 
 import androidx.compose.runtime.Immutable
+import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentState
+import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 
@@ -51,6 +53,12 @@ data class FavouriteCardRow(
     val hasBrokenProjection: Boolean,
     val overrideTitle: String?,
     val overrideCoverUrl: String?,
+    // display metadata authority: id of the tracking service whose cached site item feeds
+    // the card ([metadataTrackingTitle] / [metadataTrackingCoverUrl]) plus the badge it
+    // draws. Null when the entity has no tracking metadata authority.
+    val metadataTrackingService: Int?,
+    val metadataTrackingTitle: String?,
+    val metadataTrackingCoverUrl: String?,
     // representative membership attributes (All-slice ordering context)
     val isPinned: Boolean,
     val createdAt: Long,
@@ -66,6 +74,10 @@ data class FavouriteCardRow(
     /** Display cover after the entity-level manual override. */
     val resolvedCoverUrl: String?
         get() = overrideCoverUrl?.takeIf { it.isNotBlank() } ?: coverUrl
+
+    /** True when a tracking site is the display metadata authority of this entity. */
+    val hasMetadataTracking: Boolean
+        get() = metadataTrackingService != null
 }
 
 /** Limited tag payload for the detailed-list card chips and the compact subtitle. */
@@ -74,6 +86,21 @@ data class FavouriteCardTag(
     val tagId: Long,
     val title: String,
 )
+
+/**
+ * Tag of the library facets: the card payload plus the tag identity the quick-filter
+ * chips need. [toContentTag] round-trips to exactly [tagId] — the invariant the
+ * in-memory tag filter matches on (`"${'$'}{key}_${'$'}{source}".longHashCode()`).
+ */
+@Immutable
+data class FavouriteFacetTag(
+    val tagId: Long,
+    val title: String,
+    val key: String,
+    val source: String,
+) {
+    fun toContentTag(): ContentTag = ContentTag(title = title, key = key, source = ContentSource(source))
+}
 
 /**
  * One active `(entityId, categoryId)` membership. Pinned / created / updated belong to
@@ -97,7 +124,7 @@ data class FavouriteMembership(
  */
 @Immutable
 data class FavouriteQuickFilterMetadata(
-    val tags: List<FavouriteCardTag>,
+    val tags: List<FavouriteFacetTag>,
     val tagEntityCounts: Map<Long, Int>,
     val sources: List<String>,
     val sourceEntityCounts: Map<String, Int>,
