@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.ui.BaseViewModel
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
@@ -62,6 +63,10 @@ class FavouritesContainerViewModel @Inject constructor(
     private val sourceGroupManager: SourceGroupManager,
     spaceBrowseScope: SpaceBrowseScope,
     private val db: org.skepsun.kototoro.core.db.MangaDatabase,
+    private val favouriteLibrarySnapshotStore: org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshotStore,
+    private val spaceContentPolicy: org.skepsun.kototoro.space.domain.SpaceContentPolicy,
+    private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
+    private val workAggregateRepository: org.skepsun.kototoro.work.domain.WorkAggregateRepository,
 ) : BaseViewModel(), SpaceBindableViewModel {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
     init {
@@ -110,6 +115,99 @@ class FavouritesContainerViewModel @Inject constructor(
             globalFavoritesState.clearSelectedGroupTab()
         } else {
             globalFavoritesState.setSelectedGroupTab(tab)
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Library snapshot state (favourites-komikku-alignment Phase 4): the container
+    // is the single screen-level state holder. Quick filters / category / sort / list
+    // mode / space / preset changes re-derive in memory — they never re-query the
+    // favourites tables.
+    // ---------------------------------------------------------------------
+
+    private val activeSpaceId = spaceBinding.spaceId
+
+    private val activeSourcePreset = settings.observeAsFlow(AppSettings.KEY_ACTIVE_SOURCE_PRESET_ID) { activeSourcePresetId }
+        .flatMapLatest { id ->
+            if (id == -1L) {
+                flowOf(null)
+            } else {
+                sourcePresetsRepository.observe(id)
+            }
+        }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
+
+    private fun combineLibraryDerivationParams(): Flow<FavouriteLibraryParams> = combine(
+        currentGroupTab,
+        selectedSourceTags,
+        activeSourcePreset,
+        activeSpaceId,
+        globalFavoritesState.appliedFilter,
+        settings.observeAsFlow(AppSettings.KEY_FAVOURITES_EXCLUDE_NSFW) { isFavouritesExcludeNsfw },
+        settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) { globalTagBlacklist },
+        allFavoritesSortOrder,
+        favouritesRepository.observeCategories(),
+    ) { values: Array<*> ->
+        @Suppress("UNCHECKED_CAST")
+        val categories = (values[8] as List<org.skepsun.kototoro.core.model.FavouriteCategory>)
+        FavouriteLibraryParams(
+            groupTab = values[0] as BrowseGroupTab,
+            sourceTags = values[1] as Set<SourceTag>,
+            preset = values[2] as? org.skepsun.kototoro.explore.data.SourcePreset,
+            spaceId = values[3] as? org.skepsun.kototoro.space.domain.SpaceId,
+            filters = values[4] as Set<ListFilterOption>,
+            excludeNsfw = values[5] as Boolean,
+            blacklist = values[6] as Collection<String>,
+            defaultOrder = values[7] as ListSortOrder,
+            ordersByCategory = categories.associate { it.id to it.order },
+        )
+    }.distinctUntilChanged()
+
+    val libraryState: StateFlow<FavouriteLibraryUiState> = combine(
+        favouriteLibrarySnapshotStore.observe(),
+        combineLibraryDerivationParams(),
+    ) { snapshot, params ->
+        buildFavouriteLibraryUiState(snapshot, params, spaceContentPolicy)
+    }.withErrorHandling()
+        .stateIn(
+            viewModelScope + Dispatchers.Default,
+            SharingStarted.WhileSubscribed(5_000),
+            FavouriteLibraryUiState(),
+        )
+
+    /**
+     * Debug-only shadow comparison (favourites-komikku-alignment Phase 4): derives the
+     * visible entity ids of the legacy aggregate chain next to the new snapshot path
+     * and logs the first divergence. Removed in Phase 8 once the new path is verified.
+     */
+    fun startLibraryShadowComparison() {
+        if (!BuildConfig.DEBUG) return
+        launchJob(Dispatchers.Default) {
+            combine(
+                workAggregateRepository.observeFavouriteLibraryAggregates(order = ListSortOrder.NEWEST),
+                favouriteLibrarySnapshotStore.observe(),
+            ) { legacyAggregates, snapshot ->
+                val legacyIds = legacyAggregates.mapNotNull { it.identity.entityId }
+                val newIds = org.skepsun.kototoro.favourites.domain.library.deriveFavouriteLibraryState(
+                    snapshot,
+                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryDerivationInput(
+                        defaultOrder = ListSortOrder.NEWEST,
+                    ),
+                ).visibleIdsByCategory.getValue(
+                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryAllCategoryId,
+                )
+                if (legacyIds != newIds) {
+                    val firstDiff = legacyIds.indices.firstOrNull { legacyIds.getOrNull(it) != newIds.getOrNull(it) }
+                    android.util.Log.d(
+                        "FavouriteLibrary",
+                        "shadow diff sizeLegacy=${legacyIds.size} sizeNew=${newIds.size} " +
+                            "firstDiffIndex=$firstDiff legacyAt=${firstDiff?.let { legacyIds.getOrNull(it) }} " +
+                            "newAt=${firstDiff?.let { newIds.getOrNull(it) }}",
+                    )
+                } else {
+                    android.util.Log.d("FavouriteLibrary", "shadow match size=${legacyIds.size}")
+                }
+            }.collect()
         }
     }
 
