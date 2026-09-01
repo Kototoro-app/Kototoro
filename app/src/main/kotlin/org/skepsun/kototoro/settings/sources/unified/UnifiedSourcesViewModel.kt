@@ -38,7 +38,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import okhttp3.OkHttpClient
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.backups.external.MihonForkBuiltinSources
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.JsonSourceType
@@ -89,6 +88,11 @@ private const val TAG = "UnifiedSourcesVM"
 private const val REFRESH_PACKAGES_TIMEOUT_MS = 30_000L
 private const val SOURCE_TEST_TIMEOUT_MS = 45_000L
 private const val SOURCE_TEST_MAX_PARALLELISM = 3
+
+internal fun shouldRecommendMissingExtensionSource(
+    sourceId: Long,
+    installedSourceIds: Set<Long>,
+): Boolean = sourceId !in installedSourceIds
 
 /**
  * SavedState keys written by the Activity/UI agent for process restoration of a source
@@ -1810,9 +1814,9 @@ class UnifiedSourcesViewModel @Inject constructor(
     /**
      * Builds the "Recommended" package group for the packages tab: sources recorded in
      * `source_origins` by external backup imports (kind MIHON/ANIYOMI, numeric id) whose
-     * extension is neither installed nor covered by a fork-builtin native parser are
-     * matched against the store indexes by source id. Matched extensions become install
-     * recommendations; the rest are surfaced together with suggested repositories.
+     * extension is not installed are matched against the store indexes by source id.
+     * Matched extensions become install recommendations; the rest are surfaced together
+     * with suggested repositories.
      */
     private fun UnifiedSourcesUiState.Ready.withMissingSourceRecommendations(
         sourceOrigins: List<org.skepsun.kototoro.core.db.entity.SourceOriginEntity>,
@@ -1833,16 +1837,8 @@ class UnifiedSourcesViewModel @Inject constructor(
             .filter { it.kind == UnifiedSourceKind.MIHON || it.kind == UnifiedSourceKind.ANIYOMI }
             .mapNotNull { it.source.name.substringAfter('_', "").toLongOrNull() }
             .toSet()
-        val nativeSourceNames = allSources.mapTo(HashSet()) { it.source.name }
-        val missingCandidates = candidates.filter { (_, id, kind) ->
-            if (id in installedSourceIds) {
-                return@filter false
-            }
-            if (kind != UnifiedSourceKind.MIHON) {
-                // Anime sources have no fork-builtin native fallback table.
-                return@filter true
-            }
-            MihonForkBuiltinSources.nativeSourceNameForId(id)?.let(nativeSourceNames::contains) != true
+        val missingCandidates = candidates.filter { (_, id, _) ->
+            shouldRecommendMissingExtensionSource(id, installedSourceIds)
         }
         if (missingCandidates.isEmpty()) {
             return copy(

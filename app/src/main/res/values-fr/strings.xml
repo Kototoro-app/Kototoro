@@ -1351,7 +1351,6 @@
     <string name="home_updates_empty_subtitle">Les éléments suivis avec de nouveaux chapitres apparaîtront ici</string>
     <string name="home_updates_empty_title">Aucune mise à jour récente</string>
     <string name="image_caches">Caches d\'images et du lecteur</string>
-    <string name="import_backup_choose_source_app">Choisir l\'application source</string>
     <string name="import_backup_from_other_apps">Importer une sauvegarde depuis d\'autres applications</string>
     <string name="import_backup_from_other_apps_summary">Importer les favoris et l\'historique depuis des fichiers de sauvegarde de la famille Mihon ou Aniyomi.</string>
     <string name="import_backup_scope_summary">Cette version restaure les favoris, l\'historique et les métadonnées de progression de lecture importées.</string>

@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -37,7 +38,6 @@ data class BackupsSettingsUiState(
     val isPeriodicalTrimEnabled: Boolean,
     val periodicalBackupCount: Int,
     val lastBackupSummary: String?,
-    val isExternalImportDialogVisible: Boolean,
     val isWebDavEnabled: Boolean,
     val isGoogleDriveSyncEnabled: Boolean,
     val webDavServerUrl: String,
@@ -80,9 +80,7 @@ fun BackupsSettingsScreen(
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
     onExportUsagiBackupClick: () -> Unit,
-    onImportExternalBackupClick: () -> Unit,
-    onDismissExternalImportDialog: () -> Unit,
-    onImportExternalBackupAppClick: (ExternalBackupApp) -> Unit,
+    onImportExternalBackupClick: (ExternalBackupApp) -> Unit,
     onWebDavEnabledChange: (Boolean) -> Unit,
     onWebDavServerUrlChange: (String) -> Unit,
     onWebDavUsernameChange: (String) -> Unit,
@@ -109,6 +107,8 @@ fun BackupsSettingsScreen(
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         var selectedRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
         var pendingRestoreRemoteBackup by remember { mutableStateOf<WebDavRemoteBackupUiItem?>(null) }
+        var isExportTypeDialogVisible by rememberSaveable { mutableStateOf(false) }
+        var isImportTypeDialogVisible by rememberSaveable { mutableStateOf(false) }
         var isRestoreLatestModeDialogVisible by rememberSaveable { mutableStateOf(false) }
         var isClearRemoteBackupsConfirmVisible by rememberSaveable { mutableStateOf(false) }
         var isEnableWebDavConfirmVisible by rememberSaveable { mutableStateOf(false) }
@@ -184,45 +184,16 @@ fun BackupsSettingsScreen(
             item(key = "external_backup_import") {
                 SettingsPreferenceGroup(title = stringResource(R.string.external_backup_section_title)) {
                     item { SettingsActionPreference(
-                        title = stringResource(R.string.import_kotatsu_or_legacy_backup),
-                        summary = stringResource(R.string.import_kotatsu_or_legacy_backup_summary),
+                        title = stringResource(R.string.export_backup_for_other_apps),
+                        summary = stringResource(R.string.export_backup_for_other_apps_summary),
+                        iconRes = R.drawable.ic_share,
+                        onClick = { isExportTypeDialogVisible = true },
+                    ) }
+                    item { SettingsActionPreference(
+                        title = stringResource(R.string.import_compatible_backup),
                         iconRes = R.drawable.ic_import,
-                        onClick = onImportKotatsuOrLegacyBackupClick,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.export_kotatsu_backup),
-                        summary = stringResource(R.string.export_kotatsu_backup_summary),
-                        iconRes = R.drawable.ic_share,
-                        onClick = onExportKotatsuBackupClick,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.export_mihon_backup),
-                        summary = stringResource(R.string.export_mihon_backup_summary),
-                        iconRes = R.drawable.ic_share,
-                        onClick = onExportMihonBackupClick,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.export_aniyomi_backup),
-                        summary = stringResource(R.string.export_aniyomi_backup_summary),
-                        iconRes = R.drawable.ic_share,
-                        onClick = onExportAniyomiBackupClick,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.export_usagi_backup),
-                        summary = stringResource(R.string.export_usagi_backup_summary),
-                        iconRes = R.drawable.ic_share,
-                        onClick = onExportUsagiBackupClick,
-                    ) }
-                    item { SettingsActionPreference(
-                        title = stringResource(R.string.import_backup_from_other_apps),
-                        iconRes = R.drawable.ic_import,
-                        summary = stringResource(
-                            R.string.import_backup_from_other_apps_combined_summary,
-                            stringResource(R.string.import_backup_from_other_apps_summary),
-                            stringResource(R.string.supported_apps),
-                            stringResource(R.string.import_backup_supported_apps_summary),
-                        ),
-                        onClick = onImportExternalBackupClick,
+                        summary = stringResource(R.string.import_compatible_backup_summary),
+                        onClick = { isImportTypeDialogVisible = true },
                     ) }
                 }
             }
@@ -370,29 +341,36 @@ fun BackupsSettingsScreen(
                 }
             }
         }
-        if (state.isExternalImportDialogVisible) {
+        if (isExportTypeDialogVisible) {
             SettingsAlertDialog(
-                onDismissRequest = onDismissExternalImportDialog,
-                title = stringResource(R.string.import_backup_choose_source_app),
+                onDismissRequest = { isExportTypeDialogVisible = false },
+                title = stringResource(R.string.export_backup_choose_target_app),
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(text = stringResource(R.string.import_backup_supported_apps_summary))
-                        HorizontalDivider()
-                        ExternalBackupApp.entries.forEach { app ->
+                        BackupExportTarget.entries.forEachIndexed { index, target ->
                             SettingsDialogActionButton(
-                                text = app.displayName(),
-                                onClick = { onImportExternalBackupAppClick(app) },
+                                text = stringResource(target.titleRes),
+                                onClick = {
+                                    isExportTypeDialogVisible = false
+                                    when (target) {
+                                        BackupExportTarget.KOTATSU -> onExportKotatsuBackupClick()
+                                        BackupExportTarget.MIHON -> onExportMihonBackupClick()
+                                        BackupExportTarget.ANIYOMI -> onExportAniyomiBackupClick()
+                                        BackupExportTarget.USAGI -> onExportUsagiBackupClick()
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            app.guideNoteRes()?.let { noteRes ->
-                                Text(
-                                    text = stringResource(noteRes),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
+                            Text(
+                                text = stringResource(target.summaryRes),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (index != BackupExportTarget.entries.lastIndex) {
+                                HorizontalDivider()
                             }
                         }
                     }
@@ -401,7 +379,46 @@ fun BackupsSettingsScreen(
                 dismissButton = {
                     SettingsDialogActionButton(
                         text = stringResource(android.R.string.cancel),
-                        onClick = onDismissExternalImportDialog,
+                        onClick = { isExportTypeDialogVisible = false },
+                    )
+                },
+            )
+        }
+        if (isImportTypeDialogVisible) {
+            SettingsAlertDialog(
+                onDismissRequest = { isImportTypeDialogVisible = false },
+                title = stringResource(R.string.import_backup_choose_source_app),
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        BackupImportTarget.entries.forEachIndexed { index, target ->
+                            SettingsDialogActionButton(
+                                text = stringResource(target.titleRes),
+                                onClick = {
+                                    isImportTypeDialogVisible = false
+                                    target.externalApp?.let(onImportExternalBackupClick)
+                                        ?: onImportKotatsuOrLegacyBackupClick()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text(
+                                text = stringResource(target.summaryRes),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            if (index != BackupImportTarget.entries.lastIndex) {
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    SettingsDialogActionButton(
+                        text = stringResource(android.R.string.cancel),
+                        onClick = { isImportTypeDialogVisible = false },
                     )
                 },
             )
@@ -501,20 +518,41 @@ fun BackupsSettingsScreen(
     }
 }
 
-private fun ExternalBackupApp.displayName(): String = when (this) {
-    ExternalBackupApp.MIHON -> "Mihon"
-    ExternalBackupApp.KOMIKKU -> "Komikku"
-    ExternalBackupApp.VENERA -> "Venera"
-    ExternalBackupApp.ANIYOMI -> "Aniyomi"
-    ExternalBackupApp.ANIKKU -> "Anikku"
-    ExternalBackupApp.ANIMIRU -> "Animiru"
+private enum class BackupExportTarget(
+    @StringRes val titleRes: Int,
+    @StringRes val summaryRes: Int,
+) {
+    KOTATSU(R.string.export_kotatsu_backup, R.string.export_kotatsu_backup_summary),
+    MIHON(R.string.export_mihon_backup, R.string.export_mihon_backup_summary),
+    ANIYOMI(R.string.export_aniyomi_backup, R.string.export_aniyomi_backup_summary),
+    USAGI(R.string.export_usagi_backup, R.string.export_usagi_backup_summary),
 }
 
-/** Optional guidance shown under an import app row about built-in-source remapping. */
-private fun ExternalBackupApp.guideNoteRes(): Int? = when (this) {
-    ExternalBackupApp.MIHON -> R.string.import_backup_mihon_note
-    ExternalBackupApp.KOMIKKU -> R.string.import_backup_komikku_note
-    else -> null
+private enum class BackupImportTarget(
+    @StringRes val titleRes: Int,
+    @StringRes val summaryRes: Int,
+    val externalApp: ExternalBackupApp?,
+) {
+    KOTATSU_LEGACY(
+        R.string.import_kotatsu_or_legacy_backup,
+        R.string.import_kotatsu_or_legacy_backup_summary,
+        null,
+    ),
+    MIHON(
+        R.string.import_backup_mihon_family,
+        R.string.import_backup_mihon_family_summary,
+        ExternalBackupApp.MIHON,
+    ),
+    ANIYOMI(
+        R.string.import_backup_aniyomi_family,
+        R.string.import_backup_aniyomi_family_summary,
+        ExternalBackupApp.ANIYOMI,
+    ),
+    VENERA(
+        R.string.import_backup_venera,
+        R.string.import_backup_venera_summary,
+        ExternalBackupApp.VENERA,
+    ),
 }
 
 @Composable

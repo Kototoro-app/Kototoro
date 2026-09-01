@@ -14,7 +14,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.viewModels
@@ -98,8 +97,6 @@ fun BackupsSettingsRoute(
     val backupFrequencyOptions = backupFrequencyLabels.zip(backupFrequencyValues).mapNotNull { (label, value) ->
         value.toFloatOrNull()?.let { SettingsChoiceOption(it, label) }
     }
-    var isExternalImportDialogVisible by rememberSaveable { mutableStateOf(false) }
-
     LaunchedEffect(viewModel.onError, context, snackbarHostState) {
         viewModel.onError.collect { event ->
             event?.consume { error ->
@@ -165,7 +162,6 @@ fun BackupsSettingsRoute(
         isPeriodicalTrimEnabled = isPeriodicalTrimEnabled,
         periodicalBackupCount = periodicalBackupCount,
         lastBackupSummary = lastBackupSummary,
-        isExternalImportDialogVisible = isExternalImportDialogVisible,
         isWebDavEnabled = isWebDavEnabled,
         isGoogleDriveSyncEnabled = isGoogleDriveSyncEnabled,
         webDavServerUrl = webDavServerUrl,
@@ -204,12 +200,7 @@ fun BackupsSettingsRoute(
         onExportMihonBackupClick = onExportMihonBackupClick,
         onExportAniyomiBackupClick = onExportAniyomiBackupClick,
         onExportUsagiBackupClick = onExportUsagiBackupClick,
-        onImportExternalBackupClick = { isExternalImportDialogVisible = true },
-        onDismissExternalImportDialog = { isExternalImportDialogVisible = false },
-        onImportExternalBackupAppClick = { app ->
-            isExternalImportDialogVisible = false
-            onImportExternalBackupFilePick(app)
-        },
+        onImportExternalBackupClick = onImportExternalBackupFilePick,
         onWebDavEnabledChange = {
             viewModel.setWebDavEnabled(it)
             if (it) {

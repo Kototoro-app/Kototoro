@@ -26,13 +26,17 @@ class ExternalBackupDecoder @Inject constructor(
 
     fun decode(uri: Uri, app: ExternalBackupApp): ExternalBackupPayload {
         val bytes = readBackupBytes(uri)
-        if (app == ExternalBackupApp.VENERA) {
-            return decodeVeneraBackup(bytes)
-        }
-        return when (app.family) {
-            ExternalBackupFamily.MANGA -> tryDecodeMangaBackup(bytes, app)
-            ExternalBackupFamily.ANIME -> tryDecodeAnimeBackup(bytes, app)
-        } ?: throw UnsupportedExternalBackupException("Unsupported external backup format")
+        return when (app) {
+            ExternalBackupApp.MIHON -> runCatching {
+                parser.decodeFromByteArray(MihonBackup.serializer(), bytes).toPayload(app)
+            }.getOrNull()
+            ExternalBackupApp.ANIYOMI -> runCatching {
+                parser.decodeFromByteArray(AniyomiBackup.serializer(), bytes).toPayload(app)
+            }.getOrNull()
+            ExternalBackupApp.VENERA -> runCatching {
+                decodeVeneraBackup(bytes)
+            }.getOrNull()
+        } ?: throw UnsupportedExternalBackupException("Unsupported ${app.name} backup format")
     }
 
     private fun readBackupBytes(uri: Uri): ByteArray {
@@ -51,30 +55,15 @@ class ExternalBackupDecoder @Inject constructor(
         } ?: throw IOException("Unable to open backup file")
     }
 
-    private fun tryDecodeMangaBackup(
-        bytes: ByteArray,
-        app: ExternalBackupApp,
-    ): ExternalBackupPayload? {
-        return runCatching {
-            parser.decodeFromByteArray(MihonBackup.serializer(), bytes).toPayload(app)
-        }.getOrNull()
-    }
-
-    private fun tryDecodeAnimeBackup(
-        bytes: ByteArray,
-        app: ExternalBackupApp,
-    ): ExternalBackupPayload? {
-        return runCatching {
-            parser.decodeFromByteArray(AniyomiBackup.serializer(), bytes)
-        }.getOrNull()?.toPayload(app)
-    }
-
     private fun decodeVeneraBackup(bytes: ByteArray): ExternalBackupPayload {
         val backupFile = File.createTempFile("venera_backup", ".venera", context.cacheDir)
         val databaseFiles = LinkedHashMap<String, File>()
         return try {
             backupFile.writeBytes(bytes)
             databaseFiles += extractVeneraDatabases(backupFile)
+            if (databaseFiles.isEmpty()) {
+                throw UnsupportedExternalBackupException("Unsupported Venera backup format")
+            }
             val favoriteRecords = databaseFiles[FILENAME_VENERA_FAVORITES]?.let(::readVeneraFavorites).orEmpty()
             val historyRecords = databaseFiles[FILENAME_VENERA_HISTORY]?.let(::readVeneraHistory).orEmpty()
             ExternalBackupPayload(

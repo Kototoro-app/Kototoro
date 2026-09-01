@@ -10,10 +10,9 @@ import org.junit.jupiter.api.Test
  * protobuf backup: the per-manga `source` id (proto field 1, int64) must survive
  * decode and be carried into the Kototoro source key as `MIHON_{id}`.
  *
- * Regression reference: TachiyomiSY ships E-Hentai / ExHentai as *built-in* sources
- * with hardcoded ids (EH = 6901, EXH = 6902). Those ids are not Mihon-extension ids,
- * so no Mihon extension can ever resolve them — this test documents that they still
- * arrive intact (the loss happens later, at source resolution, not at import).
+ * Fork-built-in sources intentionally remain ordinary Mihon source keys. If the matching
+ * extension is unavailable, source resolution imports them unchanged and registers them
+ * for the extension-management recommendation flow.
  */
 class MihonBackupSourceIdPreservationTest {
 
@@ -34,6 +33,22 @@ class MihonBackupSourceIdPreservationTest {
         // This is the exact key the import pipeline writes into MangaEntity.source
         // (ExternalBackupDecoder.MihonBackup.toPayload -> "MIHON_${manga.source}").
         assertEquals("MIHON_6902", "MIHON_${manga.source}")
+    }
+
+    @Test
+    fun `Komikku and Neko built-in source ids remain ordinary Mihon keys`() {
+        val sourceIds = listOf(
+            6_225_928_719_850_211_219L,
+            2_499_283_573_021_220_255L,
+        )
+
+        sourceIds.forEach { sourceId ->
+            val encoded = encodeTachiyomiSyBackup(source = sourceId, url = "/title/example")
+            val manga = ProtoBuf.decodeFromByteArray(MihonBackup.serializer(), encoded).backupManga.first()
+
+            assertEquals(sourceId, manga.source)
+            assertEquals("MIHON_$sourceId", "MIHON_${manga.source}")
+        }
     }
 
     @Test

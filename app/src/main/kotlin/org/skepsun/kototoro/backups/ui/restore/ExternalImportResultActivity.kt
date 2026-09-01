@@ -12,6 +12,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.external.ExternalBackupImportSummary
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesActivity
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesDeepLink
+import org.skepsun.kototoro.settings.sources.unified.UnifiedSourcesDeepLinkParser
 
 /**
  * Translucent host activity that summarizes the result of an external backup import
@@ -77,12 +80,24 @@ class ExternalImportResultActivity : AppCompatActivity() {
                 append(getString(R.string.external_import_result_consolidation_pending))
             }
         }
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.external_import_result_title)
             .setMessage(text)
             .setPositiveButton(android.R.string.ok, null)
             .setOnDismissListener { finish() }
-            .show()
+        if (summary.uninstalledSources.isNotEmpty()) {
+            dialog.setNegativeButton(R.string.extension_management) { _, _ ->
+                startActivity(
+                    UnifiedSourcesActivity.newDeepLinkIntent(
+                        context = this,
+                        link = UnifiedSourcesDeepLink(
+                            initialTab = UnifiedSourcesDeepLinkParser.TAB_INSTALLED,
+                        ),
+                    ),
+                )
+            }
+        }
+        dialog.show()
     }
 
     companion object {

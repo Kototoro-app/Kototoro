@@ -654,6 +654,9 @@
     <string name="external_backup_section_title">导出/导入其他应用备份</string>
     <string name="import_backup_from_other_apps">从其他应用导入备份</string>
     <string name="import_backup_from_other_apps_summary">从 Mihon 系、Aniyomi 系或 Venera 备份文件导入收藏和历史记录。</string>
+    <string name="export_backup_for_other_apps">导出其他应用备份</string>
+    <string name="export_backup_for_other_apps_summary">选择目标应用并生成兼容备份：Kotatsu、Mihon、Aniyomi 或 Usagi。</string>
+    <string name="export_backup_choose_target_app">选择目标应用</string>
     <string name="export_kotatsu_backup">导出 Kotatsu 备份</string>
     <string name="export_kotatsu_backup_summary">创建供 Kotatsu 系应用恢复的独立旧格式备份，不包含 Kototoro 专用分段。</string>
     <string name="export_kotatsu_backup_saved">Kotatsu 备份已保存</string>
@@ -670,6 +673,14 @@
     <string name="export_usagi_backup_saved">Usagi 备份已保存（%1$d 条）</string>
     <string name="export_usagi_backup_empty">没有可导出的兼容漫画收藏或历史记录</string>
     <string name="import_backup_choose_source_app">选择来源应用</string>
+    <string name="import_backup_mihon_family">Mihon 系应用</string>
+    <string name="import_backup_mihon_family_summary">Mihon、TachiyomiSY、Komikku 或 Neko 漫画备份。</string>
+    <string name="import_backup_aniyomi_family">Aniyomi 系应用</string>
+    <string name="import_backup_aniyomi_family_summary">Aniyomi、Anikku 或 Animiru 漫画与动画备份。</string>
+    <string name="import_backup_venera">Venera</string>
+    <string name="import_backup_venera_summary">Venera ZIP 备份。</string>
+    <string name="import_compatible_backup">导入兼容备份</string>
+    <string name="import_compatible_backup_summary">选择来源应用类型后，再选择对应的备份文件。</string>
     <string name="supported_apps">支持的应用</string>
     <string name="import_backup_supported_apps_summary">Mihon、Komikku、Aniyomi、Anikku、Animiru、Venera</string>
     <string name="import_backup_scope_summary">当前版本会恢复收藏、历史记录，以及导入得到的阅读进度信息。</string>

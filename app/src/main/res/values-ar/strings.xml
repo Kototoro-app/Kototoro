@@ -1318,7 +1318,6 @@
     <string name="home_updates_empty_subtitle">ستظهر العناصر المتتبعة ذات الفصول الجديدة هنا</string>
     <string name="home_updates_empty_title">لا توجد تحديثات حديثة</string>
     <string name="image_caches">ذاكرة التخزين المؤقت للصور والقارئ</string>
-    <string name="import_backup_choose_source_app">اختر تطبيق المصدر</string>
     <string name="import_backup_from_other_apps">استيراد نسخة احتياطية من تطبيقات أخرى</string>
     <string name="import_backup_from_other_apps_summary">استيراد المفضّلات والسجل من ملفات النسخ الاحتياطي لعائلة Mihon أو Aniyomi.</string>
     <string name="import_backup_scope_summary">هذا الإصدار يستعيد المفضّلات والسجل وبيانات تقدم القراءة المستوردة.</string>

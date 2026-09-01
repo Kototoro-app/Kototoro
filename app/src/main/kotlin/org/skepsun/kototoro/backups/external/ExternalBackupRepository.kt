@@ -342,10 +342,7 @@ class ExternalBackupRepository @Inject constructor(
     }
 
     private fun generateChapterId(record: ExternalBackupContentRecord, chapterUrl: String): Long {
-        val type = when (record.app.family) {
-            ExternalBackupFamily.MANGA -> "chapter"
-            ExternalBackupFamily.ANIME -> if (record.contentType == ContentType.VIDEO) "episode" else "chapter"
-        }
+        val type = if (record.contentType == ContentType.VIDEO) "episode" else "chapter"
         return "${record.sourceName}|$type|$chapterUrl".hashCode().toLong() and Long.MAX_VALUE
     }
 
@@ -360,11 +357,6 @@ class ExternalBackupRepository @Inject constructor(
 
         suspend fun resolve(record: ExternalBackupContentRecord): SourceResolveResult {
             if (record.sourceName.startsWith("MIHON_") || record.sourceName.startsWith("ANIYOMI_")) {
-                // Mihon-family forks (TachiyomiSY, Komikku, Neko, ...) bundle some sources
-                // in-app with ids that never match a Mihon extension. Remap those to the
-                // native Kotatsu parser source when available; everything else stays
-                // verbatim as MIHON_<id> / ANIYOMI_<id>.
-                resolveMihonFamilySource(record)?.let { return it }
                 return when {
                     isInstalledExtensionSource(record.sourceName) ->
                         SourceResolveResult.Resolved(record)
@@ -404,56 +396,6 @@ class ExternalBackupRepository @Inject constructor(
                 else -> null
             } ?: return SourceResolveResult.Unmatched
             return SourceResolveResult.Resolved(record.copy(sourceName = resolved.sourceName))
-        }
-
-        /**
-         * Remaps a `MIHON_<id>` source that comes from a Mihon-family fork built-in source
-         * to the matching native Kotatsu parser source.
-         *
-         * Returns `null` (meaning "keep the raw MIHON_<id> key") when there is nothing to
-         * remap or when the native source is not currently available — the record must
-         * still import instead of failing.
-         */
-        private suspend fun resolveMihonFamilySource(
-            record: ExternalBackupContentRecord,
-        ): SourceResolveResult? {
-            val sourceId = record.sourceName.removePrefix("MIHON_").toLongOrNull()
-                ?: return null
-            val natives = candidates()
-
-            // 1) Authoritative fork-built-in id table (TachiyomiSY, Komikku).
-            MihonForkBuiltinSources.nativeSourceNameForId(sourceId)?.let { nativeName ->
-                resolveNativeOrNull(record, nativeName, natives)?.let { return it }
-            }
-
-            // 2) Never disturb a source that already resolves to an installed Mihon
-            //    extension — those ids are ecosystem-stable and already linked.
-            if (natives.any { it.sourceName == record.sourceName && it.kind == SourceKind.MIHON }) {
-                return null
-            }
-
-            // 3) URL-shape inference for built-ins that are not enumerated (e.g. Neko's
-            //    MangaDex ids are MD5-derived per language and kept out of the table).
-            val inferredName = MihonForkBuiltinSources.nativeSourceNameForMihonUrl(
-                url = record.url.ifBlank { record.publicUrl },
-            ) ?: return null
-            return resolveNativeOrNull(record, inferredName, natives)
-        }
-
-        private fun resolveNativeOrNull(
-            record: ExternalBackupContentRecord,
-            nativeName: String,
-            natives: List<SourceCandidate>,
-        ): SourceResolveResult? {
-            val matches = natives
-                .filter { it.sourceName == nativeName && it.kind == SourceKind.NATIVE }
-                .distinctBy { it.sourceName }
-            if (matches.size != 1) {
-                return null
-            }
-            return SourceResolveResult.Resolved(
-                record.copy(sourceName = matches.first().sourceName, sourceDisplayName = null),
-            )
         }
 
         private suspend fun isInstalledExtensionSource(sourceName: String): Boolean {

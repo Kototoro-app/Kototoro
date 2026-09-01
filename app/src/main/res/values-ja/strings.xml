@@ -1325,7 +1325,6 @@
     <string name="home_updates_empty_subtitle">新しいチャプターがある追跡アイテムがここに表示されます</string>
     <string name="home_updates_empty_title">最近の更新はありません</string>
     <string name="image_caches">画像とリーダーのキャッシュ</string>
-    <string name="import_backup_choose_source_app">ソースアプリを選択</string>
     <string name="import_backup_from_other_apps">他のアプリからバックアップをインポート</string>
     <string name="import_backup_from_other_apps_summary">Mihon系またはAniyomi系のバックアップファイルからお気に入りと履歴をインポートします。</string>
     <string name="import_backup_scope_summary">このバージョンでは、お気に入り、履歴、インポートした読書進捗メタデータを復元します。</string>
