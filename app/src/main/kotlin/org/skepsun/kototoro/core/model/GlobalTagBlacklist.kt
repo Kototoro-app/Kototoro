@@ -38,6 +38,17 @@ class GlobalTagBlacklist(tags: Collection<String>) {
             KototoroTaxonomy.resolve(tag.title).any { it.id in taxonomyIds }
     }
 
+    /**
+     * True when a single tag title is blacklisted — the per-tag half of
+     * [contains] without building a `Content`. The favourites snapshot uses this to
+     * apply the blacklist to its pre-resolved display tags.
+     */
+    fun containsTagTitle(title: String): Boolean {
+        val normalizedTitle = normalizeTag(title)
+        return normalizedTitle in normalizedRawTags ||
+            KototoroTaxonomy.resolve(title).any { it.id in taxonomyIds }
+    }
+
     fun filter(contents: List<Content>): List<Content> = if (isEmpty) {
         contents
     } else {
