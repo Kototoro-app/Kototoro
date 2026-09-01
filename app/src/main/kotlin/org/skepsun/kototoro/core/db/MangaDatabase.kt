@@ -191,6 +191,8 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getWorkFavouritesDao(): WorkFavouritesDao
 
+    abstract fun getFavouriteLibraryReadDao(): org.skepsun.kototoro.favourites.data.FavouriteLibraryReadDao
+
     abstract fun getPreferencesDao(): PreferencesDao
 
     abstract fun getFavouriteCategoriesDao(): FavouriteCategoriesDao
