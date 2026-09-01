@@ -1682,6 +1682,8 @@
     <string name="reader">閱讀器</string>
     <string name="reader_autoscroll_pause_on_tap">點擊屏幕時中斷並彈出控制面板</string>
     <string name="reader_chapter_toast">顯示章節切換提示</string>
+    <string name="reader_chapter_title_at_bottom">章節標題顯示在底部</string>
+    <string name="reader_chapter_title_at_bottom_summary">將頂部欄中的作品名與章節名移到進度條上方，單手更易觸及</string>
     <string name="reader_chapter_toast_summary">切換章節時顯示包含章節標題的彈出提示</string>
     <string name="reader_controls_in_bottom_bar">閱讀器底部控制欄</string>
     <string name="reader_dual_page">橫屏/大屏雙欄顯示</string>

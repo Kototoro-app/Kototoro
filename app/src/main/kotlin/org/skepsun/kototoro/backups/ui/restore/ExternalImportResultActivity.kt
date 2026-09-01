@@ -72,6 +72,10 @@ class ExternalImportResultActivity : AppCompatActivity() {
                     append(preview)
                 }
             }
+            if (summary.consolidationPending) {
+                append("\n\n")
+                append(getString(R.string.external_import_result_consolidation_pending))
+            }
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.external_import_result_title)

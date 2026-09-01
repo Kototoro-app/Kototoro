@@ -86,6 +86,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.Offset
@@ -145,6 +146,12 @@ private val ReaderInfoBarHorizontalPadding = 20.dp
 private val ReaderInfoBarVerticalPadding = 6.dp
 private val ReaderInfoBarObstructionSpacing = 4.dp
 private val ReaderInfoBarItemSpacing = 10.dp
+/**
+ * 底部右侧悬浮控件列的基准：离导航条的距离与单个药丸的高度。
+ * 放在底部居中的东西（章节标题药丸）要用同一组值才能和它们对齐（issue #509）。
+ */
+private val ReaderFloatingControlInset = 62.dp
+private val ReaderFloatingControlHeight = 44.dp
 private val ReaderTopImmersiveStops = listOf(0f, 0.24f, 0.50f, 0.70f, 0.86f, 1f)
 private val ReaderBottomImmersiveStops = listOf(0f, 0.18f, 0.38f, 0.70f, 1f)
 
@@ -584,6 +591,25 @@ internal fun ComposeReaderActivityScaffold(
             }
         }
 
+        // 底部标题药丸跟右侧悬浮按钮共用同一组基准（同高、同底距），
+        // 否则它会和最近的那颗悬浮按钮错位（issue #509 的反馈）。
+        AnimatedVisibility(
+            visible = state.controlsVisible && state.options.chapterTitleAtBottom,
+            enter = slideInVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+            exit = slideOutVertically { it }.whenReaderAnimationsEnabled(!state.eInkModeEnabled),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp)
+                .padding(bottom = ReaderFloatingControlInset),
+        ) {
+            ReaderChapterTitleChip(
+                state = state,
+                onChapters = callbacks.actions.onPages,
+                height = ReaderFloatingControlHeight,
+            )
+        }
+
         val floatingControls = resolveReaderFloatingControls(
             configured = state.actions.controls,
             translationAvailable = state.actions.translateRequestedVisible,
@@ -600,7 +626,7 @@ internal fun ComposeReaderActivityScaffold(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 16.dp, bottom = 62.dp),
+                .padding(end = 16.dp, bottom = ReaderFloatingControlInset),
         ) {
             Column(
                 horizontalAlignment = Alignment.End,
@@ -1572,7 +1598,6 @@ private fun ReaderComposeTopBar(
     onOptions: () -> Unit,
 ) {
     val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
-    val chapterControlShape = RoundedRectangle(24.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1593,35 +1618,12 @@ private fun ReaderComposeTopBar(
                 )
             }
         }
-        ReaderTopControlSurface(
-            shape = chapterControlShape,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .widthIn(min = 148.dp, max = 176.dp)
-                .height(48.dp),
-            contentModifier = Modifier
-                .clip(chapterControlShape)
-                .clickable(onClick = onChapters),
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
-            ) {
-                Text(
-                    text = state.title,
-                    color = contentColor,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
-                    maxLines = 1,
-                )
-                if (state.subtitle.isNotEmpty()) {
-                    Text(
-                        text = state.subtitle,
-                        color = contentColor.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                        maxLines = 1,
-                    )
-                }
-            }
+        if (!state.options.chapterTitleAtBottom) {
+            ReaderChapterTitleChip(
+                state = state,
+                onChapters = onChapters,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
         ReaderTopControlSurface(
             shape = Capsule(),
@@ -1634,6 +1636,51 @@ private fun ReaderComposeTopBar(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = stringResource(R.string.options),
                     tint = contentColor,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The work title + current chapter, opening the chapter list on tap. Shown in the top bar,
+ * or above the progress dock when [ComposeReaderOptionsState.chapterTitleAtBottom] is on —
+ * one-handed readers reach the bottom of the screen, not the top (issue #509).
+ */
+@Composable
+private fun ReaderChapterTitleChip(
+    state: ComposeReaderChromeState,
+    onChapters: () -> Unit,
+    modifier: Modifier = Modifier,
+    height: Dp = 48.dp,
+) {
+    val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
+    val chapterControlShape = RoundedRectangle(24.dp)
+    ReaderTopControlSurface(
+        shape = chapterControlShape,
+        modifier = modifier
+            .widthIn(min = 148.dp, max = 176.dp)
+            .height(height),
+        contentModifier = Modifier
+            .clip(chapterControlShape)
+            .clickable(onClick = onChapters),
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
+        ) {
+            Text(
+                text = state.title,
+                color = contentColor,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, lineHeight = 19.sp),
+                maxLines = 1,
+            )
+            if (state.subtitle.isNotEmpty()) {
+                Text(
+                    text = state.subtitle,
+                    color = contentColor.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                    maxLines = 1,
                 )
             }
         }

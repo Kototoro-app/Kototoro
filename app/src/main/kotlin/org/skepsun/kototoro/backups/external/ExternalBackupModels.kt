@@ -55,6 +55,12 @@ data class ExternalBackupImportSummary(
     val missingSourceNames: List<String> = emptyList(),
     /** Sources referenced by the backup but not installed/importable, with record counts. */
     val uninstalledSources: List<ExternalBackupUninstalledSource> = emptyList(),
+    /**
+     * The post-import merge of duplicate work entities did not complete. Until it does,
+     * the same work may appear several times in categories (see issue #510), so the
+     * result must not look like a clean success.
+     */
+    val consolidationPending: Boolean = false,
 )
 
 @Serializable

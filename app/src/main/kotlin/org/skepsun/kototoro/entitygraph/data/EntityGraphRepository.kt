@@ -1055,16 +1055,22 @@ class EntityGraphRepository @Inject constructor(
     /**
      * Phase 2 of the external backup fast import: merges provisional entities (WORK
      * entities whose local_manga binding was created by the bulk import, createdBy=IMPORT)
-     * that refer to the same work. Grouping is computed in memory by
-     * [buildConsolidationGroups] (strong projection keys + normalized title per content
-     * type); merging reuses the established remap path (work state, bindings, relations)
-     * and finally deletes the absorbed entity rows. Idempotent: with fewer than two
-     * provisional entities left it is a no-op.
+     * that refer to the same work. Two passes, both computed in memory:
+     *  - [buildAnchorAbsorptionGroups]: a provisional entity that duplicates a work the
+     *    library already had is absorbed into that pre-existing entity. Without this the
+     *    import leftovers (same title within one batch gets a *salted* name_hash to pass
+     *    the unique index) sit next to the user's own entity for good and the work shows
+     *    up twice in a category — issue #510;
+     *  - [buildConsolidationGroups]: the duplicates one batch created among themselves.
+     *
+     * Merging reuses the established remap path (work state, bindings, relations)
+     * and finally deletes the absorbed entity rows. Idempotent: with no provisional
+     * entities left it is a no-op.
      */
     suspend fun consolidateImportProvisionalEntities(): EntityConsolidationReport = withContext(Dispatchers.Default) {
         val dao = db.getEntityGraphDao()
         val provisionalEntityIds = dao.findImportProvisionalEntityIds()
-        if (provisionalEntityIds.size < 2) {
+        if (provisionalEntityIds.isEmpty()) {
             return@withContext EntityConsolidationReport.EMPTY
         }
         val entitiesById = provisionalEntityIds
@@ -1072,7 +1078,7 @@ class EntityGraphRepository @Inject constructor(
             .flatMap { dao.findEntitiesByIds(it) }
             .filter { it.type == EntityType.WORK.name }
             .associateBy { it.id }
-        if (entitiesById.size < 2) {
+        if (entitiesById.isEmpty()) {
             return@withContext EntityConsolidationReport.EMPTY
         }
         val bindingsByEntityId = provisionalEntityIds
@@ -1100,7 +1106,10 @@ class EntityGraphRepository @Inject constructor(
                 strongKeys = strongKeys,
             )
         }
-        val groups = buildConsolidationGroups(inputs)
+        val anchors = findConsolidationAnchors(dao, inputs, entitiesById.keys)
+        val anchorGroups = buildAnchorAbsorptionGroups(inputs, anchors)
+        val absorbedByAnchors = anchorGroups.flatMap { it.absorbedEntityIds }.toSet()
+        val groups = anchorGroups + buildConsolidationGroups(inputs.filterNot { it.entityId in absorbedByAnchors })
         if (groups.isEmpty()) {
             return@withContext EntityConsolidationReport.EMPTY
         }
@@ -1126,6 +1135,75 @@ class EntityGraphRepository @Inject constructor(
             groupCount = groups.size,
             absorbedCount = groups.sumOf { it.absorbedEntityIds.size },
         )
+    }
+
+    /**
+     * Pre-existing (not import-created) WORK entities that already own the title of a
+     * provisional entity. Title keys holding more than one candidate are skipped: guessing
+     * which of the user's own duplicates to keep is left to the manual merge.
+     */
+    private suspend fun findConsolidationAnchors(
+        dao: EntityGraphDao,
+        inputs: List<ConsolidationEntity>,
+        provisionalEntityIds: Set<Long>,
+    ): Map<String, Long> {
+        val nameHashes = inputs.mapTo(LinkedHashSet()) { computeNameHash(it.primaryName) }
+        if (nameHashes.isEmpty()) {
+            return emptyMap()
+        }
+        val candidates = nameHashes
+            .chunked(MAX_CONSOLIDATION_QUERY_PARAMS)
+            .flatMap { dao.findEntitiesByTypeAndNameHashes(EntityType.WORK.name, it) }
+            .filter { it.id !in provisionalEntityIds }
+        val byTitleKey = LinkedHashMap<String, MutableList<EntityRecord>>()
+        for (candidate in candidates) {
+            byTitleKey.getOrPut(consolidationTitleKey(candidate.contentType, candidate.primaryName)) {
+                ArrayList()
+            } += candidate
+        }
+        return buildMap {
+            byTitleKey.forEach { (titleKey, records) ->
+                if (records.size == 1) {
+                    put(titleKey, records.first().id)
+                }
+            }
+        }
+    }
+
+    /**
+     * Re-attach active work-state rows whose anchor projection belongs to some other
+     * entity ([findActiveWithDetachedAnchor]). Categories follow the anchor, the
+     * "favourited?" check follows the bindings, and the two disagree as soon as one of
+     * them drifts — which is what makes a work appear in a category the user never
+     * favourited (issue #510).
+     *
+     * Repair policy is the one the projection-split path already applies: point the row at
+     * another live local projection of its own entity, and when the entity has none left,
+     * take the row out of the category — a card without a local projection cannot be
+     * rendered anyway. Returns the number of rows that were touched.
+     */
+    suspend fun repairDetachedWorkStateAnchors(): Int = withContext(Dispatchers.Default) {
+        val entityDao = db.getEntityGraphDao()
+        val favouritesDao = db.getWorkFavouritesDao()
+        val detached = favouritesDao.findActiveWithDetachedAnchor()
+        if (detached.isEmpty()) {
+            return@withContext 0
+        }
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            detached.groupBy { it.entityId }.forEach { (entityId, rows) ->
+                val candidate = findWorkStateAnchorCandidate(entityDao, entityId)
+                rows.forEach { row ->
+                    val detachedAnchorId = row.anchorMangaId ?: return@forEach
+                    if (candidate != null) {
+                        favouritesDao.replaceAnchorMangaId(entityId, detachedAnchorId, candidate, now)
+                    } else {
+                        favouritesDao.setDeletedAt(entityId, row.categoryId, now, now)
+                    }
+                }
+            }
+        }
+        detached.size
     }
 
     private fun buildConsolidationStrongKeys(manga: MangaEntity?): List<String> {

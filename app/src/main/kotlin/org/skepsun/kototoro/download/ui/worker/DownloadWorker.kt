@@ -190,7 +190,9 @@ class DownloadWorker @AssistedInject constructor(
     @Volatile
     private var lastPublishedState: DownloadState? = null
     private val currentState: DownloadState
-        get() = checkNotNull(lastPublishedState)
+        get() = checkNotNull(lastPublishedState) {
+            "Download state was never published for work $id (an error was thrown before the first publishState)"
+        }
 
     private val etaEstimator = RealtimeEtaEstimator()
     private val notificationThrottler = Throttler(400)
@@ -385,10 +387,12 @@ class DownloadWorker @AssistedInject constructor(
         Log.d("DownloadWorker", "downloadContentImpl start: mangaId=${subject.id} title=${subject.title} excluded=${excludedIds.size}")
         val chaptersToSkip = excludedIds.toMutableSet()
         mangaLock.withLock(subject) {
-            var storageRoot = localContentRepository.getOutputDir(subject, task.destination)
-            checkNotNull(storageRoot) { applicationContext.getString(R.string.cannot_find_available_storage) }
+            var rootCandidates = localContentRepository.getOutputDirCandidates(subject, task.destination)
+            val primaryRoot = checkNotNull(rootCandidates.firstOrNull()) {
+                applicationContext.getString(R.string.cannot_find_available_storage)
+            }
             val destination = File(applicationContext.cacheDir, "downloads").apply { mkdirs() }
-            Log.d("DownloadWorker", "downloadContentImpl outputDir=${storageRoot.displayPath}")
+            Log.d("DownloadWorker", "downloadContentImpl outputDir=${primaryRoot.displayPath}")
             var output: LocalContentOutput? = null
             try {
                 val executionManga = resolvedContent.executionManga
@@ -433,15 +437,15 @@ class DownloadWorker @AssistedInject constructor(
                 Log.d("DownloadWorker", "downloadContentImpl isNovel=$isNovel hasEpubChapters=$hasEpubChapters format=$downloadFormat")
 
                 if (isNovel && !hasEpubChapters) {
-                    // 尝试获取小说专用的输出目录
-                    storageRoot = localStorageManager.getDefaultNovelWriteableRoot()
-                        ?: localStorageManager.getNovelWriteableRoots().firstOrNull()
-                        ?: storageRoot
-                    Log.d("DownloadWorker", "downloadContentImpl novel outputDir=${storageRoot.displayPath}")
+                    // 小说优先写入专用目录，其余候选保留以便专用目录实际不可写时回退
+                    val novelPreferred = listOfNotNull(localStorageManager.getDefaultNovelWriteableRoot()) +
+                        localStorageManager.getNovelWriteableRoots()
+                    rootCandidates = (novelPreferred + rootCandidates).distinct()
+                    Log.d("DownloadWorker", "downloadContentImpl novel outputDir=${rootCandidates.firstOrNull()?.displayPath}")
                 }
 
-                output = LocalContentOutput.getOrCreate(
-                    root = storageRoot,
+                output = createOutputWithFallback(
+                    candidates = rootCandidates,
                     manga = executionDetails,
                     format = downloadFormat,
                     cacheDir = applicationContext.cacheDir,
@@ -1465,7 +1469,7 @@ class DownloadWorker @AssistedInject constructor(
                     file?.delete()
                     throw e
                 }
-                checkNotNull(file)
+                checkNotNull(file) { "Temporary file was not created for $url" }
             }
     }
 

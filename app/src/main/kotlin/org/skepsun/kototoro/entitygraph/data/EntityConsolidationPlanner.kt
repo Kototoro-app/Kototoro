@@ -13,6 +13,9 @@ package org.skepsun.kototoro.entitygraph.data
  * group, so consolidation can never auto-merge curated user entities. Canonical selection
  * prefers the member whose nameHash is unsalted (the first record seen for that title),
  * then the lowest entity id for stable results.
+ *
+ * @see buildAnchorAbsorptionGroups for the other half of the picture: provisional
+ * entities that duplicate a work the library already had.
  */
 internal data class ConsolidationEntity(
     val entityId: Long,
@@ -26,6 +29,48 @@ internal data class ConsolidationGroup(
     val canonicalEntityId: Long,
     val absorbedEntityIds: List<Long>,
 )
+
+/** Identity of "the same work" for title-based matching: normalized title + content type. */
+internal fun consolidationTitleKey(contentType: String?, primaryName: String): String =
+    normalizeName(primaryName) + "\u0000" + (contentType ?: "")
+
+/**
+ * Absorb provisional entities into a pre-existing entity that already owns the same work.
+ *
+ * The bulk import only attaches a record to an entity it can see up front; when two
+ * records of the same title arrive in one batch the second one is stored under a *salted*
+ * name_hash so it survives the unique index, and when an import ran before (or a previous
+ * consolidation failed) an entity may simply exist twice. Those leftovers carry
+ * `created_by = IMPORT`, so they are provisional forever: they never merge with anything
+ * that pre-dates them and the user keeps seeing the same work twice in a category
+ * (issue #510).
+ *
+ * Only provisional entities are absorbed here — the anchor is always kept, so this can
+ * never merge two entities the user curated themselves.
+ */
+internal fun buildAnchorAbsorptionGroups(
+    entities: List<ConsolidationEntity>,
+    anchorIdByTitleKey: Map<String, Long>,
+): List<ConsolidationGroup> {
+    if (entities.isEmpty() || anchorIdByTitleKey.isEmpty()) {
+        return emptyList()
+    }
+    val absorbedByAnchor = LinkedHashMap<Long, MutableList<Long>>()
+    for (entity in entities) {
+        if (normalizeName(entity.primaryName).isEmpty()) {
+            continue
+        }
+        val anchorId = anchorIdByTitleKey[consolidationTitleKey(entity.contentType, entity.primaryName)]
+            ?: continue
+        if (anchorId == entity.entityId) {
+            continue
+        }
+        absorbedByAnchor.getOrPut(anchorId) { ArrayList() } += entity.entityId
+    }
+    return absorbedByAnchor.map { (anchorId, absorbed) ->
+        ConsolidationGroup(canonicalEntityId = anchorId, absorbedEntityIds = absorbed.sorted())
+    }
+}
 
 internal fun buildConsolidationGroups(
     entities: List<ConsolidationEntity>,

@@ -270,6 +270,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean("has_seen_plugin_welcome", false)
         set(value) = prefs.edit { putBoolean("has_seen_plugin_welcome", value) }
 
+    /**
+     * 外部备份导入后的「同名作品实体合并」失败过、尚未成功重跑。
+     *
+     * 该失败此前被静默吞掉（issue #510）：库里会长期留着同一部作品的多个 WORK 实体，
+     * 表现为「收藏/分类里同一部漫画重复出现、且出现在不同分类」。
+     * 由 LocalStorageCleanupWorker 在下次启动维护时重试。
+     */
+    var isEntityConsolidationPending: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_ENTITY_CONSOLIDATION, false)
+        set(value) = prefs.edit { putBoolean(KEY_PENDING_ENTITY_CONSOLIDATION, value) }
+
     var listMode: ListMode
         get() = prefs.getEnumValue(KEY_LIST_MODE, ListMode.GRID)
         set(value) = prefs.edit { putEnumValue(KEY_LIST_MODE, value) }
@@ -2067,6 +2078,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isReaderChapterToastEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_CHAPTER_TOAST, true)
 
+    /**
+     * 章节标题（作品名 + 章节名）放在底部进度条上方，而不是顶部栏中间。
+     * 顶部那颗标题药丸只有「看」的作用，单手够不到；想要它顺手就打开这个（issue #509）。
+     */
+    var isReaderChapterTitleAtBottom: Boolean
+        get() = prefs.getBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, false)
+        set(value) = prefs.edit { putBoolean(KEY_READER_CHAPTER_TITLE_BOTTOM, value) }
+
     var isReaderSuperResolutionEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_READER_SUPER_RESOLUTION_ENABLED, value).apply()
@@ -2755,6 +2774,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_COOKIES_CLEAR = "cookies_clear"
         const val KEY_CHAPTERS_CLEAR = "chapters_clear"
         const val KEY_CHAPTERS_CLEAR_AUTO = "chapters_clear_auto"
+        const val KEY_PENDING_ENTITY_CONSOLIDATION = "pending_entity_consolidation"
         const val KEY_THUMBS_CACHE_CLEAR = "thumbs_cache_clear"
         const val KEY_LOCAL_MANGA_CLEAR = "local_manga_clear"
         const val KEY_LOCAL_NOVELS_CLEAR = "local_novels_clear"
@@ -2947,6 +2967,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_READER_BAR_LAYOUT = "reader_bar_layout"
         const val KEY_READER_BAR_CUTOUT_AVOIDANCE = "reader_bar_cutout_avoidance"
         const val KEY_READER_CHAPTER_TOAST = "reader_chapter_toast"
+        const val KEY_READER_CHAPTER_TITLE_BOTTOM = "reader_chapter_title_bottom"
         const val KEY_READER_SUPER_RESOLUTION_ENABLED = "reader_super_resolution_enabled"
         const val KEY_READER_SUPER_RESOLUTION_ENGINE = "reader_super_resolution_engine"
         const val KEY_READER_SUPER_RESOLUTION_ANIME4K_MODE = "reader_super_resolution_anime4k_mode"

@@ -211,6 +211,7 @@
     <string name="not_available">Not available</string>
     <string name="not_set">Not set</string>
     <string name="cannot_find_available_storage">No available storage</string>
+<string name="error_cannot_write_to_storage">Cannot write to the download directory. Check its access permission, free space, or pick another folder in settings</string>
     <string name="other_storage">Other storage</string>
     <string name="done">Done</string>
     <string name="all_favourites">All favorites</string>
@@ -1112,6 +1113,7 @@
     <string name="external_import_result_uninstalled_header">Sources not installed — favorites were imported as-is. Install the matching extension to re-link them:</string>
     <string name="external_import_result_uninstalled_item">• %1$s — %2$d entries</string>
     <string name="external_import_result_failed">%1$d entries could not be matched to any source and were skipped.</string>
+    <string name="external_import_result_consolidation_pending">Some duplicated works could not be merged yet; they may appear several times in categories. A retry runs automatically on the next app start.</string>
     <string name="packages_recommended_header">Recommended</string>
     <string name="packages_recommended_count">%1$d packages</string>
     <string name="packages_recommended_missing_count">%1$d missing sources</string>
@@ -2354,6 +2356,8 @@
     <string name="all_sources_enabled">All sources are enabled</string>
     <string name="reader_chapter_toast">Show chapter change popup</string>
     <string name="reader_chapter_toast_summary">Show a pop-up message with a chapter title when it is changed</string>
+    <string name="reader_chapter_title_at_bottom_summary">Moves the work and chapter title from the top bar to above the progress bar, within thumb reach</string>
+    <string name="reader_chapter_title_at_bottom">Show chapter title at the bottom</string>
     <string name="reader_info_bar_transparent">Transparent reader information bar</string>
     <string name="backup_restored_background">The backup will be restored in the background</string>
     <string name="restoring_backup">Restoring backup</string>

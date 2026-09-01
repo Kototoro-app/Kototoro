@@ -37,7 +37,7 @@ class LocalStorageRoot private constructor(
 
         fun fromFile(file: File): LocalStorageRoot {
             val uri = file.toUri()
-            return LocalStorageRoot(uri, checkNotNull(UniFile.fromFile(file)))
+            return LocalStorageRoot(uri, checkNotNull(UniFile.fromFile(file)) { "UniFile.fromFile returned null for $file" })
         }
 
         fun fromUri(context: Context, uri: Uri): LocalStorageRoot? {

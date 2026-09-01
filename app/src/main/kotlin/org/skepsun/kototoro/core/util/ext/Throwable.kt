@@ -30,6 +30,7 @@ import org.skepsun.kototoro.core.exceptions.MissingPluginHostClassesException
 import org.skepsun.kototoro.core.exceptions.NoDataReceivedException
 import org.skepsun.kototoro.core.exceptions.NonFileUriException
 import org.skepsun.kototoro.core.exceptions.ProxyConfigException
+import org.skepsun.kototoro.core.exceptions.StorageWriteException
 import org.skepsun.kototoro.core.exceptions.SyncApiException
 import org.skepsun.kototoro.core.exceptions.UnsupportedFileException
 import org.skepsun.kototoro.core.exceptions.UnsupportedSourceException
@@ -122,6 +123,7 @@ private fun Throwable.getDisplayMessageOrNull(resources: Resources): String? = w
     )
     is FileNotFoundException -> parseMessage(resources) ?: message
     is AccessDeniedException -> resources.getString(R.string.no_access_to_file)
+    is StorageWriteException -> resources.getString(R.string.error_cannot_write_to_storage)
     is NonFileUriException -> resources.getString(R.string.error_non_file_uri)
     is EmptyHistoryException -> resources.getString(R.string.history_is_empty)
     is EmptyContentException -> reason?.let { resources.getString(it.msgResId) } ?: cause?.getDisplayMessage(resources)
