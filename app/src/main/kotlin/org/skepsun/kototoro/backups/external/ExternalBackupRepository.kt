@@ -357,6 +357,13 @@ class ExternalBackupRepository @Inject constructor(
 
         suspend fun resolve(record: ExternalBackupContentRecord): SourceResolveResult {
             if (record.sourceName.startsWith("MIHON_") || record.sourceName.startsWith("ANIYOMI_")) {
+                if (record.sourceName.startsWith("MIHON_")) {
+                    val sourceId = record.sourceName.removePrefix("MIHON_").toLongOrNull()
+                    val target = sourceId?.let(::targetForNonInstallableForkSource)
+                    if (target != null) {
+                        resolveNativeSource(record, target)?.let { return it }
+                    }
+                }
                 return when {
                     isInstalledExtensionSource(record.sourceName) ->
                         SourceResolveResult.Resolved(record)
@@ -396,6 +403,21 @@ class ExternalBackupRepository @Inject constructor(
                 else -> null
             } ?: return SourceResolveResult.Unmatched
             return SourceResolveResult.Resolved(record.copy(sourceName = resolved.sourceName))
+        }
+
+        private suspend fun resolveNativeSource(
+            record: ExternalBackupContentRecord,
+            targetSourceName: String,
+        ): SourceResolveResult? {
+            val matches = candidates()
+                .filter { it.sourceName == targetSourceName && it.kind == SourceKind.NATIVE }
+                .distinctBy { it.sourceName }
+            if (matches.size != 1) {
+                return null
+            }
+            return SourceResolveResult.Resolved(
+                record.copy(sourceName = matches.single().sourceName, sourceDisplayName = null),
+            )
         }
 
         private suspend fun isInstalledExtensionSource(sourceName: String): Boolean {
@@ -580,6 +602,17 @@ class ExternalBackupRepository @Inject constructor(
             return aliases to targets
         }
     }
+}
+
+/**
+ * ExHentai is bundled by TachiyomiSY/Komikku under ids that no Mihon extension publishes.
+ * Resolve only those known non-installable ids to Kototoro's JAR source; all other fork
+ * sources remain ordinary Mihon keys and continue through extension recovery.
+ */
+internal fun targetForNonInstallableForkSource(sourceId: Long): String? = when (sourceId) {
+    6902L,
+    6_225_928_719_850_211_219L -> "EXHENTAI"
+    else -> null
 }
 
 internal object ExternalBackupCategoryMapper {

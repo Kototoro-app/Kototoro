@@ -10,9 +10,9 @@ import org.junit.jupiter.api.Test
  * protobuf backup: the per-manga `source` id (proto field 1, int64) must survive
  * decode and be carried into the Kototoro source key as `MIHON_{id}`.
  *
- * Fork-built-in sources intentionally remain ordinary Mihon source keys. If the matching
- * extension is unavailable, source resolution imports them unchanged and registers them
- * for the extension-management recommendation flow.
+ * Decoder output retains the original id. Source resolution then converts only known
+ * non-installable ExHentai built-ins to Kototoro's `EXHENTAI` JAR source; other ids remain
+ * ordinary Mihon keys for extension recovery.
  */
 class MihonBackupSourceIdPreservationTest {
 
@@ -36,7 +36,7 @@ class MihonBackupSourceIdPreservationTest {
     }
 
     @Test
-    fun `Komikku and Neko built-in source ids remain ordinary Mihon keys`() {
+    fun `decoder preserves Komikku and Neko built-in ids before source resolution`() {
         val sourceIds = listOf(
             6_225_928_719_850_211_219L,
             2_499_283_573_021_220_255L,
@@ -49,6 +49,15 @@ class MihonBackupSourceIdPreservationTest {
             assertEquals(sourceId, manga.source)
             assertEquals("MIHON_$sourceId", "MIHON_${manga.source}")
         }
+    }
+
+    @Test
+    fun `non-installable fork ExHentai ids target the Kototoro ExHentai source`() {
+        assertEquals("EXHENTAI", targetForNonInstallableForkSource(6902L))
+        assertEquals("EXHENTAI", targetForNonInstallableForkSource(6_225_928_719_850_211_219L))
+        assertEquals(null, targetForNonInstallableForkSource(6901L))
+        assertEquals(null, targetForNonInstallableForkSource(1_713_178_126_840_476_467L))
+        assertEquals(null, targetForNonInstallableForkSource(2_499_283_573_021_220_255L))
     }
 
     @Test
