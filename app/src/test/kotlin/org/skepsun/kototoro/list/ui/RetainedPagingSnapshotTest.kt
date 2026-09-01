@@ -3,6 +3,7 @@ package org.skepsun.kototoro.list.ui
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
@@ -118,6 +119,34 @@ class RetainedPagingSnapshotTest {
         assertEquals(retained, store.peekRetainedPagingSnapshot())
         store.clearRetainedPagingSnapshot(retained.generation)
         assertNull(store.peekRetainedPagingSnapshot())
+    }
+
+    @Test
+    fun `capture records the anchor in both window-relative and absolute index spaces`() {
+        val items = List(1_000) { gridItem(it.toLong()) }
+        val snapshot = requireNotNull(
+            createRetainedPagingSnapshot(
+                loadedItems = items,
+                clickedItem = items[500],
+                listMode = ListMode.LIST,
+                layoutFirstVisibleIndex = 501,
+                firstVisibleItemScrollOffset = 0,
+                pagingAnchorIndex = 500,
+            ),
+        )
+        // The retained window is bounded, so these two are only equal by accident.
+        // `prefixReady` must compare live-list indices against the *absolute* one.
+        assertTrue(
+            snapshot.anchorAbsoluteIndex > snapshot.anchorItemIndex,
+            "absolute anchor (${snapshot.anchorAbsoluteIndex}) must sit ahead of the " +
+                "window-relative one (${snapshot.anchorItemIndex}) once the window is bounded",
+        )
+        assertEquals(500, snapshot.anchorAbsoluteIndex)
+        assertEquals(
+            snapshot.anchorAbsoluteIndex - snapshot.anchorItemIndex,
+            items.indexOf(snapshot.items.first()),
+            "the gap between the two spaces is exactly the window start",
+        )
     }
 
     private fun snapshot(anchor: ListModel) = RetainedPagingSnapshot(

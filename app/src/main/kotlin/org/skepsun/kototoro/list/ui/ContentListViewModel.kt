@@ -48,7 +48,14 @@ data class RetainedPagingSnapshot(
     val generation: Long,
     val items: List<ListModel>,
     val anchorItem: ListModel,
+    /** Index of [anchorItem] within [items], window-relative. */
     val anchorItemIndex: Int,
+    /**
+     * Index of [anchorItem] in the whole pre-navigation list, paging space. [anchorItemIndex]
+     * is window-relative, so it must not be compared against an index looked up in the live
+     * list after the refresh - those are different coordinate systems.
+     */
+    val anchorAbsoluteIndex: Int = anchorItemIndex,
     val listMode: ListMode,
     val firstVisibleItemIndex: Int,
     val firstVisibleItemScrollOffset: Int,
@@ -122,6 +129,7 @@ internal fun createRetainedPagingSnapshot(
         items = loadedItems.subList(windowStart, windowEnd).toList(),
         anchorItem = anchorItem,
         anchorItemIndex = anchorItemIndex - windowStart,
+        anchorAbsoluteIndex = anchorItemIndex,
         listMode = listMode,
         firstVisibleItemIndex = (layoutFirstVisibleIndex - windowStart).coerceAtLeast(0),
         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,

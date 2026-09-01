@@ -201,8 +201,13 @@ internal fun rememberRetainedPagingSnapshotState(
     // never "paging"; paging lists report end-of-pagination via prepend state.
     val pagingPrependExhausted = lazyPagingItems == null ||
         (lazyPagingItems.loadState.prepend as? LoadState.NotLoading)?.endOfPaginationReached == true
+    // Both sides must be live-list indices. `retainedAnchorIndex` is window-relative
+    // (anchorItemIndex - windowStart), so comparing it with `liveAnchorIndex` asks whether the
+    // anchor has passed an offset inside its own snapshot window - true far too early, which
+    // hands the list back to live paging before the anchor is actually in place.
+    val retainedAnchorAbsoluteIndex = retainedPagingSnapshot?.anchorAbsoluteIndex ?: -1
     val retainedAnchorPrefixIsReady = retainedAnchorIsLoaded &&
-        (liveAnchorIndex >= retainedAnchorIndex || pagingPrependExhausted)
+        (liveAnchorIndex >= retainedAnchorAbsoluteIndex || pagingPrependExhausted)
     val pagingRefreshSettled = if (lazyPagingItems != null) {
         lazyPagingItems.loadState.refresh is LoadState.NotLoading
     } else {
