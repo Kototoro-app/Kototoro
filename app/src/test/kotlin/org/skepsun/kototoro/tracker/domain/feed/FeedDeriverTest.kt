@@ -240,6 +240,34 @@ class FeedDeriverTest {
     }
 
     @Test
+    fun `favourite quick filter scopes by category id`() {
+        val rows = listOf(
+            row(logId = 1),
+            row(logId = 2, displayUrl = "https://example.com/other"),
+        )
+        val categoryIds = mapOf(
+            "TEST|https://example.com/1" to setOf(7L),
+        )
+        val favouriteOption = ListFilterOption.Favorite(
+            org.skepsun.kototoro.core.model.FavouriteCategory(
+                id = 7L,
+                title = "Reading",
+                sortKey = 0,
+                order = org.skepsun.kototoro.list.domain.ListSortOrder.NEWEST,
+                createdAt = java.time.Instant.EPOCH,
+                isTrackingEnabled = false,
+                isVisibleInLibrary = true,
+            ),
+        )
+
+        val derived = FeedDeriver.derive(
+            input(rows, filters = setOf(favouriteOption), mangaCategoryIdsByFeedKey = categoryIds),
+        )
+
+        assertEquals(listOf(1L), derived.visibleRows.map { it.logId })
+    }
+
+    @Test
     fun `showAll merges synthetic pending updates without logs`() {
         val logRow = row(logId = 1, ownerId = 10, createdAt = 500)
         val pending = update(ownerId = 20, lastChapterDate = 300)
