@@ -199,6 +199,8 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getTracksDao(): TracksDao
 
+    abstract fun getTrackerReadDao(): org.skepsun.kototoro.tracker.data.TrackerReadDao
+
     abstract fun getTrackLogsDao(): TrackLogsDao
 
     abstract fun getSuggestionDao(): SuggestionDao
