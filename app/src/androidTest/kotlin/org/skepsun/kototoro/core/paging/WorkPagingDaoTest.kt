@@ -2,7 +2,6 @@ package org.skepsun.kototoro.core.paging
 
 import android.os.SystemClock
 import android.util.Log
-import androidx.paging.PagingSource
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -10,7 +9,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -38,25 +36,10 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
-	fun favouritesListAndHistoryPageByUniqueEntity() = runTest {
+	fun favouritesPageByUniqueEntity() = runTest {
 		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
 		assertEquals(6_500, favourites.size)
 		assertEquals(6_500, favourites.map { it.entityId }.distinct().size)
-
-		val history = db.getWorkHistoryDao().pagingSource(
-			orderName = "LAST_READ",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-			applyTabFilter = false,
-			tabAllowedTypes = emptyList(),
-		)
-		val historyFirst = history.load(refreshParams()).requirePage()
-		val historySecond = history.load(appendParams(requireNotNull(historyFirst.nextKey)))
-			.requirePage()
-		assertUniqueEntities(historyFirst.data.map { it.history.entityId }, historySecond.data.map { it.history.entityId })
 	}
 
 	@Test
@@ -241,59 +224,6 @@ class WorkPagingDaoTest {
 		updatedAt = 1L,
 	)
 
-	@Test
-	fun historyFirstScreenBenchmarkFitsBudget() = runTest {
-		val history = db.getWorkHistoryDao().pagingSource(
-			orderName = "LAST_READ",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-			applyTabFilter = false,
-			tabAllowedTypes = emptyList(),
-		)
-		val t0 = SystemClock.elapsedRealtime()
-		val first = history.load(refreshParams()).requirePage()
-		val pageMs = SystemClock.elapsedRealtime() - t0
-		Log.d("LibraryPaging", "history-bench Refresh rawItems=" + first.data.size + " firstPageMs=" + pageMs)
-		assertEquals(64, first.data.size)
-		assertTrue("first history page took " + pageMs + "ms", pageMs < 5_000)
-	}
-
-	@Test
-	fun historyPageCarriesDisplayLocalMangaAndTrackingSummary() = runTest {
-		seedTracks()
-		val source = db.getWorkHistoryDao().pagingSource(
-			orderName = "LAST_READ",
-			applySpaceFilter = false,
-			allowedTypes = emptyList(),
-			classifiedTypes = emptyList(),
-			applySourceFilter = false,
-			allowedSources = emptyList(),
-			applyTabFilter = false,
-			tabAllowedTypes = emptyList(),
-		)
-		// LAST_READ desc starts at the most recent seed rows (entityId 3200 downward),
-		// which all carry history + tracks; the display manga must be embedded in the
-		// same query instead of re-resolved per page.
-		var page = source.load(refreshParams()).requirePage()
-		var nextKey = page.nextKey
-		var seededRow = page.data.firstOrNull { it.history.entityId <= 3_200L }
-		while (seededRow == null && nextKey != null) {
-			page = source.load(appendParams(nextKey)).requirePage()
-			seededRow = page.data.firstOrNull { it.history.entityId <= 3_200L }
-			nextKey = page.nextKey
-		}
-
-		val row = requireNotNull(seededRow) { "no seeded history row found in history pages" }
-		assertEquals(row.history.entityId + 10_000L, row.history.anchorMangaId)
-		assertEquals(row.history.anchorMangaId, row.displayManga?.id)
-		assertTrue((row.trackingNewChapters ?: 0) > 0)
-		assertNotNull(row.trackingLastChapterDate)
-		assertEquals("MANGA", row.displayManga?.contentType)
-	}
-
 	private fun seedTracks() {
 		val sql = db.openHelper.writableDatabase
 		sql.beginTransaction()
@@ -329,18 +259,6 @@ class WorkPagingDaoTest {
 		}
 	}
 
-	private fun refreshParams() = PagingSource.LoadParams.Refresh<Int>(
-		key = null,
-		loadSize = LargeLibraryPagingConfig.initialLoadSize,
-		placeholdersEnabled = false,
-	)
-
-	private fun appendParams(key: Int) = PagingSource.LoadParams.Append(
-		key = key,
-		loadSize = LargeLibraryPagingConfig.pageSize,
-		placeholdersEnabled = false,
-	)
-
 	private suspend fun favouriteList(
 		contentTypes: Set<String> = emptySet(),
 		publicationStates: Set<String> = emptySet(),
@@ -371,16 +289,6 @@ class WorkPagingDaoTest {
 	)
 
 	@Suppress("UNCHECKED_CAST")
-	private fun <T : Any> PagingSource.LoadResult<Int, T>.requirePage(): PagingSource.LoadResult.Page<Int, T> =
-		this as PagingSource.LoadResult.Page<Int, T>
-
-	private fun assertUniqueEntities(first: List<Long>, second: List<Long>) {
-		assertEquals(64, first.size)
-		assertEquals(64, second.size)
-		assertNotNull(first.lastOrNull())
-		assertEquals(128, (first + second).distinct().size)
-	}
-
 	private fun seedLargeLibrary() {
 		val sql = db.openHelper.writableDatabase
 		sql.beginTransaction()

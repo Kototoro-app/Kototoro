@@ -55,8 +55,6 @@ import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
-import org.skepsun.kototoro.history.ui.HistoryPreviewCache
-import org.skepsun.kototoro.history.ui.HistoryPreviewSnapshot
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.parsers.model.Content
@@ -100,7 +98,6 @@ class HomeViewModel @Inject constructor(
     private val workResolver: WorkResolver,
     private val workAggregateRepository: WorkAggregateRepository,
     @ApplicationContext private val appContext: Context,
-    private val historyPreviewCache: HistoryPreviewCache,
     private val historyQuickFilter: HistoryListQuickFilter,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), SpaceBindableViewModel {
@@ -332,7 +329,6 @@ class HomeViewModel @Inject constructor(
     private val contentDataFlow = combine(
         resumeStateFlow,
         recentHistoryFlow,
-        recentHistoryWithMetadataFlow,
         recentUpdatesFlow,
         recommendationsFlow,
         isHistoryNsfwDisabledFlow,
@@ -341,24 +337,17 @@ class HomeViewModel @Inject constructor(
     ) { values ->
         val resumeState = values[0] as HomeResumeState
         val recentHistory = values[1] as List<Content>
-        val recentHistoryWithMetadata = values[2] as List<ContentWithHistory>
-        val recentUpdates = values[3] as List<ContentTracking>
-        val recommendations = values[4] as List<Content>
-        val isHistoryNsfwDisabled = values[5] as Boolean
-        val isTrackerNsfwDisabled = values[6] as Boolean
+        val recentUpdates = values[2] as List<ContentTracking>
+        val recommendations = values[3] as List<Content>
+        val isHistoryNsfwDisabled = values[4] as Boolean
+        val isTrackerNsfwDisabled = values[5] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val globalTagBlacklist = GlobalTagBlacklist(values[7] as Set<String>)
+        val globalTagBlacklist = GlobalTagBlacklist(values[6] as Set<String>)
         val filteredHistory = if (isHistoryNsfwDisabled) recentHistory.filterNot { it.isNsfw() } else recentHistory
-        val filteredHistoryWithMetadata = if (isHistoryNsfwDisabled) {
-            recentHistoryWithMetadata.filterNot { it.manga.isNsfw() }
-        } else {
-            recentHistoryWithMetadata
-        }
         val filteredUpdates = if (isTrackerNsfwDisabled) recentUpdates.filterNot { it.manga.isNsfw() } else recentUpdates
         ContentDataSnapshot(
             resumeState = resumeState,
             history = globalTagBlacklist.filter(filteredHistory),
-            historyWithMetadata = filteredHistoryWithMetadata.filterNot { it.manga in globalTagBlacklist },
             updates = filteredUpdates.filterNot { it.manga in globalTagBlacklist },
             recommendations = globalTagBlacklist.filter(recommendations),
         )
@@ -376,7 +365,6 @@ class HomeViewModel @Inject constructor(
             initialValue = ContentDataSnapshot(
                 resumeState = HomeResumeState(),
                 history = emptyList(),
-                historyWithMetadata = emptyList(),
                 updates = emptyList(),
                 recommendations = emptyList(),
             ),
@@ -518,7 +506,6 @@ class HomeViewModel @Inject constructor(
                 .aggregateHomeRecommendationsByEntity(entityIdsByMangaId, preferredLocalIdsByEntity, workAggregatesByEntity, progressIndicatorMode)
                 .selectHomeRecommendationsByTab(selectedTab, selectedSourceTags, sourceGroupManager, preset)
 
-            Pair(
                 HomeSummaryState(
                     selectedTab = selectedTab,
                     recentHistoryCount = meta.recentHistoryCount,
@@ -535,31 +522,14 @@ class HomeViewModel @Inject constructor(
                     sourceBreakdown = meta.sourceBreakdown,
                     selectedSourceTags = selectedSourceTags,
                     isInitialized = true,
-                ),
-                HistoryPreviewSnapshot(
-                    items = contentData.historyWithMetadata.map { item ->
-                        item.copy(manga = item.manga.withOverride(displayContentOverrides[item.manga.id]))
-                    },
-                    listMode = settings.listMode,
-                    sortOrder = ListSortOrder.LAST_READ,
-                    isGroupingEnabled = settings.isHistoryGroupingEnabled && ListSortOrder.LAST_READ.isGroupingSupported(),
-                    isIncognito = settings.isIncognitoModeEnabled,
-                    groupTab = selectedTab.toBrowseGroupTab(),
-                    sourceTags = selectedSourceTags,
-                    preset = preset,
-                    filters = emptySet(),
-                    quickFilter = historyQuickFilter.previewFilterItem(emptySet()),
-                    isHistoryExcludeNsfw = settings.isHistoryExcludeNsfw,
-                ),
-            )
-        }.onSuccess { (summary, preview) ->
-            historyPreviewCache.update(preview)
+                )
+        }.onSuccess { summary ->
             Log.d(
                 TAG,
                 "summaryState success history=${summary.recentHistoryCount} updates=${summary.unreadUpdatesCount} recommendations=${summary.recommendationsCount} initialized=${summary.isInitialized} tookMs=${(System.nanoTime() - startNs) / 1_000_000}",
             )
             logHomeDiag("summaryState.emit", summary.homeDiagSignature())
-        }.map { it.first }.getOrElse { error ->
+        }.getOrElse { error ->
             Log.e(
                 TAG,
                 "summaryState failed tab=$selectedTab tags=${selectedSourceTags.size} presetId=${preset?.id ?: -1L} history=${contentData.history.size} updates=${contentData.updates.size} recommendations=${contentData.recommendations.size}",
@@ -794,7 +764,6 @@ private data class Quadruple<A, B, C, D>(
 private data class ContentDataSnapshot(
     val resumeState: HomeResumeState,
     val history: List<Content>,
-    val historyWithMetadata: List<ContentWithHistory>,
     val updates: List<ContentTracking>,
     val recommendations: List<Content>,
 )

@@ -2,7 +2,6 @@ package org.skepsun.kototoro.tracker.domain
 
 import androidx.annotation.VisibleForTesting
 import androidx.room.withTransaction
-import androidx.paging.PagingSource
 import dagger.Reusable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -25,7 +24,6 @@ import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.util.ext.mapItems
-import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.util.ext.toInstantOrNull
 import org.skepsun.kototoro.details.domain.ProgressUpdateUseCase
 import org.skepsun.kototoro.list.domain.ListFilterOption

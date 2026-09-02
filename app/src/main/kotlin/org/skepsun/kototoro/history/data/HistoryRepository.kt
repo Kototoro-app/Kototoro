@@ -179,41 +179,6 @@ class HistoryRepository @Inject constructor(
         return observeRecentContents(limit)
     }
 
-    fun observeAllWithHistory(
-        order: ListSortOrder,
-        filterOptions: Set<ListFilterOption>,
-        limit: Int,
-        spaceId: SpaceId? = null,
-    ): Flow<List<ContentWithHistory>> {
-        val requiresLocalMapping = ListFilterOption.Downloaded in filterOptions
-        val effectiveFilters = if (requiresLocalMapping) {
-            filterOptions - ListFilterOption.Downloaded
-        } else {
-            filterOptions
-        }
-        val flow = db.invalidationTracker.createFlow(
-            tables = arrayOf(
-                TABLE_WORK_HISTORY,
-                TABLE_WORK_FAVOURITES,
-                TABLE_ENTITY_GRAPH_BINDING,
-                TABLE_ENTITY_PREFERENCES,
-                TABLE_MANGA,
-                TABLE_TAGS,
-                TABLE_MANGA_TAGS,
-                "local_index",
-            ),
-            emitInitialState = true,
-        ).mapLatest {
-                buildObservedHistoryList(order, effectiveFilters, limit, spaceId)
-            }
-            .distinctUntilChanged()
-        return if (requiresLocalMapping) {
-            localObserver.observe(flow)
-        } else {
-            flow
-        }
-    }
-
     fun observeRecentWithHistory(
         limit: Int,
         tabTypes: Set<ContentType>? = null,
@@ -456,25 +421,6 @@ class HistoryRepository @Inject constructor(
             .toContentSources()
     }
 
-    suspend fun filterPreviewItems(
-        items: List<ContentWithHistory>,
-        filterOptions: Set<ListFilterOption>,
-    ): List<ContentWithHistory> {
-        if (filterOptions.isEmpty()) {
-            return items
-        }
-        val trackCache = HashMap<Long, TrackAggregate>()
-        val categoryIdsByEntityId = findFavouriteCategoryIdsByEntityId(items.mapNotNull { it.entityId })
-        return items.filter { item ->
-            matchesHistoryFilters(
-                item = item,
-                filterOptions = filterOptions,
-                favouriteCategoryIds = item.entityId?.let(categoryIdsByEntityId::get).orEmpty(),
-                trackCache = trackCache,
-            )
-        }
-    }
-
     fun shouldSkip(manga: Content): Boolean = settings.isIncognitoModeEnabled(manga.isNsfw())
 
     fun observeShouldSkip(manga: Content): Flow<Boolean> {
@@ -553,55 +499,6 @@ class HistoryRepository @Inject constructor(
         return findRecentContentsByWorkAnchor(offset = 0, limit = if (maxCount == Int.MAX_VALUE) null else maxCount)
     }
 
-    private suspend fun buildObservedHistoryList(
-        order: ListSortOrder,
-        filterOptions: Set<ListFilterOption>,
-        limit: Int,
-        spaceId: SpaceId? = null,
-    ): List<ContentWithHistory> {
-        val oversampleLimit = if (limit > 0) limit * 15 else 500
-        val trackCache = HashMap<Long, TrackAggregate>()
-        val baseList = workAggregateRepository.findHistoryAggregates(
-            limit = oversampleLimit,
-            spaceId = spaceId,
-        ).mapNotNull { aggregate ->
-            val content = aggregate.displayProjection ?: return@mapNotNull null
-            val history = aggregate.history ?: return@mapNotNull null
-            HistoryAggregateItem(
-                aggregate = aggregate,
-                content = ContentWithHistory(
-                    manga = content,
-                    history = history.toLegacyHistoryEntity().toContentHistory(),
-                    entityId = aggregate.identity.entityId,
-                    preferredLocalMangaId = aggregate.identity.preferredMangaId ?: content.id,
-                ),
-            )
-        }
-        val filtered = baseList
-            .filter { item ->
-                matchesHistoryFilters(
-                    item = item.content,
-                    filterOptions = filterOptions,
-                    favouriteCategoryIds = item.favouriteCategoryIds,
-                    trackCache = trackCache,
-                )
-            }
-        prewarmTrackAggregatesIfNeeded(
-            items = filtered.map { it.content },
-            order = order,
-            filterOptions = filterOptions,
-            trackCache = trackCache,
-        )
-        return filtered.sortedWith(
-            historyComparator(
-                order = order,
-                trackCache = trackCache,
-            ),
-        )
-            .map { it.content }
-            .let { if (limit > 0) it.take(limit) else it }
-    }
-
     suspend fun mapPagingAggregates(
         aggregates: List<WorkAggregate>,
         filterOptions: Set<ListFilterOption>,
@@ -672,47 +569,6 @@ class HistoryRepository @Inject constructor(
             .mapValues { (_, entries) -> entries.mapTo(LinkedHashSet()) { it.categoryId } }
     }
 
-    private fun historyComparator(
-        order: ListSortOrder,
-        trackCache: MutableMap<Long, TrackAggregate>,
-    ): Comparator<HistoryAggregateItem> {
-        val titleComparator = compareBy<HistoryAggregateItem> { it.content.manga.title }
-        return when (order) {
-            ListSortOrder.LAST_READ -> compareByDescending<HistoryAggregateItem> { it.content.history.updatedAt.toEpochMilli() }
-            ListSortOrder.LONG_AGO_READ -> compareBy<HistoryAggregateItem> { it.content.history.updatedAt.toEpochMilli() }
-            ListSortOrder.NEWEST -> compareByDescending<HistoryAggregateItem> { it.content.history.createdAt.toEpochMilli() }
-            ListSortOrder.OLDEST -> compareBy<HistoryAggregateItem> { it.content.history.createdAt.toEpochMilli() }
-            ListSortOrder.PROGRESS -> compareByDescending<HistoryAggregateItem> { it.content.history.percent }
-            ListSortOrder.UNREAD -> compareBy<HistoryAggregateItem> { it.content.history.percent }
-            ListSortOrder.ALPHABETIC -> titleComparator
-            ListSortOrder.ALPHABETIC_REVERSE -> titleComparator.reversed()
-            ListSortOrder.NEW_CHAPTERS -> compareByDescending<HistoryAggregateItem> {
-                getCachedTrackAggregate(it.content, trackCache).newChapters
-            }.thenByDescending { it.content.history.updatedAt.toEpochMilli() }
-            ListSortOrder.UPDATED -> compareByDescending<HistoryAggregateItem> {
-                getCachedTrackAggregate(it.content, trackCache).lastChapterDate
-            }.thenByDescending { it.content.history.updatedAt.toEpochMilli() }
-            else -> compareByDescending<HistoryAggregateItem> { it.content.history.updatedAt.toEpochMilli() }
-        }
-    }
-
-    private suspend fun prewarmTrackAggregatesIfNeeded(
-        items: List<ContentWithHistory>,
-        order: ListSortOrder,
-        filterOptions: Set<ListFilterOption>,
-        trackCache: MutableMap<Long, TrackAggregate>,
-    ) {
-        val needsTrackData = order == ListSortOrder.NEW_CHAPTERS ||
-            order == ListSortOrder.UPDATED ||
-            ListFilterOption.Macro.NEW_CHAPTERS in filterOptions
-        if (!needsTrackData) {
-            return
-        }
-        items.forEach { item ->
-            getTrackAggregate(item, trackCache)
-        }
-    }
-
     private suspend fun getTrackAggregate(
         item: ContentWithHistory,
         cache: MutableMap<Long, TrackAggregate>,
@@ -721,17 +577,6 @@ class HistoryRepository @Inject constructor(
         return cache.getOrPut(ownerRef.cacheKey) {
             runBlockingTrackAggregateLookup(ownerRef)
         }
-    }
-
-    private fun getCachedTrackAggregate(
-        item: ContentWithHistory,
-        cache: MutableMap<Long, TrackAggregate>,
-    ): TrackAggregate {
-        val cacheKey = item.entityId ?: -item.manga.id
-        return cache[cacheKey] ?: TrackAggregate(
-            newChapters = 0,
-            lastChapterDate = 0L,
-        )
     }
 
     private suspend fun runBlockingTrackAggregateLookup(ownerRef: HistoryOwnerRef): TrackAggregate {

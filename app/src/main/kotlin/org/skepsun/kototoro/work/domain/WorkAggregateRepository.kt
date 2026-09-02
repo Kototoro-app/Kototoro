@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.work.domain
 
-import androidx.paging.PagingSource
 import dagger.Reusable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -19,7 +18,6 @@ import org.skepsun.kototoro.core.db.TABLE_WORK_FAVOURITES
 import org.skepsun.kototoro.core.db.TABLE_WORK_HISTORY
 import org.skepsun.kototoro.core.db.TABLE_WORK_STATS
 import org.skepsun.kototoro.core.db.entity.toContent
-import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.LocalMangaSource
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
@@ -28,7 +26,6 @@ import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.favourites.data.toFavouriteCategory
-import org.skepsun.kototoro.history.data.HistoryLibraryPagingRow
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -85,141 +82,6 @@ class WorkAggregateRepository @Inject constructor(
                 )
             }
         }.distinctUntilChanged()
-    }
-
-    fun createHistoryPagingSource(
-        order: ListSortOrder,
-        spaceId: SpaceId?,
-        groupTab: BrowseGroupTab? = null,
-    ): PagingSource<Int, WorkAggregate> {
-        val allowedSources = spaceId?.let(spaceContentPolicy::allowedSourceNames)
-        // When not bound to a space, push the selected type chip down into SQL so
-        // switching to Novel/Video doesn't page through the whole history table.
-        val tabAllowedTypes = if (spaceId == null) {
-            groupTab?.allowedContentTypes()?.map(ContentType::name)
-        } else {
-            null
-        }
-        val delegate = db.getWorkHistoryDao().pagingSource(
-            orderName = order.name,
-            applySpaceFilter = spaceId != null,
-            allowedTypes = spaceId?.let(::allowedTypeNames).orEmpty(),
-            classifiedTypes = classifiedTypeNames,
-            applySourceFilter = allowedSources != null,
-            allowedSources = allowedSources.orEmpty(),
-            applyTabFilter = tabAllowedTypes != null,
-            tabAllowedTypes = tabAllowedTypes.orEmpty(),
-        )
-        return BatchMappingPagingSource(delegate, diagnosticLabel = "history-aggregate") { rows ->
-            buildHistoryPagingAggregates(rows, spaceId)
-        }
-    }
-
-    private suspend fun buildHistoryPagingAggregates(
-        rows: List<HistoryLibraryPagingRow>,
-        spaceId: SpaceId?,
-    ): List<WorkAggregate> = coroutineScope {
-        if (rows.isEmpty()) {
-            return@coroutineScope emptyList()
-        }
-        val entityIds = rows.map { row -> row.history.entityId }.distinct()
-        val bindingsDeferred = async {
-            db.getEntityGraphDao().findActiveLocalBindingsByEntities(entityIds)
-                .groupBy { binding -> binding.entityId }
-        }
-        // Categories feed HistoryRepository.favouriteCategoryIds, which the history
-        // page's FAVORITE quick filter still needs.
-        val categoriesDeferred = async { findCategoriesByEntityId(entityIds) }
-        // The persisted entity content type is authoritative for the type chips
-        // (Novel/Video), so it is loaded in one batch like resolveProjectionSet did.
-        val contentTypesByEntityIdDeferred = async {
-            db.getEntityGraphDao().findEntitiesByIds(entityIds)
-                .associate { entity -> entity.id to entity.contentType?.let(::parseContentType) }
-        }
-        val bindingsByEntityId = bindingsDeferred.await()
-        val projectionIds = buildSet {
-            rows.forEach { row ->
-                row.history.anchorMangaId.let(::add)
-                row.preferredLocalMangaId?.let(::add)
-            }
-            bindingsByEntityId.values.flatten().mapNotNullTo(this) { binding ->
-                binding.externalId.toLongOrNull()
-            }
-        }
-        // History supports the detailed list (tags rendered), so always load tags for
-        // the display projections in one batch instead of a per-page resolveProjectionSet.
-        val projectionRows = db.getMangaDao().findWithTagsByIds(projectionIds)
-        val projectionsById = projectionRows.associate { row -> row.manga.id to row.toContent() }
-        val contentTypesById = projectionRows.associate { row ->
-            row.manga.id to row.manga.contentType?.let(::parseContentType)
-        }
-        val categoriesByEntityId = categoriesDeferred.await()
-        val contentTypesByEntityId = contentTypesByEntityIdDeferred.await()
-        val allowedTypes = spaceId?.let(spaceContentPolicy::allowedTypes)
-
-        rows.mapNotNull { row ->
-            val history = row.history
-            val localMangaIds = buildSet {
-                history.anchorMangaId.let(::add)
-                bindingsByEntityId[history.entityId].orEmpty().mapNotNullTo(this) { binding ->
-                    binding.externalId.toLongOrNull()
-                }
-            }
-            val preferredMangaId = row.preferredLocalMangaId?.takeIf { it in localMangaIds }
-                ?: localMangaIds.firstOrNull()
-            val identity = WorkIdentity(
-                entityId = history.entityId,
-                requestedMangaId = row.displayManga?.id ?: history.anchorMangaId,
-                preferredMangaId = preferredMangaId,
-                localMangaIds = localMangaIds,
-                migrationState = WorkMigrationState.VALID,
-            )
-            val displayProjection = resolveDisplayProjection(
-                identity = identity,
-                anchorId = history.anchorMangaId,
-                cachedProjectionsById = projectionsById,
-                persistedContentTypesById = contentTypesById,
-                fallbackContentType = contentTypesByEntityId[history.entityId],
-                allowedContentTypes = allowedTypes,
-            ) ?: return@mapNotNull null
-            val projections = buildList {
-                preferredMangaId?.let(::add)
-                history.anchorMangaId.let(::add)
-                addAll(localMangaIds)
-            }.distinct()
-                .filter { id -> allowedTypes == null || contentTypesById[id] in allowedTypes }
-                .mapNotNull(projectionsById::get)
-                .distinctBy { content ->
-                    ProjectionIdentityKeys.contentCompactKey(
-                        source = content.source.name,
-                        id = content.id,
-                        url = content.url,
-                        publicUrl = content.publicUrl,
-                    )
-                }
-            WorkAggregate(
-                identity = identity,
-                displayProjection = displayProjection,
-                projections = projections,
-                categories = categoriesByEntityId[history.entityId].orEmpty(),
-                history = history,
-                tracking = row.toTrackingSummary(),
-                // Anchor manga type first, entity type second: the persisted content
-                // type is authoritative for the Novel/Video chips.
-                contentType = contentTypesById[history.anchorMangaId]
-                    ?: contentTypesByEntityId[history.entityId],
-            )
-        }
-    }
-
-    private fun HistoryLibraryPagingRow.toTrackingSummary(): WorkTrackingSummary? {
-        return WorkTrackingSummary(
-            anchorMangaId = trackingAnchorMangaId ?: return null,
-            lastChapterId = trackingLastChapterId ?: return null,
-            newChapters = trackingNewChapters ?: 0,
-            lastCheckTime = trackingLastCheckTime ?: 0L,
-            lastChapterDate = trackingLastChapterDate ?: 0L,
-        )
     }
 
     suspend fun findFavouriteAggregates(

@@ -1425,13 +1425,10 @@ internal fun HistoryTopLevelRouteContent(
             )
         }.getOrNull()
     }
-    val historyPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
-    // The paging stream already carries headers + content rows. Keeping the snapshot as a
-    // separate leading `items` list would render every row twice (leading + paging) inside
-    // KototoroContentListScreen and crash on duplicate "header:"... keys. Keep it only for
-    // selection bookkeeping (SELECT_ALL / selectedModels), and feed an empty leading list
-    // to the screen so content comes exclusively from the paging stream.
-    val historySnapshotItems = historyPagingItems.itemSnapshotList.items
+    // The history page renders statically from the snapshot-derived content
+    // (Phase H4); selection bookkeeping follows that list.
+    val historyContent by viewModel.content.collectAsStateWithLifecycle()
+    val historySnapshotItems = historyContent
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val listMode by viewModel.listMode.collectAsStateWithLifecycle()
     val isStatsEnabled by viewModel.isStatsEnabled.collectAsStateWithLifecycle()
@@ -1585,8 +1582,8 @@ internal fun HistoryTopLevelRouteContent(
     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
         org.skepsun.kototoro.history.ui.compose.HistoryScreen(
             contentPadding = contentPadding,
-            items = emptyList(),
-            pagingItems = historyPagingItems,
+            items = historySnapshotItems,
+            pagingItems = null,
             headerQuickFilter = headerQuickFilter,
             listMode = listMode,
             isRefreshing = false,
