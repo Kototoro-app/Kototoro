@@ -4,9 +4,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import java.util.Locale
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.home.ui.HOME_HERO_HISTORY_LIMIT
 import org.skepsun.kototoro.home.ui.HOME_HERO_RECOMMENDATIONS_LIMIT
 import org.skepsun.kototoro.home.ui.HOME_HERO_TOTAL_LIMIT
@@ -34,12 +32,10 @@ internal data class HomeHeroEntry(
     val newChapters: Int = 0,
 )
 
-internal val HomeHeroEntry.sharedElementKey: String
-    get() = contentCoverSharedKey(
-        sourceName = content.source.name,
-        url = content.coverUrl.orEmpty(),
-        instanceKey = "home_hero_${kind.name.lowercase(Locale.ROOT)}_${content.id}",
-    )
+// The hero's shared-element key is derived once, in HomeHeroCard, keyed by
+// `groupKey`. An earlier `content.id`-based twin of it used to live here: a key
+// that never matches its registration silently kills the hero (see c1002dad6),
+// so there is deliberately no second derivation.
 
 @Composable
 internal fun HomeHeroEntry.supportingText(): String? = when (kind) {

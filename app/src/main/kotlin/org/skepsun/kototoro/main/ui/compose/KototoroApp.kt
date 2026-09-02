@@ -1296,9 +1296,13 @@ fun KototoroApp(
                         )
                     }
                     CompositionLocalProvider(
+                        // `…InProgress` stays false on purpose: it gates the details-cover
+                        // freeze in DetailsCoverFrame, parked back since 1f70d606a. The
+                        // phase itself is delivered so the home hero carousel can hold the
+                        // flying card's decorative transform still for the hero window.
                         LocalHeroTransitionInProgress provides false,
                         LocalHeroReturnTransitionInProgress provides false,
-                        LocalHeroTransitionPhase provides HeroTransitionPhase.Idle,
+                        LocalHeroTransitionPhase provides heroTransitionPhase,
                         LocalSharedTransitionScope provides if (effectiveSharedElementTransitionsEnabled) {
                             this@SharedTransitionLayout
                         } else {

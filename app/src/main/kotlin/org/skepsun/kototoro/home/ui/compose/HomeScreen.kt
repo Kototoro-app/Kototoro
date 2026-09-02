@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -24,7 +25,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -309,13 +310,19 @@ fun HomeScreen(
                 autoAdvance = autoAdvanceHero,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .graphicsLayer {
+                    // A layout offset, not a draw-phase graphicsLayer: the cover's
+                    // shared-element rect is measured from this subtree's layout
+                    // coordinates, and a layer-only translation never re-places the
+                    // node — the flight would then aim at where the hero sat before the
+                    // list was scrolled (too low) and only snap to the real rect later.
+                    // Modifier.offset re-places the node per scroll frame.
+                    .offset {
                         val scrollOffset = if (listState.firstVisibleItemIndex == 0) {
-                            listState.firstVisibleItemScrollOffset.toFloat()
+                            listState.firstVisibleItemScrollOffset
                         } else {
-                            heroPx.toFloat()
+                            heroPx
                         }
-                        translationY = -scrollOffset.coerceIn(0f, heroPx.toFloat())
+                        IntOffset(x = 0, y = -scrollOffset.coerceIn(0, heroPx))
                     }
                     .onGloballyPositioned { coordinates ->
                         val newHeight = coordinates.size.height

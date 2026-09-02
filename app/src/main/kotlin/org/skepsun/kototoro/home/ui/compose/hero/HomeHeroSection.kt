@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,10 +54,13 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import java.util.Locale
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 import androidx.core.text.HtmlCompat
 import org.skepsun.kototoro.core.model.getContentType
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
+import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
+import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
@@ -99,6 +103,14 @@ internal fun HomeHeroSection(
         derivedStateOf { pagerState.currentPage.coerceIn(0, entries.lastIndex) }
     }
     val mixedSeed = rememberSaveable(entries.map(HomeHeroEntry::groupKey)) { Random.nextInt() }
+    val navigationScope = rememberCoroutineScope()
+    // The shared-element flight measures the cover through this pager item's
+    // graphicsLayer on the way out, and lands on the rect the card settles into.
+    // Anything still moving when that rect is captured points the flight at a rect
+    // the landing never reaches — the cover lands low and small, then snaps. So the
+    // card that owns the flight is held at rest for the whole hero window, and a
+    // still-glideing pager is landed before the route changes.
+    val heroPhase = LocalHeroTransitionPhase.current
 
     HeroAutoAdvanceEffect(
         pagerState = pagerState,
@@ -163,7 +175,26 @@ internal fun HomeHeroSection(
                     } else {
                         null
                     },
-                    onClick = onClick,
+                    onClick = { content, coverBounds, sharedElementKey ->
+                        // Land the pager before the route changes: the flight's start rect is
+                        // measured from this card the moment Home leaves the composition, so a
+                        // card that is still gliding would be recorded mid-glide and the return
+                        // flight would snap to the settled rect later. `finally` so a cancelled
+                        // scope can never swallow the tap.
+                        val gliding = page == pagerState.currentPage &&
+                            (pagerState.isScrollInProgress || pagerState.currentPageOffsetFraction != 0f)
+                        if (gliding) {
+                            navigationScope.launch {
+                                try {
+                                    pagerState.scrollToPage(page)
+                                } finally {
+                                    onClick(content, coverBounds, sharedElementKey)
+                                }
+                            }
+                        } else {
+                            onClick(content, coverBounds, sharedElementKey)
+                        }
+                    },
                     modifier = Modifier
                         .zIndex(if (page == selectedIndex) 1f else 0f)
                         .graphicsLayer {
@@ -182,9 +213,14 @@ internal fun HomeHeroSection(
                                 signedOffset > 0.02f -> 1f
                                 else -> 0.5f
                             }
-                            scaleX = 0.9f + (0.1f * focus)
-                            scaleY = 0.9f + (0.1f * focus)
-                            alpha = 0.64f + (0.36f * focus)
+                            // Scaling about TransformOrigin(_, 0.5f) moves the measured cover
+                            // DOWN by (1 - scale) * cardHeight / 2, so a card that is not at
+                            // rest hands the flight a rect that is both low and small.
+                            val atRest = page == selectedIndex && heroPhase != HeroTransitionPhase.Idle
+                            val visualFocus = if (atRest) 1f else focus
+                            scaleX = 0.9f + (0.1f * visualFocus)
+                            scaleY = 0.9f + (0.1f * visualFocus)
+                            alpha = 0.64f + (0.36f * visualFocus)
                             transformOrigin = TransformOrigin(hOrigin, 0.5f)
                         },
                 )
