@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
-import org.skepsun.kototoro.browser.AdListUpdateService
+import org.skepsun.kototoro.browser.AdListUpdateWorker
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
@@ -53,7 +53,7 @@ import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.extensions.install.ExtensionInstallService
-import org.skepsun.kototoro.local.ui.LocalIndexUpdateService
+import org.skepsun.kototoro.local.ui.LocalIndexUpdateWorker
 import org.skepsun.kototoro.local.ui.LocalStorageCleanupWorker
 import org.skepsun.kototoro.main.ui.compose.ComposeAppNavBarDelegator
 import org.skepsun.kototoro.main.ui.compose.KototoroApp
@@ -790,15 +790,20 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
         lifecycleScope.launch(Dispatchers.Main) {
             withContext(Dispatchers.Default) {
                 LocalStorageCleanupWorker.enqueue(applicationContext)
+                // Local index / ad list refresh moved off direct startService: a service
+                // started from the ON_RESUME dispatch can be rejected with
+                // BackgroundServiceStartNotAllowedException when the uid record still
+                // carries a stale background procstate (process restart after idle),
+                // which crashed startup. WorkManager has no such restriction.
+                LocalIndexUpdateWorker.enqueue(applicationContext)
+                if (settings.isAdBlockEnabled) {
+                    AdListUpdateWorker.enqueue(applicationContext)
+                }
             }
             lifecycle.withResumed {
                 ContentPrefetchService.prefetchLast(this@MainActivity)
                 requestNotificationsPermission()
-                startService(Intent(this@MainActivity, LocalIndexUpdateService::class.java))
                 backupStartupCoordinator.startOnFirstLaunch(lifecycleScope)
-                if (settings.isAdBlockEnabled) {
-                    startService(Intent(this@MainActivity, AdListUpdateService::class.java))
-                }
             }
         }
     } catch (e: IllegalStateException) {

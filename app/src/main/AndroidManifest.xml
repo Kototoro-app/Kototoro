@@ -465,9 +465,6 @@
 			android:foregroundServiceType="dataSync"
 			android:label="@string/fixing_manga" />
 		<service
-			android:name="org.skepsun.kototoro.local.ui.LocalIndexUpdateService"
-			android:label="@string/local_manga_processing" />
-		<service
 			android:name="org.skepsun.kototoro.backups.ui.backup.BackupService"
 			android:foregroundServiceType="dataSync"
 			android:label="@string/creating_backup" />
@@ -537,9 +534,6 @@
 			android:name="org.skepsun.kototoro.details.service.ContentPrefetchService"
 			android:exported="false"
 			android:label="@string/prefetch_content" />
-		<service
-			android:name="org.skepsun.kototoro.browser.AdListUpdateService"
-			android:exported="false" />
 		<provider
 			android:name="org.skepsun.kototoro.search.ui.ContentSuggestionsProvider"
 			android:authorities="${applicationId}.ContentSuggestionsProvider"
