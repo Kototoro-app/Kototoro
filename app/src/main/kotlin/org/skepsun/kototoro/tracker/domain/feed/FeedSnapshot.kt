@@ -49,6 +49,7 @@ data class FeedCardRow(
     val coverUrl: String?,
     val author: String?,
     val sourceName: String,
+    val displayUrl: String,
     val contentType: ContentType?,
     val publicationState: ContentState?,
     val isNsfw: Boolean,

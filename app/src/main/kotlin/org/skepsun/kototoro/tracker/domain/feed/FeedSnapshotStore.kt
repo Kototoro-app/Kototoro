@@ -113,6 +113,7 @@ class FeedSnapshotStore @Inject constructor(
                 coverUrl = log.displayCoverUrl?.takeIf { it.isNotBlank() },
                 author = log.displayAuthor,
                 sourceName = log.displaySource.orEmpty(),
+                displayUrl = log.displayUrl.orEmpty(),
                 contentType = log.displayContentType?.let(::parseContentType),
                 publicationState = log.displayState?.let(::parseContentState),
                 isNsfw = log.displayNsfw == true,
