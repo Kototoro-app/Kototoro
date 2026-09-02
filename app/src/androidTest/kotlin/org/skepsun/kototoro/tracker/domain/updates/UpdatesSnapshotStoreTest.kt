@@ -193,6 +193,23 @@ class UpdatesSnapshotStoreTest {
     }
 
     @Test
+    fun favouriteCategoryFacetFollowsTheEntity() = runTest {
+        FavouriteLibrarySeed.insertCategory(sql, 7, "Reading")
+        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
+        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
+        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
+        FavouriteLibrarySeed.insertFavourite(sql, 10, 7, anchorMangaId = 101)
+        FavouriteLibrarySeed.insertManga(sql, 201, "No favourite")
+        insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0, ownerId = 100)
+        insertTrack(mangaId = 201, entityId = null, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0, ownerId = 201)
+
+        val groups = store.observe().first().groups
+
+        assertEquals(setOf(7L), groups.first { it.entityId == 10L }.categoryIds)
+        assertEquals(emptySet<Long>(), groups.first { it.mangaIds == listOf(201L) }.categoryIds)
+    }
+
+    @Test
     fun emissionReflectsDatabaseChanges() = runTest {
         FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
         FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")

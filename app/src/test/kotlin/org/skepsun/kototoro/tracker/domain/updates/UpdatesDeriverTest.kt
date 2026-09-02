@@ -26,8 +26,8 @@ class UpdatesDeriverTest {
         lastChapterDate: Long? = uiId * 10L,
         totalNewChapters: Int = 2,
         isNsfw: Boolean = false,
-        tagIds: Set<Long> = emptySet(),
-        tagTitles: List<String> = emptyList(),
+        tags: List<UpdateCardTag> = emptyList(),
+        categoryIds: Set<Long> = emptySet(),
         sourceGroupFlags: Int = 1,
         sourceOriginFlags: Int = 1,
     ) = UpdateGroupRow(
@@ -38,6 +38,7 @@ class UpdatesDeriverTest {
         totalNewChapters = totalNewChapters,
         lastChapterDate = lastChapterDate,
         isPinned = false,
+        categoryIds = categoryIds,
         displayMangaId = uiId + 1000L,
         title = "Group $uiId",
         altTitle = null,
@@ -48,8 +49,7 @@ class UpdatesDeriverTest {
         publicationState = null,
         isNsfw = isNsfw,
         rating = -1f,
-        tagIds = tagIds,
-        tagTitles = tagTitles,
+        tags = tags,
         overrideTitle = null,
         overrideCoverUrl = null,
         metadataTrackingService = null,
@@ -143,8 +143,8 @@ class UpdatesDeriverTest {
     @Test
     fun `tag blacklist hides groups with blacklisted tags`() {
         val groups = listOf(
-            group(uiId = 1, tagTitles = listOf("Drama")),
-            group(uiId = 2, tagTitles = listOf("Comedy")),
+            group(uiId = 1, tags = listOf(UpdateCardTag(dramaTagId, "Drama"))),
+            group(uiId = 2, tags = listOf(UpdateCardTag(999L, "Comedy"))),
         )
 
         val derived = UpdatesDeriver.derive(input(groups, tagBlacklist = GlobalTagBlacklist(listOf("Drama"))))
@@ -155,14 +155,38 @@ class UpdatesDeriverTest {
     @Test
     fun `tag quick filter matches on tag identity`() {
         val groups = listOf(
-            group(uiId = 1, tagIds = setOf(dramaTagId)),
-            group(uiId = 2, tagIds = setOf(999L)),
+            group(uiId = 1, tags = listOf(UpdateCardTag(dramaTagId, "Drama"))),
+            group(uiId = 2, tags = listOf(UpdateCardTag(999L, "Comedy"))),
         )
         val tagOption = ListFilterOption.Tag(
             ContentTag(title = "Drama", key = "drama", source = TestSource),
         )
 
         val derived = UpdatesDeriver.derive(input(groups, filters = setOf(tagOption)))
+
+        assertEquals(listOf(1L), derived.visibleGroups.map { it.uiId })
+    }
+
+    @Test
+    fun `favourite quick filter matches groups in that category`() {
+        val groups = listOf(
+            group(uiId = 1, categoryIds = setOf(7L)),
+            group(uiId = 2, categoryIds = setOf(8L)),
+            group(uiId = 3, categoryIds = emptySet()),
+        )
+        val favouriteOption = ListFilterOption.Favorite(
+            org.skepsun.kototoro.core.model.FavouriteCategory(
+                id = 7L,
+                title = "Reading",
+                sortKey = 0,
+                order = org.skepsun.kototoro.list.domain.ListSortOrder.NEWEST,
+                createdAt = java.time.Instant.EPOCH,
+                isTrackingEnabled = false,
+                isVisibleInLibrary = true,
+            ),
+        )
+
+        val derived = UpdatesDeriver.derive(input(groups, filters = setOf(favouriteOption)))
 
         assertEquals(listOf(1L), derived.visibleGroups.map { it.uiId })
     }

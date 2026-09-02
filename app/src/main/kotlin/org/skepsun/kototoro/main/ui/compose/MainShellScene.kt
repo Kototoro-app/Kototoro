@@ -1265,8 +1265,10 @@ internal fun UpdatedTopLevelRouteContent(
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.updates.UpdatesViewModel>("updated")
     val headerQuickFilter by viewModel.headerQuickFilter.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val updatedPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
-    val updatedSnapshotItems = updatedPagingItems.itemSnapshotList.items
+    // The updates page renders statically from the snapshot-derived content
+    // (Phase U4); selection bookkeeping follows that list.
+    val updatedContent by viewModel.content.collectAsStateWithLifecycle()
+    val updatedSnapshotItems = updatedContent
     val updatedSelectedItemIdsState = remember { mutableStateOf(emptySet<Long>()) }
     var updatedSelectedItemIds by updatedSelectedItemIdsState
     val updatedSelectedModels = remember(updatedSnapshotItems, updatedSelectedItemIds) {

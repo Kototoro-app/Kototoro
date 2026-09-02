@@ -83,6 +83,16 @@ data class UpdateTrackRow(
     @ColumnInfo(name = "display_rating") val displayRating: Float?,
 )
 
+/**
+ * Favourite-category facet per tracked entity: which categories (if any) each
+ * entity with pending updates belongs to — the Favourite(category) quick
+ * filter's key for the updates page.
+ */
+data class TrackedEntityCategoryFacetRow(
+    @ColumnInfo(name = "entity_id") val entityId: Long,
+    @ColumnInfo(name = "category_id") val categoryId: Long,
+)
+
 /** Binding facet: an actively bound local projection of a tracked entity. */
 data class TrackedBindingFacetRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,

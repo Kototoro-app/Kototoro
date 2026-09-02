@@ -38,23 +38,6 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
-	fun updatedContentPagesHaveStableUniqueEntityOrder() = runTest {
-		seedTracks()
-		val source = db.getTracksDao().pagingUpdatedContent(emptySet())
-		val first = source.load(refreshParams()).requirePage()
-		val second = source.load(appendParams(requireNotNull(first.nextKey)))
-			.requirePage()
-		assertEquals(64, first.data.size)
-		assertEquals(64, second.data.size)
-		val entities = (first.data + second.data).map { requireNotNull(it.entityId) }
-		assertEquals(128, entities.distinct().size)
-		// pinned is 0 for every seeded favourite, so the stable sort falls back to
-		// last_chapter_date DESC and must stay monotonic across page boundaries.
-		val dates = (first.data + second.data).map { it.lastChapterDate }
-		assertEquals(dates.sortedDescending(), dates)
-	}
-
-	@Test
 	fun favouritesListAndHistoryPageByUniqueEntity() = runTest {
 		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
 		assertEquals(6_500, favourites.size)

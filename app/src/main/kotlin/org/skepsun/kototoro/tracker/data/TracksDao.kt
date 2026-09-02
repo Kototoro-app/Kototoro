@@ -89,15 +89,6 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
             .build(),
     )
 
-    fun pagingUpdatedContent(filterOptions: Set<ListFilterOption>): PagingSource<Int, TrackEntity> =
-        pagingContentImpl(
-            MangaQueryBuilder("tracks", this)
-                .where("chapters_new > 0")
-                .filters(filterOptions)
-                .orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC, tracks.entity_id ASC, tracks.manga_id ASC")
-                .build(),
-        )
-
     @Query("DELETE FROM tracks")
     abstract suspend fun clear()
 
@@ -238,9 +229,6 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
 
     @RawQuery(observedEntities = [TrackEntity::class])
     protected abstract fun observeContentImpl(query: SupportSQLiteQuery): Flow<List<TrackEntity>>
-
-    @RawQuery(observedEntities = [TrackEntity::class])
-    protected abstract fun pagingContentImpl(query: SupportSQLiteQuery): PagingSource<Int, TrackEntity>
 
     override fun getCondition(option: ListFilterOption): String? = when (option) {
         ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("tracks.manga_id")

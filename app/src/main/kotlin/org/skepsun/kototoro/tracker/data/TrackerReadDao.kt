@@ -213,6 +213,21 @@ abstract class TrackerReadDao {
     )
     abstract fun observeTrackedTagFacets(): Flow<List<TrackedTagFacetRow>>
 
+    /** Favourite-category ids of every tracked entity with pending updates. */
+    @Query(
+        """
+        SELECT DISTINCT
+            t.entity_id AS entity_id,
+            wf.category_id AS category_id
+        FROM tracks t
+        INNER JOIN work_favourites wf ON wf.entity_id = t.entity_id
+            AND wf.anchor_manga_id IS NOT NULL
+            AND wf.deleted_at = 0
+        WHERE t.chapters_new > 0
+        """,
+    )
+    abstract fun observeTrackedEntityCategoryFacets(): Flow<List<TrackedEntityCategoryFacetRow>>
+
     /** Manual overrides of tracked manga (title/cover of the feed/updates card). */
     @Query(
         """

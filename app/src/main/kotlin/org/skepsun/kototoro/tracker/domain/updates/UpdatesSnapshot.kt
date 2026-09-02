@@ -49,6 +49,8 @@ data class UpdateGroupRow(
     val totalNewChapters: Int,
     val lastChapterDate: Long?,
     val isPinned: Boolean,
+    /** Favourite-category ids this entity belongs to (the Favourite chip key). */
+    val categoryIds: Set<Long>,
     // ---- representative (display) fields
     val displayMangaId: Long?,
     val title: String,
@@ -60,8 +62,7 @@ data class UpdateGroupRow(
     val publicationState: ContentState?,
     val isNsfw: Boolean,
     val rating: Float,
-    val tagIds: Set<Long>,
-    val tagTitles: List<String>,
+    val tags: List<UpdateCardTag>,
     val overrideTitle: String?,
     val overrideCoverUrl: String?,
     val metadataTrackingService: Int?,
@@ -79,6 +80,12 @@ data class UpdateGroupRow(
 
     fun originGroup(origin: OriginGroup): Boolean = sourceOriginFlags and (1 shl origin.ordinal) != 0
 }
+
+/** One display tag of the representative projection: identity + title. */
+data class UpdateCardTag(
+    val tagId: Long,
+    val title: String,
+)
 
 /** One raw track row as assembled before grouping (store-internal). */
 internal data class TrackRowSeed(
@@ -101,8 +108,7 @@ internal data class TrackRowSeed(
     val publicationState: ContentState?,
     val isNsfw: Boolean,
     val rating: Float,
-    val tagIds: Set<Long>,
-    val tagTitles: List<String>,
+    val tags: List<UpdateCardTag>,
     val overrideTitle: String?,
     val overrideCoverUrl: String?,
     val metadataTrackingService: Int?,

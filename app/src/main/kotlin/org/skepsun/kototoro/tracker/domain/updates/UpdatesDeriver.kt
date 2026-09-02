@@ -59,16 +59,19 @@ object UpdatesDeriver {
             return false
         }
         if (input.excludedNsfw && isNsfw) return false
-        if (tagTitles.isNotEmpty() && tagTitles.any(input.tagBlacklist::containsTagTitle)) return false
+        if (tags.isNotEmpty() && tags.any { input.tagBlacklist.containsTagTitle(it.title) }) return false
         return matchesQuickFilters(input.filters)
     }
+
+    private fun UpdateGroupRow.tagIds(): Set<Long> = tags.mapTo(LinkedHashSet()) { it.tagId }
 
     private fun UpdateGroupRow.matchesQuickFilters(filters: Set<ListFilterOption>): Boolean {
         if (filters.isEmpty()) return true
         return filters.all { option ->
             when (option) {
                 ListFilterOption.Macro.NSFW -> isNsfw
-                is ListFilterOption.Tag -> option.tagId in tagIds
+                is ListFilterOption.Tag -> option.tagId in tagIds()
+                is ListFilterOption.Favorite -> option.category.id in categoryIds
                 else -> true
             }
         }

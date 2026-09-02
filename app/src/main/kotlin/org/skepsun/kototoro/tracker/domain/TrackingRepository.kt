@@ -143,16 +143,6 @@ class TrackingRepository @Inject constructor(
             .onStart { gcIfNeeded() }
     }
 
-    fun createUpdatedPagingSource(filterOptions: Set<ListFilterOption>): PagingSource<Int, ContentTracking> {
-        return BatchMappingPagingSource(
-            delegate = db.getTracksDao().pagingUpdatedContent(filterOptions),
-            diagnosticLabel = "updates-aggregate",
-        ) { tracks ->
-            workAggregateRepository.buildTrackingAggregates(tracks)
-                .mapNotNull { aggregate -> aggregate.toContentTracking() }
-        }
-    }
-
     suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
         return workAggregateRepository
             .buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))

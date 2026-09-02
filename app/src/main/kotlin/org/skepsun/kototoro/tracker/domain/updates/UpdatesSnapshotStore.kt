@@ -11,7 +11,7 @@ import org.skepsun.kototoro.core.jsonsource.OriginGroup
 import org.skepsun.kototoro.core.jsonsource.SourceGroupManager
 import org.skepsun.kototoro.parsers.model.ContentState
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.tracker.data.TrackedChapterCountRow
+import org.skepsun.kototoro.tracker.data.TrackedEntityCategoryFacetRow
 import org.skepsun.kototoro.tracker.data.TrackedOverrideRow
 import org.skepsun.kototoro.tracker.data.TrackedTagFacetRow
 import org.skepsun.kototoro.tracker.data.UpdateTrackRow
@@ -41,14 +41,14 @@ class UpdatesSnapshotStore @Inject constructor(
             dao.observeUpdateTrackRows().distinctUntilChanged(),
             dao.observeTrackedTagFacets().distinctUntilChanged(),
             dao.observeTrackedOverrides().distinctUntilChanged(),
-            dao.observeTrackedChapterCounts().distinctUntilChanged(),
+            dao.observeTrackedEntityCategoryFacets().distinctUntilChanged(),
         ) { values: Array<*> ->
             @Suppress("UNCHECKED_CAST")
             buildSnapshot(
                 trackRows = values[0] as List<UpdateTrackRow>,
                 tagFacets = values[1] as List<TrackedTagFacetRow>,
                 overrides = values[2] as List<TrackedOverrideRow>,
-                chapterCounts = values[3] as List<TrackedChapterCountRow>,
+                categoryFacets = values[3] as List<TrackedEntityCategoryFacetRow>,
             )
         }.distinctUntilChanged().flowOn(Dispatchers.Default)
     }
@@ -57,22 +57,24 @@ class UpdatesSnapshotStore @Inject constructor(
         trackRows: List<UpdateTrackRow>,
         tagFacets: List<TrackedTagFacetRow>,
         overrides: List<TrackedOverrideRow>,
-        @Suppress("UNUSED_PARAMETER") chapterCounts: List<TrackedChapterCountRow>,
+        categoryFacets: List<TrackedEntityCategoryFacetRow>,
     ): UpdatesSnapshot {
         if (trackRows.isEmpty()) {
             return UpdatesSnapshot.Empty
         }
 
-        val tagIdsByMangaId = HashMap<Long, LinkedHashSet<Long>>(tagFacets.size)
-        val tagTitlesByMangaId = HashMap<Long, LinkedHashMap<Long, String>>(tagFacets.size)
+        val tagsByMangaId = HashMap<Long, LinkedHashMap<Long, String>>(tagFacets.size)
         for (facet in tagFacets) {
-            tagIdsByMangaId.getOrPut(facet.mangaId) { LinkedHashSet() }.add(facet.tagId)
-            tagTitlesByMangaId.getOrPut(facet.mangaId) { LinkedHashMap() }
+            tagsByMangaId.getOrPut(facet.mangaId) { LinkedHashMap() }
                 .putIfAbsent(facet.tagId, facet.tagTitle)
         }
         val overrideByMangaId = HashMap<Long, TrackedOverrideRow>(overrides.size)
         for (override in overrides) {
             overrideByMangaId[override.mangaId] = override
+        }
+        val categoryIdsByEntityId = HashMap<Long, LinkedHashSet<Long>>(categoryFacets.size)
+        for (facet in categoryFacets) {
+            categoryIdsByEntityId.getOrPut(facet.entityId) { LinkedHashSet() }.add(facet.categoryId)
         }
 
         // seeds in track order (the DAO's stable order is the tie-break source)
@@ -101,8 +103,9 @@ class UpdatesSnapshotStore @Inject constructor(
                 publicationState = track.displayState?.let(::parseContentState),
                 isNsfw = track.displayNsfw == true,
                 rating = track.displayRating ?: -1f,
-                tagIds = displayId?.let(tagIdsByMangaId::get).orEmpty(),
-                tagTitles = displayId?.let(tagTitlesByMangaId::get)?.values?.toList().orEmpty(),
+                tags = displayId?.let(tagsByMangaId::get)
+                    ?.map { (tagId, title) -> UpdateCardTag(tagId, title) }
+                    .orEmpty(),
                 overrideTitle = displayId?.let(overrideByMangaId::get)?.titleOverride?.takeIf { it.isNotBlank() },
                 overrideCoverUrl = displayId?.let(overrideByMangaId::get)?.coverOverride?.takeIf { it.isNotBlank() },
                 metadataTrackingService = track.metadataTrackingService,
@@ -140,7 +143,7 @@ class UpdatesSnapshotStore @Inject constructor(
 
         val groups = ArrayList<UpdateGroupRow>(grouped.size)
         for ((key, items) in grouped) {
-            groups += items.toUpdateGroupRow(key)
+            groups += items.toUpdateGroupRow(key, categoryIdsByEntityId)
         }
         return UpdatesSnapshot(groups = groups)
     }
@@ -149,7 +152,10 @@ class UpdatesSnapshotStore @Inject constructor(
      * The representative: the preferred projection when one of the tracks is
      * it, else the freshest track (lastChapterDate, lastCheck, newChapters).
      */
-    private fun List<TrackRowSeed>.toUpdateGroupRow(key: GroupKey): UpdateGroupRow {
+    private fun List<TrackRowSeed>.toUpdateGroupRow(
+        key: GroupKey,
+        categoryIdsByEntityId: Map<Long, Set<Long>>,
+    ): UpdateGroupRow {
         val entityId = firstNotNullOfOrNull(TrackRowSeed::entityId)
         val preferredLocalMangaId = firstNotNullOfOrNull(TrackRowSeed::preferredLocalMangaId)
         val representative = firstOrNull { it.mangaId == preferredLocalMangaId }
@@ -169,6 +175,7 @@ class UpdatesSnapshotStore @Inject constructor(
             totalNewChapters = sumOf(TrackRowSeed::newChapters),
             lastChapterDate = mapNotNull(TrackRowSeed::lastChapterDate).maxOrNull(),
             isPinned = representative.isPinned,
+            categoryIds = entityId?.let(categoryIdsByEntityId::get).orEmpty(),
             displayMangaId = representative.displayMangaId,
             title = representative.title,
             altTitle = representative.altTitle,
@@ -179,8 +186,7 @@ class UpdatesSnapshotStore @Inject constructor(
             publicationState = representative.publicationState,
             isNsfw = representative.isNsfw,
             rating = representative.rating,
-            tagIds = representative.tagIds,
-            tagTitles = representative.tagTitles,
+            tags = representative.tags,
             overrideTitle = representative.overrideTitle,
             overrideCoverUrl = representative.overrideCoverUrl,
             metadataTrackingService = representative.metadataTrackingService,
