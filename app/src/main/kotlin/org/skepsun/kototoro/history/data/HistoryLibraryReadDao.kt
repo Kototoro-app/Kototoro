@@ -96,7 +96,14 @@ abstract class HistoryLibraryReadDao {
     )
     abstract fun observeHistoryCardBaseRows(): Flow<List<HistoryCardRow>>
 
-    /** Tags of the history display projections (the Tag quick filter's key). */
+    /**
+     * Tags of the history display projections (the Tag quick filter's key).
+     *
+     * Two indexable branches instead of one OR join with a correlated
+     * subquery: the OR shape forced a full `manga_tags` scan plus an
+     * automatic-index rebuild per row (26s on a 3.2k-history / 119k-tag
+     * restore; the UNION below returns the identical row set in ~70ms).
+     */
     @Query(
         """
         SELECT
@@ -105,12 +112,17 @@ abstract class HistoryLibraryReadDao {
             t.key AS tag_key
         FROM manga_tags mt
         INNER JOIN tags t ON t.tag_id = mt.tag_id
-        INNER JOIN work_history wh ON wh.anchor_manga_id = mt.manga_id
-            OR mt.manga_id = COALESCE(
-                (SELECT ep.preferred_local_manga_id FROM entity_preferences ep WHERE ep.entity_id = wh.entity_id),
-                wh.anchor_manga_id
-            )
-        WHERE wh.deleted_at = 0
+        INNER JOIN work_history wh ON wh.anchor_manga_id = mt.manga_id AND wh.deleted_at = 0
+        UNION
+        SELECT
+            mt.manga_id AS manga_id,
+            t.title AS tag_title,
+            t.key AS tag_key
+        FROM manga_tags mt
+        INNER JOIN tags t ON t.tag_id = mt.tag_id
+        INNER JOIN work_history wh ON wh.deleted_at = 0
+        INNER JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
+            AND ep.preferred_local_manga_id = mt.manga_id
         """,
     )
     abstract fun observeHistoryTagFacets(): Flow<List<HistoryTagFacetRow>>
@@ -173,7 +185,12 @@ abstract class HistoryLibraryReadDao {
     )
     abstract fun observeHistoryDownloadedRows(): Flow<List<HistoryDownloadedRow>>
 
-    /** Manual title/cover overrides of the history display projections. */
+    /**
+     * Manual title/cover overrides of the history display projections.
+     *
+     * Same UNION rewrite as the tag facets: the OR + correlated-COALESCE shape
+     * scans `preferences` and rebuilds an automatic index per row.
+     */
     @Query(
         """
         SELECT
@@ -182,12 +199,18 @@ abstract class HistoryLibraryReadDao {
             p.cover_override AS cover_override
         FROM preferences p
         INNER JOIN work_history wh ON wh.anchor_manga_id = p.manga_id
-            OR p.manga_id = COALESCE(
-                (SELECT ep.preferred_local_manga_id FROM entity_preferences ep WHERE ep.entity_id = wh.entity_id),
-                wh.anchor_manga_id
-            )
-        WHERE wh.deleted_at = 0
-            AND (p.title_override IS NOT NULL OR p.cover_override IS NOT NULL)
+            AND wh.deleted_at = 0
+        WHERE p.title_override IS NOT NULL OR p.cover_override IS NOT NULL
+        UNION
+        SELECT
+            p.manga_id AS manga_id,
+            p.title_override AS title_override,
+            p.cover_override AS cover_override
+        FROM preferences p
+        INNER JOIN entity_preferences ep ON ep.preferred_local_manga_id = p.manga_id
+        INNER JOIN work_history wh ON wh.entity_id = ep.entity_id
+            AND wh.deleted_at = 0
+        WHERE p.title_override IS NOT NULL OR p.cover_override IS NOT NULL
         """,
     )
     abstract fun observeHistoryOverrides(): Flow<List<HistoryOverrideRow>>
