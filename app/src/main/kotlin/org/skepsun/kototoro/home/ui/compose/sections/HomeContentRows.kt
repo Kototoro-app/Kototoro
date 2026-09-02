@@ -60,6 +60,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
@@ -543,13 +544,7 @@ private fun HomeCoverRowItem(
     modifier: Modifier = Modifier,
 ) {
     val content = item.content
-    val sharedElementKey = remember(item.sectionKey, item.stableKey, content.coverUrl, content.source.name) {
-        contentCoverSharedKey(
-            content,
-            content.coverUrl,
-            instanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
-        )
-    }
+    val gridInstanceKey = "home_row_${item.sectionKey}_${item.stableKey}"
     val model = remember(content, item.supportingText, item.counter, item.progress) {
         ContentGridModel(
             manga = content,
@@ -561,10 +556,18 @@ private fun HomeCoverRowItem(
             isSaved = false,
         )
     }
+    // The grid card registers its shared element with
+    // contentListSharedElementKey(model, gridInstanceKey); the click key must be
+    // derived the SAME way or the details cover will never match the card and the
+    // hero transition silently does not run (a contentCoverSharedKey here produced
+    // cover|<source>|<url>|... against the card's cover|list-item|<id>|...).
+    val sharedElementKey = remember(model.id, gridInstanceKey) {
+        contentListSharedElementKey(model, gridInstanceKey)
+    }
 
     KototoroContentCardGrid(
         item = model,
-        sharedElementInstanceKey = "home_row_${item.sectionKey}_${item.stableKey}",
+        sharedElementInstanceKey = gridInstanceKey,
         cardStyle = posterStyle,
         compactOverlay = listMode == ListMode.COMPACT_GRID,
         // Tighter than the global grid default: rails sit on a shared screen

@@ -1330,6 +1330,18 @@ fun KototoroApp(
                                             chromeState.setHeroTransitionPhase(HeroTransitionPhase.EnteringDetails)
                                             chromeState.setLastHeroTransitionStartedAtMs(heroTransitionTimestampMs())
                                         },
+                                        // Mirrors onDetailsTransitionRequested for the pop direction: flags the
+                                        // return hero so the details cover freezes on the cached painter and the
+                                        // chrome restore waits for HeroProtectionMillis instead of racing the
+                                        // shared-element settle. Dropped in the nav3 flattening (e637a98fd), which
+                                        // left the return cover un-frozen and visibly two-stepped.
+                                        onDetailsReturnTransitionRequested = {
+                                            if (effectiveSharedElementTransitionsEnabled) {
+                                                chromeState.setDetailsChromeTransitionPending(true)
+                                                chromeState.setHeroTransitionPhase(HeroTransitionPhase.ReturningFromDetails)
+                                                chromeState.setLastHeroTransitionStartedAtMs(heroTransitionTimestampMs())
+                                            }
+                                        },
                                         onDetailsBottomPanelStateChanged = { expansion, obstruction ->
                                             if (renderedSpaceId == navigationSpaceId) {
                                                 chromeState.setDetailsBottomPanelRoute(currentDestinationRoute)

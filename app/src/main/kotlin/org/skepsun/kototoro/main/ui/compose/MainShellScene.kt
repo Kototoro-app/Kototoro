@@ -91,6 +91,7 @@ import org.skepsun.kototoro.core.BaseApp
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
 import org.skepsun.kototoro.list.ui.compose.ContentSelectionControl
+import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTabsTopBarOverrideState
 import org.skepsun.kototoro.main.ui.compose.CompactTopBarTabItem
@@ -182,6 +183,7 @@ fun MainShellScene(
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit = {},
     onOpenSearch: (SearchNavigationRequest) -> Unit = {},
     onDetailsTransitionRequested: () -> Unit = {},
+    onDetailsReturnTransitionRequested: () -> Unit = {},
     onDetailsBottomPanelStateChanged: (Float, Dp) -> Unit = { _, _ -> },
     isLandscapeNavigation: Boolean = false,
     detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
@@ -265,6 +267,7 @@ fun MainShellScene(
                                 onExploreSourceSelectionTopBarChanged = onExploreSourceSelectionTopBarChanged,
                                 onContextualMenuActionsChanged = onContextualMenuActionsChanged,
                                 onOpenSearch = onOpenSearch,
+                                onDetailsReturnTransitionRequested = onDetailsReturnTransitionRequested,
                                 navigateToDetailsWithContent = navigateToDetailsWithContent,
                                 navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
                             )
@@ -300,6 +303,7 @@ private fun MainShellTopLevelEntryContent(
     onExploreSourceSelectionTopBarChanged: (TopBarOverrideState?) -> Unit,
     onContextualMenuActionsChanged: (RouteScopedTopBarMenuActions) -> Unit,
     onOpenSearch: (SearchNavigationRequest) -> Unit,
+    onDetailsReturnTransitionRequested: () -> Unit = {},
     navigateToDetailsWithContent: (Content, String?) -> Unit,
     navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
 ) {
@@ -515,6 +519,7 @@ private fun MainShellTopLevelEntryContent(
                             appRouter = appRouter,
                             pageSaveHelper = effectivePageSaveHelper,
                             onBackClick = {
+                                onDetailsReturnTransitionRequested()
                                 mainNavState.pop()
                             },
                             activeSpaceId = null,
@@ -533,7 +538,10 @@ private fun MainShellTopLevelEntryContent(
                                     onOpenSourceList = { source, filter, sortOrder ->
                                         mainNavigator.openContentList(source, filter, sortOrder)
                                     },
-                                    onFinish = { mainNavState.pop() },
+                                    onFinish = {
+                                        onDetailsReturnTransitionRequested()
+                                        mainNavState.pop()
+                                    },
                                 )
                             },
                         )
@@ -1604,7 +1612,9 @@ internal fun HistoryTopLevelRouteContent(
                     }
                 } else {
                     val content = item.toContentWithOverride()
-                    val sharedKey = contentCoverSharedKey(item.source.name, item.coverUrl.orEmpty())
+                    // Must mirror the grid card registration (contentListSharedElementKey with
+                    // the screen's instance key, null here) or the hero transition never fires.
+                    val sharedKey = contentListSharedElementKey(item, null)
                     val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
                     val preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id)
                     if (entityId != null) {
