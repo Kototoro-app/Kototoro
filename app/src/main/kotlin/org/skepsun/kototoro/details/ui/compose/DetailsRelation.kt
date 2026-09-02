@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.kyant.shapes.RoundedRectangle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,8 +41,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
-import org.skepsun.kototoro.core.ui.glass.GlassDefaults
-import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
@@ -82,11 +79,12 @@ fun DetailsRelationSections(
     ) {
         sections.forEach { section ->
             DetailsRelationSectionContainer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = outerHorizontalPadding),
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                EntityRelationSectionHeader(section = section)
+                EntityRelationSectionHeader(
+                    section = section,
+                    horizontalPadding = outerHorizontalPadding,
+                )
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
@@ -145,64 +143,14 @@ internal fun DetailsRelatedContentSection(
 }
 
 @Composable
-internal fun DetailsSupplementMetadataCard(
-    properties: List<Pair<String, String>>,
-    outerHorizontalPadding: Dp,
-    modifier: Modifier = Modifier,
-) {
-    GlassSurface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = outerHorizontalPadding),
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedRectangle(24.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.details_additional_metadata),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            properties.forEach { (label, value) ->
-                if (value.isBlank()) {
-                    return@forEach
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.Top,
-                ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.width(96.dp),
-                    )
-                    Text(
-                        text = value,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun EntityRelationSectionHeader(
     section: EntityRelationSection,
+    horizontalPadding: Dp,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding),
+            .padding(horizontal = horizontalPadding),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -401,19 +349,11 @@ private fun DetailsRelationSectionContainer(
     modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    GlassSurface(
+    Column(
         modifier = modifier,
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedRectangle(24.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            content = content,
-        )
-    }
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -427,12 +367,14 @@ private fun DetailsRelationItemCard(
     footer: (@Composable () -> Unit)? = null,
     cover: @Composable () -> Unit,
 ) {
-    GlassSurface(
+    Surface(
         modifier = modifier
             .width(width)
             .clickable(onClick = onClick),
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedRectangle(22.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
     ) {
         Column(
             modifier = Modifier
@@ -521,18 +463,3 @@ private fun EntityRelationCardPreview() {
         )
     }
 }
-
-@Preview(showBackground = true)
-@Composable
-private fun DetailsSupplementMetadataCardPreview() {
-    KototoroTheme {
-        DetailsSupplementMetadataCard(
-            properties = listOf(
-                "Publisher" to "Demo Studio",
-                "Year" to "2026",
-            ),
-            outerHorizontalPadding = 16.dp,
-        )
-    }
-}
-

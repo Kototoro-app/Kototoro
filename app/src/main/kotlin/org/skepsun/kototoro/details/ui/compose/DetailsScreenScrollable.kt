@@ -245,6 +245,7 @@ internal fun DetailsScrollableContent(
             trackingSuggestion = trackingSuggestion,
             metadataSourceOptions = metadataSourceOptions,
             readingSourceOptions = readingSourceOptions,
+            supplementalMetadataProperties = supplementalMetadataProperties,
             supplementalActions = supplementalActions,
             resolvedContentType = resolvedContentType,
             metadataLanguageCode = resolvedMetadataLanguage,
@@ -318,12 +319,6 @@ internal fun DetailsScrollableContent(
                 onItemClick = { item ->
                     onActionClick(DetailsAction.OpenContent(item.toContentWithOverride()))
                 },
-            )
-        }
-        if (!preferLightweightFirstFrame && supplementalMetadataProperties.isNotEmpty()) {
-            DetailsSupplementMetadataCard(
-                properties = supplementalMetadataProperties,
-                outerHorizontalPadding = outerHorizontalPadding,
             )
         }
         if (visibleSupplementalSections.isNotEmpty()) {

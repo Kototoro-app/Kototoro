@@ -4,6 +4,7 @@ package org.skepsun.kototoro.details.ui.compose
 import android.text.format.Formatter
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyRow
@@ -119,6 +121,7 @@ fun DetailsHeader(
     trackingSuggestion: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult?,
     metadataSourceOptions: List<DetailsSourceOption>,
     readingSourceOptions: List<DetailsSourceOption>,
+    supplementalMetadataProperties: List<Pair<String, String>>,
     supplementalActions: List<DetailsSupplementAction>,
     resolvedContentType: ContentType?,
     metadataLanguageCode: String?,
@@ -268,6 +271,12 @@ fun DetailsHeader(
     } else {
         null
     }
+    val visibleSupplementalMetadataProperties = remember(supplementalMetadataProperties) {
+        supplementalMetadataProperties.filter { (label, value) -> label.isNotBlank() && value.isNotBlank() }
+    }
+    val hasSupplementalMetadataDescription = showWorkActions &&
+        metadataSourceOption?.trackingService != null &&
+        visibleSupplementalMetadataProperties.isNotEmpty()
 
     val normalizedCoverUrl = coverUrl?.takeIfUsableImageUri()
     val normalizedFallbackCoverUrl = fallbackCoverUrl?.takeIfUsableImageUri()
@@ -285,6 +294,12 @@ fun DetailsHeader(
     val descriptionForDisplay = description.take(MAX_RENDERED_DESCRIPTION_LENGTH)
     val collapsedDescriptionMaxLines = 3
     var canExpandDescription by remember(description) { mutableStateOf(false) }
+    var isSupplementalMetadataSelected by rememberSaveable(
+        metadataSourceOption?.key,
+        hasSupplementalMetadataDescription,
+    ) {
+        mutableStateOf(false)
+    }
     val coverModel = remember(content?.source?.name, content?.url, currentCoverUrl) {
         when {
             currentCoverUrl != null -> {
@@ -653,56 +668,71 @@ fun DetailsHeader(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = stringResource(R.string.description),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                SelectionContainer {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = descriptionForDisplay,
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = stringResource(R.string.description),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                enabled = canExpandDescription,
-                                role = Role.Button,
-                            ) {
-                                isDescriptionExpanded = !isDescriptionExpanded
-                            }
-                            .animateContentSize()
-                            .then(
-                                if (canExpandDescription && !isDescriptionExpanded) {
-                                    Modifier
-                                        .graphicsLayer {
-                                            compositingStrategy = CompositingStrategy.Offscreen
-                                        }
-                                        .drawWithContent {
-                                            drawContent()
-                                            drawRect(
-                                                brush = Brush.verticalGradient(
-                                                    colors = listOf(Color.Black, Color.Transparent),
-                                                    startY = size.height * 0.62f,
-                                                    endY = size.height,
-                                                ),
-                                                blendMode = BlendMode.DstIn,
-                                            )
-                                        }
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
-                        overflow = TextOverflow.Ellipsis,
-                        onTextLayout = { textLayoutResult ->
-                            val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
-                                textLayoutResult.lineCount > collapsedDescriptionMaxLines
-                            if (canExpandDescription != hasCollapsedOverflow) {
-                                canExpandDescription = hasCollapsedOverflow
-                            }
-                        },
+                        modifier = Modifier.weight(1f),
                     )
+                    if (hasSupplementalMetadataDescription) {
+                        DetailsViewToggle(
+                            isSupplementalMetadataSelected = isSupplementalMetadataSelected,
+                            onSelect = { isSupplementalMetadataSelected = it },
+                        )
+                    }
+                }
+                if (isSupplementalMetadataSelected && hasSupplementalMetadataDescription) {
+                    SupplementalMetadataDescription(properties = visibleSupplementalMetadataProperties)
+                } else {
+                    SelectionContainer {
+                        Text(
+                            text = descriptionForDisplay,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    enabled = canExpandDescription,
+                                    role = Role.Button,
+                                ) {
+                                    isDescriptionExpanded = !isDescriptionExpanded
+                                }
+                                .animateContentSize()
+                                .then(
+                                    if (canExpandDescription && !isDescriptionExpanded) {
+                                        Modifier
+                                            .graphicsLayer {
+                                                compositingStrategy = CompositingStrategy.Offscreen
+                                            }
+                                            .drawWithContent {
+                                                drawContent()
+                                                drawRect(
+                                                    brush = Brush.verticalGradient(
+                                                        colors = listOf(Color.Black, Color.Transparent),
+                                                        startY = size.height * 0.62f,
+                                                        endY = size.height,
+                                                    ),
+                                                    blendMode = BlendMode.DstIn,
+                                                )
+                                            }
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                            maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else collapsedDescriptionMaxLines,
+                            overflow = TextOverflow.Ellipsis,
+                            onTextLayout = { textLayoutResult ->
+                                val hasCollapsedOverflow = textLayoutResult.hasVisualOverflow ||
+                                    textLayoutResult.lineCount > collapsedDescriptionMaxLines
+                                if (canExpandDescription != hasCollapsedOverflow) {
+                                    canExpandDescription = hasCollapsedOverflow
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -758,3 +788,84 @@ fun DetailsHeader(
     }
 }
 
+/**
+ * Compact inline switch between the description and the supplemental metadata view.
+ *
+ * Deliberately not a [androidx.compose.material3.SingleChoiceSegmentedButtonRow]: the
+ * Material3 segmented row is a full-width ~40dp band, which dominated this card and read
+ * as a separate section rather than as a view switch for the text below it.
+ */
+@Composable
+private fun DetailsViewToggle(
+    isSupplementalMetadataSelected: Boolean,
+    onSelect: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val options = listOf(
+        false to stringResource(R.string.description),
+        true to stringResource(R.string.details_additional_metadata),
+    )
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .padding(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val selected = isSupplementalMetadataSelected == value
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(
+                        if (selected) {
+                            MaterialTheme.colorScheme.surface
+                        } else {
+                            Color.Transparent
+                        },
+                    )
+                    .clickable(role = Role.Tab) { onSelect(value) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SupplementalMetadataDescription(
+    properties: List<Pair<String, String>>,
+) {
+    SelectionContainer {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            properties.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.width(96.dp),
+                    )
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
