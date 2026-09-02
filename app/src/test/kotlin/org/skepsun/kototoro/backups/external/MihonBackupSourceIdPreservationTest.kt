@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.backups.external
 
 import kotlinx.serialization.protobuf.ProtoBuf
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -53,8 +54,8 @@ class MihonBackupSourceIdPreservationTest {
 
     @Test
     fun `non-installable fork ExHentai ids target the Kototoro ExHentai source`() {
-        assertEquals("EXHENTAI", targetForNonInstallableForkSource(6902L))
-        assertEquals("EXHENTAI", targetForNonInstallableForkSource(6_225_928_719_850_211_219L))
+        assertEquals(NonInstallableForkTarget("EXHENTAI", ContentType.HENTAI_MANGA), targetForNonInstallableForkSource(6902L))
+        assertEquals(NonInstallableForkTarget("EXHENTAI", ContentType.HENTAI_MANGA), targetForNonInstallableForkSource(6_225_928_719_850_211_219L))
         assertEquals(null, targetForNonInstallableForkSource(6901L))
         assertEquals(null, targetForNonInstallableForkSource(1_713_178_126_840_476_467L))
         assertEquals(null, targetForNonInstallableForkSource(2_499_283_573_021_220_255L))

@@ -407,16 +407,20 @@ class ExternalBackupRepository @Inject constructor(
 
         private suspend fun resolveNativeSource(
             record: ExternalBackupContentRecord,
-            targetSourceName: String,
+            target: NonInstallableForkTarget,
         ): SourceResolveResult? {
             val matches = candidates()
-                .filter { it.sourceName == targetSourceName && it.kind == SourceKind.NATIVE }
+                .filter { it.sourceName == target.sourceName && it.kind == SourceKind.NATIVE }
                 .distinctBy { it.sourceName }
             if (matches.size != 1) {
                 return null
             }
             return SourceResolveResult.Resolved(
-                record.copy(sourceName = matches.single().sourceName, sourceDisplayName = null),
+                record.copy(
+                    sourceName = matches.single().sourceName,
+                    sourceDisplayName = null,
+                    contentType = target.contentType,
+                ),
             )
         }
 
@@ -609,11 +613,24 @@ class ExternalBackupRepository @Inject constructor(
  * Resolve only those known non-installable ids to Kototoro's JAR source; all other fork
  * sources remain ordinary Mihon keys and continue through extension recovery.
  */
-internal fun targetForNonInstallableForkSource(sourceId: Long): String? = when (sourceId) {
+internal fun targetForNonInstallableForkSource(sourceId: Long): NonInstallableForkTarget? = when (sourceId) {
     6902L,
-    6_225_928_719_850_211_219L -> "EXHENTAI"
+    6_225_928_719_850_211_219L -> NonInstallableForkTarget("EXHENTAI", ContentType.HENTAI_MANGA)
     else -> null
 }
+
+/**
+ * A fork source id that cannot be installed, plus the content type Kototoro's replacement
+ * source reports for it.
+ *
+ * The content type must travel with the mapping. A restored record carries the *fork's*
+ * value (Komikku stores its built-in ExHentai entries as MANGA), while Kototoro's EXHENTAI
+ * source yields HENTAI_MANGA. Left as-is, the two disagree for every restored work, so the
+ * first details open re-persists the row and Room's invalidation tracker tears the favourites
+ * paging query down - measured on device as 2154 not-yet-converged rows against 43 already
+ * converged ones, i.e. a list rebuild on essentially every visit through a restored library.
+ */
+internal data class NonInstallableForkTarget(val sourceName: String, val contentType: ContentType)
 
 internal object ExternalBackupCategoryMapper {
 
