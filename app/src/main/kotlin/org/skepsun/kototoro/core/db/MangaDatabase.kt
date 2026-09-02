@@ -183,6 +183,8 @@ abstract class MangaDatabase : RoomDatabase() {
 
     abstract fun getWorkHistoryDao(): WorkHistoryDao
 
+    abstract fun getHistoryLibraryReadDao(): org.skepsun.kototoro.history.data.HistoryLibraryReadDao
+
     abstract fun getTagsDao(): TagsDao
 
     abstract fun getMangaDao(): MangaDao
