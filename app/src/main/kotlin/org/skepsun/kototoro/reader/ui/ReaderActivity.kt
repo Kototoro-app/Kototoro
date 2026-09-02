@@ -723,6 +723,16 @@ class ReaderActivity :
                 }
             }
             .launchIn(lifecycleScope)
+        // The bottom chapter-title pill is pure chrome and is rendered straight away, so its
+        // Compose option must mirror the setting from the start: seeding it only when the
+        // options sheet opened made the setting look dead until the sheet was opened once,
+        // both for a fresh chapter and for toggles made in Settings → Reader (issue #514).
+        // The flow re-emits on every prefs change, so a live toggle applies immediately.
+        settings.observeAsFlow(AppSettings.KEY_READER_CHAPTER_TITLE_BOTTOM) {
+            isReaderChapterTitleAtBottom
+        }.onEach { enabled ->
+            composeReaderController.updateOptions { copy(chapterTitleAtBottom = enabled) }
+        }.launchIn(lifecycleScope)
         viewModel.translationLayerState.onEach {
             currentTranslationLayerState = it
             updateTranslationToggleButton()
