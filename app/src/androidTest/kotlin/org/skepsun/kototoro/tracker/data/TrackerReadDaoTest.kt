@@ -259,6 +259,62 @@ class TrackerReadDaoTest {
     }
 
     @Test
+    fun updateTrackRowCarriesMetadataAuthorityWhenTracking() = runTest {
+        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
+        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
+        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
+        FavouriteLibrarySeed.insertPrefs(
+            sql,
+            10,
+            metadataSourceKind = "tracking",
+            metadataService = 3,
+            metadataRemoteId = 77L,
+        )
+        FavouriteLibrarySeed.insertTrackingSiteItem(sql, service = 3, remoteId = 77L, title = "Site title", coverUrl = "http://site")
+        insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
+
+        val row = db.getTrackerReadDao().observeUpdateTrackRows().first().single()
+        assertEquals(3, row.metadataTrackingService)
+        assertEquals("Site title", row.metadataTrackingTitle)
+        assertEquals("http://site", row.metadataTrackingCoverUrl)
+    }
+
+    @Test
+    fun updateTrackRowMetadataIsNullForNonTrackingKind() = runTest {
+        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
+        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
+        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
+        FavouriteLibrarySeed.insertPrefs(
+            sql,
+            10,
+            metadataSourceKind = "manual",
+            metadataService = 3,
+            metadataRemoteId = 77L,
+        )
+        FavouriteLibrarySeed.insertTrackingSiteItem(sql, service = 3, remoteId = 77L, title = "Site title", coverUrl = null)
+        insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
+
+        val row = db.getTrackerReadDao().observeUpdateTrackRows().first().single()
+        assertNull(row.metadataTrackingService)
+        assertNull(row.metadataTrackingTitle)
+    }
+
+    @Test
+    fun updateTrackRowDisplayFollowsPreferredProjection() = runTest {
+        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
+        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor title")
+        FavouriteLibrarySeed.insertManga(sql, 105, "Preferred title")
+        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
+        FavouriteLibrarySeed.insertPrefs(sql, 10, preferredLocalMangaId = 105)
+        insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
+
+        val row = db.getTrackerReadDao().observeUpdateTrackRows().first().single()
+        assertEquals(105L, row.displayMangaId)
+        assertEquals("Preferred title", row.displayTitle)
+        assertEquals(105L, row.preferredLocalMangaId)
+    }
+
+    @Test
     fun readPathNeverWrites() = runTest {
         FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
         FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")

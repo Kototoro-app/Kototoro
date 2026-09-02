@@ -64,6 +64,11 @@ data class UpdateTrackRow(
     // resolved identity
     @ColumnInfo(name = "preferred_local_manga_id") val preferredLocalMangaId: Long?,
     @ColumnInfo(name = "entity_pinned") val entityPinned: Boolean,
+    // display metadata authority: the cached tracking-site item behind the
+    // entity's 'tracking' metadata selection (same join as the favourites row)
+    @ColumnInfo(name = "metadata_tracking_service") val metadataTrackingService: Int?,
+    @ColumnInfo(name = "metadata_tracking_title") val metadataTrackingTitle: String?,
+    @ColumnInfo(name = "metadata_tracking_cover_url") val metadataTrackingCoverUrl: String?,
     // display projection columns (COALESCE(preferred, anchor))
     @ColumnInfo(name = "display_manga_id") val displayMangaId: Long?,
     @ColumnInfo(name = "display_title") val displayTitle: String?,
@@ -71,6 +76,7 @@ data class UpdateTrackRow(
     @ColumnInfo(name = "display_cover_url") val displayCoverUrl: String?,
     @ColumnInfo(name = "display_author") val displayAuthor: String?,
     @ColumnInfo(name = "display_source") val displaySource: String?,
+    @ColumnInfo(name = "display_url") val displayUrl: String?,
     @ColumnInfo(name = "display_content_type") val displayContentType: String?,
     @ColumnInfo(name = "display_state") val displayState: String?,
     @ColumnInfo(name = "display_nsfw") val displayNsfw: Boolean?,

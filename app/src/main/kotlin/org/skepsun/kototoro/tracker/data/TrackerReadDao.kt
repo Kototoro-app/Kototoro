@@ -105,6 +105,9 @@ abstract class TrackerReadDao {
             t.last_chapter_id AS last_chapter_id,
             ep.preferred_local_manga_id AS preferred_local_manga_id,
             IFNULL(pinned.pinned, 0) AS entity_pinned,
+            metadata.service AS metadata_tracking_service,
+            metadata.title AS metadata_tracking_title,
+            metadata.cover_url AS metadata_tracking_cover_url,
             dm.manga_id AS display_manga_id,
             dm.title AS display_title,
             dm.alt_title AS display_alt_title,
@@ -133,6 +136,13 @@ abstract class TrackerReadDao {
                 AND wf.deleted_at = 0
             GROUP BY wf.entity_id
         ) pinned ON pinned.entity_id = e.id
+        LEFT JOIN tracking_site_items metadata ON metadata.service = COALESCE(
+                CAST(ep.metadata_binding_source AS INTEGER), ep.metadata_source_service
+            )
+            AND metadata.remote_id = COALESCE(
+                CAST(ep.metadata_binding_external_id AS INTEGER), ep.metadata_source_remote_id
+            )
+            AND ep.metadata_source_kind = 'tracking'
         WHERE t.chapters_new > 0
         """,
     )
