@@ -74,7 +74,6 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
-import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
@@ -84,6 +83,7 @@ import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCard
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.list.ui.model.ButtonFooter
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -349,7 +349,7 @@ fun SearchResultsRoute(
                             val content = item.toContentWithOverride()
                             onOpenContent(
                                 content,
-                                contentCoverSharedKey(content, item.coverUrl),
+                                contentListSharedElementKey(item, null),
                             )
                         }
                     },

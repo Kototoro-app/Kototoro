@@ -98,6 +98,7 @@ import org.skepsun.kototoro.core.parser.favicon.directFaviconUriOrNull
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxActionHostActivity
 import org.skepsun.kototoro.list.ui.compose.KototoroSelectionTopBar
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -710,7 +711,7 @@ fun AppSearchContentListRoute(
                                         } else {
                                             previewContent = null
                                             sidePaneMode = SearchSidePaneMode.Filter
-                                            val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
+                                            val sharedElementKey = contentListSharedElementKey(item, null)
                                             openDetailsHandler(
                                                 content,
                                                 sharedElementKey,
@@ -879,7 +880,7 @@ fun AppSearchContentListRoute(
                                 } else {
                                     val content = item.toContentWithOverride()
                                     if (viewModel.onContentClick(content)) return@itemClick
-                                    val sharedElementKey = contentCoverSharedKey(content, item.coverUrl)
+                                    val sharedElementKey = contentListSharedElementKey(item, null)
                                     openDetailsHandler(
                                         content,
                                         sharedElementKey,
