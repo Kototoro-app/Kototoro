@@ -68,7 +68,8 @@ fun FeedScreen(
     contentPadding: PaddingValues = PaddingValues(0.dp),
     leadingItems: List<ListModel>,
     fallbackItems: List<ListModel>,
-    pagingItems: LazyPagingItems<ListModel>,
+    /** Null once the feed renders statically from [fallbackItems] (Phase F4). */
+    pagingItems: LazyPagingItems<ListModel>?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onFeedItemClick: (FeedItem, Rect?) -> Unit,
@@ -85,8 +86,11 @@ fun FeedScreen(
     host: RetainedPagingSnapshotHost? = null,
     modifier: Modifier = Modifier
 ) {
-    val pagingRefreshState = pagingItems.loadState.refresh
-    val showFallback = pagingItems.itemCount == 0 && pagingRefreshState is LoadState.NotLoading
+    // The paging chain is gone (Phase F4): pagingItems is null and the static
+    // fallback path is the only path. The nullable shape keeps the retained
+    // snapshot machinery (still shared with the history page) intact.
+    val pagingRefreshState = pagingItems?.loadState?.refresh
+    val showFallback = pagingItems == null || (pagingItems.itemCount == 0 && pagingRefreshState is LoadState.NotLoading)
     val liveLeadingItems = if (showFallback) leadingItems + fallbackItems else leadingItems
     val livePagingItems = pagingItems.takeUnless { showFallback }
     val retainedState = host?.let { snapshotHost ->
@@ -225,7 +229,7 @@ fun FeedScreen(
                     onUpdatedContentItemClick = onUpdatedContentItemClick,
                     onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                     onCaptureNavigationSnapshot = captureNavigationSnapshot,
-                    onRetry = pagingItems::retry,
+                    onRetry = pagingItems?.let { it::retry } ?: {},
                 )
             }
             displayedPagingItems?.let { pagedItems ->
@@ -247,7 +251,7 @@ fun FeedScreen(
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
-                        onRetry = pagingItems::retry,
+                        onRetry = pagingItems?.let { it::retry } ?: {},
                     )
                 }
             }
@@ -268,7 +272,7 @@ fun FeedScreen(
                         onUpdatedContentItemClick = onUpdatedContentItemClick,
                         onUpdatedContentMoreClick = onUpdatedContentMoreClick,
                         onCaptureNavigationSnapshot = captureNavigationSnapshot,
-                        onRetry = pagingItems::retry,
+                        onRetry = pagingItems?.let { it::retry } ?: {},
                     )
                 }
             }

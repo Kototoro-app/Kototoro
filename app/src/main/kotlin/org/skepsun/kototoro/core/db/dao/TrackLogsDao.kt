@@ -15,17 +15,6 @@ import org.skepsun.kototoro.tracker.data.TrackLogEntity
 @Dao
 abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
 
-    fun pagingAll(
-        limit: Int,
-        filterOptions: Set<ListFilterOption>,
-    ): PagingSource<Int, TrackLogEntity> = pagingAllImpl(
-        MangaQueryBuilder("track_logs", this)
-            .filters(filterOptions)
-            .limit(limit)
-            .orderBy("${pinnedSortExpr("track_logs.manga_id")} DESC, created_at DESC, track_logs.id DESC")
-            .build(),
-    )
-
     @Query("SELECT COUNT(*) FROM track_logs WHERE unread = 1")
     abstract fun observeUnreadCount(): Flow<Int>
 
@@ -154,9 +143,6 @@ abstract class TrackLogsDao : MangaQueryBuilder.ConditionCallback {
         """,
     )
     abstract suspend fun ensureUnreadUpdateLogs()
-
-    @RawQuery(observedEntities = [TrackLogEntity::class])
-    protected abstract fun pagingAllImpl(query: SupportSQLiteQuery): PagingSource<Int, TrackLogEntity>
 
     override fun getCondition(option: ListFilterOption): String? = when (option) {
         ListFilterOption.Macro.FAVORITE -> favouriteExistsExpr("track_logs.manga_id")

@@ -153,18 +153,6 @@ class TrackingRepository @Inject constructor(
         }
     }
 
-    fun createAllTrackingLogItemsPagingSource(
-        limit: Int,
-        filterOptions: Set<ListFilterOption>,
-    ): PagingSource<Int, TrackingLogItem> = BatchMappingPagingSource(
-        delegate = db.getTracksDao().pagingAllTracks(limit, filterOptions),
-        diagnosticLabel = "feed-all-tracks",
-    ) { tracks ->
-        val contentTracks = workAggregateRepository.buildTrackingAggregates(tracks)
-            .mapNotNull { aggregate -> aggregate.toContentTracking() }
-        resolveAllTrackingLogItems(contentTracks)
-    }
-
     suspend fun getTracks(offset: Int, limit: Int): List<ContentTracking> {
         return workAggregateRepository
             .buildTrackingAggregates(db.getTracksDao().findAll(offset = offset, limit = limit))
@@ -248,15 +236,6 @@ class TrackingRepository @Inject constructor(
         val anchorMangaId = resolvePersistableTrackAnchorMangaId(mangaId) ?: return
         db.getTracksDao().delete(anchorMangaId)
     }
-
-    fun createTrackingLogPagingSource(
-        limit: Int,
-        filterOptions: Set<ListFilterOption>,
-    ): PagingSource<Int, TrackingLogItem> = BatchMappingPagingSource(
-        delegate = db.getTrackLogsDao().pagingAll(limit, filterOptions),
-        diagnosticLabel = "feed-logs",
-        transform = ::resolveDisplayTrackingLogItems,
-    )
 
     suspend fun getLogsCount() = db.getTrackLogsDao().count()
 
@@ -564,46 +543,6 @@ class TrackingRepository @Inject constructor(
                 lastError = track.lastError,
             )
         }
-    }
-
-    private suspend fun resolveDisplayTrackingLogItems(items: List<TrackLogEntity>): List<TrackingLogItem> {
-        if (items.isEmpty()) {
-            return emptyList()
-        }
-        val anchorIds = items.map(TrackLogEntity::mangaId)
-        val fallbackByAnchorId = buildFallbackContentByAnchorId(anchorIds)
-        val entityIdsByAnchorId = anchorIds.distinct().associateWith { anchorId ->
-            resolveTrackIdentity(anchorId).entityId
-        }
-        val preferredLocalIdsByEntity = entityIdsByAnchorId.values
-            .filterNotNull()
-            .distinct()
-            .associateWith { entityId -> resolveExistingTrackAnchorForEntity(entityId) }
-        return items.mapNotNull { item ->
-            val entityId = entityIdsByAnchorId[item.mangaId]
-            val fallbackContent = fallbackByAnchorId[item.mangaId] ?: return@mapNotNull null
-            TrackingLogItem(
-                id = item.id,
-                anchorMangaId = item.mangaId,
-                entityId = entityId,
-                preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get),
-                manga = resolveDisplayTrackingContent(item.mangaId, fallbackContent),
-                chapters = item.chapters.split('\n').filterNot { x -> x.isEmpty() },
-                createdAt = java.time.Instant.ofEpochMilli(item.createdAt),
-                isNew = item.isUnread,
-            )
-        }
-    }
-
-    private suspend fun resolveAllTrackingLogItems(tracks: List<ContentTracking>): List<TrackingLogItem> {
-        if (tracks.isEmpty()) {
-            return emptyList()
-        }
-        val chapters = db.getChaptersDao()
-            .findAllByMangaIds(tracks.map { it.manga.id })
-        val trackOwnerIds = tracks.map { track -> resolveTrackOwnerId(track.entityId, track.manga.id) }
-        val unreadOwnerIds = db.getTrackLogsDao().findUnreadOwnerIds(trackOwnerIds).toSet()
-        return TrackingLogItemMapper.fromAllTrackedContent(tracks, chapters, unreadOwnerIds)
     }
 
     private suspend fun buildFallbackContentByAnchorId(anchorIds: Collection<Long>): Map<Long, Content> {

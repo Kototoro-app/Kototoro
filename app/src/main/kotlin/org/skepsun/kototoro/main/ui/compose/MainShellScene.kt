@@ -737,11 +737,10 @@ internal fun FeedTopLevelRouteContent(
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.tracker.ui.feed.FeedViewModel>("feed")
     val leadingItems by viewModel.leadingContent.collectAsStateWithLifecycle()
-    val fallbackItems by viewModel.fallbackContent.collectAsStateWithLifecycle()
-    val feedPagingItems = viewModel.pagingContent.collectAsLazyPagingItems()
-    val loadedFeedItems = feedPagingItems.itemSnapshotList.items
-        .filterIsInstance<FeedItem>()
-        .ifEmpty { fallbackItems.filterIsInstance<FeedItem>() }
+    // The feed renders statically from the snapshot-derived content (Phase F4).
+    val fallbackItems by viewModel.content.collectAsStateWithLifecycle()
+    val feedPagingItems = viewModel.pagingContent?.collectAsLazyPagingItems()
+    val loadedFeedItems = fallbackItems.filterIsInstance<FeedItem>()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val categories by viewModel.categories.collectAsStateWithLifecycle()
 

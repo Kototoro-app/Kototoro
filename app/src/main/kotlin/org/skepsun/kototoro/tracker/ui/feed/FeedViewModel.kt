@@ -3,9 +3,7 @@ package org.skepsun.kototoro.tracker.ui.feed
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.qualifiers.ApplicationContext
-import androidx.paging.Pager
 import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -31,8 +30,6 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsFlow
 import org.skepsun.kototoro.core.prefs.observeAsStateFlow
-import org.skepsun.kototoro.core.paging.BatchMappingPagingSource
-import org.skepsun.kototoro.core.paging.LargeLibraryPagingConfig
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.ui.util.ReversibleAction
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
@@ -103,6 +100,9 @@ class FeedViewModel @Inject constructor(
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     private val dataRepository: ContentDataRepository,
     private val workResolver: WorkResolver,
+    private val feedSnapshotStore: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotStore,
+    private val feedCardMapper: org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper,
+    private val favouritesRepositoryForIds: FavouritesRepository,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel,
     RetainedPagingSnapshotHost {
@@ -125,13 +125,6 @@ class FeedViewModel @Inject constructor(
         val sourceTags: Set<SourceTag>,
         val mangaCategoryIds: Map<String, Set<Long>>,
         val preset: org.skepsun.kototoro.explore.data.SourcePreset?,
-    )
-
-    private data class FeedPagingParams(
-        val showAll: Boolean,
-        val limit: Int,
-        val filters: Set<ListFilterOption>,
-        val scope: FeedScopeParams,
     )
 
     private val feedLimitFlow = settings.observeAsStateFlow(
@@ -269,30 +262,57 @@ class FeedViewModel @Inject constructor(
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val onMessage = MutableEventFlow<String>()
 
-    val pagingContent: Flow<PagingData<ListModel>> = combine(
+    private val feedCategoryIdsForFilters = observeFeedCategoryIdsForSelection(selectedCategoryId) {
+        favouritesRepositoryForIds.observeFeedCategoryIds()
+    }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
+
+    private val excludedNsfw = combine(
+        settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
+        settings.observeAsFlow(AppSettings.KEY_FEED_EXCLUDE_NSFW) { isFeedExcludeNsfw },
+    ) { skipNsfwGlobally, skipNsfwInFeed -> skipNsfwGlobally || skipNsfwInFeed }
+        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, false)
+
+    private val tagBlacklistFlow = settings.observeAsFlow(AppSettings.KEY_GLOBAL_TAG_BLACKLIST) {
+        GlobalTagBlacklist(settings.globalTagBlacklist)
+    }
+
+    /**
+     * The one and only feed list (history-updates-feed komikku-alignment Phase F4):
+     * snapshot -> in-memory derivation -> card mapping -> date buckets. The paging
+     * chain (two Pager sources + per-page display resolution + insertSeparators) is
+     * replaced by this single re-derivation; changing the limit, showAll, scope or
+     * filters never re-queries the database.
+     */
+    val content: StateFlow<List<ListModel>> = combine(
+        feedSnapshotStore.observe(),
         showAllUpdates,
         feedLimitFlow,
-        feedFilters,
+        quickFilter.appliedOptions,
         feedScope,
+        excludedNsfw,
+        tagBlacklistFlow,
+        feedCategoryIdsForFilters,
         mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
-    ) { showAll, limit, filters, scope, _ ->
-        FeedPagingParams(showAll, limit, filters, scope)
-    }.flatMapLatest { params ->
-        Pager(
-            config = LargeLibraryPagingConfig,
-            pagingSourceFactory = {
-                val source = if (params.showAll) {
-                    repository.createAllTrackingLogItemsPagingSource(params.limit, params.filters)
-                } else {
-                    repository.createTrackingLogPagingSource(params.limit, params.filters)
-                }
-                BatchMappingPagingSource(
-                    delegate = source,
-                    diagnosticLabel = "feed-ui",
-                ) { items -> mapFeedPage(items, params.scope) }
-            },
-        ).flow.map { pagingData -> pagingData.applyFeedPagingPresentation() }
-    }.cachedIn(viewModelScope)
+    ) { values: Array<Any?> ->
+        buildFeedContent(
+            snapshot = values[0] as org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot,
+            showAll = values[1] as Boolean,
+            limit = values[2] as Int,
+            filters = values[3] as Set<ListFilterOption>,
+            scope = values[4] as FeedScopeParams,
+            skipNsfw = values[5] as Boolean,
+            tagBlacklist = values[6] as GlobalTagBlacklist,
+            mangaCategoryIds = values[7] as Map<String, Set<Long>>,
+        )
+    }.stateIn(
+        viewModelScope + Dispatchers.Default,
+        SharingStarted.Eagerly,
+        listOf(LoadingState),
+    )
+
+    /** The paging chain is gone; static [content] is the only feed list. */
+    val pagingContent: Flow<PagingData<ListModel>>? = null
 
     val leadingContent = combine(
         quickFilter.appliedOptions,
@@ -308,36 +328,60 @@ class FeedViewModel @Inject constructor(
         }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
 
-    val fallbackContent = combine(
-        updatedContent,
-        feedScope,
-        mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
-    ) { items, scope, _ -> items to scope }
-        .mapLatest { (items, scope) ->
-            val logs = items.asSequence()
-                .filter { item -> item.manga.matchesFeedScope(scope) }
-                .map { item -> item.toFallbackTrackingLogItem() }
-                .toList()
-            buildStaticFeedContent(logs, scope)
+    private fun buildFeedContent(
+        snapshot: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshot,
+        showAll: Boolean,
+        limit: Int,
+        filters: Set<ListFilterOption>,
+        scope: FeedScopeParams,
+        skipNsfw: Boolean,
+        tagBlacklist: GlobalTagBlacklist,
+        mangaCategoryIds: Map<String, Set<Long>>,
+    ): List<ListModel> {
+        val derived = org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.derive(
+            org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.Input(
+                snapshot = snapshot,
+                showAllUpdates = showAll,
+                feedLimit = limit,
+                filters = filters,
+                excludedNsfw = skipNsfw,
+                tagBlacklist = tagBlacklist,
+                groupTab = scope.groupTab,
+                sourceTags = scope.sourceTags,
+                presetSourceNames = scope.preset?.sources,
+                selectedCategoryId = scope.categoryId.takeIf { it != NO_ID },
+                mangaCategoryIdsByFeedKey = mangaCategoryIds,
+            ),
+        )
+        val feedItems = feedCardMapper.map(
+            derived.visibleRows,
+            org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper.Request(
+                brokenTitle = appContext.getString(R.string.favourites_broken_projection_title),
+            ),
+        )
+        if (feedItems.isEmpty()) {
+            return listOf(
+                EmptyState(
+                    icon = R.drawable.ic_empty_feed,
+                    textPrimary = R.string.text_empty_holder_primary,
+                    textSecondary = R.string.text_feed_holder,
+                    actionStringRes = 0,
+                ),
+            )
         }
-        .stateIn(
-            viewModelScope + Dispatchers.Default,
-            SharingStarted.Eagerly,
-            listOf(LoadingState),
-        )
-
-    private fun ContentTracking.toFallbackTrackingLogItem(): TrackingLogItem {
-        return TrackingLogItem(
-            id = -anchorMangaId,
-            anchorMangaId = anchorMangaId,
-            entityId = entityId,
-            preferredLocalMangaId = preferredLocalMangaId,
-            manga = manga,
-            chapters = List(newChapters.coerceAtLeast(1)) { "" },
-            createdAt = lastChapterDate ?: lastCheck ?: java.time.Instant.EPOCH,
-            isNew = newChapters > 0,
-            count = newChapters,
-        )
+        val result = ArrayList<ListModel>((feedItems.size * 1.4).toInt().coerceAtLeast(1))
+        val bucketedItems = feedItems.groupByDateBucket(FeedItem::createdAt)
+        for ((date, items) in bucketedItems) {
+            result += if (date != null) {
+                ListHeader(date)
+            } else {
+                ListHeader(R.string.unknown)
+            }
+            for (feedItem in items) {
+                result += feedItem
+            }
+        }
+        return result
     }
 
     init {
@@ -422,47 +466,6 @@ class FeedViewModel @Inject constructor(
 
     fun toggleSourceTag(tag: SourceTag) {
         globalFavoritesState.toggleSourceTag(tag)
-    }
-
-    private suspend fun mapFeedPage(
-        items: List<TrackingLogItem>,
-        scope: FeedScopeParams,
-    ): List<FeedItem> {
-        val globalTagBlacklist = GlobalTagBlacklist(settings.globalTagBlacklist)
-        val visibleItems = items.filter { item ->
-            item.manga.matchesFeedScope(scope) && item.manga !in globalTagBlacklist
-        }
-        return mangaListMapper.toFeedItems(visibleItems)
-    }
-
-    private suspend fun buildStaticFeedContent(
-        items: List<TrackingLogItem>,
-        scope: FeedScopeParams,
-    ): List<ListModel> {
-        val feedItems = mapFeedPage(items, scope)
-        if (feedItems.isEmpty()) {
-            return listOf(
-                EmptyState(
-                    icon = R.drawable.ic_empty_feed,
-                    textPrimary = R.string.text_empty_holder_primary,
-                    textSecondary = R.string.text_feed_holder,
-                    actionStringRes = 0,
-                ),
-            )
-        }
-        val result = ArrayList<ListModel>((feedItems.size * 1.4).toInt().coerceAtLeast(1))
-        val bucketedItems = feedItems.groupByDateBucket(FeedItem::createdAt)
-        for ((date, items) in bucketedItems) {
-            result += if (date != null) {
-                ListHeader(date)
-            } else {
-                ListHeader(R.string.unknown)
-            }
-            for (feedItem in items) {
-                result += feedItem
-            }
-        }
-        return result
     }
 
     private fun observeHeader() = combine(

@@ -55,34 +55,6 @@ class WorkPagingDaoTest {
 	}
 
 	@Test
-	fun feedTrackLogsLoadOneWindowThenAppendWithoutRepeatingRows() = runTest {
-		seedTrackLogs(500)
-		val source = db.getTrackLogsDao().pagingAll(limit = 500, filterOptions = emptySet())
-		val first = source.load(refreshParams()).requirePage()
-		val second = source.load(appendParams(requireNotNull(first.nextKey))).requirePage()
-
-		assertEquals(64, first.data.size)
-		assertEquals(64, second.data.size)
-		assertEquals(128, (first.data + second.data).map { it.id }.distinct().size)
-		assertEquals(
-			(first.data + second.data).map { it.createdAt }.sortedDescending(),
-			(first.data + second.data).map { it.createdAt },
-		)
-	}
-
-	@Test
-	fun feedAllTracksLoadOneWindowThenAppendWithoutRepeatingRows() = runTest {
-		seedTracks()
-		val source = db.getTracksDao().pagingAllTracks(limit = 500, filterOptions = emptySet())
-		val first = source.load(refreshParams()).requirePage()
-		val second = source.load(appendParams(requireNotNull(first.nextKey))).requirePage()
-
-		assertEquals(64, first.data.size)
-		assertEquals(64, second.data.size)
-		assertEquals(128, (first.data + second.data).map { it.mangaId }.distinct().size)
-	}
-
-	@Test
 	fun favouritesListAndHistoryPageByUniqueEntity() = runTest {
 		val favourites = db.getWorkFavouritesDao().findListRepresentatives(-1L)
 		assertEquals(6_500, favourites.size)

@@ -143,17 +143,22 @@ object FeedDeriver {
         // tag blacklist: any tag title of the row is blacklisted -> hidden
         if (tagTitles.isNotEmpty() && tagTitles.any(input.tagBlacklist::containsTagTitle)) return false
         // quick filters
-        return matchesQuickFilters(input.filters)
+        return matchesQuickFilters(input.filters, input)
     }
 
-    private fun FeedCardRow.matchesQuickFilters(filters: Set<ListFilterOption>): Boolean {
+    private fun FeedCardRow.matchesQuickFilters(
+        filters: Set<ListFilterOption>,
+        input: Input,
+    ): Boolean {
         if (filters.isEmpty()) return true
+        val categoryIds = input.mangaCategoryIdsByFeedKey[feedKey()].orEmpty()
         return filters.all { option ->
             when (option) {
-                // a favourite-category filter is only satisfiable when the display key
-                // is known to hold that category; unknown keys count as no match
-                ListFilterOption.Macro.FAVORITE -> false
-                is ListFilterOption.Favorite -> false
+                // the feed quick filter offers favourite categories only; the SQL
+                // favouriteExistsExpr(entityId, categoryId) maps onto the same
+                // category-id set the scope filter uses
+                ListFilterOption.Macro.FAVORITE -> categoryIds.isNotEmpty()
+                is ListFilterOption.Favorite -> option.category.id in categoryIds
                 ListFilterOption.Macro.NSFW -> isNsfw
                 is ListFilterOption.Tag -> option.tagId in tagIds
                 else -> true

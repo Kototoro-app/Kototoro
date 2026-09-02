@@ -98,18 +98,6 @@ abstract class TracksDao : MangaQueryBuilder.ConditionCallback {
                 .build(),
         )
 
-    fun pagingAllTracks(
-        limit: Int,
-        filterOptions: Set<ListFilterOption>,
-    ): PagingSource<Int, TrackEntity> =
-        pagingContentImpl(
-            MangaQueryBuilder("tracks", this)
-                .filters(filterOptions)
-                .limit(limit)
-                .orderBy("${pinnedSortExpr("tracks.manga_id")} DESC, last_chapter_date DESC, tracks.entity_id ASC, tracks.manga_id ASC")
-                .build(),
-        )
-
     @Query("DELETE FROM tracks")
     abstract suspend fun clear()
 
