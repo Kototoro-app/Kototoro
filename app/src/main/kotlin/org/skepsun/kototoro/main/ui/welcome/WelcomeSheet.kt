@@ -83,11 +83,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -442,54 +444,74 @@ private fun WelcomeContent(
             GlassBottomBarContainer(
                 modifier = Modifier.wrapContentWidth(),
             ) {
-                Row(
+                WizardActionBar(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(
-                        onClick = {
-                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                        },
-                        enabled = pagerState.currentPage > 0 && !navigationLocked,
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back),
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        repeat(pagerState.pageCount) { index ->
-                            Box(modifier = Modifier.size(width = 24.dp, height = 8.dp), contentAlignment = Alignment.Center) {
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = if (index == pagerState.currentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                                    modifier = Modifier.size(width = if (index == pagerState.currentPage) 24.dp else 8.dp, height = 8.dp),
-                                ) {}
+                    back = {
+                        IconButton(
+                            onClick = {
+                                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                            },
+                            enabled = pagerState.currentPage > 0 && !navigationLocked,
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                            )
+                        }
+                    },
+                    progress = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(WizardPageDotsSlotGap)) {
+                            repeat(pagerState.pageCount) { index ->
+                                Box(
+                                    modifier = Modifier.size(
+                                        width = WizardPageDotsSlotWidth,
+                                        height = WizardPageDotsHeight,
+                                    ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = if (index == pagerState.currentPage) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant
+                                        },
+                                        modifier = Modifier.size(
+                                            width = if (index == pagerState.currentPage) {
+                                                WizardPageDotsSlotWidth
+                                            } else {
+                                                WizardPageDotsHeight
+                                            },
+                                            height = WizardPageDotsHeight,
+                                        ),
+                                    ) {}
+                                }
                             }
                         }
-                    }
-                    WizardPrimaryButton(
-                        page = pagerState.currentPage,
-                        setupPhase = setupPhase,
-                        navigationLocked = navigationLocked,
-                        isInstallingPackages = isInstallingPackages,
-                        selectedRepoCount = selectedRepositoryKeys.size,
-                        pendingInstallCount = pendingInstallCount,
-                        doneOutcome = doneOutcome,
-                        onNext = {
-                            scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                        },
-                        onConfigure = { showDisclaimer = true },
-                        onInstall = viewModel::installMatchingPackages,
-                        onCancelInstall = viewModel::cancelInstall,
-                        onRetryFailed = {
-                            viewModel.retryFailedPackages()
-                            scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL) }
-                        },
-                        onDone = onDone,
-                    )
-                }
+                    },
+                    action = {
+                        WizardPrimaryButton(
+                            page = pagerState.currentPage,
+                            setupPhase = setupPhase,
+                            navigationLocked = navigationLocked,
+                            isInstallingPackages = isInstallingPackages,
+                            selectedRepoCount = selectedRepositoryKeys.size,
+                            pendingInstallCount = pendingInstallCount,
+                            doneOutcome = doneOutcome,
+                            onNext = {
+                                scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                            },
+                            onConfigure = { showDisclaimer = true },
+                            onInstall = viewModel::installMatchingPackages,
+                            onCancelInstall = viewModel::cancelInstall,
+                            onRetryFailed = {
+                                viewModel.retryFailedPackages()
+                                scope.launch { pagerState.animateScrollToPage(WIZARD_PAGE_BATCH_INSTALL) }
+                            },
+                            onDone = onDone,
+                        )
+                    },
+                )
             }
         }
     }
@@ -515,6 +537,77 @@ private enum class WizardDoneOutcome {
     SUCCESS,
     PARTIAL,
     SKIPPED,
+}
+
+/**
+ * The setup-wizard action bar: `[back] [page dots] [primary action]`.
+ *
+ * Every child is measured *before* anything is allocated, so the primary action
+ * always keeps its natural width. It used to be the last child of a plain `Row`
+ * and therefore absorbed the entire width deficit: on narrow screens (or under a
+ * large font scale) the label wrapped inside the fixed-height pill and read as
+ * clipped text. When the leftover slot cannot hold the dot rail the rail steps
+ * out — `WizardPageHeader` already carries "Step N of M" — and the pill hugs the
+ * two items that remain instead of stretching around an empty hole.
+ */
+@Composable
+private fun WizardActionBar(
+    back: @Composable () -> Unit,
+    progress: @Composable () -> Unit,
+    action: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Layout(
+        modifier = modifier,
+        content = {
+            back()
+            progress()
+            action()
+        },
+    ) { measurables, constraints ->
+        val spacing = WizardActionBarItemSpacing.roundToPx()
+        val availableWidth = constraints.maxWidth
+        val freeHeight = constraints.copy(minHeight = 0)
+        val backPlaceable = measurables[0].measure(freeHeight)
+        // The action is the only child allowed to be constrained: an over-long
+        // localized label ellipsizes (see WizardPrimaryButtonContent) rather than
+        // push the back button out of the bar.
+        val actionPlaceable = measurables[2].measure(
+            freeHeight.copy(
+                maxWidth = (availableWidth - backPlaceable.width - spacing).coerceAtLeast(0),
+            ),
+        )
+        // Unbounded, so the rail reports the width the fit decision needs.
+        val progressPlaceable = measurables[1].measure(Constraints())
+        val spec = resolveWizardActionBar(
+            availableWidth = availableWidth.toDp(),
+            backButtonWidth = backPlaceable.width.toDp(),
+            dotsWidth = progressPlaceable.width.toDp(),
+            actionWidth = actionPlaceable.width.toDp(),
+        )
+        val width = spec.width.roundToPx()
+        val showProgress = spec.progress == WizardProgressPresentation.Roomy
+        val height = maxOf(
+            backPlaceable.height,
+            actionPlaceable.height,
+            if (showProgress) progressPlaceable.height else 0,
+        )
+        layout(width, height) {
+            if (showProgress) {
+                val slotStart = backPlaceable.width + spacing
+                val slotEnd = (width - actionPlaceable.width - spacing).coerceAtLeast(slotStart)
+                progressPlaceable.placeRelative(
+                    x = slotStart + (slotEnd - slotStart - progressPlaceable.width) / 2,
+                    y = (height - progressPlaceable.height) / 2,
+                )
+            }
+            backPlaceable.placeRelative(x = 0, y = (height - backPlaceable.height) / 2)
+            actionPlaceable.placeRelative(
+                x = width - actionPlaceable.width,
+                y = (height - actionPlaceable.height) / 2,
+            )
+        }
+    }
 }
 
 /**
@@ -650,7 +743,15 @@ private fun WizardPrimaryButtonContent(
     iconVector: androidx.compose.ui.graphics.vector.ImageVector?,
     iconPainter: Painter?,
 ) {
-    Text(label)
+    // The pill's height is fixed, so a wrapping label would be cut off mid-line.
+    // One line, ellipsized: same guard KototoroBottomNav uses for its labels
+    // (see also `WizardActionBar`, which keeps this label from being squeezed).
+    Text(
+        text = label,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
+    )
     if (iconVector != null) {
         Spacer(Modifier.width(8.dp))
         Icon(iconVector, contentDescription = null, modifier = Modifier.size(18.dp))
