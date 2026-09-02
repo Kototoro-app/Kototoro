@@ -15,8 +15,8 @@
 | 3 纯内存派生 | ✅ 完成 | `FavouriteLibraryDeriver`（visibility/quickFilters/groupAndSort 三阶段）；16 用例 |
 | 4 Container 接管状态 | ✅ 完成（管线侧） | `libraryState` StateFlow + `buildFavouriteLibraryUiState` 纯函数 + debug shadow comparison 挂点；6 用例 |
 | 5 UI 切静态 List | ✅ 完成（渲染侧） | `FavouritesCardMapper` + `FavouriteContentResolver`；`pagingContent = null`；详见 §4 |
-| 6 actions 迁移/删逐分类 VM | ✅ 完成（待设备回归） | `ContentListHost` seam + `FavouritesListHost` 适配器；`FavouritesListViewModel`/`Factory` 删除；quick filter chips 与 metadata authority 一并转内存/快照；详见 §4.5 |
-| 7 删除收藏 Paging 代码 | ✅ 完成（设备待补测） | `FavouriteLibraryPagingRow`/`WorkFavouritesDao.pagingSource`/`createFavouritePagingSource`/`observeFavouriteAggregates`/`FavouriteLibraryPagingConfig` 与两个旧链路测试套删除；`findList` 改成直接投影 entity；详见 §4.6 |
+| 6 actions 迁移/删逐分类 VM | ✅ 完成（设备回归已补） | `ContentListHost` seam + `FavouritesListHost` 适配器；`FavouritesListViewModel`/`Factory` 删除；quick filter chips 与 metadata authority 一并转内存/快照；详见 §4.5 |
+| 7 删除收藏 Paging 代码 | ✅ 完成（设备回归已补） | `FavouriteLibraryPagingRow`/`WorkFavouritesDao.pagingSource`/`createFavouritePagingSource`/`observeFavouriteAggregates`/`FavouriteLibraryPagingConfig` 与两个旧链路测试套删除；`findList` 改成直接投影 entity；详见 §4.6 |
 | 8 验收收敛 | ⬜ 未开始 | |
 
 **性能实测**（Xiaomi M332BF / Android 16 / debug 变体 / Room in-memory）：
@@ -257,7 +257,7 @@ Phase 6 追加：切分类/旋转后卡片不重置（host 由容器缓存）、
 
 Phase 6 之后（2026-09-02，接了手机但只能跑无 UI 的 androidTest）：`compileDebugKotlin` ✓、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 **2148/2148** ✓（favourites 包 90：新增 `FavouritesQuickFilterOptionsTest` 4、`FavouritesCardMapperTest` 14）。设备（`am instrument` 直跑，见 §5）：`FavouriteLibraryReadDaoTest` **11/11**（含 `metadataAuthorityReadsTheCachedSiteItem`）、`FavouriteLibrarySnapshotStoreTest` **9/9**。冷启动新 APK 无 crash（`adb install` + monkey 起 `MainActivity`，logcat 无 AndroidRuntime FATAL）。§4.7 的交互清单（含 Phase 6 追加项）仍需人工在手机上跑——本会话 adb 无法注入输入（见 §5）。
 
-Phase 7 之后（2026-09-02）：`compileDebugKotlin` ✓（Room KSP 校验改写后的 `findList` SQL）、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 ✓（删了 `BatchMappingPagingSourceTest` 的 favourites config 断言）。设备侧本轮没跑成——手机在装机后从 adb 掉线（`adb: device not found`），`WorkPagingDaoTest` 留在下一次接机补跑（它现在也负责改写后 `findList` 的实机覆盖）。
+Phase 7 之后（2026-09-02，本机补跑）：`compileDebugKotlin` ✓（Room KSP 校验改写后的 `findList` SQL）、`compileDebugAndroidTestKotlin` ✓、`testDebugUnitTest` 全量 ✓（删了 `BatchMappingPagingSourceTest` 的 favourites config 断言）。设备侧：另一台机器装机后 adb 掉线遗留的 `WorkPagingDaoTest` 已在本机（M332BF，核心破解跨签名安装本机构建 APK）补跑通过 **12/12**（含改写后 `findList` 的实机覆盖）；全部收藏套件用本机构建复跑 **35/35**（ReadDao 11 + Scale 2 + SnapshotStore 9 + StoreScale 1 + AggregateChain 12）；冷启动 `MainActivity` 无 FATAL、进程存活。adb 输入注入仍被 MIUI `INJECT_EVENTS` 拦截，§4.7 交互清单（收藏页进出、分类切换、多选、详情返回等）需人工在设备上完成。
 
 全部通过状态（2026-09-01）：JVM 32/32（契约 10 + deriver 16 + UiState 6），设备 58/58（SQL 24 + 聚合链 12 + DAO 10+2 + Store 9+1 + 基准 3——基准 3 含在其中）。
 
