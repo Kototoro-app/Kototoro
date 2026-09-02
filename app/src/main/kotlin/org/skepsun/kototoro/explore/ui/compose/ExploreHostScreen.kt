@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,13 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -884,12 +885,19 @@ fun KototoroExploreHostRoute(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.TopStart)
-                        .graphicsLayer {
-                            translationY = if (listState.firstVisibleItemIndex == 0) {
-                                -listState.firstVisibleItemScrollOffset.toFloat()
+                        // A layout offset, not a draw-phase graphicsLayer: the cover's
+                        // shared-element rect is measured from this subtree's layout
+                        // coordinates, and a layer-only translation never re-places the node
+                        // -- the return flight then aims at where the hero sat before the list
+                        // was scrolled (too low) and only snaps to the real rect afterwards.
+                        // Modifier.offset re-places the node per scroll frame.
+                        .offset {
+                            val scrollOffset = if (listState.firstVisibleItemIndex == 0) {
+                                listState.firstVisibleItemScrollOffset
                             } else {
-                                -browseHeroHeightPx
+                                browseHeroHeightPx.toInt()
                             }
+                            IntOffset(x = 0, y = -scrollOffset)
                         },
                 )
             }

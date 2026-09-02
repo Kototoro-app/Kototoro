@@ -45,6 +45,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -107,6 +108,7 @@ import org.skepsun.kototoro.list.ui.model.supportingText
 import org.skepsun.kototoro.list.ui.model.buildInfoText
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.core.util.ext.mangaExtra
+import kotlinx.coroutines.launch
 
 private val DiscoverHeroHeight = 340.dp
 private val DiscoverHeroHeightDetached = 262.dp
@@ -197,6 +199,7 @@ fun DiscoverHeroCarousel(
             }
         }
     val pagerState = rememberPagerState(pageCount = { items.size })
+    val navigationScope = rememberCoroutineScope()
     val selectedIndex by remember(items, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, items.lastIndex) }
     }
@@ -488,7 +491,24 @@ fun DiscoverHeroCarousel(
                             logHeroTransition(
                                 "discover_click title=${item.title} sharedKey=$sharedElementKey bounds=${coverBounds != null}",
                             )
-                            onItemClick(item, coverBounds, sharedElementKey)
+                            // Land the pager before the route changes: the flight's start rect
+                            // is measured from this card the moment this page leaves the
+                            // composition, so a card that is still gliding would be recorded
+                            // mid-glide and the return flight would snap to the settled rect
+                            // later. `finally` so a cancelled scope can never swallow the tap.
+                            val gliding = page == pagerState.currentPage &&
+                                (pagerState.isScrollInProgress || pagerState.currentPageOffsetFraction != 0f)
+                            if (gliding) {
+                                navigationScope.launch {
+                                    try {
+                                        pagerState.scrollToPage(page)
+                                    } finally {
+                                        onItemClick(item, coverBounds, sharedElementKey)
+                                    }
+                                }
+                            } else {
+                                onItemClick(item, coverBounds, sharedElementKey)
+                            }
                         }
                         .padding(horizontal = CompactTopBarHorizontalPadding, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
