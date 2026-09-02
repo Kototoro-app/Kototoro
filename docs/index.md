@@ -53,6 +53,7 @@ features:
 - Read [External Extension Integration Guide](./architecture/external-extension-integration-guide.md) if you are a developer looking to integrate Mihon/Tachiyomi extensions into your own app.
 - Read [Architecture Review](./architecture/architecture-review.md) if you want a project-level architectural assessment before changing major subsystems.
 - Read [Architecture Roadmap](./architecture/architecture-roadmap.md) if you want to understand the active epics and planning.
+- Read [Favourites Library Improvement Plan](./architecture/favourites-komikku-alignment-implementation-plan-2026-09.md) for the full-list snapshot migration inspired by Komikku.
 - Read [Incremental OTA Updates](./architecture/incremental-updates.md) to learn how Kototoro achieves NDK-free pure Kotlin bspatch delta updating.
 - Read [Dynamic Plugin System Architecture](./architecture/dynamic_plugin_system.md) to understand how Kototoro and Kotatsu extension JARs are loaded dynamically using zero-overhead ClassLoaders.
 - Read [Plugin Development Guide](./plugin_development_guide.md) to learn how to build and publish third-party plugins in an independent repository using GitHub Actions.
