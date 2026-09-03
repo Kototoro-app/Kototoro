@@ -750,15 +750,6 @@ fun QuickFilterSection(
     val orderedChips = remember(quickFilter.items) {
         quickFilter.items.sortedBy { chip -> !chip.isChecked }
     }
-    val hasSelectedFilter = remember(quickFilter.groups, orderedChips) {
-        quickFilter.groups.any { group -> group.items.any(ChipModel::isChecked) } ||
-            orderedChips.firstOrNull()?.isChecked == true
-    }
-    LaunchedEffect(hasSelectedFilter) {
-        if (hasSelectedFilter && listState.firstVisibleItemIndex > 0) {
-            listState.animateScrollToItem(0)
-        }
-    }
     LazyRow(
         state = listState,
         contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
