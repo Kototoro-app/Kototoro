@@ -1,9 +1,13 @@
 package org.skepsun.kototoro.settings.nav
 
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -15,6 +19,7 @@ import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
+import org.skepsun.kototoro.main.ui.MainActivity
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NavConfigViewModelTest {
@@ -40,5 +45,39 @@ class NavConfigViewModelTest {
 		assertTrue(viewModel.availableItems.value.isNotEmpty())
 		assertTrue(viewModel.canShowAddAction.value)
 		assertTrue(viewModel.canAddAction.value)
+	}
+
+	@Test
+	fun `change is persisted immediately even when leaving before the debounce`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME)
+		}
+		val viewModel = NavConfigViewModel(settings, mockk<ActivityRecreationHandle>(relaxed = true))
+
+		viewModel.addItem(NavItem.HISTORY)
+
+		// Leaving the screen right away cancels viewModelScope mid-debounce; the write
+		// must already be on disk (the recreation is the only debounced part).
+		viewModel.viewModelScope.cancel()
+		verify(exactly = 1) { settings.mainNavItems = listOf(NavItem.HOME, NavItem.HISTORY) }
+	}
+
+	@Test
+	fun `pending recreation fires when the view model is cleared`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME)
+		}
+		val recreation = mockk<ActivityRecreationHandle>(relaxed = true)
+		val viewModel = NavConfigViewModel(settings, recreation)
+		val store = ViewModelStore()
+		store.put("nav", viewModel)
+
+		viewModel.addItem(NavItem.HISTORY)
+		// Debounce has not elapsed yet: no recreation so far.
+		verify(exactly = 0) { recreation.recreate(MainActivity::class.java) }
+
+		store.clear() // fragment destroyed / settings finished within the debounce window
+
+		verify(exactly = 1) { recreation.recreate(MainActivity::class.java) }
 	}
 }

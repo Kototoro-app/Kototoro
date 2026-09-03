@@ -77,6 +77,9 @@ class NavConfigViewModel @Inject constructor(
 
     private var commitJob: Job? = null
 
+    /** True while a debounced activity recreation is still owed; see [commit]. */
+    private var recreatePending = false
+
     fun reorder(fromPos: Int, toPos: Int) {
         items.value = items.value.toMutableList().apply {
             move(fromPos, toPos)
@@ -112,13 +115,37 @@ class NavConfigViewModel @Inject constructor(
     }
 
     private fun commit(value: List<NavItem>) {
+        // Persist synchronously. The setter is a plain SharedPreferences putString and
+        // every commit writes the full list (last write wins), so there is nothing to
+        // debounce here. Writing inside the debounced job below meant that leaving the
+        // screen within the 500 ms window cancelled viewModelScope mid-delay and
+        // silently dropped the change: the nav config "did not take effect" until the
+        // user tried again and happened to stay longer.
+        settings.mainNavItems = value
         val prevJob = commitJob
+        recreatePending = true
+        // Debounce only the activity recreation, so rapid reorders coalesce into one.
         commitJob = launchJob {
             prevJob?.cancelAndJoin()
             delay(500)
-            settings.mainNavItems = value
+            activityRecreationHandle.recreate(MainActivity::class.java)
+            // Cleared only on successful completion. A cancelled job never reaches this
+            // line, so the flag stays set and onCleared() can fire the owed recreate.
+            recreatePending = false
+        }
+    }
+
+    override fun onCleared() {
+        // ViewModel.clear() cancels viewModelScope *before* calling onCleared(), so an
+        // isActive check on the job is always false here. Instead: if a debounced
+        // recreate is still owed (the user left within the 500 ms window), fire it now.
+        // The main shell reads mainNavItems non-reactively, so without the recreation
+        // the bottom nav would keep showing the stale set until the next unrelated
+        // recreation - while the preference already says otherwise.
+        if (recreatePending) {
             activityRecreationHandle.recreate(MainActivity::class.java)
         }
+        super.onCleared()
     }
 
     private fun getUnavailabilityHint(item: NavItem) = if (item.isAvailable(settings)) {
