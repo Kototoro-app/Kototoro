@@ -189,7 +189,14 @@ fun MainShellScene(
     detailsTransitionStyle: ListToDetailsTransition = ListToDetailsTransition.HERO_EXPAND,
 ) {
     val activity = LocalContext.current as FragmentActivity
-    val appRouter = activity.router
+    // `activity.router` builds a fresh AppRouter on every read; composing it directly
+    // hands every recomposition a new instance, re-keying DisposableEffects that use it
+    // as a key (favourites / local contextual menus). That churn re-dispatched their
+    // menu reports every frame: remove-on-forget + put-on-remember alternated the
+    // snapshot map, invalidating the shell, which recomposed, which built a new router.
+    // An AppRouter is a stateless facade over the activity, so one instance per
+    // activity is correct.
+    val appRouter = remember(activity) { activity.router }
     val mainActivity = activity as? MainActivity
     val rootView = LocalView.current
     val isMainShellRouteVisible = mainNavState.currentStack().lastOrNull() is TopLevelNavKey

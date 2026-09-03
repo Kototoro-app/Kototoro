@@ -1362,20 +1362,22 @@ fun KototoroApp(
                                                         if (ownerRoute in routeTopBarOverrideStates) {
                                                             routeTopBarOverrideStates.remove(ownerRoute)
                                                         }
-                                                    } else if (routeTopBarOverrideStates[ownerRoute] != state) {
-                                                        // Structural, not identity: the routes report from an unkeyed
-                                                        // SideEffect and hand us a freshly built (data-class) state every
-                                                        // recomposition. Unlike MutableState.setValue, a snapshot map
-                                                        // notifies its readers on every put even when the value is equal,
-                                                        // so an instance check here turns "report again" into a permanent
-                                                        // invalidate -> recompose -> report loop. Measured on a Redmi
-                                                        // K70: 175 of ~510 sampled writes on an untouched history screen,
-                                                        // ~620 frames rendered per idle 5s.
+                                                    } else if (!overrideStateEquivalent(routeTopBarOverrideStates[ownerRoute], state)) {
+                                                        // Semantic, not data-class ==: the routes re-report from an
+                                                        // unkeyed SideEffect (history) or a re-remembered DisposableEffect
+                                                        // (favourites) and hand us a freshly built state every
+                                                        // recomposition, callback lambdas included. == on those states
+                                                        // therefore never dedupes, and unlike MutableState.setValue a
+                                                        // snapshot map notifies its readers on every put even when the
+                                                        // value is equal, so an identity/== check here turned "report
+                                                        // again" into a permanent invalidate -> recompose -> report loop
+                                                        // (~620 frames per idle 5s on an untouched history screen;
+                                                        // see overrideStateEquivalent).
                                                         routeTopBarOverrideStates[ownerRoute] = state
                                                     }
                                                 }
                                                 else -> {
-                                                    if (globalTopBarOverrideState !== overrideState) {
+                                                    if (!overrideStateEquivalent(globalTopBarOverrideState, overrideState)) {
                                                         globalTopBarOverrideState = overrideState
                                                     }
                                                 }
@@ -1388,7 +1390,10 @@ fun KototoroApp(
                                                 if (state.ownerRoute in routeContextualMenuActions) {
                                                     routeContextualMenuActions.remove(state.ownerRoute)
                                                 }
-                                            } else if (routeContextualMenuActions[state.ownerRoute] != state.actions) {
+                                            } else if (!menuActionsEquivalent(routeContextualMenuActions[state.ownerRoute].orEmpty(), state.actions)) {
+                                                // See overrideStateEquivalent: the action lists carry freshly built
+                                                // onClick callbacks on every re-report, so == never dedupes and every
+                                                // put re-invalidates the shell that reads this map.
                                                 routeContextualMenuActions[state.ownerRoute] = state.actions
                                             }
                                         },
