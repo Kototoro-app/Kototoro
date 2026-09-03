@@ -941,7 +941,10 @@ internal fun SourceOptionCard(
                         onDismissRequest = { statusMenuExpanded = false },
                         shape = RoundedCornerShape(28.dp),
                         style = GlassDefaults.subtleStyle(),
-                        useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                        // SourceOptionCard is rendered inside the metadata/reading source sheets,
+                        // which live in their own Dialog window. The app-level root overlay would
+                        // be behind that window and the menu would be occluded by the sheet.
+                        useRootOverlay = false,
                         anchorBounds = statusMenuAnchorBounds,
                     ) {
                         supportedStatusesForService(linkedTrackingItem.service).forEach { status ->

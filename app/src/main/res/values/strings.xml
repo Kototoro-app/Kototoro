@@ -3079,6 +3079,9 @@
     <string name="welcome_done_skipped">You chose to skip the batch install. Head to Extension Management whenever you are ready.</string>
     <string name="welcome_done_summary_text">Succeeded %1$d · Failed %2$d · Cancelled %3$d. Sources matching your selected content types and languages are enabled.</string>
     <string name="welcome_done_json_note">JSON-based types (Legado / TVBox / LNReader) are imported automatically; if you also added other JSON repositories, import them in Extension Management.</string>
+    <string name="welcome_done_title_finished">Setup complete</string>
+    <string name="welcome_done_summary_finished">The wizard is done — no repositories or sources were added automatically.</string>
+    <string name="welcome_done_body_finished">Kototoro did not add any sources during setup. You can add your own repositories and sources any time in Settings › Content sources (Extension Management).</string>
     <string name="welcome_done_advice_title">If a source does not work</string>
     <string name="welcome_done_advice_summary">A short troubleshooting path, so the right people see the report.</string>
     <string name="welcome_done_advice_body">1. Confirm the issue using the original host app of the extension — for example a Mihon-type source should be tested in the Mihon app.\n2. If the problem also happens there, it belongs to the repository that maintains the extension: open an issue at the repository\'s own URL.\n3. If it only happens in Kototoro, report it in the Kototoro project repository and include the source name, the extension version and what you tried.</string>

@@ -284,9 +284,10 @@ class WelcomeViewModel @Inject constructor(
     val currentPage = _currentPage.asStateFlow()
 
     private val _selectedRepositoryKeys = MutableStateFlow(
-        savedStateHandle.get<ArrayList<String>>(KEY_SELECTED_REPOSITORIES)?.toSet()
-            ?: WelcomeDefaults.defaultRepositories(UnifiedRecommendedRepositories.all)
-                .mapTo(LinkedHashSet(), ::repoKeyForWelcome),
+        // The wizard no longer imports repositories, so nothing is pre-selected by default. Any
+        // keys saved by a previous wizard run on this device are preserved, but a fresh install
+        // starts with an empty selection.
+        savedStateHandle.get<ArrayList<String>>(KEY_SELECTED_REPOSITORIES)?.toSet() ?: emptySet(),
     )
     val selectedRepositoryKeys = _selectedRepositoryKeys.asStateFlow()
 

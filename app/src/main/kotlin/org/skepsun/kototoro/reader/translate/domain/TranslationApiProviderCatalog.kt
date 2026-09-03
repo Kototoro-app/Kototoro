@@ -37,6 +37,7 @@ object TranslationApiProviderCatalog {
         provider("ANTHROPIC", "Anthropic", "anthropic", "https://api.anthropic.com/v1", "claude-3-5-haiku-latest", "https://console.anthropic.com/settings/keys", "https://docs.anthropic.com/en/api/openai-sdk"),
         provider("GEMINI", "Google Gemini", "google", "https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.0-flash", "https://aistudio.google.com/apikey", "https://ai.google.dev/gemini-api/docs/openai"),
         provider("OPENROUTER", "OpenRouter", "openrouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", "https://openrouter.ai/settings/keys", "https://openrouter.ai/docs/api-reference/overview"),
+        provider("NANOGPT", "NanoGPT", "nanogpt", "https://nano-gpt.com/api/v1", "gpt-4o-mini", "https://nano-gpt.com/api", "https://docs.nano-gpt.com/api-reference/chat-completions"),
         provider("OPENCODE", "OpenCode Zen", "opencode", "https://opencode.ai/zen/v1", "big-pickle", "https://opencode.ai/auth", "https://opencode.ai/docs/zen"),
         provider("OPENCODE_GO", "OpenCode Go", "opencode-go", "https://opencode.ai/zen/go/v1", "deepseek-v4-flash", "https://opencode.ai/auth", "https://opencode.ai/docs/zen"),
         provider("GROQ", "Groq", "groq", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", "https://console.groq.com/keys", "https://console.groq.com/docs/openai"),

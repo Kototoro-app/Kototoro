@@ -28,6 +28,10 @@ class TranslationApiProviderCatalogTest {
 			TranslationApiProviderCatalog.resolveChatEndpoint("GROQ", ""),
 		)
 		assertEquals(
+			"https://nano-gpt.com/api/v1/chat/completions",
+			TranslationApiProviderCatalog.resolveChatEndpoint("NANOGPT", ""),
+		)
+		assertEquals(
 			"https://example.com/v1/chat/completions",
 			TranslationApiProviderCatalog.resolveChatEndpoint("CUSTOM", " https://example.com/v1/chat/completions "),
 		)

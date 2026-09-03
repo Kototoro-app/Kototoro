@@ -1232,9 +1232,6 @@ class AppRouter(
                         )
                     }
                 },
-                onStartSystemInstall = { intent ->
-                    (composeActivity as? SystemInstallLauncherHost)?.launchSystemInstall(intent)
-                },
                 onOpenExtensionManagement = {
                     composeActivity.dismissComposeModal(WELCOME_MODAL_KEY)
                     openManageSources()

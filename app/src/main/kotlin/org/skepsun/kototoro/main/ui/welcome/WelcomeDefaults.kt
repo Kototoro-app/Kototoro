@@ -8,17 +8,12 @@ import org.skepsun.kototoro.settings.sources.unified.UnifiedSourceKind
 
 internal object WelcomeDefaults {
 
-    private val defaultRepositoryNames = mapOf(
-        UnifiedSourceKind.JAR to setOf("Kototoro Parsers", "Redo Parsers"),
-        UnifiedSourceKind.MIHON to setOf("Keiyoushi"),
-        UnifiedSourceKind.ANIYOMI to setOf("Yuzono Anime Repo"),
-        UnifiedSourceKind.IREADER to setOf("IReader Official"),
-        UnifiedSourceKind.LEGADO to setOf("XIU2 Yuedu"),
-        UnifiedSourceKind.TVBOX to setOf("Qiqi TVBox"),
-        UnifiedSourceKind.LNREADER to setOf("LNReader Official"),
-        UnifiedSourceKind.TSUNDOKU to setOf("NovelSourcery (Tsundoku novels)"),
-        UnifiedSourceKind.CLOUDSTREAM to setOf("Phisher Repo"),
-    )
+    /**
+     * No repository is auto-selected by default. The wizard no longer imports repositories, and
+     * Kototoro never curates a default set of third-party repositories (see
+     * [UnifiedRecommendedRepositories]); users add their own sources explicitly.
+     */
+    private val defaultRepositoryNames: Map<UnifiedSourceKind, Set<String>> = emptyMap()
 
     fun defaultRepositories(
         recommendations: List<UnifiedRecommendedRepository>,

@@ -26,13 +26,11 @@ import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
 
 class UnifiedSourceCatalogRepositoryTest : FunSpec({
 
-    test("recommended repositories include Cs-GizliKeyif") {
-        val repository = UnifiedRecommendedRepositories.all.single {
-            it.url == "https://raw.githubusercontent.com/Kraptor123/Cs-GizliKeyif/refs/heads/master/repo.json"
-        }
-
-        repository.kind shouldBe UnifiedSourceKind.CLOUDSTREAM
-        repository.name shouldBe "Cs-GizliKeyif +18 | @kraptor123"
+    test("preset repository list is empty - nothing is recommended") {
+        UnifiedRecommendedRepositories.all shouldHaveSize 0
+        UnifiedRecommendedRepositories.byKind(UnifiedSourceKind.CLOUDSTREAM) shouldBe emptyList()
+        UnifiedRecommendedRepositories.byKind(UnifiedSourceKind.LEGADO) shouldBe emptyList()
+        UnifiedRecommendedRepositories.byKind(UnifiedSourceKind.TVBOX) shouldBe emptyList()
     }
 
     test("lnreader package ids stay unique when plugin metadata ids repeat") {
@@ -138,34 +136,19 @@ class UnifiedSourceCatalogRepositoryTest : FunSpec({
         item.url shouldBe "https://github.com/example/novels/raw/repo/index.min.json"
     }
 
-    test("preset merge replaces legacy json url and removes duplicate repository ids") {
+    test("configured repositories are kept untouched when there are no presets") {
         val repository = testRepository()
-        val legacyItem = unifiedKeiyoushiRepositoryItem(
-            name = "Legacy Keiyoushi",
-            url = "https://github.com/keiyoushi/extensions/raw/repo/index.min.json",
-        )
-        val protobufItem = repository.invokeToUnifiedRepositoryItem(
-            ExternalExtensionRepo(
-                type = ExternalExtensionType.MIHON,
-                baseUrl = KEIYOUSHI_PROTOBUF_URL,
-                name = "Keiyoushi",
-                shortName = null,
-                website = "https://keiyoushi.github.io",
-                signingKeyFingerprint = "fingerprint",
-                createdAt = 2L,
-                updatedAt = 2L,
-                lastSuccessAt = 2L,
-                lastError = null,
-            ),
+        val configured = unifiedKeiyoushiRepositoryItem(
+            name = "Keiyoushi",
+            url = KEIYOUSHI_PROTOBUF_URL,
         )
 
-        val matchingItems = repository.invokeWithPresetRepositories(listOf(legacyItem, protobufItem))
-            .filter { it.id == KEIYOUSHI_REPOSITORY_ID }
+        val items = repository.invokeWithPresetRepositories(listOf(configured))
 
-        matchingItems shouldHaveSize 1
-        matchingItems.single().url shouldBe KEIYOUSHI_PROTOBUF_URL
-        matchingItems.single().isConfigured shouldBe true
-        matchingItems.single().isPreset shouldBe true
+        items shouldHaveSize 1
+        items.single().url shouldBe KEIYOUSHI_PROTOBUF_URL
+        items.single().isConfigured shouldBe true
+        items.single().isPreset shouldBe false
     }
 })
 

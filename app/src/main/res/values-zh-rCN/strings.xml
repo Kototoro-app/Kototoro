@@ -2190,6 +2190,9 @@
     <string name="welcome_done_skipped">你选择了跳过批量安装。随时可以到拓展管理中自行安装。</string>
     <string name="welcome_done_summary_text">成功 %1$d · 失败 %2$d · 取消 %3$d。已启用与所选内容形态和语言匹配的源。</string>
     <string name="welcome_done_json_note">Legado / TVBox / LNReader 等 JSON 类仓库已自动导入；若你还添加了其他 JSON 仓库，请在拓展管理中导入。</string>
+    <string name="welcome_done_title_finished">设置完成</string>
+    <string name="welcome_done_summary_finished">向导已完成——没有自动添加任何仓库或来源。</string>
+    <string name="welcome_done_body_finished">Kototoro 在设置过程中没有添加任何来源。你可以随时前往「设置 › 内容源（拓展管理）」添加自己的仓库和来源。</string>
     <string name="welcome_done_advice_title">如果内容源出问题</string>
     <string name="welcome_done_advice_summary">按这条路径排查，把问题反馈给对的人。</string>
     <string name="welcome_done_advice_body">1. 先用拓展对应的原始宿主应用确认是否同样有问题——例如 Mihon 类型的源应先在 Mihon 应用中测试。\n2. 如果宿主应用里也一样，问题属于维护该拓展的仓库：到该仓库自己的地址提 Issue。\n3. 如果只在 Kototoro 中出现，请到 Kototoro 项目仓库提 Issue，并附上源名称、拓展版本和你尝试过的内容。</string>

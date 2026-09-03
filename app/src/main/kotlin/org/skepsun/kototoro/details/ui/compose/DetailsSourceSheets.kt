@@ -50,9 +50,7 @@ import androidx.compose.ui.window.Dialog
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.titleResId
-import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.model.ContentSourceInfo
-import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
@@ -169,7 +167,10 @@ fun MetadataSourceSheet(
                                 GlassDropdownMenu(
                                     expanded = showMenu,
                                     onDismissRequest = { showMenu = false },
-                                    useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+                                    // MetadataSourceSheet is rendered in its own Dialog window. The
+                                    // app-level root overlay would be behind that window and the
+                                    // menu would be occluded by the sheet's panel.
+                                    useRootOverlay = false,
                                     anchorBounds = menuAnchorBounds,
                                 ) {
                                     CompactDropdownMenuItem(
