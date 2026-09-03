@@ -17,7 +17,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
@@ -114,10 +116,25 @@ class FeedViewModel @Inject constructor(
     private val workResolver: WorkResolver,
     private val feedSnapshotStore: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotStore,
     private val feedCardMapper: org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper,
+    private val updatesSnapshotStore: org.skepsun.kototoro.tracker.domain.updates.UpdatesSnapshotStore,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel,
     RetainedPagingSnapshotHost {
     private val spaceBinding = spaceBrowseScope.createBinding(viewModelScope + Dispatchers.Default)
+
+    /**
+     * The quick-filter chips (category rail) are built by [UpdatesListQuickFilter], whose
+     * first evaluation blocks on an [UpdatesSnapshot]. The base class caches that first
+     * result forever, and this screen's own quick-filter instance is otherwise never fed
+     * (only the old updates screen fed its own copy) - so without this the leading-content
+     * combine suspended forever and the feed showed neither the chip rail nor the
+     * updated-content carousel.
+     */
+    init {
+        updatesSnapshotStore.observe()
+            .onEach(quickFilter::acceptSnapshot)
+            .launchIn(viewModelScope + Dispatchers.Default)
+    }
 
     private val retainedPagingSnapshotStore = RetainedPagingSnapshotStore()
 
