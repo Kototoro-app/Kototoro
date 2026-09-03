@@ -4,6 +4,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ContentListQuickFilter
@@ -46,7 +47,13 @@ class FavoritesListQuickFilter @AssistedInject constructor(
         buildFavoritesQuickFilter(chips)
 
     override suspend fun getAvailableFilterOptions(): List<ListFilterOption> {
-        val library = libraryState.value
+        // The base class caches the first evaluation forever, and the library snapshot
+        // starts empty (isInitialized = false) before its first complete emission. The
+        // all-favourites host is the first pager page, so it used to evaluate against the
+        // empty snapshot and permanently cache the macro-only chip set (tags/sources
+        // missing) while later-created category tabs got the full set. Wait for the first
+        // complete snapshot before computing.
+        val library = libraryState.first { it.isInitialized }
         return buildFavouritesFilterOptions(
             FavouritesQuickFilterInput(
                 categoryId = categoryId,
