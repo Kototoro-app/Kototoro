@@ -89,10 +89,17 @@ abstract class HistoryLibraryReadDao {
     /**
      * Tags of the history display projections (the Tag quick filter's key).
      *
-     * Two indexable branches instead of one OR join with a correlated
-     * subquery: the OR shape forced a full `manga_tags` scan plus an
-     * automatic-index rebuild per row (26s on a 3.2k-history / 119k-tag
-     * restore; the UNION below returns the identical row set in ~70ms).
+     * Driven from the distinct display projections rather than joining the history twice
+     * (once by anchor, once by preferred local projection) and unioning: that shape made
+     * SQLite scan all of `manga_tags` — the links of every work in the library, not just
+     * the ones in the history — and dedup through a temp b-tree. It also emitted tags under
+     * an anchor id whenever the entity displays another projection, and nothing reads those
+     * rows: the snapshot keys tag lookups by the display projection alone.
+     *
+     * Measured on a 4.6k-history / 121k-link copy of a real library: 117ms → 42ms, and the
+     * row set is now exactly what the snapshot consumes. The two earlier shapes were the
+     * OR-join (26s) and the UNION (~70ms) on the 3.2k restore of
+     * docs/architecture/large-library-performance-handoff-2026-08.md.
      */
     @Query(
         """
@@ -100,19 +107,14 @@ abstract class HistoryLibraryReadDao {
             mt.manga_id AS manga_id,
             t.title AS tag_title,
             t.key AS tag_key
-        FROM manga_tags mt
+        FROM (
+            SELECT DISTINCT COALESCE(ep.preferred_local_manga_id, wh.anchor_manga_id) AS manga_id
+            FROM work_history wh
+            LEFT JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
+            WHERE wh.deleted_at = 0
+        ) display_ids
+        INNER JOIN manga_tags mt ON mt.manga_id = display_ids.manga_id
         INNER JOIN tags t ON t.tag_id = mt.tag_id
-        INNER JOIN work_history wh ON wh.anchor_manga_id = mt.manga_id AND wh.deleted_at = 0
-        UNION
-        SELECT
-            mt.manga_id AS manga_id,
-            t.title AS tag_title,
-            t.key AS tag_key
-        FROM manga_tags mt
-        INNER JOIN tags t ON t.tag_id = mt.tag_id
-        INNER JOIN work_history wh ON wh.deleted_at = 0
-        INNER JOIN entity_preferences ep ON ep.entity_id = wh.entity_id
-            AND ep.preferred_local_manga_id = mt.manga_id
         """,
     )
     abstract fun observeHistoryTagFacets(): Flow<List<HistoryTagFacetRow>>

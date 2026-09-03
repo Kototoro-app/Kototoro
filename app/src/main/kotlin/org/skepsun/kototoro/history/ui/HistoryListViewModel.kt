@@ -5,9 +5,12 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emitAll
@@ -80,6 +83,28 @@ import org.skepsun.kototoro.stats.domain.StatsDashboard
 import org.skepsun.kototoro.stats.domain.StatsPeriod
 
 private const val PAGE_SIZE = 32
+
+/**
+ * Gate for the history page's secondary header read. [dashboard] is subscribed once, when
+ * [listReady] first reports that the list has data — two full-library readers on the cold
+ * path only compete for the same SQLite page cache. The gate opens once and stays open, so
+ * later list refreshes do not re-run the dashboard: it keeps refreshing off its own table
+ * invalidations.
+ */
+internal fun observeStatsSummary(
+    isEnabled: Flow<Boolean>,
+    listReady: Flow<Boolean>,
+    dashboard: () -> Flow<StatsDashboard>,
+): Flow<StatsDashboard?> = isEnabled.flatMapLatest { enabled ->
+    if (!enabled) {
+        flowOf(null)
+    } else {
+        listReady
+            .filter { it }
+            .take(1)
+            .flatMapLatest { dashboard() }
+    }
+}
 
 private data class HistoryUiParams(
     val order: ListSortOrder,
@@ -163,17 +188,6 @@ class HistoryListViewModel @Inject constructor(
     private val historySnapshot = historyLibrarySnapshotStore.observe()
         .onEach(quickFilter::acceptSnapshot)
         .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
-
-    /** Reading statistics summary shown at the top of the history page. */
-    val statsSummary: StateFlow<StatsDashboard?> = isStatsEnabled
-        .flatMapLatest { enabled ->
-            if (enabled) {
-                statsRepository.observeDashboard(StatsPeriod.WEEK)
-            } else {
-                flowOf(null)
-            }
-        }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
     val headerQuickFilter: StateFlow<QuickFilter?> = combine(
         quickFilter.appliedOptions,
@@ -287,6 +301,18 @@ class HistoryListViewModel @Inject constructor(
     ) { rows, params, progressMode ->
         buildStaticContent(rows, params, progressMode)
     }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, listOf(LoadingState))
+
+    /**
+     * Reading statistics summary shown at the top of the history page. Secondary to the
+     * list, so it starts once the cards exist: the dashboard walks every reading session of
+     * the week and resolves each work in it, which on a cold page would otherwise compete
+     * with the history snapshot for the same SQLite page cache and cores.
+     */
+    val statsSummary: StateFlow<StatsDashboard?> = observeStatsSummary(
+        isEnabled = isStatsEnabled,
+        listReady = content.map { it.firstOrNull() !is LoadingState },
+        dashboard = { statsRepository.observeDashboard(StatsPeriod.WEEK) },
+    ).stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
     /** Nothing to re-query: the snapshot is Room-invalidation driven. */
     override fun onRefresh() = Unit
