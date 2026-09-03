@@ -1412,14 +1412,19 @@ class AppRouter(
         fun cloudFlareResolveIntent(
             context: Context,
             exception: CloudFlareProtectedException,
-        ): Intent = browserIntent(
-            context = context,
-            url = CloudFlareHelper.getChallengeUrl(exception.url),
-            source = exception.source,
-            title = context.getString(R.string.open_in_reader_browser),
-        ).apply {
-            exception.headers[CommonHeaders.USER_AGENT]?.let {
-                putExtra(KEY_USER_AGENT, it)
+        ): Intent {
+            val challengeUrl = CloudFlareHelper.getChallengeUrl(exception.url)
+            return browserIntent(
+                context = context,
+                url = challengeUrl,
+                source = exception.source,
+                title = context.getString(R.string.open_in_reader_browser),
+            ).apply {
+                putExtra(KEY_SUCCESS_COOKIE_URL, challengeUrl)
+                putExtra(KEY_SUCCESS_COOKIE_NAME, "cf_clearance")
+                exception.headers[CommonHeaders.USER_AGENT]?.let {
+                    putExtra(KEY_USER_AGENT, it)
+                }
             }
         }
 
