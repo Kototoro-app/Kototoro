@@ -166,15 +166,23 @@ class FavouriteLibraryReadDaoTest {
     }
 
     @Test
-    fun tagFacetsCoverEveryBoundProjection() = runTest {
-        val facets = dao.observeFavouriteTagFacets().first().groupBy { it.entityId }
+    fun tagRelationsCoverEveryBoundProjectionAndResolveThroughTheDictionary() = runTest {
+        val relations = dao.observeFavouriteTagIdRows().first().groupBy { it.entityId }
+        val dictionary = dao.observeFavouriteTagDictionary().first().associateBy { it.tagId }
 
         // E12: the tag lives on the bound projection, not the display manga
-        val e12Tags = facets.getValue(12L).map { it.tagTitle }.toSet()
+        val e12Tags = relations.getValue(12L).map { dictionary.getValue(it.tagId).tagTitle }.toSet()
         assertTrue("Drama" in e12Tags)
         // tag identity uses the deterministic TagEntity id
         val dramaTagId = "drama_TEST".longHashCode()
-        assertTrue(facets.getValue(12L).any { it.tagId == dramaTagId })
+        assertTrue(dramaTagId in relations.getValue(12L).map { it.tagId })
+
+        // The two flows must compose: every relation resolves to the identity and title the
+        // filter and the detailed-list chip show. Per-entity rows carry ids only, so the tag
+        // strings travel once per tag instead of once per entity-tag pair.
+        val allRelations = dao.observeFavouriteTagIdRows().first()
+        assertTrue(allRelations.all { it.tagId in dictionary })
+        assertTrue(dictionary.values.all { it.tagTitle.isNotEmpty() && it.tagKey.isNotEmpty() })
     }
 
     @Test
@@ -212,7 +220,8 @@ class FavouriteLibraryReadDaoTest {
         dao.observeFavouriteCardBaseRows().first()
         dao.observeFavouriteMembershipRows().first()
         dao.observeFavouriteProjectionFacets().first()
-        dao.observeFavouriteTagFacets().first()
+        dao.observeFavouriteTagIdRows().first()
+        dao.observeFavouriteTagDictionary().first()
         dao.observeDownloadedFavouriteRows().first()
         dao.observeFavouriteLegacyOverrides().first()
         val after = db.openHelper.writableDatabase
@@ -232,7 +241,7 @@ class FavouriteLibraryReadDaoTest {
         assertEquals(baseEntities, membershipEntities)
         // facets / tags / downloads never reference unknown entities
         val facetEntities = dao.observeFavouriteProjectionFacets().first().map { it.entityId }.toSet()
-        val tagEntities = dao.observeFavouriteTagFacets().first().map { it.entityId }.toSet()
+        val tagEntities = dao.observeFavouriteTagIdRows().first().map { it.entityId }.toSet()
         val downloadedEntities = dao.observeDownloadedFavouriteRows().first().map { it.entityId }.toSet()
         assertTrue(baseEntities.containsAll(facetEntities))
         assertTrue(baseEntities.containsAll(tagEntities))

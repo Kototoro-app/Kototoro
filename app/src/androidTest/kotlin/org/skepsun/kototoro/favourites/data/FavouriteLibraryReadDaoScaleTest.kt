@@ -60,7 +60,8 @@ class FavouriteLibraryReadDaoScaleTest {
         val entities = base.map { it.entityId }.toSet()
         dao.observeFavouriteProjectionFacets().first().forEach { assertTrue(it.entityId in entities) }
         dao.observeDownloadedFavouriteRows().first().forEach { assertTrue(it.entityId in entities) }
-        dao.observeFavouriteTagFacets().first().forEach { assertTrue(it.entityId in entities) }
+        dao.observeFavouriteTagIdRows().first().forEach { assertTrue(it.entityId in entities) }
+        dao.observeFavouriteTagDictionary().first()
         dao.observeFavouriteLegacyOverrides().first()
     }
 
@@ -82,7 +83,8 @@ class FavouriteLibraryReadDaoScaleTest {
     private suspend fun readAll(): List<FavouriteCardBaseRow> {
         dao.observeFavouriteMembershipRows().first()
         dao.observeFavouriteProjectionFacets().first()
-        dao.observeFavouriteTagFacets().first()
+        dao.observeFavouriteTagIdRows().first()
+        dao.observeFavouriteTagDictionary().first()
         dao.observeDownloadedFavouriteRows().first()
         dao.observeFavouriteLegacyOverrides().first()
         return dao.observeFavouriteCardBaseRows().first()

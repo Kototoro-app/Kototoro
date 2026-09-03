@@ -29,18 +29,25 @@ data class FavouriteProjectionFacetRow(
 )
 
 /**
- * Tag facet for one entity: the tag identity used for filtering plus the title shown
- * by the detailed list card. Identity is `tag_id`; titles are only carried for display.
+ * One entity↔tag relation of the favourites library: ids only. A heavily-tagged library has
+ * over 100k of these, so the tag strings deliberately do not ride along — they come from
+ * [FavouriteTagDictionaryRow] once per tag instead of once per relation.
  */
-data class FavouriteTagFacetRow(
+data class FavouriteTagIdRow(
     @ColumnInfo(name = "entity_id") val entityId: Long,
     @ColumnInfo(name = "tag_id") val tagId: Long,
+)
+
+/**
+ * Tag identity and display title, once per tag. Identity is `tag_id`;
+ * ListFilterOption.Tag is built from (key, source) and its id must equal tagId, which is
+ * what the in-memory filter matches on.
+ */
+data class FavouriteTagDictionaryRow(
+    @ColumnInfo(name = "tag_id") val tagId: Long,
     @ColumnInfo(name = "tag_title") val tagTitle: String,
-    // tag identity: ListFilterOption.Tag is built from (key, source) and its id must
-    // equal tagId, which is what the in-memory filter matches on
     @ColumnInfo(name = "tag_key") val tagKey: String,
     @ColumnInfo(name = "tag_source") val tagSource: String,
-    @ColumnInfo(name = "manga_id") val mangaId: Long,
 )
 
 /**

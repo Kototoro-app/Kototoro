@@ -73,8 +73,15 @@ class FavouritesCardMapper @Inject constructor(
         }
         val progressMode = settings.progressIndicatorMode
         val brokenTitle = context.getString(R.string.favourites_broken_projection_title)
-        val tagTint = contentListMapper::tagTint
+        // Tag tint depends on the title alone, and a detailed list repeats the same few
+        // thousand titles over every card carrying them (a 6.6k-favourite library has 113k
+        // tag relations against 9.7k distinct tags), so it resolves once per title per batch.
+        val tintByTitle = HashMap<String, Int>(64)
+        val tagTint: (String) -> Int = { title -> tintByTitle.getOrPut(title) { contentListMapper.tagTint(title) } }
         val projectionLabels = HashMap<String, String>(8)
+        // Only the list modes put the projection suffix on a card. Formatting it for a grid
+        // was one localized string per card that no model ever reads (65ms of a 263ms batch).
+        val needsGroupSuffix = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
         return rows.map { row ->
             buildFavouriteCardModel(
                 FavouriteCardModelRequest(
@@ -82,7 +89,7 @@ class FavouritesCardMapper @Inject constructor(
                     mode = slice.mode,
                     progressMode = progressMode,
                     isPinned = row.entityId in slice.pinnedEntityIds,
-                    groupSuffix = groupSuffixOf(row, projectionLabels),
+                    groupSuffix = if (needsGroupSuffix) groupSuffixOf(row, projectionLabels) else null,
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
                 ),

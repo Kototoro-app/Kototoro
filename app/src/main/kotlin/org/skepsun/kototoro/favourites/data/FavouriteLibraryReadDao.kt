@@ -156,19 +156,22 @@ abstract class FavouriteLibraryReadDao {
     abstract fun observeFavouriteProjectionFacets(): Flow<List<FavouriteProjectionFacetRow>>
 
     /**
-     * Tag facets for filtering (tag identity) and the detailed-list tag chips (title).
-     * Tags of every bound projection count, matching the legacy tag filter which
-     * matched the display manga OR any bound projection.
+     * Entity↔tag relations of the favourites library. Tags of every bound projection count,
+     * matching the legacy tag filter which matched the display manga OR any bound projection.
+     *
+     * Ids only, and the `tags` join is gone: at library scale this relation is six figures
+     * (a real 6.6k-favourite library has ~114k of them), and carrying each tag's title/key/
+     * source on every one of its relations moved 5.4MB of text through the cursor and made
+     * this the single most expensive part of the page's first frame — 1078ms of a 1459ms
+     * snapshot read on the device. The same rows without the strings cost 113ms; the strings
+     * come from [observeFavouriteTagDictionary] once per tag. Row order per entity is
+     * unchanged, which is what decides the order of the detailed-list chips.
      */
     @Query(
         """
         SELECT
             wf.entity_id AS entity_id,
-            mt.tag_id AS tag_id,
-            t.title AS tag_title,
-            t.key AS tag_key,
-            t.source AS tag_source,
-            mt.manga_id AS manga_id
+            mt.tag_id AS tag_id
         FROM (
             SELECT DISTINCT entity_id
             FROM work_favourites
@@ -177,12 +180,30 @@ abstract class FavouriteLibraryReadDao {
         ) wf
         INNER JOIN entity_binding eb ON eb.entity_id = wf.entity_id
         INNER JOIN manga_tags mt ON mt.manga_id = CAST(eb.external_id AS INTEGER)
-        INNER JOIN tags t ON t.tag_id = mt.tag_id
         WHERE eb.source IN ('local_manga', '0')
             AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
         """,
     )
-    abstract fun observeFavouriteTagFacets(): Flow<List<FavouriteTagFacetRow>>
+    abstract fun observeFavouriteTagIdRows(): Flow<List<FavouriteTagIdRow>>
+
+    /**
+     * Tag identity and titles, once per tag. Deliberately the whole tag table rather than
+     * only the tags some favourite carries: restricting it to the tags in use needs the same
+     * six-figure join back (46ms vs 6ms measured), the snapshot only ever *looks up* ids it
+     * already saw in [observeFavouriteTagIdRows], and the quick-filter chips are built from
+     * the per-tag entity presence, so an unused tag can never surface as a chip.
+     */
+    @Query(
+        """
+        SELECT
+            tag_id AS tag_id,
+            title AS tag_title,
+            key AS tag_key,
+            source AS tag_source
+        FROM tags
+        """,
+    )
+    abstract fun observeFavouriteTagDictionary(): Flow<List<FavouriteTagDictionaryRow>>
 
     /** Downloaded favourite entities via the local download index on bound projections. */
     @Query(
@@ -232,23 +253,4 @@ abstract class FavouriteLibraryReadDao {
         """,
     )
     abstract fun observeFavouriteLegacyOverrides(): Flow<List<FavouriteLegacyOverrideRow>>
-
-    /** Tag facets of the display projection only (detailed-list chips + compact subtitle). */
-    @Query(
-        """
-        SELECT
-            wf.entity_id AS entity_id,
-            mt.tag_id AS tag_id,
-            t.title AS tag_title,
-            t.key AS tag_key,
-            t.source AS tag_source,
-            mt.manga_id AS manga_id
-        FROM work_favourites wf
-        INNER JOIN manga_tags mt ON mt.manga_id = wf.anchor_manga_id
-        INNER JOIN tags t ON t.tag_id = mt.tag_id
-        WHERE wf.anchor_manga_id IS NOT NULL
-            AND wf.deleted_at = 0
-        """,
-    )
-    abstract fun observeFavouriteAnchorTagRows(): Flow<List<FavouriteTagFacetRow>>
 }

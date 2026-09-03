@@ -48,7 +48,8 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
             dao.observeFavouriteCardBaseRows().distinctUntilChanged(),
             dao.observeFavouriteMembershipRows().distinctUntilChanged(),
             dao.observeFavouriteProjectionFacets().distinctUntilChanged(),
-            dao.observeFavouriteTagFacets().distinctUntilChanged(),
+            dao.observeFavouriteTagIdRows().distinctUntilChanged(),
+            dao.observeFavouriteTagDictionary().distinctUntilChanged(),
             dao.observeDownloadedFavouriteRows().distinctUntilChanged(),
             dao.observeFavouriteLegacyOverrides().distinctUntilChanged(),
         ) { values: Array<*> ->
@@ -57,9 +58,10 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
                 baseRows = values[0] as List<FavouriteCardBaseRow>,
                 membershipRows = values[1] as List<org.skepsun.kototoro.favourites.data.FavouriteMembershipRow>,
                 projectionFacets = values[2] as List<org.skepsun.kototoro.favourites.data.FavouriteProjectionFacetRow>,
-                tagFacets = values[3] as List<org.skepsun.kototoro.favourites.data.FavouriteTagFacetRow>,
-                downloadedRows = values[4] as List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
-                legacyOverrides = values[5] as List<org.skepsun.kototoro.favourites.data.FavouriteLegacyOverrideRow>,
+                tagRelations = values[3] as List<org.skepsun.kototoro.favourites.data.FavouriteTagIdRow>,
+                tagDictionary = values[4] as List<org.skepsun.kototoro.favourites.data.FavouriteTagDictionaryRow>,
+                downloadedRows = values[5] as List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
+                legacyOverrides = values[6] as List<org.skepsun.kototoro.favourites.data.FavouriteLegacyOverrideRow>,
             )
         }.distinctUntilChanged().flowOn(Dispatchers.Default)
     }
@@ -68,7 +70,8 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
         baseRows: List<FavouriteCardBaseRow>,
         membershipRows: List<org.skepsun.kototoro.favourites.data.FavouriteMembershipRow>,
         projectionFacets: List<org.skepsun.kototoro.favourites.data.FavouriteProjectionFacetRow>,
-        tagFacets: List<org.skepsun.kototoro.favourites.data.FavouriteTagFacetRow>,
+        tagRelations: List<org.skepsun.kototoro.favourites.data.FavouriteTagIdRow>,
+        tagDictionary: List<org.skepsun.kototoro.favourites.data.FavouriteTagDictionaryRow>,
         downloadedRows: List<org.skepsun.kototoro.favourites.data.FavouriteDownloadedRow>,
         legacyOverrides: List<org.skepsun.kototoro.favourites.data.FavouriteLegacyOverrideRow>,
     ): FavouriteLibrarySnapshot {
@@ -86,24 +89,29 @@ class FavouriteLibrarySnapshotStore @Inject constructor(
             projectionSourcePresence.getOrPut(facet.source) { LinkedHashSet() }.add(facet.entityId)
         }
 
-        // ---- tag facets: identity set + limited display list per entity
+        // ---- tag dictionary: identity and title, once per tag rather than once per relation
+        val facetTagsById = HashMap<Long, FavouriteFacetTag>(tagDictionary.size)
+        for (tag in tagDictionary) {
+            facetTagsById[tag.tagId] = FavouriteFacetTag(
+                tagId = tag.tagId,
+                title = tag.tagTitle,
+                key = tag.tagKey,
+                source = tag.tagSource,
+            )
+        }
+
+        // ---- tag relations: identity set + limited display list per entity, in query order
+        // (that order is what the detailed-list chips show). A relation whose tag is missing
+        // from the dictionary is dropped, exactly as the joined query dropped it.
         val tagIdsByEntity = HashMap<Long, LinkedHashSet<Long>>(baseRows.size)
         val displayTagsByEntity = HashMap<Long, LinkedHashMap<Long, String>>(baseRows.size)
         val tagEntityPresence = HashMap<Long, MutableSet<Long>>(256)
-        val facetTagsById = HashMap<Long, FavouriteFacetTag>(256)
-        for (facet in tagFacets) {
-            tagIdsByEntity.getOrPut(facet.entityId) { LinkedHashSet() }.add(facet.tagId)
-            displayTagsByEntity.getOrPut(facet.entityId) { LinkedHashMap() }.putIfAbsent(facet.tagId, facet.tagTitle)
-            facetTagsById.putIfAbsent(
-                facet.tagId,
-                FavouriteFacetTag(
-                    tagId = facet.tagId,
-                    title = facet.tagTitle,
-                    key = facet.tagKey,
-                    source = facet.tagSource,
-                ),
-            )
-            tagEntityPresence.getOrPut(facet.tagId) { LinkedHashSet() }.add(facet.entityId)
+        for (relation in tagRelations) {
+            val tag = facetTagsById[relation.tagId] ?: continue
+            val entityId = relation.entityId
+            tagIdsByEntity.getOrPut(entityId) { LinkedHashSet() }.add(tag.tagId)
+            displayTagsByEntity.getOrPut(entityId) { LinkedHashMap() }.putIfAbsent(tag.tagId, tag.title)
+            tagEntityPresence.getOrPut(tag.tagId) { LinkedHashSet() }.add(entityId)
         }
 
         // ---- downloaded entities

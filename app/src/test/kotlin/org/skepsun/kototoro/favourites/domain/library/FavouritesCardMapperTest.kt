@@ -2,6 +2,7 @@ package org.skepsun.kototoro.favourites.domain.library
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -119,6 +120,24 @@ class FavouritesCardMapperTest {
         ) as ContentGridModel
         assertEquals(before.id, after.id)
     }
+    @Test
+    fun `grid modes never read the group suffix`() {
+        // The batch mapper skips building the suffix for these modes because it is not part
+        // of the model. This is that assumption: if a grid card ever starts showing the
+        // projection suffix, mapping a whole library has to format it again.
+        for (mode in listOf(ListMode.GRID, ListMode.COMPACT_GRID)) {
+            val withSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = "Current: Test"))
+            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = null))
+            assertEquals(withSuffix, withoutSuffix, "$mode must not depend on groupSuffix")
+        }
+        // The list modes do show it, so the skip is limited to the grid.
+        for (mode in listOf(ListMode.LIST, ListMode.DETAILED_LIST)) {
+            val withSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = "Current: Test"))
+            val withoutSuffix = buildFavouriteCardModel(request(mode = mode, groupSuffix = null))
+            assertNotEquals(withSuffix, withoutSuffix, "$mode must keep the projection suffix")
+        }
+    }
+
 
     @Test
     fun `grid card carries counter progress projection pin and download badges`() {
