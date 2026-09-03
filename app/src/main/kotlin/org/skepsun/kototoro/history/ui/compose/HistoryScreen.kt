@@ -217,8 +217,13 @@ private fun HistoryHeader(
         }
 
         if (quickFilter != null) {
+            // Sort once per filter change: called inline, withMacroOptionsFirst() built a new
+            // QuickFilter and a new sorted items list on every recomposition, so the rail and the
+            // list below it saw fresh input forever (re-measured every frame; the comparator was
+            // still 1.2% of main-thread CPU on an untouched screen).
+            val sortedQuickFilter = remember(quickFilter) { quickFilter.withMacroOptionsFirst() }
             org.skepsun.kototoro.list.ui.compose.QuickFilterSection(
-                quickFilter = quickFilter.withMacroOptionsFirst(),
+                quickFilter = sortedQuickFilter,
                 onQuickFilterOptionClick = onQuickFilterOptionClick,
             )
         }
