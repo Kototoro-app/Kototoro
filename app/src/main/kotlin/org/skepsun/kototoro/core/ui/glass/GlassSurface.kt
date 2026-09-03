@@ -58,6 +58,17 @@ import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 
+/**
+ * Specular highlight angle for every glass surface.
+ *
+ * It used to follow the accelerometer; that was removed because the low-pass filter never
+ * converged, so each sensor event wrote a new float and the window never stopped re-recording
+ * (measured ~135 frames/s on an untouched page, ~9 ms of full-window draw record per frame).
+ * Revisit here if a tilt response is ever wanted again — it must publish quantized, converging
+ * values so an untouched device stays idle.
+ */
+private const val GlassStaticHighlightAngleDeg = 45f
+
 @Immutable
 data class GlassSurfaceColors(
     val containerColor: Color,
@@ -368,18 +379,12 @@ fun LiquidGlassSurface(
     val isDark = colors.isDarkTheme()
     val isNavigationChrome = componentRole == GlassComponentRole.TopBar ||
         componentRole == GlassComponentRole.BottomBar
-    // Floating pill controls (search button, filter group, tab rails) are
-    // objects rather than bars: they share the chrome look but are bucketed
-    // separately so their edge/highlight treatment can evolve independently
-    // from real bars (bottom nav, reader toolbars, settings top bar).
-    val isPillControl = componentRole == GlassComponentRole.PillControl
-    val isFloatingChrome = isNavigationChrome || isPillControl
-    // Large glass panels (the details bottom pane) also drop the always-on
-    // specular highlight — like pills they prefer a uniform hairline — but keep
-    // their own shadow, alpha and depth treatment.
-    val suppressPersistentHighlight =
-        isFloatingChrome || componentRole == GlassComponentRole.BottomPanel
+    // Floating pill controls (search button, filter group, tab rails) are objects rather than
+    // bars: they share the chrome tint below but are bucketed separately so their edge and
+    // highlight treatment can evolve independently from real bars (bottom nav, reader
+    // toolbars, settings top bar).
     val surfaceAlpha = tuning.value(tuningScope, GlassTuningParam.SURFACE_ALPHA)
+
     val tint = when (componentRole) {
         GlassComponentRole.TopBar,
         GlassComponentRole.BottomBar,
@@ -391,16 +396,17 @@ fun LiquidGlassSurface(
         else -> colors.surfaceContainer.copy(alpha = surfaceAlpha)
     }
 
-    // Persistent glass follows the upstream Control Center pattern: an
-    // always-on specular highlight whose angle tracks the device gravity (the
-    // sensor mirrors iOS "specular highlight responding to device motion");
-    // a touch additionally boosts exposure. Navigation chrome (bars), top pill
-    // controls and large glass panels deliberately render without the
-    // persistent edge highlight: bars keep the bar treatment, pills and panels
-    // favor a uniform hairline over the uneven specular rim. Callers may opt
-    // out of the idle highlight (highlightOnIdle = false) so large static info
-    // panels render clean while idle and only brighten while pressed.
-    val uiSensor = if (suppressPersistentHighlight || !highlightOnIdle) null else UiSensor.remember()
+    // Persistent glass follows the upstream Control Center pattern: an always-on specular
+    // highlight, with a touch additionally boosting exposure. Navigation chrome (bars), top pill
+    // controls and large glass panels deliberately render without the persistent edge highlight:
+    // bars keep the bar treatment, pills and panels favor a uniform hairline over the uneven
+    // specular rim. Callers may opt out of the idle highlight (highlightOnIdle = false) so large
+    // static info panels render clean while idle and only brighten while pressed.
+    //
+    // The highlight angle is static. It used to track the accelerometer, but the low-pass filter
+    // never converged, so every sensor event wrote a new float and the whole window kept
+    // re-recording (~135 frames/s with the page untouched, measured). The tilt response is not
+    // visible in practice; see GlassStaticHighlightAngleDeg for where to revisit it.
     val pressProgress = remember { Animatable(0f) }
     val coroutineScope = rememberCoroutineScope()
     // Pure observer: never consumes, so nested controls keep their own
@@ -501,12 +507,12 @@ fun LiquidGlassSurface(
                             press > 0f &&
                             tuning.value(tuningScope, GlassTuningParam.PRESS_HIGHLIGHT_ALPHA) > 0f
                         val idleRimOn = tuning.isOn(tuningScope, GlassTuningParam.RIM_ENABLED) && highlightOnIdle
-                        // 0 = Default specular (angle tracks gravity on non-bar chrome),
+                        // 0 = Default specular (static angle, see GlassStaticHighlightAngleDeg),
                         // 1 = Ambient (even edge glow — BiliTV / BiliPai look),
                         // 2 = Plain (uniform tint without a shader).
                         val edgeStyle = resolveGlassHighlightStyle(
                             tuning.value(tuningScope, GlassTuningParam.HIGHLIGHT_STYLE).toInt(),
-                            angle = if (isFloatingChrome) 45f else (uiSensor?.gravityAngle ?: 45f),
+                            angle = GlassStaticHighlightAngleDeg,
                         )
                         when {
                             pressRimOn -> Highlight(
