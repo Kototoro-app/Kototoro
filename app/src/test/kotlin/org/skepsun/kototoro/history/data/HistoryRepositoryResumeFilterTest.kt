@@ -15,6 +15,7 @@ import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentRating
 import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
@@ -97,6 +98,29 @@ class HistoryRepositoryResumeFilterTest {
 		)
 	}
 
+	@Test
+	fun `popular filter options reuse one history load`() = runTest {
+		val alphaSource = TestContentSource(ContentType.MANGA, "alpha")
+		val betaSource = TestContentSource(ContentType.MANGA, "beta")
+		val action = ContentTag("Action", "action", alphaSource)
+		val drama = ContentTag("Drama", "drama", alphaSource)
+		coEvery {
+			workAggregateRepository.findRecentHistoryAggregates(Int.MAX_VALUE, null, null)
+		} returns listOf(
+			aggregate(content(1L, ContentRating.SAFE, tags = setOf(action, drama), source = alphaSource)),
+			aggregate(content(2L, ContentRating.SAFE, tags = setOf(action), source = betaSource)),
+			aggregate(content(3L, ContentRating.SAFE, tags = setOf(action), source = alphaSource)),
+		)
+
+		val options = repository.getPopularFilterOptions(tagLimit = 1, sourceLimit = 1)
+
+		assertEquals(listOf(action), options.tags)
+		assertEquals(listOf("alpha"), options.sources.map { it.name })
+		coVerify(exactly = 1) {
+			workAggregateRepository.findRecentHistoryAggregates(Int.MAX_VALUE, null, null)
+		}
+	}
+
 	private fun aggregate(content: Content) = WorkAggregate(
 		identity = WorkIdentity(
 			entityId = null,
@@ -113,6 +137,8 @@ class HistoryRepositoryResumeFilterTest {
 		id: Long,
 		contentRating: ContentRating,
 		contentType: ContentType = ContentType.MANGA,
+		tags: Set<ContentTag> = emptySet(),
+		source: ContentSource = TestContentSource(contentType),
 	) = Content(
 		id = id,
 		title = "Work $id",
@@ -122,16 +148,16 @@ class HistoryRepositoryResumeFilterTest {
 		rating = RATING_UNKNOWN,
 		contentRating = contentRating,
 		coverUrl = null,
-		tags = emptySet(),
+		tags = tags,
 		state = null,
 		authors = emptySet(),
-		source = TestContentSource(contentType),
+		source = source,
 	).also { check(it.isNsfw() == (contentRating == ContentRating.ADULT)) }
 
 	private data class TestContentSource(
 		override val contentType: ContentType,
+		override val name: String = "test-$contentType",
 	) : ContentSource {
-		override val name = "test-$contentType"
 		override val locale = ""
 	}
 }

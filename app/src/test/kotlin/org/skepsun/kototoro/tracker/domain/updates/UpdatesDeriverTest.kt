@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
+import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
 import org.skepsun.kototoro.list.domain.ListFilterOption
@@ -11,6 +12,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.longHashCode
+import java.time.Instant
 
 /**
  * Pure-function tests for the in-memory updates derivation
@@ -61,6 +63,43 @@ class UpdatesDeriverTest {
     )
 
     private fun snapshot(groups: List<UpdateGroupRow>) = UpdatesSnapshot(groups = groups)
+
+    @Test
+    fun `popular categories are derived from the loaded update snapshot`() {
+        val categories = listOf(
+            category(id = 10, title = "Low"),
+            category(id = 20, title = "High"),
+            category(id = 30, title = "Tracking disabled", tracking = false),
+        )
+        val snapshot = snapshot(
+            listOf(
+                group(uiId = 1, totalNewChapters = 2, categoryIds = setOf(10, 20, 30)),
+                group(uiId = 2, totalNewChapters = 5, categoryIds = setOf(20)),
+            ),
+        )
+
+        val result = org.skepsun.kototoro.tracker.domain.buildMostUpdatedCategories(
+            snapshot = snapshot,
+            categories = categories,
+            limit = 4,
+        )
+
+        assertEquals(listOf(20L, 10L), result.map { it.id })
+    }
+
+    private fun category(
+        id: Long,
+        title: String,
+        tracking: Boolean = true,
+    ) = FavouriteCategory(
+        id = id,
+        title = title,
+        sortKey = id.toInt(),
+        order = org.skepsun.kototoro.list.domain.ListSortOrder.NEWEST,
+        createdAt = Instant.EPOCH,
+        isTrackingEnabled = tracking,
+        isVisibleInLibrary = true,
+    )
 
     private fun input(
         groups: List<UpdateGroupRow>,

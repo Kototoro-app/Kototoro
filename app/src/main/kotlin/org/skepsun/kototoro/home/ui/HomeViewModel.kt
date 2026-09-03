@@ -53,7 +53,6 @@ import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
-import org.skepsun.kototoro.history.domain.HistoryListQuickFilter
 import org.skepsun.kototoro.history.domain.model.ContentWithHistory
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.list.domain.ReadingProgress
@@ -98,7 +97,6 @@ class HomeViewModel @Inject constructor(
     private val workResolver: WorkResolver,
     private val workAggregateRepository: WorkAggregateRepository,
     @ApplicationContext private val appContext: Context,
-    private val historyQuickFilter: HistoryListQuickFilter,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), SpaceBindableViewModel {
 

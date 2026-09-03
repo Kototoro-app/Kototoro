@@ -211,7 +211,7 @@ class TrackerReadDaoTest {
         FavouriteLibrarySeed.insertMangaTag(sql, 105, 2)
         insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
 
-        val facets = db.getTrackerReadDao().observeTrackedTagFacets().first()
+        val facets = db.getTrackerReadDao().observeTrackedTagFacets(includeFeedLogs = true).first()
         assertEquals(listOf(2L), facets.filter { it.mangaId == 105L }.map { it.tagId })
         assertTrue(facets.none { it.mangaId == 101L && it.tagId == 1L })
     }
@@ -230,11 +230,29 @@ class TrackerReadDaoTest {
             arrayOf<Any?>(101, "Manual title", "http://cover"),
         )
 
-        val overrides = db.getTrackerReadDao().observeTrackedOverrides().first()
+        val overrides = db.getTrackerReadDao().observeTrackedOverrides(includeFeedLogs = true).first()
         val override = overrides.single()
         assertEquals(101L, override.mangaId)
         assertEquals("Manual title", override.titleOverride)
         assertEquals("http://cover", override.coverOverride)
+    }
+
+    @Test
+    fun updateFacetsExcludeFeedOnlyMetadata() = runTest {
+        FavouriteLibrarySeed.insertManga(sql, 101, "Pending update")
+        FavouriteLibrarySeed.insertManga(sql, 202, "Feed only")
+        FavouriteLibrarySeed.insertTag(sql, 1, "Update tag")
+        FavouriteLibrarySeed.insertTag(sql, 2, "Feed tag")
+        FavouriteLibrarySeed.insertMangaTag(sql, 101, 1)
+        FavouriteLibrarySeed.insertMangaTag(sql, 202, 2)
+        insertTrack(mangaId = 101, entityId = null, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
+        insertLog(mangaId = 202, entityId = null, createdAt = 100)
+        insertLegacyOverride(mangaId = 101, title = "Update override")
+        insertLegacyOverride(mangaId = 202, title = "Feed override")
+
+        val dao = db.getTrackerReadDao()
+        assertEquals(setOf(101L), dao.observeTrackedTagFacets(includeFeedLogs = false).first().map { it.mangaId }.toSet())
+        assertEquals(setOf(101L), dao.observeTrackedOverrides(includeFeedLogs = false).first().map { it.mangaId }.toSet())
     }
 
     @Test
@@ -325,13 +343,25 @@ class TrackerReadDaoTest {
         dao.observeFeedLogRows().first()
         dao.observeUpdateTrackRows().first()
         dao.observeTrackedBindingFacets().first()
-        dao.observeTrackedTagFacets().first()
-        dao.observeTrackedOverrides().first()
+        dao.observeTrackedTagFacets(includeFeedLogs = true).first()
+        dao.observeTrackedOverrides(includeFeedLogs = true).first()
         dao.observeTrackedChapterCounts().first()
 
         // Nothing was written: the log is still unread and the log count is unchanged.
         val logs = db.getTrackLogsDao().dump()
         assertEquals(1, logs.size)
         assertTrue(logs.single().isUnread)
+    }
+
+    private fun insertLegacyOverride(mangaId: Long, title: String) {
+        sql.execSQL(
+            """
+            INSERT INTO preferences (
+                manga_id, mode, cf_brightness, cf_contrast, cf_invert, cf_grayscale,
+                cf_book, title_override
+            ) VALUES (?, 0, 0, 0, 0, 0, 0, ?)
+            """.trimIndent(),
+            arrayOf<Any?>(mangaId, title),
+        )
     }
 }

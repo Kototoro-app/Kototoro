@@ -215,6 +215,19 @@ abstract class FavouriteLibraryReadDao {
             p.title_override AS title_override,
             p.cover_override AS cover_override
         FROM preferences p
+        INNER JOIN (
+            SELECT anchor_manga_id AS manga_id
+            FROM work_favourites
+            WHERE anchor_manga_id IS NOT NULL
+                AND deleted_at = 0
+            UNION
+            SELECT ep.preferred_local_manga_id AS manga_id
+            FROM work_favourites wf
+            INNER JOIN entity_preferences ep ON ep.entity_id = wf.entity_id
+            WHERE wf.anchor_manga_id IS NOT NULL
+                AND wf.deleted_at = 0
+                AND ep.preferred_local_manga_id IS NOT NULL
+        ) favourite_manga ON favourite_manga.manga_id = p.manga_id
         WHERE p.title_override IS NOT NULL OR p.cover_override IS NOT NULL
         """,
     )

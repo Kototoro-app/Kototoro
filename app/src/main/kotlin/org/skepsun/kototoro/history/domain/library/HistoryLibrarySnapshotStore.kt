@@ -104,6 +104,7 @@ class HistoryLibrarySnapshotStore @Inject constructor(
         for (base in baseRows) {
             val entityId = base.entityId
             val displayId = base.displayMangaId
+            val categoryIds = categoryIdsByEntityId[entityId].orEmpty()
             // authoritative content type: anchor manga type first, entity type
             // second (the Novel/Video chips depend on this order)
             val contentType = base.anchorContentType?.let(::parseContentType)
@@ -129,10 +130,10 @@ class HistoryLibrarySnapshotStore @Inject constructor(
                 chapterId = base.chapterId,
                 newChapters = base.newChapters ?: 0,
                 lastChapterDate = base.lastChapterDate,
-                isFavourite = base.isFavourite,
+                isFavourite = categoryIds.isNotEmpty(),
                 isPinned = base.isPinned,
                 isDownloaded = entityId in downloadedEntities,
-                categoryIds = categoryIdsByEntityId[entityId].orEmpty(),
+                categoryIds = categoryIds,
                 contentType = contentType,
                 displayContentTypeOrdinal = contentType.ordinal,
                 localMangaIds = localMangaIds,

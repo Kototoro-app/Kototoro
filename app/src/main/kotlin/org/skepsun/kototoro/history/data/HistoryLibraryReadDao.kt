@@ -41,12 +41,6 @@ abstract class HistoryLibraryReadDao {
                 WHERE wf.entity_id = wh.entity_id
                     AND wf.anchor_manga_id IS NOT NULL
                     AND wf.deleted_at = 0
-            ) AS is_favourite,
-            EXISTS (
-                SELECT 1 FROM work_favourites wf
-                WHERE wf.entity_id = wh.entity_id
-                    AND wf.anchor_manga_id IS NOT NULL
-                    AND wf.deleted_at = 0
                     AND wf.pinned > 0
             ) AS is_pinned,
             metadata.service AS metadata_tracking_service,
@@ -61,7 +55,6 @@ abstract class HistoryLibraryReadDao {
             m.source AS display_source,
             m.state AS display_state,
             m.nsfw AS display_nsfw,
-            m.content_rating AS display_content_rating,
             m.rating AS display_rating,
             m.content_type AS display_content_type
         FROM work_history wh
@@ -71,10 +64,7 @@ abstract class HistoryLibraryReadDao {
         LEFT JOIN (
             SELECT
                 entity_id,
-                MAX(manga_id) AS anchor_manga_id,
-                MAX(last_chapter_id) AS last_chapter_id,
                 SUM(chapters_new) AS new_chapters,
-                MAX(last_check_time) AS last_check_time,
                 MAX(last_chapter_date) AS last_chapter_date
             FROM tracks
             WHERE entity_id IS NOT NULL

@@ -29,7 +29,6 @@ data class HistoryCardRow(
     @ColumnInfo(name = "new_chapters") val newChapters: Int?,
     @ColumnInfo(name = "last_chapter_date") val lastChapterDate: Long?,
     // membership
-    @ColumnInfo(name = "is_favourite") val isFavourite: Boolean,
     @ColumnInfo(name = "is_pinned") val isPinned: Boolean,
     // display metadata authority (the cached tracking-site item behind a
     // 'tracking' metadata selection, same join as the favourites row)
@@ -46,7 +45,6 @@ data class HistoryCardRow(
     @ColumnInfo(name = "display_source") val displaySource: String?,
     @ColumnInfo(name = "display_state") val displayState: String?,
     @ColumnInfo(name = "display_nsfw") val displayNsfw: Boolean?,
-    @ColumnInfo(name = "display_content_rating") val displayContentRating: String?,
     @ColumnInfo(name = "display_rating") val displayRating: Float?,
     @ColumnInfo(name = "display_content_type") val displayContentType: String?,
 )

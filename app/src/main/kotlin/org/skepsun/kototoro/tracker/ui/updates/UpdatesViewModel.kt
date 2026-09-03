@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
@@ -88,6 +90,11 @@ class UpdatesViewModel @Inject constructor(
 
     override val hasMoreItems = MutableStateFlow(false)
 
+    /** One cold-start read shared by list derivation and quick-filter metadata. */
+    private val updatesSnapshot = updatesSnapshotStore.observe()
+        .onEach(quickFilter::acceptSnapshot)
+        .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
+
     val headerQuickFilter: StateFlow<QuickFilter?> = combine(
         quickFilter.appliedOptions,
         // Re-emit when the quick-filter visibility toggle changes so filterItem()
@@ -104,7 +111,7 @@ class UpdatesViewModel @Inject constructor(
      * re-queried) whenever a filter, the group tab or a tag changes.
      */
     private val derivedGroups: StateFlow<List<org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow>> = combine(
-        updatesSnapshotStore.observe(),
+        updatesSnapshot,
         quickFilter.appliedOptions,
         currentGroupTab,
         currentSourceTags,

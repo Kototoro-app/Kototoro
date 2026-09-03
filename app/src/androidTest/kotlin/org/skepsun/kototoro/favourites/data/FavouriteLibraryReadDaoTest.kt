@@ -198,6 +198,8 @@ class FavouriteLibraryReadDaoTest {
         assertEquals("/cover/legacy.jpg", overrides.getValue(1001L)?.coverOverride)
         // rows without any override are not returned at all
         assertNull(overrides[2001L])
+        // overrides unrelated to an active favourite are outside this read model
+        assertNull(overrides[99_001L])
     }
 
     // ------------------------------------------------------- read-only guarantee
@@ -278,6 +280,16 @@ class FavouriteLibraryReadDaoTest {
                 ) VALUES (?, 0, 0, 0, 0, 0, 0, ?, ?)
                 """.trimIndent(),
                 arrayOf<Any?>(1001, "Legacy Title", "/cover/legacy.jpg"),
+            )
+            FavouriteLibrarySeed.insertManga(sql, 99_001, "Not a favourite")
+            sql.execSQL(
+                """
+                INSERT INTO preferences (
+                    manga_id, mode, cf_brightness, cf_contrast, cf_invert, cf_grayscale,
+                    cf_book, title_override
+                ) VALUES (?, 0, 0, 0, 0, 0, 0, ?)
+                """.trimIndent(),
+                arrayOf<Any?>(99_001, "Unrelated override"),
             )
 
             FavouriteLibrarySeed.insertEntity(sql, 2, "E2")

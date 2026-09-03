@@ -86,6 +86,18 @@ internal fun observeFeedCategoryIdsForSelection(
     }
 }
 
+internal fun observeFeedHeaderContent(
+    isHeaderEnabled: Flow<Boolean>,
+    filters: Flow<Set<ListFilterOption>>,
+    observeUpdatedContent: (Set<ListFilterOption>) -> Flow<List<ContentTracking>>,
+): Flow<List<ContentTracking>> = isHeaderEnabled.flatMapLatest { enabled ->
+    if (enabled) {
+        filters.flatMapLatest(observeUpdatedContent)
+    } else {
+        flowOf(emptyList())
+    }
+}
+
 @HiltViewModel
 class FeedViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
@@ -102,7 +114,6 @@ class FeedViewModel @Inject constructor(
     private val workResolver: WorkResolver,
     private val feedSnapshotStore: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotStore,
     private val feedCardMapper: org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper,
-    private val favouritesRepositoryForIds: FavouritesRepository,
     spaceBrowseScope: SpaceBrowseScope,
 ) : BaseViewModel(), QuickFilterListener by quickFilter, SpaceBindableViewModel,
     RetainedPagingSnapshotHost {
@@ -256,16 +267,12 @@ class FeedViewModel @Inject constructor(
     private val feedFilters = quickFilter.appliedOptions.combineWithSettings()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptySet())
 
-    private val updatedContent = feedFilters
-        .flatMapLatest { repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, it) }
+    private val updatedContent = observeFeedHeaderContent(isHeaderEnabled, feedFilters) { filters ->
+        repository.observeUpdatedContent(UPDATED_CONTENT_LOOKAHEAD_SIZE, filters)
+    }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyList())
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val onMessage = MutableEventFlow<String>()
-
-    private val feedCategoryIdsForFilters = observeFeedCategoryIdsForSelection(selectedCategoryId) {
-        favouritesRepositoryForIds.observeFeedCategoryIds()
-    }
-        .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
 
     private val excludedNsfw = combine(
         settings.observeAsFlow(AppSettings.KEY_DISABLE_NSFW) { isNsfwContentDisabled },
@@ -292,7 +299,6 @@ class FeedViewModel @Inject constructor(
         feedScope,
         excludedNsfw,
         tagBlacklistFlow,
-        feedCategoryIdsForFilters,
         mangaListMapper.observeDisplayChanges().onStart { emit(Unit) },
     ) { values: Array<Any?> ->
         buildFeedContent(
@@ -303,7 +309,6 @@ class FeedViewModel @Inject constructor(
             scope = values[4] as FeedScopeParams,
             skipNsfw = values[5] as Boolean,
             tagBlacklist = values[6] as GlobalTagBlacklist,
-            mangaCategoryIds = values[7] as Map<String, Set<Long>>,
         )
     }.stateIn(
         viewModelScope + Dispatchers.Default,
@@ -336,7 +341,6 @@ class FeedViewModel @Inject constructor(
         scope: FeedScopeParams,
         skipNsfw: Boolean,
         tagBlacklist: GlobalTagBlacklist,
-        mangaCategoryIds: Map<String, Set<Long>>,
     ): List<ListModel> {
         val derived = org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.derive(
             org.skepsun.kototoro.tracker.domain.feed.FeedDeriver.Input(
@@ -350,7 +354,7 @@ class FeedViewModel @Inject constructor(
                 sourceTags = scope.sourceTags,
                 presetSourceNames = scope.preset?.sources,
                 selectedCategoryId = scope.categoryId.takeIf { it != NO_ID },
-                mangaCategoryIdsByFeedKey = mangaCategoryIds,
+                mangaCategoryIdsByFeedKey = scope.mangaCategoryIds,
             ),
         )
         val feedItems = feedCardMapper.map(

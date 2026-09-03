@@ -39,8 +39,8 @@ class UpdatesSnapshotStore @Inject constructor(
         val dao = database.getTrackerReadDao()
         return combine(
             dao.observeUpdateTrackRows().distinctUntilChanged(),
-            dao.observeTrackedTagFacets().distinctUntilChanged(),
-            dao.observeTrackedOverrides().distinctUntilChanged(),
+            dao.observeTrackedTagFacets(includeFeedLogs = false).distinctUntilChanged(),
+            dao.observeTrackedOverrides(includeFeedLogs = false).distinctUntilChanged(),
             dao.observeTrackedEntityCategoryFacets().distinctUntilChanged(),
         ) { values: Array<*> ->
             @Suppress("UNCHECKED_CAST")
@@ -81,6 +81,7 @@ class UpdatesSnapshotStore @Inject constructor(
         val seeds = ArrayList<TrackRowSeed>(trackRows.size)
         for (track in trackRows) {
             val displayId = track.displayMangaId
+            val displayContentType = track.displayContentType?.let(::parseContentType)
             seeds += TrackRowSeed(
                 ownerId = track.ownerId,
                 mangaId = track.mangaId,
@@ -96,10 +97,8 @@ class UpdatesSnapshotStore @Inject constructor(
                 coverUrl = track.displayCoverUrl?.takeIf { it.isNotBlank() },
                 author = track.displayAuthor,
                 sourceName = track.displaySource.orEmpty(),
-                contentType = track.displayContentType?.let(::parseContentType),
-                displayContentTypeOrdinal = track.displayContentType
-                    ?.let(::parseContentType)?.ordinal
-                    ?: ContentType.MANGA.ordinal,
+                contentType = displayContentType,
+                displayContentTypeOrdinal = displayContentType?.ordinal ?: ContentType.MANGA.ordinal,
                 publicationState = track.displayState?.let(::parseContentState),
                 isNsfw = track.displayNsfw == true,
                 rating = track.displayRating ?: -1f,

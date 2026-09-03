@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 
 class FeedCategoryIdsFlowTest {
 
@@ -34,6 +35,37 @@ class FeedCategoryIdsFlowTest {
         }.first()
 
         assertEquals(expected, result)
+        assertEquals(1, subscriptions)
+    }
+
+    @Test
+    fun `disabled header does not load updated content`() = runTest {
+        var subscriptions = 0
+
+        val result = observeFeedHeaderContent(
+            isHeaderEnabled = flowOf(false),
+            filters = flowOf(emptySet()),
+        ) {
+            subscriptions += 1
+            flowOf(emptyList<ContentTracking>())
+        }.first()
+
+        assertTrue(result.isEmpty())
+        assertEquals(0, subscriptions)
+    }
+
+    @Test
+    fun `enabled header loads updated content once`() = runTest {
+        var subscriptions = 0
+
+        observeFeedHeaderContent(
+            isHeaderEnabled = flowOf(true),
+            filters = flowOf(emptySet()),
+        ) {
+            subscriptions += 1
+            flowOf(emptyList<ContentTracking>())
+        }.first()
+
         assertEquals(1, subscriptions)
     }
 }

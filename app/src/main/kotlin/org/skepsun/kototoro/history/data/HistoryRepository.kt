@@ -58,6 +58,11 @@ import javax.inject.Provider
 
 private const val RESUME_HISTORY_FILTER_BATCH_SIZE = 32
 
+data class HistoryPopularFilterOptions(
+    val tags: List<ContentTag> = emptyList(),
+    val sources: List<ContentSource> = emptyList(),
+)
+
 @Reusable
 class HistoryRepository @Inject constructor(
     private val db: MangaDatabase,
@@ -393,33 +398,49 @@ class HistoryRepository @Inject constructor(
         }
     }
 
-    suspend fun getPopularTags(limit: Int): List<ContentTag> {
-        if (limit <= 0) {
-            return emptyList()
+    suspend fun getPopularFilterOptions(tagLimit: Int, sourceLimit: Int): HistoryPopularFilterOptions {
+        if (tagLimit <= 0 && sourceLimit <= 0) {
+            return HistoryPopularFilterOptions()
         }
-        return getAllRecentContents()
-            .flatMap { it.tags }
-            .groupingBy { it }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .take(limit)
-            .map { it.key }
+        val contents = getAllRecentContents()
+        val tagCounts = LinkedHashMap<ContentTag, Int>()
+        val sourceCounts = LinkedHashMap<String, Int>()
+        for (content in contents) {
+            if (tagLimit > 0) {
+                for (tag in content.tags) {
+                    tagCounts[tag] = tagCounts.getOrDefault(tag, 0) + 1
+                }
+            }
+            if (sourceLimit > 0) {
+                val sourceName = content.source.name
+                sourceCounts[sourceName] = sourceCounts.getOrDefault(sourceName, 0) + 1
+            }
+        }
+        val tags = if (tagLimit > 0) {
+            tagCounts.entries
+                .sortedByDescending { it.value }
+                .take(tagLimit)
+                .map { it.key }
+        } else {
+            emptyList()
+        }
+        val sources = if (sourceLimit > 0) {
+            sourceCounts.entries
+                .sortedByDescending { it.value }
+                .take(sourceLimit)
+                .map { it.key }
+                .toContentSources()
+        } else {
+            emptyList()
+        }
+        return HistoryPopularFilterOptions(tags = tags, sources = sources)
     }
 
-    suspend fun getPopularSources(limit: Int): List<ContentSource> {
-        if (limit <= 0) {
-            return emptyList()
-        }
-        return getAllRecentContents()
-            .groupingBy { it.source.name }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .take(limit)
-            .map { it.key }
-            .toContentSources()
-    }
+    suspend fun getPopularTags(limit: Int): List<ContentTag> =
+        getPopularFilterOptions(tagLimit = limit, sourceLimit = 0).tags
+
+    suspend fun getPopularSources(limit: Int): List<ContentSource> =
+        getPopularFilterOptions(tagLimit = 0, sourceLimit = limit).sources
 
     fun shouldSkip(manga: Content): Boolean = settings.isIncognitoModeEnabled(manga.isNsfw())
 

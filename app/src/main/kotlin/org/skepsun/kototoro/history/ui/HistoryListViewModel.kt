@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.plus
 import org.skepsun.kototoro.R
@@ -158,6 +159,11 @@ class HistoryListViewModel @Inject constructor(
         valueProducer = { isStatsEnabled },
     )
 
+    /** One cold-start read shared by list derivation and quick-filter metadata. */
+    private val historySnapshot = historyLibrarySnapshotStore.observe()
+        .onEach(quickFilter::acceptSnapshot)
+        .shareIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, replay = 1)
+
     /** Reading statistics summary shown at the top of the history page. */
     val statsSummary: StateFlow<StatsDashboard?> = isStatsEnabled
         .flatMapLatest { enabled ->
@@ -235,7 +241,7 @@ class HistoryListViewModel @Inject constructor(
      */
     private val derivedRows: StateFlow<List<org.skepsun.kototoro.history.domain.library.HistoryCardEntry>> =
         combine(
-            historyLibrarySnapshotStore.observe(),
+            historySnapshot,
             uiParams,
         ) { snapshot, params ->
             val space = params.spaceId?.let { spaceId ->

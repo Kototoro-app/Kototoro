@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
+import org.skepsun.kototoro.history.domain.buildHistorySnapshotFilterOptions
 import org.skepsun.kototoro.list.domain.ListFilterOption
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -15,6 +16,29 @@ import org.skepsun.kototoro.parsers.model.ContentType
  * orders re-pinned in memory, the SQL filter re-play, the space/tab filter).
  */
 class HistoryLibraryDeriverTest {
+
+    @Test
+    fun `quick filter metadata is derived from the loaded snapshot`() {
+        val options = buildHistorySnapshotFilterOptions(
+            listOf(
+                row(entityId = 1, tags = listOf(HistoryCardTag("Drama", "drama"))),
+                row(
+                    entityId = 2,
+                    tags = listOf(HistoryCardTag("Drama", "drama"), HistoryCardTag("Action", "action")),
+                ),
+                row(
+                    entityId = 3,
+                    sourceName = "LOCAL",
+                    tags = listOf(HistoryCardTag("Offline", "offline")),
+                ),
+            ),
+        )
+
+        val tags = options.filterIsInstance<ListFilterOption.Tag>()
+        val sources = options.filterIsInstance<ListFilterOption.Source>()
+        assertEquals(listOf("Drama", "Action", "Offline"), tags.map { it.tag.title })
+        assertEquals(listOf("TEST", "LOCAL"), sources.map { it.mangaSource.name })
+    }
 
     private fun row(
         entityId: Long,

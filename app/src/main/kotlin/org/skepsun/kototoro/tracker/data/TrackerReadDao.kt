@@ -114,7 +114,6 @@ abstract class TrackerReadDao {
             dm.cover_url AS display_cover_url,
             dm.author AS display_author,
             dm.source AS display_source,
-            dm.url AS display_url,
             dm.content_type AS display_content_type,
             dm.state AS display_state,
             dm.nsfw AS display_nsfw,
@@ -208,10 +207,11 @@ abstract class TrackerReadDao {
                 LIMIT 1
             ))
             LEFT JOIN entity_preferences ep ON ep.entity_id = e.id
+            WHERE :includeFeedLogs
         )
         """,
     )
-    abstract fun observeTrackedTagFacets(): Flow<List<TrackedTagFacetRow>>
+    abstract fun observeTrackedTagFacets(includeFeedLogs: Boolean): Flow<List<TrackedTagFacetRow>>
 
     /** Favourite-category ids of every tracked entity with pending updates. */
     @Query(
@@ -238,13 +238,13 @@ abstract class TrackerReadDao {
         FROM preferences p
         WHERE (p.title_override IS NOT NULL OR p.cover_override IS NOT NULL)
             AND p.manga_id IN (
-                SELECT manga_id FROM tracks
+                SELECT manga_id FROM tracks WHERE chapters_new > 0
                 UNION
-                SELECT manga_id FROM track_logs
+                SELECT manga_id FROM track_logs WHERE :includeFeedLogs
             )
         """,
     )
-    abstract fun observeTrackedOverrides(): Flow<List<TrackedOverrideRow>>
+    abstract fun observeTrackedOverrides(includeFeedLogs: Boolean): Flow<List<TrackedOverrideRow>>
 
     /** Chapter counts of the representative manga (the feed card's total). */
     @Query(
