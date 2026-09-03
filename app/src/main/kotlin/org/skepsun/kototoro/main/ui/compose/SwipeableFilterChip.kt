@@ -67,6 +67,16 @@ import org.skepsun.kototoro.parsers.model.ContentType
 private val CompactFilterChipSize = 32.dp
 
 /** A fixed-center, three-slot swipe filter: Video | Manga | Novel. */
+/**
+ * Refraction on the top-bar filter chips is off: each chip owns a layer backdrop, and
+ * `DrawBackdropNode` writes its LayoutCoordinates from onGloballyPositioned, so every layout
+ * pass invalidates the window again. Measured on a Redmi K70: with refraction on, an untouched
+ * favourites screen rendered 638 frames per idle 5s; with it off, 386 -- 40% less work, though
+ * the loop itself lives elsewhere and the page still never settles. Flip this back to true once
+ * the upstream write stops looping (Kyant0/AndroidLiquidGlass).
+ */
+private const val FilterChipRefractionEnabled = false
+
 @Composable
 fun SwipeableFilterChip(
     selectedType: ContentType?,
@@ -115,7 +125,8 @@ fun SwipeableFilterChip(
     val panelWidth = controlSize * swipeableFilterChipWidthMultiplier(exp)
     val panelShape = Capsule()
     val backdrop = LocalLiquidGlassBackdrop.current
-    val useBackdrop = exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
+    val useBackdrop = FilterChipRefractionEnabled &&
+        exp > 0.01f && LocalInterfaceStyle.current == InterfaceStyle.IOS && backdrop != null
     val exportedBackdrop = if (useBackdrop) rememberLayerBackdrop() else null
 
     fun selectCenterType(): Boolean {
