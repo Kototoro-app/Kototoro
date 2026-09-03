@@ -182,22 +182,6 @@ class TrackerReadDaoTest {
     }
 
     @Test
-    fun bindingFacetsCoverTrackAndTrackLogEntities() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertEntity(sql, 20, "work-20")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Bound")
-        FavouriteLibrarySeed.insertManga(sql, 105, "Also bound")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        FavouriteLibrarySeed.insertBinding(sql, 10, 105)
-        insertTrack(mangaId = 101, entityId = 10, newChapters = 1, lastChapterDate = 0, lastCheckTime = 0)
-        insertLog(mangaId = 101, entityId = null, createdAt = 100)
-
-        val facets = db.getTrackerReadDao().observeTrackedBindingFacets().first()
-        assertEquals(setOf(101L, 105L), facets.map { it.mangaId }.toSet())
-        assertTrue(facets.all { it.entityId == 10L })
-    }
-
-    @Test
     fun tagFacetsResolveOnTheRepresentativeManga() = runTest {
         FavouriteLibrarySeed.insertTag(sql, 1, "Drama")
         FavouriteLibrarySeed.insertTag(sql, 2, "Action")
@@ -342,7 +326,6 @@ class TrackerReadDaoTest {
         val dao = db.getTrackerReadDao()
         dao.observeFeedLogRows().first()
         dao.observeUpdateTrackRows().first()
-        dao.observeTrackedBindingFacets().first()
         dao.observeTrackedTagFacets(includeFeedLogs = true).first()
         dao.observeTrackedOverrides(includeFeedLogs = true).first()
         dao.observeTrackedChapterCounts().first()

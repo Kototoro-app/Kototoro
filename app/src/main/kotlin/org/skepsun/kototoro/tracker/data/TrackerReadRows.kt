@@ -92,14 +92,6 @@ data class TrackedEntityCategoryFacetRow(
     @ColumnInfo(name = "category_id") val categoryId: Long,
 )
 
-/** Binding facet: an actively bound local projection of a tracked entity. */
-data class TrackedBindingFacetRow(
-    @ColumnInfo(name = "entity_id") val entityId: Long,
-    @ColumnInfo(name = "manga_id") val mangaId: Long,
-    @ColumnInfo(name = "source") val source: String,
-    @ColumnInfo(name = "content_type") val contentType: String?,
-)
-
 /** Tag facet on the representative (preferred/anchor) manga — the tag filter key. */
 data class TrackedTagFacetRow(
     @ColumnInfo(name = "manga_id") val mangaId: Long,

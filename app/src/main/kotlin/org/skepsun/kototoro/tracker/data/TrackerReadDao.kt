@@ -147,34 +147,6 @@ abstract class TrackerReadDao {
     )
     abstract fun observeUpdateTrackRows(): Flow<List<UpdateTrackRow>>
 
-    /** Binding facets of every entity referenced by tracks or track_logs. */
-    @Query(
-        """
-        SELECT
-            eb.entity_id AS entity_id,
-            CAST(eb.external_id AS INTEGER) AS manga_id,
-            m.source AS source,
-            m.content_type AS content_type
-        FROM (
-            SELECT DISTINCT entity_id FROM tracks WHERE entity_id IS NOT NULL
-            UNION
-            SELECT DISTINCT COALESCE(tl.entity_id, (
-                SELECT eb.entity_id FROM entity_binding eb
-                WHERE eb.source IN ('local_manga', '0')
-                    AND eb.external_id = CAST(tl.manga_id AS TEXT)
-                    AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-                LIMIT 1
-            )) AS entity_id
-            FROM track_logs tl
-        ) tracked
-        INNER JOIN entity_binding eb ON eb.entity_id = tracked.entity_id
-        INNER JOIN manga m ON m.manga_id = CAST(eb.external_id AS INTEGER)
-        WHERE eb.source IN ('local_manga', '0')
-            AND eb.state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-        """,
-    )
-    abstract fun observeTrackedBindingFacets(): Flow<List<TrackedBindingFacetRow>>
-
     /** Tags of the representative manga of each tracked work (tag filter key). */
     @Query(
         """
