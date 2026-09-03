@@ -1,0 +1,47 @@
+plugins {
+	id 'com.android.library'
+	alias(libs.plugins.kotlin.compose)
+}
+
+android {
+	// Vendored io.github.kyant0:backdrop:2.0.0 — see backdrop/UPSTREAM.md
+	namespace 'com.kyant.backdrop'
+	compileSdk 37
+
+	defaultConfig {
+		minSdk 26
+	}
+
+	compileOptions {
+		sourceCompatibility JavaVersion.VERSION_11
+		targetCompatibility JavaVersion.VERSION_11
+	}
+
+	// AGP 9 built-in Kotlin: kotlin-android plugin removed, use KGP compilerOptions block.
+	kotlin {
+		compilerOptions {
+			jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		}
+	}
+
+	buildFeatures {
+		compose true
+	}
+}
+
+// Dependency set mirrors the published backdrop-android 2.0.0 POM (kotlin-stdlib,
+// foundation, ui, ui-graphics, shapes, org.jetbrains annotations), plus androidx.annotation
+// for the @RequiresApi/@ChecksSdkIntAtLeast annotations in the androidMain actuals. Compose
+// coordinates resolve through the BOM; catalog keys are used where one exists.
+dependencies {
+	implementation libs.kotlin.stdlib
+	implementation "androidx.annotation:annotation:1.9.1"
+	implementation "org.jetbrains:annotations:26.1.0"
+
+	// api: Compose/shapes types appear in backdrop's public signatures.
+	api platform(libs.androidx.compose.bom)
+	api libs.androidx.compose.ui
+	api 'androidx.compose.ui:ui-graphics'
+	api 'androidx.compose.foundation:foundation'
+	api libs.kyant.shapes
+}

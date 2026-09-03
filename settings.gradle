@@ -53,7 +53,7 @@ dependencyResolutionManagement {
 	}
 }
 
-include ':app', ':parser-api'
+include ':app', ':parser-api', ':backdrop'
 // T0.3 offline self-built NovelSourcery/Tsundoku fixture APKs (plan Phase 0 / T0.3). Each
 // module compiles against :app:exportTachiyomiAbi (host ABI jar) with compileOnly and packs
 // the real manifest morphologies the host's strict classifier/loader must accept or reject.

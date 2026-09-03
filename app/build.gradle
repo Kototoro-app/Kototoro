@@ -429,7 +429,7 @@ configurations.all {
 	implementation libs.androidx.compose.ui.tooling.preview
 	debugImplementation libs.androidx.compose.ui.tooling
 	implementation libs.lifecycle.runtime.compose
-	implementation libs.backdrop
+	implementation project(':backdrop')
 	implementation libs.kyant.shapes
 
 	coreLibraryDesugaring libs.desugar.jdk.libs
