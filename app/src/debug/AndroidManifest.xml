@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+	<application>
+		<!--
+			Debug-only probe for bisecting the shell's never-settling idle redraws.
+			Not exported; started from the shell with root for measurements.
+		-->
+		<activity
+			android:name="org.skepsun.kototoro.core.dev.IdleProbeActivity"
+			android:exported="false"
+			android:label="Idle Probe"
+			android:theme="@style/Theme.Kototoro" />
+	</application>
+
+</manifest>
