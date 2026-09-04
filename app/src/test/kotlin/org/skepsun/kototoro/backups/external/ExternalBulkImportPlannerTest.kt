@@ -205,4 +205,40 @@ class ExternalBulkImportPlannerTest {
         // local binding owner wins over the exact-name attach target
         assertEquals(88L, entry.entityId)
     }
+
+    @Test
+    fun `mangaEntity computes isNsfw and contentRating accurately based on contentType, tags, and safe flags`() {
+        val hentaiManga = BulkImportEntry(
+            record("ExHentai Work", "https://ex/1", sourceName = "EXHENTAI", contentType = ContentType.HENTAI_MANGA),
+            mangaId = 1L,
+        )
+        assertTrue(hentaiManga.mangaEntity.isNsfw)
+        assertEquals("ADULT", hentaiManga.mangaEntity.contentRating)
+
+        val adultTagManga = BulkImportEntry(
+            record("Tagged Adult", "https://a/2", tags = listOf("Ecchi", "Romance")),
+            mangaId = 2L,
+        )
+        assertTrue(adultTagManga.mangaEntity.isNsfw)
+        assertEquals("ADULT", adultTagManga.mangaEntity.contentRating)
+
+        val safeTagManga = BulkImportEntry(
+            record("Safe Work", "https://a/3", tags = listOf("Safe", "Hentai")),
+            mangaId = 3L,
+        )
+        assertFalse(safeTagManga.mangaEntity.isNsfw)
+        assertEquals("SAFE", safeTagManga.mangaEntity.contentRating)
+
+        val normalManga = BulkImportEntry(
+            record("One Piece", "https://a/4", tags = listOf("Action", "Adventure")),
+            mangaId = 4L,
+        )
+        assertFalse(normalManga.mangaEntity.isNsfw)
+        assertNull(normalManga.mangaEntity.contentRating)
+
+        // Merging an adult tag updates mangaEntity
+        normalManga.mergeFrom(record("One Piece", "https://a/4", tags = listOf("Smut")))
+        assertTrue(normalManga.mangaEntity.isNsfw)
+        assertEquals("ADULT", normalManga.mangaEntity.contentRating)
+    }
 }

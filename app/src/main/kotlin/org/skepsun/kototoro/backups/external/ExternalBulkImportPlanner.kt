@@ -2,12 +2,19 @@ package org.skepsun.kototoro.backups.external
 
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.TagEntity
+import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.core.model.containsAdultTagKeyword
+import org.skepsun.kototoro.core.model.isAdultTagKeyword
+import org.skepsun.kototoro.core.model.isExplicitlySafeTagKeyword
+import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
 import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
 import org.skepsun.kototoro.entitygraph.data.hasSameNormalizedEntityName
 import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.parsers.model.ContentRating
+import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.util.longHashCode
 
 /**
@@ -91,22 +98,40 @@ internal class BulkImportEntry(
             }
     }
 
-    private fun buildMangaEntity(): MangaEntity = MangaEntity(
-        id = mangaId,
-        title = title,
-        altTitles = null,
-        url = record.url,
-        publicUrl = record.publicUrl.ifBlank { record.url },
-        rating = -1f,
-        isNsfw = false,
-        contentRating = null,
-        coverUrl = record.coverUrl.orEmpty(),
-        largeCoverUrl = record.coverUrl,
-        state = null,
-        authors = record.authors,
-        source = record.sourceName,
-        contentType = record.contentType.name,
-    )
+    private fun buildMangaEntity(): MangaEntity {
+        val isExplicitlySafe = record.tags.any { it.isExplicitlySafeTagKeyword() }
+        val isAdultContentType = record.contentType in setOf(
+            ContentType.HENTAI_MANGA,
+            ContentType.HENTAI_NOVEL,
+            ContentType.HENTAI_VIDEO,
+        )
+        val isAdultSource = ContentSource(record.sourceName).isNsfw()
+        val hasAdultTag = record.tags.any { it.isAdultTagKeyword() || it.containsAdultTagKeyword() }
+
+        val isNsfw = !isExplicitlySafe && (isAdultContentType || isAdultSource || hasAdultTag)
+        val contentRating = when {
+            isNsfw -> ContentRating.ADULT.name
+            isExplicitlySafe -> ContentRating.SAFE.name
+            else -> null
+        }
+
+        return MangaEntity(
+            id = mangaId,
+            title = title,
+            altTitles = null,
+            url = record.url,
+            publicUrl = record.publicUrl.ifBlank { record.url },
+            rating = -1f,
+            isNsfw = isNsfw,
+            contentRating = contentRating,
+            coverUrl = record.coverUrl.orEmpty(),
+            largeCoverUrl = record.coverUrl,
+            state = null,
+            authors = record.authors,
+            source = record.sourceName,
+            contentType = record.contentType.name,
+        )
+    }
 }
 
 /**
