@@ -213,17 +213,15 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
             if (action != Intent.ACTION_VIEW || data?.host != HOST_ADD_REPO) {
                 return null
             }
-            return when (data?.scheme) {
-                "aniyomi", "anikku" -> UnifiedSourceKind.ANIYOMI
-                else -> UnifiedSourceKind.MIHON
-            }
+            val parsed = UnifiedAddRepoDeepLinkParser.fromUri(data)
+            return parsed.kind ?: UnifiedAddRepoDeepLinkParser.kindFromScheme(data?.scheme)
         }
 
         private fun Intent.resolveInitialRepositoryUrl(): String? {
             return getStringExtra(EXTRA_INITIAL_REPOSITORY_URL)
                 ?: data
                     ?.takeIf { action == Intent.ACTION_VIEW && it.host == HOST_ADD_REPO }
-                    ?.getQueryParameter("url")
+                    ?.let { UnifiedAddRepoDeepLinkParser.fromUri(it).url }
         }
     }
 }

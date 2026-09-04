@@ -13,6 +13,11 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
  * Settings › Content sources. Repositories the user has already added live in the user's own
  * settings/database and are in no way affected by this empty preset list.
  *
+ * A community-maintained repository directory exists as a separate repository
+ * (`kototoro-repo-hub`): a VitePress/GitHub Pages site with install buttons that link back
+ * into the unified source manager via `kototoro://add-repo?url=...&kind=...`. The app never
+ * points to that site or ships its contents.
+ *
  * `withPresetRepositories` and the various `firstOrNull { preset -> ... }` lookups in the
  * unified catalog already handle an empty list gracefully (presets simply match nothing), so
  * existing user-configured repositories keep working with `isPreset = false`.
