@@ -818,11 +818,15 @@ private fun InlineCompactTopBarTabsRail(
         if (selectedIndex < 0) {
             return@LaunchedEffect
         }
-        onExpandedChange(true)
+        if (state.autoExpandOnSelection) {
+            onExpandedChange(true)
+        }
         listState.animateScrollToItem(index = selectedIndex, scrollOffset = -with(density) { 24.dp.roundToPx() })
-        delay(1600)
-        if (!listState.isScrollInProgress) {
-            onExpandedChange(false)
+        if (state.autoExpandOnSelection) {
+            delay(1600)
+            if (!listState.isScrollInProgress) {
+                onExpandedChange(false)
+            }
         }
     }
     Box(

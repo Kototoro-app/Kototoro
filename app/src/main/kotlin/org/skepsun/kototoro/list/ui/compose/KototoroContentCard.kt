@@ -59,6 +59,8 @@ import org.skepsun.kototoro.core.ui.compose.CompactContentCoverCornerRadius
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.ContentCoverCornerRadius
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
+import org.skepsun.kototoro.core.ui.compose.DeferredContentCoverBounds
+import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.model.getLocale
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
@@ -108,25 +110,6 @@ internal fun contentCardSourceMetadata(
         ?.uppercase(Locale.ROOT)
         ?.takeIf(String::isNotBlank),
 )
-
-internal class DeferredContentCoverBounds<T>(
-    private val resolveBounds: (T) -> Rect?,
-) {
-    private var coordinates: T? = null
-
-    fun updateCoordinates(value: T) {
-        coordinates = value
-    }
-
-    fun currentBounds(): Rect? = coordinates?.let(resolveBounds)
-}
-
-@Composable
-private fun rememberDeferredContentCoverBounds(): DeferredContentCoverBounds<LayoutCoordinates> = remember {
-    DeferredContentCoverBounds { coordinates ->
-        coordinates.takeIf(LayoutCoordinates::isAttached)?.unclippedBoundsInWindow()
-    }
-}
 
 @Composable
 private fun rememberContentCardSourceMetadata(
@@ -178,7 +161,13 @@ data class ContentCardUiPrefs(
     val badgesBottomLeft: Set<String>,
     val badgesBottomRight: Set<String>,
     val showExtraInfo: Boolean = false,
-)
+) {
+    fun requiresSourceMetadata(): Boolean =
+        "source" in badgesTopLeft || "language" in badgesTopLeft ||
+        "source" in badgesTopRight || "language" in badgesTopRight ||
+        "source" in badgesBottomLeft || "language" in badgesBottomLeft ||
+        "source" in badgesBottomRight || "language" in badgesBottomRight
+}
 
 @Composable
 fun rememberContentCardUiPrefs(
@@ -283,7 +272,11 @@ fun KototoroContentCardGrid(
 
     val manga = item.manga
     val renderModel = remember(item) { item.toContentCardRenderModel() }
-    val sourceMetadata = rememberContentCardSourceMetadata(manga.source)
+    val sourceMetadata = if (resolvedUiPrefs.requiresSourceMetadata()) {
+        rememberContentCardSourceMetadata(manga.source)
+    } else {
+        null
+    }
     val coverRequest = rememberContentCoverRequest(
         context = context,
         coverUrl = item.coverUrl,
@@ -658,7 +651,11 @@ fun KototoroContentCardList(
         allowCrossfade = !sharedTransitionEnabled,
     )
     val renderModel = remember(item) { item.toContentCardRenderModel() }
-    val sourceMetadata = rememberContentCardSourceMetadata(item.manga.source)
+    val sourceMetadata = if (resolvedUiPrefs.requiresSourceMetadata()) {
+        rememberContentCardSourceMetadata(item.manga.source)
+    } else {
+        null
+    }
     val badgeMetrics = remember { contentCardBadgeMetricsFor(48.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -813,7 +810,13 @@ fun ContentCardCornerBadges(
     attachedToTitleEdge: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val effectiveSourceMetadata = sourceMetadata ?: rememberContentCardSourceMetadata(item.manga.source)
+    if (badges.isEmpty()) return
+    val requiresSource = "source" in badges || "language" in badges
+    val effectiveSourceMetadata = if (requiresSource) {
+        sourceMetadata ?: rememberContentCardSourceMetadata(item.manga.source)
+    } else {
+        sourceMetadata
+    }
     ContentCardCornerBadges(
         badges = badges,
         item = remember(item) { item.toContentCardRenderModel() },
@@ -830,7 +833,7 @@ fun ContentCardCornerBadges(
 private fun ContentCardCornerBadges(
     badges: Set<String>,
     item: ContentCardRenderModel,
-    sourceMetadata: ContentCardSourceMetadata,
+    sourceMetadata: ContentCardSourceMetadata?,
     corner: Alignment,
     cardRadius: androidx.compose.ui.unit.Dp,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
@@ -839,12 +842,12 @@ private fun ContentCardCornerBadges(
 ) {
     if (badges.isEmpty()) return
 
-    val resolvedSource = sourceMetadata.resolvedSource
-    val langText = sourceMetadata.languageText
+    val resolvedSource = sourceMetadata?.resolvedSource
+    val langText = sourceMetadata?.languageText
     val showTracker = "tracker" in badges && item.metadataTrackingService != null
     val showFavorite = "favorite" in badges && item.isFavorite
     val showSaved = "saved" in badges && item.isSaved
-    val showSource = "source" in badges
+    val showSource = "source" in badges && resolvedSource != null
     val showLanguage = "language" in badges && !langText.isNullOrBlank()
     val showCounter = "counter" in badges && item.counter > 0
     val showProjectionCount = "projection_count" in badges && item.projectionCount > 1
@@ -949,11 +952,13 @@ private fun ContentCardCornerBadges(
                     }
                 }
                 "source" -> {
-                    ContentSourceResolvedIcon(
-                        source = resolvedSource,
-                        contentDescription = resolvedSource.name,
-                        modifier = Modifier.size(metrics.iconSize),
-                    )
+                    if (resolvedSource != null) {
+                        ContentSourceResolvedIcon(
+                            source = resolvedSource,
+                            contentDescription = resolvedSource.name,
+                            modifier = Modifier.size(metrics.iconSize),
+                        )
+                    }
                 }
                 "language" -> {
                     if (!langText.isNullOrBlank()) {
@@ -1064,7 +1069,11 @@ fun KototoroContentCardDetailedList(
         allowCrossfade = !sharedTransitionEnabled,
     )
     val renderModel = remember(item) { item.toContentCardRenderModel() }
-    val sourceMetadata = rememberContentCardSourceMetadata(item.manga.source)
+    val sourceMetadata = if (resolvedUiPrefs.requiresSourceMetadata()) {
+        rememberContentCardSourceMetadata(item.manga.source)
+    } else {
+        null
+    }
     val badgeMetrics = remember { contentCardBadgeMetricsFor(80.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -1316,16 +1325,21 @@ private fun BoxScope.ContentCardCoverImage(
     if (coverRequest == null) {
         return
     }
+    val onSuccess = remember(retainSnapshot, sharedKey) {
+        if (retainSnapshot) {
+            { state: coil3.compose.AsyncImagePainter.State.Success ->
+                HeroCoverSnapshotStore.put(sharedKey, state.result.image)
+            }
+        } else {
+            null
+        }
+    }
     AsyncImage(
         model = coverRequest,
         contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         modifier = Modifier.matchParentSize(),
-        onSuccess = if (retainSnapshot) {
-            { state -> HeroCoverSnapshotStore.put(sharedKey, state.result.image) }
-        } else {
-            null
-        },
+        onSuccess = onSuccess,
     )
 }
 

@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.history.ui.compose
 
-import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -10,11 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -31,15 +28,7 @@ import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.QuickFilter
 import org.skepsun.kototoro.list.domain.ListFilterOption
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.paging.compose.LazyPagingItems
-
-private const val MainRouteFlickerLogTag = "MainRouteFlicker"
-
-private fun List<ListModel>.contentAtVisibleIndex(index: Int): String {
-    val content = filterIsInstance<ContentListModel>().getOrNull(index) ?: return "none"
-    return "${content.source.name}:${content.id}:${content.title}"
-}
 
 @Composable
 fun HistoryScreen(
@@ -96,38 +85,6 @@ fun HistoryScreen(
     }
     val gridState = retainedState?.gridState ?: rememberSaveable(saver = LazyGridState.Saver) {
         LazyGridState()
-    }
-    LaunchedEffect(
-        items.size,
-        contentItems.size,
-        quickFilter?.items?.size,
-        listMode,
-        isRefreshing,
-        selectedItemsIds.size,
-        contentPadding,
-    ) {
-        Log.d(
-            MainRouteFlickerLogTag,
-            "history screen state items=${items.size} contentItems=${contentItems.size} " +
-                "quickItems=${quickFilter?.items?.size ?: -1} listMode=$listMode refreshing=$isRefreshing " +
-                "selected=${selectedItemsIds.size} " +
-                "paddingTop=${contentPadding.calculateTopPadding()} paddingBottom=${contentPadding.calculateBottomPadding()} " +
-                "visibleGrid=${contentItems.contentAtVisibleIndex(gridState.firstVisibleItemIndex)} " +
-                "visibleList=${contentItems.contentAtVisibleIndex(listState.firstVisibleItemIndex)} " +
-                "visibleDetail=${contentItems.contentAtVisibleIndex(detailedListState.firstVisibleItemIndex)}",
-        )
-    }
-
-    LaunchedEffect(listState, detailedListState, gridState) {
-        snapshotFlow {
-            "list=${listState.firstVisibleItemIndex}/${listState.firstVisibleItemScrollOffset} " +
-                "detail=${detailedListState.firstVisibleItemIndex}/${detailedListState.firstVisibleItemScrollOffset} " +
-                "grid=${gridState.firstVisibleItemIndex}/${gridState.firstVisibleItemScrollOffset}"
-        }
-            .distinctUntilChanged()
-            .collect { scrollState ->
-                Log.d(MainRouteFlickerLogTag, "history scroll $scrollState")
-            }
     }
     KototoroContentListScreen(
         modifier = modifier,

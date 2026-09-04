@@ -52,6 +52,7 @@ import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 
 import org.skepsun.kototoro.core.model.isNsfw
@@ -176,17 +177,22 @@ private fun FeedUpdatedPosterCard(
     val counterBadgeModel = remember(model, item.totalNewChapters) {
         model.asBadgeModel().copy(counter = item.totalNewChapters)
     }
-    var coverBounds by remember(model.id) { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val sharedElementKey = remember(item.groupKey, model.coverUrl, model.manga.source.name) {
         contentCoverSharedKey(model.manga.source.name, model.coverUrl.orEmpty(), instanceKey = "feed_updated_${item.groupKey}")
     }
+    val onImageSuccess = remember(sharedElementKey) {
+        { state: coil3.compose.AsyncImagePainter.State.Success ->
+            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+        }
+    }
 
     Column(
         modifier = modifier
             .width(posterStyle.itemWidth)
-            .clickable { onClick(coverBounds) },
+            .clickable { onClick(coverBounds.currentBounds()) },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Box(
@@ -194,7 +200,7 @@ private fun FeedUpdatedPosterCard(
                 .fillMaxWidth()
                 .height(posterStyle.posterHeight)
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.unclippedBoundsInWindow()
+                    coverBounds.updateCoordinates(coordinates)
                 }
                 .then(
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -214,9 +220,7 @@ private fun FeedUpdatedPosterCard(
                 contentDescription = model.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                },
+                onSuccess = onImageSuccess,
             )
             ContentCardCornerBadges(
                 badges = if (item.totalNewChapters > 0) setOf("counter") else emptySet(),

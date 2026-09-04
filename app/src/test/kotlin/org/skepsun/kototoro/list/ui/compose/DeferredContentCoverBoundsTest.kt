@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.list.ui.compose
 
 import androidx.compose.ui.geometry.Rect
+import org.skepsun.kototoro.core.ui.compose.DeferredContentCoverBounds
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test

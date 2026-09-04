@@ -5,7 +5,8 @@ import androidx.compose.runtime.Immutable
 import dagger.Reusable
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.ContentSource
+import org.skepsun.kototoro.parsers.model.ContentSource
+import org.skepsun.kototoro.core.model.ContentSource as createContentSource
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
@@ -82,6 +83,8 @@ class FavouritesCardMapper @Inject constructor(
         // Only the list modes put the projection suffix on a card. Formatting it for a grid
         // was one localized string per card that no model ever reads (65ms of a 263ms batch).
         val needsGroupSuffix = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
+        val sourcesByName = HashMap<String, ContentSource>(8)
+        val sourceResolver: (String) -> ContentSource = { name -> sourcesByName.getOrPut(name) { createContentSource(name) } }
         return rows.map { row ->
             buildFavouriteCardModel(
                 FavouriteCardModelRequest(
@@ -92,6 +95,7 @@ class FavouritesCardMapper @Inject constructor(
                     groupSuffix = if (needsGroupSuffix) groupSuffixOf(row, projectionLabels) else null,
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
+                    sourceResolver = sourceResolver,
                 ),
             )
         }
@@ -100,7 +104,7 @@ class FavouritesCardMapper @Inject constructor(
     /** Localized source title of the display projection, cached per mapping batch. */
     private fun groupSuffixOf(row: FavouriteCardRow, labelCache: MutableMap<String, String>): String {
         val sourceTitle = labelCache.getOrPut(row.sourceName) {
-            ContentSource(row.sourceName).getTitle(context)
+            createContentSource(row.sourceName).getTitle(context)
         }
         return if (row.projectionCount > 1) {
             context.getString(R.string.favourites_entity_current_projection_with_count, sourceTitle, row.projectionCount)
@@ -123,12 +127,13 @@ data class FavouriteCardModelRequest(
     val groupSuffix: String?,
     val brokenTitle: String,
     val tagTint: (String) -> Int = { 0 },
+    val sourceResolver: (String) -> ContentSource = { createContentSource(it) },
 )
 
 /** Pure row -> card model projection, unit-tested without Android (see `FavouritesCardMapperTest`). */
 internal fun buildFavouriteCardModel(request: FavouriteCardModelRequest): ContentListModel {
     val row = request.row
-    val manga = row.toStubContent(request.brokenTitle)
+    val manga = row.toStubContent(request.brokenTitle, request.mode, request.sourceResolver)
     val override = row.toDisplayOverride()
     val trackingService = row.metadataTrackingService?.let { id ->
         ScrobblerService.entries.firstOrNull { it.id == id }
@@ -223,21 +228,40 @@ private fun FavouriteCardRow.toReadingProgress(mode: ProgressIndicatorMode): Rea
  * Display-only [Content]: the cards read title / cover / authors / state / tags /
  * source-name and the NSFW flag from it, everything else stays in the database.
  */
-private fun FavouriteCardRow.toStubContent(brokenTitle: String): Content {
-    val source = ContentSource(sourceName)
+private fun FavouriteCardRow.toStubContent(
+    brokenTitle: String,
+    mode: ListMode,
+    sourceResolver: (String) -> ContentSource,
+): Content {
+    val source = sourceResolver(sourceName)
+    val altTitlesSet = if (altTitle.isNullOrBlank()) emptySet() else setOf(altTitle)
+    val authorsSet = if (author.isNullOrBlank()) emptySet() else setOf(author)
+    val tagsSet = when {
+        displayTags.isEmpty() -> emptySet()
+        mode == ListMode.GRID || mode == ListMode.COMPACT_GRID -> {
+            val count = minOf(displayTags.size, 3)
+            val result = LinkedHashSet<ContentTag>(count)
+            for (i in 0 until count) {
+                val tag = displayTags[i]
+                result.add(ContentTag(title = tag.title, key = tag.tagId.toString(), source = source))
+            }
+            result
+        }
+        else -> emptySet()
+    }
     return Content(
         id = displayMangaId ?: entityId,
         title = title.ifBlank { brokenTitle },
-        altTitles = setOfNotNull(altTitle?.takeIf { it.isNotBlank() }),
+        altTitles = altTitlesSet,
         url = "",
         publicUrl = "",
         rating = rating,
         // Explicit rating so the badge follows the persisted flag instead of the tag heuristic.
         contentRating = if (isNsfw) ContentRating.ADULT else ContentRating.SAFE,
         coverUrl = coverUrl,
-        tags = displayTags.mapTo(LinkedHashSet()) { ContentTag(title = it.title, key = it.tagId.toString(), source = source) },
+        tags = tagsSet,
         state = publicationState,
-        authors = setOfNotNull(author?.takeIf { it.isNotBlank() }),
+        authors = authorsSet,
         largeCoverUrl = null,
         description = null,
         chapters = null,

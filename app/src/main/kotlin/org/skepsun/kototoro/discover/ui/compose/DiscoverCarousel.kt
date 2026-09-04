@@ -153,6 +153,12 @@ private fun DiscoverPosterCard(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
 
+    val onImageSuccess = remember(sharedElementKey) {
+        { state: coil3.compose.AsyncImagePainter.State.Success ->
+            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+        }
+    }
+
     Column(
         modifier = modifier
             .width(posterStyle.itemWidth)
@@ -186,9 +192,7 @@ private fun DiscoverPosterCard(
                 contentDescription = model.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                },
+                onSuccess = onImageSuccess,
             )
             model.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
                 Surface(

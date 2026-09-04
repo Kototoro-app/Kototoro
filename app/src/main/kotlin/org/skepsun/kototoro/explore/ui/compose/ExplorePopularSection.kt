@@ -190,6 +190,11 @@ internal fun BrowsePopularListItem(
             crossfadeEnabled = !heroTransitionInProgress,
         )
     }
+    val onImageSuccess = remember(sharedElementKey) {
+        { state: coil3.compose.AsyncImagePainter.State.Success ->
+            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+        }
+    }
 
     Surface(
         modifier = modifier
@@ -273,9 +278,7 @@ internal fun BrowsePopularListItem(
                         contentDescription = item.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
-                        onSuccess = { state ->
-                            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                        },
+                        onSuccess = onImageSuccess,
                     )
                     item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
                         Surface(

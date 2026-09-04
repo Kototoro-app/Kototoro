@@ -68,7 +68,7 @@ class FavouritesListHost internal constructor(
     val topQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
         .withSettings()
         .mapLatest { filters -> quickFilter.filterItem(filters) }
-        .stateIn(container.listScope, SharingStarted.Eagerly, null)
+        .stateIn(container.listScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * Like [topQuickFilter] but ignores the "show quick filters" appearance setting, so the
@@ -78,7 +78,7 @@ class FavouritesListHost internal constructor(
     val popupQuickFilter: StateFlow<QuickFilter?> = quickFilter.appliedOptions
         .withSettings()
         .mapLatest { filters -> quickFilter.filterItem(filters, ignoreVisibilitySetting = true) }
-        .stateIn(container.listScope, SharingStarted.Eagerly, null)
+        .stateIn(container.listScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * The cards of this category: entity ids of the shared slice mapped to the card mode
@@ -93,7 +93,7 @@ class FavouritesListHost internal constructor(
     }.flowOn(Dispatchers.Default)
         .stateIn(
             scope = container.listScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(5_000),
             initialValue = listOf<ListModel>(LoadingState),
         )
 

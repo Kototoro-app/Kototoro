@@ -31,23 +31,48 @@ internal data class ContentListItemDescriptor(
     val contentType: ContentListItemType,
 )
 
+internal fun contentListItemKey(
+    item: ListModel?,
+    index: Int,
+): Any = when (item) {
+    is ContentGridModel -> item.id
+    is ContentCompactListModel -> item.id
+    is ContentDetailedListModel -> item.id
+    is ListHeader -> "header:${item.hashCode()}:$index"
+    is QuickFilter -> "quick_filter:$index"
+    is InfoModel -> "info:${item.hashCode()}:$index"
+    is EmptyState -> "empty:${item.hashCode()}:$index"
+    is ErrorState -> "error:${item.hashCode()}:$index"
+    LoadingState -> "loading:$index"
+    null -> "paging_placeholder:$index"
+    is ContentListModel -> item.id
+    else -> "${item.javaClass.name}:${item.hashCode()}:$index"
+}
+
+internal fun contentListItemContentType(
+    item: ListModel?,
+): ContentListItemType = when (item) {
+    is ContentGridModel -> ContentListItemType.GRID_CARD
+    is ContentCompactListModel -> ContentListItemType.COMPACT_CARD
+    is ContentDetailedListModel -> ContentListItemType.DETAILED_CARD
+    is ListHeader -> ContentListItemType.HEADER
+    is QuickFilter -> ContentListItemType.QUICK_FILTER
+    is InfoModel -> ContentListItemType.INFO
+    is EmptyState -> ContentListItemType.EMPTY
+    is ErrorState -> ContentListItemType.ERROR
+    LoadingState -> ContentListItemType.LOADING
+    null -> ContentListItemType.PLACEHOLDER
+    is ContentListModel -> ContentListItemType.OTHER
+    else -> ContentListItemType.OTHER
+}
+
 internal fun contentListItemDescriptor(
     item: ListModel?,
     index: Int,
-): ContentListItemDescriptor = when (item) {
-    is ContentGridModel -> ContentListItemDescriptor(item.id, ContentListItemType.GRID_CARD)
-    is ContentCompactListModel -> ContentListItemDescriptor(item.id, ContentListItemType.COMPACT_CARD)
-    is ContentDetailedListModel -> ContentListItemDescriptor(item.id, ContentListItemType.DETAILED_CARD)
-    is ListHeader -> ContentListItemDescriptor("header:${item.hashCode()}:$index", ContentListItemType.HEADER)
-    is QuickFilter -> ContentListItemDescriptor("quick_filter:$index", ContentListItemType.QUICK_FILTER)
-    is InfoModel -> ContentListItemDescriptor("info:${item.hashCode()}:$index", ContentListItemType.INFO)
-    is EmptyState -> ContentListItemDescriptor("empty:${item.hashCode()}:$index", ContentListItemType.EMPTY)
-    is ErrorState -> ContentListItemDescriptor("error:${item.hashCode()}:$index", ContentListItemType.ERROR)
-    LoadingState -> ContentListItemDescriptor("loading:$index", ContentListItemType.LOADING)
-    null -> ContentListItemDescriptor("paging_placeholder:$index", ContentListItemType.PLACEHOLDER)
-    is ContentListModel -> ContentListItemDescriptor(item.id, ContentListItemType.OTHER)
-    else -> ContentListItemDescriptor("${item.javaClass.name}:${item.hashCode()}:$index", ContentListItemType.OTHER)
-}
+): ContentListItemDescriptor = ContentListItemDescriptor(
+    key = contentListItemKey(item, index),
+    contentType = contentListItemContentType(item),
+)
 
 internal sealed interface ContentListItemOrigin {
     data class Leading(val index: Int) : ContentListItemOrigin

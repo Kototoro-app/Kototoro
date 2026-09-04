@@ -21,11 +21,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.collection.LruCache
 import coil3.compose.AsyncImage
 import org.jsoup.Jsoup
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+
+private val novelBookmarkPreviewCache = LruCache<String, String>(128)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -169,7 +172,8 @@ fun KototoroBookmarkCardNovel(
 }
 
 private fun extractTextPreview(context: Context, imageUrl: String): String {
-    return try {
+    novelBookmarkPreviewCache.get(imageUrl)?.let { return it }
+    val result = try {
         when {
             imageUrl.startsWith("data:text/html") -> {
                 val base64Data = imageUrl.substringAfter("base64,", "")
@@ -190,6 +194,8 @@ private fun extractTextPreview(context: Context, imageUrl: String): String {
     } catch (e: Exception) {
         context.getString(R.string.bookmark_position)
     }
+    novelBookmarkPreviewCache.put(imageUrl, result)
+    return result
 }
 
 private fun extractTextFromHtml(html: String): String {

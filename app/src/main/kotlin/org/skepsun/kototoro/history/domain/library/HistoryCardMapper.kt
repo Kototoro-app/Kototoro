@@ -51,14 +51,15 @@ class HistoryCardMapper @Inject constructor(
         }
         val brokenTitle = context.getString(R.string.favourites_broken_projection_title)
         val tagTint = contentListMapper::tagTint
-        val sourceLabels = HashMap<String, String>(8)
+        val shouldComputeGroupSuffix = slice.mode == ListMode.LIST || slice.mode == ListMode.DETAILED_LIST
+        val sourceLabels = if (shouldComputeGroupSuffix) HashMap<String, String>(8) else null
         return rows.map { row ->
             buildHistoryCardModel(
                 HistoryCardModelRequest(
                     row = row,
                     mode = slice.mode,
                     progressMode = slice.progressMode,
-                    groupSuffix = groupSuffixOf(row, sourceLabels),
+                    groupSuffix = if (shouldComputeGroupSuffix && sourceLabels != null) groupSuffixOf(row, sourceLabels) else null,
                     brokenTitle = brokenTitle,
                     tagTint = tagTint,
                 ),

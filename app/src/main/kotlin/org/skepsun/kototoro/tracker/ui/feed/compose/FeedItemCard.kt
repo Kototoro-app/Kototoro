@@ -49,6 +49,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverCacheKey
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
+import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 
@@ -66,7 +67,7 @@ fun FeedItemCard(
     onLongClick: (() -> Unit)? = null,
     onContinueReading: (() -> Unit)? = null,
 ) {
-    var coverBounds by remember(item.id) { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember { contentCardBadgeMetricsFor(40.dp) }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
@@ -85,6 +86,11 @@ fun FeedItemCard(
             .crossfade(allowCrossfade)
             .build()
     }
+    val onImageSuccess = remember(sharedElementKey) {
+        { state: coil3.compose.AsyncImagePainter.State.Success ->
+            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+        }
+    }
 
     Row(
         modifier = modifier
@@ -97,7 +103,7 @@ fun FeedItemCard(
                 },
             )
             .combinedClickable(
-                onClick = { onClick(coverBounds) },
+                onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
             )
             .padding(horizontal = 16.dp, vertical = 16.dp),
@@ -107,7 +113,7 @@ fun FeedItemCard(
             modifier = Modifier
                 .size(40.dp)
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.unclippedBoundsInWindow()
+                    coverBounds.updateCoordinates(coordinates)
                 }
                 .then(
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -126,9 +132,7 @@ fun FeedItemCard(
                 contentDescription = item.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
-                onSuccess = { state ->
-                    HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                },
+                onSuccess = onImageSuccess,
             )
             if (item.manga.isNsfw()) {
                 ContentCardNsfwBadge(

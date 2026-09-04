@@ -85,7 +85,7 @@ import org.skepsun.kototoro.core.ui.image.panoramaBlur
 import org.skepsun.kototoro.core.ui.image.rememberPanoramaRequestSize
 import org.skepsun.kototoro.core.ui.compose.HeroAutoAdvanceEffect
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
-import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.core.ui.compose.HeroPagerIndicator
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionInProgress
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
@@ -467,7 +467,12 @@ fun DiscoverHeroCarousel(
             ) { page ->
                 val item = items[page]
                 val sharedElementKey = remember(item.id, page) { sharedElementKeyForItem(item, page) }
-                var coverBounds by remember(item.id) { mutableStateOf<Rect?>(null) }
+                val coverBounds = rememberDeferredContentCoverBounds()
+                val onImageSuccess = remember(sharedElementKey) {
+                    { state: coil3.compose.AsyncImagePainter.State.Success ->
+                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+                    }
+                }
                 val posterRequest = remember(item.id, item.coverUrl) {
                     val memoryCacheKey = sharedCoverMemoryCacheKey(
                         sourceName = item.manga.source.name,
@@ -488,8 +493,9 @@ fun DiscoverHeroCarousel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
+                            val bounds = coverBounds.currentBounds()
                             logHeroTransition(
-                                "discover_click title=${item.title} sharedKey=$sharedElementKey bounds=${coverBounds != null}",
+                                "discover_click title=${item.title} sharedKey=$sharedElementKey bounds=${bounds != null}",
                             )
                             // Land the pager before the route changes: the flight's start rect
                             // is measured from this card the moment this page leaves the
@@ -503,11 +509,11 @@ fun DiscoverHeroCarousel(
                                     try {
                                         pagerState.scrollToPage(page)
                                     } finally {
-                                        onItemClick(item, coverBounds, sharedElementKey)
+                                        onItemClick(item, bounds, sharedElementKey)
                                     }
                                 }
                             } else {
-                                onItemClick(item, coverBounds, sharedElementKey)
+                                onItemClick(item, bounds, sharedElementKey)
                             }
                         }
                         .padding(horizontal = CompactTopBarHorizontalPadding, vertical = 6.dp),
@@ -523,7 +529,7 @@ fun DiscoverHeroCarousel(
                                 .width(96.dp)
                                 .aspectRatio(0.72f)
                                 .onGloballyPositioned { coordinates ->
-                                    coverBounds = coordinates.unclippedBoundsInWindow()
+                                    coverBounds.updateCoordinates(coordinates)
                                 }
                                 .then(
                                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -539,9 +545,7 @@ fun DiscoverHeroCarousel(
                                 )
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
-                            onSuccess = { state ->
-                                HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                            },
+                            onSuccess = onImageSuccess,
                         )
                         item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
                             DiscoverHeroOverlaySurface(

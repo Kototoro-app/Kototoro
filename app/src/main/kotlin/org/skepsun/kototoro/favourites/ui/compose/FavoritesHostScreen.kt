@@ -251,6 +251,7 @@ fun KototoroFavoritesHostRoute(
                     coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
                 }
             },
+            autoExpandOnSelection = false,
         )
     }
 
@@ -352,6 +353,7 @@ fun KototoroFavoritesHostRoute(
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 1,
                     key = { page ->
                         val categoryId = displayCategories.getOrNull(page)?.id ?: page.toLong()
                         "${categoryId}_$refreshGeneration"

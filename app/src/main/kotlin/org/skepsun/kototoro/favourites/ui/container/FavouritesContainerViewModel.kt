@@ -101,12 +101,6 @@ class FavouritesContainerViewModel @Inject constructor(
         val isEmpty: Boolean = false,
     )
 
-    private sealed class ActiveCategoryCountsState {
-        object Loading : ActiveCategoryCountsState()
-        object NotFiltered : ActiveCategoryCountsState()
-        data class Filtered(val categoryCounts: Map<Long, Int>) : ActiveCategoryCountsState()
-    }
-
     val listMode = settings.observeAsFlow(AppSettings.KEY_LIST_MODE) { this.listMode }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, settings.listMode)
 
@@ -453,52 +447,34 @@ class FavouritesContainerViewModel @Inject constructor(
         .withErrorHandling()
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, null)
 
-    private val activeCategoryCounts = combine(
-        currentGroupTab,
-        selectedSourceTags,
-    ) { groupTab, sourceTags ->
-        groupTab to sourceTags
-    }.flatMapLatest { (groupTab, sourceTags) ->
-        if (groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
-            flowOf(ActiveCategoryCountsState.NotFiltered)
-        } else {
-            favouritesRepository.observeCategoryCountEntries()
-                .map { entries ->
-                    ActiveCategoryCountsState.Filtered(
-                        buildActiveCategoryCounts(
-                            entries = entries,
-                            groupTab = groupTab,
-                            sourceTags = sourceTags,
-                        ),
-                    ) as ActiveCategoryCountsState
-                }
-                .onStart { emit(ActiveCategoryCountsState.Loading) }
-        }
-    }.stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, ActiveCategoryCountsState.Loading)
-
     val uiState = combine(
         categoriesStateFlow,
-        activeCategoryCounts,
+        libraryState,
+        currentGroupTab,
+        selectedSourceTags,
         observeAllFavouritesVisibility(),
-    ) { list, countsState, showAll ->
-        if (list == null || countsState is ActiveCategoryCountsState.Loading) {
+    ) { list, libState, groupTab, sourceTags, showAll ->
+        if (list == null || !libState.isInitialized) {
             return@combine FavoritesHostUiState()
         }
 
-        val activeCounts = (countsState as? ActiveCategoryCountsState.Filtered)?.categoryCounts
-        val filteredList = activeCounts?.let { counts ->
-            list.filter { counts.getOrDefault(it.id, 0) > 0 }
-        } ?: list
+        val activeCounts = libState.categoryCounts
+        val hasActiveFilter = groupTab != BrowseGroupTab.All || sourceTags.isNotEmpty()
+        val filteredList = if (hasActiveFilter) {
+            list.filter { activeCounts.getOrDefault(it.id, 0) > 0 }
+        } else {
+            list
+        }
 
         val result = ArrayList<FavouriteTabModel>(if (showAll) filteredList.size + 1 else filteredList.size)
         if (showAll) {
-            if (activeCounts == null || activeCounts.getOrDefault(NO_ID, 0) > 0) {
+            if (!hasActiveFilter || activeCounts.getOrDefault(NO_ID, 0) > 0) {
                 result.add(FavouriteTabModel(NO_ID, null))
             }
         }
         filteredList.mapTo(result) { FavouriteTabModel(it.id, it.title, it.order) }
 
-        val isEmpty = if (activeCounts != null) {
+        val isEmpty = if (hasActiveFilter) {
             list.all { activeCounts.getOrDefault(it.id, 0) == 0 } &&
                 activeCounts.getOrDefault(NO_ID, 0) == 0
         } else {
@@ -538,28 +514,6 @@ class FavouritesContainerViewModel @Inject constructor(
          * reports via its own notification) if the check is simply slow.
          */
         const val UPDATE_CHECK_AWAIT_MS = 60_000L
-    }
-
-    private fun buildActiveCategoryCounts(
-        entries: List<org.skepsun.kototoro.favourites.data.FavouriteCategoryCountEntry>,
-        groupTab: BrowseGroupTab,
-        sourceTags: Set<SourceTag>,
-    ): Map<Long, Int> {
-        val categoryCounts = mutableMapOf<Long, Int>()
-        val allContentIds = HashSet<Long>(entries.size)
-        for (entry in entries) {
-            val contentGroup = sourceGroupManager.getContentGroupByName(entry.source, entry.isNsfw)
-            val originGroup = sourceGroupManager.getOriginGroupByName(entry.source)
-            val groupMatches = groupTab.matchesContentGroup(contentGroup)
-            val originMatches = sourceTags.isEmpty() || sourceTags.any { it.matches(contentGroup, originGroup) }
-            if (!groupMatches || !originMatches) {
-                continue
-            }
-            categoryCounts[entry.categoryId] = (categoryCounts[entry.categoryId] ?: 0) + 1
-            allContentIds += entry.mangaId
-        }
-        categoryCounts[NO_ID] = allContentIds.size
-        return categoryCounts
     }
 
     fun hide(categoryId: Long) {
@@ -867,20 +821,12 @@ class FavouritesContainerViewModel @Inject constructor(
                     )
 
                     val probedCandidates = group.map { manga ->
-                        val isAlive = try {
-                            val repo = mangaRepositoryFactory.create(manga.source)
-                            repo.getDetails(manga)
-                            true
-                        } catch (e: Exception) {
-                            false
-                        }
-
-                        val chapterCount = if (isAlive) {
+                        val (isAlive, chapterCount) = try {
                             val repo = mangaRepositoryFactory.create(manga.source)
                             val detailed = repo.getDetails(manga)
-                            detailed.chapters?.size ?: 0
-                        } else {
-                            db.getChaptersDao().findAll(manga.id).size
+                            true to (detailed.chapters?.size ?: 0)
+                        } catch (e: Exception) {
+                            false to db.getChaptersDao().findAll(manga.id).size
                         }
 
                         ProbedManga(manga, isAlive, chapterCount)
@@ -964,33 +910,44 @@ class FavouritesContainerViewModel @Inject constructor(
 
                 if (isDuplicatesCancellationRequested) return@launchJob
 
-                val remaining = allFavs.toMutableList()
+                val cleanTitles = allFavs.map { it.title.trim().lowercase() }
+                val visited = BooleanArray(allFavs.size)
                 val fuzzyGroups = mutableListOf<List<org.skepsun.kototoro.parsers.model.Content>>()
                 val similarityThreshold = tolerance / 100.0
 
-                while (remaining.isNotEmpty()) {
+                for (i in allFavs.indices) {
                     if (isDuplicatesCancellationRequested) break
-                    val root = remaining.removeAt(0)
-                    val duplicates = mutableListOf<org.skepsun.kototoro.parsers.model.Content>()
-                    duplicates.add(root)
+                    if (visited[i]) continue
+                    visited[i] = true
 
-                    val iterator = remaining.iterator()
-                    while (iterator.hasNext()) {
-                        val item = iterator.next()
-                        val clean1 = root.title.trim().lowercase()
-                        val clean2 = item.title.trim().lowercase()
+                    val clean1 = cleanTitles[i]
+                    val len1 = clean1.length
+                    val duplicates = mutableListOf<org.skepsun.kototoro.parsers.model.Content>()
+                    duplicates.add(allFavs[i])
+
+                    for (j in i + 1 until allFavs.size) {
+                        if (visited[j]) continue
+                        val clean2 = cleanTitles[j]
+                        val len2 = clean2.length
+                        val maxLen = maxOf(len1, len2)
+                        if (maxLen > 0) {
+                            val minPossibleDistance = kotlin.math.abs(len1 - len2)
+                            val maxPossibleSimilarity = 1.0 - (minPossibleDistance.toDouble() / maxLen)
+                            if (maxPossibleSimilarity < similarityThreshold) {
+                                continue
+                            }
+                        }
 
                         val similarity = if (clean1 == clean2) {
                             1.0
                         } else {
                             val distance = clean1.levenshteinDistance(clean2)
-                            val maxLen = maxOf(clean1.length, clean2.length)
                             if (maxLen == 0) 1.0 else 1.0 - (distance.toDouble() / maxLen)
                         }
 
                         if (similarity >= similarityThreshold) {
-                            duplicates.add(item)
-                            iterator.remove()
+                            visited[j] = true
+                            duplicates.add(allFavs[j])
                         }
                     }
 
@@ -1035,20 +992,12 @@ class FavouritesContainerViewModel @Inject constructor(
                     )
 
                     val probedCandidates = group.map { manga ->
-                        val isAlive = try {
-                            val repo = mangaRepositoryFactory.create(manga.source)
-                            repo.getDetails(manga)
-                            true
-                        } catch (e: Exception) {
-                            false
-                        }
-
-                        val chapterCount = if (isAlive) {
+                        val (isAlive, chapterCount) = try {
                             val repo = mangaRepositoryFactory.create(manga.source)
                             val detailed = repo.getDetails(manga)
-                            detailed.chapters?.size ?: 0
-                        } else {
-                            db.getChaptersDao().findAll(manga.id).size
+                            true to (detailed.chapters?.size ?: 0)
+                        } catch (e: Exception) {
+                            false to db.getChaptersDao().findAll(manga.id).size
                         }
 
                         ProbedManga(manga, isAlive, chapterCount)

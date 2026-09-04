@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.core.ui.theme
 
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /**
@@ -41,7 +42,7 @@ enum class SurfaceStyle {
  * (overlap), never from velocity — matching the iOS design rule that the backdrop must
  * not wobble with fling speed.
  */
-val LocalChromeScrollOverlap = staticCompositionLocalOf { 0f }
+val LocalChromeScrollOverlap = compositionLocalOf { 0f }
 
 val LocalMotionStyle = staticCompositionLocalOf { MotionStyle.MATERIAL }
 val LocalSurfaceStyle = staticCompositionLocalOf { SurfaceStyle.MATERIAL }

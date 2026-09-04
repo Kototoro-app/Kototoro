@@ -59,7 +59,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
-import org.skepsun.kototoro.core.ui.compose.unclippedBoundsInWindow
+import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.list.domain.ReadingProgress
@@ -369,7 +369,7 @@ private fun HomeListRailRowItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
     val shouldCrossfadeCover = sharedTransitionScope == null || animatedVisibilityScope == null
-    var coverBounds by remember(item.sectionKey, item.stableKey) { mutableStateOf<Rect?>(null) }
+    val coverBounds = rememberDeferredContentCoverBounds()
     val imageRequest = rememberHomeCoverRequest(
         context = context,
         content = content,
@@ -384,11 +384,16 @@ private fun HomeListRailRowItem(
             instanceKey = "home_list_${item.sectionKey}_${item.stableKey}",
         )
     }
+    val onImageSuccess = remember(sharedElementKey) {
+        { state: coil3.compose.AsyncImagePainter.State.Success ->
+            HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
+        }
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick(content, coverBounds, sharedElementKey) },
+            .clickable { onClick(content, coverBounds.currentBounds(), sharedElementKey) },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
@@ -397,7 +402,7 @@ private fun HomeListRailRowItem(
                 .width(coverSize.width)
                 .height(coverSize.height)
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.unclippedBoundsInWindow()
+                    coverBounds.updateCoordinates(coordinates)
                 }
                 .then(
                     if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -418,9 +423,7 @@ private fun HomeListRailRowItem(
                     contentDescription = content.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
-                    onSuccess = { state ->
-                        HeroCoverSnapshotStore.put(sharedElementKey, state.result.image)
-                    },
+                    onSuccess = onImageSuccess,
                 )
             }
             val badgeModel = remember(content, item.counter, item.progress) {

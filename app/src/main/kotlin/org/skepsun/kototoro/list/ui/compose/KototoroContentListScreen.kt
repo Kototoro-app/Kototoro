@@ -231,7 +231,10 @@ fun KototoroContentListScreen(
     val itemCount = combinedIndex.itemCount
     val pagingRefreshState = pagingItems?.loadState?.refresh
     fun peekItem(index: Int): ListModel? {
-        val pagingSnapshot = pagingItems?.itemSnapshotList
+        if (pagingItems == null) {
+            return items.getOrNull(index)
+        }
+        val pagingSnapshot = pagingItems.itemSnapshotList
         return when (val origin = combinedIndex.origin(index, pagingSnapshot?.size ?: 0)) {
             is ContentListItemOrigin.Leading -> items[origin.index]
             is ContentListItemOrigin.Paging -> pagingSnapshot?.get(origin.index)
@@ -239,16 +242,20 @@ fun KototoroContentListScreen(
         }
     }
     fun getItem(index: Int): ListModel? {
+        if (pagingItems == null) {
+            return items.getOrNull(index)
+        }
         val currentPagingItems = pagingItems
-        return when (val origin = combinedIndex.origin(index, currentPagingItems?.itemCount ?: 0)) {
+        return when (val origin = combinedIndex.origin(index, currentPagingItems.itemCount)) {
             is ContentListItemOrigin.Leading -> items[origin.index]
-            is ContentListItemOrigin.Paging -> currentPagingItems?.getDuringSnapshotChangeOrNull(origin.index)
+            is ContentListItemOrigin.Paging -> currentPagingItems.getDuringSnapshotChangeOrNull(origin.index)
             ContentListItemOrigin.OutOfBounds -> null
         }
     }
     fun itemDescriptor(index: Int): ContentListItemDescriptor =
         contentListItemDescriptor(peekItem(index), index)
-    fun itemKey(index: Int): Any = itemDescriptor(index).key
+    fun itemKey(index: Int): Any = contentListItemKey(peekItem(index), index)
+    fun itemContentType(index: Int): ContentListItemType = contentListItemContentType(peekItem(index))
     val canLoadMore = remember(items, pagingItems?.itemCount, hasMoreItems) {
         pagingItems == null && hasMoreItems && items.any { it is ContentListModel }
     }
@@ -397,9 +404,7 @@ fun KototoroContentListScreen(
                                             GridItemSpan(maxLineSpan)
                                         }
                                     },
-                                    contentType = { index ->
-                                        itemDescriptor(index).contentType
-                                    },
+                                    contentType = ::itemContentType,
                                 ) { index ->
                                     val listModel = getItem(index) ?: return@items
                                     if (listModel is ContentGridModel) {
@@ -470,13 +475,11 @@ fun KototoroContentListScreen(
                             items(
                                 count = itemCount,
                                 key = ::itemKey,
-                                contentType = { index ->
-                                    itemDescriptor(index).contentType
-                                },
+                                contentType = ::itemContentType,
                             ) { index ->
                                 val listModel = getItem(index) ?: return@items
                                 VerticalRailAnimatedVisibility(
-                                    animationKey = itemDescriptor(index).key,
+                                    animationKey = itemKey(index),
                                     index = index,
                                     listState = actualListState,
                                     isAnimationEnabled = isVerticalCardListAnimationEnabled,
@@ -539,13 +542,11 @@ fun KototoroContentListScreen(
                             items(
                                 count = itemCount,
                                 key = ::itemKey,
-                                contentType = { index ->
-                                    itemDescriptor(index).contentType
-                                },
+                                contentType = ::itemContentType,
                             ) { index ->
                                 val listModel = getItem(index) ?: return@items
                                 VerticalRailAnimatedVisibility(
-                                    animationKey = itemDescriptor(index).key,
+                                    animationKey = itemKey(index),
                                     index = index,
                                     listState = actualListState,
                                     isAnimationEnabled = isVerticalCardListAnimationEnabled,
