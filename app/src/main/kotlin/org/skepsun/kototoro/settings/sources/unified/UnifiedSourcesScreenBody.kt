@@ -2,6 +2,11 @@ package org.skepsun.kototoro.settings.sources.unified
 
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +29,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Badge
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -72,6 +78,7 @@ fun UnifiedSourcesScreen(
     onSearchQueryChange: (String) -> Unit,
     onKindClick: (UnifiedSourceKind?) -> Unit,
     onContentTypeClick: (ContentType?) -> Unit,
+    onPackageStatusClick: (UnifiedPackageStatusFilter) -> Unit = {},
     onSourceEnabledChange: (String, Boolean) -> Unit,
     onEnableAllSources: () -> Unit,
     onDisableAllSources: () -> Unit,
@@ -151,29 +158,6 @@ fun UnifiedSourcesScreen(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 if (readyState != null) {
-                    UnifiedSourcesFilterTabs(
-                        state = readyState,
-                        onContentTypeClick = onContentTypeClick,
-                        onKindClick = onKindClick,
-                    )
-                }
-            }
-        },
-    ) { innerPadding ->
-        when (state) {
-            UnifiedSourcesUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                )
-            }
-            is UnifiedSourcesUiState.Ready -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                ) {
                     SecondaryTabRow(
                         selectedTabIndex = selectedTab,
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -204,20 +188,64 @@ fun UnifiedSourcesScreen(
                         Tab(
                             selected = selectedTab == UNIFIED_SOURCES_TAB_SOURCES,
                             onClick = { onTabClick(UNIFIED_SOURCES_TAB_SOURCES, sourceListState) },
-                            text = { Text(stringResource(R.string.sources_tab_title, state.sources.size)) },
+                            text = { Text(stringResource(R.string.sources_tab_title, readyState.sources.size)) },
                         )
                         Tab(
                             selected = selectedTab == UNIFIED_SOURCES_TAB_REPOSITORIES,
                             onClick = { onTabClick(UNIFIED_SOURCES_TAB_REPOSITORIES, repositoryListState) },
-                            text = { Text(stringResource(R.string.repositories_tab_title, state.repositories.size)) },
+                            text = { Text(stringResource(R.string.repositories_tab_title, readyState.repositories.size)) },
                         )
                         Tab(
                             selected = selectedTab == UNIFIED_SOURCES_TAB_PACKAGES,
                             onClick = { onTabClick(UNIFIED_SOURCES_TAB_PACKAGES, packageListState) },
-                            text = { Text(stringResource(R.string.packages_tab_title, state.packages.size)) },
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(stringResource(R.string.packages_tab_title, readyState.packages.size))
+                                    if (readyState.packageUpdateCount > 0) {
+                                        Badge(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                                        ) {
+                                            Text(readyState.packageUpdateCount.toString())
+                                        }
+                                    }
+                                }
+                            },
                         )
                     }
-                    if (selectedTab == UNIFIED_SOURCES_TAB_SOURCES && activeSelectedSourceIds.isNotEmpty()) {
+                    UnifiedSourcesContextualFilterTabs(
+                        tab = selectedTab,
+                        state = readyState,
+                        onContentTypeClick = onContentTypeClick,
+                        onKindClick = onKindClick,
+                        onPackageStatusClick = onPackageStatusClick,
+                    )
+                }
+            }
+        },
+    ) { innerPadding ->
+        when (state) {
+            UnifiedSourcesUiState.Loading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                )
+            }
+            is UnifiedSourcesUiState.Ready -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                ) {
+                    AnimatedVisibility(
+                        visible = selectedTab == UNIFIED_SOURCES_TAB_SOURCES && activeSelectedSourceIds.isNotEmpty(),
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         UnifiedSourceSelectionBar(
                             selectedCount = activeSelectedSourceIds.size,
                             allVisibleSelected = activeSelectedSourceIds.size == state.sources.size,
@@ -291,51 +319,137 @@ fun UnifiedSourcesScreen(
 }
 
 @Composable
-private fun UnifiedSourcesFilterTabs(
+private fun UnifiedSourcesContextualFilterTabs(
+    tab: Int,
     state: UnifiedSourcesUiState.Ready,
     onContentTypeClick: (ContentType?) -> Unit,
     onKindClick: (UnifiedSourceKind?) -> Unit,
+    onPackageStatusClick: (UnifiedPackageStatusFilter) -> Unit,
 ) {
     Column(
-        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(horizontal = 1.dp),
-        ) {
-            item(key = "content_all") {
-                    CompactFilterChip(
-                        selected = state.filters.contentTypes.isEmpty(),
-                        onClick = { onContentTypeClick(null) },
-                        text = stringResource(R.string.all_content),
-                )
+        when (tab) {
+            UNIFIED_SOURCES_TAB_SOURCES -> {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 1.dp),
+                ) {
+                    item(key = "content_all") {
+                        CompactFilterChip(
+                            selected = state.filters.contentTypes.isEmpty(),
+                            onClick = { onContentTypeClick(null) },
+                            text = stringResource(R.string.all_content),
+                        )
+                    }
+                    items(state.availableContentTypes, key = { it.name }) { type ->
+                        CompactFilterChip(
+                            selected = type in state.filters.contentTypes,
+                            onClick = { onContentTypeClick(type) },
+                            text = stringResource(type.titleResId),
+                        )
+                    }
+                }
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 1.dp),
+                ) {
+                    item(key = "kind_all") {
+                        CompactFilterChip(
+                            selected = state.filters.kinds.isEmpty(),
+                            onClick = { onKindClick(null) },
+                            text = stringResource(R.string.all_sources),
+                        )
+                    }
+                    items(state.availableKinds, key = { it.name }) { kind ->
+                        CompactFilterChip(
+                            selected = kind in state.filters.kinds,
+                            onClick = { onKindClick(kind) },
+                            text = kind.displayLabel(),
+                        )
+                    }
+                }
             }
-            items(state.availableContentTypes, key = { it.name }) { type ->
-                CompactFilterChip(
-                    selected = type in state.filters.contentTypes,
-                    onClick = { onContentTypeClick(type) },
-                    text = stringResource(type.titleResId),
-                )
+            UNIFIED_SOURCES_TAB_REPOSITORIES -> {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 1.dp),
+                ) {
+                    item(key = "repo_kind_all") {
+                        CompactFilterChip(
+                            selected = state.filters.kinds.isEmpty(),
+                            onClick = { onKindClick(null) },
+                            text = stringResource(R.string.all_sources),
+                        )
+                    }
+                    items(state.availableKinds, key = { it.name }) { kind ->
+                        CompactFilterChip(
+                            selected = kind in state.filters.kinds,
+                            onClick = { onKindClick(kind) },
+                            text = kind.displayLabel(),
+                        )
+                    }
+                }
             }
-        }
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(horizontal = 1.dp),
-        ) {
-            item(key = "kind_all") {
-                    CompactFilterChip(
-                        selected = state.filters.kinds.isEmpty(),
-                        onClick = { onKindClick(null) },
-                        text = stringResource(R.string.all_sources),
-                )
-            }
-            items(state.availableKinds, key = { it.name }) { kind ->
-                CompactFilterChip(
-                    selected = kind in state.filters.kinds,
-                    onClick = { onKindClick(kind) },
-                    text = kind.displayLabel(),
-                )
+            UNIFIED_SOURCES_TAB_PACKAGES -> {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 1.dp),
+                ) {
+                    item(key = "package_status_all") {
+                        CompactFilterChip(
+                            selected = state.filters.packageStatusFilter == UnifiedPackageStatusFilter.ALL,
+                            onClick = { onPackageStatusClick(UnifiedPackageStatusFilter.ALL) },
+                            text = stringResource(R.string.all),
+                        )
+                    }
+                    item(key = "package_status_updates") {
+                        val label = if (state.packageUpdateCount > 0) {
+                            "${stringResource(R.string.package_filter_updates)} (${state.packageUpdateCount})"
+                        } else {
+                            stringResource(R.string.package_filter_updates)
+                        }
+                        CompactFilterChip(
+                            selected = state.filters.packageStatusFilter == UnifiedPackageStatusFilter.UPDATE_AVAILABLE,
+                            onClick = { onPackageStatusClick(UnifiedPackageStatusFilter.UPDATE_AVAILABLE) },
+                            text = label,
+                        )
+                    }
+                    item(key = "package_status_installed") {
+                        CompactFilterChip(
+                            selected = state.filters.packageStatusFilter == UnifiedPackageStatusFilter.INSTALLED,
+                            onClick = { onPackageStatusClick(UnifiedPackageStatusFilter.INSTALLED) },
+                            text = stringResource(R.string.package_filter_installed),
+                        )
+                    }
+                    item(key = "package_status_not_installed") {
+                        CompactFilterChip(
+                            selected = state.filters.packageStatusFilter == UnifiedPackageStatusFilter.NOT_INSTALLED,
+                            onClick = { onPackageStatusClick(UnifiedPackageStatusFilter.NOT_INSTALLED) },
+                            text = stringResource(R.string.package_filter_available),
+                        )
+                    }
+                }
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(horizontal = 1.dp),
+                ) {
+                    item(key = "pkg_kind_all") {
+                        CompactFilterChip(
+                            selected = state.filters.kinds.isEmpty(),
+                            onClick = { onKindClick(null) },
+                            text = stringResource(R.string.all_sources),
+                        )
+                    }
+                    items(state.availableKinds, key = { it.name }) { kind ->
+                        CompactFilterChip(
+                            selected = kind in state.filters.kinds,
+                            onClick = { onKindClick(kind) },
+                            text = kind.displayLabel(),
+                        )
+                    }
+                }
             }
         }
     }

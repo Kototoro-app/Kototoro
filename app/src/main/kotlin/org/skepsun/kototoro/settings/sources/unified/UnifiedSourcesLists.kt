@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.settings.sources.unified
 
 
+import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -34,21 +35,26 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,9 +69,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.aniyomi.model.AniyomiAnimeSource
 import org.skepsun.kototoro.core.model.getSummary
@@ -77,6 +87,71 @@ import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabl
 import org.skepsun.kototoro.ireader.model.IReaderMangaSource
 import org.skepsun.kototoro.mihon.model.MihonMangaSource
 import org.skepsun.kototoro.settings.compose.SettingsContentHorizontalPadding
+
+private object PackageIconMemoryCache {
+    private val cache = ConcurrentHashMap<String, Drawable>()
+
+    fun get(packageName: String): Drawable? = cache[packageName]
+
+    fun put(packageName: String, drawable: Drawable) {
+        cache[packageName] = drawable
+    }
+}
+
+@Composable
+internal fun UnifiedEmptyState(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    message: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 48.dp, horizontal = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                FilledTonalButton(onClick = onAction) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun UnifiedSourceList(
@@ -224,6 +299,15 @@ internal fun UnifiedSourceList(
                             HorizontalDivider(modifier = Modifier.padding(start = 64.dp))
                         }
                     }
+                }
+            }
+            if (displayRows.isEmpty()) {
+                item(key = "sources_empty_state") {
+                    UnifiedEmptyState(
+                        icon = Icons.Outlined.SearchOff,
+                        title = stringResource(R.string.no_sources_found),
+                        message = stringResource(R.string.no_sources_found_desc),
+                    )
                 }
             }
         }
@@ -660,6 +744,9 @@ internal fun UnifiedRepositoryList(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val style = rememberUnifiedSourcesVisualStyle()
+    val (configured, presets) = remember(repositories) {
+        repositories.partition { it.isConfigured }
+    }
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -667,85 +754,97 @@ internal fun UnifiedRepositoryList(
             contentPadding = unifiedCardListPadding,
             verticalArrangement = Arrangement.spacedBy(unifiedCardSpacing),
         ) {
-            item(key = "add_repository") {
+            item(key = "add_repository_header") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AssistChip(
-                        onClick = { onAddRepository(null) },
-                        label = { Text(stringResource(R.string.add_repository_prompt)) },
+                    Text(
+                        text = stringResource(R.string.configured_repositories),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    Button(
+                        onClick = { onAddRepository(null) },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.add_repository))
+                    }
                 }
             }
-            items(repositories, key = { it.id }) { item ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = style.cardShape,
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = if (expressive) {
-                            MaterialTheme.colorScheme.surfaceContainerLow
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(
-                        defaultElevation = style.cardElevation,
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(unifiedCardContentPadding),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
+            if (configured.isEmpty()) {
+                item(key = "no_configured_repo_hint") {
+                    Surface(
+                        shape = style.cardShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
-                                text = item.name,
-                                modifier = Modifier.weight(1f),
+                                text = stringResource(R.string.no_extension_repositories),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
-                            if (item.isConfigured) {
-                                AssistChip(
-                                    onClick = { onRefreshRepository(item) },
-                                    label = { Text(stringResource(R.string.refresh_action)) },
-                                )
-                                AssistChip(
-                                    onClick = { onDeleteRepository(item) },
-                                    label = { Text(stringResource(R.string.delete)) },
-                                )
-                            } else if (item.isPreset) {
-                                AssistChip(
-                                    onClick = { onAddRepository(item) },
-                                    label = { Text(stringResource(R.string.add)) },
-                                )
-                            }
-                        }
-                        Text(
-                            text = "${item.kind.displayLabel()} · ${item.locationType.displayLabel()}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = item.url,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
                             Text(
-                                text = stringResource(R.string.unified_sources_repository_last_refresh_failed, error),
+                                text = stringResource(R.string.no_extension_repositories_text),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
+                }
+            } else {
+                items(configured, key = { it.id }) { item ->
+                    UnifiedRepositoryCard(
+                        item = item,
+                        style = style,
+                        expressive = expressive,
+                        onRefresh = { onRefreshRepository(item) },
+                        onDelete = { onDeleteRepository(item) },
+                        onAdd = null,
+                    )
+                }
+            }
+            if (presets.isNotEmpty()) {
+                item(key = "preset_repositories_header") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.preset_repositories),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+                items(presets, key = { it.id }) { item ->
+                    UnifiedRepositoryCard(
+                        item = item,
+                        style = style,
+                        expressive = expressive,
+                        onRefresh = null,
+                        onDelete = null,
+                        onAdd = { onAddRepository(item) },
+                    )
+                }
+            } else if (configured.isEmpty()) {
+                item(key = "repo_empty_state") {
+                    UnifiedEmptyState(
+                        icon = Icons.Outlined.SearchOff,
+                        title = stringResource(R.string.no_extension_repositories),
+                        message = stringResource(R.string.no_sources_found_desc),
+                    )
                 }
             }
         }
@@ -754,6 +853,110 @@ internal fun UnifiedRepositoryList(
             alwaysVisible = true,
             endInset = 4.dp,
         )
+    }
+}
+
+@Composable
+private fun UnifiedRepositoryCard(
+    item: UnifiedSourceRepositoryItem,
+    style: UnifiedSourcesVisualStyle,
+    expressive: Boolean,
+    onRefresh: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    onAdd: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = style.cardShape,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (expressive) {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+        elevation = CardDefaults.elevatedCardElevation(
+            defaultElevation = style.cardElevation,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(unifiedCardContentPadding),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh, style.iconShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        painter = rememberSafePainter(item.kind.packageIconRes()),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Text(
+                    text = item.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (item.isConfigured) {
+                    if (onRefresh != null) {
+                        CompactActionChip(
+                            onClick = onRefresh,
+                            label = { Text(stringResource(R.string.refresh_action)) },
+                        )
+                    }
+                    if (onDelete != null) {
+                        CompactActionChip(
+                            onClick = onDelete,
+                            label = { Text(stringResource(R.string.delete)) },
+                        )
+                    }
+                } else if (item.isPreset && onAdd != null) {
+                    Button(
+                        onClick = onAdd,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                        modifier = Modifier.height(30.dp),
+                    ) {
+                        Text(stringResource(R.string.add), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                CompactTag(text = item.kind.displayLabel())
+                CompactTag(text = item.locationType.displayLabel())
+                if (item.isConfigured && item.lastError.isNullOrBlank()) {
+                    CompactTag(text = stringResource(R.string.installed), tone = CompactTagTone.TestedAvailable)
+                }
+            }
+            Text(
+                text = item.url,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
+                Text(
+                    text = stringResource(R.string.unified_sources_repository_last_refresh_failed, error),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -775,6 +978,9 @@ internal fun UnifiedPackageList(
     onAddRecommendedRepository: (UnifiedRecommendedRepository) -> Unit = {},
 ) {
     var recommendedExpanded by rememberSaveable { mutableStateOf(true) }
+    val updateAvailableCount = remember(packages) {
+        packages.count { it.state == UnifiedSourcePackageState.UPDATE_AVAILABLE }
+    }
     Box(modifier = modifier) {
         LazyColumn(
             state = listState,
@@ -810,6 +1016,70 @@ internal fun UnifiedPackageList(
                                 suggestedRepositories = suggestedRepositoriesForMissing,
                                 onAddRepository = onAddRecommendedRepository,
                             )
+                        }
+                    }
+                }
+            }
+            if (updateAvailableCount > 0) {
+                item(key = "update_all_banner") {
+                    val style = rememberUnifiedSourcesVisualStyle()
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = style.cardShape,
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        ),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f, fill = false),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    text = stringResource(R.string.update_all_available_banner, updateAvailableCount),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = onUpdateAllPackages,
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            ) {
+                                if (updateAllInProgress) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = stringResource(
+                                        if (updateAllInProgress) {
+                                            R.string.cancel_update_all_packages
+                                        } else {
+                                            R.string.update_all_packages
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
                         }
                     }
                 }
@@ -853,6 +1123,15 @@ internal fun UnifiedPackageList(
                     onUninstall = { onPackageUninstall(item.id) },
                     onCancelInstall = { onPackageCancelInstall(item.id) },
                 )
+            }
+            if (packages.isEmpty() && recommendedPackages.isEmpty() && missingSourcesWithoutMatch.isEmpty()) {
+                item(key = "packages_empty_state") {
+                    UnifiedEmptyState(
+                        icon = Icons.Outlined.SearchOff,
+                        title = stringResource(R.string.no_packages_found),
+                        message = stringResource(R.string.no_packages_found_desc),
+                    )
+                }
             }
         }
         VerticalScrollbar(
@@ -1201,9 +1480,22 @@ private fun UnifiedPackageIcon(
 ) {
     val context = LocalContext.current
     val fallbackPainter = rememberSafePainter(item.kind.packageIconRes())
-    val installedIcon = remember(item.kind, item.packageName, item.isInstalled, context) {
-        val installedPackageName = item.installedIconPackageName() ?: return@remember null
-        runCatching { context.packageManager.getApplicationIcon(installedPackageName) }.getOrNull()
+    val installedPackageName = remember(item.kind, item.packageName, item.isInstalled) {
+        item.installedIconPackageName()
+    }
+    var installedIcon by remember(installedPackageName) {
+        mutableStateOf(installedPackageName?.let { PackageIconMemoryCache.get(it) })
+    }
+    LaunchedEffect(installedPackageName) {
+        if (installedPackageName != null && installedIcon == null) {
+            val icon = withContext(Dispatchers.IO) {
+                runCatching { context.packageManager.getApplicationIcon(installedPackageName) }.getOrNull()
+            }
+            if (icon != null) {
+                PackageIconMemoryCache.put(installedPackageName, icon)
+                installedIcon = icon
+            }
+        }
     }
     val iconModel = installedIcon ?: item.iconUrl
     val style = rememberUnifiedSourcesVisualStyle()

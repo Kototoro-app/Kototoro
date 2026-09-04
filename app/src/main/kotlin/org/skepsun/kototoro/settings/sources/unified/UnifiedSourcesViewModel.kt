@@ -174,37 +174,53 @@ class UnifiedSourcesViewModel @Inject constructor(
     }
 
     /**
-     * Heavy catalog pipeline (rebuilds on every Room invalidation / runtime change).
-     * Kept separate from [uiState] so toggle feedback — which only needs the enabled
-     * state — never waits for this potentially multi-second rebuild.
+     * Heavy catalog pipeline (rebuilds only on Room invalidation / runtime change / repo change).
+     * Kept separate from [filterState] so search queries and filter chip toggles never trigger
+     * a multi-second full catalog rebuild.
      */
-    private val baseSourcesUiState: Flow<UnifiedSourcesUiState.Ready> = combine(
+    private val fullCatalogState: Flow<FullCatalogData> = combine(
         combine(
             catalogRepository.observeState(),
             availableExternalExtensions,
             installService.downloadStates,
-            filterState,
             lnReaderPackageSnapshot,
-        ) { catalog, availableExtensions, downloadStates, filters, lnReaderSnapshot ->
-            CatalogInputs(catalog, availableExtensions, downloadStates, filters, lnReaderSnapshot)
+        ) { catalog, availableExtensions, downloadStates, lnReaderSnapshot ->
+            catalog
+                .withAvailableExternalPackages(availableExtensions, downloadStates)
+                .withAvailableLnReaderPackages(lnReaderSnapshot.plugins, lnReaderSnapshot.installingPackageIds)
+                .withAvailableJsonPackages(lnReaderSnapshot.jsonPackages)
         },
         database.getSourceOriginsDao().observeAll(),
-    ) { inputs, sourceOrigins ->
-        inputs.catalog
-            .withAvailableExternalPackages(inputs.availableExtensions, inputs.downloadStates)
-            .withAvailableLnReaderPackages(inputs.lnReaderSnapshot.plugins, inputs.lnReaderSnapshot.installingPackageIds)
-            .withAvailableJsonPackages(inputs.lnReaderSnapshot.jsonPackages)
-            .toUiState(inputs.filters)
-            .withMissingSourceRecommendations(sourceOrigins, inputs.availableExtensions)
+        availableExternalExtensions,
+    ) { catalog, sourceOrigins, availableExtensions ->
+        catalog.toFullCatalogData(sourceOrigins, availableExtensions)
     }.flowOn(Dispatchers.Default)
 
-    private data class CatalogInputs(
-        val catalog: UnifiedSourceCatalogState,
-        val availableExtensions: List<RepoAvailableExtension>,
-        val downloadStates: Map<String, ExtensionInstallDownloadState>,
-        val filters: UnifiedSourcesFilterState,
-        val lnReaderSnapshot: AvailablePackageSnapshot,
-    )
+    private val baseSourcesUiState: Flow<UnifiedSourcesUiState.Ready> = combine(
+        fullCatalogState,
+        filterState,
+    ) { catalogData, filters ->
+        val visibleRepositories = catalogData.repositories.filterBy(filters)
+        val visiblePackages = catalogData.packages.filterBy(filters, catalogData.repositoriesById)
+        val visibleSources = catalogData.sources.filterBy(filters, catalogData.repositoriesById, catalogData.packagesById)
+
+        UnifiedSourcesUiState.Ready(
+            filters = filters,
+            repositories = visibleRepositories,
+            packages = visiblePackages,
+            sources = visibleSources,
+            allRepositories = catalogData.repositories,
+            allPackages = catalogData.packages,
+            allSources = catalogData.sources,
+            availableKinds = catalogData.availableKinds,
+            availableContentTypes = catalogData.availableContentTypes,
+            availableLocationTypes = catalogData.availableLocationTypes,
+            availableLanguages = catalogData.availableLanguages,
+            recommendedPackages = catalogData.recommendedPackages,
+            missingSourcesWithoutMatch = catalogData.missingSourcesWithoutMatch,
+            suggestedRepositoriesForMissing = catalogData.suggestedRepositoriesForMissing,
+        )
+    }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<UnifiedSourcesUiState> = combine(
         baseSourcesUiState,
@@ -299,9 +315,14 @@ class UnifiedSourcesViewModel @Inject constructor(
         }
     }
 
+    fun setPackageStatusFilter(filter: UnifiedPackageStatusFilter) {
+        filterState.update { it.copy(packageStatusFilter = filter) }
+    }
+
     fun clearFilters() {
         filterState.value = UnifiedSourcesFilterState(
             availabilityFilter = UnifiedAvailabilityFilter.AVAILABLE,
+            packageStatusFilter = UnifiedPackageStatusFilter.ALL,
         )
     }
 
@@ -1759,9 +1780,31 @@ class UnifiedSourcesViewModel @Inject constructor(
         )
     }
 
-    private fun UnifiedSourceCatalogState.toUiState(
-        filters: UnifiedSourcesFilterState,
-    ): UnifiedSourcesUiState.Ready {
+    private data class FullCatalogData(
+        val repositories: List<UnifiedSourceRepositoryItem>,
+        val packages: List<UnifiedSourcePackageItem>,
+        val sources: List<UnifiedSourceItem>,
+        val repositoriesById: Map<String, UnifiedSourceRepositoryItem>,
+        val packagesById: Map<String, UnifiedSourcePackageItem>,
+        val availableKinds: List<UnifiedSourceKind>,
+        val availableContentTypes: List<ContentType>,
+        val availableLocationTypes: List<UnifiedRepositoryLocationType>,
+        val availableLanguages: List<String>,
+        val recommendedPackages: List<RecommendedPackageItem> = emptyList(),
+        val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
+        val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
+    )
+
+    private data class MissingRecommendations(
+        val recommendedPackages: List<RecommendedPackageItem> = emptyList(),
+        val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
+        val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
+    )
+
+    private fun UnifiedSourceCatalogState.toFullCatalogData(
+        sourceOrigins: List<org.skepsun.kototoro.core.db.entity.SourceOriginEntity>,
+        availableExtensions: List<RepoAvailableExtension>,
+    ): FullCatalogData {
         val repositoriesById = repositories.associateBy { it.id }
         val enrichedPackages = packages.withUniquePackageIds().enrichWithSourceCoverage(sources)
         val packagesById = enrichedPackages.associateBy { it.id }
@@ -1772,10 +1815,6 @@ class UnifiedSourcesViewModel @Inject constructor(
                 source
             }
         }
-        val visibleRepositories = repositories.filterBy(filters)
-        val visiblePackages = enrichedPackages.filterBy(filters, repositoriesById)
-        val visibleSources = enrichedSources
-            .filterBy(filters, repositoriesById, packagesById)
         val availableLanguages = (
             enrichedPackages.mapNotNull { it.language } + enrichedSources.mapNotNull { it.language }
         )
@@ -1783,31 +1822,30 @@ class UnifiedSourcesViewModel @Inject constructor(
             .filter { it.isNotBlank() }
             .distinct()
             .sorted()
-        Log.d(
-            TAG,
-            "language filter availableLanguages=$availableLanguages selectedLanguages=${filters.languages}",
+
+        val recommendations = computeMissingSourceRecommendations(
+            allSources = enrichedSources,
+            allPackages = enrichedPackages,
+            repositories = repositories,
+            sourceOrigins = sourceOrigins,
+            availableExtensions = availableExtensions,
         )
 
-        return UnifiedSourcesUiState.Ready(
-            filters = filters,
-            repositories = visibleRepositories,
-            packages = visiblePackages,
-            sources = visibleSources,
-            allRepositories = repositories,
-            allPackages = enrichedPackages,
-            allSources = enrichedSources,
+        return FullCatalogData(
+            repositories = repositories,
+            packages = enrichedPackages,
+            sources = enrichedSources,
+            repositoriesById = repositoriesById,
+            packagesById = packagesById,
             availableKinds = (
                 repositories.map { it.kind } + enrichedPackages.map { it.kind } + enrichedSources.map { it.kind }
-            )
-                .distinct()
-                .sortedBy { it.ordinal },
-            availableContentTypes = enrichedSources.map { it.contentType }
-                .distinct()
-                .sortedBy { it.ordinal },
-            availableLocationTypes = repositories.map { it.locationType }
-                .distinct()
-                .sortedBy { it.ordinal },
+            ).distinct().sortedBy { it.ordinal },
+            availableContentTypes = enrichedSources.map { it.contentType }.distinct().sortedBy { it.ordinal },
+            availableLocationTypes = repositories.map { it.locationType }.distinct().sortedBy { it.ordinal },
             availableLanguages = availableLanguages,
+            recommendedPackages = recommendations.recommendedPackages,
+            missingSourcesWithoutMatch = recommendations.missingSourcesWithoutMatch,
+            suggestedRepositoriesForMissing = recommendations.suggestedRepositoriesForMissing,
         )
     }
 
@@ -1818,10 +1856,13 @@ class UnifiedSourcesViewModel @Inject constructor(
      * Matched extensions become install recommendations; the rest are surfaced together
      * with suggested repositories.
      */
-    private fun UnifiedSourcesUiState.Ready.withMissingSourceRecommendations(
+    private fun computeMissingSourceRecommendations(
+        allSources: List<UnifiedSourceItem>,
+        allPackages: List<UnifiedSourcePackageItem>,
+        repositories: List<UnifiedSourceRepositoryItem>,
         sourceOrigins: List<org.skepsun.kototoro.core.db.entity.SourceOriginEntity>,
         availableExtensions: List<RepoAvailableExtension>,
-    ): UnifiedSourcesUiState.Ready {
+    ): MissingRecommendations {
         val candidates = sourceOrigins.asSequence()
             .filter { it.kind == "MIHON" || it.kind == "ANIYOMI" }
             .mapNotNull { origin ->
@@ -1831,7 +1872,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             }
             .toList()
         if (candidates.isEmpty()) {
-            return this
+            return MissingRecommendations()
         }
         val installedSourceIds = allSources.asSequence()
             .filter { it.kind == UnifiedSourceKind.MIHON || it.kind == UnifiedSourceKind.ANIYOMI }
@@ -1841,11 +1882,7 @@ class UnifiedSourcesViewModel @Inject constructor(
             shouldRecommendMissingExtensionSource(id, installedSourceIds)
         }
         if (missingCandidates.isEmpty()) {
-            return copy(
-                recommendedPackages = emptyList(),
-                missingSourcesWithoutMatch = emptyList(),
-                suggestedRepositoriesForMissing = emptyList(),
-            )
+            return MissingRecommendations()
         }
         val candidateIds = missingCandidates.mapTo(HashSet()) { it.second }
         val labelById = HashMap<Long, String>()
@@ -1888,7 +1925,7 @@ class UnifiedSourcesViewModel @Inject constructor(
                 }
             }
             .distinctBy { it.url }
-        return copy(
+        return MissingRecommendations(
             recommendedPackages = recommendedPackages,
             missingSourcesWithoutMatch = missingSourcesWithoutMatch,
             suggestedRepositoriesForMissing = suggestedRepositoriesForMissing,
@@ -1947,6 +1984,14 @@ class UnifiedSourcesViewModel @Inject constructor(
             .filter { filters.kinds.isEmpty() || it.kind in filters.kinds }
             .filter { filters.locationTypes.isEmpty() || it.repositoryLocationType(repositoriesById) in filters.locationTypes }
             .filter { filters.languages.isEmpty() || it.language.matchesLanguageFilter(filters.languages) }
+            .filter {
+                when (filters.packageStatusFilter) {
+                    UnifiedPackageStatusFilter.ALL -> true
+                    UnifiedPackageStatusFilter.UPDATE_AVAILABLE -> it.state == UnifiedSourcePackageState.UPDATE_AVAILABLE
+                    UnifiedPackageStatusFilter.INSTALLED -> it.isInstalled
+                    UnifiedPackageStatusFilter.NOT_INSTALLED -> !it.isInstalled
+                }
+            }
             .filter {
                 when (filters.nsfwFilter) {
                     UnifiedNsfwFilter.ALL -> true

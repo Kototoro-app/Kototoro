@@ -265,6 +265,7 @@ fun UnifiedSourcesRoute(
         onSearchQueryChange = viewModel::setSearchQuery,
         onKindClick = viewModel::setKindFilter,
         onContentTypeClick = viewModel::setContentTypeFilter,
+        onPackageStatusClick = viewModel::setPackageStatusFilter,
         onLanguageFilterClick = { onActivePanelChange(UnifiedToolbarFilterPanel.LANGUAGE) },
         onMoreFiltersClick = { onActivePanelChange(UnifiedToolbarFilterPanel.MORE) },
         onSourceEnabledChange = viewModel::setSourceEnabled,

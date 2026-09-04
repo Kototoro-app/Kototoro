@@ -14,9 +14,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.settings.compose.SettingsSectionScaffold
 
 @AndroidEntryPoint
 class UnifiedSourcesActivity : BaseComposeActivity() {
@@ -101,31 +105,72 @@ class UnifiedSourcesActivity : BaseComposeActivity() {
     ) {
         var searchActive by remember { mutableStateOf(false) }
         var activePanel by remember { mutableStateOf<UnifiedToolbarFilterPanel?>(null) }
-        UnifiedSourcesRoute(
-            searchActive = searchActive,
-            onSearchActiveChange = { searchActive = it },
-            activePanel = activePanel,
-            onActivePanelChange = { activePanel = it },
-            initialAddRepositoryKind = initialAddRepositoryKind,
-            initialAddRepositoryUrl = initialAddRepositoryUrl,
-            viewModel = viewModel,
-            onBrowseSource = { item -> router.openList(item.source, null, null) },
-            onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
-            onOpenRepositoryFile = ::openRepositoryFilePicker,
-            onOpenLocalJarPicker = ::openLocalJarPicker,
-            onStartInstall = { intent ->
-                runCatching { installLauncher.launch(intent) }
-                    .onFailure {
-                        viewModel.onInstallerActivityReturned()
-                        Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show()
-                    }
+        val state by viewModel.uiState.collectAsStateWithLifecycle()
+        val readyState = state as? UnifiedSourcesUiState.Ready
+        val closeSearch = {
+            searchActive = false
+            viewModel.setSearchQuery("")
+        }
+        val openLanguageFilter = {
+            activePanel = UnifiedToolbarFilterPanel.LANGUAGE
+        }
+        val openMoreFilters = {
+            activePanel = UnifiedToolbarFilterPanel.MORE
+        }
+
+        SettingsSectionScaffold(
+            title = stringResource(R.string.extension_management),
+            onNavigateUp = ::finish,
+            searchContent = if (searchActive) {
+                {
+                    UnifiedSourcesSearchTopBar(
+                        readyState = readyState,
+                        onNavigateUp = closeSearch,
+                        onSearchQueryChange = viewModel::setSearchQuery,
+                        onLanguageFilterClick = openLanguageFilter,
+                        onMoreFiltersClick = openMoreFilters,
+                    )
+                }
+            } else {
+                null
             },
-            onStartUninstall = { intent ->
-                runCatching { uninstallLauncher.launch(intent) }
-                    .onFailure { Toast.makeText(this, it.message, Toast.LENGTH_SHORT).show() }
+            actions = {
+                UnifiedSourcesToolbarActions(
+                    readyState = readyState,
+                    onSearchClick = { searchActive = true },
+                    onLanguageFilterClick = openLanguageFilter,
+                    onMoreFiltersClick = openMoreFilters,
+                    modifier = Modifier.fillMaxSize(),
+                )
             },
             modifier = modifier,
-        )
+        ) {
+            UnifiedSourcesRoute(
+                searchActive = searchActive,
+                onSearchActiveChange = { searchActive = it },
+                activePanel = activePanel,
+                onActivePanelChange = { activePanel = it },
+                initialAddRepositoryKind = initialAddRepositoryKind,
+                initialAddRepositoryUrl = initialAddRepositoryUrl,
+                viewModel = viewModel,
+                onBrowseSource = { item -> router.openList(item.source, null, null) },
+                onOpenSourceSettings = { item -> router.openSourceSettings(item.source) },
+                onOpenRepositoryFile = ::openRepositoryFilePicker,
+                onOpenLocalJarPicker = ::openLocalJarPicker,
+                onStartInstall = { intent ->
+                    runCatching { installLauncher.launch(intent) }
+                        .onFailure {
+                            viewModel.onInstallerActivityReturned()
+                            Toast.makeText(this@UnifiedSourcesActivity, it.message, Toast.LENGTH_SHORT).show()
+                        }
+                },
+                onStartUninstall = { intent ->
+                    runCatching { uninstallLauncher.launch(intent) }
+                        .onFailure { Toast.makeText(this@UnifiedSourcesActivity, it.message, Toast.LENGTH_SHORT).show() }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 
     private fun openRepositoryFilePicker(kind: UnifiedSourceKind, enableImportedSources: Boolean) {

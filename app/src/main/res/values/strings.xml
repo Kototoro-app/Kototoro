@@ -2964,6 +2964,16 @@
     <string name="unified_sources_shadowed_count">%1$d shadowed</string>
     <string name="unified_sources_shadowed_notice">Only currently active source implementations are shown here. %1$d same-name implementation(s) are hidden because a higher-priority package overrides them.</string>
     <string name="installed_section">Installed</string>
+    <string name="configured_repositories">Configured repositories</string>
+    <string name="preset_repositories">Recommended &amp; preset repositories</string>
+    <string name="no_sources_found">No sources found</string>
+    <string name="no_sources_found_desc">Try adjusting your filters or search query</string>
+    <string name="no_packages_found">No packages found</string>
+    <string name="no_packages_found_desc">Try adjusting your filters or add more repositories</string>
+    <string name="package_filter_updates">Updates</string>
+    <string name="package_filter_installed">Installed</string>
+    <string name="package_filter_available">Not installed</string>
+    <string name="update_all_available_banner">%1$d extension updates available</string>
     <string name="updates_section">Updates</string>
     <string name="available_section">Available</string>
     <string name="untrusted_section">Untrusted</string>

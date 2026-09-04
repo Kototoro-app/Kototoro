@@ -31,7 +31,15 @@ data class UnifiedSourcesFilterState(
     val availabilityFilter: UnifiedAvailabilityFilter = UnifiedAvailabilityFilter.AVAILABLE,
     val testAvailabilityFilter: UnifiedTestAvailabilityFilter = UnifiedTestAvailabilityFilter.ALL,
     val nsfwFilter: UnifiedNsfwFilter = UnifiedNsfwFilter.ALL,
+    val packageStatusFilter: UnifiedPackageStatusFilter = UnifiedPackageStatusFilter.ALL,
 )
+
+enum class UnifiedPackageStatusFilter {
+    ALL,
+    UPDATE_AVAILABLE,
+    INSTALLED,
+    NOT_INSTALLED,
+}
 
 enum class UnifiedEnabledFilter {
     ALL,
@@ -79,7 +87,10 @@ sealed interface UnifiedSourcesUiState {
         val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
         /** Suggested repositories that may carry the unmatched missing sources. */
         val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
-    ) : UnifiedSourcesUiState
+    ) : UnifiedSourcesUiState {
+        val packageUpdateCount: Int
+            get() = allPackages.count { it.state == UnifiedSourcePackageState.UPDATE_AVAILABLE }
+    }
 }
 
 /**

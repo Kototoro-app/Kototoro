@@ -1361,6 +1361,16 @@
     <string name="no_dlna_devices_found">未发现 DLNA 设备</string>
     <string name="no_extension_repositories">未配置仓库</string>
     <string name="no_extension_repositories_text">添加兼容的 Mihon 或 Aniyomi 仓库以加载可用扩展。</string>
+    <string name="configured_repositories">已配置仓库</string>
+    <string name="preset_repositories">推荐与预设仓库</string>
+    <string name="no_sources_found">未找到匹配的内容源</string>
+    <string name="no_sources_found_desc">请尝试调整筛选条件或搜索关键词</string>
+    <string name="no_packages_found">未找到匹配的插件包</string>
+    <string name="no_packages_found_desc">请尝试调整筛选条件或去仓库添加更多来源</string>
+    <string name="package_filter_updates">可更新</string>
+    <string name="package_filter_installed">已安装</string>
+    <string name="package_filter_available">未安装</string>
+    <string name="update_all_available_banner">发现 %1$d 个可更新扩展</string>
     <string name="no_extension_updates_available">无可用扩展更新</string>
     <string name="no_external_player">未找到外部播放器</string>
     <string name="no_fix_required">没有修复 \"%s\" 的请求</string>

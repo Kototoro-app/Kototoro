@@ -3019,6 +3019,16 @@ SHA-256 指纹:
     <string name="unified_sources_repository_refreshed">仓库已刷新</string>
     <string name="unified_sources_repository_sources_deleted">仓库源已删除</string>
     <string name="unified_sources_unsupported_repository_kind">不支持的扩展仓库类型: %1$s</string>
+    <string name="configured_repositories">已配置仓库</string>
+    <string name="preset_repositories">推荐与预设仓库</string>
+    <string name="no_sources_found">未找到匹配的内容源</string>
+    <string name="no_sources_found_desc">请尝试调整筛选条件或搜索关键词</string>
+    <string name="no_packages_found">未找到匹配的插件包</string>
+    <string name="no_packages_found_desc">请尝试调整筛选条件或去仓库添加更多来源</string>
+    <string name="package_filter_updates">可更新</string>
+    <string name="package_filter_installed">已安装</string>
+    <string name="package_filter_available">未安装</string>
+    <string name="update_all_available_banner">发现 %1$d 个可更新扩展</string>
     <string name="uninstall">卸载</string>
     <string name="untrusted_extension">未信任</string>
     <string name="untrusted_extension_message">%1$s（%2$s）已安装，但其签名与所选仓库指纹不匹配。
