@@ -56,11 +56,7 @@ This is the highly recommended way to start using Kototoro, ensuring you have th
 2. If you also use Mihon, install the Mihon extensions you need there.
 3. Return to Kototoro and refresh source detection if the new sources do not appear immediately.
 
-Common Mihon extension repositories:
-
-- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source)
-- [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions)
-- [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
+To add compatible extension repositories manually, use `Settings -> Content Sources -> Extensions`.
 
 Read more: [Source Integrations](./source-integrations.md)
 
@@ -73,10 +69,7 @@ Read more: [Source Integrations](./source-integrations.md)
 5. Configure playback options only after you confirm basic playback works.
 6. Try DLNA casting: open the player menu and select a device on your local network.
 
-Common Aniyomi extension repositories:
-
-- [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source)
-- [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
+To add compatible extension repositories manually, use `Settings -> Content Sources -> Extensions`.
 
 Read more: [Reader Features](./reader-features.md) and [Source Integrations](./source-integrations.md)
 
@@ -89,9 +82,7 @@ Read more: [Reader Features](./reader-features.md) and [Source Integrations](./s
 5. If you use IReader extensions, install the APKs and Kototoro will auto-detect them.
 6. Test chapter loading and formatting before importing a large reading list.
 
-Common Legado source repository:
-
-- [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
+To add Legado JSON sources manually, use `Settings -> Content Sources -> Import JSON Sources`.
 
 Read more: [Source Integrations](./source-integrations.md)
 

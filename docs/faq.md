@@ -41,13 +41,12 @@ Yes. Kototoro supports DLNA casting. During video playback, open the player menu
 
 Yes. The built-in player supports subtitle and audio track selection for sources that provide them. You can switch between embedded subtitle tracks and audio languages during playback.
 
-## Where Do I Find Common External Source Repositories?
+## Where Do I Find External Source Repositories?
 
-For many users, these are the most important starting points:
+Kototoro does not ship or recommend any specific repository. Add compatible repositories manually:
 
-- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
-- Aniyomi: [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source), [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
-- Legado: [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
+- Mihon / Aniyomi / IReader: `Settings -> Content Sources -> Extensions`
+- Legado / TVBox: `Settings -> Content Sources -> Import JSON Sources`
 
 Read more: [Source Integrations](./source-integrations.md)
 

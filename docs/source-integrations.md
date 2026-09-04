@@ -21,25 +21,6 @@ In Simplified Chinese builds, the relevant settings page is labeled `Settings ->
 
 In some English and older localized builds, the same page may still be labeled `Settings -> Manga sources`. That label is not fully accurate anymore because the page also manages video and JSON-based content sources.
 
-## Key Repositories
-
-These repositories are the common entry point for real-world external-source setups.
-
-### Mihon / Tachiyomi-style manga repositories
-
-- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source)
-- [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions)
-- [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20) for Chinese-site coverage
-
-### Aniyomi video repositories
-
-- [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source)
-- [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
-
-### Legado reading repositories
-
-- [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
-
 ## Built-In And Kotatsu-Redo Parsers
 
 Kototoro includes its own native parsers and additionally integrates the full Kotatsu-Redo parser library. These sources are available out of the box without any additional installation.

@@ -64,28 +64,9 @@ Kototoro is an open-source Android app that brings manga, novels, and video into
 
 ## External Source Ecosystems
 
-Kototoro supports several important external source ecosystems. These repositories are a key part of real-world setup for many users.
+Kototoro supports several external source ecosystems: Mihon, Aniyomi, IReader, Legado, TVBox, and CloudStream. The app does not ship or recommend any specific third-party repository.
 
-### Common Mihon source repositories
-
-- [Keiyoushi Extensions](https://github.com/keiyoushi/extensions)
-- [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions)
-- [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
-
-### Common Aniyomi source repositories
-
-- [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source)
-- [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
-
-### Common Legado source repository
-
-- [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
-
-### Common Cloudstream source repository
-
-- [recloudstream/extensions](https://github.com/recloudstream/extensions)
-
-For setup details, see [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations).
+To add a repository, open `Settings -> Content Sources` and use the repository / import JSON flow described in [Source Integrations](https://kototoro-app.github.io/Kototoro/source-integrations).
 
 ## Screenshots / 界面截图
 

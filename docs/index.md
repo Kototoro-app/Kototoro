@@ -75,10 +75,6 @@ features:
 - Built-in browser with Cloudflare challenge bypass
 - Reading statistics, quick-access widget, and Telegram backup bot
 
-## Key External Source Repositories
+## External Source Setup
 
-These repositories matter because they are the most common entry points for real device setups.
-
-- Mihon: [Keiyoushi Extensions](https://github.com/keiyoushi/extensions-source), [Yuzono Tachiyomi Extensions](https://github.com/yuzono/tachiyomi-extensions), [LittleSurvival CopyManga Copy20](https://github.com/LittleSurvival/copymanga-copy20)
-- Aniyomi: [Kohi-den Extensions Source](https://github.com/Kohi-den/extensions-source), [Yuzono Anime Extensions](https://github.com/yuzono/anime-extensions)
-- Legado: [XIU2 Yuedu](https://github.com/XIU2/Yuedu)
+Kototoro supports Mihon, Aniyomi, IReader, Legado, TVBox, and CloudStream sources. The app does not ship or recommend any specific repository; add repositories manually from `Settings -> Content Sources`. See [Source Integrations](./source-integrations.md) for the exact steps.
