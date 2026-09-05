@@ -137,12 +137,7 @@ class BrowserActivity : BaseBrowserActivity() {
         logCookieState("finish", currentValue)
         pendingResult = if (isSuccessCookieSatisfied(currentValue)) RESULT_OK else RESULT_CANCELED
         setResult(pendingResult)
-        if (!cfResolveResultNotified) {
-            cfResolveResultNotified = true
-            intent?.getStringExtra(EXTRA_CF_RESOLVE_KEY)?.let { resolveKey ->
-                captchaAutoResolveCoordinator.notifyResolveResult(resolveKey, pendingResult == RESULT_OK)
-            }
-        }
+        notifyCfResolveResult()
         super.finish()
     }
 
@@ -310,7 +305,16 @@ class BrowserActivity : BaseBrowserActivity() {
 
     private fun superFinishAfterVerification() {
         setResult(pendingResult)
+        notifyCfResolveResult()
         super.finish()
+    }
+
+    private fun notifyCfResolveResult() {
+        if (cfResolveResultNotified) return
+        cfResolveResultNotified = true
+        intent?.getStringExtra(EXTRA_CF_RESOLVE_KEY)?.let { resolveKey ->
+            captchaAutoResolveCoordinator.notifyResolveResult(resolveKey, pendingResult == RESULT_OK)
+        }
     }
 
     private suspend fun completeBrowserWait() {
