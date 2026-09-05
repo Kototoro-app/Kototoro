@@ -1,5 +1,9 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,18 +29,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -44,12 +53,24 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.parsers.util.move
 import org.skepsun.kototoro.settings.nav.model.NavItemConfigModel
 import kotlin.math.abs
 
+/**
+ * The list data is deliberately left untouched while a row is being dragged:
+ * rows here are positionally reused inside [SettingsPreferenceGroup], so a live
+ * reorder would rebuild each row in place and restart (i.e. kill) the drag
+ * gesture that lives on the handle. Instead the dragged row follows the finger
+ * via a layer offset, its neighbours spring out of the way as the target slot
+ * changes, and the real move is committed once on release.
+ */
 @Composable
 fun NavConfigScreen(
     configuredItems: List<NavItemConfigModel>,
@@ -62,7 +83,125 @@ fun NavConfigScreen(
     modifier: Modifier = Modifier,
 ) {
     var isAddDialogVisible by remember { mutableStateOf(false) }
-    var draggedItem by remember { mutableStateOf<NavItem?>(null) }
+    val rowCenters = remember { mutableStateMapOf<NavItem, Float>() }
+    var dragState by remember { mutableStateOf<NavRowDragState?>(null) }
+    val dragScope = rememberCoroutineScope()
+    val currentOnMoveItem by rememberUpdatedState(onMoveItem)
+
+    val currentOrder = remember(configuredItems) { configuredItems.map { it.item } }
+    // Stop painting the drag offsets the moment the committed order arrives;
+    // keeping them would stack stale translations on top of the new layout.
+    val visualDragState = dragState?.takeUnless { it.committedOrder == currentOrder }
+    val dragSourceIndex = visualDragState?.sourceIndex
+    val dragCurrentIndex = visualDragState?.currentIndex
+    val draggedItem = visualDragState?.item
+
+    LaunchedEffect(configuredItems) {
+        val expected = dragState?.committedOrder ?: return@LaunchedEffect
+        if (configuredItems.mapTo(mutableListOf()) { it.item } == expected) {
+            dragState = null
+        }
+    }
+    dragState?.let { state ->
+        if (state.committedOrder != null) {
+            // Failsafe: never wedge the screen if the committed order never lands.
+            LaunchedEffect(state) {
+                delay(1500L)
+                if (dragState === state) {
+                    dragState = null
+                }
+            }
+        }
+    }
+
+    fun rowCenterPositions(): List<Float>? {
+        if (configuredItems.isEmpty()) return null
+        return configuredItems.map { rowCenters[it.item] ?: return null }
+    }
+
+    fun rowShiftPx(item: NavItem, index: Int): Float {
+        val source = dragSourceIndex ?: return 0f
+        val current = dragCurrentIndex ?: return 0f
+        if (item == draggedItem) return 0f
+        val centers = rowCenterPositions() ?: return 0f
+        return when {
+            source < current && index > source && index <= current -> centers[index - 1] - centers[index]
+            source > current && index >= current && index < source -> centers[index + 1] - centers[index]
+            else -> 0f
+        }
+    }
+
+    fun handleDragStart(item: NavItem, index: Int) {
+        if (dragState == null) {
+            dragState = NavRowDragState(item = item, sourceIndex = index)
+        }
+    }
+
+    fun handleDrag(deltaY: Float) {
+        val state = dragState ?: return
+        if (state.committedOrder != null) return
+        val centers = rowCenterPositions() ?: return
+        val ownCenter = centers.getOrNull(state.sourceIndex) ?: return
+        if (state.fingerCenter.isNaN()) {
+            state.fingerCenter = ownCenter
+        }
+        state.fingerCenter += deltaY
+        val fingerCenter = state.fingerCenter
+        // Target slot = row whose static center sits closest to the finger.
+        val targetIndex = centers.indices
+            .minByOrNull { index -> abs(centers[index] - fingerCenter) }
+            ?: state.currentIndex
+        val targetCenter = centers[targetIndex]
+        // The row follows the finger freely but cannot outrun the slot it is
+        // about to take. The clamp must read the raw finger position, never its
+        // own previous output - feeding the clamped offset back in pins the row
+        // to the first slot center and multi-step drags can never continue.
+        val visualCenter = if (targetCenter >= ownCenter) {
+            targetCenter.coerceAtMost(fingerCenter)
+        } else {
+            targetCenter.coerceAtLeast(fingerCenter)
+        }
+        state.currentIndex = targetIndex
+        val nextOffset = visualCenter - ownCenter
+        dragScope.launch { state.offsetAnim.snapTo(nextOffset) }
+    }
+
+    fun handleDragEnd() {
+        val state = dragState ?: return
+        if (state.committedOrder != null) return
+        if (state.currentIndex == state.sourceIndex) {
+            dragScope.launch {
+                state.offsetAnim.animateTo(0f)
+                if (dragState === state) {
+                    dragState = null
+                }
+            }
+            return
+        }
+        val centers = rowCenterPositions()
+        val targetOffset = if (centers != null) {
+            (centers.getOrNull(state.currentIndex) ?: state.offsetAnim.value + centers[state.sourceIndex]) -
+                centers[state.sourceIndex]
+        } else {
+            state.offsetAnim.value
+        }
+        state.committedOrder = configuredItems.map { it.item }
+            .toMutableList()
+            .apply { move(state.sourceIndex, state.currentIndex) }
+        dragScope.launch { state.offsetAnim.snapTo(targetOffset) }
+        currentOnMoveItem(state.item, state.currentIndex - state.sourceIndex)
+    }
+
+    fun handleDragCancel() {
+        val state = dragState ?: return
+        if (state.committedOrder != null) return
+        dragScope.launch {
+            state.offsetAnim.snapTo(0f)
+            if (dragState === state) {
+                dragState = null
+            }
+        }
+    }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -81,16 +220,39 @@ fun NavConfigScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item(key = "nav_config") {
-                SettingsPreferenceGroup(title = stringResource(R.string.main_screen_sections)) {
+                SettingsPreferenceGroup(
+                    title = stringResource(R.string.main_screen_sections),
+                    itemModifier = { index ->
+                        // Material-style groups stack one Surface per row; the dragged
+                        // tile itself must be raised, or dragging downward slides the
+                        // row under the next tile that is painted after it.
+                        if (configuredItems.getOrNull(index)?.item == draggedItem) {
+                            Modifier.zIndex(4f)
+                        } else {
+                            Modifier
+                        }
+                    },
+                ) {
                     configuredItems.forEachIndexed { index, config ->
                         item {
+                            val isDragged = draggedItem == config.item
                             NavConfigPreferenceRow(
                                 item = config,
                                 canMoveUp = index > 0,
                                 canMoveDown = index < configuredItems.lastIndex,
-                                isDragging = draggedItem == config.item,
-                                onDraggingChanged = { isDragging ->
-                                    draggedItem = config.item.takeIf { isDragging }
+                                isDragging = isDragged,
+                                shiftPx = rowShiftPx(config.item, index),
+                                dragTranslation = if (isDragged && visualDragState != null) {
+                                    { visualDragState.offsetAnim.value }
+                                } else {
+                                    null
+                                },
+                                onDragStart = { handleDragStart(config.item, index) },
+                                onDrag = { deltaY -> handleDrag(deltaY) },
+                                onDragEnd = { handleDragEnd() },
+                                onDragCancel = { handleDragCancel() },
+                                onBoundsChanged = { bounds ->
+                                    rowCenters[config.item] = bounds.center.y
                                 },
                                 onMove = { direction -> onMoveItem(config.item, direction) },
                                 onRemove = { onRemoveItem(config.item) },
@@ -154,28 +316,71 @@ fun NavConfigScreen(
     }
 }
 
+private class NavRowDragState(
+    val item: NavItem,
+    val sourceIndex: Int,
+) {
+    val offsetAnim = Animatable(0f)
+
+    /**
+     * Monotonic finger travel in static layout coordinates, accumulated from the
+     * raw drag deltas. Deliberately independent of [offsetAnim]: the visual
+     * offset is clamped to slot centers, and re-deriving the finger from it
+     * would form a feedback loop that traps the drag in the first slot.
+     */
+    var fingerCenter = Float.NaN
+    var currentIndex by mutableIntStateOf(sourceIndex)
+    var committedOrder: List<NavItem>? by mutableStateOf(null)
+}
+
 @Composable
 private fun NavConfigPreferenceRow(
     item: NavItemConfigModel,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     isDragging: Boolean,
-    onDraggingChanged: (Boolean) -> Unit,
+    shiftPx: Float,
+    dragTranslation: (() -> Float)?,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    onBoundsChanged: (Rect) -> Unit,
     onMove: (direction: Int) -> Unit,
     onRemove: () -> Unit,
 ) {
-    var rowHeightPx by remember(item.item) { mutableIntStateOf(0) }
-    var accumulatedDragY by remember(item.item) { mutableFloatStateOf(0f) }
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+    val currentOnBoundsChanged by rememberUpdatedState(onBoundsChanged)
     val currentOnMove by rememberUpdatedState(onMove)
-    val currentOnDraggingChanged by rememberUpdatedState(onDraggingChanged)
     val reorderLabel = stringResource(R.string.reorder)
     val moveUpLabel = stringResource(R.string.move_up)
     val moveDownLabel = stringResource(R.string.move_down)
+    // Neighbours glide into place when the target slot changes; the dragged row
+    // itself is driven one-to-one by [dragTranslation] instead.
+    val settledShift by animateFloatAsState(
+        targetValue = if (dragTranslation == null) shiftPx else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "nav_config_row_shift",
+    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .onSizeChanged { rowHeightPx = it.height }
+            .zIndex(if (isDragging) 4f else 0f)
+            // Measured outside the layer so the reported bounds are always the
+            // static layout position, never the transient drag offset.
+            .onGloballyPositioned { coordinates ->
+                currentOnBoundsChanged(coordinates.boundsInRoot())
+            }
+            .graphicsLayer {
+                translationY = dragTranslation?.invoke() ?: settledShift
+            }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -224,32 +429,20 @@ private fun NavConfigPreferenceRow(
                         }
                     }
                 }
-                .pointerInput(item.item, rowHeightPx) {
+                .pointerInput(item.item) {
                     detectDragGestures(
                         onDragStart = {
-                            accumulatedDragY = 0f
-                            currentOnDraggingChanged(true)
+                            currentOnDragStart()
                         },
                         onDragCancel = {
-                            accumulatedDragY = 0f
-                            currentOnDraggingChanged(false)
+                            currentOnDragCancel()
                         },
                         onDragEnd = {
-                            val draggedRows = if (rowHeightPx == 0) {
-                                0
-                            } else {
-                                (abs(accumulatedDragY) / rowHeightPx + 0.5f).toInt()
-                            }
-                            val direction = if (accumulatedDragY < 0f) -draggedRows else draggedRows
-                            accumulatedDragY = 0f
-                            if (direction != 0) {
-                                currentOnMove(direction)
-                            }
-                            currentOnDraggingChanged(false)
+                            currentOnDragEnd()
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            accumulatedDragY += dragAmount.y
+                            currentOnDrag(dragAmount.y)
                         },
                     )
                 },

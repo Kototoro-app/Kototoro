@@ -65,6 +65,7 @@ class SettingsItemGroupScope internal constructor() {
 fun SettingsPreferenceGroup(
     title: String,
     modifier: Modifier = Modifier,
+    itemModifier: (Int) -> Modifier = { Modifier },
     content: SettingsItemGroupScope.() -> Unit,
 ) {
     val scope = SettingsItemGroupScope()
@@ -80,7 +81,10 @@ fun SettingsPreferenceGroup(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
-        SettingsItemGroup(itemCount = scope.items.size) { index ->
+        SettingsItemGroup(
+            itemCount = scope.items.size,
+            itemModifier = itemModifier,
+        ) { index ->
             scope.items[index]()
         }
     }
@@ -90,6 +94,10 @@ fun SettingsPreferenceGroup(
 fun SettingsItemGroup(
     itemCount: Int,
     modifier: Modifier = Modifier,
+    // Applied to each row's own Surface in the Material branch. zIndex only
+    // reorders siblings inside the same parent, so anything that lifts a row
+    // above later tiles (e.g. drag previews) has to live here, not on the row.
+    itemModifier: (Int) -> Modifier = { Modifier },
     itemContent: @Composable (index: Int) -> Unit,
 ) {
     require(itemCount >= 0) { "Settings item count cannot be negative" }
@@ -125,7 +133,9 @@ fun SettingsItemGroup(
         ) {
             repeat(itemCount) { index ->
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(itemModifier(index)),
                     shape = settingsGroupItemShape(
                         position = resolveSettingsGroupItemPosition(index, itemCount),
                         outerCornerRadius = tokens.settingsGroupOuterCornerRadius,
