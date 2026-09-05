@@ -58,7 +58,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -101,6 +105,38 @@ import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
 
 private val CompactTopTabsRailVisualHeight = 40.dp
 private val CompactTopFilterRailVisualHeight = 36.dp
+private val CompactRailEdgeFadeExtent = 16.dp
+
+/**
+ * Softens the start/end edges of a scrolling compact rail so items that are cut
+ * off by the capsule border dissolve instead of colliding with it. Each edge only
+ * fades while the rail can still scroll that way, so a settled rail never dims a
+ * partially visible item that will never move again.
+ */
+private fun Modifier.compactRailEdgeFade(
+    fadeStart: Boolean,
+    fadeEnd: Boolean,
+    extent: Dp = CompactRailEdgeFadeExtent,
+): Modifier {
+    if (!fadeStart && !fadeEnd) return this
+    return this
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val width = size.width
+            if (width <= 0f) return@drawWithContent
+            val fadeFraction = (extent.toPx() / width).coerceIn(0f, 0.5f)
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    0f to if (fadeStart) Color.Transparent else Color.Black,
+                    fadeFraction to Color.Black,
+                    1f - fadeFraction to Color.Black,
+                    1f to if (fadeEnd) Color.Transparent else Color.Black,
+                ),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+}
 data class KototoroTopBarMenuAction(
     val titleRes: Int,
     val iconRes: Int? = null,
@@ -742,6 +778,10 @@ fun CompactTopBarTabsRail(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(tokens.minimumTouchTarget)
+                .compactRailEdgeFade(
+                    fadeStart = listState.canScrollBackward,
+                    fadeEnd = listState.canScrollForward,
+                )
                 .padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -843,6 +883,10 @@ private fun InlineCompactTopBarTabsRail(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(tokens.minimumTouchTarget)
+                .compactRailEdgeFade(
+                    fadeStart = listState.canScrollBackward,
+                    fadeEnd = listState.canScrollForward,
+                )
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(1.dp),
             verticalAlignment = Alignment.CenterVertically,
