@@ -253,6 +253,29 @@ components:
     supportingTypography: "{typography.supporting}"
     minimumTouchTarget: "{sizes.minimum-touch-target}"
     container: optional-group-only
+  cover-progress:
+    diameter: 26dp
+    smallCoverDiameter: 24dp
+    container: surfaceContainerHigh
+    track: primary
+    strokeRatio: 0.075
+    zeroProgress: neutral-label-without-accent
+    completed: compact-check-without-ring
+  home-section-heading:
+    count: unframed-supporting-text
+    configurationTouchTarget: 48dp
+    contentGap: 8dp
+  home-carousel-indicator:
+    alignment: bottom-end
+    contentClearance: 20dp
+  compact-scroll-rail:
+    edgeFade: "16dp start/end, only while the rail can still scroll that way"
+  display-options-sheet:
+    modeChipRowGap: 4dp
+    gridColumnsHint: "grid modes only; approximates the full-width grid from window width"
+  discover-hero:
+    indicator: "dots alone while they fit; counter only replaces them past the dot cap"
+    sourcePill: "omitted while the header service selector names the same platform"
   settings-group:
     canvas: "{colors.canvas}"
     itemSurface: "{colors.surface-low}"
