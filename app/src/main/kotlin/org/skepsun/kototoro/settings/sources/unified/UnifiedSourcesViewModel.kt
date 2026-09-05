@@ -94,6 +94,20 @@ internal fun shouldRecommendMissingExtensionSource(
     installedSourceIds: Set<Long>,
 ): Boolean = sourceId !in installedSourceIds
 
+internal fun resolveMissingExtensionSourceLabel(
+    sourceKey: String,
+    persistedDisplayName: String?,
+    catalogNamesById: Map<Long, String>,
+): String {
+    val readablePersistedName = persistedDisplayName
+        ?.trim()
+        ?.takeIf { it.isNotBlank() && !it.equals(sourceKey, ignoreCase = true) }
+    val sourceId = sourceKey.substringAfter('_', "").toLongOrNull()
+    return readablePersistedName
+        ?: sourceId?.let(catalogNamesById::get)?.trim()?.takeIf { it.isNotBlank() }
+        ?: sourceKey
+}
+
 /**
  * SavedState keys written by the Activity/UI agent for process restoration of a source
  * recovery deep link (T5.2). Read in [UnifiedSourcesViewModel.init].
@@ -1885,9 +1899,19 @@ class UnifiedSourcesViewModel @Inject constructor(
             return MissingRecommendations()
         }
         val candidateIds = missingCandidates.mapTo(HashSet()) { it.second }
+        val catalogNamesById = availableExtensions.asSequence()
+            .flatMap { extension ->
+                extension.sourceNamesById.asSequence().map { (id, name) -> id to name }
+            }
+            .filter { (_, name) -> name.isNotBlank() }
+            .toMap()
         val labelById = HashMap<Long, String>()
         missingCandidates.forEach { (origin, id, _) ->
-            labelById[id] = origin.displayName?.takeIf { it.isNotBlank() } ?: origin.sourceKey
+            labelById[id] = resolveMissingExtensionSourceLabel(
+                sourceKey = origin.sourceKey,
+                persistedDisplayName = origin.displayName,
+                catalogNamesById = catalogNamesById,
+            )
         }
         val recommendedPackages = allPackages
             .filter { item ->
@@ -1910,7 +1934,11 @@ class UnifiedSourcesViewModel @Inject constructor(
         val missingSourcesWithoutMatch = missingCandidates
             .filter { (_, id, _) -> id !in coveredIds }
             .map { (origin, _, kind) ->
-                MissingSourceHint(kind = kind, sourceKey = origin.sourceKey, displayName = origin.displayName)
+                MissingSourceHint(
+                    kind = kind,
+                    sourceKey = origin.sourceKey,
+                    displayName = labelById[origin.sourceKey.substringAfter('_', "").toLongOrNull()],
+                )
             }
         val suggestedKinds = missingSourcesWithoutMatch.map { it.kind }.toSet()
         // Only actually configured repos count: the repository list always contains the

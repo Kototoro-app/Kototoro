@@ -320,6 +320,7 @@ class ExtensionRepoServiceTest : FunSpec({
 			extensions.first().iconUrl shouldBe "https://cdn.example/asura.png"
 			extensions.first().isNsfw.shouldBeTrue()
 			extensions.first().sourceNames shouldBe listOf("Asura Scans", "Asura Scans 中文")
+			extensions.first().sourceNamesById shouldBe mapOf(1L to "Asura Scans", 2L to "Asura Scans 中文")
 			extensions.first().languageCodes shouldBe setOf("en", "zh")
 			server.takeRequest().path shouldBe "/mihon/index.pb"
 			server.takeRequest().path shouldBe "/mihon/index.pb"

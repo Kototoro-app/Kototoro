@@ -415,6 +415,9 @@ class ExtensionRepoService @Inject constructor(
             isNsfw = nsfw == 1,
             sourceNames = sources.orEmpty().map { it.name },
             sourceIds = sources.orEmpty().mapNotNull { it.id?.toLongOrNull() },
+            sourceNamesById = sources.orEmpty().mapNotNull { source ->
+                source.id?.toLongOrNull()?.let { id -> id to source.name }
+            }.toMap(),
             archiveName = apk,
             archiveUrl = null,
             iconUrl = applyMirror(if (repo.type == ExternalExtensionType.IREADER) "${repo.baseUrl}/icon/${apk.replace(".apk", ".png")}" else "${repo.baseUrl}/icon/$pkg.png"),
@@ -509,6 +512,7 @@ class ExtensionRepoService @Inject constructor(
             isNsfw = contentWarning >= ExtensionStoreIndex.ContentWarning.MIXED,
             sourceNames = sources.map { it.name },
             sourceIds = sources.map { it.id },
+            sourceNamesById = sources.associate { it.id to it.name },
             archiveName = archiveUrl.substringAfterLast('/').substringBefore('?').ifBlank { "$packageName.apk" },
             archiveUrl = archiveUrl,
             iconUrl = applyMirror(resources.iconUrl),

@@ -18,6 +18,8 @@ data class RepoAvailableExtension(
     val sourceNames: List<String>,
     /** Numeric source ids declared by the index, when the repo format exposes them. */
     val sourceIds: List<Long> = emptyList(),
+    /** Human-readable source names keyed by their numeric ids, when the index exposes both. */
+    val sourceNamesById: Map<Long, String> = emptyMap(),
     val archiveName: String,
     val archiveUrl: String? = null,
     val iconUrl: String,
