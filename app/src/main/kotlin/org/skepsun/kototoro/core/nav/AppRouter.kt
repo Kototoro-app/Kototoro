@@ -57,6 +57,7 @@ import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.work.domain.WorkResolver
 import org.skepsun.kototoro.core.network.CommonHeaders
+import org.skepsun.kototoro.core.network.webview.CF_CLEARANCE_COOKIE
 import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -1418,7 +1419,7 @@ class AppRouter(
                 title = context.getString(R.string.open_in_reader_browser),
             ).apply {
                 putExtra(KEY_SUCCESS_COOKIE_URL, challengeUrl)
-                putExtra(KEY_SUCCESS_COOKIE_NAME, "cf_clearance")
+                putExtra(KEY_SUCCESS_COOKIE_NAME, CF_CLEARANCE_COOKIE)
                 exception.headers[CommonHeaders.USER_AGENT]?.let {
                     putExtra(KEY_USER_AGENT, it)
                 }

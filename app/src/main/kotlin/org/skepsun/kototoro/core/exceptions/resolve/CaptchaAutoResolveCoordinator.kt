@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -250,7 +251,22 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
             context.startActivity(intent)
         }
         return try {
-            resultDeferred.await()
+            // Bounded await: BrowserActivity normally reports through notifyResolveResult(),
+            // but if the activity is destroyed without ever finishing (system-driven kill of
+            // a backgrounded activity) the deferred would otherwise hang manualMutex and
+            // every later manual resolution for the lifetime of the process.
+            val result = withTimeoutOrNull(MANUAL_RESOLUTION_TIMEOUT_MS) {
+                resultDeferred.await()
+            }
+            if (result == null) {
+                android.util.Log.w(
+                    TAG,
+                    "Manual Cloudflare resolution timed out: source=${source.name} url=${exception.url}",
+                )
+                false
+            } else {
+                result
+            }
         } finally {
             pendingActivityResult.remove(resolveKey, resultDeferred)
         }
@@ -266,6 +282,7 @@ class CaptchaAutoResolveCoordinator @Inject constructor(
         const val TAG = "CaptchaAutoResolver"
         const val PROBE_MAX_ATTEMPTS = 10
         const val PROBE_RETRY_DELAY_MS = 1_000L
+        const val MANUAL_RESOLUTION_TIMEOUT_MS = 10 * 60 * 1000L
 
         // Browser/transport managed headers that the OkHttp probe must not re-emit
         // manually; cookies are handled by the shared CookieJar.

@@ -285,7 +285,10 @@ class BrowserActivity : BaseBrowserActivity() {
             browserWaitCompleted = true
             completeBrowserWait()
         }
-        superFinishAfterVerification()
+        // Funnel every completion through finish(): setResult, cookie flush and the
+        // coordinator notification live in exactly one place, so no completion path
+        // can bypass notifyCfResolveResult() again.
+        finish()
     }
 
     private fun shouldAutoCompleteVerification(): Boolean {
@@ -301,12 +304,6 @@ class BrowserActivity : BaseBrowserActivity() {
 
     private fun flushBrowserCookies() {
         runCatching { CookieManager.getInstance().flush() }
-    }
-
-    private fun superFinishAfterVerification() {
-        setResult(pendingResult)
-        notifyCfResolveResult()
-        super.finish()
     }
 
     private fun notifyCfResolveResult() {
