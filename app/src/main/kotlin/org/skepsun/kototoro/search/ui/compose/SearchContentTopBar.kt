@@ -174,6 +174,9 @@ internal fun SearchContentTopBar(
                             supportsGridSizeSlider = true,
                             gridSize = gridSize,
                             onGridSizeChange = onGridSizeChange,
+                            // The results grid may sit in a split layout beside the
+                            // filter panel, so a window-width column estimate lies.
+                            supportsGridColumnsHint = false,
                             onDismissRequest = { showDisplayOptionsSheet = false },
                         )
                     }

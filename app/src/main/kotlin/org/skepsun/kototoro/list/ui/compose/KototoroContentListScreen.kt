@@ -102,7 +102,8 @@ private const val LoadMoreVisibleThreshold = 4
 private const val GridColumnMinFitRatio = 0.94f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
-private val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
+internal val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
+internal val GridSpacing = 6.dp
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,
@@ -346,7 +347,7 @@ fun KototoroContentListScreen(
                             onLoadMore = onLoadMore,
                         )
                         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val gridSpacing = 6.dp
+                            val gridSpacing = GridSpacing
                             val innerHorizontalPadding = innerPadding.calculateLeftPadding(LayoutDirection.Ltr) +
                                 innerPadding.calculateRightPadding(LayoutDirection.Ltr)
                             val horizontalPadding = innerHorizontalPadding + GridHorizontalPadding * 2

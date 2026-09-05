@@ -35,12 +35,15 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
@@ -60,6 +63,9 @@ fun DisplayOptionsSheet(
     supportsGridSizeSlider: Boolean,
     gridSize: Int,
     onGridSizeChange: (Int) -> Unit,
+    // Off for surfaces whose grid does not span the window (search's wide
+    // split layout would make a window-width estimate visibly wrong).
+    supportsGridColumnsHint: Boolean = true,
     sortOrders: List<ListSortOrder> = emptyList(),
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
@@ -144,43 +150,48 @@ fun DisplayOptionsSheet(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            DisplayModeChip(
-                                iconRes = R.drawable.ic_list,
-                                label = stringResource(R.string.list),
-                                selected = currentListMode == ListMode.LIST,
-                                onClick = { onListModeSelected(ListMode.LIST) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            DisplayModeChip(
-                                iconRes = R.drawable.ic_list_detailed,
-                                label = stringResource(R.string.details),
-                                selected = currentListMode == ListMode.DETAILED_LIST,
-                                onClick = { onListModeSelected(ListMode.DETAILED_LIST) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            DisplayModeChip(
-                                iconRes = R.drawable.ic_grid,
-                                label = stringResource(R.string.grid),
-                                selected = currentListMode == ListMode.GRID,
-                                onClick = { onListModeSelected(ListMode.GRID) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            DisplayModeChip(
-                                iconRes = R.drawable.ic_grid,
-                                label = stringResource(R.string.compact_grid),
-                                selected = currentListMode == ListMode.COMPACT_GRID,
-                                onClick = { onListModeSelected(ListMode.COMPACT_GRID) },
-                                modifier = Modifier.weight(1f)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                DisplayModeChip(
+                                    iconRes = R.drawable.ic_list,
+                                    label = stringResource(R.string.list),
+                                    selected = currentListMode == ListMode.LIST,
+                                    onClick = { onListModeSelected(ListMode.LIST) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DisplayModeChip(
+                                    iconRes = R.drawable.ic_list_detailed,
+                                    label = stringResource(R.string.details),
+                                    selected = currentListMode == ListMode.DETAILED_LIST,
+                                    onClick = { onListModeSelected(ListMode.DETAILED_LIST) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                DisplayModeChip(
+                                    iconRes = R.drawable.ic_grid,
+                                    label = stringResource(R.string.grid),
+                                    selected = currentListMode == ListMode.GRID,
+                                    onClick = { onListModeSelected(ListMode.GRID) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DisplayModeChip(
+                                    iconRes = R.drawable.ic_grid,
+                                    label = stringResource(R.string.compact_grid),
+                                    selected = currentListMode == ListMode.COMPACT_GRID,
+                                    onClick = { onListModeSelected(ListMode.COMPACT_GRID) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
 
@@ -192,6 +203,11 @@ fun DisplayOptionsSheet(
                             title = stringResource(R.string.grid_size),
                             value = gridSize,
                             onValueChange = onGridSizeChange,
+                            columnsHint = resolveGridColumnsHint(
+                                enabled = supportsGridColumnsHint,
+                                listMode = currentListMode,
+                                gridSize = gridSize,
+                            ),
                         )
                     }
 
@@ -421,13 +437,14 @@ internal fun GridSizeSlider(
     title: String,
     value: Int,
     onValueChange: (Int) -> Unit,
+    columnsHint: String? = null,
 ) {
     var sliderValue by remember(value) { mutableFloatStateOf(value.toFloat()) }
     val currentValue = sliderValue.toInt().coerceIn(50, 150)
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -439,11 +456,20 @@ internal fun GridSizeSlider(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = "$currentValue%",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "$currentValue%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (columnsHint != null) {
+                    Text(
+                        text = columnsHint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                    )
+                }
+            }
         }
         KototoroSlider(
             value = sliderValue,
@@ -455,4 +481,31 @@ internal fun GridSizeSlider(
             steps = 19,
         )
     }
+}
+
+/**
+ * Approximate poster-column count the grid below the sheet would show at the
+ * current scale. The real grid measures its own width inside
+ * [KototoroContentListScreen]; the sheet only sees the window container, so the
+ * resource wording stays "about".
+ */
+@Composable
+private fun resolveGridColumnsHint(
+    enabled: Boolean,
+    listMode: ListMode,
+    gridSize: Int,
+): String? {
+    if (!enabled) return null
+    if (listMode != ListMode.GRID && listMode != ListMode.COMPACT_GRID) return null
+    val density = LocalDensity.current
+    val windowWidthPx = LocalWindowInfo.current.containerSize.width
+    if (windowWidthPx <= 0) return null
+    val windowWidth = with(density) { windowWidthPx.toDp() }
+    val availableWidth = (windowWidth - GridHorizontalPadding * 2).coerceAtLeast(48.dp)
+    val columns = resolveGridColumnCount(
+        availableWidth = availableWidth,
+        targetItemWidth = compactPosterCardStyle(gridSize / 100f).itemWidth,
+        spacing = GridSpacing,
+    )
+    return stringResource(R.string.grid_size_columns_hint, columns)
 }

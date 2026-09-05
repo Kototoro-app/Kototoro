@@ -137,6 +137,7 @@
     <string name="double_page_cover_page">First page as cover (solo)</string>
     <string name="miscellaneous">Miscellaneous</string>
     <string name="grid_size">Grid size</string>
+    <string name="grid_size_columns_hint">About %1$d columns per row</string>
     <string name="home_rail_rows_per_page">Rows per page</string>
     <string name="grid_aspect_ratio">Grid ratio</string>
     <string name="fit_page_thumbnails">Fit page thumbnails</string>
