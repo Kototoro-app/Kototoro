@@ -605,22 +605,29 @@ fun DiscoverHeroCarousel(
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        DiscoverHeroPill(
-                            text = rememberResolvedSourceTitle(item.source),
-                            contentColor = heroContentColor,
-                            containerColor = heroControlContainerColor,
-                        )
+                        // The header service selector already names the platform these
+                        // items come from; the per-item pill only earns its space when
+                        // there is no selector carrying that context.
+                        if (activeService == null) {
+                            DiscoverHeroPill(
+                                text = rememberResolvedSourceTitle(item.source),
+                                contentColor = heroContentColor,
+                                containerColor = heroControlContainerColor,
+                            )
+                        }
                     }
                 }
             }
             if (!detachedBottomContent) {
+                // Dots alone up to HeroPagerMaxVisibleDots (the counter the old call
+                // passed repeated what the dots already say); the indicator falls
+                // back to a plain "n / total" once there are too many dots to show.
                 HeroPagerIndicator(
                     pageCount = items.size,
                     currentPage = selectedIndex,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     activeColor = heroContentColor,
                     inactiveColor = heroContentColor.copy(alpha = 0.34f),
-                    pageCounter = "${selectedIndex + 1} / ${items.size}",
                 )
             }
             if (bottomContent != null) {
@@ -643,7 +650,6 @@ fun DiscoverHeroCarousel(
                     ),
                 activeColor = heroContentColor,
                 inactiveColor = heroContentColor.copy(alpha = 0.34f),
-                pageCounter = "${selectedIndex + 1} / ${items.size}",
             )
         }
     }
