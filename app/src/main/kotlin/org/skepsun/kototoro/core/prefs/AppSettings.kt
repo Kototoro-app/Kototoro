@@ -378,14 +378,16 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() {
             val rawStr = prefs.getString(KEY_NAV_MAIN, null)
             val legacyThreeItemDefault = migratedLegacyThreeNavItems.joinToString(",") { it.name }
+            val isLegacyThreeItemMigrationPending = !prefs.getBoolean(
+                KEY_NAV_MAIN_LEGACY_THREE_MIGRATED,
+                false,
+            )
             val items = when (rawStr) {
                 null -> defaultMainNavItems
-                legacyThreeItemDefault -> {
-                    // 2.0.1 rewrote and persisted the legacy five-destination
-                    // default down to Home/Favourites/Browse; restore it to the
-                    // five-destination set. Custom orders are left untouched.
-                    prefs.edit { putString(KEY_NAV_MAIN, defaultMainNavItems.joinToString(",") { it.name }) }
+                legacyThreeItemDefault -> if (isLegacyThreeItemMigrationPending) {
                     defaultMainNavItems
+                } else {
+                    migratedLegacyThreeNavItems
                 }
                 else -> rawStr.split(',')
                     .mapNotNull { x -> NavItem.entries.find(x) }
@@ -393,14 +395,24 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
                     .ifEmpty { defaultMainNavItems }
             }
             return items.limitMainNavigationItems().also { limitedItems ->
-                if (limitedItems.size != items.size) {
-                    prefs.edit { putString(KEY_NAV_MAIN, limitedItems.joinToString(",") { it.name }) }
+                val shouldPersistItems = limitedItems.size != items.size ||
+                    rawStr == legacyThreeItemDefault && isLegacyThreeItemMigrationPending
+                if (shouldPersistItems || isLegacyThreeItemMigrationPending) {
+                    prefs.edit {
+                        if (shouldPersistItems) {
+                            putString(KEY_NAV_MAIN, limitedItems.joinToString(",") { it.name })
+                        }
+                        if (isLegacyThreeItemMigrationPending) {
+                            putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
+                        }
+                    }
                 }
             }
         }
         set(value) {
             prefs.edit {
                 putString(KEY_NAV_MAIN, value.limitMainNavigationItems().joinToString(",") { it.name })
+                putBoolean(KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, true)
             }
         }
 
@@ -3100,6 +3112,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_GLOBAL_TAG_BLACKLIST = "global_tag_blacklist"
         const val KEY_RELATED_MANGA = "related_manga"
         const val KEY_NAV_MAIN = "nav_main"
+        const val KEY_NAV_MAIN_LEGACY_THREE_MIGRATED = "nav_main_legacy_three_migrated"
         const val KEY_NAV_LABELS = "nav_labels"
         const val KEY_NAV_LABELS_ALWAYS_VISIBLE = "nav_labels_always_visible"
         const val KEY_NAV_PINNED = "nav_pinned"

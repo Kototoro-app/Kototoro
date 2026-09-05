@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.settings.compose
 
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,8 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,19 +26,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.settings.nav.model.NavItemConfigModel
+import kotlin.math.abs
 
 @Composable
 fun NavConfigScreen(
@@ -47,11 +58,11 @@ fun NavConfigScreen(
     canAddAction: Boolean,
     onAddItem: (NavItem) -> Unit,
     onRemoveItem: (NavItem) -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMoveItem: (item: NavItem, direction: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var isAddDialogVisible by remember { mutableStateOf(false) }
+    var draggedItem by remember { mutableStateOf<NavItem?>(null) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -77,8 +88,11 @@ fun NavConfigScreen(
                                 item = config,
                                 canMoveUp = index > 0,
                                 canMoveDown = index < configuredItems.lastIndex,
-                                onMoveUp = { onMoveUp(index) },
-                                onMoveDown = { onMoveDown(index) },
+                                isDragging = draggedItem == config.item,
+                                onDraggingChanged = { isDragging ->
+                                    draggedItem = config.item.takeIf { isDragging }
+                                },
+                                onMove = { direction -> onMoveItem(config.item, direction) },
                                 onRemove = { onRemoveItem(config.item) },
                             )
                         }
@@ -145,13 +159,23 @@ private fun NavConfigPreferenceRow(
     item: NavItemConfigModel,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
+    isDragging: Boolean,
+    onDraggingChanged: (Boolean) -> Unit,
+    onMove: (direction: Int) -> Unit,
     onRemove: () -> Unit,
 ) {
+    var rowHeightPx by remember(item.item) { mutableIntStateOf(0) }
+    var accumulatedDragY by remember(item.item) { mutableFloatStateOf(0f) }
+    val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnDraggingChanged by rememberUpdatedState(onDraggingChanged)
+    val reorderLabel = stringResource(R.string.reorder)
+    val moveUpLabel = stringResource(R.string.move_up)
+    val moveDownLabel = stringResource(R.string.move_down)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { rowHeightPx = it.height }
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -180,16 +204,65 @@ private fun NavConfigPreferenceRow(
                 )
             }
         }
-        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .semantics {
+                    contentDescription = reorderLabel
+                    customActions = buildList {
+                        if (canMoveUp) {
+                            add(CustomAccessibilityAction(moveUpLabel) {
+                                currentOnMove(-1)
+                                true
+                            })
+                        }
+                        if (canMoveDown) {
+                            add(CustomAccessibilityAction(moveDownLabel) {
+                                currentOnMove(1)
+                                true
+                            })
+                        }
+                    }
+                }
+                .pointerInput(item.item, rowHeightPx) {
+                    detectDragGestures(
+                        onDragStart = {
+                            accumulatedDragY = 0f
+                            currentOnDraggingChanged(true)
+                        },
+                        onDragCancel = {
+                            accumulatedDragY = 0f
+                            currentOnDraggingChanged(false)
+                        },
+                        onDragEnd = {
+                            val draggedRows = if (rowHeightPx == 0) {
+                                0
+                            } else {
+                                (abs(accumulatedDragY) / rowHeightPx + 0.5f).toInt()
+                            }
+                            val direction = if (accumulatedDragY < 0f) -draggedRows else draggedRows
+                            accumulatedDragY = 0f
+                            if (direction != 0) {
+                                currentOnMove(direction)
+                            }
+                            currentOnDraggingChanged(false)
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            accumulatedDragY += dragAmount.y
+                        },
+                    )
+                },
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(
-                imageVector = Icons.Filled.KeyboardArrowUp,
-                contentDescription = stringResource(R.string.move_up),
-            )
-        }
-        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = stringResource(R.string.move_down),
+                imageVector = Icons.Filled.DragHandle,
+                contentDescription = null,
+                tint = if (isDragging) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
         IconButton(onClick = onRemove) {

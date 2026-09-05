@@ -63,6 +63,73 @@ class NavConfigViewModelTest {
 	}
 
 	@Test
+	fun `drag reorder is persisted immediately`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME, NavItem.HISTORY, NavItem.FAVORITES)
+		}
+		val viewModel = NavConfigViewModel(settings, mockk<ActivityRecreationHandle>(relaxed = true))
+
+		viewModel.reorder(fromPos = 2, toPos = 0)
+
+		verify(exactly = 1) {
+			settings.mainNavItems = listOf(NavItem.FAVORITES, NavItem.HOME, NavItem.HISTORY)
+		}
+	}
+
+	@Test
+	fun `consecutive drag moves use the latest item position`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME, NavItem.HISTORY, NavItem.FAVORITES)
+		}
+		val viewModel = NavConfigViewModel(settings, mockk<ActivityRecreationHandle>(relaxed = true))
+
+		viewModel.moveItem(NavItem.FAVORITES, direction = -1)
+		viewModel.moveItem(NavItem.FAVORITES, direction = -1)
+
+		verify(exactly = 1) {
+			settings.mainNavItems = listOf(NavItem.HOME, NavItem.FAVORITES, NavItem.HISTORY)
+		}
+		verify(exactly = 1) {
+			settings.mainNavItems = listOf(NavItem.FAVORITES, NavItem.HOME, NavItem.HISTORY)
+		}
+	}
+
+	@Test
+	fun `drag beyond the list clamps the item to the edge`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME, NavItem.HISTORY, NavItem.FAVORITES)
+		}
+		val viewModel = NavConfigViewModel(settings, mockk<ActivityRecreationHandle>(relaxed = true))
+
+		viewModel.moveItem(NavItem.FAVORITES, direction = -10)
+
+		verify(exactly = 1) {
+			settings.mainNavItems = listOf(NavItem.FAVORITES, NavItem.HOME, NavItem.HISTORY)
+		}
+	}
+
+	@Test
+	fun `navigation accepts up to five unique buttons`() {
+		val settings = mockk<AppSettings>(relaxed = true) {
+			every { mainNavItems } returns listOf(NavItem.HOME)
+		}
+		val viewModel = NavConfigViewModel(settings, mockk<ActivityRecreationHandle>(relaxed = true))
+
+		viewModel.addItem(NavItem.HISTORY)
+		viewModel.addItem(NavItem.FAVORITES)
+		viewModel.addItem(NavItem.EXPLORE)
+		viewModel.addItem(NavItem.FEED)
+		viewModel.addItem(NavItem.BOOKMARKS)
+
+		val persistedItems = mutableListOf<List<NavItem>>()
+		verify(exactly = 4) { settings.mainNavItems = capture(persistedItems) }
+		assertEquals(
+			listOf(NavItem.HOME, NavItem.HISTORY, NavItem.FAVORITES, NavItem.EXPLORE, NavItem.FEED),
+			persistedItems.last(),
+		)
+	}
+
+	@Test
 	fun `pending recreation fires when the view model is cleared`() {
 		val settings = mockk<AppSettings>(relaxed = true) {
 			every { mainNavItems } returns listOf(NavItem.HOME)

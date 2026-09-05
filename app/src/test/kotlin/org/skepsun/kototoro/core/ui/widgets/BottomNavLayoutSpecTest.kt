@@ -156,6 +156,15 @@ class BottomNavLayoutSpecTest {
 	}
 
 	@Test
+	fun `non full width pill keeps vertical breathing room inside the bar`() {
+		resolveBottomNavInsetPillHeight(
+			itemHeightPx = 56,
+			maxPillHeightPx = 56,
+			verticalInsetPx = 4,
+		) shouldBe 48
+	}
+
+	@Test
 	fun `floating bar height follows the floating height setting plus inset`() {
 		resolveNavBarHeight(
 			isFloating = true,

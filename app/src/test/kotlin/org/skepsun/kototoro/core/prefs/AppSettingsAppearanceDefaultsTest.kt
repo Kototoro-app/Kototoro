@@ -121,6 +121,37 @@ class AppSettingsAppearanceDefaultsTest {
 	}
 
 	@Test
+	fun `user can save home favourites and explore as a custom three item navigation`() {
+		var storedNavigation: String? = null
+		var legacyMigrationCompleted = false
+		every { preferences.getString(AppSettings.KEY_NAV_MAIN, null) } answers { storedNavigation }
+		every {
+			preferences.getBoolean(AppSettings.KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, false)
+		} answers { legacyMigrationCompleted }
+		every { editor.putString(AppSettings.KEY_NAV_MAIN, any()) } answers {
+			storedNavigation = secondArg()
+			editor
+		}
+		every { editor.putBoolean(AppSettings.KEY_NAV_MAIN_LEGACY_THREE_MIGRATED, any()) } answers {
+			legacyMigrationCompleted = secondArg()
+			editor
+		}
+		val settings = AppSettings(context)
+
+		settings.mainNavItems = listOf(
+			NavItem.HOME,
+			NavItem.FAVORITES,
+			NavItem.EXPLORE,
+		)
+
+		settings.mainNavItems shouldBe listOf(
+			NavItem.HOME,
+			NavItem.FAVORITES,
+			NavItem.EXPLORE,
+		)
+	}
+
+	@Test
 	fun `legacy surface choices normalize to the standard background`() {
 		BackgroundStyle.DYNAMIC_TONAL_GLASS.normalized() shouldBe BackgroundStyle.DEFAULT
 		BackgroundStyle.SYSTEM_DYNAMIC_TINT.normalized() shouldBe BackgroundStyle.DEFAULT

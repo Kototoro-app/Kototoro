@@ -572,6 +572,13 @@ internal fun resolveBottomNavFullWidthPillHeight(
     tabContentHeightPx.coerceAtMost(idealPillHeightPx)
 }
 
+internal fun resolveBottomNavInsetPillHeight(
+    itemHeightPx: Int,
+    maxPillHeightPx: Int,
+    verticalInsetPx: Int,
+): Int = (itemHeightPx - verticalInsetPx.coerceAtLeast(0) * 2)
+    .coerceIn(0, maxPillHeightPx.coerceAtLeast(0))
+
 internal fun resolveBottomNavDragIndicatorX(
     pointerX: Float?,
     indicatorWidth: Int,
@@ -827,17 +834,21 @@ private fun FloatingBottomNavRow(
     } else {
         MaterialTheme.colorScheme.onSecondaryContainer
     }
-    // Icon-and-label (labels-below) tabs are taller than the classic 40dp pill:
-    // the capsule must wrap the whole selected content (icon + label), not just
-    // the icon. Use the measured item height, capped at the sample 56dp
-    // full-tab size so the resting capsule stays inside the shell (it is
-    // centered on the tab and never crosses the bar while idle). Expressive
-    // (icon beside label) layouts keep the compact 40dp pill that already
-    // matches their content row.
+    // Icon-and-label (labels-below) tabs are taller than the classic 40dp pill.
+    // Keep the capsule around the whole selected content while leaving the same
+    // 4dp vertical breathing room used by the full-width layout. Expressive
+    // (icon beside label) layouts keep the compact 40dp pill that already has
+    // sufficient room inside the shell.
     val pillHeightPx = with(density) {
         val idealPillHeight = 40.dp.roundToPx()
         if (useSharedLiquidGlassPill && !useExpressivePill) {
-            selectedBounds?.size?.height?.coerceIn(idealPillHeight, 56.dp.roundToPx()) ?: idealPillHeight
+            selectedBounds?.size?.height?.let { itemHeightPx ->
+                resolveBottomNavInsetPillHeight(
+                    itemHeightPx = itemHeightPx,
+                    maxPillHeightPx = 56.dp.roundToPx(),
+                    verticalInsetPx = 4.dp.roundToPx(),
+                )
+            } ?: idealPillHeight
         } else {
             idealPillHeight
         }

@@ -87,14 +87,12 @@ class NavConfigViewModel @Inject constructor(
         }
     }
 
-    fun moveUp(index: Int) {
-        if (index <= 0) return
-        reorder(index, index - 1)
-    }
-
-    fun moveDown(index: Int) {
-        if (index >= items.value.lastIndex) return
-        reorder(index, index + 1)
+    fun moveItem(item: NavItem, direction: Int) {
+        val fromIndex = items.value.indexOf(item)
+        if (fromIndex < 0 || direction == 0) return
+        val toIndex = (fromIndex + direction).coerceIn(items.value.indices)
+        if (fromIndex == toIndex) return
+        reorder(fromIndex, toIndex)
     }
 
     fun addItem(item: NavItem) {
