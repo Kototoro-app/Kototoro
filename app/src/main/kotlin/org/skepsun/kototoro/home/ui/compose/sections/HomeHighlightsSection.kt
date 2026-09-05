@@ -114,7 +114,6 @@ internal fun HomeHighlightsSections(
                 HomeContentRowSection(
                     title = stringResource(R.string.recent_history),
                     sectionKey = "recent_history",
-                    iconRes = R.drawable.ic_history,
                     items = historyDisplayItems,
                     count = recentHistoryCount,
                     railStyle = historyStyle,
@@ -131,7 +130,6 @@ internal fun HomeHighlightsSections(
                 HomeContentRowSection(
                     title = stringResource(R.string.home_recent_updates),
                     sectionKey = "recent_updates",
-                    iconRes = R.drawable.ic_updated,
                     items = updateDisplayItems,
                     count = unreadUpdatesCount,
                     railStyle = updatesStyle,
@@ -148,7 +146,6 @@ internal fun HomeHighlightsSections(
                 HomeContentRowSection(
                     title = stringResource(R.string.suggestions),
                     sectionKey = "recommendations",
-                    iconRes = R.drawable.ic_suggestion,
                     items = recommendationDisplayItems,
                     count = recommendationsCount,
                     railStyle = recommendationsStyle,
@@ -250,4 +247,3 @@ private fun HomeRecentSearchSection(
 }
 
 private const val HOME_CONTENT_RAIL_PREVIEW_LIMIT = 24
-

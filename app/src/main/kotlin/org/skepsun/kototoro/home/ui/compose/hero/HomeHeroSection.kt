@@ -348,9 +348,8 @@ private fun HomeHeroCard(
         } else {
             Color.White
         }
-        val isSplit = presentation.background == HomeHeroBackground.COVER_SPLIT
         val indicatorPlacement = indicator?.let {
-            resolveHeroIndicatorPlacement(presentation.contentLayout, isSplit)
+            resolveHeroIndicatorPlacement(presentation.contentLayout)
         }
         HomeHeroInfoLayout(
             entry = entry,
@@ -644,4 +643,3 @@ private fun HomeHeroMinimal(
         }
     }
 }
-

@@ -61,7 +61,6 @@ import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
 import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
-import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
 import org.skepsun.kototoro.list.ui.compose.ContentCardCoverProgressIndicator
@@ -71,7 +70,6 @@ import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
 
-import org.skepsun.kototoro.home.ui.compose.HomeBadge
 import org.skepsun.kototoro.home.ui.compose.rememberHomeCoverRequest
 import org.skepsun.kototoro.home.ui.compose.toHeroCountLabel
 import androidx.compose.runtime.getValue
@@ -104,7 +102,6 @@ internal data class HomeRailStyle(
 internal fun HomeContentRowSection(
     title: String,
     sectionKey: String,
-    iconRes: Int,
     items: List<HomeCoverDisplayItem>,
     count: Int,
     railStyle: HomeRailStyle,
@@ -118,9 +115,7 @@ internal fun HomeContentRowSection(
     val listMode = railStyle.listMode
     val posterStyle = railStyle.posterStyle
     val rowState = rememberLazyListState()
-    val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
-    val showMoreButton = true
     val railPages = remember(items, listMode, railStyle.railRowsPerPage) {
         when (listMode) {
             ListMode.GRID,
@@ -134,7 +129,7 @@ internal fun HomeContentRowSection(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = if (addTopSpacing) 6.dp else 0.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -148,21 +143,22 @@ internal fun HomeContentRowSection(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                HomeBadge(
+                Text(
                     text = count.toHeroCountLabel(),
-                    iconRes = iconRes,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (onConfigureClick != null) {
                 IconButton(
                     onClick = onConfigureClick,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(48.dp),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_settings),
@@ -172,28 +168,14 @@ internal fun HomeContentRowSection(
                     )
                 }
             }
-            if (showMoreButton) {
-                if (expressive) {
-                    TextButton(
-                        onClick = onMoreClick,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.more),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                } else {
-                    TextButton(
-                        onClick = onMoreClick,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.more),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                }
+            TextButton(
+                onClick = onMoreClick,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.more),
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
         }
 
@@ -631,4 +613,3 @@ private val HOME_DETAILED_RAIL_PAGE_MAX_WIDTH = 368.dp
 private val HOME_LIST_RAIL_REFERENCE_VIEWPORT_WIDTH = 384.dp
 private const val HOME_LIST_RAIL_PAGE_WIDTH_RATIO = 0.74f
 private const val HOME_DETAILED_RAIL_PAGE_WIDTH_RATIO = 0.84f
-

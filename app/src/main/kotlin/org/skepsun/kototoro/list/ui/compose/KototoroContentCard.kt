@@ -130,7 +130,7 @@ data class ContentCardBadgeMetrics(
     val textSize: androidx.compose.ui.unit.TextUnit = 11.sp,
     val outerPadding: androidx.compose.ui.unit.Dp = 7.dp,
     val badgeEdgePadding: androidx.compose.ui.unit.Dp = 0.dp,
-    val progressSize: androidx.compose.ui.unit.Dp = 32.dp,
+    val progressSize: androidx.compose.ui.unit.Dp = 26.dp,
     val progressAnchorInset: androidx.compose.ui.unit.Dp = 8.dp,
     val progressSpacing: androidx.compose.ui.unit.Dp = 4.dp,
     val innerCornerRadius: androidx.compose.ui.unit.Dp = 10.dp,
@@ -147,7 +147,7 @@ fun contentCardBadgeMetricsFor(coverWidth: androidx.compose.ui.unit.Dp): Content
         textSize = 11.sp * scale,
         outerPadding = 7.dp * scale,
         badgeEdgePadding = 0.dp,
-        progressSize = if (isSmallCard) 24.dp else 32.dp,
+        progressSize = if (isSmallCard) 24.dp else 26.dp,
         progressAnchorInset = 8.dp * scale,
         progressSpacing = 4.dp * scale,
         innerCornerRadius = 10.dp * scale,
@@ -525,10 +525,9 @@ private fun CompactGridTitleOverlay(
 ) {
     val overlayBrush = remember {
         Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                Color.Black.copy(alpha = 0.72f),
-            ),
+            0f to Color.Transparent,
+            0.4f to Color.Black.copy(alpha = 0.48f),
+            1f to Color.Black.copy(alpha = 0.84f),
         )
     }
     Box(
@@ -567,9 +566,14 @@ fun ContentCardReadingProgressIndicator(
     if (!progress.isValid()) return
 
     val percent = progress.percent.coerceIn(0f, 1f)
-    val strokeColor = MaterialTheme.colorScheme.surfaceVariant
-    val backgroundColor = MaterialTheme.colorScheme.primary
-    val contentColor = MaterialTheme.colorScheme.onPrimary
+    val completed = progress.isCompleted()
+    val strokeColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.96f)
+    val contentColor = if (completed) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     val label = remember(progress) {
         when (progress.mode) {
             NONE -> ""
@@ -585,7 +589,7 @@ fun ContentCardReadingProgressIndicator(
         contentAlignment = Alignment.Center,
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeWidth = size.minDimension * 0.125f
+            val strokeWidth = size.minDimension * 0.075f
             val radius = size.minDimension / 2f
             val arcDiameter = size.minDimension - strokeWidth
 
@@ -593,7 +597,7 @@ fun ContentCardReadingProgressIndicator(
                 color = backgroundColor,
                 radius = radius,
             )
-            drawArc(
+            if (percent > 0f && !completed) drawArc(
                 color = strokeColor,
                 startAngle = -90f,
                 sweepAngle = 360f * percent,
@@ -604,21 +608,21 @@ fun ContentCardReadingProgressIndicator(
             )
         }
 
-        if (progress.isCompleted()) {
+        if (completed) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_check),
                 contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.fillMaxSize(0.45f),
+                modifier = Modifier.fillMaxSize(0.55f),
             )
         } else {
             Text(
                 text = label,
                 color = contentColor,
                 style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.sp,
-                    lineHeight = 11.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = if (label.length > 3) 9.sp else 10.sp,
+                    lineHeight = 12.sp,
+                    fontWeight = FontWeight.Medium,
                 ),
                 maxLines = 1,
             )

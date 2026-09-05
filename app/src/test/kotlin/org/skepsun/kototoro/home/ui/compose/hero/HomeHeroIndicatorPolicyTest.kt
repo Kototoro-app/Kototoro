@@ -9,22 +9,11 @@ import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 class HomeHeroIndicatorPolicyTest {
 
     @Test
-    fun `regular cards anchor the indicator bottom-center`() {
-        HomeHeroContentLayout.entries.forEach { layout ->
-            assertEquals(
-                Alignment.BottomCenter,
-                resolveHeroIndicatorPlacement(layout, isSplit = false).alignment,
-                "layout=$layout",
-            )
-        }
-    }
-
-    @Test
-    fun `split cards anchor the indicator bottom-end to avoid the cover seam`() {
+    fun `all layouts anchor pagination away from the central content`() {
         HomeHeroContentLayout.entries.forEach { layout ->
             assertEquals(
                 Alignment.BottomEnd,
-                resolveHeroIndicatorPlacement(layout, isSplit = true).alignment,
+                resolveHeroIndicatorPlacement(layout).alignment,
                 "layout=$layout",
             )
         }
@@ -34,29 +23,25 @@ class HomeHeroIndicatorPolicyTest {
     fun `bottom-pinned layouts reserve indicator clearance`() {
         assertEquals(
             HERO_INDICATOR_STRIP,
-            resolveHeroIndicatorPlacement(HomeHeroContentLayout.MINIMAL_PROGRESS, isSplit = false).bottomAvoidance,
+            resolveHeroIndicatorPlacement(HomeHeroContentLayout.MINIMAL_PROGRESS).bottomAvoidance,
         )
         assertEquals(
             HERO_INDICATOR_STRIP,
-            resolveHeroIndicatorPlacement(HomeHeroContentLayout.TEXT_QUOTE, isSplit = true).bottomAvoidance,
+            resolveHeroIndicatorPlacement(HomeHeroContentLayout.TEXT_QUOTE).bottomAvoidance,
         )
     }
 
     @Test
-    fun `editorial only reserves clearance when the indicator shares its end corner`() {
-        assertEquals(
-            0.dp,
-            resolveHeroIndicatorPlacement(HomeHeroContentLayout.EDITORIAL, isSplit = false).bottomAvoidance,
-        )
+    fun `editorial reserves clearance for its end-aligned poster`() {
         assertEquals(
             HERO_INDICATOR_STRIP,
-            resolveHeroIndicatorPlacement(HomeHeroContentLayout.EDITORIAL, isSplit = true).bottomAvoidance,
+            resolveHeroIndicatorPlacement(HomeHeroContentLayout.EDITORIAL).bottomAvoidance,
         )
     }
 
     @Test
     fun `centered row layouts never reserve clearance`() {
-        assertEquals(0.dp, resolveHeroIndicatorPlacement(HomeHeroContentLayout.STANDARD, isSplit = false).bottomAvoidance)
-        assertEquals(0.dp, resolveHeroIndicatorPlacement(HomeHeroContentLayout.DETAILS, isSplit = false).bottomAvoidance)
+        assertEquals(0.dp, resolveHeroIndicatorPlacement(HomeHeroContentLayout.STANDARD).bottomAvoidance)
+        assertEquals(0.dp, resolveHeroIndicatorPlacement(HomeHeroContentLayout.DETAILS).bottomAvoidance)
     }
 }
