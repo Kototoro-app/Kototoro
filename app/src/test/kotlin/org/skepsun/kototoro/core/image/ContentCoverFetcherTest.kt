@@ -35,6 +35,7 @@ import okio.Path.Companion.toOkioPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import org.skepsun.kototoro.core.parser.ContentRepository
@@ -46,6 +47,14 @@ class ContentCoverFetcherTest {
 
     @TempDir
     lateinit var tempDir: File
+
+    private val diskCaches = mutableListOf<DiskCache>()
+
+    @AfterEach
+    fun closeDiskCaches() {
+        diskCaches.forEach(DiskCache::shutdown)
+        diskCaches.clear()
+    }
 
     @Test
     fun `concurrent displays share one cover download and both receive the image`() = runBlocking {
@@ -251,6 +260,7 @@ class ContentCoverFetcherTest {
         .directory(tempDir.toOkioPath())
         .maxSizeBytes(1024 * 1024)
         .build()
+        .also(diskCaches::add)
 
     private suspend fun Any?.readBody(): String = withContext(Dispatchers.IO) {
         val result = this@readBody as SourceFetchResult

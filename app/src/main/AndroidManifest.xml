@@ -485,6 +485,10 @@
 			android:name="org.skepsun.kototoro.backups.ui.backup.BackupService"
 			android:foregroundServiceType="dataSync"
 			android:label="@string/creating_backup" />
+		<activity
+			android:name="org.skepsun.kototoro.backups.ui.orphan.BackupOrphanReviewActivity"
+			android:excludeFromRecents="true"
+			android:exported="false" />
 		<service
 			android:name="org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService"
 			android:foregroundServiceType="dataSync"

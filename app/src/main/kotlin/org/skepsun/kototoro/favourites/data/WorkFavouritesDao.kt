@@ -330,6 +330,17 @@ abstract class WorkFavouritesDao {
 
     @Query(
         """
+		SELECT wf.*
+		FROM work_favourites wf
+		LEFT JOIN `entity` e ON e.id = wf.entity_id
+		WHERE e.id IS NULL
+		ORDER BY wf.updated_at DESC
+        """,
+    )
+    abstract suspend fun findDanglingEntityRefs(): List<WorkFavouriteEntity>
+
+    @Query(
+        """
 		SELECT COUNT(*)
 		FROM work_favourites wf
 		LEFT JOIN favourite_categories fc
@@ -350,6 +361,17 @@ abstract class WorkFavouritesDao {
 
     @Query("SELECT * FROM work_favourites WHERE anchor_manga_id IS NULL AND deleted_at = 0 ORDER BY updated_at DESC LIMIT :limit")
     abstract suspend fun findActiveWithoutAnchor(limit: Int): List<WorkFavouriteEntity>
+
+    @Query(
+        "SELECT * FROM work_favourites " +
+            "WHERE anchor_manga_id IS NULL AND deleted_at = 0 " +
+            "AND entity_id NOT IN (:excludedEntityIds) " +
+            "ORDER BY updated_at DESC LIMIT :limit",
+    )
+    abstract suspend fun findActiveWithoutAnchorExcluding(
+        excludedEntityIds: Collection<Long>,
+        limit: Int,
+    ): List<WorkFavouriteEntity>
 
     @Query("SELECT * FROM work_favourites WHERE entity_id = :entityId AND anchor_manga_id IS NOT NULL AND deleted_at = 0 ORDER BY updated_at DESC LIMIT 1")
     abstract suspend fun findActiveForEntity(entityId: Long): WorkFavouriteEntity?
@@ -380,6 +402,13 @@ abstract class WorkFavouritesDao {
 
     @Query("SELECT DISTINCT anchor_manga_id FROM work_favourites WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0")
     abstract suspend fun findActiveAnchorMangaIds(): List<Long>
+
+    @Query(
+        "SELECT DISTINCT anchor_manga_id FROM work_favourites " +
+            "WHERE anchor_manga_id IS NOT NULL AND deleted_at = 0 " +
+            "AND entity_id NOT IN (:excludedEntityIds)",
+    )
+    abstract suspend fun findActiveAnchorMangaIdsExcluding(excludedEntityIds: Collection<Long>): List<Long>
 
     @Query("SELECT MAX(pinned) FROM work_favourites WHERE entity_id IN (:entityIds) AND anchor_manga_id IS NOT NULL AND deleted_at = 0")
     abstract suspend fun isPinned(entityIds: List<Long>): Boolean?

@@ -18,10 +18,15 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.backups.domain.AppBackupAgent
+import org.skepsun.kototoro.backups.domain.ActiveWorkStateMissingEntityException
+import org.skepsun.kototoro.backups.domain.BackupOrphanInfo
+import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.model.TestContentSource
+import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
@@ -273,6 +278,24 @@ class RestoreCheckpointTest {
 			"entity graph must be restored after resume",
 			database.getEntityGraphDao().dumpEntities().isNotEmpty(),
 		)
+		assertEquals(
+			"restored work history must not retain references to replaced entities",
+			0,
+			database.getWorkHistoryDao().countDanglingEntityRefs(),
+		)
+		assertEquals(
+			"restored work favourites must not retain references to replaced entities",
+			0,
+			database.getWorkFavouritesDao().countDanglingEntityRefs(),
+		)
+		assertEquals(
+			"restored work stats must not retain references to replaced entities",
+			0,
+			database.getWorkStatsDao().findDanglingEntityRefs().size,
+		)
+		val followUpBackup = agent.createBackupFile(context, backupRepository)
+		assertTrue("a successful restore must remain exportable", followUpBackup.length() > 0L)
+		assertTrue("follow-up backup cleanup", followUpBackup.delete())
 		assertTrue(
 			"checkpoint must be deleted after successful restore",
 			database.getRestoreCheckpointDao().findById(CHECKPOINT_ID) == null,
@@ -310,6 +333,297 @@ class RestoreCheckpointTest {
 		val second = runRestore(backup, sections, BackupRepository.RestoreMode.SNAPSHOT_REPLACE, CHECKPOINT_ID)
 		assertEquals(0, second.resumedSections)
 		assertTrue(database.getRestoreCheckpointDao().findById(CHECKPOINT_ID) == null)
+	}
+
+	@Test
+	fun exportSkipsUnrecoverableDeletedWorkTombstones() = runTest {
+		val orphanEntityIds = listOf(1059L, 1020L, 887L, 868L, 847L, 846L, 841L, 682L)
+		orphanEntityIds.forEachIndexed { index, entityId ->
+			database.getEntityGraphDao().upsertEntityRecord(
+				EntityRecord(
+					id = entityId,
+					type = EntityType.WORK.name,
+					contentType = "MANGA",
+					syncId = "orphan-test-work-$entityId",
+					primaryName = "Orphan test work $entityId",
+					nameHash = entityId,
+					aliases = "[]",
+					createdAt = 0L,
+					lastAccessed = 0L,
+					accessCount = 1,
+				),
+			)
+			database.getWorkHistoryDao().upsert(
+				WorkHistoryEntity(
+					entityId = entityId,
+					anchorMangaId = 9_999_000L + index,
+					createdAt = 0L,
+					updatedAt = index.toLong() + 1L,
+					chapterId = 1L,
+					page = 0,
+					scroll = 0f,
+					percent = 1f,
+					deletedAt = 2L,
+					chaptersCount = 1,
+				),
+			)
+		}
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+		database.getEntityGraphDao().deleteEntitiesByIds(orphanEntityIds)
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+		assertEquals(orphanEntityIds.size, database.getWorkHistoryDao().countDanglingEntityRefs())
+
+		val agent = AppBackupAgent()
+		val backup = agent.createBackupFile(
+			InstrumentationRegistry.getInstrumentation().targetContext,
+			backupRepository,
+		)
+		assertTrue("backup must recover from a deleted orphan tombstone", backup.length() > 0L)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, "orphan tombstone test")
+		assertEquals(
+			"local sync tombstone must be retained",
+			orphanEntityIds.size,
+			database.getWorkHistoryDao().countDanglingEntityRefs(),
+		)
+		assertTrue("orphan test backup cleanup", backup.delete())
+	}
+
+	@Test
+	fun exportRepairsDanglingWorkHistoryUsingLocalBinding() = runTest {
+		val oldEntityId = 8_888_001L
+		val targetEntityId = 8_888_002L
+		val anchorMangaId = 9_999_101L
+		database.getMangaDao().upsert(
+			MangaEntity(
+				id = anchorMangaId,
+				title = "Recoverable work",
+				altTitles = null,
+				url = "/recoverable-work",
+				publicUrl = "https://test.example/recoverable-work",
+				rating = 0f,
+				isNsfw = false,
+				contentRating = null,
+				coverUrl = "",
+				largeCoverUrl = null,
+				state = null,
+				authors = null,
+				source = TestContentSource.name,
+				description = null,
+				contentType = "MANGA",
+				sourceData = null,
+			),
+		)
+		database.getEntityGraphDao().upsertEntityRecord(
+			EntityRecord(
+				id = oldEntityId,
+				type = EntityType.WORK.name,
+				contentType = "MANGA",
+				syncId = "orphan-old-work",
+				primaryName = "Old recoverable work",
+				nameHash = oldEntityId,
+				aliases = "[]",
+				createdAt = 0L,
+				lastAccessed = 0L,
+				accessCount = 1,
+			),
+		)
+		database.getEntityGraphDao().upsertEntityRecord(
+			EntityRecord(
+				id = targetEntityId,
+				type = EntityType.WORK.name,
+				contentType = "MANGA",
+				syncId = "orphan-target-work",
+				primaryName = "Target recoverable work",
+				nameHash = targetEntityId,
+				aliases = "[]",
+				createdAt = 0L,
+				lastAccessed = 0L,
+				accessCount = 1,
+			),
+		)
+		database.getEntityGraphDao().upsertBinding(
+			EntityBindingRecord(
+				entityId = targetEntityId,
+				source = "local_manga",
+				externalId = anchorMangaId.toString(),
+				confidence = 1f,
+				isPrimary = true,
+			),
+		)
+		database.getWorkHistoryDao().upsert(
+			WorkHistoryEntity(
+				entityId = oldEntityId,
+				anchorMangaId = anchorMangaId,
+				createdAt = 0L,
+				updatedAt = 1L,
+				chapterId = 1L,
+				page = 2,
+				scroll = 0f,
+				percent = 0.5f,
+				deletedAt = 0L,
+				chaptersCount = 2,
+			),
+		)
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+		database.getEntityGraphDao().deleteEntitiesByIds(listOf(oldEntityId))
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+
+		val agent = AppBackupAgent()
+		val backup = agent.createBackupFile(
+			InstrumentationRegistry.getInstrumentation().targetContext,
+			backupRepository,
+		)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, "recoverable orphan test")
+		assertEquals(0, database.getWorkHistoryDao().countDanglingEntityRefs())
+		assertNotNull(database.getWorkHistoryDao().find(targetEntityId))
+		assertTrue("recoverable orphan backup cleanup", backup.delete())
+	}
+
+	@Test
+	fun exportRefusesActiveDanglingWorkStateAndReportsWorkTitle() = runTest {
+		val entityId = 8_888_003L
+		val anchorMangaId = 9_999_103L
+		database.getMangaDao().upsert(
+			MangaEntity(
+				id = anchorMangaId,
+				title = "Readable orphan title",
+				altTitles = null,
+				url = "/readable-orphan-title",
+				publicUrl = "https://test.example/readable-orphan-title",
+				rating = 0f,
+				isNsfw = false,
+				contentRating = null,
+				coverUrl = "",
+				largeCoverUrl = null,
+				state = null,
+				authors = null,
+				source = TestContentSource.name,
+				description = null,
+				contentType = "MANGA",
+				sourceData = null,
+			),
+		)
+		database.getEntityGraphDao().upsertEntityRecord(
+			EntityRecord(
+				id = entityId,
+				type = EntityType.WORK.name,
+				contentType = "MANGA",
+				syncId = "active-orphan-work",
+				primaryName = "Active orphan work",
+				nameHash = entityId,
+				aliases = "[]",
+				createdAt = 0L,
+				lastAccessed = 0L,
+				accessCount = 1,
+			),
+		)
+		database.getWorkHistoryDao().upsert(
+			WorkHistoryEntity(
+				entityId = entityId,
+				anchorMangaId = anchorMangaId,
+				createdAt = 0L,
+				updatedAt = 1L,
+				chapterId = 1L,
+				page = 1,
+				scroll = 0f,
+				percent = 0.2f,
+				deletedAt = 0L,
+				chaptersCount = 1,
+			),
+		)
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+		database.getEntityGraphDao().deleteEntitiesByIds(listOf(entityId))
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		val output = File.createTempFile("active_orphan_backup_", ".bk.zip", context.cacheDir)
+		val failure = runCatching {
+			ZipOutputStream(output.outputStream()).use { zip ->
+				backupRepository.createBackup(zip, null)
+			}
+		}.exceptionOrNull()
+		assertTrue(
+			"active orphan state must remain a hard export failure",
+			failure is ActiveWorkStateMissingEntityException,
+		)
+		val report = (failure as ActiveWorkStateMissingEntityException).report
+		assertEquals(1, report.totalCount)
+		assertEquals("Readable orphan title", report.items.single().title)
+		assertEquals(TestContentSource.name, report.items.single().source)
+		assertTrue(
+			"report must identify the missing work state",
+			report.items.single().stateKinds.contains(BackupOrphanInfo.StateKind.HISTORY),
+		)
+
+		val discardedOutput = File.createTempFile("active_orphan_discarded_", ".bk.zip", context.cacheDir)
+		ZipOutputStream(discardedOutput.outputStream()).use { zip ->
+			backupRepository.createBackup(
+				output = zip,
+				progress = null,
+				allowDiscardingActiveWorkState = true,
+			)
+		}
+		assertTrue("discarded orphan backup must be written", discardedOutput.length() > 0L)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(
+			file = discardedOutput,
+			operation = "active orphan discard test",
+			allowIdentityOnlyWorkSnapshot = true,
+		)
+		assertTrue("discarded orphan backup cleanup", discardedOutput.delete())
+		assertTrue("active orphan backup cleanup", output.delete())
+	}
+
+	@Test
+	fun exportCanDiscardActiveOrphanWithMissingProjection() = runTest {
+		val entityId = 8_888_004L
+		database.getEntityGraphDao().upsertEntityRecord(
+			EntityRecord(
+				id = entityId,
+				type = EntityType.WORK.name,
+				contentType = "MANGA",
+				syncId = "active-orphan-without-projection",
+				primaryName = "Active orphan without projection",
+				nameHash = entityId,
+				aliases = "[]",
+				createdAt = 0L,
+				lastAccessed = 0L,
+				accessCount = 1,
+			),
+		)
+		database.getWorkHistoryDao().upsert(
+			WorkHistoryEntity(
+				entityId = entityId,
+				anchorMangaId = 9_999_104L,
+				createdAt = 0L,
+				updatedAt = 1L,
+				chapterId = 1L,
+				page = 1,
+				scroll = 0f,
+				percent = 0.2f,
+				deletedAt = 0L,
+				chaptersCount = 1,
+			),
+		)
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
+		database.getEntityGraphDao().deleteEntitiesByIds(listOf(entityId))
+		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
+
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		val output = File.createTempFile("active_orphan_without_projection_", ".bk.zip", context.cacheDir)
+		ZipOutputStream(output.outputStream()).use { zip ->
+			backupRepository.createBackup(
+				output = zip,
+				progress = null,
+				allowDiscardingActiveWorkState = true,
+			)
+		}
+		assertTrue("orphan without projection can be discarded", output.length() > 0L)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(
+			file = output,
+			operation = "active orphan without projection test",
+			allowIdentityOnlyWorkSnapshot = true,
+		)
+		assertTrue("orphan without projection backup cleanup", output.delete())
 	}
 
 	@Test

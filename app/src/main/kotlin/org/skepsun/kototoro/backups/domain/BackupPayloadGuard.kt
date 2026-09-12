@@ -76,9 +76,13 @@ object BackupPayloadGuard {
         return Inspection(sectionBytes, unknownEntries)
     }
 
-    fun requireRestorableWorkSnapshot(file: File, operation: String): Inspection {
+    fun requireRestorableWorkSnapshot(
+        file: File,
+        operation: String,
+        allowIdentityOnlyWorkSnapshot: Boolean = false,
+    ): Inspection {
         return inspect(file).also { inspection ->
-            if (inspection.isIdentityOnlyWorkSnapshot()) {
+            if (!allowIdentityOnlyWorkSnapshot && inspection.isIdentityOnlyWorkSnapshot()) {
                 throw IllegalStateException(
                     "Refusing $operation: backup snapshot contains entity identity data but no work " +
                         "favourites, history, or statistics. This incomplete snapshot would clear local user state.",
@@ -165,9 +169,9 @@ object BackupPayloadGuard {
             sections[BackupSection.WORK_STATS].ids("entity_id")
         val missingEntityIds = workStateEntityIds - entityIds
         if (missingEntityIds.isNotEmpty()) {
-            throw IllegalStateException(
-                "Refusing $operation: backup snapshot has work state with missing entity ids: " +
-                    missingEntityIds.take(MAX_REPORTED_IDS).joinToString(),
+            throw ActiveWorkStateMissingEntityException(
+                report = buildMissingWorkEntityReport(sections, missingEntityIds),
+                operation = operation,
             )
         }
 
@@ -275,6 +279,65 @@ object BackupPayloadGuard {
                 ?.jsonPrimitive
                 ?.contentOrNull
         }.orEmpty()
+    }
+
+    private fun buildMissingWorkEntityReport(
+        sections: Map<BackupSection, JsonArray>,
+        missingEntityIds: Set<Long>,
+    ): BackupOrphanReport {
+        val anchorsByEntity = LinkedHashMap<Long, Long?>()
+        val kindsByEntity = LinkedHashMap<Long, LinkedHashSet<BackupOrphanInfo.StateKind>>()
+
+        fun add(
+            entityId: Long,
+            anchorMangaId: Long?,
+            kind: BackupOrphanInfo.StateKind,
+        ) {
+            if (entityId !in missingEntityIds) return
+            anchorsByEntity.putIfAbsent(entityId, anchorMangaId)
+            kindsByEntity.getOrPut(entityId) { LinkedHashSet() } += kind
+        }
+
+        sections[BackupSection.WORK_HISTORY].orEmpty().forEach { item ->
+            add(
+                entityId = item.long("entity_id"),
+                anchorMangaId = item.longOrNull("anchor_manga_id"),
+                kind = BackupOrphanInfo.StateKind.HISTORY,
+            )
+        }
+        sections[BackupSection.WORK_FAVOURITES].orEmpty().forEach { item ->
+            add(
+                entityId = item.long("entity_id"),
+                anchorMangaId = item.longOrNull("anchor_manga_id"),
+                kind = BackupOrphanInfo.StateKind.FAVOURITE,
+            )
+        }
+        sections[BackupSection.WORK_STATS].orEmpty().forEach { item ->
+            add(
+                entityId = item.long("entity_id"),
+                anchorMangaId = item.longOrNull("anchor_manga_id"),
+                kind = BackupOrphanInfo.StateKind.STATISTICS,
+            )
+        }
+
+        val projectionsById = sections[BackupSection.PROJECTIONS].orEmpty()
+            .mapNotNull { item -> item.longOrNull("id")?.let { id -> id to item } }
+            .toMap()
+        val items = missingEntityIds.take(MAX_REPORTED_IDS).map { entityId ->
+            val anchorMangaId = anchorsByEntity[entityId]
+            val projection = anchorMangaId?.let(projectionsById::get)
+            BackupOrphanInfo(
+                entityId = entityId,
+                anchorMangaId = anchorMangaId,
+                title = projection?.string("title")?.takeIf(String::isNotBlank),
+                source = projection?.string("source")?.takeIf(String::isNotBlank),
+                stateKinds = kindsByEntity[entityId].orEmpty().toList(),
+            )
+        }
+        return BackupOrphanReport(
+            totalCount = missingEntityIds.size,
+            items = items,
+        )
     }
 
     private fun Inspection.isIdentityOnlyWorkSnapshot(): Boolean {

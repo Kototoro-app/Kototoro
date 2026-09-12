@@ -42,6 +42,23 @@ abstract class WorkStatsDao {
     abstract suspend fun findAnchorMangaIds(): List<Long>
 
     @Query(
+        "SELECT DISTINCT anchor_manga_id FROM work_stats " +
+            "WHERE entity_id NOT IN (:excludedEntityIds)",
+    )
+    abstract suspend fun findAnchorMangaIdsExcluding(excludedEntityIds: Collection<Long>): List<Long>
+
+    @Query(
+        """
+		SELECT ws.*
+		FROM work_stats ws
+		LEFT JOIN `entity` e ON e.id = ws.entity_id
+		WHERE e.id IS NULL
+		ORDER BY ws.started_at ASC
+        """,
+    )
+    abstract suspend fun findDanglingEntityRefs(): List<WorkStatsEntity>
+
+    @Query(
         """
 		SELECT entity_id AS entityId,
 			IFNULL(SUM(pages), 0) AS totalPages,

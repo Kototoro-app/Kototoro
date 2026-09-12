@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.backups.ui.backup
 
 import android.annotation.SuppressLint
+import android.app.PendingIntent
 import android.app.Notification
 import android.content.Context
 import android.content.Intent
@@ -9,7 +10,9 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.annotation.CheckResult
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.app.PendingIntentCompat
 import androidx.documentfile.provider.DocumentFile
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +22,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.backups.data.BackupRepository
+import org.skepsun.kototoro.backups.domain.ActiveWorkStateMissingEntityException
 import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
+import org.skepsun.kototoro.backups.domain.BackupOrphanReport
+import org.skepsun.kototoro.backups.ui.orphan.BackupOrphanReviewActivity
 import org.skepsun.kototoro.backups.ui.BaseBackupRestoreService
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.CompositeResult
@@ -51,6 +57,7 @@ class BackupService : BaseBackupRestoreService() {
         val format = intent.getStringExtra(EXTRA_EXPORT_FORMAT)
             ?.let { runCatching { BackupRepository.ExportFormat.valueOf(it) }.getOrNull() }
             ?: BackupRepository.ExportFormat.KOTOTORO
+        val allowDiscardingActiveWorkState = intent.getBooleanExtra(EXTRA_ALLOW_DISCARDING_ACTIVE_WORK_STATE, false)
         val notification = buildNotification(Progress.INDETERMINATE, format)
         setForeground(
             FOREGROUND_NOTIFICATION_ID,
@@ -70,14 +77,21 @@ class BackupService : BaseBackupRestoreService() {
                 null
             }
             val tempFile = File.createTempFile("manual_backup_", ".bk.zip", cacheDir)
+            var orphanReviewShown = false
             try {
                 ZipOutputStream(tempFile.outputStream()).use { output ->
-                    repository.createBackup(output, progress, format)
+                    repository.createBackup(
+                        output = output,
+                        progress = progress,
+                        format = format,
+                        allowDiscardingActiveWorkState = allowDiscardingActiveWorkState,
+                    )
                 }
                 if (format == BackupRepository.ExportFormat.KOTOTORO) {
                     BackupPayloadGuard.requireRestorableWorkSnapshot(
                         file = tempFile,
                         operation = "manual backup creation",
+                        allowIdentityOnlyWorkSnapshot = allowDiscardingActiveWorkState,
                     )
                 }
                 val expectedBytes = tempFile.length()
@@ -90,6 +104,27 @@ class BackupService : BaseBackupRestoreService() {
                         }
                     } ?: throw FileNotFoundException()
                 }
+            } catch (e: ActiveWorkStateMissingEntityException) {
+                val dialogShown = BackupOrphanReviewActivity.startIfAppInForeground(
+                    context = this@BackupService,
+                    destination = destination,
+                    report = e.report,
+                    notificationId = ORPHAN_REVIEW_NOTIFICATION_ID,
+                )
+                if (!dialogShown && !showOrphanReviewNotification(
+                        destination = destination,
+                        report = e.report,
+                        notificationId = ORPHAN_REVIEW_NOTIFICATION_ID,
+                    )) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(
+                            this@BackupService,
+                            R.string.backup_orphan_notification_disabled,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+                orphanReviewShown = true
             } catch (e: Throwable) {
                 try {
                     DocumentFile.fromSingleUri(applicationContext, destination)?.delete()
@@ -108,6 +143,9 @@ class BackupService : BaseBackupRestoreService() {
                 tempFile.delete()
             }
             progressUpdateJob?.cancelAndJoin()
+            if (orphanReviewShown) {
+                return@withPartialWakeLock
+            }
             contentResolver.notifyChange(destination, null)
             showResultNotification(destination, CompositeResult.success())
             withContext(Dispatchers.Main) {
@@ -119,6 +157,62 @@ class BackupService : BaseBackupRestoreService() {
                 Toast.makeText(this@BackupService, message, Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun showOrphanReviewNotification(
+        destination: Uri,
+        report: BackupOrphanReport,
+        notificationId: Int,
+    ): Boolean {
+        if (!applicationContext.checkNotificationPermission(CHANNEL_ID)) {
+            return false
+        }
+        val reviewIntent = BackupOrphanReviewActivity.newIntent(
+            context = applicationContext,
+            destination = destination,
+            report = report,
+            notificationId = notificationId,
+        )
+        val reviewPendingIntent = PendingIntentCompat.getActivity(
+            applicationContext,
+            notificationId,
+            reviewIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false,
+        )
+        val summary = buildString {
+            append(getString(R.string.backup_orphan_review_summary, report.totalCount))
+            report.items.forEach { item ->
+                append("\n• ")
+                append(item.title ?: getString(R.string.backup_orphan_unknown_work))
+            }
+            if (report.totalCount > report.items.size) {
+                append("\n")
+                append(getString(R.string.backup_orphan_more_items, report.totalCount - report.items.size))
+            }
+        }
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(0)
+            .setSilent(false)
+            .setAutoCancel(true)
+            .setContentTitle(getString(R.string.backup_orphan_review_title))
+            .setContentText(getString(R.string.backup_orphan_review_summary, report.totalCount))
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(summary)
+                    .setSummaryText(getString(R.string.backup_orphan_review_title)),
+            )
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentIntent(reviewPendingIntent)
+            .addAction(
+                R.drawable.ic_alert_outline,
+                getString(R.string.backup_orphan_review_action),
+                reviewPendingIntent,
+            )
+            .build()
+        NotificationManagerCompat.from(applicationContext).notify(notificationTag, notificationId, notification)
+        return true
     }
 
     private fun IntentJobContext.buildNotification(
@@ -163,15 +257,23 @@ class BackupService : BaseBackupRestoreService() {
 
     companion object {
 
-        private const val TAG = "BACKUP"
+        const val NOTIFICATION_TAG = "BACKUP"
+        private const val TAG = NOTIFICATION_TAG
         private const val FOREGROUND_NOTIFICATION_ID = 33
+        private const val ORPHAN_REVIEW_NOTIFICATION_ID = 34
         private const val EXTRA_EXPORT_FORMAT = "export_format"
+        const val EXTRA_ALLOW_DISCARDING_ACTIVE_WORK_STATE = "allow_discarding_active_work_state"
 
         @CheckResult
-        fun start(context: Context, uri: Uri): Boolean = try {
+        fun start(
+            context: Context,
+            uri: Uri,
+            allowDiscardingActiveWorkState: Boolean = false,
+        ): Boolean = try {
             val intent = Intent(context, BackupService::class.java)
             intent.putExtra(AppRouter.KEY_DATA, uri.toString())
             intent.putExtra(EXTRA_EXPORT_FORMAT, BackupRepository.ExportFormat.KOTOTORO.name)
+            intent.putExtra(EXTRA_ALLOW_DISCARDING_ACTIVE_WORK_STATE, allowDiscardingActiveWorkState)
             ContextCompat.startForegroundService(context, intent)
             true
         } catch (e: Exception) {

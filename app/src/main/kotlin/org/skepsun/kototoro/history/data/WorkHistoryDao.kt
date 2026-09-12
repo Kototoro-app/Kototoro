@@ -97,6 +97,12 @@ abstract class WorkHistoryDao {
     @Query("SELECT anchor_manga_id FROM work_history WHERE deleted_at = 0")
     abstract suspend fun findActiveAnchorMangaIds(): List<Long>
 
+    @Query(
+        "SELECT anchor_manga_id FROM work_history " +
+            "WHERE deleted_at = 0 AND entity_id NOT IN (:excludedEntityIds)",
+    )
+    abstract suspend fun findActiveAnchorMangaIdsExcluding(excludedEntityIds: Collection<Long>): List<Long>
+
     @Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
     abstract suspend fun countActive(): Int
 
@@ -109,6 +115,17 @@ abstract class WorkHistoryDao {
         """,
     )
     abstract suspend fun countDanglingEntityRefs(): Int
+
+    @Query(
+        """
+		SELECT wh.*
+		FROM work_history wh
+		LEFT JOIN `entity` e ON e.id = wh.entity_id
+		WHERE e.id IS NULL
+		ORDER BY wh.updated_at DESC
+        """,
+    )
+    abstract suspend fun findDanglingEntityRefs(): List<WorkHistoryEntity>
 
     @Query("SELECT COUNT(*) FROM work_history WHERE deleted_at = 0")
     abstract fun observeCountActive(): Flow<Int>
@@ -263,6 +280,13 @@ abstract class WorkHistoryDao {
     abstract suspend fun setDeletedAtAll(deletedAt: Long)
 
     suspend fun clear() = setDeletedAtAll(System.currentTimeMillis())
+
+    /**
+     * Clears all rows for snapshot replacement. Ordinary history deletion stays
+     * a soft delete because sync relies on its tombstones.
+     */
+    @Query("DELETE FROM work_history")
+    abstract suspend fun deleteAllForSnapshotRestore()
 
     @Query("DELETE FROM work_history WHERE deleted_at != 0 AND deleted_at < :maxDeletionTime")
     abstract suspend fun gc(maxDeletionTime: Long)

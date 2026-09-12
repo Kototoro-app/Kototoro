@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.Serializable
@@ -51,6 +52,9 @@ import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
 import org.skepsun.kototoro.backups.data.model.WorkHistoryBackup
 import org.skepsun.kototoro.backups.data.model.WorkStatisticBackup
 import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
+import org.skepsun.kototoro.backups.domain.ActiveWorkStateMissingEntityException
+import org.skepsun.kototoro.backups.domain.BackupOrphanInfo
+import org.skepsun.kototoro.backups.domain.BackupOrphanReport
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointDao
@@ -89,6 +93,7 @@ import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.stats.data.WorkStatsEntity
 import org.skepsun.kototoro.parsers.util.runCatchingCancellable
 import org.skepsun.kototoro.core.parser.kotatsu.KotatsuParserSource
+import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.reader.domain.ReaderColorFilter
 import org.skepsun.kototoro.reader.data.TapGridSettings
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
@@ -117,6 +122,7 @@ import javax.inject.Inject
 private const val TAG = "BackupRepo"
 private const val RESTORE_TRANSACTION_BATCH_SIZE = 100
 private const val RESTORE_PLACEHOLDER_SOURCE = "RESTORE_PLACEHOLDER"
+private const val MAX_REPORTED_WORK_ENTITY_IDS = 8
 private val RESTORE_PROTECTED_BINDING_STATES = setOf(
     EntityBindingState.MANUAL,
     EntityBindingState.CANDIDATE,
@@ -181,6 +187,24 @@ private data class RestoredProjectionResolution(
     val localMangaId: Long,
     val nextRestoredProjectionId: Long,
     val created: Boolean,
+)
+
+/**
+ * The work-owned sections must be captured from one database snapshot. The
+ * archive writer is intentionally streaming, but independently querying these
+ * tables while the app is running can otherwise produce a cross-section ID
+ * mismatch.
+ */
+private data class WorkBackupSnapshot(
+    val categories: List<CategoryBackup>,
+    val projections: List<ContentBackup>,
+    val history: List<WorkHistoryBackup>,
+    val favourites: List<WorkFavouriteBackup>,
+    val stats: List<WorkStatisticBackup>,
+    val entities: List<EntityRecord>,
+    val bindings: List<EntityBindingRecord>,
+    val relations: List<RelationRecord>,
+    val prefs: List<EntityPrefsRecord>,
 )
 
 @Serializable
@@ -435,13 +459,47 @@ class BackupRepository @Inject constructor(
         )
     }
 
-    private suspend fun requireBackupExportableWorkSnapshot() {
+    private suspend fun buildWorkBackupSnapshot(
+        discardedActiveWorkEntityIds: Set<Long> = emptySet(),
+    ): WorkBackupSnapshot {
+        val entities = database.getEntityGraphDao().dumpEntities()
+        val entityIds = entities.mapTo(HashSet()) { it.id }
+        // Keep active rows visible to the payload guard; omit only deleted orphan
+        // tombstones, whose parent entity no longer exists in this snapshot.
+        return WorkBackupSnapshot(
+            categories = database.getFavouriteCategoriesDao().findAll().map(::CategoryBackup),
+            projections = dumpWorkProjectionSnapshots().toList(),
+            history = database.getWorkHistoryDao().dump()
+                .filter { it.entityId !in discardedActiveWorkEntityIds }
+                .filter { it.deletedAt == 0L || it.entityId in entityIds }
+                .map(::WorkHistoryBackup)
+                .toList(),
+            favourites = database.getWorkFavouritesDao().dumpWithActiveCategories()
+                .filter { it.entityId !in discardedActiveWorkEntityIds }
+                .filter { it.deletedAt == 0L || it.entityId in entityIds }
+                .map(::WorkFavouriteBackup)
+                .toList(),
+            stats = database.getWorkStatsDao().dumpEnabled()
+                .filter { it.entityId !in discardedActiveWorkEntityIds }
+                .map(::WorkStatisticBackup)
+                .toList(),
+            entities = entities,
+            bindings = dumpEntityBindingsForBackup().toList(),
+            relations = database.getEntityGraphDao().dumpRelations(),
+            prefs = database.getEntityGraphDao().dumpPrefs(),
+        )
+    }
+
+    private suspend fun requireBackupExportableWorkSnapshot(
+        allowDiscardingActiveWorkState: Boolean = false,
+    ): Set<Long> {
         if (settings.isWorkMigrationSyncWriteBlocked || settings.requiresWorkMigrationNormalization) {
             throw IllegalStateException(
                 "Refusing backup creation: Work identity normalization is not complete.",
             )
         }
         repairActiveDanglingWorkFavouriteCategories()
+        val discardedActiveWorkEntityIds = repairDanglingWorkStateForBackup(allowDiscardingActiveWorkState)
         val dao = database.getEntityGraphDao()
         val missingSyncId = dao.findWorkEntityIdsMissingSyncId().firstOrNull()
         if (missingSyncId != null) {
@@ -449,8 +507,13 @@ class BackupRepository @Inject constructor(
                 "Refusing backup creation: WORK entity $missingSyncId has no sync_id.",
             )
         }
-        val activeFavouriteWithoutAnchor = database.getWorkFavouritesDao().findActiveWithoutAnchor(limit = 1)
-            .firstOrNull()
+        val activeFavouriteWithoutAnchor = if (discardedActiveWorkEntityIds.isEmpty()) {
+            database.getWorkFavouritesDao().findActiveWithoutAnchor(limit = 1).firstOrNull()
+        } else {
+            database.getWorkFavouritesDao()
+                .findActiveWithoutAnchorExcluding(discardedActiveWorkEntityIds, limit = 1)
+                .firstOrNull()
+        }
         if (activeFavouriteWithoutAnchor != null) {
             throw IllegalStateException(
                 "Refusing backup creation: active work favourite has no projection anchor " +
@@ -458,11 +521,21 @@ class BackupRepository @Inject constructor(
                     "categoryId=${activeFavouriteWithoutAnchor.categoryId}.",
             )
         }
-        val anchorIds = (
-            database.getWorkHistoryDao().findActiveAnchorMangaIds() +
-                database.getWorkFavouritesDao().findActiveAnchorMangaIds() +
-                database.getWorkStatsDao().findAnchorMangaIds()
-            ).filterTo(LinkedHashSet<Long>()) { it > 0L }
+        val anchorIds = if (discardedActiveWorkEntityIds.isEmpty()) {
+            (
+                database.getWorkHistoryDao().findActiveAnchorMangaIds() +
+                    database.getWorkFavouritesDao().findActiveAnchorMangaIds() +
+                    database.getWorkStatsDao().findAnchorMangaIds()
+                ).filterTo(LinkedHashSet<Long>()) { it > 0L }
+        } else {
+            (
+                database.getWorkHistoryDao()
+                    .findActiveAnchorMangaIdsExcluding(discardedActiveWorkEntityIds) +
+                    database.getWorkFavouritesDao()
+                        .findActiveAnchorMangaIdsExcluding(discardedActiveWorkEntityIds) +
+                    database.getWorkStatsDao().findAnchorMangaIdsExcluding(discardedActiveWorkEntityIds)
+                ).filterTo(LinkedHashSet<Long>()) { it > 0L }
+        }
         if (anchorIds.isNotEmpty()) {
             val existingAnchorIds = database.getMangaDao().findEntitiesByIds(anchorIds)
                 .mapTo(LinkedHashSet<Long>()) { it.id }
@@ -473,6 +546,138 @@ class BackupRepository @Inject constructor(
                 )
             }
         }
+        return discardedActiveWorkEntityIds
+    }
+
+    /**
+     * Repair state left behind by older restores that temporarily disabled FK
+     * enforcement. A dangling row can still be recovered when its projection
+     * anchor has a valid local WORK binding. Rows that are already deleted and
+     * have no recoverable identity remain local tombstones and are omitted from the
+     * export; active rows remain a hard error so backup creation never hides live state.
+     */
+    private suspend fun repairDanglingWorkStateForBackup(
+        allowDiscardingActiveWorkState: Boolean,
+    ): Set<Long> {
+        val historyDao = database.getWorkHistoryDao()
+        val favouritesDao = database.getWorkFavouritesDao()
+        val statsDao = database.getWorkStatsDao()
+        val danglingHistory = historyDao.findDanglingEntityRefs()
+        val danglingFavourites = favouritesDao.findDanglingEntityRefs()
+        val danglingStats = statsDao.findDanglingEntityRefs()
+        var remapped = 0
+
+        danglingHistory.forEach { row ->
+            val targetEntityId = database.resolveExistingWorkEntityIdForBackup(row.anchorMangaId)
+            if (targetEntityId != null) {
+                historyDao.moveAnchorToEntity(row.entityId, targetEntityId, row.anchorMangaId)
+                remapped++
+            }
+        }
+        danglingFavourites.forEach { row ->
+            val anchorMangaId = row.anchorMangaId ?: return@forEach
+            val targetEntityId = database.resolveExistingWorkEntityIdForBackup(anchorMangaId)
+            if (targetEntityId != null) {
+                favouritesDao.moveAnchorToEntity(row.entityId, targetEntityId, anchorMangaId)
+                remapped++
+            }
+        }
+        danglingStats.forEach { row ->
+            val targetEntityId = database.resolveExistingWorkEntityIdForBackup(row.anchorMangaId)
+            if (targetEntityId != null) {
+                statsDao.moveAnchorToEntity(row.entityId, targetEntityId, row.anchorMangaId)
+                remapped++
+            }
+        }
+
+        val remainingHistory = historyDao.findDanglingEntityRefs()
+        val remainingFavourites = favouritesDao.findDanglingEntityRefs()
+        val remainingStats = statsDao.findDanglingEntityRefs()
+        val activeMissingEntityIds = LinkedHashSet<Long>()
+        remainingHistory.filter { it.deletedAt == 0L }
+            .forEach { activeMissingEntityIds += it.entityId }
+        remainingFavourites.filter { it.deletedAt == 0L }
+            .forEach { activeMissingEntityIds += it.entityId }
+        remainingStats.forEach { activeMissingEntityIds += it.entityId }
+        if (activeMissingEntityIds.isNotEmpty()) {
+            val report = buildBackupOrphanReport(
+                history = remainingHistory,
+                favourites = remainingFavourites,
+                stats = remainingStats,
+                entityIds = activeMissingEntityIds,
+            )
+            if (!allowDiscardingActiveWorkState) {
+                throw ActiveWorkStateMissingEntityException(report)
+            }
+            Log.w(
+                TAG,
+                "backup creation discarded active work state from missing WORK entities: " +
+                    report.items.joinToString { it.entityId.toString() } +
+                    if (report.totalCount > report.items.size) {
+                        " and ${report.totalCount - report.items.size} more"
+                    } else {
+                        ""
+                    },
+            )
+            return activeMissingEntityIds
+        }
+        val retainedDeletedHistory = remainingHistory.count { it.deletedAt != 0L }
+        val retainedDeletedFavourites = remainingFavourites.count { it.deletedAt != 0L }
+        if (remapped > 0 || retainedDeletedHistory > 0 || retainedDeletedFavourites > 0) {
+            Log.w(
+                TAG,
+                "backup creation repaired dangling work state: remapped=$remapped " +
+                    "retainedDeletedHistory=$retainedDeletedHistory " +
+                    "retainedDeletedFavourites=$retainedDeletedFavourites",
+            )
+        }
+        return emptySet()
+    }
+
+    private suspend fun buildBackupOrphanReport(
+        history: List<WorkHistoryEntity>,
+        favourites: List<WorkFavouriteEntity>,
+        stats: List<WorkStatsEntity>,
+        entityIds: Set<Long>,
+    ): BackupOrphanReport {
+        val anchorsByEntity = LinkedHashMap<Long, Long?>()
+        val kindsByEntity = LinkedHashMap<Long, LinkedHashSet<BackupOrphanInfo.StateKind>>()
+        fun add(
+            entityId: Long,
+            anchorMangaId: Long?,
+            kind: BackupOrphanInfo.StateKind,
+        ) {
+            if (entityId !in entityIds) return
+            anchorsByEntity.putIfAbsent(entityId, anchorMangaId)
+            kindsByEntity.getOrPut(entityId) { LinkedHashSet() } += kind
+        }
+        history.filter { it.deletedAt == 0L }
+            .forEach { add(it.entityId, it.anchorMangaId, BackupOrphanInfo.StateKind.HISTORY) }
+        favourites.filter { it.deletedAt == 0L }
+            .forEach { add(it.entityId, it.anchorMangaId, BackupOrphanInfo.StateKind.FAVOURITE) }
+        stats.forEach { add(it.entityId, it.anchorMangaId, BackupOrphanInfo.StateKind.STATISTICS) }
+
+        val anchorIds = anchorsByEntity.values.filterNotNull().distinct()
+        val mangaById: Map<Long, MangaEntity> = if (anchorIds.isEmpty()) {
+            emptyMap()
+        } else {
+            database.getMangaDao().findEntitiesByIds(anchorIds).associateBy { it.id }
+        }
+        val items = entityIds.take(MAX_REPORTED_WORK_ENTITY_IDS).map { entityId ->
+            val anchorMangaId = anchorsByEntity[entityId]
+            val manga = anchorMangaId?.let(mangaById::get)
+            BackupOrphanInfo(
+                entityId = entityId,
+                anchorMangaId = anchorMangaId,
+                title = manga?.title?.takeIf(String::isNotBlank),
+                source = manga?.source?.takeIf(String::isNotBlank),
+                stateKinds = kindsByEntity[entityId].orEmpty().toList(),
+            )
+        }
+        return BackupOrphanReport(
+            totalCount = entityIds.size,
+            items = items,
+        )
     }
 
     private suspend fun repairActiveDanglingWorkFavouriteCategories() {
@@ -480,17 +685,27 @@ class BackupRepository @Inject constructor(
         if (workFavouritesDao.countActiveDanglingCategoryRefs() == 0) {
             return
         }
-        database.withTransaction {
-            val targetCategoryId = database.ensureBackupFallbackCategoryId()
-            val repaired = database.getWorkFavouritesDao().repairActiveDanglingCategoryRefs(targetCategoryId)
-            if (repaired > 0) {
-                Log.w(
-                    TAG,
-                    "backup creation repaired $repaired active work favourite category refs " +
-                        "to categoryId=$targetCategoryId",
-                )
+        val targetCategoryId = database.ensureBackupFallbackCategoryId()
+        val repaired = database.getWorkFavouritesDao().repairActiveDanglingCategoryRefs(targetCategoryId)
+        if (repaired > 0) {
+            Log.w(
+                TAG,
+                "backup creation repaired $repaired active work favourite category refs " +
+                    "to categoryId=$targetCategoryId",
+            )
+        }
+    }
+
+    private suspend fun MangaDatabase.resolveExistingWorkEntityIdForBackup(anchorMangaId: Long): Long? {
+        val dao = getEntityGraphDao()
+        for (source in listOf("local_manga", "0")) {
+            val entityId = dao.findActiveBinding(source, anchorMangaId.toString())?.entityId ?: continue
+            val entity = dao.findEntity(entityId) ?: continue
+            if (entity.type == EntityType.WORK.name) {
+                return entity.id
             }
         }
+        return null
     }
 
     private suspend fun MangaDatabase.ensureBackupFallbackCategoryId(): Long {
@@ -514,11 +729,27 @@ class BackupRepository @Inject constructor(
         output: ZipOutputStream,
         progress: FlowCollector<Progress>?,
         format: ExportFormat = ExportFormat.KOTOTORO,
+        allowDiscardingActiveWorkState: Boolean = false,
     ) {
-        if (format == ExportFormat.KOTOTORO) {
-            requireBackupExportableWorkSnapshot()
-        }
         progress?.emit(Progress.INDETERMINATE)
+        // Resolving sources also backfills projection content types. Do this before the
+        // transactional work snapshot so its projection payload keeps the previous export
+        // semantics, where SOURCE_ORIGINS ran before PROJECTIONS.
+        val installedSources = if (format == ExportFormat.KOTOTORO) {
+            mangaSourcesRepository.getAllAvailableSourcesUnfiltered()
+        } else {
+            null
+        }
+        val workSnapshot = if (format == ExportFormat.KOTOTORO) {
+            database.withTransaction {
+                val discardedActiveWorkEntityIds = requireBackupExportableWorkSnapshot(
+                    allowDiscardingActiveWorkState = allowDiscardingActiveWorkState,
+                )
+                buildWorkBackupSnapshot(discardedActiveWorkEntityIds)
+            }
+        } else {
+            null
+        }
         var commonProgress = Progress(0, format.sections.size)
         val exportedAt = System.currentTimeMillis()
         val kotatsuSourceNames = if (format == ExportFormat.KOTATSU) {
@@ -557,7 +788,10 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.CATEGORIES -> output.writeJsonArray(
                     section = BackupSection.CATEGORIES,
-                    data = database.getFavouriteCategoriesDao().findAll().asFlow().map { CategoryBackup(it) },
+                    data = (
+                        workSnapshot?.categories
+                            ?: database.getFavouriteCategoriesDao().findAll().map(::CategoryBackup)
+                    ).asFlow(),
                     serializer = serializer(),
                 )
 
@@ -602,7 +836,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.SOURCE_ORIGINS -> output.writeJsonArray(
                     section = BackupSection.SOURCE_ORIGINS,
-                    data = materializeSourceOrigins(),
+                    data = materializeSourceOrigins(installedSources),
                     serializer = serializer(),
                 )
 
@@ -647,7 +881,7 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.PROJECTIONS -> output.writeJsonArray(
                     section = BackupSection.PROJECTIONS,
-                    data = dumpWorkProjectionSnapshots(),
+                    data = (workSnapshot?.projections ?: dumpWorkProjectionSnapshots().toList()).asFlow(),
                     serializer = serializer(),
                 )
 
@@ -663,19 +897,27 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.WORK_HISTORY -> output.writeJsonArray(
                     section = BackupSection.WORK_HISTORY,
-                    data = database.getWorkHistoryDao().dump().map { WorkHistoryBackup(it) },
+                    data = (
+                        workSnapshot?.history
+                            ?: database.getWorkHistoryDao().dump().map(::WorkHistoryBackup).toList()
+                    ).asFlow(),
                     serializer = serializer(),
                 )
 
                 BackupSection.WORK_FAVOURITES -> output.writeJsonArray(
                     section = BackupSection.WORK_FAVOURITES,
-                    data = database.getWorkFavouritesDao().dumpWithActiveCategories().map { WorkFavouriteBackup(it) },
+                    data = (workSnapshot?.favourites ?: database.getWorkFavouritesDao().dumpWithActiveCategories()
+                        .map(::WorkFavouriteBackup)
+                        .toList()).asFlow(),
                     serializer = serializer(),
                 )
 
                 BackupSection.WORK_STATS -> output.writeJsonArray(
                     section = BackupSection.WORK_STATS,
-                    data = database.getWorkStatsDao().dumpEnabled().map { WorkStatisticBackup(it) },
+                    data = (
+                        workSnapshot?.stats
+                            ?: database.getWorkStatsDao().dumpEnabled().map(::WorkStatisticBackup).toList()
+                    ).asFlow(),
                     serializer = serializer(),
                 )
 
@@ -700,25 +942,25 @@ class BackupRepository @Inject constructor(
 
                 BackupSection.ENTITY_GRAPH_ENTITIES -> output.writeJsonArray(
                     section = BackupSection.ENTITY_GRAPH_ENTITIES,
-                    data = database.getEntityGraphDao().dumpEntities().asFlow(),
+                    data = (workSnapshot?.entities ?: database.getEntityGraphDao().dumpEntities()).asFlow(),
                     serializer = serializer(),
                 )
 
                 BackupSection.ENTITY_GRAPH_BINDINGS -> output.writeJsonArray(
                     section = BackupSection.ENTITY_GRAPH_BINDINGS,
-                    data = dumpEntityBindingsForBackup(),
+                    data = (workSnapshot?.bindings ?: dumpEntityBindingsForBackup().toList()).asFlow(),
                     serializer = serializer(),
                 )
 
                 BackupSection.ENTITY_GRAPH_RELATIONS -> output.writeJsonArray(
                     section = BackupSection.ENTITY_GRAPH_RELATIONS,
-                    data = database.getEntityGraphDao().dumpRelations().asFlow(),
+                    data = (workSnapshot?.relations ?: database.getEntityGraphDao().dumpRelations()).asFlow(),
                     serializer = serializer(),
                 )
 
                 BackupSection.ENTITY_GRAPH_PREFS -> output.writeJsonArray(
                     section = BackupSection.ENTITY_GRAPH_PREFS,
-                    data = database.getEntityGraphDao().dumpPrefs().asFlow(),
+                    data = (workSnapshot?.prefs ?: database.getEntityGraphDao().dumpPrefs()).asFlow(),
                     serializer = serializer(),
                 )
             }
@@ -770,10 +1012,12 @@ class BackupRepository @Inject constructor(
      * about but that have no origin record yet. The origin registry is long-term: rows for
      * since-uninstalled sources stay exported.
      */
-    private suspend fun materializeSourceOrigins(): Flow<SourceOriginBackup> = flow {
+    private suspend fun materializeSourceOrigins(
+        installedSources: List<ContentSource>? = null,
+    ): Flow<SourceOriginBackup> = flow {
         val now = System.currentTimeMillis()
         val existing = database.getSourceOriginsDao().findAll().associateBy { it.sourceKey }
-        val installedByName = mangaSourcesRepository.getAllAvailableSourcesUnfiltered()
+        val installedByName = (installedSources ?: mangaSourcesRepository.getAllAvailableSourcesUnfiltered())
             .associateBy { it.name }
         val keys = LinkedHashSet<String>()
         keys += existing.keys
@@ -1218,7 +1462,7 @@ class BackupRepository @Inject constructor(
                 database.getHistoryDao().clear()
             }
             if (BackupSection.WORK_HISTORY in actOn) {
-                database.getWorkHistoryDao().clear()
+                database.getWorkHistoryDao().deleteAllForSnapshotRestore()
             }
             if (BackupSection.CATEGORIES in actOn) {
                 database.getFavouriteCategoriesDao().deleteAll()
