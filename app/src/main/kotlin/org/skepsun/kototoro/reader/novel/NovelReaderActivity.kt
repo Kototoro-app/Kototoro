@@ -11,7 +11,6 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.view.KeyEvent
 import android.view.View
-import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -78,6 +77,8 @@ import org.skepsun.kototoro.core.replace.ReplaceRule
 import org.skepsun.kototoro.core.replace.ReplaceRuleRepository
 import org.skepsun.kototoro.dictionary.DictionaryActivity
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.local.epub.buildEpubChapterUrl
@@ -259,6 +260,12 @@ class NovelReaderActivity :
     override val readerMode: ReaderMode?
         get() = ReaderMode.STANDARD
 
+    override val isTvPresentation: Boolean
+        get() = tvPresentationEnabled
+
+    override val isReaderControlsVisible: Boolean
+        get() = isUiVisible
+
     private var ttsService: org.skepsun.kototoro.reader.novel.tts.TtsService? = null
     private var isTtsBound = false
     private var ttsScrollModeChapterIndex: Int = -1
@@ -268,6 +275,7 @@ class NovelReaderActivity :
     private var lastEInkPageIdentity: EInkPageIdentity? = null
     private var eInkRefresh by mutableStateOf<ReaderEInkRefresh?>(null)
     private var isEInkModeEnabled by mutableStateOf(false)
+    private var tvPresentationEnabled = false
     private var nextEInkRefreshId = 0L
     private var novelMarkingObservationJob: Job? = null
     private var novelBookmarkObservationJob: Job? = null
@@ -351,6 +359,7 @@ class NovelReaderActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tvPresentationEnabled = resolveUiPresentationConfig(this, settings).isTv
 
         // Compose 1.12 enables the new Android text context menu by default. It bypasses
         // LocalTextToolbar, so the reader's own selection actions would otherwise be shown
@@ -622,8 +631,9 @@ class NovelReaderActivity :
             controlsVisible = isUiVisible,
             workTitle = manga.title,
         )
-        setContent {
+        setFullscreenComposeContent {
             KototoroTheme {
+                val presentationConfig = LocalUiPresentationConfig.current
                 val state by composeReaderViewModel.uiState.collectAsStateWithLifecycle()
                 val floatingControls by settings.observeAsState(AppSettings.KEY_NOVEL_READER_CONTROLS) {
                     novelReaderControls
@@ -753,7 +763,7 @@ class NovelReaderActivity :
                                 state = state,
                                 callbacks = callbacks,
                                 controls = floatingControls,
-                                showFloatingControlLabels = showFloatingControlLabels,
+                                showFloatingControlLabels = showFloatingControlLabels || presentationConfig.isTv,
                                 animationsEnabled = !isEInkModeEnabled,
                             )
                         }

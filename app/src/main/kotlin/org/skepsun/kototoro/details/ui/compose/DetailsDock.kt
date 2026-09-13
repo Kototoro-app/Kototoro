@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.layout.Arrangement
@@ -54,10 +55,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
@@ -74,6 +79,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.glass.rememberGlassPrefsOrFallback
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.details.ui.model.ContentBranch
@@ -1217,6 +1223,16 @@ private fun ReadDock(
 ) {
     var expanded by remember { mutableStateOf(false) }
     var menuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
+    var isReadButtonFocused by remember { mutableStateOf(false) }
+    var isMoreButtonFocused by remember { mutableStateOf(false) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val readButtonFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTvPresentation, isEnabled) {
+        if (isTvPresentation && isEnabled) {
+            withFrameNanos { }
+            runCatching { readButtonFocusRequester.requestFocus() }
+        }
+    }
     val hasBranchOptions = branches.size > 1
     val canOpenIncognito = !historyInfo.isIncognitoMode
     val canForgetHistory = historyInfo.history != null
@@ -1279,11 +1295,19 @@ private fun ReadDock(
             },
             tonalElevation = 0.dp,
             shadowElevation = if (modernStyle) 4.dp else 0.dp,
+            border = if (isTvPresentation && isReadButtonFocused) {
+                BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+            } else {
+                null
+            },
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(readButtonShape)
+                    .focusRequester(readButtonFocusRequester)
+                    .onFocusChanged { isReadButtonFocused = it.isFocused }
+                    .then(if (isTvPresentation && isEnabled) Modifier.focusable() else Modifier)
                     .clickable(enabled = isEnabled, onClick = onReadClick)
                     .padding(horizontal = if (modernStyle) 6.dp else 14.dp),
                 contentAlignment = Alignment.Center,
@@ -1353,11 +1377,18 @@ private fun ReadDock(
                 },
                 tonalElevation = 0.dp,
                 shadowElevation = if (modernStyle) 4.dp else 0.dp,
+                border = if (isTvPresentation && isMoreButtonFocused) {
+                    BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                } else {
+                    null
+                },
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(trailingButtonShape)
+                        .onFocusChanged { isMoreButtonFocused = it.isFocused }
+                        .then(if (isTvPresentation && hasMenuActions) Modifier.focusable() else Modifier)
                         .clickable(enabled = hasMenuActions, onClick = { expanded = true }),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1527,4 +1558,3 @@ private fun DetailsMenuIconPreview() {
         DetailsMenuIcon(iconRes = R.drawable.ic_info_outline)
     }
 }
-

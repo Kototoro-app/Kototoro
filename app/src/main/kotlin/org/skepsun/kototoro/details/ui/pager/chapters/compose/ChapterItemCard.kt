@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -16,6 +18,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.details.ui.model.ChapterListItem
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -24,6 +27,7 @@ fun ChapterListCard(
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -48,9 +52,11 @@ fun ChapterListCard(
                     Modifier
                 },
             )
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 2.dp, addFocusTarget = false)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
             )
             .heightIn(min = 56.dp)
             .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -121,6 +127,7 @@ fun ChapterGridCard(
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -136,9 +143,11 @@ fun ChapterGridCard(
             .fillMaxWidth()
             .aspectRatio(1f) // 1:1 ratio
             .alpha(alphaFactor)
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = RoundedCornerShape(8.dp), borderWidth = 3.dp, addFocusTarget = false)
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
             ),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(

@@ -445,6 +445,12 @@
     <string name="tablet_ui_mode_disabled">关闭（始终使用竖屏布局）</string>
     <string name="tablet_ui_mode_relaxed">宽松（宽竖屏也算）</string>
     <string name="tablet_ui_mode_strict">严格（原 Kotatsu 规则）</string>
+    <string name="presentation_mode">展示模式</string>
+    <string name="presentation_mode_summary">为所有界面选择自动、标准或 TV 展示。</string>
+    <string name="presentation_mode_auto">自动（根据设备）</string>
+    <string name="presentation_mode_standard">标准</string>
+    <string name="presentation_mode_tv">TV</string>
+    <string name="presentation_mode_restore_standard">恢复标准界面</string>
     <string name="suggestions_excluded_genres_summary">不希望在推荐中看到的类别</string> <string name="suggestions_preferred_genres_summary">希望在推荐中高优先级展示的类别</string>
     <string name="text_delete_local_manga_batch">确定从设备中永久删除所选内容？</string>
     <string name="removal_completed">删除成功</string>

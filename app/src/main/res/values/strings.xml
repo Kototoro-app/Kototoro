@@ -767,6 +767,12 @@
     <string name="tablet_ui_mode_disabled">Off (always use phone layout)</string>
     <string name="tablet_ui_mode_relaxed">Relaxed (wide portrait counts)</string>
     <string name="tablet_ui_mode_strict">Strict (original Kotatsu)</string>
+    <string name="presentation_mode">Display mode</string>
+    <string name="presentation_mode_summary">Choose automatic, standard, or TV presentation for every screen.</string>
+    <string name="presentation_mode_auto">Automatic (device based)</string>
+    <string name="presentation_mode_standard">Standard</string>
+    <string name="presentation_mode_tv">TV</string>
+    <string name="presentation_mode_restore_standard">Use standard interface</string>
     <string name="suggestions_updating">Suggestions updating</string>
     <string name="suggestions_excluded_genres">Exclude genres</string>
     <string name="suggestions_excluded_genres_summary">Specify genres that you do not want to see in the suggestions</string>

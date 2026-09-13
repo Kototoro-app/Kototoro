@@ -374,6 +374,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_TABLET_UI_MODE, TabletUiMode.RELAXED)
         set(value) = prefs.edit { putEnumValue(KEY_TABLET_UI_MODE, value) }
 
+    var uiPresentationMode: UiPresentationMode
+        get() = prefs.getEnumValue(KEY_UI_PRESENTATION_MODE, UiPresentationMode.AUTO)
+        set(value) = prefs.edit { putEnumValue(KEY_UI_PRESENTATION_MODE, value) }
+
+    /** Short alias for callers that work with the presentation preference directly. */
+    var presentationMode: UiPresentationMode
+        get() = uiPresentationMode
+        set(value) {
+            uiPresentationMode = value
+        }
+
     var mainNavItems: List<NavItem>
         get() {
             val rawStr = prefs.getString(KEY_NAV_MAIN, null)
@@ -2843,6 +2854,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_APP_FONT_PRESET = "app_font_preset"
         const val KEY_EXPRESSIVE_APP_FONT_PRESET = "expressive_app_font_preset"
         const val KEY_TABLET_UI_MODE = "tablet_ui_mode"
+        const val KEY_UI_PRESENTATION_MODE = "ui_presentation_mode"
+        const val KEY_PRESENTATION_MODE = KEY_UI_PRESENTATION_MODE
         const val KEY_TABLET_LIST_PREVIEW = "tablet_list_preview"
         const val KEY_TABLET_LIST_PREVIEW_MODE = "tablet_list_preview_mode"
         const val KEY_TABLET_LIST_FILTER_PANEL_DEFAULT = "tablet_list_filter_panel_default"

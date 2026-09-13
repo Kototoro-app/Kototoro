@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,7 @@ import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -142,6 +144,11 @@ fun SwipeableFilterChip(
         modifier = modifier
             .width(slotWidth)
             .height(controlSize)
+            .clickable(
+                enabled = enabledTypes.isNotEmpty(),
+                onClick = { selectCenterType() },
+            )
+            .tvFocusable(shape = Capsule(), enabled = enabledTypes.isNotEmpty())
             .semantics {
                 role = Role.Button
                 contentDescription = filterDescription

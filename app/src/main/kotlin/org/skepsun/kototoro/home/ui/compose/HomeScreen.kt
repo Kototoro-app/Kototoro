@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -44,6 +45,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.details.ui.compose.rememberPanoramaBackdropPrefs
 import org.skepsun.kototoro.home.ui.HomeSummaryState
 import org.skepsun.kototoro.parsers.model.Content
@@ -117,6 +119,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val settings = remember(context.applicationContext) { AppSettings(context.applicationContext) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val screenPrefs by settings.observeAsState(
         AppSettings.KEY_GRID_SIZE,
         AppSettings.KEY_HOME_HERO_STYLE,
@@ -243,6 +246,7 @@ fun HomeScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                 .nestedScroll(rememberNestedScrollInteropConnection())
                 .padding(
                     start = systemBarsPadding.calculateLeftPadding(layoutDirection) + CompactTopBarHorizontalPadding,
@@ -334,4 +338,3 @@ fun HomeScreen(
 }
 
 internal val HOME_SECTION_GAP = 4.dp
-

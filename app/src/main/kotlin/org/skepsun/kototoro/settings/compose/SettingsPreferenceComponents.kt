@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -210,6 +211,7 @@ fun SettingsActionPreference(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled, onClick = onClick)
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
@@ -355,6 +357,7 @@ fun SettingsSwitchPreference(
 ) {
     Row(
         modifier = Modifier
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .toggleable(
                 value = checked,
                 enabled = enabled,
@@ -428,6 +431,7 @@ fun <T> SettingsChoicePreference(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) { isDialogVisible = true }
             .settingsPreferenceLayout(enabled),
         verticalAlignment = Alignment.CenterVertically,
@@ -535,6 +539,7 @@ fun <T> SettingsChoiceDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
+                            .tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false)
                             .selectable(selected = selected, onClick = { onValueChange(option.value) })
                             .padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -600,6 +605,7 @@ fun <T> SettingsMultiChoicePreference(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) {
                 pendingValues = values
                 isDialogVisible = true
@@ -662,6 +668,11 @@ fun <T> SettingsMultiChoicePreference(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = if (isIosStyle) 48.dp else 0.dp)
+                                .tvFocusable(
+                                    enabled = optionEnabled,
+                                    shape = RoundedCornerShape(10.dp),
+                                    addFocusTarget = false,
+                                )
                                 .toggleable(
                                     value = checked,
                                     enabled = optionEnabled,
@@ -883,6 +894,7 @@ fun SettingsDialogTextPreference(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) {
                 pendingValue = value
                 isDialogVisible = true
@@ -1025,6 +1037,7 @@ fun SettingsReorderPreference(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(enabled = enabled, shape = RoundedCornerShape(12.dp), addFocusTarget = false)
             .clickable(enabled = enabled) {
                 pendingValue = value
                 isDialogVisible = true

@@ -72,6 +72,8 @@ import org.skepsun.kototoro.core.util.ext.findCloudFlareException
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.util.SystemUiController
 import org.skepsun.kototoro.core.ui.util.MenuInvalidator
 import org.skepsun.kototoro.core.util.IdlingDetector
@@ -159,6 +161,12 @@ class ReaderActivity :
     override val readerMode: ReaderMode?
         get() = if (::composeReaderController.isInitialized) composeReaderController.readerMode else null
 
+    override val isTvPresentation: Boolean
+        get() = tvPresentationEnabled
+
+    override val isReaderControlsVisible: Boolean
+        get() = areControlsVisible
+
     private lateinit var scrollTimer: ScrollTimer
     private lateinit var pageSaveHelper: PageSaveHelper
     private lateinit var controlDelegate: ReaderControlDelegate
@@ -173,6 +181,7 @@ class ReaderActivity :
     private var enableTranslationAfterSetup = false
     private var composeSliderValue = 0
     private var areControlsVisible = true
+    private var tvPresentationEnabled = false
     private var loadingError by mutableStateOf<Throwable?>(null)
     private var pendingIncognitoDialog by mutableStateOf<IncognitoDialogState?>(null)
 
@@ -258,6 +267,7 @@ class ReaderActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tvPresentationEnabled = resolveUiPresentationConfig(this, settings).isTv
         if (checkAndRedirectMedia(intent)) {
             return
         }
@@ -601,11 +611,14 @@ class ReaderActivity :
         )
         spaceSwitcherDelegate.setControlsVisible(areControlsVisible)
         setComposeContent {
+            val presentationConfig = LocalUiPresentationConfig.current
             val showFloatingControlLabels by settings.observeAsState(AppSettings.KEY_READER_CONTROL_LABELS) {
                 isReaderControlLabelsEnabled
             }
             Box(modifier = Modifier.fillMaxSize()) {
-                composeReaderController.Content(showFloatingControlLabels = showFloatingControlLabels)
+                composeReaderController.Content(
+                    showFloatingControlLabels = showFloatingControlLabels || presentationConfig.isTv,
+                )
                 spaceSwitcherDelegate.Fab(
                     modifier = Modifier.fillMaxSize(),
                 )

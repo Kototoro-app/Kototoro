@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
 import org.skepsun.kototoro.core.ui.widgets.KototoroBottomNav
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -42,6 +43,7 @@ import androidx.compose.material3.Surface
 import coil3.compose.rememberAsyncImagePainter
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.main.ui.compose.tv.TvNavigationRail
 
 @Composable
 internal fun ContinueReadingFab(
@@ -142,6 +144,7 @@ internal fun BoxScope.MainBottomChrome(
     railHeaderContent: (@Composable () -> Unit)?,
     adjacentAction: (@Composable () -> Unit)?,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Box(
         modifier = Modifier
             .align(if (isLandscapeNavigation) Alignment.CenterStart else Alignment.BottomCenter)
@@ -174,25 +177,38 @@ internal fun BoxScope.MainBottomChrome(
                 }
             }
             .onGloballyPositioned { coords ->
-                val newHeight = if (isLandscapeNavigation) coords.size.width else coords.size.height
-                onBottomNavHeightMeasured(newHeight)
+                val measuredDimensionPx = if (isLandscapeNavigation) coords.size.width else coords.size.height
+                onBottomNavHeightMeasured(measuredDimensionPx)
             },
     ) {
         val bottomNavContent: @Composable () -> Unit = {
-            KototoroBottomNav(
-                state = navStateFlow,
-                onItemSelected = onItemSelected,
-                onItemReselected = onItemReselected,
-                railHeaderContent = railHeaderContent,
-                adjacentAction = adjacentAction,
-                showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
-                onContinueReadingClick = onResumeClick,
-                continueReadingIconRes = resumeAction.iconRes,
-                continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
-                continueReadingCoverModel = resumeCoverModel,
-            )
+            if (isTvPresentation) {
+                TvNavigationRail(
+                    state = navStateFlow,
+                    onItemSelected = onItemSelected,
+                    onItemReselected = onItemReselected,
+                    railHeaderContent = railHeaderContent,
+                    showContinueReadingButton = isResumeEnabled,
+                    onContinueReadingClick = onResumeClick,
+                    continueReadingIconRes = resumeAction.iconRes,
+                    continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
+                )
+            } else {
+                KototoroBottomNav(
+                    state = navStateFlow,
+                    onItemSelected = onItemSelected,
+                    onItemReselected = onItemReselected,
+                    railHeaderContent = railHeaderContent,
+                    adjacentAction = adjacentAction,
+                    showContinueReadingButton = isLandscapeNavigation && isResumeEnabled,
+                    onContinueReadingClick = onResumeClick,
+                    continueReadingIconRes = resumeAction.iconRes,
+                    continueReadingContentDescriptionRes = resumeAction.contentDescriptionRes,
+                    continueReadingCoverModel = resumeCoverModel,
+                )
+            }
         }
-        if (isLayeredSurface && !isLandscapeNavigation) {
+        if (isLayeredSurface && !isLandscapeNavigation && !isTvPresentation) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surfaceContainer,

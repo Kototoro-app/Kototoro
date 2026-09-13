@@ -33,6 +33,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 internal enum class SettingsGroupItemPosition {
     SINGLE,
@@ -205,6 +206,7 @@ fun SettingsCollapsiblePreferenceGroup(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(enabled = enabled) { expanded = !expanded }
+                    .tvFocusable(enabled = enabled, shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius))
                     .heightIn(min = tokens.settingsItemMinHeight)
                     .padding(horizontal = horizontalPadding, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,

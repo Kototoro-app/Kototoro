@@ -44,6 +44,7 @@ import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletListPreviewMode
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.prefs.UiPresentationMode
 import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassTuning
 import org.skepsun.kototoro.core.ui.glass.GlassTuningController
@@ -119,6 +120,9 @@ fun AppearanceSettingsRoute(
     val isReducedVisualEffectsEnabled =
         settings.observeAsState(AppSettings.KEY_REDUCED_VISUAL_EFFECTS) { isReducedVisualEffectsEnabled }.value
     val tabletUiMode = settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }.value
+    val presentationMode = settings.observeAsState(AppSettings.KEY_UI_PRESENTATION_MODE) {
+        uiPresentationMode
+    }.value
     val appLocale = settings.observeAsState(AppSettings.KEY_APP_LOCALE) { appLocales.toLanguageTags() }.value
     val loadingCircleStyle = settings.observeAsState(AppSettings.KEY_LOADING_CIRCLE_STYLE) { loadingCircleStyle }.value
     val popupRadius = settings.observeAsState(AppSettings.KEY_POPUP_RADIUS) { popupRadius }.value
@@ -295,6 +299,7 @@ fun AppearanceSettingsRoute(
         fontPresets = coordinator.buildFontPresetOptions(),
         tabletListPreviewModes = coordinator.buildTabletListPreviewModeOptions(),
         tabletUiModes = coordinator.buildTabletUiModeOptions(),
+        presentationModes = coordinator.buildPresentationModeOptions(),
         appLocales = coordinator.buildLocaleOptions(),
         loadingCircleStyles = coordinator.buildLoadingCircleStyleOptions(),
         popupRadii = coordinator.buildPopupRadiusOptions(),
@@ -334,6 +339,7 @@ fun AppearanceSettingsRoute(
         appFontPreset = appFontPreset,
         expressiveAppFontPreset = expressiveAppFontPreset,
         tabletUiMode = tabletUiMode,
+        presentationMode = presentationMode,
         appLocale = appLocale,
         loadingCircleStyle = loadingCircleStyle,
         popupRadius = popupRadius,
@@ -410,6 +416,7 @@ fun AppearanceSettingsRoute(
             coordinator.updateAndRestart(coroutineScope) { settings.expressiveAppFontPreset = it }
         },
         onTabletUiModeChange = { settings.tabletUiMode = it },
+        onPresentationModeChange = { settings.uiPresentationMode = it },
         onAppLocaleChange = coordinator::updateAppLocale,
         onLoadingCircleStyleChange = { coordinator.updateAndRestart(coroutineScope) { settings.loadingCircleStyle = it } },
         onPopupRadiusChange = { coordinator.updateAndRestart(coroutineScope) { settings.popupRadius = it } },
@@ -658,6 +665,23 @@ private class AppearanceSettingsCoordinator(
             SettingsChoiceOption(TabletUiMode.DISABLED, context.getString(R.string.tablet_ui_mode_disabled)),
             SettingsChoiceOption(TabletUiMode.RELAXED, context.getString(R.string.tablet_ui_mode_relaxed)),
             SettingsChoiceOption(TabletUiMode.STRICT, context.getString(R.string.tablet_ui_mode_strict)),
+        )
+    }
+
+    fun buildPresentationModeOptions(): List<SettingsChoiceOption<UiPresentationMode>> {
+        return listOf(
+            SettingsChoiceOption(
+                UiPresentationMode.AUTO,
+                context.getString(R.string.presentation_mode_auto),
+            ),
+            SettingsChoiceOption(
+                UiPresentationMode.STANDARD,
+                context.getString(R.string.presentation_mode_standard),
+            ),
+            SettingsChoiceOption(
+                UiPresentationMode.TV,
+                context.getString(R.string.presentation_mode_tv),
+            ),
         )
     }
 

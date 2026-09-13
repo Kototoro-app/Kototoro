@@ -2,6 +2,7 @@ package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -98,6 +100,8 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaExtra
@@ -217,6 +221,7 @@ fun KototoroSearchOverlay(
     onExitFinished: () -> Unit = {},
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val navigationBarPadding = WindowInsets.navigationBars.asPaddingValues()
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val focusRequester = remember { FocusRequester() }
@@ -232,12 +237,14 @@ fun KototoroSearchOverlay(
     var advancedAuthor by remember { mutableStateOf("") }
     val style = rememberSearchOverlayStyle()
 
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, isTvPresentation) {
         animatedVisible = visible
         if (visible) {
             delay(90)
             focusRequester.requestFocus()
-            keyboardController?.show()
+            if (!isTvPresentation) {
+                keyboardController?.show()
+            }
         } else {
             keyboardController?.hide()
             delay(SearchOverlayAnimationDurationMillis.toLong())
@@ -355,7 +362,8 @@ fun KototoroSearchOverlay(
                 .padding(horizontal = horizontalPadding)
                 .height(panelHeight)
                 .clip(RoundedCornerShape(cornerRadius))
-                .background(style.panelContainerColor),
+                .background(style.panelContainerColor)
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
         ) {
             Column(
                 modifier = Modifier
@@ -372,7 +380,9 @@ fun KototoroSearchOverlay(
                     TopBarControlSurface(allowBackdrop = false) {
                         IconButton(
                             onClick = onDismissRequest,
-                            modifier = Modifier.size(CompactTopBarPillHeight),
+                            modifier = Modifier
+                                .size(CompactTopBarPillHeight)
+                                .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -413,7 +423,9 @@ fun KototoroSearchOverlay(
                             if (query.isNotEmpty()) {
                                 IconButton(
                                     onClick = { onQueryChanged("") },
-                                    modifier = Modifier.size(40.dp),
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .tvFocusable(shape = CircleShape),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Clear,
@@ -441,7 +453,9 @@ fun KototoroSearchOverlay(
                             ) {
                                 IconButton(
                                     onClick = { showAdvanced = !showAdvanced },
-                                    modifier = Modifier.size(CompactTopBarPillHeight),
+                                    modifier = Modifier
+                                        .size(CompactTopBarPillHeight)
+                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
                                 ) {
                                     Icon(
                                         imageVector = if (showAdvanced)
@@ -458,7 +472,9 @@ fun KototoroSearchOverlay(
                                 }
                                 IconButton(
                                     onClick = { showFilterSheet = true },
-                                    modifier = Modifier.size(CompactTopBarPillHeight),
+                                    modifier = Modifier
+                                        .size(CompactTopBarPillHeight)
+                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_filter_menu),
@@ -675,7 +691,9 @@ private fun SuggestionList(
     val hapticFeedback = LocalHapticFeedback.current
 
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
         contentPadding = PaddingValues(
             start = style.listHorizontalPadding,
             top = 10.dp,
@@ -749,7 +767,10 @@ private fun SuggestionList(
                                 )
                             },
                             trailingContent = {
-                                IconButton(onClick = { onRecentQueryCompleteClick(item.query) }) {
+                                IconButton(
+                                    onClick = { onRecentQueryCompleteClick(item.query) },
+                                    modifier = Modifier.tvFocusable(shape = CircleShape),
+                                ) {
                                     Icon(
                                         painter = painterResource(
                                             androidx.appcompat.R.drawable.abc_ic_commit_search_api_mtrl_alpha,
@@ -795,7 +816,9 @@ private fun SuggestionList(
 
                 is SearchSuggestionItem.Tags -> {
                     LazyRow(
-                        modifier = Modifier.padding(vertical = 4.dp),
+                        modifier = Modifier
+                            .padding(vertical = 4.dp)
+                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(item.tags, contentType = { "tag_chip" }) { chip ->
@@ -803,7 +826,9 @@ private fun SuggestionList(
                             AssistChip(
                                 onClick = { tag?.let(onTagSuggestionClick) },
                                 label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
-                                modifier = Modifier.height(style.chipHeight),
+                                modifier = Modifier
+                                    .height(style.chipHeight)
+                                    .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius)),
                                 shape = RoundedCornerShape(style.chipCornerRadius),
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -833,7 +858,8 @@ private fun SuggestionList(
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -854,7 +880,8 @@ private fun SuggestionList(
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -875,7 +902,8 @@ private fun SuggestionList(
                     LazyRow(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
+                            .padding(vertical = 8.dp)
+                            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(
@@ -946,7 +974,8 @@ private fun SearchSuggestionRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius)),
         shape = RoundedCornerShape(style.rowCornerRadius),
         color = containerColor,
     ) {
@@ -992,6 +1021,7 @@ private fun SourceSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius))
             .background(
                 color = style.rowContainerColor,
                 shape = RoundedCornerShape(style.rowCornerRadius),
@@ -1053,7 +1083,8 @@ private fun TrackingEntitySuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
@@ -1136,7 +1167,8 @@ private fun ContentSuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
@@ -1196,7 +1228,8 @@ private fun LocalEntitySuggestionCard(
     Surface(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(

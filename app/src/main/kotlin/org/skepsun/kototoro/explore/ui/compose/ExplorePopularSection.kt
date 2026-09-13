@@ -3,6 +3,7 @@ package org.skepsun.kototoro.explore.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,8 @@ import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.secondaryTitleText
@@ -73,6 +76,7 @@ internal fun TrackingCategoryRow(
         LazyListState()
     }
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -92,13 +96,17 @@ internal fun TrackingCategoryRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onMoreClick) {
+            TextButton(
+                onClick = onMoreClick,
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
+            ) {
                 Text(stringResource(R.string.more))
             }
         }
         val railAnimationFactor = rememberRailAnimationFactor()
         LazyRow(
             state = rowState,
+            modifier = if (isTvPresentation) Modifier.focusGroup() else Modifier,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(horizontal = 2.dp),
         ) {
@@ -199,6 +207,7 @@ internal fun BrowsePopularListItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .tvFocusable(shape = surfaceShape, borderWidth = 3.dp)
             .clickable(
                 onClick = {
                     logHeroTransition("explore_popular_click title=${item.title} sharedKey=$sharedElementKey")
@@ -360,4 +369,3 @@ internal fun BrowsePopularListItem(
         }
     }
 }
-

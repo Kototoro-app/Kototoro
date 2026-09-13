@@ -2,6 +2,7 @@ package org.skepsun.kototoro.search.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,13 +50,17 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -77,6 +83,8 @@ import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
@@ -220,6 +228,17 @@ fun SearchResultsRoute(
     var pinnedOnly by remember { mutableStateOf(viewModel.isPinnedOnlySelected) }
     var hideEmpty by remember { mutableStateOf(viewModel.isHideEmptySelected) }
     var selectedItemsIds by rememberSaveable { mutableStateOf(emptySet<Long>()) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val searchFocusRequester = remember { FocusRequester() }
+    var hasRequestedInitialSearchFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(isTvPresentation, isPickMode) {
+        if (isTvPresentation && !isPickMode && selectedItemsIds.isEmpty() && !hasRequestedInitialSearchFocus) {
+            withFrameNanos { }
+            if (searchFocusRequester.requestFocus()) {
+                hasRequestedInitialSearchFocus = true
+            }
+        }
+    }
     val hapticFeedback = LocalHapticFeedback.current
 
     val preparedItems = remember(listModels) { prepareSearchItems(listModels) }
@@ -276,6 +295,9 @@ fun SearchResultsRoute(
                     onAdvancedAuthorChange = { advancedAuthor = it },
                     onSourceTypesClick = { showOptionsSheet = true },
                     onContentKindsClick = { showOptionsSheet = true },
+                    searchFocusRequester = searchFocusRequester.takeIf {
+                        isTvPresentation && selectedItemsIds.isEmpty() && !isPickMode
+                    },
                 )
             } else {
                 KototoroSelectionTopBar(
@@ -317,7 +339,9 @@ fun SearchResultsRoute(
         },
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             contentPadding = PaddingValues(
                 start = 0.dp,
                 top = paddingValues.calculateTopPadding(),
@@ -429,20 +453,25 @@ private fun SearchResultsTopBar(
     onAdvancedAuthorChange: (String) -> Unit,
     onSourceTypesClick: () -> Unit,
     onContentKindsClick: () -> Unit,
+    searchFocusRequester: FocusRequester? = null,
 ) {
     Surface(shadowElevation = 4.dp) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = onBackClick) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.back),
@@ -458,7 +487,9 @@ private fun SearchResultsTopBar(
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(searchFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
                 singleLine = true,
                 label = { Text(stringResource(R.string.search)) },
                 leadingIcon = {
@@ -470,14 +501,20 @@ private fun SearchResultsTopBar(
                 trailingIcon = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (query.isNotEmpty()) {
-                            IconButton(onClick = { onQueryChange("") }) {
+                            IconButton(
+                                onClick = { onQueryChange("") },
+                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                            ) {
                                 Icon(
                                     imageVector = Icons.Filled.Clear,
                                     contentDescription = stringResource(R.string.clear),
                                 )
                             }
                         }
-                        IconButton(onClick = onSearchClick) {
+                        IconButton(
+                            onClick = onSearchClick,
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                        ) {
                             Icon(
                                 imageVector = Icons.Filled.Search,
                                 contentDescription = stringResource(R.string.search),
@@ -485,7 +522,9 @@ private fun SearchResultsTopBar(
                         }
                         IconButton(
                             onClick = { onAdvancedExpandedChange(!isAdvancedExpanded) },
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier
+                                .size(40.dp)
+                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
                         ) {
                             Icon(
                                 imageVector = if (isAdvancedExpanded)
@@ -500,7 +539,12 @@ private fun SearchResultsTopBar(
                                        else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        IconButton(onClick = onOptionsClick, modifier = Modifier.size(40.dp)) {
+                        IconButton(
+                            onClick = onOptionsClick,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                        ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter_menu),
                                 contentDescription = stringResource(R.string.display_options),
@@ -570,7 +614,9 @@ private fun SearchResultsSection(
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(
@@ -589,6 +635,7 @@ private fun SearchResultsSection(
             if (section.source !== UnknownContentSource) {
                 Button(
                     onClick = onSectionClick,
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 ) {
                     Text(stringResource(R.string.show_all))
@@ -602,6 +649,9 @@ private fun SearchResultsSection(
                 state = rowState,
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.then(
+                    if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,
+                ),
             ) {
                 itemsIndexed(
                     items = section.list,
@@ -658,7 +708,9 @@ private fun SearchSupplementaryItem(
         is ButtonFooter -> {
             Button(
                 onClick = onContinueSearch,
-                modifier = modifier.fillMaxWidth(),
+                modifier = modifier
+                    .fillMaxWidth()
+                    .tvFocusable(shape = RoundedCornerShape(12.dp)),
             ) {
                 Text(stringResource(item.textResId))
             }
@@ -696,7 +748,10 @@ private fun SearchSupplementaryItem(
                     )
                     if (item.actionStringRes != 0) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        Button(onClick = onContinueSearch) {
+                        Button(
+                            onClick = onContinueSearch,
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                        ) {
                             Text(stringResource(item.actionStringRes))
                         }
                     }

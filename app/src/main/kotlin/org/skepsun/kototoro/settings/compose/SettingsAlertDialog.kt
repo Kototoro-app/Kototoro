@@ -8,7 +8,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.glass.ApplyDynamicArtworkBlurDialogStyle
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 
 @Composable
@@ -53,7 +55,11 @@ internal fun SettingsDialogActionButton(
     TextButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = modifier.tvFocusable(
+            enabled = enabled,
+            shape = RoundedCornerShape(10.dp),
+            addFocusTarget = false,
+        ),
     ) {
         Text(
             text = text,

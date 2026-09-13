@@ -3,6 +3,7 @@ package org.skepsun.kototoro.details.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
 import org.skepsun.kototoro.core.ui.compose.compactPosterRailCardStyle
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
 import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
@@ -86,6 +89,7 @@ fun DetailsRelationSections(
                     horizontalPadding = outerHorizontalPadding,
                 )
                 LazyRow(
+                    modifier = if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
                 ) {
@@ -121,6 +125,7 @@ internal fun DetailsRelatedContentSection(
             modifier = Modifier.padding(horizontal = outerHorizontalPadding),
         )
         LazyRow(
+            modifier = if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = outerHorizontalPadding),
         ) {
@@ -370,6 +375,7 @@ private fun DetailsRelationItemCard(
     Surface(
         modifier = modifier
             .width(width)
+            .tvFocusable(shape = RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f),

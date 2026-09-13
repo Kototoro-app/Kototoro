@@ -97,6 +97,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.space.ui.SpaceAction
 import org.skepsun.kototoro.space.ui.SpaceSidekick
+import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
@@ -129,6 +130,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMotionStyle
 import org.skepsun.kototoro.core.ui.theme.LocalSurfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalChromeScrollOverlap
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.MotionStyle
 import org.skepsun.kototoro.core.ui.theme.SurfaceStyle
 import androidx.compose.material3.Surface
@@ -443,6 +445,7 @@ fun KototoroApp(
 
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
+    val presentationConfig = LocalUiPresentationConfig.current
     val prefs = rememberKototoroAppPrefs(appSettings)
     val navigationPrefs by prefs.navigationPrefs
     val displayPrefs by prefs.displayPrefs
@@ -491,8 +494,9 @@ fun KototoroApp(
         configuration.orientation,
         configuration.screenWidthDp,
         tabletUiMode,
+        presentationConfig.effectiveMode,
     ) {
-        FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+        presentationConfig.isTv || FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
     val isLanguagePresetFilterVisibleSetting = filterVisibilityPrefs.isLanguagePresetFilterVisible
     val isContentTypeFilterVisibleSetting = filterVisibilityPrefs.isContentTypeFilterVisible
@@ -1249,7 +1253,19 @@ fun KototoroApp(
                         onResumeClick = effectiveResumeClick,
                         resumeAction = effectiveResumeAction,
                         resumeCoverModel = effectiveResumeCoverModel,
-                        railHeaderContent = null,
+                        railHeaderContent = if (presentationConfig.isTv && spaceUiState.switcherEnabled) {
+                            {
+                                SpaceSwitcherRailButton(
+                                    activeSpaceId = spaceUiState.activeSpaceId,
+                                    activeSpace = spaceUiState.spaces.firstOrNull {
+                                        it.id == spaceUiState.activeSpaceId
+                                    },
+                                    onClick = { onSpaceAction(SpaceAction.OpenSwitcher) },
+                                )
+                            }
+                        } else {
+                            null
+                        },
                         adjacentAction = if (!isLandscapeNavigation && effectiveResumeEnabled) {
                             {
                                 ContinueReadingFab(

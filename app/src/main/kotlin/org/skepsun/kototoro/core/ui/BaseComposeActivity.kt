@@ -29,6 +29,9 @@ import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.PresentationModeExitButton
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.rememberUiPresentationConfig
 import org.skepsun.kototoro.core.ui.glass.LocalGlassTuning
 import org.skepsun.kototoro.core.ui.glass.rememberGlassTuning
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -90,15 +93,23 @@ abstract class BaseComposeActivity :
             val cornerRadius by kototoroAppSettings.observeAsState(AppSettings.KEY_POPUP_RADIUS) {
                 cornerRadius
             }
+            val presentationConfig = rememberUiPresentationConfig(kototoroAppSettings)
             // Glass Finish Tuner (ADR 0001): expose the live tuning state to the
             // whole activity so every GlassSurface / bottom-nav pill reads the
             // resolved per-scope parameters instead of hardcoded values. When
             // nothing has been tuned the state resolves to exact legacy values.
             val glassTuning = rememberGlassTuning(kototoroAppSettings)
             KototoroTheme(cornerRadius = cornerRadius) {
-                CompositionLocalProvider(LocalGlassTuning provides glassTuning) {
+                CompositionLocalProvider(
+                    LocalGlassTuning provides glassTuning,
+                    LocalUiPresentationConfig provides presentationConfig,
+                ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         content()
+                        PresentationModeExitButton(
+                            settings = kototoroAppSettings,
+                            modifier = Modifier.align(Alignment.TopEnd),
+                        )
                         SnackbarHost(
                             hostState = snackbarHostState,
                             modifier = Modifier

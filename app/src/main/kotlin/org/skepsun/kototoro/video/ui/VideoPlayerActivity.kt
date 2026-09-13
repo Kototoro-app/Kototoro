@@ -2,6 +2,7 @@ package org.skepsun.kototoro.video.ui
 
 import android.os.Bundle
 import android.view.View
+import android.view.KeyEvent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.content.ContentValues
@@ -47,6 +48,8 @@ import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.network.webview.WebViewExecutor
 import org.skepsun.kototoro.core.parser.tvbox.TVBoxPlayback
 import org.skepsun.kototoro.core.ui.BaseComposeFullscreenActivity
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.util.ext.getParcelableExtraCompat
 import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.ReaderIntent
@@ -144,11 +147,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
 import androidx.activity.viewModels
+import androidx.activity.OnBackPressedCallback
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -182,6 +185,8 @@ import org.skepsun.kototoro.video.ui.compose.VideoSubtitleSettingsDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialog
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerTvKeyAction
+import org.skepsun.kototoro.video.ui.compose.resolveVideoPlayerTvKeyAction
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerInfoDialog
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
 import org.skepsun.kototoro.video.ui.compose.PlayerMenuPlacement
@@ -246,6 +251,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private var videoPlayer: VideoPlayerEngine? = null
     private var isUiVisible: Boolean = false
     private var playerUiState: PlayerUiState = PlayerUiState.Hidden
+    private var tvPresentationEnabled = false
     private var autoNextTriggered: Boolean = false
     // Screen lock state
     private var isScreenLocked: Boolean = false
@@ -663,7 +669,8 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     lateinit var spaceSwitcherDelegate: SpaceSwitcherDelegate
 
     private fun installComposeContent() {
-        setContent {
+        setFullscreenComposeContent {
+            val presentationConfig = LocalUiPresentationConfig.current
             KototoroTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     VideoPlayerRenderLayer(
@@ -677,6 +684,11 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                         onAction = ::onComposePlayerAction,
                         onInteractionStart = ::pauseControlsAutoHide,
                         onInteractionEnd = ::restartControlsAutoHide,
+                        modifier = if (presentationConfig.isTv) {
+                            Modifier.padding(horizontal = 12.dp)
+                        } else {
+                            Modifier
+                        },
                     )
                     VideoGestureOverlays(state = gestureOverlayState)
                     VideoSubtitleOverlay(state = subtitleOverlayState)
@@ -843,6 +855,46 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (initialized) installPlayerGesturesIfReady()
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!tvPresentationEnabled) return super.dispatchKeyEvent(event)
+        val action = resolveVideoPlayerTvKeyAction(
+            keyCode = event.keyCode,
+            controlsVisible = playerUiState == PlayerUiState.ControlsVisible,
+            screenLocked = isScreenLocked,
+        )
+        if (action == VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
+            if (
+                event.action == KeyEvent.ACTION_DOWN &&
+                playerUiState == PlayerUiState.ControlsVisible &&
+                !event.isCanceled
+            ) {
+                restartControlsAutoHide()
+            }
+            return super.dispatchKeyEvent(event)
+        }
+        if (event.action != KeyEvent.ACTION_DOWN || event.isCanceled) return true
+        when (action) {
+            VideoPlayerTvKeyAction.SHOW_CONTROLS -> setUiIsVisible(true)
+            VideoPlayerTvKeyAction.TOGGLE_PLAYBACK -> onComposePlayerAction(VideoPlayerAction.TogglePlayback)
+            VideoPlayerTvKeyAction.SEEK_BACKWARD -> seekFromTvRemote(-quickTapBackMs)
+            VideoPlayerTvKeyAction.SEEK_FORWARD -> seekFromTvRemote(quickTapJumpMs)
+            VideoPlayerTvKeyAction.CONSUME,
+            VideoPlayerTvKeyAction.PASS_TO_FOCUS,
+            -> Unit
+        }
+        return true
+    }
+
+    private fun seekFromTvRemote(deltaMs: Long) {
+        val player = videoPlayer ?: return
+        val durationMs = player.durationMs.takeIf { it > 0L } ?: return
+        val startPosition = player.positionMs
+        val target = (startPosition + deltaMs).coerceIn(0L, durationMs)
+        player.seekTo(target)
+        showSeekFeedback(target, durationMs, target - startPosition)
+        setUiIsVisible(true)
+    }
+
     private fun onEnhancementViewCreated(view: EnhancedVideoSurfaceView) {
         if (::enhancementView.isInitialized) return
         enhancementView = view
@@ -922,6 +974,9 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             }
             VideoPlayerAction.AddNote -> openVideoAnnotation()
         }
+        if (tvPresentationEnabled && action != VideoPlayerAction.NavigateBack) {
+            restartControlsAutoHide()
+        }
         syncComposeControlState()
     }
 
@@ -984,6 +1039,16 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tvPresentationEnabled = resolveUiPresentationConfig(this, appSettings).isTv
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (tvPresentationEnabled) {
+                    handleTvBackPressed()
+                } else {
+                    finishAfterTransition()
+                }
+            }
+        })
         devicePerformanceInfo = DevicePerformanceClassifier.classify(this)
         effectivePlaybackConfig = VideoPlaybackPolicy.resolve(appSettings, devicePerformanceInfo)
         installComposeContent()
@@ -1296,6 +1361,34 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     override fun finishAfterTransition() {
         finish()
+    }
+
+    private fun handleTvBackPressed() {
+        if (isScreenLocked) {
+            showLockedUi()
+            return
+        }
+        when {
+            selectionDialogState != null -> selectionDialogState = null
+            subtitleSettingsDialogVisible -> subtitleSettingsDialogVisible = false
+            chapterDialogState != null -> chapterDialogState = null
+            videoAnnotationState != null -> videoAnnotationState = null
+            videoInfoDialogText != null -> videoInfoDialogText = null
+            dlnaDialogState != null -> dlnaDialogState = null
+            superResolutionDialogVisible -> superResolutionDialogVisible = false
+            nativeInitErrorVisible -> finishAfterTransition()
+            actionDialogState != null -> {
+                val onBack = actionDialogState?.onBack
+                if (onBack != null) {
+                    onBack()
+                } else {
+                    actionDialogState = null
+                }
+            }
+            playerUiState == PlayerUiState.ControlsVisible -> setUiIsVisible(false)
+            else -> finishAfterTransition()
+        }
+        syncComposeControlState()
     }
 
     override fun finish() {

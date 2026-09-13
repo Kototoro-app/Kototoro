@@ -92,6 +92,7 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -230,6 +231,7 @@ private fun SourceSummarySegment(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
+                .tvFocusable(shape = RoundedCornerShape(999.dp))
                 .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
                 .padding(3.dp),
             contentAlignment = Alignment.Center,
@@ -238,7 +240,9 @@ private fun SourceSummarySegment(
         }
         Text(
             text = label.ifBlank { fallbackLabel },
-            modifier = Modifier.clickable(onClick = onNameClick),
+            modifier = Modifier
+                .tvFocusable(shape = RoundedCornerShape(999.dp))
+                .clickable(onClick = onNameClick),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasResolvedSource) 1f else 0.68f),
             maxLines = 1,
@@ -1003,4 +1007,3 @@ private fun supportedStatusesForService(service: ScrobblerService): List<Scrobbl
         )
     }
 }
-

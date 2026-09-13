@@ -40,6 +40,7 @@ import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletListPreviewMode
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.prefs.UiPresentationMode
 import org.skepsun.kototoro.core.ui.glass.GlassCustomPreset
 import org.skepsun.kototoro.core.ui.glass.GlassTuningParam
 import org.skepsun.kototoro.core.ui.glass.GlassTuningScope
@@ -57,6 +58,7 @@ data class AppearanceSettingsUiState(
     val appFontPreset: AppFontPreset,
     val expressiveAppFontPreset: AppFontPreset,
     val tabletUiMode: TabletUiMode,
+    val presentationMode: UiPresentationMode = UiPresentationMode.AUTO,
     val appLocale: String,
     val loadingCircleStyle: AppSettings.LoadingCircleStyle,
     val popupRadius: Int,
@@ -123,6 +125,7 @@ data class AppearanceSettingsOptions(
     val fontPresets: List<SettingsChoiceOption<AppFontPreset>>,
     val tabletListPreviewModes: List<SettingsChoiceOption<TabletListPreviewMode>>,
     val tabletUiModes: List<SettingsChoiceOption<TabletUiMode>>,
+    val presentationModes: List<SettingsChoiceOption<UiPresentationMode>> = emptyList(),
     val appLocales: List<SettingsChoiceOption<String>>,
     val loadingCircleStyles: List<SettingsChoiceOption<AppSettings.LoadingCircleStyle>>,
     val popupRadii: List<SettingsChoiceOption<Int>>,
@@ -170,6 +173,7 @@ fun AppearanceSettingsScreen(
     onAppFontPresetChange: (AppFontPreset) -> Unit,
     onExpressiveAppFontPresetChange: (AppFontPreset) -> Unit,
     onTabletUiModeChange: (TabletUiMode) -> Unit,
+    onPresentationModeChange: (UiPresentationMode) -> Unit = {},
     onAppLocaleChange: (String) -> Unit,
     onLoadingCircleStyleChange: (AppSettings.LoadingCircleStyle) -> Unit,
     onPopupRadiusChange: (Int) -> Unit,
@@ -746,6 +750,16 @@ fun AppearanceSettingsScreen(
             SettingsPreferenceGroup(
                 title = stringResource(R.string.appearance_group_interface_components),
             ) {
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.presentation_mode),
+                        iconRes = R.drawable.ic_aspect_ratio,
+                        value = state.presentationMode,
+                        options = options.presentationModes,
+                        summary = stringResource(R.string.presentation_mode_summary),
+                        onValueChange = onPresentationModeChange,
+                    )
+                }
                 item {
                     SettingsChoicePreference(
                         title = stringResource(R.string.tablet_ui_mode),

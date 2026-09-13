@@ -1,7 +1,9 @@
 package org.skepsun.kototoro.home.ui.compose.hero
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,6 +34,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Rect
@@ -67,6 +73,7 @@ import org.skepsun.kototoro.core.prefs.HomeHeroBackground
 import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 import org.skepsun.kototoro.core.prefs.HomeHeroMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
@@ -85,6 +92,7 @@ import org.skepsun.kototoro.home.ui.compose.homeHeroTonalColor
 import org.skepsun.kototoro.home.ui.compose.rememberHomeCoverRequest
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 
 @Composable
 internal fun HomeHeroSection(
@@ -99,6 +107,8 @@ internal fun HomeHeroSection(
 ) {
     if (entries.isEmpty()) return
     val pagerState = rememberPagerState(pageCount = { entries.size })
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val heroFocusRequester = remember { FocusRequester() }
     val selectedIndex by remember(entries, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, entries.lastIndex) }
     }
@@ -116,8 +126,15 @@ internal fun HomeHeroSection(
         pagerState = pagerState,
         pageCount = entries.size,
         intervalMillis = 5200L,
-        enabled = autoAdvance,
+        enabled = autoAdvance && !isTvPresentation,
     )
+    // Recommendation refreshes must not steal focus from another row or the navigation rail.
+    LaunchedEffect(isTvPresentation) {
+        if (isTvPresentation) {
+            withFrameNanos { }
+            runCatching { heroFocusRequester.requestFocus() }
+        }
+    }
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
@@ -223,6 +240,7 @@ internal fun HomeHeroSection(
                             alpha = 0.64f + (0.36f * visualFocus)
                             transformOrigin = TransformOrigin(hOrigin, 0.5f)
                         },
+                    focusRequester = heroFocusRequester.takeIf { page == 0 },
                 )
             }
         }
@@ -245,6 +263,7 @@ private fun HomeHeroCard(
     panoramaPrefs: PanoramaBackdropPrefs,
     indicator: HeroIndicatorState?,
     onClick: (Content, Rect?, String?) -> Unit,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -269,6 +288,8 @@ private fun HomeHeroCard(
             instanceKey = "home_hero_${entry.kind.name.lowercase(Locale.ROOT)}_${entry.groupKey}",
         )
     }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
 
     BoxWithConstraints(
         modifier = modifier
@@ -276,6 +297,22 @@ private fun HomeHeroCard(
             .height(cardHeight)
             .clip(MaterialTheme.shapes.large)
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (isTvPresentation && focusRequester != null) {
+                    Modifier.focusRequester(focusRequester)
+                } else {
+                    Modifier
+                },
+            )
+            .then(if (isTvPresentation) Modifier.focusable() else Modifier)
+            .onFocusChanged { isFocused = it.isFocused }
+            .then(
+                if (isTvPresentation && isFocused) {
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                } else {
+                    Modifier
+                },
+            )
             .clickable { onClick(content, coverBounds, sharedElementKey) },
     ) {
         when (presentation.background) {

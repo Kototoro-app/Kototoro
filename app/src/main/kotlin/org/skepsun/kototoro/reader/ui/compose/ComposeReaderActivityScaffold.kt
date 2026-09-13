@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -68,8 +69,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -121,6 +125,8 @@ import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
 import org.skepsun.kototoro.core.ui.compose.KototoroMotion
 import org.skepsun.kototoro.core.ui.compose.ImmersiveEdgeGradient
 import org.skepsun.kototoro.core.ui.compose.toTransparentImmersiveColor
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -485,6 +491,16 @@ internal fun ComposeReaderActivityScaffold(
     content: @Composable () -> Unit,
 ) {
     var chapterSelectionState by remember { mutableStateOf<ChapterSelectionUiState?>(null) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val defaultFocusRequester = remember { FocusRequester() }
+    val expandedPanelVisible = state.chaptersVisible || state.options.visible ||
+        state.toolsVisible || state.autoScroll.visible
+    LaunchedEffect(isTvPresentation, state.controlsVisible, expandedPanelVisible) {
+        if (isTvPresentation && state.controlsVisible && !expandedPanelVisible) {
+            withFrameNanos { }
+            runCatching { defaultFocusRequester.requestFocus() }
+        }
+    }
     BackHandler { callbacks.onBackPressed() }
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val immersiveBaseColor = if (isSystemInDarkTheme()) Color.Black else Color.White
@@ -560,6 +576,7 @@ internal fun ComposeReaderActivityScaffold(
                 onNavigateBack = callbacks.onNavigateBack,
                 onChapters = callbacks.actions.onPages,
                 onOptions = callbacks.actions.onOptions,
+                defaultFocusRequester = defaultFocusRequester,
             )
         }
 
@@ -1614,7 +1631,9 @@ private fun ReaderComposeTopBar(
     onNavigateBack: () -> Unit,
     onChapters: () -> Unit,
     onOptions: () -> Unit,
+    defaultFocusRequester: FocusRequester? = null,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val contentColor = if (isSystemInDarkTheme()) Color.White else Color.Black
     Box(
         modifier = Modifier
@@ -1628,7 +1647,16 @@ private fun ReaderComposeTopBar(
                 .align(Alignment.CenterStart)
                 .size(48.dp),
         ) {
-            IconButton(onClick = onNavigateBack) {
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = if (isTvPresentation) {
+                    Modifier.then(
+                        defaultFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+                    ).focusable()
+                } else {
+                    Modifier
+                },
+            ) {
                 Icon(
                     painter = painterResource(androidx.appcompat.R.drawable.abc_ic_ab_back_material),
                     contentDescription = stringResource(androidx.appcompat.R.string.abc_action_bar_up_description),
@@ -1640,6 +1668,7 @@ private fun ReaderComposeTopBar(
             ReaderChapterTitleChip(
                 state = state,
                 onChapters = onChapters,
+                focusRequester = defaultFocusRequester.takeIf { isTvPresentation },
                 modifier = Modifier.align(Alignment.Center),
             )
         }
@@ -1649,7 +1678,16 @@ private fun ReaderComposeTopBar(
                 .align(Alignment.CenterEnd)
                 .size(48.dp),
         ) {
-            IconButton(onClick = onOptions) {
+            IconButton(
+                onClick = onOptions,
+                modifier = if (isTvPresentation && state.options.chapterTitleAtBottom) {
+                    Modifier.then(
+                        defaultFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+                    ).focusable()
+                } else {
+                    Modifier
+                },
+            ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = stringResource(R.string.options),
@@ -1669,6 +1707,7 @@ private fun ReaderComposeTopBar(
 private fun ReaderChapterTitleChip(
     state: ComposeReaderChromeState,
     onChapters: () -> Unit,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
     height: Dp = 48.dp,
 ) {
@@ -1681,6 +1720,8 @@ private fun ReaderChapterTitleChip(
             .height(height),
         contentModifier = Modifier
             .clip(chapterControlShape)
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = chapterControlShape, borderWidth = 2.dp)
             .clickable(onClick = onChapters),
     ) {
         Column(

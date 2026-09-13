@@ -15,6 +15,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 
 @Composable
 fun VerticalRailAnimatedVisibility(
@@ -28,7 +29,11 @@ fun VerticalRailAnimatedVisibility(
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
-    if (!isAnimationEnabled || animationFactor <= 0f || !enableScrollLinkedAnimation) {
+    if (LocalUiPresentationConfig.current.isTv ||
+        !isAnimationEnabled ||
+        animationFactor <= 0f ||
+        !enableScrollLinkedAnimation
+    ) {
         content(modifier)
         return
     }

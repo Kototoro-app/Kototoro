@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.main.ui.compose
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +39,8 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.FilterPanelGroup
 import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.search.domain.ALL_SEARCH_CONTENT_KINDS
 import org.skepsun.kototoro.search.domain.ALL_SOURCE_TYPES
@@ -77,7 +82,8 @@ fun SearchFilterSheet(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .navigationBarsPadding(),
+                    .navigationBarsPadding()
+                    .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
             ) {
                 SheetDragHandle(
                     modifier = Modifier
@@ -193,7 +199,9 @@ private fun LanguagePresetSection(
             if (onManagePresets != null) {
                 TextButton(
                     onClick = onManagePresets,
-                    modifier = Modifier.padding(start = 8.dp),
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .tvFocusable(shape = RoundedCornerShape(10.dp), addFocusTarget = false),
                 ) {
                     Text(stringResource(R.string.manage))
                 }
@@ -225,15 +233,23 @@ private fun CompactSearchFilterChip(
     onClick: () -> Unit,
     label: String,
 ) {
-    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 28.dp) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val minimumHeight = if (isTvPresentation) 48.dp else 28.dp
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides minimumHeight) {
         FilterChip(
             selected = selected,
             onClick = onClick,
-            modifier = Modifier.heightIn(min = 28.dp),
+            modifier = Modifier
+                .heightIn(min = minimumHeight)
+                .tvFocusable(shape = RoundedCornerShape(14.dp), addFocusTarget = false),
             label = {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.labelLarge
+                    } else {
+                        MaterialTheme.typography.labelSmall
+                    },
                 )
             },
         )
@@ -249,7 +265,8 @@ private fun SearchOptionSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .heightIn(min = 48.dp)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -262,7 +279,7 @@ private fun SearchOptionSwitchRow(
         )
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
         )
     }
 }

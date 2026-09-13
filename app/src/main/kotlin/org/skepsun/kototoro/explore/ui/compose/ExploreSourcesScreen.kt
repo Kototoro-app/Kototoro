@@ -3,6 +3,7 @@ package org.skepsun.kototoro.explore.ui.compose
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.material.icons.Icons
@@ -13,6 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +42,8 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.parser.external.ExternalContentSource
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
@@ -70,6 +75,15 @@ fun KototoroExploreSourcesScreen(
     var composeSelectionIds: LongSet by remember { mutableStateOf(longSetOf()) }
     val hapticFeedback = LocalHapticFeedback.current
     val isGrid by viewModel.isGrid.collectAsStateWithLifecycle()
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val firstSourceIndex = remember(items) { items.indexOfFirst { it is ContentSourceItem } }
+    val defaultFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTvPresentation, firstSourceIndex, isGrid) {
+        if (isTvPresentation && firstSourceIndex >= 0) {
+            kotlinx.coroutines.yield()
+            runCatching { defaultFocusRequester.requestFocus() }
+        }
+    }
 
     val activity = LocalContext.current as? androidx.activity.ComponentActivity
 
@@ -96,17 +110,19 @@ fun KototoroExploreSourcesScreen(
         LazyVerticalGrid(
             columns = if (isGrid) GridCells.Fixed(4) else GridCells.Adaptive(minSize = 100.dp),
             contentPadding = contentPadding,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
         ) {
-            items(
+            itemsIndexed(
                 items = items,
-                key = { model ->
+                key = { _, model ->
                     when (model) {
                         is ContentSourceItem -> model.id
                         else -> model.hashCode()
                     }
                 },
-                contentType = { model ->
+                contentType = { _, model ->
                     when (model) {
                         is ContentSourceItem -> "source_card"
                         is ListHeader -> "header"
@@ -114,19 +130,20 @@ fun KototoroExploreSourcesScreen(
                         else -> "unknown"
                     }
                 },
-                span = { item ->
+                span = { _, item ->
                     if (item is ListHeader || item is EmptyState) {
                         GridItemSpan(maxLineSpan)
                     } else {
                         GridItemSpan(1)
                     }
                 }
-            ) { listModel ->
+            ) { index, listModel ->
                 when (listModel) {
                     is ListHeader -> {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .tvFocusable(shape = RoundedCornerShape(12.dp))
                                 .combinedClickable(
                                     onClick = {
                                         if (listModel.payload == R.id.nav_suggestions) {
@@ -163,6 +180,16 @@ fun KototoroExploreSourcesScreen(
                             isSelected = isSelected,
                             isGrid = isGrid,
                             modifier = Modifier
+                                .then(
+                                    if (isTvPresentation && index == firstSourceIndex) {
+                                        Modifier.focusRequester(defaultFocusRequester)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .tvFocusable(
+                                    shape = RoundedCornerShape(if (isGrid) 20.dp else 12.dp),
+                                )
                                 .combinedClickable(
                                     onClick = {
                                         if (composeSelectionIds.isNotEmpty()) {

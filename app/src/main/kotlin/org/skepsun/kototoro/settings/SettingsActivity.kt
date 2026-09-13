@@ -75,6 +75,7 @@ import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
+import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -246,7 +247,8 @@ class SettingsActivity :
     lateinit var onnxModelManager: OnnxModelManager
 
     private val isMasterDetails
-        get() = FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
+        get() = resolveUiPresentationConfig(this, kototoroAppSettings).isTv ||
+            FoldableUtils.shouldUseTabletLayout(this, kototoroAppSettings) && if (kototoroAppSettings.tabletUiMode == org.skepsun.kototoro.core.prefs.TabletUiMode.STRICT) {
             resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         } else {
             true

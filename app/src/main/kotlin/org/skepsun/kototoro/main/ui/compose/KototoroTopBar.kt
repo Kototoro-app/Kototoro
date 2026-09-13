@@ -86,6 +86,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillHeight
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -268,7 +269,9 @@ fun KototoroTopBar(
                 TopBarControlSurface {
                     IconButton(
                         onClick = onSearchClick,
-                        modifier = Modifier.size(topBarControlHeight),
+                        modifier = Modifier
+                            .size(topBarControlHeight)
+                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
                     ) {
                         Icon(
                             Icons.Filled.Search,
@@ -363,7 +366,9 @@ fun KototoroTopBar(
                                                 isMoreMenuExpanded = true
                                             }
                                         },
-                                        modifier = Modifier.size(topBarControlHeight),
+                                        modifier = Modifier
+                                            .size(topBarControlHeight)
+                                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
                                     ) {
                                         Box {
                                             Icon(

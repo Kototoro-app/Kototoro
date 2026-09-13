@@ -69,6 +69,7 @@ import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.ui.compose.KototoroLinearProgressIndicator
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.util.ext.copyToClipboard
@@ -474,6 +475,10 @@ fun DetailsHeader(
                                     Modifier
                                 },
                             )
+                            .tvFocusable(
+                                shape = RoundedCornerShape(8.dp),
+                                enabled = canExpandTitle,
+                            )
                             .clickable(enabled = canExpandTitle) {
                                 isTitleExpanded = !isTitleExpanded
                             },
@@ -528,6 +533,7 @@ fun DetailsHeader(
                         items(supplementalActions, key = { it.title + it.url }) { action ->
                             SuggestionChip(
                                 onClick = { onOpenSupplementalAction(action) },
+                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
                                 label = { Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
@@ -700,6 +706,10 @@ fun DetailsHeader(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .tvFocusable(
+                                    shape = RoundedCornerShape(8.dp),
+                                    enabled = canExpandDescription,
+                                )
                                 .clickable(
                                     enabled = canExpandDescription,
                                     role = Role.Button,
@@ -755,7 +765,9 @@ fun DetailsHeader(
                             val isSensitiveTag = isSensitiveDetailsTag(tag)
                             SuggestionChip(
                                 onClick = { onTagClick(tag) },
-                                modifier = Modifier.heightIn(min = 24.dp),
+                                modifier = Modifier
+                                    .heightIn(min = 24.dp)
+                                    .tvFocusable(shape = RoundedCornerShape(8.dp)),
                                 shape = RoundedCornerShape(8.dp),
                                 label = {
                                     Text(
@@ -839,6 +851,7 @@ private fun DetailsViewToggle(
                             Color.Transparent
                         },
                     )
+                    .tvFocusable(shape = RoundedCornerShape(percent = 50))
                     .clickable(role = Role.Tab) { onSelect(value) }
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )

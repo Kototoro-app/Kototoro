@@ -3,6 +3,7 @@ package org.skepsun.kototoro.search.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -70,6 +71,8 @@ import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
@@ -146,7 +149,10 @@ internal fun SearchInputRow(
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onClose) {
+        IconButton(
+            onClick = onClose,
+            modifier = Modifier.tvFocusable(shape = CircleShape),
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.close),
@@ -232,7 +238,8 @@ internal fun SourceListTopActionsRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(tokens.mainTopBarHeight)
-                .padding(horizontal = CompactTopBarHorizontalPadding),
+                .padding(horizontal = CompactTopBarHorizontalPadding)
+                .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
         ) {
@@ -241,7 +248,9 @@ internal fun SourceListTopActionsRow(
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.size(controlSize),
+                    modifier = Modifier
+                        .size(controlSize)
+                        .tvFocusable(shape = CircleShape),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -275,7 +284,9 @@ internal fun SourceListTopActionsRow(
                         activeSpaceId?.let { spaceId ->
                             IconButton(
                                 onClick = onSpaceSwitcherClick,
-                                modifier = Modifier.size(controlSize),
+                                modifier = Modifier
+                                    .size(controlSize)
+                                    .tvFocusable(shape = CircleShape),
                             ) {
                                 SpaceSwitcherIcon(
                                     activeSpaceId = spaceId,
@@ -290,7 +301,12 @@ internal fun SourceListTopActionsRow(
                                 }
                             },
                         ) {
-                            IconButton(onClick = onFilterClick, modifier = Modifier.size(controlSize)) {
+                            IconButton(
+                                onClick = onFilterClick,
+                                modifier = Modifier
+                                    .size(controlSize)
+                                    .tvFocusable(shape = CircleShape),
+                            ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_filter_menu),
                                     contentDescription = currentSortLabel,
@@ -300,7 +316,12 @@ internal fun SourceListTopActionsRow(
                             }
                         }
 
-                        IconButton(onClick = onSearchClick, modifier = Modifier.size(controlSize)) {
+                        IconButton(
+                            onClick = onSearchClick,
+                            modifier = Modifier
+                                .size(controlSize)
+                                .tvFocusable(shape = CircleShape),
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = stringResource(R.string.search),
@@ -312,7 +333,9 @@ internal fun SourceListTopActionsRow(
                             IconButton(
                                 onClick = onRandomClick,
                                 enabled = !isRandomLoading,
-                                modifier = Modifier.size(controlSize),
+                                modifier = Modifier
+                                    .size(controlSize)
+                                    .tvFocusable(enabled = !isRandomLoading, shape = CircleShape),
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_dice),
@@ -325,7 +348,9 @@ internal fun SourceListTopActionsRow(
                         if (showDisplayDirect) {
                             IconButton(
                                 onClick = onShowDisplayOptionsSheet,
-                                modifier = Modifier.size(controlSize),
+                                modifier = Modifier
+                                    .size(controlSize)
+                                    .tvFocusable(shape = CircleShape),
                             ) {
                                 Icon(
                                     painter = painterResource(listMode.iconRes()),
@@ -336,7 +361,12 @@ internal fun SourceListTopActionsRow(
                         }
 
                         if (showSettingsDirect) {
-                            IconButton(onClick = onSettingsClick, modifier = Modifier.size(controlSize)) {
+                            IconButton(
+                                onClick = onSettingsClick,
+                                modifier = Modifier
+                                    .size(controlSize)
+                                    .tvFocusable(shape = CircleShape),
+                            ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_settings),
                                     contentDescription = stringResource(R.string.settings),
@@ -389,7 +419,12 @@ private fun MoreActionsButton(
     Box(
         modifier = Modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() },
     ) {
-        IconButton(onClick = { expanded = true }, modifier = Modifier.size(tokens.topBarButtonSize)) {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier
+                .size(tokens.topBarButtonSize)
+                .tvFocusable(shape = CircleShape),
+        ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(R.string.more),

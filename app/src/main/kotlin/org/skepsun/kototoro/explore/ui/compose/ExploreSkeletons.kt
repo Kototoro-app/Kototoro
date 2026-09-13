@@ -38,6 +38,7 @@ import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.logHeroTransition
 import org.skepsun.kototoro.core.ui.compose.sharedCoverMemoryCacheKey
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 
@@ -79,6 +80,10 @@ internal fun TrackingCompactPoster(
         modifier = modifier
             .width(posterStyle.itemWidth)
             .height(posterStyle.posterHeight + 32.dp)
+            .tvFocusable(
+                shape = RoundedCornerShape(posterStyle.cornerRadius),
+                borderWidth = 3.dp,
+            )
             .clickable(
                 onClick = {
                     logHeroTransition("explore_tracking_click title=${item.title} sharedKey=$sharedElementKey")
@@ -265,4 +270,3 @@ private fun ExploreSkeletonBlock(
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)),
     )
 }
-

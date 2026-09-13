@@ -8,6 +8,13 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.core.content.ContextCompat
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
@@ -15,6 +22,9 @@ import kotlinx.coroutines.flow.flowOf
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.nav.AppRouter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.PresentationModeExitButton
+import org.skepsun.kototoro.core.ui.adaptive.rememberUiPresentationConfig
 import org.skepsun.kototoro.core.ui.util.SystemUiController
 import org.skepsun.kototoro.main.ui.protect.ScreenshotPolicyHelper
 
@@ -67,6 +77,26 @@ abstract class BaseComposeFullscreenActivity :
     override fun onNewIntent(intent: Intent) {
         putDataToExtras(intent)
         super.onNewIntent(intent)
+    }
+
+    /**
+     * Installs a fullscreen Compose root with the same presentation config as
+     * regular activities. The caller remains responsible for its own theme and
+     * media surface, while the escape hatch is kept above that content.
+     */
+    protected fun setFullscreenComposeContent(content: @Composable () -> Unit) {
+        setContent {
+            val presentationConfig = rememberUiPresentationConfig(entryPoint.settings)
+            CompositionLocalProvider(LocalUiPresentationConfig provides presentationConfig) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    content()
+                    PresentationModeExitButton(
+                        settings = entryPoint.settings,
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
+                }
+            }
+        }
     }
 
     override fun isNsfwContent(): Flow<Boolean> = flowOf(false)

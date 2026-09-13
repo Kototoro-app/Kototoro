@@ -3,6 +3,7 @@ package org.skepsun.kototoro.explore.ui.compose
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -55,6 +56,8 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolvedIcon
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.discover.ui.compose.DiscoverHeroCarousel
 import org.skepsun.kototoro.discover.ui.compose.discoverHeroHeight
@@ -138,8 +141,11 @@ private fun SourcesQuickAccessSection(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
@@ -166,6 +172,7 @@ private fun SourcesQuickAccessSection(
             }
             TextButton(
                 onClick = onManageClick,
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             ) {
                 Text(
@@ -254,12 +261,16 @@ private fun SourceQuickAccessGrid(
 ) {
     val rows = remember(sources, columns) { sources.chunked(columns) }
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
         verticalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
     ) {
         rows.forEach { rowSources ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (LocalUiPresentationConfig.current.isTv) Modifier.focusGroup() else Modifier),
                 horizontalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
             ) {
                 rowSources.forEach { source ->
@@ -571,7 +582,8 @@ private fun SourceQuickAccessCard(
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
-                ),
+                )
+                .tvFocusable(shape = cardShape, borderWidth = 3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top,
         ) {
@@ -641,6 +653,7 @@ private fun SourceQuickAccessCard(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
+                .tvFocusable(shape = cardShape, borderWidth = 2.dp)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -738,4 +751,3 @@ private fun SourceAvailabilityBadge(
         )
     }
 }
-

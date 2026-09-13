@@ -1,6 +1,9 @@
 package org.skepsun.kototoro.home.ui.compose.sections
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -16,8 +19,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -30,6 +38,7 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -53,9 +62,11 @@ internal fun QuickActionsSection(
     modifier: Modifier = Modifier,
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Column(
         modifier = modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
@@ -118,6 +129,8 @@ private fun QuickAccessButton(
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
     val containerColor = when {
         !expressive -> MaterialTheme.colorScheme.surfaceContainerLow
         paletteIndex % 3 == 0 -> MaterialTheme.colorScheme.secondaryContainer
@@ -151,6 +164,15 @@ private fun QuickAccessButton(
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(enabled = action.enabled, onClick = action.onClick)
+                .then(if (isTvPresentation) Modifier.focusable(action.enabled) else Modifier)
+                .onFocusChanged { isFocused = it.isFocused }
+                .then(
+                    if (isTvPresentation && isFocused) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -211,4 +233,3 @@ private fun HomeQuickActionIcon(
         tint = tint,
     )
 }
-

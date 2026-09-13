@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.home.ui.compose.sections
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -20,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
@@ -52,6 +57,7 @@ import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -114,6 +120,7 @@ internal fun HomeContentRowSection(
     if (items.isEmpty()) return
     val listMode = railStyle.listMode
     val posterStyle = railStyle.posterStyle
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val railPages = remember(items, listMode, railStyle.railRowsPerPage) {
@@ -188,6 +195,7 @@ internal fun HomeContentRowSection(
                     flingBehavior = rememberSnapFlingBehavior(rowState),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                         .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                     contentPadding = PaddingValues(
@@ -245,6 +253,7 @@ internal fun HomeContentRowSection(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                             .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                         horizontalArrangement = Arrangement.spacedBy(rowSpacing),
                         contentPadding = horizontalPadding,
@@ -334,6 +343,8 @@ private fun HomeListRailRowItem(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
     val cardUiPrefs = rememberContentCardUiPrefs(
         remember(context.applicationContext) { AppSettings(context.applicationContext) },
     )
@@ -375,6 +386,15 @@ private fun HomeListRailRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (isTvPresentation) Modifier.focusable() else Modifier)
+            .onFocusChanged { isFocused = it.isFocused }
+            .then(
+                if (isTvPresentation && isFocused) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                } else {
+                    Modifier
+                },
+            )
             .clickable { onClick(content, coverBounds.currentBounds(), sharedElementKey) },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,

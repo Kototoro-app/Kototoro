@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import kotlin.math.abs
 
 val LocalRailAnimationFactor = staticCompositionLocalOf<Float?> { null }
@@ -76,6 +77,7 @@ fun rememberHorizontalRailScrollIntensity(
 
 @Composable
 fun rememberRailAnimationFactor(settings: AppSettings? = null): Float {
+    if (LocalUiPresentationConfig.current.isTv) return 0f
     LocalRailAnimationFactor.current?.let { return it }
     val context = LocalContext.current
     val fallbackSettings = remember(context.applicationContext) { AppSettings(context.applicationContext) }

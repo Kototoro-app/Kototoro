@@ -37,6 +37,14 @@ class ReaderControlDelegate(
     }
 
     fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (shouldDelegateReaderKeyToTvControls(
+                isTvPresentation = listener.isTvPresentation,
+                controlsVisible = listener.isReaderControlsVisible,
+                keyCode = keyCode,
+            )
+        ) {
+            return false
+        }
         when (keyCode) {
             KeyEvent.KEYCODE_NAVIGATE_NEXT,
             KeyEvent.KEYCODE_SPACE -> switchBy(1, event, false)
@@ -68,6 +76,14 @@ class ReaderControlDelegate(
             KeyEvent.KEYCODE_DPAD_LEFT -> switchByRelative(if (settings.isReaderNavigationInverted) 1 else -1, event)
 
             KeyEvent.KEYCODE_DPAD_CENTER -> listener.toggleUiVisibility()
+
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER,
+            -> if (listener.isTvPresentation) {
+                listener.toggleUiVisibility()
+            } else {
+                return false
+            }
 
             KeyEvent.KEYCODE_SYSTEM_NAVIGATION_UP,
             KeyEvent.KEYCODE_DPAD_UP -> switchBy(if (settings.isReaderNavigationInverted) 1 else -1, event, true)
@@ -120,6 +136,14 @@ class ReaderControlDelegate(
 
         val readerMode: ReaderMode?
 
+        /** True when the current Activity is using the TV presentation. */
+        val isTvPresentation: Boolean
+            get() = false
+
+        /** Visible reader controls own directional and confirm keys in TV mode. */
+        val isReaderControlsVisible: Boolean
+            get() = false
+
         fun switchPageBy(delta: Int)
 
         fun switchPageTo(index: Int)
@@ -153,5 +177,24 @@ class ReaderControlDelegate(
         fun onPagesButtonLongClick(): Boolean = false
 
         fun isReaderResumed(): Boolean
+    }
+}
+
+internal fun shouldDelegateReaderKeyToTvControls(
+    isTvPresentation: Boolean,
+    controlsVisible: Boolean,
+    keyCode: Int,
+): Boolean {
+    if (!isTvPresentation || !controlsVisible) return false
+    return when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP,
+        KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_DPAD_RIGHT,
+        KeyEvent.KEYCODE_DPAD_CENTER,
+        KeyEvent.KEYCODE_ENTER,
+        KeyEvent.KEYCODE_NUMPAD_ENTER,
+        -> true
+        else -> false
     }
 }

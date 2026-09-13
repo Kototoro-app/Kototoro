@@ -2,6 +2,7 @@ package org.skepsun.kototoro.settings.compose
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -32,9 +33,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -44,6 +53,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -121,6 +132,17 @@ fun SettingsRootScreen(
     horizontalPadding: Dp = SettingsContentHorizontalPadding,
     applyHorizontalDisplayCutoutPadding: Boolean = true,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val firstFocusRequester = remember { FocusRequester() }
+    var hasRequestedInitialFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(isTvPresentation, searchQuery.isBlank(), sections.size, searchResults.size) {
+        if (isTvPresentation && searchQuery.isBlank() && !hasRequestedInitialFocus) {
+            withFrameNanos { }
+            if (firstFocusRequester.requestFocus()) {
+                hasRequestedInitialFocus = true
+            }
+        }
+    }
     Surface(
         modifier = modifier.fillMaxSize(),
         color = settingsScreenBackgroundColor(),
@@ -144,7 +166,9 @@ fun SettingsRootScreen(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             contentPadding = PaddingValues(
                 start = displayCutoutStart + horizontalPadding,
                 end = displayCutoutEnd + horizontalPadding,
@@ -156,14 +180,19 @@ fun SettingsRootScreen(
             ),
         ) {
             if (searchQuery.isBlank()) {
-                items(sections, key = { it.title }, contentType = { "settings_section" }) { section ->
-                    SettingsSectionCard(section = section)
+                itemsIndexed(sections, key = { _, section -> section.title }, contentType = { _, _ -> "settings_section" }) {
+                    sectionIndex, section ->
+                    SettingsSectionCard(
+                        section = section,
+                        firstFocusRequester = firstFocusRequester.takeIf { isTvPresentation && sectionIndex == 0 },
+                    )
                 }
             } else {
                 item(key = "search_results") {
                     SettingsSearchResultsCard(
                         results = searchResults,
                         onItemClick = onSearchResultClick,
+                        firstFocusRequester = firstFocusRequester.takeIf { isTvPresentation },
                     )
                 }
             }
@@ -174,6 +203,7 @@ fun SettingsRootScreen(
 @Composable
 private fun SettingsSectionCard(
     section: SettingsRootSection,
+    firstFocusRequester: FocusRequester? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -190,7 +220,10 @@ private fun SettingsSectionCard(
             )
         }
         SettingsItemGroup(itemCount = section.items.size) { index ->
-            SettingsRootRow(item = section.items[index])
+            SettingsRootRow(
+                item = section.items[index],
+                focusRequester = firstFocusRequester.takeIf { index == 0 },
+            )
         }
     }
 }
@@ -199,6 +232,7 @@ private fun SettingsSectionCard(
 private fun SettingsSearchResultsCard(
     results: List<SettingsItem>,
     onItemClick: (SettingsItem) -> Unit,
+    firstFocusRequester: FocusRequester? = null,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -216,6 +250,7 @@ private fun SettingsSearchResultsCard(
                 SettingsSearchResultRow(
                     item = item,
                     onClick = { onItemClick(item) },
+                    focusRequester = firstFocusRequester.takeIf { index == 0 },
                 )
             }
         }
@@ -226,12 +261,15 @@ private fun SettingsSearchResultsCard(
 private fun SettingsSearchResultRow(
     item: SettingsItem,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = RoundedCornerShape(12.dp))
             .heightIn(min = tokens.settingsItemMinHeight)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -268,6 +306,7 @@ private fun SettingsSearchResultRow(
 @Composable
 private fun SettingsRootRow(
     item: SettingsRootItem,
+    focusRequester: FocusRequester? = null,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
@@ -275,6 +314,8 @@ private fun SettingsRootRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = item.onClick)
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = RoundedCornerShape(12.dp))
             .heightIn(min = tokens.settingsItemMinHeight)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

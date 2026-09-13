@@ -89,6 +89,7 @@ import org.skepsun.kototoro.core.model.appUrl
 import org.skepsun.kototoro.core.model.getLocalizedTitle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -417,6 +418,7 @@ private fun DetailsScreenContent(
     }
     val isShortcutSupported = remember(context) { ShortcutManagerCompat.isRequestPinShortcutSupported(context) }
     val configuration = LocalConfiguration.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val scrollState = rememberScrollState()
     val landscapeLeftScrollState = rememberScrollState()
     LaunchedEffect(activeSpaceId) {
@@ -436,8 +438,14 @@ private fun DetailsScreenContent(
         resolveAvailableDetailsTabIds(contentType, settings)
     }
     val tabletUiMode by settings.observeAsState(AppSettings.KEY_TABLET_UI_MODE) { tabletUiMode }
-    val isWideAdaptiveLayout = remember(context, configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
-        FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
+    val isWideAdaptiveLayout = remember(
+        context,
+        configuration.orientation,
+        configuration.screenWidthDp,
+        tabletUiMode,
+        isTvPresentation,
+    ) {
+        isTvPresentation || FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
     }
     val isModernDetailsDockEnabled by settings.observeAsState(AppSettings.KEY_MODERN_DETAILS_DOCK) {
         isModernDetailsDockEnabled
@@ -1885,5 +1893,4 @@ private fun DetailsScreenContent(
         }
     }
 }
-
 

@@ -49,6 +49,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -78,6 +82,8 @@ import androidx.compose.foundation.layout.Arrangement
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedContentSource
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
@@ -203,6 +209,8 @@ fun KototoroContentCard(
     sharedElementInstanceKey: String? = null,
     cardStyle: CompactPosterCardStyle? = null,
     uiPrefs: ContentCardUiPrefs? = null,
+    focusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -216,6 +224,8 @@ fun KototoroContentCard(
                 sharedTransitionEnabled = sharedTransitionEnabled,
                 sharedElementInstanceKey = sharedElementInstanceKey,
                 uiPrefs = uiPrefs,
+                focusRequester = focusRequester,
+                onFocused = onFocused,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 modifier = modifier
@@ -228,6 +238,8 @@ fun KototoroContentCard(
                 sharedTransitionEnabled = sharedTransitionEnabled,
                 sharedElementInstanceKey = sharedElementInstanceKey,
                 uiPrefs = uiPrefs,
+                focusRequester = focusRequester,
+                onFocused = onFocused,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 modifier = modifier
@@ -243,6 +255,8 @@ fun KototoroContentCard(
                 sharedElementInstanceKey = sharedElementInstanceKey,
                 cardStyle = cardStyle,
                 uiPrefs = uiPrefs,
+                focusRequester = focusRequester,
+                onFocused = onFocused,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 modifier = modifier
@@ -265,6 +279,8 @@ fun KototoroContentCardGrid(
     compactOverlay: Boolean = false,
     cellContentPadding: PaddingValues = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
     uiPrefs: ContentCardUiPrefs? = null,
+    focusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -311,6 +327,7 @@ fun KototoroContentCardGrid(
 
     val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
     val cardRadius = posterStyle.cornerRadius
+    val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
 
     Column(
         modifier = modifier
@@ -330,6 +347,7 @@ fun KototoroContentCardGrid(
                     Modifier
                 },
             )
+            .then(tvFocusModifier)
             .combinedClickable(
                 onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
@@ -659,6 +677,8 @@ fun KototoroContentCardList(
     sharedTransitionEnabled: Boolean = true,
     sharedElementInstanceKey: String? = null,
     uiPrefs: ContentCardUiPrefs? = null,
+    focusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -703,6 +723,7 @@ fun KototoroContentCardList(
         }
     }
     val cardShape = RoundedCornerShape(16.dp)
+    val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -721,6 +742,7 @@ fun KototoroContentCardList(
                     Modifier
                 },
             )
+            .then(tvFocusModifier)
             .combinedClickable(
                 onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
@@ -1093,6 +1115,8 @@ fun KototoroContentCardDetailedList(
     sharedTransitionEnabled: Boolean = true,
     sharedElementInstanceKey: String? = null,
     uiPrefs: ContentCardUiPrefs? = null,
+    focusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null,
     onClick: (Rect?) -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1137,6 +1161,7 @@ fun KototoroContentCardDetailedList(
         }
     }
     val cardShape = RoundedCornerShape(16.dp)
+    val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -1155,6 +1180,7 @@ fun KototoroContentCardDetailedList(
                     Modifier
                 },
             )
+            .then(tvFocusModifier)
             .combinedClickable(
                 onClick = { onClick(coverBounds.currentBounds()) },
                 onLongClick = onLongClick,
@@ -1401,6 +1427,21 @@ private fun BoxScope.ContentCardCoverImage(
 
 internal fun shouldRetainContentCoverSnapshot(sharedTransitionEnabled: Boolean): Boolean =
     sharedTransitionEnabled
+
+@Composable
+private fun rememberTvContentCardFocusModifier(
+    shape: Shape,
+    focusRequester: FocusRequester?,
+    onFocused: (() -> Unit)?,
+): Modifier {
+    if (!LocalUiPresentationConfig.current.isTv) {
+        return Modifier
+    }
+    return Modifier
+        .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+        .tvFocusable(shape = shape, borderWidth = 3.dp, addFocusTarget = false)
+        .onFocusChanged { if (it.isFocused) onFocused?.invoke() }
+}
 
 @Composable
 private fun rememberContentCoverRequest(

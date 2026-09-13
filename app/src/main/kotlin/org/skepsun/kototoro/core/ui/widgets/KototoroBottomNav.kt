@@ -68,6 +68,7 @@ import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
@@ -187,8 +188,14 @@ fun KototoroBottomNav(
         .filter { navState.itemVisibility[it.id] != false }
         .limitMainNavigationItems()
     val showSelectedLabels = navState.showLabels
-    val useNavigationRail = remember(configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
-        FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val useNavigationRail = remember(
+        configuration.orientation,
+        configuration.screenWidthDp,
+        tabletUiMode,
+        isTvPresentation,
+    ) {
+        isTvPresentation || FoldableUtils.shouldUseTabletLayout(context, appSettings, configuration)
     }
     val systemBarsPadding = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
     val statusBarTopPadding = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
@@ -1626,7 +1633,7 @@ private fun AnimatedNavigationIcon(
     }
 }
 
-private fun premiumIconResId(itemId: Int, isSelected: Boolean): Int {
+internal fun premiumIconResId(itemId: Int, isSelected: Boolean): Int {
     return when (itemId) {
         R.id.nav_home -> if (isSelected) R.drawable.ic_home_filled else R.drawable.ic_home
         R.id.nav_history -> R.drawable.ic_history

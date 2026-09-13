@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -50,13 +51,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
@@ -93,6 +98,8 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.LocalRootGlassMenuHost
@@ -259,6 +266,7 @@ internal fun BoxScope.SpaceSidekickHandle(
                 onClickLabel = description,
                 onClick = onOpen,
             )
+            .tvFocusable(shape = shape, enabled = state.switcherEnabled)
             .semantics { contentDescription = description },
         contentAlignment = if (isLeft) Alignment.CenterStart else Alignment.CenterEnd,
     ) {
@@ -308,6 +316,17 @@ private fun SpaceSidekickPanel(
     isLeft: Boolean,
 ) {
     var horizontalDragOffset by remember(isLeft) { mutableFloatStateOf(0f) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val defaultFocusRequester = remember { FocusRequester() }
+    val defaultFocusIndex = remember(state.spaces, state.activeSpaceId) {
+        state.spaces.indexOfFirst { it.id == state.activeSpaceId }.takeIf { it >= 0 } ?: 0
+    }
+    LaunchedEffect(isTvPresentation, state.switcherVisible, defaultFocusIndex) {
+        if (isTvPresentation && state.switcherVisible) {
+            withFrameNanos { }
+            runCatching { defaultFocusRequester.requestFocus() }
+        }
+    }
     val dismissThreshold = with(LocalDensity.current) { 72.dp.toPx() }
     val shape = if (isLeft) {
         RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
@@ -399,10 +418,11 @@ private fun SpaceSidekickPanel(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
+                    .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                     .selectableGroup(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
             ) {
-                state.spaces.forEach { context ->
+                state.spaces.forEachIndexed { index, context ->
                     item(key = context.id.value) {
                         val selected = context.id == state.activeSpaceId
                         val resumeItem = resumeItems[context.id]
@@ -462,6 +482,7 @@ private fun SpaceSidekickPanel(
                                     resumeItem = resumeItem,
                                     onResume = { onResume(context.id) },
                                     onClick = { onAction(SpaceAction.SelectSpace(context.id)) },
+                                    focusRequester = defaultFocusRequester.takeIf { index == defaultFocusIndex },
                                 )
                             }
                         }
@@ -490,12 +511,15 @@ private fun SpaceSidekickCardContent(
     resumeItem: SpaceResumeItem?,
     onResume: () -> Unit,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
 ) {
     val presentation = context.presentation()
     val hapticFeedback = LocalHapticFeedback.current
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .tvFocusable(shape = RoundedCornerShape(20.dp), enabled = enabled)
             .selectable(
                 selected = selected,
                 enabled = enabled,
@@ -642,6 +666,7 @@ fun SpaceSwitcherFab(
             role = Role.Button,
             onClick = onClick,
         )
+        .tvFocusable(shape = fabShape)
         .semantics { contentDescription = description }
     val content: @Composable BoxScope.() -> Unit = {
         Box(
@@ -694,7 +719,9 @@ fun SpaceSwitcherRailButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(48.dp),
+        modifier = modifier
+            .size(48.dp)
+            .tvFocusable(shape = CircleShape),
     ) {
         SpaceSwitcherIcon(activeSpaceId = activeSpaceId, activeSpace = activeSpace)
     }
@@ -840,6 +867,7 @@ private fun SpaceRow(
                 },
                 role = Role.RadioButton,
             )
+            .tvFocusable(shape = RoundedCornerShape(12.dp), enabled = enabled)
             .padding(
                 horizontal = if (compactMenu) 12.dp else 24.dp,
                 vertical = if (compactMenu) 6.dp else 12.dp,

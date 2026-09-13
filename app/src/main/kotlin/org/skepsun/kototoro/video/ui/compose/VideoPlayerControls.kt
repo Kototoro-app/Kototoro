@@ -4,9 +4,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,17 +44,28 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
@@ -61,8 +76,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import kotlin.math.roundToInt
 
@@ -115,6 +133,14 @@ fun VideoPlayerControls(
     onInteractionEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val primaryFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(isTvPresentation, state.controlsVisible, state.isScreenLocked) {
+        if (isTvPresentation && state.controlsVisible && !state.isScreenLocked) {
+            withFrameNanos { }
+            runCatching { primaryFocusRequester.requestFocus() }
+        }
+    }
     AnimatedVisibility(
         visible = state.controlsVisible && !state.isScreenLocked,
         enter = fadeIn(),
@@ -122,16 +148,23 @@ fun VideoPlayerControls(
         modifier = modifier,
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            VideoPlayerTopControls(state = state, onAction = onAction)
+            VideoPlayerTopControls(
+                state = state,
+                onAction = onAction,
+                primaryFocusRequester = primaryFocusRequester,
+            )
             Spacer(modifier = Modifier.weight(1f))
             VideoPlayerBottomControls(
                 state = state,
                 onAction = onAction,
                 onInteractionStart = onInteractionStart,
                 onInteractionEnd = onInteractionEnd,
+                primaryFocusRequester = primaryFocusRequester,
             )
         }
     }
@@ -141,6 +174,7 @@ fun VideoPlayerControls(
 fun VideoPlayerTopControls(
     state: VideoPlayerControlState,
     onAction: (VideoPlayerAction) -> Unit,
+    primaryFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     var moreAnchorBounds by remember { mutableStateOf(IntRect.Zero) }
@@ -219,6 +253,7 @@ fun VideoPlayerBottomControls(
     onAction: (VideoPlayerAction) -> Unit,
     onInteractionStart: () -> Unit = {},
     onInteractionEnd: () -> Unit = {},
+    primaryFocusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalInterfaceStyleTokens.current
@@ -270,15 +305,14 @@ fun VideoPlayerBottomControls(
                     },
                     contentDescription = if (state.isPlaying) "Pause" else "Play",
                     onClick = { onAction(VideoPlayerAction.TogglePlayback) },
+                    focusRequester = primaryFocusRequester,
                 )
-                KototoroSlider(
-                    value = progress.coerceIn(0f, 1f),
-                    onValueChange = { onAction(VideoPlayerAction.SeekTo((it * state.durationMs).toLong())) },
-                    modifier = Modifier.weight(1f).padding(start = 8.dp),
-                    enabled = state.canSeek,
+                PlayerSeekSlider(
+                    state = state,
+                    progress = progress,
+                    onAction = onAction,
                     colors = sliderColors,
-                    compactThumb = true,
-                    trackHeight = 2.dp,
+                    modifier = Modifier.weight(1f).padding(start = 8.dp),
                 )
                 Text(
                     text = formatDuration(state.positionMs),
@@ -387,14 +421,84 @@ private fun PlayerIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
+    val focusModifier = if (isTvPresentation) {
+        Modifier
+            .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+            .onFocusChanged { isFocused = it.isFocused }
+            .then(
+                if (isFocused) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                } else {
+                    Modifier
+                },
+            )
+    } else {
+        Modifier
+    }
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(36.dp).semantics { this.contentDescription = contentDescription },
+        modifier = modifier
+            .size(if (isTvPresentation) 48.dp else 36.dp)
+            .then(focusModifier)
+            .semantics { this.contentDescription = contentDescription },
         content = icon,
     )
+}
+
+@Composable
+private fun PlayerSeekSlider(
+    state: VideoPlayerControlState,
+    progress: Float,
+    onAction: (VideoPlayerAction) -> Unit,
+    colors: androidx.compose.material3.SliderColors,
+    modifier: Modifier = Modifier,
+) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
+    val focusShape = RoundedCornerShape(8.dp)
+    Box(
+        modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (!isTvPresentation || !state.canSeek || event.type != KeyEventType.KeyDown) {
+                    return@onKeyEvent false
+                }
+                val step = 10_000L
+                val target = when (event.key) {
+                    Key.DirectionLeft -> (state.positionMs - step).coerceAtLeast(0L)
+                    Key.DirectionRight -> (state.positionMs + step).coerceAtMost(state.durationMs)
+                    else -> return@onKeyEvent false
+                }
+                onAction(VideoPlayerAction.SeekTo(target))
+                true
+            }
+            .then(if (isTvPresentation) Modifier.focusable(state.canSeek) else Modifier)
+            .then(
+                if (isTvPresentation && isFocused) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, focusShape)
+                } else {
+                    Modifier
+                },
+            ),
+    ) {
+        KototoroSlider(
+            value = progress.coerceIn(0f, 1f),
+            onValueChange = { onAction(VideoPlayerAction.SeekTo((it * state.durationMs).toLong())) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusProperties { canFocus = !isTvPresentation },
+            enabled = state.canSeek,
+            colors = colors,
+            compactThumb = true,
+            trackHeight = 2.dp,
+        )
+    }
 }
 
 private fun Modifier.keepVisibleDuringTouch(
@@ -421,11 +525,22 @@ private fun PlayerChapterButton(
     modifier: Modifier = Modifier,
 ) {
     val label = groupLabel?.takeIf(String::isNotBlank)
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
+    val focusShape = RoundedCornerShape(10.dp)
     TextButton(
         onClick = onClick,
         modifier = modifier
-            .height(40.dp)
+            .height(if (isTvPresentation) 48.dp else 40.dp)
             .widthIn(max = 120.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .then(
+                if (isTvPresentation && isFocused) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, focusShape)
+                } else {
+                    Modifier
+                },
+            )
             .semantics {
                 contentDescription = if (label == null) "Chapters" else "Chapters, $label"
             },
@@ -467,9 +582,21 @@ private fun PlayerTextButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    var isFocused by remember { mutableStateOf(false) }
+    val focusShape = RoundedCornerShape(10.dp)
     TextButton(
         onClick = onClick,
-        modifier = modifier.height(40.dp),
+        modifier = modifier
+            .height(if (isTvPresentation) 48.dp else 40.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .then(
+                if (isTvPresentation && isFocused) {
+                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, focusShape)
+                } else {
+                    Modifier
+                },
+            ),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
     ) {
         Text(text = text, color = PlayerControlsForeground, style = MaterialTheme.typography.labelLarge)

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.details.ui.pager.chapters.compose
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +42,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
@@ -75,8 +80,16 @@ fun ChaptersScreen(
 ) {
     val context = LocalContext.current
     val hapticFeedback = LocalHapticFeedback.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+    val focusTargetIndex = remember(items, initialChapterId) {
+        val requestedIndex = initialChapterId?.let { chapterId ->
+            items.indexOfFirst { item -> item is ChapterListItem && item.chapter.id == chapterId }
+        } ?: -1
+        requestedIndex.takeIf { it >= 0 } ?: items.indexOfFirst { it is ChapterListItem }
+    }
+    val defaultFocusRequester = remember { FocusRequester() }
     val itemPositionKeys = remember(items, context) {
         items.map { item ->
             when (item) {
@@ -106,6 +119,12 @@ fun ChaptersScreen(
             listState.scrollToItem(index)
         }
     }
+    LaunchedEffect(isTvPresentation, focusTargetIndex, isGridView, isScrollEnabled) {
+        if (isTvPresentation && isScrollEnabled && focusTargetIndex >= 0) {
+            kotlinx.coroutines.yield()
+            runCatching { defaultFocusRequester.requestFocus() }
+        }
+    }
     val paneNestedScrollConnection = rememberDetailsPaneNestedScrollConnection(
         state = detailsPaneState,
         canChildScrollBackward = {
@@ -127,7 +146,9 @@ fun ChaptersScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             if (filterChips.isNotEmpty()) {
                 LazyRow(
-                    modifier = dragModifier.fillMaxWidth(),
+                    modifier = dragModifier
+                        .fillMaxWidth()
+                        .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -141,6 +162,7 @@ fun ChaptersScreen(
                         FilterChip(
                             selected = chip.isChecked,
                             onClick = { onFilterChipClick(chip) },
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
                             label = {
                                 Text(
                                     buildString {
@@ -196,7 +218,9 @@ fun ChaptersScreen(
                             verticalArrangement = Arrangement.spacedBy(gridSpacing),
                             horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                             userScrollEnabled = isScrollEnabled,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
                         ) {
                         items(
                             count = items.size,
@@ -221,6 +245,7 @@ fun ChaptersScreen(
                                     ChapterGridCard(
                                         item = item,
                                         isSelected = selectedItemIds.contains(item.chapter.id),
+                                        focusRequester = defaultFocusRequester.takeIf { index == focusTargetIndex },
                                         onClick = {
                                             if (selectedItemIds.isNotEmpty()) {
                                                 hapticFeedback.performSelectionHapticFeedback()
@@ -255,6 +280,7 @@ fun ChaptersScreen(
                         userScrollEnabled = isScrollEnabled,
                         modifier = Modifier
                             .fillMaxSize()
+                            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
                             .then(paneNestedScrollModifier),
                     ) {
                         items(
@@ -273,6 +299,7 @@ fun ChaptersScreen(
                                     ChapterListCard(
                                         item = item,
                                         isSelected = selectedItemIds.contains(item.chapter.id),
+                                        focusRequester = defaultFocusRequester.takeIf { index == focusTargetIndex },
                                         onClick = {
                                             if (selectedItemIds.isNotEmpty()) {
                                                 hapticFeedback.performSelectionHapticFeedback()
@@ -331,6 +358,10 @@ private fun ChapterHeaderUI(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .tvFocusable(
+                shape = RoundedCornerShape(8.dp),
+                enabled = isCollapsible,
+            )
             .clickable(enabled = isCollapsible, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

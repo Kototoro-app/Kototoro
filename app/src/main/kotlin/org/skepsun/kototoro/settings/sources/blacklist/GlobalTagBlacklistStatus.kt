@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @Composable
 fun GlobalTagBlacklistStatus(
@@ -97,7 +98,9 @@ fun GlobalTagBlacklistStatus(
             }
             TextButton(
                 onClick = onClick,
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .tvFocusable(shape = RoundedCornerShape(10.dp)),
             ) {
                 Text(stringResource(R.string.manage))
             }

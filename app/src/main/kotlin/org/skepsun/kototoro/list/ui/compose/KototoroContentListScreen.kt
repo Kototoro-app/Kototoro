@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.paging.LoadState
@@ -44,11 +45,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.layout
@@ -77,6 +81,8 @@ import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
 import org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.compactPosterCardStyle
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.resolveSourceTitleForUi
 import org.skepsun.kototoro.core.ui.compose.ScrollToTopEffect
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -264,6 +270,31 @@ fun KototoroContentListScreen(
         pagingItems == null && hasMoreItems && items.any { it is ContentListModel }
     }
     val context = LocalContext.current
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val pagingSnapshotItems = pagingItems?.itemSnapshotList?.items
+    val firstContentIndex = remember(itemCount, items, pagingSnapshotItems) {
+        (0 until itemCount).firstOrNull { index -> peekItem(index) is ContentListModel }
+    }
+    var focusedContentId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val fallbackContentId = firstContentIndex?.let { index -> (peekItem(index) as? ContentListModel)?.id }
+    val focusedContentIndex = remember(itemCount, items, pagingSnapshotItems, focusedContentId) {
+        focusedContentId?.let { focusedId ->
+            (0 until itemCount).firstOrNull { index ->
+                (peekItem(index) as? ContentListModel)?.id == focusedId
+            }
+        }
+    }
+    val focusTargetIndex = focusedContentIndex ?: firstContentIndex
+    val focusTargetId = focusTargetIndex?.let { index -> (peekItem(index) as? ContentListModel)?.id }
+        ?: fallbackContentId
+    val firstContentFocusRequester = remember { FocusRequester() }
+    // Moving between cards updates focusTargetId; it must not schedule another focus request.
+    LaunchedEffect(isTvPresentation, focusTargetId != null, listMode) {
+        if (isTvPresentation && focusTargetId != null) {
+            withFrameNanos { }
+            runCatching { firstContentFocusRequester.requestFocus() }
+        }
+    }
     val defaultSecondaryAction: (Throwable) -> Unit = remember(context) {
         { error ->
             error.getCauseUrl()?.let { url ->
@@ -383,7 +414,9 @@ fun KototoroContentListScreen(
                                 contentPadding = gridContentPadding,
                                 horizontalArrangement = Arrangement.spacedBy(gridSpacing),
                                 verticalArrangement = Arrangement.spacedBy(gridSpacing),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
                             ) {
                                 if (listHeader != null) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -433,6 +466,10 @@ fun KototoroContentListScreen(
                                                 compactOverlay = listMode == ListMode.COMPACT_GRID,
                                                 cellContentPadding = PaddingValues(0.dp),
                                                 uiPrefs = cardUiPrefs,
+                                                focusRequester = firstContentFocusRequester.takeIf {
+                                                    isTvPresentation && listModel.id == focusTargetId
+                                                },
+                                                onFocused = { focusedContentId = listModel.id },
                                                 modifier = Modifier.width(effectivePosterStyle.itemWidth),
                                             )
                                         }
@@ -476,7 +513,9 @@ fun KototoroContentListScreen(
                         LazyColumn(
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
                         ) {
                             if (listHeader != null) {
                                 item {
@@ -503,6 +542,10 @@ fun KototoroContentListScreen(
                                             sharedTransitionEnabled = sharedTransitionEnabled,
                                             sharedElementInstanceKey = sharedElementInstanceKey,
                                             uiPrefs = cardUiPrefs,
+                                            focusRequester = firstContentFocusRequester.takeIf {
+                                                isTvPresentation && listModel.id == focusTargetId
+                                            },
+                                            onFocused = { focusedContentId = listModel.id },
                                             onClick = { coverBounds ->
                                                 onPrepareItemTransition(listModel, coverBounds)
                                                 onItemClick(listModel)
@@ -550,7 +593,9 @@ fun KototoroContentListScreen(
                         LazyColumn(
                             state = actualListState,
                             contentPadding = innerPadding,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
                         ) {
                             if (listHeader != null) {
                                 item {
@@ -577,6 +622,10 @@ fun KototoroContentListScreen(
                                             sharedTransitionEnabled = sharedTransitionEnabled,
                                             sharedElementInstanceKey = sharedElementInstanceKey,
                                             uiPrefs = cardUiPrefs,
+                                            focusRequester = firstContentFocusRequester.takeIf {
+                                                isTvPresentation && listModel.id == focusTargetId
+                                            },
+                                            onFocused = { focusedContentId = listModel.id },
                                             onClick = { coverBounds ->
                                                 onPrepareItemTransition(listModel, coverBounds)
                                                 onItemClick(listModel)
@@ -764,6 +813,7 @@ fun QuickFilterSection(
 ) {
     val context = LocalContext.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val listState = rememberLazyListState()
     val entryPoint = remember(context.applicationContext) {
         runCatching {
@@ -780,7 +830,9 @@ fun QuickFilterSection(
         state = listState,
         contentPadding = PaddingValues(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
     ) {
         items(
             items = quickFilter.groups,
@@ -837,9 +889,11 @@ fun QuickFilterSection(
                                 Modifier
                             },
                         )
-                        .then(
-                            if (option != null) {
-                                Modifier.clickable { onQuickFilterOptionClick(option) }
+                    .then(
+                        if (option != null) {
+                                Modifier
+                                    .tvFocusable(shape = chipShape)
+                                    .clickable { onQuickFilterOptionClick(option) }
                             } else {
                                 Modifier
                             },
@@ -876,6 +930,7 @@ private fun QuickFilterGroupChip(
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
 ) {
     var expanded by remember(group.key) { mutableStateOf(false) }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val selectedItems = group.items.filter(ChipModel::isChecked)
     val isSelected = selectedItems.isNotEmpty()
     val contentColor = when {
@@ -912,6 +967,7 @@ private fun QuickFilterGroupChip(
                             Modifier
                         },
                     )
+                    .tvFocusable(shape = chipShape, enabled = true)
                     .clickable { expanded = true }
                     .height(QuickFilterChipHeight)
                     .padding(horizontal = 10.dp),

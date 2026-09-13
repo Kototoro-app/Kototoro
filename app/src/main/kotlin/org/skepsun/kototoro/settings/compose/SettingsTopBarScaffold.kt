@@ -55,6 +55,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassLayerBackdrop
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
@@ -424,7 +425,9 @@ fun SettingsTopBarIconButton(
     val tokens = LocalInterfaceStyleTokens.current
     Surface(
         onClick = onClick,
-        modifier = Modifier.size(tokens.minimumTouchTarget),
+        modifier = Modifier
+            .size(tokens.minimumTouchTarget)
+            .tvFocusable(shape = CircleShape),
         shape = CircleShape,
         color = Color.Transparent,
     ) {

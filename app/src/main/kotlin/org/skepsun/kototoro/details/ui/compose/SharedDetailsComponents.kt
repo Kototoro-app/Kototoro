@@ -64,6 +64,7 @@ import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -132,6 +133,7 @@ fun DetailsCoverFrame(
                 ambientColor = Color.Black.copy(alpha = 0.22f),
                 spotColor = Color.Black.copy(alpha = 0.28f),
             )
+            .tvFocusable(shape = frameShape, enabled = onClick != null, borderWidth = 3.dp, addFocusTarget = false)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .background(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
@@ -444,6 +446,7 @@ fun DetailsHeaderIconButton(
             Box(
                 modifier = Modifier
                     .size(buttonSize)
+                    .tvFocusable(shape = shape, enabled = enabled, addFocusTarget = false)
                     .combinedClickable(
                         enabled = enabled,
                         onClick = onClick,
@@ -481,6 +484,7 @@ fun DetailsHeaderIconButton(
             Box(
                 modifier = Modifier
                     .size(buttonSize)
+                    .tvFocusable(shape = shape, enabled = enabled, addFocusTarget = false)
                     .combinedClickable(
                         enabled = enabled,
                         onClick = onClick,
@@ -514,7 +518,9 @@ fun MetadataItem(
         modifier = modifier
             .then(
                 if (onClick != null) {
-                    Modifier.clickable(onClick = onClick)
+                    Modifier
+                        .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
+                        .clickable(onClick = onClick)
                 } else {
                     Modifier
                 },
