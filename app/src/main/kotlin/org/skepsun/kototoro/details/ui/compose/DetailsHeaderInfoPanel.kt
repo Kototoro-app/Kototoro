@@ -231,7 +231,7 @@ private fun SourceSummarySegment(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(999.dp))
-                .tvFocusable(shape = RoundedCornerShape(999.dp))
+                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                 .clickable(onClick = if (hasResolvedSource) onIconClick else onNameClick)
                 .padding(3.dp),
             contentAlignment = Alignment.Center,
@@ -241,7 +241,7 @@ private fun SourceSummarySegment(
         Text(
             text = label.ifBlank { fallbackLabel },
             modifier = Modifier
-                .tvFocusable(shape = RoundedCornerShape(999.dp))
+                .tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false)
                 .clickable(onClick = onNameClick),
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (hasResolvedSource) 1f else 0.68f),

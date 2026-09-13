@@ -261,12 +261,13 @@ internal fun BoxScope.SpaceSidekickHandle(
                     onDragCancel = { dragDistance = 0f },
                 )
             }
+            .tvFocusable(shape = shape, enabled = state.switcherEnabled, addFocusTarget = false)
             .clickable(
+                enabled = state.switcherEnabled,
                 role = Role.Button,
                 onClickLabel = description,
                 onClick = onOpen,
             )
-            .tvFocusable(shape = shape, enabled = state.switcherEnabled)
             .semantics { contentDescription = description },
         contentAlignment = if (isLeft) Alignment.CenterStart else Alignment.CenterEnd,
     ) {
@@ -519,7 +520,7 @@ private fun SpaceSidekickCardContent(
         modifier = Modifier
             .fillMaxSize()
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .tvFocusable(shape = RoundedCornerShape(20.dp), enabled = enabled)
+            .tvFocusable(shape = RoundedCornerShape(20.dp), enabled = enabled, addFocusTarget = false)
             .selectable(
                 selected = selected,
                 enabled = enabled,
@@ -660,13 +661,13 @@ fun SpaceSwitcherFab(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val fabShape = CircleShape
     val fabModifier = modifier
+        .tvFocusable(shape = fabShape, addFocusTarget = false)
         .clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
             role = Role.Button,
             onClick = onClick,
         )
-        .tvFocusable(shape = fabShape)
         .semantics { contentDescription = description }
     val content: @Composable BoxScope.() -> Unit = {
         Box(
@@ -721,7 +722,7 @@ fun SpaceSwitcherRailButton(
         onClick = onClick,
         modifier = modifier
             .size(48.dp)
-            .tvFocusable(shape = CircleShape),
+            .tvFocusable(shape = CircleShape, addFocusTarget = false),
     ) {
         SpaceSwitcherIcon(activeSpaceId = activeSpaceId, activeSpace = activeSpace)
     }
@@ -856,6 +857,7 @@ private fun SpaceRow(
                     Modifier.fillMaxWidth()
                 },
             )
+            .tvFocusable(shape = RoundedCornerShape(12.dp), enabled = enabled, addFocusTarget = false)
             .selectable(
                 selected = selected,
                 enabled = enabled,
@@ -867,7 +869,6 @@ private fun SpaceRow(
                 },
                 role = Role.RadioButton,
             )
-            .tvFocusable(shape = RoundedCornerShape(12.dp), enabled = enabled)
             .padding(
                 horizontal = if (compactMenu) 12.dp else 24.dp,
                 vertical = if (compactMenu) 6.dp else 12.dp,

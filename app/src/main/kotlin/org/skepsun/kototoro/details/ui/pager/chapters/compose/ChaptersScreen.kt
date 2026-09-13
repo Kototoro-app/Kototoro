@@ -63,6 +63,7 @@ fun ChaptersScreen(
     items: List<ListModel>,
     isGridView: Boolean,
     isScrollEnabled: Boolean = true,
+    requestInitialFocus: Boolean = true,
     detailsPaneState: DetailsPaneState? = null,
     gridScale: Float,
     selectedItemIds: Set<Long>,
@@ -119,8 +120,8 @@ fun ChaptersScreen(
             listState.scrollToItem(index)
         }
     }
-    LaunchedEffect(isTvPresentation, focusTargetIndex, isGridView, isScrollEnabled) {
-        if (isTvPresentation && isScrollEnabled && focusTargetIndex >= 0) {
+    LaunchedEffect(isTvPresentation, requestInitialFocus, focusTargetIndex >= 0, isGridView, isScrollEnabled) {
+        if (isTvPresentation && requestInitialFocus && isScrollEnabled && focusTargetIndex >= 0) {
             kotlinx.coroutines.yield()
             runCatching { defaultFocusRequester.requestFocus() }
         }

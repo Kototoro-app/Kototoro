@@ -427,7 +427,7 @@ fun SettingsTopBarIconButton(
         onClick = onClick,
         modifier = Modifier
             .size(tokens.minimumTouchTarget)
-            .tvFocusable(shape = CircleShape),
+            .tvFocusable(shape = CircleShape, addFocusTarget = false),
         shape = CircleShape,
         color = Color.Transparent,
     ) {

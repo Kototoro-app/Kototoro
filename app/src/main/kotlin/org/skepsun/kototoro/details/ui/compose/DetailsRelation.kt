@@ -60,7 +60,7 @@ fun DetailsChromeButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
     ) {
         content()
     }
@@ -375,7 +375,7 @@ private fun DetailsRelationItemCard(
     Surface(
         modifier = modifier
             .width(width)
-            .tvFocusable(shape = RoundedCornerShape(22.dp))
+            .tvFocusable(shape = RoundedCornerShape(22.dp), addFocusTarget = false)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(22.dp),
         color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f),

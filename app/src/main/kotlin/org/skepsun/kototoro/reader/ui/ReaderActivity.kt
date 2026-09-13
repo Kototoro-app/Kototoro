@@ -165,7 +165,7 @@ class ReaderActivity :
         get() = tvPresentationEnabled
 
     override val isReaderControlsVisible: Boolean
-        get() = areControlsVisible
+        get() = if (::composeReaderController.isInitialized) composeReaderController.isChromeVisible else areControlsVisible
 
     private lateinit var scrollTimer: ScrollTimer
     private lateinit var pageSaveHelper: PageSaveHelper
@@ -864,6 +864,7 @@ class ReaderActivity :
     }
 
     override fun onPause() {
+        tvKeyDispatcher.reset()
         super.onPause()
         if (::composeReaderController.isInitialized) {
             viewModel.saveCurrentState(composeReaderController.getCurrentState())
@@ -954,6 +955,23 @@ class ReaderActivity :
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Route hidden-chrome TV keys before a focused Compose pager can consume them.
+        when (
+            tvKeyDispatcher.dispatch(
+                keyCode = event.keyCode,
+                action = event.action,
+                isTvPresentation = isTvPresentation,
+                controlsVisible = isReaderControlsVisible,
+                repeatCount = event.repeatCount,
+            )
+        ) {
+            ReaderTvKeyDispatcher.Action.DISPATCH_TO_READER -> {
+                controlDelegate.onKeyDown(event.keyCode, event)
+                return true
+            }
+            ReaderTvKeyDispatcher.Action.CONSUME -> return true
+            ReaderTvKeyDispatcher.Action.DELEGATE -> Unit
+        }
         if (
             settings.isReaderVolumeButtonsEnabled &&
             (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
@@ -974,7 +992,14 @@ class ReaderActivity :
         return super.dispatchKeyEvent(event)
     }
 
+    private val tvKeyDispatcher = ReaderTvKeyDispatcher()
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // TV navigation was already routed in dispatchKeyEvent. A delegated control press
+        // must not turn into page navigation through the Activity's unhandled-key fallback.
+        if (isTvPresentation && isReaderTvNavigationKey(keyCode)) {
+            return super.onKeyDown(keyCode, event)
+        }
         return controlDelegate.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
     }
 

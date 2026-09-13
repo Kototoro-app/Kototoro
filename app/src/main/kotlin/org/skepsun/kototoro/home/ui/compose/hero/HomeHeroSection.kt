@@ -3,7 +3,6 @@ package org.skepsun.kototoro.home.ui.compose.hero
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -304,7 +303,6 @@ private fun HomeHeroCard(
                     Modifier
                 },
             )
-            .then(if (isTvPresentation) Modifier.focusable() else Modifier)
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {

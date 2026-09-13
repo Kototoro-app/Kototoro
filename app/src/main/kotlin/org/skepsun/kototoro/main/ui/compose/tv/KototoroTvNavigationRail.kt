@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.NavItem
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
 import org.skepsun.kototoro.core.prefs.limitMainNavigationItems
 import org.skepsun.kototoro.core.ui.widgets.BadgeInfo
 import org.skepsun.kototoro.core.ui.widgets.BottomNavState
@@ -88,14 +94,7 @@ internal fun TvNavigationRail(
     val fallbackItemId = resolveTvNavigationFocusItem(activeItemIds, navState.selectedItemId)
     val fallbackFocusRequester = focusRequesters[fallbackItemId] ?: FocusRequester.Default
 
-    Surface(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(TvNavigationRailWidth),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 3.dp,
-    ) {
+    TvNavigationRailSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -126,77 +125,103 @@ internal fun TvNavigationRail(
                 )
             }
             activeItems.forEach { item ->
-                val isSelected = navState.selectedItemId == item.id
-                val isFocused = railHasFocus && focusedItemId == item.id
-                val badge = navState.badges[item.id]
-                val itemFocusRequester = focusRequesters.getValue(item.id)
-                Surface(
-                    onClick = {
-                        if (isSelected) {
-                            onItemReselected(item.id)
-                        } else {
-                            onItemSelected(item.id)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(68.dp)
-                        .focusRequester(itemFocusRequester)
-                        .onFocusChanged { focusState ->
-                            if (focusState.hasFocus) {
-                                focusedItemId = item.id
-                            } else if (focusedItemId == item.id) {
-                                focusedItemId = null
+                key(item.id) {
+                    val isSelected = navState.selectedItemId == item.id
+                    val isFocused = railHasFocus && focusedItemId == item.id
+                    val badge = navState.badges[item.id]
+                    val itemFocusRequester = focusRequesters.getValue(item.id)
+                    Surface(
+                        onClick = {
+                            if (isSelected) {
+                                onItemReselected(item.id)
+                            } else {
+                                onItemSelected(item.id)
                             }
                         },
-                    shape = TvNavigationItemShape,
-                    color = when {
-                        isFocused -> MaterialTheme.colorScheme.primaryContainer
-                        isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                        else -> Color.Transparent
-                    },
-                    contentColor = when {
-                        isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
-                        isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    border = if (isFocused) {
-                        BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-                    } else {
-                        null
-                    },
-                ) {
-                    Column(
                         modifier = Modifier
-                            .fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-                    ) {
-                        BadgedBox(
-                            badge = {
-                                if (badge?.isVisible == true) {
-                                    TvNavigationBadge(badge)
+                            .fillMaxWidth()
+                            .height(68.dp)
+                            .focusRequester(itemFocusRequester)
+                            .onFocusChanged { focusState ->
+                                if (focusState.hasFocus) {
+                                    focusedItemId = item.id
+                                } else if (focusedItemId == item.id) {
+                                    focusedItemId = null
                                 }
                             },
+                        shape = TvNavigationItemShape,
+                        color = when {
+                            isFocused -> MaterialTheme.colorScheme.primaryContainer
+                            isSelected -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> Color.Transparent
+                        },
+                        contentColor = when {
+                            isFocused -> MaterialTheme.colorScheme.onPrimaryContainer
+                            isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        border = if (isFocused) {
+                            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                        } else {
+                            null
+                        },
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
                         ) {
-                            Icon(
-                                painter = painterResource(tvNavigationIconResId(item.id, isSelected)),
-                                contentDescription = stringResource(item.title),
-                                modifier = Modifier.width(28.dp),
+                            BadgedBox(
+                                badge = {
+                                    if (badge?.isVisible == true) {
+                                        TvNavigationBadge(badge)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    painter = painterResource(tvNavigationIconResId(item.id, isSelected)),
+                                    contentDescription = stringResource(item.title),
+                                    modifier = Modifier.width(28.dp),
+                                )
+                            }
+                            Text(
+                                text = stringResource(item.title),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
                             )
                         }
-                        Text(
-                            text = stringResource(item.title),
-                            style = MaterialTheme.typography.labelSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp),
-                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TvNavigationRailSurface(content: @Composable () -> Unit) {
+    val modifier = Modifier.fillMaxHeight().width(TvNavigationRailWidth)
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        GlassSurface(
+            modifier = modifier,
+            style = GlassDefaults.bottomBarChromeStyle(),
+            shape = RoundedCornerShape(0.dp),
+            componentRole = GlassComponentRole.BottomBar,
+            pressFeedbackEnabled = false,
+        ) {
+            content()
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 3.dp,
+            content = content,
+        )
     }
 }
 

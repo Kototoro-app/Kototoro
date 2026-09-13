@@ -45,6 +45,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.graphics.Color
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
@@ -423,6 +432,8 @@ fun UnifiedSourcesTopBarTabs(
     val bringIntoViewRequesters = remember {
         List(tabs.size) { BringIntoViewRequester() }
     }
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val tabFocusRequesters = remember { List(tabs.size) { FocusRequester() } }
 
     LaunchedEffect(selectedTab) {
         bringIntoViewRequesters.getOrNull(selectedTab)?.bringIntoView()
@@ -480,6 +491,25 @@ fun UnifiedSourcesTopBarTabs(
                         .clip(tabShape)
                         .background(animatedBgColor)
                         .border(BorderStroke(0.5.dp, animatedBorderColor), tabShape)
+                        .focusRequester(tabFocusRequesters[tab.tabIndex])
+                        .tvFocusable(shape = tabShape, addFocusTarget = false)
+                        .onPreviewKeyEvent { event ->
+                            val delta = when (event.key) {
+                                Key.DirectionLeft -> -1
+                                Key.DirectionRight -> 1
+                                else -> 0
+                            }
+                            val target = tab.tabIndex + delta
+                            if (!isTvPresentation || delta == 0 || target !in tabs.indices) {
+                                false
+                            } else {
+                                if (event.type == KeyEventType.KeyDown) {
+                                    onTabClick(target)
+                                    tabFocusRequesters[target].requestFocus()
+                                }
+                                true
+                            }
+                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

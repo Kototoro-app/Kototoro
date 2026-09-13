@@ -51,6 +51,7 @@ fun ChaptersScreenRoot(
     viewForSnackbar: View,
     lifecycleOwner: LifecycleOwner,
     isScrollEnabled: Boolean = true,
+    requestInitialFocus: Boolean = true,
     detailsPaneState: DetailsPaneState? = null,
     handleSelectionBackPressInternally: Boolean = true,
     onSelectionStateChange: (ChapterSelectionUiState?) -> Unit = {},
@@ -276,6 +277,7 @@ fun ChaptersScreenRoot(
     }
 
         ChaptersScreen(
+            requestInitialFocus = requestInitialFocus,
             items = collapsedChapters,
             isGridView = isGridView,
             isScrollEnabled = isScrollEnabled,

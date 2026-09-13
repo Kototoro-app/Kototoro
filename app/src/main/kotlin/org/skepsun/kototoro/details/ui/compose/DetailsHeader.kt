@@ -478,6 +478,7 @@ fun DetailsHeader(
                             .tvFocusable(
                                 shape = RoundedCornerShape(8.dp),
                                 enabled = canExpandTitle,
+                                addFocusTarget = false,
                             )
                             .clickable(enabled = canExpandTitle) {
                                 isTitleExpanded = !isTitleExpanded
@@ -533,7 +534,7 @@ fun DetailsHeader(
                         items(supplementalActions, key = { it.title + it.url }) { action ->
                             SuggestionChip(
                                 onClick = { onOpenSupplementalAction(action) },
-                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
+                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
                                 label = { Text(action.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 colors = SuggestionChipDefaults.suggestionChipColors(
                                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.42f),
@@ -709,6 +710,7 @@ fun DetailsHeader(
                                 .tvFocusable(
                                     shape = RoundedCornerShape(8.dp),
                                     enabled = canExpandDescription,
+                                    addFocusTarget = false,
                                 )
                                 .clickable(
                                     enabled = canExpandDescription,
@@ -767,7 +769,7 @@ fun DetailsHeader(
                                 onClick = { onTagClick(tag) },
                                 modifier = Modifier
                                     .heightIn(min = 24.dp)
-                                    .tvFocusable(shape = RoundedCornerShape(8.dp)),
+                                    .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false),
                                 shape = RoundedCornerShape(8.dp),
                                 label = {
                                     Text(
@@ -851,7 +853,7 @@ private fun DetailsViewToggle(
                             Color.Transparent
                         },
                     )
-                    .tvFocusable(shape = RoundedCornerShape(percent = 50))
+                    .tvFocusable(shape = RoundedCornerShape(percent = 50), addFocusTarget = false)
                     .clickable(role = Role.Tab) { onSelect(value) }
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )

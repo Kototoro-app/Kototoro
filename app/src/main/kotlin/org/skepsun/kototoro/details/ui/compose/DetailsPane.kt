@@ -241,6 +241,8 @@ internal fun DetailsPaneContent(
                                 isMergeRepeatedChapters = isMergeRepeatedChapters,
                                 selectedTabId = resolveDetailsTabSelection(selectedTabId, availableTabIds),
                                 showTabStrip = false,
+                                // The wide pane's ReadDock owns initial TV focus.
+                                requestInitialFocus = showCollapsedHandle,
                                 isSheetFullyExpanded = isSheetFullyExpanded,
                                 isChapterListScrollEnabled = true,
                                 handleSelectionBackPressInternally = !showCollapsedHandle,

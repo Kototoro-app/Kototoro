@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -118,6 +130,10 @@ fun UnifiedSourcesScreen(
     val repositoryListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val packageListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val selectedTab = pagerState.currentPage.coerceIn(0, UNIFIED_SOURCES_TAB_COUNT - 1)
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val scope = rememberCoroutineScope()
+    val pageFocusRequesters = remember { List(UNIFIED_SOURCES_TAB_COUNT) { FocusRequester() } }
+    val filtersFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(tabReselectTrigger) {
         val trigger = tabReselectTrigger ?: return@LaunchedEffect
@@ -151,10 +167,41 @@ fun UnifiedSourcesScreen(
         onClearSourceSelection()
     }
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.onKeyEvent { event ->
+            val delta = when (event.key) {
+                Key.DirectionLeft -> -1
+                Key.DirectionRight -> 1
+                else -> 0
+            }
+            val target = pagerState.currentPage + delta
+            if (!isTvPresentation || delta == 0 || target !in 0 until UNIFIED_SOURCES_TAB_COUNT) {
+                false
+            } else {
+                if (event.type == KeyEventType.KeyDown) {
+                    scope.launch {
+                        pagerState.scrollToPage(target)
+                        withFrameNanos { }
+                        if (pagerState.currentPage == target && readyState != null) {
+                            // Loading or a concurrent tab change may detach a requester before this frame.
+                            val focused = runCatching { pageFocusRequesters[target].requestFocus() }.getOrDefault(false)
+                            if (!focused) {
+                                runCatching { filtersFocusRequester.requestFocus() }
+                            }
+                        }
+                    }
+                }
+                true
+            }
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column {
+            Column(
+                modifier = if (isTvPresentation) {
+                    Modifier.focusRequester(filtersFocusRequester).focusGroup()
+                } else {
+                    Modifier
+                },
+            ) {
                 Spacer(modifier = Modifier.height(settingsContentTopInset()))
                 if (isLoading || state == UnifiedSourcesUiState.Loading) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -216,9 +263,16 @@ fun UnifiedSourcesScreen(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
                         ) { page ->
+                            val pageModifier = Modifier.fillMaxSize().then(
+                                if (isTvPresentation) {
+                                    Modifier.focusRequester(pageFocusRequesters[page]).focusGroup()
+                                } else {
+                                    Modifier
+                                },
+                            )
                             when (page) {
                                 UNIFIED_SOURCES_TAB_SOURCES -> UnifiedSourceList(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = pageModifier,
                                     listState = sourceListState,
                                     sources = state.sources,
                                     onBrowseSource = onBrowseSource,
@@ -231,7 +285,7 @@ fun UnifiedSourcesScreen(
                                     onSourcePinnedChange = onSourcePinnedChange,
                                 )
                                 UNIFIED_SOURCES_TAB_REPOSITORIES -> UnifiedRepositoryList(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = pageModifier,
                                     listState = repositoryListState,
                                     repositories = state.repositories,
                                     onAddRepository = onAddRepository,
@@ -239,7 +293,7 @@ fun UnifiedSourcesScreen(
                                     onDeleteRepository = onDeleteRepository,
                                 )
                                 UNIFIED_SOURCES_TAB_PACKAGES -> UnifiedPackageList(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = pageModifier,
                                     listState = packageListState,
                                     packages = state.packages,
                                     recommendedPackages = state.recommendedPackages,

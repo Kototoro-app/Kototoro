@@ -98,6 +98,7 @@ fun ChaptersPagesTabsContent(
     showTabStrip: Boolean = true,
     isSheetFullyExpanded: Boolean = true,
     isChapterListScrollEnabled: Boolean = true,
+    requestInitialFocus: Boolean = true,
     handleSelectionBackPressInternally: Boolean = true,
     detailsPaneState: DetailsPaneState? = null,
     pageThumbnailAspectRatio: Float = 0.7f,
@@ -211,6 +212,7 @@ fun ChaptersPagesTabsContent(
             ) { page ->
                 when (tabsList.getOrNull(page)?.tabId ?: return@HorizontalPager) {
                     DETAILS_TAB_CHAPTERS -> DetailsChapterPanels(
+                        requestInitialFocus = requestInitialFocus && page == safeCurrentPage,
                         viewModel = viewModel,
                         router = router,
                         viewForSnackbar = viewForSnackbar,
@@ -257,6 +259,7 @@ private enum class ChapterPanelMode {
 
 @Composable
 private fun DetailsChapterPanels(
+    requestInitialFocus: Boolean,
     viewModel: ChaptersPagesViewModel,
     router: AppRouter,
     viewForSnackbar: android.view.View,
@@ -312,6 +315,7 @@ private fun DetailsChapterPanels(
 
         when (selectedMode) {
             ChapterPanelMode.METADATA -> MetadataChapterPanel(
+                requestInitialFocus = requestInitialFocus,
                 tabs = metadataChapterTabs,
                 chapterQuery = chapterQuery,
                 onSelectTab = onSelectMetadataChapterTab,
@@ -329,6 +333,7 @@ private fun DetailsChapterPanels(
                     )
                 }
                 ChaptersScreenRoot(
+                    requestInitialFocus = requestInitialFocus,
                     viewModel = viewModel,
                     router = router,
                     viewForSnackbar = viewForSnackbar,
@@ -428,6 +433,7 @@ private fun ChapterModeTabsRow(
 
 @Composable
 private fun MetadataChapterPanel(
+    requestInitialFocus: Boolean,
     tabs: List<DetailsChapterSourceTab>,
     chapterQuery: String,
     onSelectTab: (DetailsChapterSourceTab) -> Unit,
@@ -473,6 +479,7 @@ private fun MetadataChapterPanel(
             )
         }
         ChaptersScreen(
+            requestInitialFocus = requestInitialFocus,
             items = items,
             isGridView = isGridView,
             isScrollEnabled = isScrollEnabled,

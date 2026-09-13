@@ -205,8 +205,12 @@ fun SettingsCollapsiblePreferenceGroup(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .tvFocusable(
+                        enabled = enabled,
+                        shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius),
+                        addFocusTarget = false,
+                    )
                     .clickable(enabled = enabled) { expanded = !expanded }
-                    .tvFocusable(enabled = enabled, shape = RoundedCornerShape(tokens.settingsGroupOuterCornerRadius))
                     .heightIn(min = tokens.settingsItemMinHeight)
                     .padding(horizontal = horizontalPadding, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,

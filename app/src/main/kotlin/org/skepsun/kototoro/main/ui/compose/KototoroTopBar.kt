@@ -271,7 +271,7 @@ fun KototoroTopBar(
                         onClick = onSearchClick,
                         modifier = Modifier
                             .size(topBarControlHeight)
-                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                     ) {
                         Icon(
                             Icons.Filled.Search,
@@ -368,7 +368,7 @@ fun KototoroTopBar(
                                         },
                                         modifier = Modifier
                                             .size(topBarControlHeight)
-                                            .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                                     ) {
                                         Box {
                                             Icon(

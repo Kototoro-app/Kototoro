@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -172,7 +173,7 @@ private fun SourcesQuickAccessSection(
             }
             TextButton(
                 onClick = onManageClick,
-                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             ) {
                 Text(
@@ -524,15 +525,17 @@ private fun SourceQuickAccessRow(
         horizontalArrangement = Arrangement.spacedBy(metrics.gridSpacing),
     ) {
         sources.forEach { source ->
-            Box(modifier = Modifier.weight(1f)) {
-                SourceQuickAccessCard(
-                    metrics = metrics,
-                    browseListMode = browseListMode,
-                    source = source,
-                    isSelected = source.id in selectedSourceIds,
-                    onClick = { onSourceClick(source) },
-                    onLongClick = { onSourceLongClick(source) },
-                )
+            key(source.id) {
+                Box(modifier = Modifier.weight(1f)) {
+                    SourceQuickAccessCard(
+                        metrics = metrics,
+                        browseListMode = browseListMode,
+                        source = source,
+                        isSelected = source.id in selectedSourceIds,
+                        onClick = { onSourceClick(source) },
+                        onLongClick = { onSourceLongClick(source) },
+                    )
+                }
             }
         }
         repeat(columns - sources.size) {
@@ -579,11 +582,11 @@ private fun SourceQuickAccessCard(
                 .height(metrics.cardHeight)
                 .clip(cardShape)
                 .background(cardBackground)
+                .tvFocusable(shape = cardShape, borderWidth = 3.dp, addFocusTarget = false)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
-                )
-                .tvFocusable(shape = cardShape, borderWidth = 3.dp),
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top,
         ) {
@@ -649,11 +652,11 @@ private fun SourceQuickAccessCard(
                 .height(56.dp)
                 .clip(cardShape)
                 .background(cardBackground)
+                .tvFocusable(shape = cardShape, borderWidth = 2.dp, addFocusTarget = false)
                 .combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
                 )
-                .tvFocusable(shape = cardShape, borderWidth = 2.dp)
                 .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,

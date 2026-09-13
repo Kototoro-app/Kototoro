@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.googlefonts.Font
@@ -32,7 +31,6 @@ import org.skepsun.kototoro.core.prefs.AppFontPreset
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.ext.getThemeColor
 import org.skepsun.kototoro.core.ui.BaseActivityEntryPoint
-import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.ContentSourceResolutionProvider
 
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,23 +68,10 @@ fun KototoroTheme(
     val context = LocalContext.current
     val appContext = context.applicationContext
     val settings = remember(appContext) { AppSettings(appContext) }
-    val configuration = LocalConfiguration.current
-    val presentationMode by settings.observeAsState(AppSettings.KEY_UI_PRESENTATION_MODE) {
-        uiPresentationMode
-    }
-    val isTvPresentation = remember(context, presentationMode, configuration.uiMode) {
-        resolveUiPresentationConfig(context, settings).isTv
-    }
     val interfaceStyle by settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) {
         interfaceStyle
     }
-    // TV keeps the stable Material surface language even when the phone preference is iOS.
-    // The preference remains unchanged and is used again when STANDARD is selected.
-    val effectiveInterfaceStyle = if (isTvPresentation) {
-        InterfaceStyle.MATERIAL_3_EXPRESSIVE
-    } else {
-        interfaceStyle.normalized()
-    }
+    val effectiveInterfaceStyle = interfaceStyle.normalized()
     val expressiveComponents = effectiveInterfaceStyle == InterfaceStyle.MATERIAL_3_EXPRESSIVE
     val styleTokens = effectiveInterfaceStyle.tokens()
     val stylePolicy = remember(effectiveInterfaceStyle) { InterfaceStylePolicy.from(effectiveInterfaceStyle) }
@@ -102,11 +87,7 @@ fun KototoroTheme(
     val isAmoledTheme by settings.observeAsState(AppSettings.KEY_THEME_AMOLED) {
         isAmoledTheme
     }
-    val backgroundStyle = if (isTvPresentation) {
-        BackgroundStyle.DEFAULT
-    } else {
-        selectedBackgroundStyle.normalized()
-    }
+    val backgroundStyle = selectedBackgroundStyle.normalized()
     val selectedColorScheme by settings.observeAsState(AppSettings.KEY_COLOR_THEME) {
         colorScheme
     }

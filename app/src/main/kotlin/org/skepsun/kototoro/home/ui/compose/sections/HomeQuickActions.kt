@@ -3,7 +3,6 @@ package org.skepsun.kototoro.home.ui.compose.sections
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -163,9 +162,8 @@ private fun QuickAccessButton(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(enabled = action.enabled, onClick = action.onClick)
-                .then(if (isTvPresentation) Modifier.focusable(action.enabled) else Modifier)
                 .onFocusChanged { isFocused = it.isFocused }
+                .clickable(enabled = action.enabled, onClick = action.onClick)
                 .then(
                     if (isTvPresentation && isFocused) {
                         Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape)

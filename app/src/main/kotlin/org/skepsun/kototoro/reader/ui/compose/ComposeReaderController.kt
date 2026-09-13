@@ -465,6 +465,10 @@ internal class ComposeReaderController(
     val isChromeControlsVisible: Boolean
         get() = chromeState.controlsVisible
 
+    val isChromeVisible: Boolean
+        get() = chromeState.controlsVisible || chromeState.options.visible || chromeState.toolsVisible ||
+            chromeState.chaptersVisible || chromeState.autoScroll.visible
+
     fun toggleChapters(defaultTab: Int = DETAILS_TAB_CHAPTERS) {
         chromeState = if (chromeState.chaptersVisible) {
             chromeState.copy(chaptersVisible = false)

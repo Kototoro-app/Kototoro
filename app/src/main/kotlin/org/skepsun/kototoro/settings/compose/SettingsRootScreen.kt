@@ -168,11 +168,12 @@ fun SettingsRootScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(top = if (isTvPresentation) topInset else 0.dp)
                 .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
             contentPadding = PaddingValues(
                 start = displayCutoutStart + horizontalPadding,
                 end = displayCutoutEnd + horizontalPadding,
-                top = topInset + 4.dp,
+                top = (if (isTvPresentation) 0.dp else topInset) + 4.dp,
                 bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp,
             ),
             verticalArrangement = Arrangement.spacedBy(
@@ -267,9 +268,9 @@ private fun SettingsSearchResultRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .tvFocusable(shape = RoundedCornerShape(12.dp))
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(onClick = onClick)
             .heightIn(min = tokens.settingsItemMinHeight)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -313,9 +314,9 @@ private fun SettingsRootRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = item.onClick)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .tvFocusable(shape = RoundedCornerShape(12.dp))
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
+            .clickable(onClick = item.onClick)
             .heightIn(min = tokens.settingsItemMinHeight)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -70,6 +70,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -941,6 +942,7 @@ fun SettingsDialogTextPreference(
 
     if (isDialogVisible) {
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val isTvPresentation = LocalUiPresentationConfig.current.isTv
         SettingsAlertDialog(
             title = title,
             onDismissRequest = {
@@ -956,7 +958,7 @@ fun SettingsDialogTextPreference(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = placeholder?.let { { Text(text = it) } },
-                        trailingIcon = if (suggestions.isNotEmpty()) {
+                        trailingIcon = if (suggestions.isNotEmpty() && !isTvPresentation) {
                             {
                                 IconButton(onClick = { isSuggestionsExpanded = !isSuggestionsExpanded }) {
                                     Icon(
@@ -978,6 +980,12 @@ fun SettingsDialogTextPreference(
                             VisualTransformation.None
                         },
                     )
+                    if (suggestions.isNotEmpty() && isTvPresentation) {
+                        SettingsDialogActionButton(
+                            text = stringResource(R.string.options),
+                            onClick = { isSuggestionsExpanded = !isSuggestionsExpanded },
+                        )
+                    }
                     DropdownMenu(
                         expanded = isSuggestionsExpanded && suggestions.isNotEmpty(),
                         onDismissRequest = { isSuggestionsExpanded = false },
@@ -986,6 +994,10 @@ fun SettingsDialogTextPreference(
                         suggestions.forEach { suggestion ->
                             DropdownMenuItem(
                                 text = { Text(text = suggestion.label) },
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(10.dp),
+                                    addFocusTarget = false,
+                                ),
                                 onClick = {
                                     pendingValue = suggestion.value
                                     isSuggestionsExpanded = false

@@ -5,7 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +63,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
@@ -304,7 +305,9 @@ internal fun DetailsPaneActionsRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (isModernDockEnabled) {
+                    if (LocalUiPresentationConfig.current.isTv) {
+                        Modifier.focusGroup()
+                    } else if (isModernDockEnabled) {
                         Modifier
                     } else {
                         Modifier.clickable(
@@ -1092,7 +1095,8 @@ internal fun DetailsDockActionButton(
             onClick = onClick,
             modifier = Modifier
                 .width(42.dp)
-                .height(42.dp),
+                .height(42.dp)
+                .tvFocusable(shape = RoundedCornerShape(16.dp), addFocusTarget = false),
         ) {
             Icon(
                 painter = rememberSafePainter(iconRes),
@@ -1227,10 +1231,11 @@ private fun ReadDock(
     var isMoreButtonFocused by remember { mutableStateOf(false) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val readButtonFocusRequester = remember { FocusRequester() }
+    var hasRequestedInitialFocus by remember { mutableStateOf(false) }
     LaunchedEffect(isTvPresentation, isEnabled) {
-        if (isTvPresentation && isEnabled) {
+        if (isTvPresentation && isEnabled && !hasRequestedInitialFocus) {
             withFrameNanos { }
-            runCatching { readButtonFocusRequester.requestFocus() }
+            hasRequestedInitialFocus = runCatching { readButtonFocusRequester.requestFocus() }.getOrDefault(false)
         }
     }
     val hasBranchOptions = branches.size > 1
@@ -1296,7 +1301,10 @@ private fun ReadDock(
             tonalElevation = 0.dp,
             shadowElevation = if (modernStyle) 4.dp else 0.dp,
             border = if (isTvPresentation && isReadButtonFocused) {
-                BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                BorderStroke(
+                    3.dp,
+                    if (modernStyle) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                )
             } else {
                 null
             },
@@ -1307,7 +1315,6 @@ private fun ReadDock(
                     .clip(readButtonShape)
                     .focusRequester(readButtonFocusRequester)
                     .onFocusChanged { isReadButtonFocused = it.isFocused }
-                    .then(if (isTvPresentation && isEnabled) Modifier.focusable() else Modifier)
                     .clickable(enabled = isEnabled, onClick = onReadClick)
                     .padding(horizontal = if (modernStyle) 6.dp else 14.dp),
                 contentAlignment = Alignment.Center,
@@ -1378,7 +1385,10 @@ private fun ReadDock(
                 tonalElevation = 0.dp,
                 shadowElevation = if (modernStyle) 4.dp else 0.dp,
                 border = if (isTvPresentation && isMoreButtonFocused) {
-                    BorderStroke(3.dp, MaterialTheme.colorScheme.primary)
+                    BorderStroke(
+                        3.dp,
+                        if (modernStyle) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
                 } else {
                     null
                 },
@@ -1388,7 +1398,6 @@ private fun ReadDock(
                         .fillMaxSize()
                         .clip(trailingButtonShape)
                         .onFocusChanged { isMoreButtonFocused = it.isFocused }
-                        .then(if (isTvPresentation && hasMenuActions) Modifier.focusable() else Modifier)
                         .clickable(enabled = hasMenuActions, onClick = { expanded = true }),
                     contentAlignment = Alignment.Center,
                 ) {

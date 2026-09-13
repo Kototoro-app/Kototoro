@@ -13,6 +13,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +71,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -88,6 +97,10 @@ fun SwipeableFilterChip(
     iconSize: Dp = 16.dp,
     modifier: Modifier = Modifier,
 ) {
+    if (LocalUiPresentationConfig.current.isTv) {
+        TvContentTypeFilter(selectedType, enabledTypes, onTypeSelected, controlSize, iconSize, modifier)
+        return
+    }
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -357,6 +370,60 @@ fun SwipeableFilterChip(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvContentTypeFilter(
+    selectedType: ContentType?,
+    enabledTypes: Set<ContentType>,
+    onTypeSelected: (ContentType?) -> Unit,
+    controlSize: Dp,
+    iconSize: Dp,
+    modifier: Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val types = listOf(null, ContentType.VIDEO, ContentType.MANGA, ContentType.NOVEL)
+    val labels = listOf(
+        R.string.all, R.string.content_type_video, R.string.content_type_manga, R.string.content_type_novel,
+    )
+    val icons = listOf(
+        R.drawable.ic_filter_content_type, R.drawable.ic_content_video,
+        R.drawable.ic_content_manga, R.drawable.ic_content_novel,
+    )
+    val selectedIndex = selectedType?.toSwipeableIndex()?.plus(1) ?: 0
+    Box(modifier) {
+        IconButton(
+            onClick = { expanded = true },
+            enabled = enabledTypes.isNotEmpty(),
+            modifier = Modifier.size(controlSize).tvFocusable(
+                enabled = enabledTypes.isNotEmpty(),
+                shape = CircleShape,
+                addFocusTarget = false,
+            ),
+        ) {
+            Icon(
+                painter = painterResource(icons[selectedIndex]),
+                contentDescription = stringResource(R.string.content_type_filter) + ": " +
+                    stringResource(labels[selectedIndex]),
+                modifier = Modifier.size(iconSize),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            types.forEachIndexed { index, type ->
+                val enabled = type == null || type in enabledTypes
+                DropdownMenuItem(
+                    text = { Text(stringResource(labels[index])) },
+                    leadingIcon = { RadioButton(selected = index == selectedIndex, onClick = null, enabled = enabled) },
+                    enabled = enabled,
+                    modifier = Modifier.tvFocusable(enabled = enabled, shape = CircleShape, addFocusTarget = false),
+                    onClick = {
+                        expanded = false
+                        onTypeSelected(type)
+                    },
+                )
             }
         }
     }

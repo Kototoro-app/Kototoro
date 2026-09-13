@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -1650,13 +1649,7 @@ private fun ReaderComposeTopBar(
         ) {
             IconButton(
                 onClick = onNavigateBack,
-                modifier = if (isTvPresentation) {
-                    Modifier.then(
-                        defaultFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
-                    ).focusable()
-                } else {
-                    Modifier
-                },
+                modifier = Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false),
             ) {
                 Icon(
                     painter = painterResource(androidx.appcompat.R.drawable.abc_ic_ab_back_material),
@@ -1684,9 +1677,9 @@ private fun ReaderComposeTopBar(
                 modifier = if (isTvPresentation && state.options.chapterTitleAtBottom) {
                     Modifier.then(
                         defaultFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
-                    ).focusable()
+                    ).tvFocusable(shape = Capsule(), addFocusTarget = false)
                 } else {
-                    Modifier
+                    Modifier.tvFocusable(shape = Capsule(), addFocusTarget = false)
                 },
             ) {
                 Icon(
@@ -1722,7 +1715,7 @@ private fun ReaderChapterTitleChip(
         contentModifier = Modifier
             .clip(chapterControlShape)
             .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-            .tvFocusable(shape = chapterControlShape, borderWidth = 2.dp)
+            .tvFocusable(shape = chapterControlShape, borderWidth = 2.dp, addFocusTarget = false)
             .clickable(onClick = onChapters),
     ) {
         Column(

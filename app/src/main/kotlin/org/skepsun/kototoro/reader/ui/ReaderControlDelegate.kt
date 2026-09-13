@@ -186,7 +186,17 @@ internal fun shouldDelegateReaderKeyToTvControls(
     keyCode: Int,
 ): Boolean {
     if (!isTvPresentation || !controlsVisible) return false
-    return when (keyCode) {
+    return isReaderTvNavigationKey(keyCode)
+}
+
+internal fun shouldInterceptReaderTvKey(
+    isTvPresentation: Boolean,
+    controlsVisible: Boolean,
+    keyCode: Int,
+): Boolean = isTvPresentation && !controlsVisible && isReaderTvNavigationKey(keyCode)
+
+internal fun isReaderTvNavigationKey(keyCode: Int): Boolean =
+    when (keyCode) {
         KeyEvent.KEYCODE_DPAD_UP,
         KeyEvent.KEYCODE_DPAD_DOWN,
         KeyEvent.KEYCODE_DPAD_LEFT,
@@ -197,4 +207,3 @@ internal fun shouldDelegateReaderKeyToTvControls(
         -> true
         else -> false
     }
-}
