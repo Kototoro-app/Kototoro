@@ -48,6 +48,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarPillShape
 import org.skepsun.kototoro.core.ui.compose.iconResForUi
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.compose.performSelectionHapticFeedback
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
@@ -561,7 +562,7 @@ fun KototoroSourceCard(
                         source = item,
                         icon = {
                             Icon(
-                                painter = painterResource(id = item.source.iconResForUi()),
+                                painter = rememberSafePainter(id = item.source.iconResForUi()),
                                 contentDescription = title,
                                 modifier = Modifier.size(30.dp),
                             )

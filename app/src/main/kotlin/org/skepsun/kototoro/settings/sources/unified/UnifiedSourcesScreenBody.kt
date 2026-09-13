@@ -55,7 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -312,7 +312,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.all_content),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_filter_content_type),
+                                    painter = rememberSafePainter(R.drawable.ic_filter_content_type),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -326,7 +326,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(type.titleResId),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(type.contentIconRes()),
+                                    painter = rememberSafePainter(type.contentIconRes()),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -346,7 +346,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.all_sources),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_extension),
+                                    painter = rememberSafePainter(R.drawable.ic_extension),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -360,7 +360,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = kind.displayLabel(),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(kind.packageIconRes()),
+                                    painter = rememberSafePainter(kind.packageIconRes()),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -382,7 +382,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.all_sources),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_extension),
+                                    painter = rememberSafePainter(R.drawable.ic_extension),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -396,7 +396,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = kind.displayLabel(),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(kind.packageIconRes()),
+                                    painter = rememberSafePainter(kind.packageIconRes()),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -425,7 +425,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.all),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_extension),
+                                    painter = rememberSafePainter(R.drawable.ic_extension),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -472,7 +472,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.package_filter_installed),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_check),
+                                    painter = rememberSafePainter(R.drawable.ic_check),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -486,7 +486,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.package_filter_available),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_cloud_download),
+                                    painter = rememberSafePainter(R.drawable.ic_cloud_download),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -506,7 +506,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = stringResource(R.string.all_sources),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_extension),
+                                    painter = rememberSafePainter(R.drawable.ic_extension),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -520,7 +520,7 @@ private fun UnifiedSourcesContextualFilterTabs(
                             text = kind.displayLabel(),
                             leadingIcon = {
                                 Icon(
-                                    painter = painterResource(kind.packageIconRes()),
+                                    painter = rememberSafePainter(kind.packageIconRes()),
                                     contentDescription = null,
                                     modifier = Modifier.size(16.dp),
                                 )
@@ -552,7 +552,7 @@ private fun UnifiedRepositoryFilterRow(
                 text = stringResource(R.string.all),
                 leadingIcon = {
                     Icon(
-                        painter = painterResource(R.drawable.ic_storage),
+                        painter = rememberSafePainter(R.drawable.ic_storage),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )
@@ -569,7 +569,7 @@ private fun UnifiedRepositoryFilterRow(
                 text = repository.name,
                 leadingIcon = {
                     Icon(
-                        painter = painterResource(R.drawable.ic_storage),
+                        painter = rememberSafePainter(R.drawable.ic_storage),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )

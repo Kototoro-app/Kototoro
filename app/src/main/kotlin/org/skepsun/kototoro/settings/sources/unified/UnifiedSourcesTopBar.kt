@@ -46,7 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -113,7 +113,7 @@ private fun ToolbarFilterIconButton(
             modifier = Modifier.size(40.dp),
         ) {
             Icon(
-                painter = painterResource(iconRes),
+                painter = rememberSafePainter(iconRes),
                 contentDescription = contentDescription,
                 modifier = Modifier.size(20.dp),
                 tint = if (activeCount > 0) {
@@ -271,7 +271,7 @@ fun UnifiedSourcesActionCapsule(
             ) {
                 Box(contentAlignment = Alignment.TopEnd) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_filter_menu),
+                        painter = rememberSafePainter(R.drawable.ic_filter_menu),
                         contentDescription = stringResource(R.string.filter),
                         modifier = Modifier.size(tokens.topBarIconSize),
                         tint = if (filterActiveCount > 0) {
