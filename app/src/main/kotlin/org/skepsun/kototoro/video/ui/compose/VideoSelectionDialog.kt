@@ -24,6 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
@@ -58,6 +65,17 @@ internal fun VideoSelectionDialog(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = true),
     ) {
+        val isTvPresentation = LocalUiPresentationConfig.current.isTv
+        val initialFocusIndex = state.selectedIndex.takeIf { it in state.options.indices } ?: 0
+        val itemFocusRequester = remember { FocusRequester() }
+
+        LaunchedEffect(isTvPresentation) {
+            if (isTvPresentation && state.options.isNotEmpty()) {
+                withFrameNanos { }
+                runCatching { itemFocusRequester.requestFocus() }
+            }
+        }
+
         Surface(
             modifier = Modifier
                 .widthIn(min = 220.dp, max = 300.dp)
@@ -78,10 +96,13 @@ internal fun VideoSelectionDialog(
                 )
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     itemsIndexed(state.options) { index, label ->
+                        val isTarget = index == initialFocusIndex
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(if (isTvPresentation && isTarget) Modifier.focusRequester(itemFocusRequester) else Modifier)
+                                .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
                                 .clickable { onSelect(index) }
                                 .padding(horizontal = 14.dp, vertical = 11.dp),
                         ) {

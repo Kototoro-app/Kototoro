@@ -470,7 +470,7 @@ private fun SearchResultsTopBar(
             ) {
                 IconButton(
                     onClick = onBackClick,
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -503,7 +503,7 @@ private fun SearchResultsTopBar(
                         if (query.isNotEmpty()) {
                             IconButton(
                                 onClick = { onQueryChange("") },
-                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Clear,
@@ -513,7 +513,7 @@ private fun SearchResultsTopBar(
                         }
                         IconButton(
                             onClick = onSearchClick,
-                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Search,
@@ -524,7 +524,7 @@ private fun SearchResultsTopBar(
                             onClick = { onAdvancedExpandedChange(!isAdvancedExpanded) },
                             modifier = Modifier
                                 .size(40.dp)
-                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                         ) {
                             Icon(
                                 imageVector = if (isAdvancedExpanded)
@@ -543,7 +543,7 @@ private fun SearchResultsTopBar(
                             onClick = onOptionsClick,
                             modifier = Modifier
                                 .size(40.dp)
-                                .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                                .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter_menu),
@@ -635,7 +635,7 @@ private fun SearchResultsSection(
             if (section.source !== UnknownContentSource) {
                 Button(
                     onClick = onSectionClick,
-                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                    modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 ) {
                     Text(stringResource(R.string.show_all))
@@ -710,7 +710,7 @@ private fun SearchSupplementaryItem(
                 onClick = onContinueSearch,
                 modifier = modifier
                     .fillMaxWidth()
-                    .tvFocusable(shape = RoundedCornerShape(12.dp)),
+                    .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
             ) {
                 Text(stringResource(item.textResId))
             }
@@ -750,7 +750,7 @@ private fun SearchSupplementaryItem(
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(
                             onClick = onContinueSearch,
-                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp)),
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                         ) {
                             Text(stringResource(item.actionStringRes))
                         }

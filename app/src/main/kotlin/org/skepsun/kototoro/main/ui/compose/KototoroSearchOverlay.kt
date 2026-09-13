@@ -382,7 +382,7 @@ fun KototoroSearchOverlay(
                             onClick = onDismissRequest,
                             modifier = Modifier
                                 .size(CompactTopBarPillHeight)
-                                .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
+                                .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius), addFocusTarget = false),
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -425,7 +425,7 @@ fun KototoroSearchOverlay(
                                     onClick = { onQueryChanged("") },
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .tvFocusable(shape = CircleShape),
+                                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Clear,
@@ -455,7 +455,7 @@ fun KototoroSearchOverlay(
                                     onClick = { showAdvanced = !showAdvanced },
                                     modifier = Modifier
                                         .size(CompactTopBarPillHeight)
-                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
+                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius), addFocusTarget = false),
                                 ) {
                                     Icon(
                                         imageVector = if (showAdvanced)
@@ -474,7 +474,7 @@ fun KototoroSearchOverlay(
                                     onClick = { showFilterSheet = true },
                                     modifier = Modifier
                                         .size(CompactTopBarPillHeight)
-                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius)),
+                                        .tvFocusable(shape = RoundedCornerShape(style.inputCornerRadius), addFocusTarget = false),
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_filter_menu),
@@ -769,7 +769,7 @@ private fun SuggestionList(
                             trailingContent = {
                                 IconButton(
                                     onClick = { onRecentQueryCompleteClick(item.query) },
-                                    modifier = Modifier.tvFocusable(shape = CircleShape),
+                                    modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                                 ) {
                                     Icon(
                                         painter = painterResource(
@@ -828,7 +828,7 @@ private fun SuggestionList(
                                 label = { Text(chip.title?.toString().orEmpty(), maxLines = 1) },
                                 modifier = Modifier
                                     .height(style.chipHeight)
-                                    .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius)),
+                                    .tvFocusable(shape = RoundedCornerShape(style.chipCornerRadius), addFocusTarget = false),
                                 shape = RoundedCornerShape(style.chipCornerRadius),
                                 colors = AssistChipDefaults.assistChipColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -975,7 +975,7 @@ private fun SearchSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius)),
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false),
         shape = RoundedCornerShape(style.rowCornerRadius),
         color = containerColor,
     ) {
@@ -1021,7 +1021,7 @@ private fun SourceSuggestionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius))
+            .tvFocusable(shape = RoundedCornerShape(style.rowCornerRadius), addFocusTarget = false)
             .background(
                 color = style.rowContainerColor,
                 shape = RoundedCornerShape(style.rowCornerRadius),
@@ -1084,7 +1084,7 @@ private fun TrackingEntitySuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.36f)),
@@ -1168,7 +1168,7 @@ private fun ContentSuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(
@@ -1229,7 +1229,7 @@ private fun LocalEntitySuggestionCard(
         modifier = Modifier
             .width(SearchSuggestionCardWidth)
             .clickable(onClick = onClick)
-            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius)),
+            .tvFocusable(shape = RoundedCornerShape(style.cardCornerRadius), addFocusTarget = false),
         shape = RoundedCornerShape(style.cardCornerRadius),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(

@@ -28,6 +28,8 @@ internal fun resolveVideoPlayerTvKeyAction(
         KeyEvent.KEYCODE_DPAD_CENTER,
         KeyEvent.KEYCODE_ENTER,
         KeyEvent.KEYCODE_NUMPAD_ENTER,
+        KeyEvent.KEYCODE_DPAD_UP,
+        KeyEvent.KEYCODE_DPAD_DOWN,
         -> if (controlsVisible) {
             VideoPlayerTvKeyAction.PASS_TO_FOCUS
         } else {

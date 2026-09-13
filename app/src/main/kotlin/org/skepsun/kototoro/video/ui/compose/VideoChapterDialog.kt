@@ -56,6 +56,7 @@ import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.video.ui.PlayerChapterGroup
 
@@ -128,7 +129,9 @@ internal fun VideoChapterDialog(
                             isGridView = !isGridView
                             onGridViewChanged(isGridView)
                         },
-                        modifier = Modifier.size(40.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
                     ) {
                         Icon(
                             imageVector = if (isGridView) {
@@ -265,6 +268,7 @@ private fun CompactGroupTabs(
                         color = if (selected) Color.White.copy(alpha = 0.16f) else Color.Transparent,
                         shape = RoundedCornerShape(4.dp),
                     )
+                    .tvFocusable(shape = RoundedCornerShape(4.dp), addFocusTarget = false)
                     .clickable { onSelect(index) }
                     .padding(horizontal = 9.dp),
             ) {
@@ -291,6 +295,7 @@ private fun ChapterRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
@@ -327,7 +332,10 @@ private fun ChapterGridItem(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .tvFocusable(shape = RoundedCornerShape(6.dp), addFocusTarget = false),
         shape = RoundedCornerShape(6.dp),
         color = Color.White.copy(alpha = if (checked) 0.18f else 0.08f),
         contentColor = Color.White,

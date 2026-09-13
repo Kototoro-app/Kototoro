@@ -163,7 +163,7 @@ fun ChaptersScreen(
                         FilterChip(
                             selected = chip.isChecked,
                             onClick = { onFilterChipClick(chip) },
-                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
+                            modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
                             label = {
                                 Text(
                                     buildString {
@@ -362,6 +362,7 @@ private fun ChapterHeaderUI(
             .tvFocusable(
                 shape = RoundedCornerShape(8.dp),
                 enabled = isCollapsible,
+                addFocusTarget = false,
             )
             .clickable(enabled = isCollapsible, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),

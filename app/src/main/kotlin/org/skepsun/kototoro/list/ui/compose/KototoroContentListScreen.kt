@@ -892,7 +892,7 @@ fun QuickFilterSection(
                     .then(
                         if (option != null) {
                                 Modifier
-                                    .tvFocusable(shape = chipShape)
+                                    .tvFocusable(shape = chipShape, addFocusTarget = false)
                                     .clickable { onQuickFilterOptionClick(option) }
                             } else {
                                 Modifier
@@ -967,7 +967,7 @@ private fun QuickFilterGroupChip(
                             Modifier
                         },
                     )
-                    .tvFocusable(shape = chipShape, enabled = true)
+                    .tvFocusable(shape = chipShape, enabled = true, addFocusTarget = false)
                     .clickable { expanded = true }
                     .height(QuickFilterChipHeight)
                     .padding(horizontal = 10.dp),

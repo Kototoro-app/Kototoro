@@ -97,6 +97,8 @@ import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.readingrecord.data.ReadingRecordRepository
 import org.skepsun.kototoro.reader.ui.ReaderControlDelegate
 import org.skepsun.kototoro.reader.ui.ReaderState
+import org.skepsun.kototoro.reader.ui.ReaderTvKeyDispatcher
+import org.skepsun.kototoro.reader.ui.isReaderTvNavigationKey
 import org.skepsun.kototoro.reader.ui.compose.EInkRefreshOverlay
 import org.skepsun.kototoro.reader.ui.compose.ReaderEInkRefresh
 import org.skepsun.kototoro.reader.ui.eink.EInkPageIdentity
@@ -276,6 +278,10 @@ class NovelReaderActivity :
     private var eInkRefresh by mutableStateOf<ReaderEInkRefresh?>(null)
     private var isEInkModeEnabled by mutableStateOf(false)
     private var tvPresentationEnabled = false
+    private val tvKeyDispatcher = ReaderTvKeyDispatcher()
+    private val controlDelegate by lazy {
+        ReaderControlDelegate(resources, settings, tapGridSettings, this)
+    }
     private var nextEInkRefreshId = 0L
     private var novelMarkingObservationJob: Job? = null
     private var novelBookmarkObservationJob: Job? = null
@@ -337,6 +343,11 @@ class NovelReaderActivity :
         super.onStart()
         val intent = Intent(this, org.skepsun.kototoro.reader.novel.tts.TtsService::class.java)
         bindService(intent, ttsConnection, android.content.Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onPause() {
+        tvKeyDispatcher.reset()
+        super.onPause()
     }
 
     override fun onStop() {
@@ -1004,29 +1015,84 @@ class NovelReaderActivity :
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        when (keyCode) {
-            KeyEvent.KEYCODE_VOLUME_UP -> if (settings.isReaderVolumeButtonsEnabled) {
-                val delta = if (settings.isReaderNavigationInverted) 1 else -1
-                switchPageBy(delta)
-                return true
-            }
-            KeyEvent.KEYCODE_VOLUME_DOWN -> if (settings.isReaderVolumeButtonsEnabled) {
-                val delta = if (settings.isReaderNavigationInverted) -1 else 1
-                switchPageBy(delta)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            val uiState = composeReaderViewModel.uiState.value
+            val hasSubOverlay = uiState.settingsSheetVisible ||
+                uiState.replaceRulesSheetVisible ||
+                uiState.markingsSheetVisible ||
+                uiState.chaptersSheetVisible ||
+                uiState.toolsSheetVisible ||
+                uiState.ttsControlsVisible ||
+                ttsVoiceDialogState != null ||
+                noteSelection != null ||
+                noteMarking != null ||
+                noteDetailMarking != null
+            if (shouldInterceptNovelReaderTvBack(isTvPresentation, isUiVisible, hasSubOverlay)) {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    setUiVisible(false)
+                }
                 return true
             }
         }
-        return super.onKeyDown(keyCode, event)
+
+        when (
+            tvKeyDispatcher.dispatch(
+                keyCode = event.keyCode,
+                action = event.action,
+                isTvPresentation = isTvPresentation,
+                controlsVisible = isReaderControlsVisible,
+                repeatCount = event.repeatCount,
+            )
+        ) {
+            ReaderTvKeyDispatcher.Action.DISPATCH_TO_READER -> {
+                controlDelegate.onKeyDown(event.keyCode, event)
+                return true
+            }
+            ReaderTvKeyDispatcher.Action.CONSUME -> return true
+            ReaderTvKeyDispatcher.Action.DELEGATE -> Unit
+        }
+
+        if (isTvPresentation && !isUiVisible) {
+            val delta = resolveNovelReaderPageKeyDelta(event.keyCode, settings.isReaderNavigationInverted)
+            if (delta != null) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    switchPageBy(delta)
+                }
+                return true
+            }
+        }
+
+        if (
+            settings.isReaderVolumeButtonsEnabled &&
+            (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
+        ) {
+            return when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    val delta = when (event.keyCode) {
+                        KeyEvent.KEYCODE_VOLUME_UP -> if (settings.isReaderNavigationInverted) 1 else -1
+                        else -> if (settings.isReaderNavigationInverted) -1 else 1
+                    }
+                    switchPageBy(delta)
+                    true
+                }
+                KeyEvent.ACTION_UP -> true
+                else -> true
+            }
+        }
+
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isTvPresentation && isReaderTvNavigationKey(keyCode)) {
+            return super.onKeyDown(keyCode, event)
+        }
+        return controlDelegate.onKeyDown(keyCode, event) || super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN)
-            && settings.isReaderVolumeButtonsEnabled
-        ) {
-            return true
-        }
-        return super.onKeyUp(keyCode, event)
+        return controlDelegate.onKeyUp(keyCode, event) || super.onKeyUp(keyCode, event)
     }
 
     override fun openMenu() {
@@ -3199,6 +3265,7 @@ class NovelReaderActivity :
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        tvPresentationEnabled = resolveUiPresentationConfig(this, settings).isTv
         resetEInkRefreshContext(clearIdentity = true)
         applyReaderPalette()
         // 保存当前进度（按字符比例），用于横竖屏/单双页切换后的恢复

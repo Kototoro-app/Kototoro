@@ -19,6 +19,26 @@ class VideoPlayerTvKeyPolicyTest {
     }
 
     @Test
+    fun `vertical dpad reveals hidden controls`() {
+        assertEquals(
+            VideoPlayerTvKeyAction.SHOW_CONTROLS,
+            resolveVideoPlayerTvKeyAction(
+                keyCode = KeyEvent.KEYCODE_DPAD_UP,
+                controlsVisible = false,
+                screenLocked = false,
+            ),
+        )
+        assertEquals(
+            VideoPlayerTvKeyAction.SHOW_CONTROLS,
+            resolveVideoPlayerTvKeyAction(
+                keyCode = KeyEvent.KEYCODE_DPAD_DOWN,
+                controlsVisible = false,
+                screenLocked = false,
+            ),
+        )
+    }
+
+    @Test
     fun `visible controls keep directional keys in focus system`() {
         assertEquals(
             VideoPlayerTvKeyAction.PASS_TO_FOCUS,

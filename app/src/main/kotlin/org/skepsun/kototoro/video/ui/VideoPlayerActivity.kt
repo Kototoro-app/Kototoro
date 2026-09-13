@@ -186,6 +186,7 @@ import org.skepsun.kototoro.video.ui.compose.VideoChapterDialog
 import org.skepsun.kototoro.video.ui.compose.VideoChapterDialogState
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerControls
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerTvKeyAction
+import org.skepsun.kototoro.video.ui.compose.VideoPlayerTvKeyDispatcher
 import org.skepsun.kototoro.video.ui.compose.resolveVideoPlayerTvKeyAction
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerInfoDialog
 import org.skepsun.kototoro.video.ui.compose.VideoPlayerNativeInitErrorDialog
@@ -855,34 +856,44 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         if (initialized) installPlayerGesturesIfReady()
     }
 
+    private val tvKeyDispatcher = VideoPlayerTvKeyDispatcher()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (!tvPresentationEnabled) return super.dispatchKeyEvent(event)
-        val action = resolveVideoPlayerTvKeyAction(
+        val (dispatchResult, action) = tvKeyDispatcher.dispatch(
             keyCode = event.keyCode,
+            action = event.action,
+            isTvPresentation = tvPresentationEnabled,
             controlsVisible = playerUiState == PlayerUiState.ControlsVisible,
             screenLocked = isScreenLocked,
+            repeatCount = event.repeatCount,
         )
-        if (action == VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
-            if (
-                event.action == KeyEvent.ACTION_DOWN &&
-                playerUiState == PlayerUiState.ControlsVisible &&
-                !event.isCanceled
-            ) {
-                restartControlsAutoHide()
+        when (dispatchResult) {
+            VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME -> return true
+            VideoPlayerTvKeyDispatcher.DispatchResult.DELEGATE -> {
+                if (
+                    event.action == KeyEvent.ACTION_DOWN &&
+                    playerUiState == PlayerUiState.ControlsVisible &&
+                    !event.isCanceled
+                ) {
+                    restartControlsAutoHide()
+                }
+                return super.dispatchKeyEvent(event)
             }
-            return super.dispatchKeyEvent(event)
+            VideoPlayerTvKeyDispatcher.DispatchResult.EXECUTE_ACTION -> {
+                if (event.isCanceled) return true
+                when (action) {
+                    VideoPlayerTvKeyAction.SHOW_CONTROLS -> setUiIsVisible(true)
+                    VideoPlayerTvKeyAction.TOGGLE_PLAYBACK -> onComposePlayerAction(VideoPlayerAction.TogglePlayback)
+                    VideoPlayerTvKeyAction.SEEK_BACKWARD -> seekFromTvRemote(-quickTapBackMs)
+                    VideoPlayerTvKeyAction.SEEK_FORWARD -> seekFromTvRemote(quickTapJumpMs)
+                    VideoPlayerTvKeyAction.CONSUME,
+                    VideoPlayerTvKeyAction.PASS_TO_FOCUS,
+                    null -> Unit
+                }
+                return true
+            }
         }
-        if (event.action != KeyEvent.ACTION_DOWN || event.isCanceled) return true
-        when (action) {
-            VideoPlayerTvKeyAction.SHOW_CONTROLS -> setUiIsVisible(true)
-            VideoPlayerTvKeyAction.TOGGLE_PLAYBACK -> onComposePlayerAction(VideoPlayerAction.TogglePlayback)
-            VideoPlayerTvKeyAction.SEEK_BACKWARD -> seekFromTvRemote(-quickTapBackMs)
-            VideoPlayerTvKeyAction.SEEK_FORWARD -> seekFromTvRemote(quickTapJumpMs)
-            VideoPlayerTvKeyAction.CONSUME,
-            VideoPlayerTvKeyAction.PASS_TO_FOCUS,
-            -> Unit
-        }
-        return true
     }
 
     private fun seekFromTvRemote(deltaMs: Long) {
@@ -3740,6 +3751,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     override fun onPause() {
+        tvKeyDispatcher.reset()
         if (::enhancementView.isInitialized) enhancementView.pauseVideoSurface()
         super.onPause()
     }

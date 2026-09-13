@@ -45,6 +45,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import kotlin.math.roundToInt
 
 internal data class VideoActionDialogItem(
@@ -216,6 +217,7 @@ private fun VideoActionItem(
                     bottom = bounds.bottom.roundToInt(),
                 )
             }
+            .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clickable { onItemSelected(item, itemBounds) }
             .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 8.dp else 10.dp),
     ) {

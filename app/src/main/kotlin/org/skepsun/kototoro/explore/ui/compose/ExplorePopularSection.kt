@@ -98,7 +98,7 @@ internal fun TrackingCategoryRow(
             )
             TextButton(
                 onClick = onMoreClick,
-                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp)),
+                modifier = Modifier.tvFocusable(shape = RoundedCornerShape(999.dp), addFocusTarget = false),
             ) {
                 Text(stringResource(R.string.more))
             }
@@ -207,7 +207,7 @@ internal fun BrowsePopularListItem(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .tvFocusable(shape = surfaceShape, borderWidth = 3.dp)
+            .tvFocusable(shape = surfaceShape, borderWidth = 3.dp, addFocusTarget = false)
             .clickable(
                 onClick = {
                     logHeroTransition("explore_popular_click title=${item.title} sharedKey=$sharedElementKey")

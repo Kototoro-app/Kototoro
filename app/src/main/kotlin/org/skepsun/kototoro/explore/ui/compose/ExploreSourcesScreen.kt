@@ -144,7 +144,7 @@ fun KototoroExploreSourcesScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .tvFocusable(shape = RoundedCornerShape(12.dp))
+                                .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false)
                                 .combinedClickable(
                                     onClick = {
                                         if (listModel.payload == R.id.nav_suggestions) {
@@ -190,6 +190,7 @@ fun KototoroExploreSourcesScreen(
                                 )
                                 .tvFocusable(
                                     shape = RoundedCornerShape(if (isGrid) 20.dp else 12.dp),
+                                    addFocusTarget = false,
                                 )
                                 .combinedClickable(
                                     onClick = {
