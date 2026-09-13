@@ -163,6 +163,7 @@ enum class EntityGraphRepairIssueKind {
     DANGLING_WORK_PROJECTION_ANCHOR,
     WORK_ENTITY_MISSING_SYNC_ID,
     MIXED_WORK_CONTENT_TYPES,
+    DUPLICATE_LOCAL_PROJECTIONS,
 }
 
 data class EntityGraphRepairIssue(
@@ -213,6 +214,18 @@ data class EntityGraphRepairReport(
             .count()
     val mixedWorkContentTypeProjectionCount: Int
         get() = issues.count { it.kind == EntityGraphRepairIssueKind.MIXED_WORK_CONTENT_TYPES }
+    val duplicateLocalProjectionsEntityCount: Int
+        get() = issues
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
+            .map { it.entityId }
+            .distinct()
+            .count()
+    val duplicateLocalProjectionsCount: Int
+        get() = issues
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
+            .sumOf { it.count }
     val hasIssues: Boolean
         get() = issues.isNotEmpty()
 }

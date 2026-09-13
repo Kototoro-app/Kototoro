@@ -2967,6 +2967,14 @@ SHA-256 指纹:
     <string name="entity_organize_repair_mixed_work_content_types_action">拆分混合内容类型作品</string>
     <string name="entity_organize_repair_mixed_work_content_types_feedback">已将 %1$d 个混合内容类型投影拆分为独立作品实体。</string>
 
+    <!-- 实体整理 - 重复本地投影 -->
+    <string name="entity_organize_repair_duplicate_projections_title">清理实体下重复的本地投影</string>
+    <string name="entity_organize_repair_duplicate_projections_summary">%1$d 部作品实体包含 %2$d 个同源重复本地投影。这会导致界面卡顿和数据膨胀。修复将保留收藏和历史锚点，并清理冗余绑定。</string>
+    <string name="entity_organize_repair_duplicate_projections_action">一键清理重复投影</string>
+    <string name="entity_organize_repair_duplicate_projections_feedback">已清理 %1$d 个重复的本地投影。</string>
+    <string name="entity_organize_duplicate_projections_badge">重复 ×%1$d</string>
+    <string name="entity_organize_clean_duplicate_projections_action">清理</string>
+
     <!-- Spaces 功能 -->
     <string name="space_switcher_title">切换 Space</string>
     <string name="space_switcher_content_description">当前：%1$s。切换 Space</string>

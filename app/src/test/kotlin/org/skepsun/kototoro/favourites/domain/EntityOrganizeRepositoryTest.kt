@@ -94,6 +94,52 @@ class EntityOrganizeRepositoryTest {
         verify(exactly = 0) { db.getFavouritesDao() }
     }
 
+    @Test
+    fun `duplicate projections are grouped and canonical projection preserved with duplicateCount`() = runTest {
+        coEvery { workFavouritesDao.findActive() } returns listOf(
+            workFavourite(entityId = 9L, categoryId = 1L, anchorMangaId = 101L),
+        )
+        coEvery { entityGraphDao.findEntitiesByIds(listOf(9L)) } returns listOf(entity(9L, "Duplicated Work"))
+        coEvery { entityGraphDao.findEntityPrefsByIds(listOf(9L)) } returns listOf(
+            prefs(entityId = 9L, preferredLocalMangaId = 102L),
+        )
+        // 3 duplicate bindings with same source and url, plus 1 distinct source
+        coEvery { entityGraphDao.findActiveLocalBindingsByEntities(listOf(9L)) } returns listOf(
+            binding(entityId = 9L, mangaId = 101L, state = EntityBindingState.CONFIRMED),
+            binding(entityId = 9L, mangaId = 102L, state = EntityBindingState.MANUAL),
+            binding(entityId = 9L, mangaId = 103L, state = EntityBindingState.CONFIRMED),
+            binding(entityId = 9L, mangaId = 200L, state = EntityBindingState.CONFIRMED),
+        )
+        coEvery { mangaDao.findWithTagsByIds(any<Collection<Long>>()) } answers {
+            val ids = firstArg<Collection<Long>>()
+            listOfNotNull(
+                if (101L in ids) mangaWithTags(101L, "source_dup", "Dup Title", "/same_path") else null,
+                if (102L in ids) mangaWithTags(102L, "source_dup", "Dup Title", "/same_path") else null,
+                if (103L in ids) mangaWithTags(103L, "source_dup", "Dup Title", "/same_path") else null,
+                if (200L in ids) mangaWithTags(200L, "source_other", "Other Title", "/other_path") else null,
+            )
+        }
+        coEvery { categoriesDao.findByIds(listOf(1L)) } returns listOf(category(1))
+
+        val works = repository.listOrganizableWorks()
+
+        assertEquals(1, works.size)
+        val work = works.single()
+        assertEquals(9L, work.entityId)
+        assertTrue(work.hasDuplicateProjections)
+        assertEquals(2, work.totalDuplicateProjections) // 3 duplicates for source_dup - 1 = 2 extra
+        assertEquals(2, work.projections.size) // 1 grouped for source_dup, 1 for source_other
+
+        val dupGroup = work.projections.first { it.source == "source_dup" }
+        assertEquals(102L, dupGroup.mangaId) // preferred projection chosen
+        assertEquals(3, dupGroup.duplicateCount)
+        assertTrue(dupGroup.isPreferred)
+
+        val otherProj = work.projections.first { it.source == "source_other" }
+        assertEquals(200L, otherProj.mangaId)
+        assertEquals(1, otherProj.duplicateCount)
+    }
+
     private fun workFavourite(
         entityId: Long,
         categoryId: Long,
@@ -157,14 +203,14 @@ class EntityOrganizeRepositoryTest {
         )
     }
 
-    private fun mangaWithTags(id: Long, source: String, title: String): MangaWithTags {
+    private fun mangaWithTags(id: Long, source: String, title: String, url: String = "/$id"): MangaWithTags {
         return MangaWithTags(
             manga = MangaEntity(
                 id = id,
                 title = title,
                 altTitles = null,
-                url = "/$id",
-                publicUrl = "https://example.org/$id",
+                url = url,
+                publicUrl = "https://example.org$url",
                 rating = -1f,
                 isNsfw = false,
                 contentRating = null,

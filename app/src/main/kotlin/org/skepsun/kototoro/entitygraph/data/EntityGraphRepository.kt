@@ -1131,6 +1131,9 @@ class EntityGraphRepository @Inject constructor(
                 dao.touchEntity(group.canonicalEntityId, now)
             }
         }
+        if (groups.isNotEmpty()) {
+            repairDuplicateLocalProjections(entityIds = groups.map { it.canonicalEntityId })
+        }
         EntityConsolidationReport(
             groupCount = groups.size,
             absorbedCount = groups.sumOf { it.absorbedEntityIds.size },
@@ -2118,6 +2121,92 @@ class EntityGraphRepository @Inject constructor(
         }
     }
 
+    suspend fun repairDuplicateLocalProjections(
+        entityId: Long? = null,
+        entityIds: Collection<Long>? = null,
+    ): Int = withContext(Dispatchers.Default) {
+        val dao = db.getEntityGraphDao()
+        val targetEntityIds = when {
+            entityIds != null -> entityIds.distinct()
+            entityId != null -> listOf(entityId)
+            else -> {
+                val report = inspectRepairIssues()
+                report.issues
+                    .asSequence()
+                    .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
+                    .map { it.entityId }
+                    .distinct()
+                    .toList()
+            }
+        }
+        if (targetEntityIds.isEmpty()) {
+            return@withContext 0
+        }
+        var totalRepaired = 0
+        val now = System.currentTimeMillis()
+        db.withTransaction {
+            targetEntityIds.forEach { targetId ->
+                val localBindings = dao.findActiveLocalBindingsByEntity(targetId)
+                if (localBindings.size <= 1) return@forEach
+                val mangaIds = localBindings.mapNotNull { it.externalId.toLongOrNull() }
+                val mangaById = db.getMangaDao().findEntitiesByIds(mangaIds).associateBy { it.id }
+                val prefs = dao.findEntityPrefs(targetId)
+                val preferredId = prefs?.preferredLocalMangaId
+                val favouriteAnchorId = db.getWorkFavouritesDao().findActiveForEntity(targetId)?.anchorMangaId
+                val historyAnchorId = db.getWorkHistoryDao().find(targetId)?.anchorMangaId
+
+                val groups = localBindings.mapNotNull { binding ->
+                    val mId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+                    val manga = mangaById[mId] ?: return@mapNotNull null
+                    Triple(binding, mId, manga)
+                }.groupBy { (_, _, manga) ->
+                    val key = ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
+                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
+                }
+
+                groups.values.filter { it.size > 1 }.forEach { group ->
+                    val canonicalTriple = group.firstOrNull { it.second == preferredId }
+                        ?: group.firstOrNull { it.second == favouriteAnchorId }
+                        ?: group.firstOrNull { it.second == historyAnchorId }
+                        ?: group.minByOrNull { it.second }
+                        ?: return@forEach
+
+                    val canonicalMangaId = canonicalTriple.second
+                    val redundant = group.filterNot { it.second == canonicalMangaId }
+
+                    redundant.forEach { (binding, redundantMangaId, _) ->
+                        dao.deleteBindingBySource(binding.source, binding.externalId)
+                        dao.deleteBindingBySource("0", binding.externalId)
+                        db.getWorkFavouritesDao().replaceAnchorMangaId(
+                            entityId = targetId,
+                            oldAnchorMangaId = redundantMangaId,
+                            newAnchorMangaId = canonicalMangaId,
+                            updatedAt = now,
+                        )
+                        val history = db.getWorkHistoryDao().find(targetId)
+                        if (history?.anchorMangaId == redundantMangaId) {
+                            db.getWorkHistoryDao().update(history.copy(anchorMangaId = canonicalMangaId, updatedAt = now))
+                        }
+                        db.getWorkStatsDao().replaceAnchorMangaId(
+                            entityId = targetId,
+                            oldAnchorMangaId = redundantMangaId,
+                            newAnchorMangaId = canonicalMangaId,
+                        )
+                        if (preferredId == redundantMangaId) {
+                            dao.updateEntityPreferredLocalMangaId(targetId, canonicalMangaId, now)
+                        }
+                        totalRepaired++
+                    }
+                }
+                dao.touchEntity(targetId, now)
+            }
+            if (totalRepaired > 0) {
+                db.getMangaDao().cleanupSyncResidue()
+            }
+        }
+        totalRepaired
+    }
+
     suspend fun inspectRepairIssues(limit: Int = Int.MAX_VALUE): EntityGraphRepairReport = withContext(Dispatchers.Default) {
         val dao = db.getEntityGraphDao()
         val bindings = dao.dumpBindings()
@@ -2332,6 +2421,13 @@ class EntityGraphRepository @Inject constructor(
                 )
             }
 
+        val allActiveLocalMangaIds = activeBindings
+            .filter { it.isLocalReadingSource() }
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .distinct()
+        val activeLocalMangaById = db.getMangaDao().findEntitiesByIds(allActiveLocalMangaIds)
+            .associateBy { it.id }
+
         activeBindingsByEntity.forEach { (entityId, entityBindings) ->
             val localBindings = entityBindings.filter { it.isLocalReadingSource() }
             val hasTrackingBinding = entityBindings.any { it.source.toTrackingServiceOrNull() != null }
@@ -2339,9 +2435,36 @@ class EntityGraphRepository @Inject constructor(
                 return@forEach
             }
             val entity = entitiesById[entityId] ?: return@forEach
+
+            if (localBindings.size > 1) {
+                val mangaItems = localBindings.mapNotNull { binding ->
+                    val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+                    val manga = activeLocalMangaById[localMangaId] ?: return@mapNotNull null
+                    Triple(binding, localMangaId, manga)
+                }
+                val duplicateGroups = mangaItems.groupBy { (_, _, manga) ->
+                    val key = ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
+                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
+                }.filterValues { it.size > 1 }
+
+                duplicateGroups.forEach { (_, groupItems) ->
+                    val redundantCount = groupItems.size - 1
+                    groupItems.drop(1).forEach { (binding, localMangaId, _) ->
+                        issues += EntityGraphRepairIssue(
+                            kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+                            entityId = entityId,
+                            source = binding.source,
+                            externalId = binding.externalId,
+                            localMangaId = localMangaId,
+                            count = redundantCount,
+                        )
+                    }
+                }
+            }
+
             val localProjectionTypes = localBindings.mapNotNull { binding ->
                 val localMangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
-                val manga = db.getMangaDao().find(localMangaId)?.manga ?: return@mapNotNull null
+                val manga = activeLocalMangaById[localMangaId] ?: return@mapNotNull null
                 val contentType = manga.contentType
                     ?.let { raw -> runCatching { ContentType.valueOf(raw) }.getOrNull() }
                     ?: ContentSource(manga.source).resolvedContentTypeForSnapshot()

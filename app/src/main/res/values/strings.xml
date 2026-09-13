@@ -1653,6 +1653,12 @@
     <string name="entity_organize_repair_mixed_work_content_types_title">Repair mixed content-type works</string>
     <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d work entities contain %2$d local projections from different content types. Split the projections into independent work entities to restore type isolation.</string>
     <string name="entity_organize_repair_mixed_work_content_types_action">Split mixed works</string>
+    <string name="entity_organize_repair_duplicate_projections_title">Prune duplicate local projections</string>
+    <string name="entity_organize_repair_duplicate_projections_summary">%1$d work entities contain %2$d duplicate local projections for the same reading source. This can cause UI lag and database bloat. The repair will preserve favorite/history anchors and prune redundant bindings.</string>
+    <string name="entity_organize_repair_duplicate_projections_action">Prune duplicate projections</string>
+    <string name="entity_organize_repair_duplicate_projections_feedback">Pruned %1$d duplicate local projections.</string>
+    <string name="entity_organize_duplicate_projections_badge">Duplicates ×%1$d</string>
+    <string name="entity_organize_clean_duplicate_projections_action">Clean</string>
     <string name="entity_organize_repair_confirm">Confirm</string>
     <string name="entity_organize_repair_split_feedback">Local projection was split into a standalone entity.</string>
     <string name="entity_organize_repair_detach_feedback">Local projection was removed from the current work.</string>

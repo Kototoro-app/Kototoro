@@ -98,6 +98,7 @@ internal data class EntityWorkbenchRow(
     val trackingCandidates: List<TrackingBindingPreview>,
     val readingCandidates: List<ReadingSourcePreview>,
     val isMergeCandidate: Boolean,
+    val duplicateProjectionCount: Int = 0,
 )
 
 internal data class WorkbenchSelectionSummary(
@@ -324,6 +325,15 @@ fun SourceMigrationPanel(
                 }
             }
 
+            if ((uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) > 0) {
+                item {
+                    DuplicateProjectionsRepairCard(
+                        uiState = uiState,
+                        onRepairClick = viewModel::repairDuplicateLocalProjections,
+                    )
+                }
+            }
+
             if ((uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) > 0) {
                 item {
                     DanglingWorkAnchorsRepairCard(
@@ -397,6 +407,7 @@ fun SourceMigrationPanel(
                     onClearReadingPreviews = viewModel::clearReadingPreviews,
                     onSplitLocalProjection = viewModel::splitLocalWorkProjection,
                     onDetachLocalProjection = viewModel::detachLocalWorkProjection,
+                    onRepairDuplicateProjections = viewModel::repairDuplicateLocalProjections,
                 )
             }
 

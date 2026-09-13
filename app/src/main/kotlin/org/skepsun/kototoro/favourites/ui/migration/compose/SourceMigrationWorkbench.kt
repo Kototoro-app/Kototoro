@@ -51,6 +51,7 @@ internal fun EntityWorkbenchSection(
     onClearReadingPreviews: (Set<Long>) -> Unit,
     onSplitLocalProjection: (Long) -> Unit,
     onDetachLocalProjection: (Long) -> Unit,
+    onRepairDuplicateProjections: ((Long?) -> Unit)? = null,
 ) {
     val normalizedQuery = viewState.query.trim().lowercase(Locale.ROOT)
     val filteredRows = remember(
@@ -323,6 +324,7 @@ internal fun EntityWorkbenchSection(
                         onToggleReadingPreview = onToggleReadingPreview,
                         onSplitLocalProjection = onSplitLocalProjection,
                         onDetachLocalProjection = onDetachLocalProjection,
+                        onRepairDuplicateProjections = onRepairDuplicateProjections,
                     )
                 }
             }

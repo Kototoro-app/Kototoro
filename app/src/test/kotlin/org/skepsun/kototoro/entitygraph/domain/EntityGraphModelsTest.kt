@@ -27,6 +27,31 @@ class EntityGraphModelsTest {
 	}
 
 	@Test
+	fun `repair report counts duplicate local projections entities and count correctly`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+					entityId = 7L,
+					localMangaId = 101L,
+				),
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+					entityId = 7L,
+					localMangaId = 102L,
+				),
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+					entityId = 8L,
+					localMangaId = 201L,
+				),
+			),
+		)
+		assertEquals(2, report.duplicateLocalProjectionsEntityCount)
+		assertEquals(3, report.duplicateLocalProjectionsCount)
+	}
+
+	@Test
 	fun `strict title key ignores case and punctuation`() {
 		assertEquals(
 			normalizeStrictTitleKey("Kami wa Game ni Ueteiru"),

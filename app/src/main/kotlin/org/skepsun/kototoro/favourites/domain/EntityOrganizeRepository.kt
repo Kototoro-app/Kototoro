@@ -18,7 +18,10 @@ data class OrganizableWork(
     val preferredMangaId: Long?,
     val favouriteCategoryIds: Set<Long>,
     val projections: List<WorkProjection>,
-)
+) {
+    val hasDuplicateProjections: Boolean get() = projections.any { it.duplicateCount > 1 }
+    val totalDuplicateProjections: Int get() = projections.sumOf { (it.duplicateCount - 1).coerceAtLeast(0) }
+}
 
 data class WorkProjection(
     val mangaId: Long,
@@ -28,6 +31,7 @@ data class WorkProjection(
     val bindingCreatedBy: EntityBindingCreatedBy,
     val isPreferred: Boolean,
     val isFavouriteAnchor: Boolean,
+    val duplicateCount: Int = 1,
 )
 
 @Reusable
@@ -91,14 +95,27 @@ class EntityOrganizeRepository @Inject constructor(
                 .mapNotNull { binding ->
                     val mangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
                     val content = contentById[mangaId] ?: return@mapNotNull null
+                    Triple(binding, mangaId, content.manga)
+                }
+                .groupBy { (_, _, manga) ->
+                    val key = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
+                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
+                }
+                .mapNotNull { (_, group) ->
+                    val canonical = group.firstOrNull { it.second == preferredMangaId }
+                        ?: group.firstOrNull { it.second in favouriteAnchorIds }
+                        ?: group.minByOrNull { it.second }
+                        ?: return@mapNotNull null
+                    val (binding, mangaId, manga) = canonical
                     WorkProjection(
                         mangaId = mangaId,
-                        source = content.manga.source,
-                        title = content.manga.title,
+                        source = manga.source,
+                        title = manga.title,
                         bindingState = binding.state.toEntityBindingState(),
                         bindingCreatedBy = binding.createdBy.toEntityBindingCreatedBy(),
                         isPreferred = mangaId == preferredMangaId,
                         isFavouriteAnchor = mangaId in favouriteAnchorIds,
+                        duplicateCount = group.size,
                     )
                 }
                 .sortedWith(

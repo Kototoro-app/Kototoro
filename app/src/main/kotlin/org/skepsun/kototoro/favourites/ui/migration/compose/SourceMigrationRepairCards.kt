@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MergeType
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -143,6 +144,73 @@ internal fun MixedWorkContentTypesRepairCard(
                     ),
                 ) {
                     Text(stringResource(R.string.entity_organize_repair_mixed_work_content_types_action))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun DuplicateProjectionsRepairCard(
+    uiState: MigrationUiState,
+    onRepairClick: () -> Unit,
+) {
+    val entityCount = uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0
+    val projectionCount = uiState.repairReport?.duplicateLocalProjectionsCount ?: 0
+    OutlinedCard(
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.16f),
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.35f)),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ContentCopy,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.entity_organize_repair_duplicate_projections_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.entity_organize_repair_duplicate_projections_summary,
+                            entityCount,
+                            projectionCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+            ) {
+                OutlinedButton(
+                    onClick = onRepairClick,
+                    enabled = !uiState.isExecuting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.tertiary,
+                    ),
+                ) {
+                    Text(stringResource(R.string.entity_organize_repair_duplicate_projections_action))
                 }
             }
         }

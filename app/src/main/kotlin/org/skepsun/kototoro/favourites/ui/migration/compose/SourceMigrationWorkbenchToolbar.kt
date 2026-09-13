@@ -640,11 +640,20 @@ internal fun buildEntityWorkbenchRows(
 ): List<EntityWorkbenchRow> {
     val candidateGroups = uiState.mergeCandidateGroups
     val groupedMangaIds = candidateGroups.flatMapTo(LinkedHashSet()) { it.mangaIds }
+    val workByEntityId = uiState.organizableWorks.associateBy { it.entityId }
+    val workByMangaId = buildMap {
+        uiState.organizableWorks.forEach { work ->
+            work.projections.forEach { p -> put(p.mangaId, work) }
+        }
+    }
     val workGroups = uiState.organizableWorks
         .filter { work -> work.projections.any { projection -> projection.mangaId !in groupedMangaIds } }
         .map(::workToWorkbenchGroup)
     val groups = candidateGroups + workGroups
     return groups.map { group ->
+        val associatedWork = group.resolvedEntityId?.let(workByEntityId::get)
+            ?: group.mangaIds.firstNotNullOfOrNull(workByMangaId::get)
+        val duplicateCount = associatedWork?.totalDuplicateProjections ?: 0
         EntityWorkbenchRow(
             group = group,
             existingTrackingBindings = uiState.existingTrackingPreviews.filter { it.groupId == group.id },
@@ -653,6 +662,7 @@ internal fun buildEntityWorkbenchRows(
                 preview.mangaId in group.mangaIds
             },
             isMergeCandidate = group.isExecutableMergeCandidate(),
+            duplicateProjectionCount = duplicateCount,
         )
     }
 }

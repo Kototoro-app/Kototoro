@@ -1182,6 +1182,36 @@ class SourceMigrationViewModel @Inject constructor(
         }
     }
 
+    fun repairDuplicateLocalProjections(entityId: Long? = null) {
+        val state = _uiState.value
+        if (state.isExecuting) {
+            return
+        }
+        _uiState.value = state.copy(
+            isExecuting = true,
+            isFinished = false,
+            stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
+        )
+        viewModelScope.launch(Dispatchers.IO) {
+            val repaired = entityGraphRepository.repairDuplicateLocalProjections(entityId = entityId)
+            loadSourcesNow()
+            refreshRepairReportNow()
+            val current = _uiState.value
+            _uiState.value = current.copy(
+                isExecuting = false,
+                isFinished = true,
+                stageFeedbacks = current.stageFeedbacks.withFeedback(
+                    stage = EntityOrganizeStage.MERGE,
+                    kind = EntityOrganizeFeedbackKind.EXECUTE,
+                    message = appContext.getString(
+                        R.string.entity_organize_repair_duplicate_projections_feedback,
+                        repaired,
+                    ),
+                ),
+            )
+        }
+    }
+
     fun mergeSelectedEntities() {
         val state = _uiState.value
         if (!state.mergePreviewReady || state.selectedMergeGroupIds.isEmpty() || state.isExecuting) {
