@@ -248,6 +248,8 @@ private class TestJsonSourceDao : JsonSourceDao {
 	override fun observeAll() = flowState
 	
 	override suspend fun getById(id: String) = sources.firstOrNull { it.id == id }
+	override suspend fun findAll(): List<JsonSourceEntity> = sources.toList()
+	override suspend fun findByName(name: String): JsonSourceEntity? = sources.firstOrNull { it.name == name }
 	
 	override suspend fun insert(source: JsonSourceEntity) {
 		sources.add(source)

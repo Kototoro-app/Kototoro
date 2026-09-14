@@ -13,6 +13,10 @@ import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
 import org.skepsun.kototoro.sync.google.data.model.SyncFavouriteCategory
 import org.skepsun.kototoro.sync.google.data.model.SyncTrack
 import org.skepsun.kototoro.sync.google.data.model.SyncTrackLog
+import org.skepsun.kototoro.sync.google.data.model.SyncExtensionPackage
+import org.skepsun.kototoro.sync.google.data.model.SyncExtensionRepo
+import org.skepsun.kototoro.sync.google.data.model.SyncJsonSource
+import org.skepsun.kototoro.sync.google.data.model.SyncSourceState
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkFavourite
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkHistory
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
@@ -64,6 +68,10 @@ object GoogleDriveSyncMerger {
                     logs = local.feed.logs + isolatedRemote.feed.logs,
                 ),
                 config = config,
+                repositories = (local.repositories + isolatedRemote.repositories),
+                sourceStates = (local.sourceStates + isolatedRemote.sourceStates),
+                jsonSources = (local.jsonSources + isolatedRemote.jsonSources),
+                extensions = (local.extensions + isolatedRemote.extensions),
             ),
         )
     }
@@ -308,6 +316,10 @@ object GoogleDriveSyncMerger {
                 logs = mappedLogs,
             ),
             config = snapshot.config,
+            repositories = snapshot.repositories.groupBy { it.type.name to it.baseUrl }.values.map(::mergeExtensionRepos),
+            sourceStates = snapshot.sourceStates.groupBy { it.source }.values.map(::mergeSourceStates),
+            jsonSources = snapshot.jsonSources.groupBy { it.name }.values.map(::mergeJsonSources),
+            extensions = snapshot.extensions.groupBy { it.packageId }.values.map(::mergeExtensionPackages),
         )
     }
 
@@ -609,6 +621,10 @@ object GoogleDriveSyncMerger {
                 },
             ),
             config = config,
+            repositories = repositories,
+            sourceStates = sourceStates,
+            jsonSources = jsonSources,
+            extensions = extensions,
         )
     }
 
@@ -779,6 +795,40 @@ object GoogleDriveSyncMerger {
             val duplicate = maxOf(leftRoot, rightRoot)
             parent[duplicate] = canonical
         }
+    }
+
+    private fun mergeExtensionRepos(items: List<SyncExtensionRepo>): SyncExtensionRepo {
+        if (items.size == 1) return items.single()
+        return items.maxByOrNull { it.updatedAt } ?: items.first()
+    }
+
+    private fun mergeSourceStates(items: List<SyncSourceState>): SyncSourceState {
+        if (items.size == 1) return items.single()
+        val latest = items.maxByOrNull { it.usedAt } ?: items.first()
+        val anyEnabled = items.any { it.isEnabled }
+        val anyPinned = items.any { it.isPinned }
+        val maxSortKey = items.maxOf { it.sortKey }
+        return SyncSourceState(
+            source = latest.source,
+            isEnabled = anyEnabled,
+            isPinned = anyPinned,
+            sortKey = maxSortKey,
+            usedAt = latest.usedAt,
+        )
+    }
+
+    private fun mergeJsonSources(items: List<SyncJsonSource>): SyncJsonSource {
+        if (items.size == 1) return items.single()
+        return items.maxByOrNull { it.lastUsedAt } ?: items.first()
+    }
+
+    private fun mergeExtensionPackages(items: List<SyncExtensionPackage>): SyncExtensionPackage {
+        if (items.size == 1) return items.single()
+        val withPayload = items.filter { it.isPayloadIncluded && !it.payloadBase64.isNullOrBlank() }
+        if (withPayload.isNotEmpty()) {
+            return withPayload.maxByOrNull { it.versionCode ?: 0L } ?: withPayload.first()
+        }
+        return items.maxByOrNull { it.versionCode ?: 0L } ?: items.first()
     }
 
     private const val LOCAL_MANGA_SOURCE = "local_manga"

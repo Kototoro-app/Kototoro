@@ -1,30 +1,46 @@
 package org.skepsun.kototoro.sync.google.domain
 
 import android.accounts.Account
+import android.content.Context
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import androidx.room.withTransaction
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.db.MangaDatabase
+import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
+import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
+import org.skepsun.kototoro.core.extensions.GlobalExtensionManager
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.extensions.runtime.ExternalExtensionLoaderSupport
+import org.skepsun.kototoro.extensions.runtime.LocalApkExtensionSupport
+import org.skepsun.kototoro.parsers.network.CloudFlareHelper
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncApi
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.sync.google.data.model.GoogleDriveSyncSnapshot
+import org.skepsun.kototoro.sync.google.data.model.MAX_SYNC_PACKAGE_SIZE_BYTES
 import org.skepsun.kototoro.sync.google.data.model.SyncContent
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityBindingRecord
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityGraph
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityPrefsRecord
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityRecord
 import org.skepsun.kototoro.sync.google.data.model.SyncEntityRelationRecord
-import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
+import org.skepsun.kototoro.sync.google.data.model.SyncExtensionPackage
+import org.skepsun.kototoro.sync.google.data.model.SyncExtensionRepo
 import org.skepsun.kototoro.sync.google.data.model.SyncFavouriteCategory
+import org.skepsun.kototoro.sync.google.data.model.SyncFeedState
+import org.skepsun.kototoro.sync.google.data.model.SyncJsonSource
+import org.skepsun.kototoro.sync.google.data.model.SyncSourceState
 import org.skepsun.kototoro.sync.google.data.model.SyncTrack
 import org.skepsun.kototoro.sync.google.data.model.SyncTrackLog
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkFavourite
@@ -53,6 +69,8 @@ import org.skepsun.kototoro.tracker.data.mergeRestoredTrackNewChapters
 import org.skepsun.kototoro.tracker.data.normalizeTrackFeedState
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.work.domain.WorkResolver
+import java.io.File
+import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +83,7 @@ sealed interface GoogleDriveSyncResult {
 
 @Singleton
 class GoogleDriveSyncRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settings: GoogleDriveSyncSettings,
     private val appSettings: AppSettings,
     private val auth: GoogleDriveSyncAuth,
@@ -438,6 +457,10 @@ class GoogleDriveSyncRepository @Inject constructor(
                 tracks = tracks.map(::SyncTrack),
                 logs = logs.map(::SyncTrackLog),
             ),
+            repositories = dumpRepositories(),
+            sourceStates = dumpSourceStates(),
+            jsonSources = dumpJsonSources(),
+            extensions = dumpExtensionPackages(),
         )
     }
 
@@ -513,9 +536,21 @@ class GoogleDriveSyncRepository @Inject constructor(
                     log.toEntity().mapWith(database, mapping)?.let { database.mergeTrackLog(it) }
                 }
             }
+            runSyncStep("apply repositories") {
+                database.restoreRepositories(snapshot)
+            }
+            runSyncStep("apply source states") {
+                database.restoreSourceStates(snapshot)
+            }
+            runSyncStep("apply json sources") {
+                database.restoreJsonSources(snapshot)
+            }
             runSyncStep("prune local sync residue") {
                 database.pruneLocalSyncResidue()
             }
+        }
+        runSyncStep("apply extension packages") {
+            restoreExtensionPackages(snapshot)
         }
         runSyncStep("normalize track feed state") {
             database.normalizeTrackFeedState()
@@ -1059,7 +1094,282 @@ class GoogleDriveSyncRepository @Inject constructor(
             work = work,
             feed = feed,
             config = config,
+            repositories = repositories,
+            sourceStates = sourceStates,
+            jsonSources = jsonSources,
+            extensions = extensions,
         )
+    }
+
+    private suspend fun dumpRepositories(): List<SyncExtensionRepo> {
+        return database.getExternalExtensionRepoDao().getAll().map(::SyncExtensionRepo)
+    }
+
+    private suspend fun dumpSourceStates(): List<SyncSourceState> {
+        return database.getSourcesDao().findAll().map { SyncSourceState(it) }
+    }
+
+    private suspend fun dumpJsonSources(): List<SyncJsonSource> {
+        return database.getJsonSourceDao().findAll().mapNotNull { entity ->
+            val configBytes = entity.config.toByteArray(Charsets.UTF_8)
+            if (configBytes.size > MAX_SYNC_PACKAGE_SIZE_BYTES) {
+                null
+            } else {
+                SyncJsonSource(entity)
+            }
+        }
+    }
+
+    private fun dumpExtensionPackages(): List<SyncExtensionPackage> {
+        val results = mutableListOf<SyncExtensionPackage>()
+
+        // 1. Local APKs: mihon, aniyomi, ireader, tsundoku
+        val ecosystems = listOf("mihon", "aniyomi", "ireader", "tsundoku")
+        for (ecosystem in ecosystems) {
+            val apkFiles = LocalApkExtensionSupport.findLocalApkFiles(context, ecosystem)
+            for (file in apkFiles) {
+                val pkgInfo = ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(context.packageManager, file)
+                val pkgName = pkgInfo?.packageName ?: file.nameWithoutExtension
+                val label = pkgInfo?.applicationInfo?.loadLabel(context.packageManager)?.toString() ?: pkgName
+                val versionName = pkgInfo?.versionName
+                val versionCode = pkgInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: 0L
+                val size = file.length()
+                val isPayload = size in 1..MAX_SYNC_PACKAGE_SIZE_BYTES
+                val payload = if (isPayload) {
+                    runCatching { Base64.getEncoder().encodeToString(file.readBytes()) }.getOrNull()
+                } else {
+                    null
+                }
+                results.add(
+                    SyncExtensionPackage(
+                        packageId = pkgName,
+                        name = label,
+                        kind = ecosystem,
+                        versionName = versionName,
+                        versionCode = versionCode,
+                        fileName = file.name,
+                        sizeBytes = size,
+                        isPayloadIncluded = isPayload && payload != null,
+                        payloadBase64 = payload,
+                    )
+                )
+            }
+        }
+
+        // 2. JAR plugins
+        val pluginsDir = File(context.filesDir, "plugins")
+        if (pluginsDir.exists() && pluginsDir.isDirectory) {
+            val jarPrefs = context.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
+            val jarFiles = pluginsDir.listFiles { f -> f.isFile && f.extension.equals("jar", ignoreCase = true) }.orEmpty()
+            for (file in jarFiles) {
+                val pkgName = file.nameWithoutExtension
+                val versionCode = jarPrefs.getLong(pkgName, 0L)
+                val repoUrl = jarPrefs.getString("$pkgName:repo", null)
+                val size = file.length()
+                val isPayload = size in 1..MAX_SYNC_PACKAGE_SIZE_BYTES
+                val payload = if (isPayload) {
+                    runCatching { Base64.getEncoder().encodeToString(file.readBytes()) }.getOrNull()
+                } else {
+                    null
+                }
+                results.add(
+                    SyncExtensionPackage(
+                        packageId = pkgName,
+                        name = pkgName,
+                        kind = "jar",
+                        versionCode = versionCode,
+                        repoUrl = repoUrl,
+                        fileName = file.name,
+                        sizeBytes = size,
+                        isPayloadIncluded = isPayload && payload != null,
+                        payloadBase64 = payload,
+                    )
+                )
+            }
+        }
+
+        // 3. Cloudstream plugins
+        val csDir = File(File(context.filesDir, "cloudstream"), "plugins")
+        if (csDir.exists() && csDir.isDirectory) {
+            val csPrefs = context.getSharedPreferences("cloudstream_plugin_versions", Context.MODE_PRIVATE)
+            val csFiles = csDir.listFiles { f -> f.isFile && (f.extension.equals("cs3", ignoreCase = true) || f.extension.equals("jar", ignoreCase = true)) }.orEmpty()
+            for (file in csFiles) {
+                val pkgName = csPrefs.all.entries.firstOrNull { it.key.endsWith(":archive") && it.value == file.name }
+                    ?.key?.substringBefore(":archive") ?: file.nameWithoutExtension
+                val name = csPrefs.getString("$pkgName:name", pkgName) ?: pkgName
+                val repoUrl = csPrefs.getString("$pkgName:repo", null)
+                val versionCode = csPrefs.getLong(pkgName, 0L)
+                val size = file.length()
+                val isPayload = size in 1..MAX_SYNC_PACKAGE_SIZE_BYTES
+                val payload = if (isPayload) {
+                    runCatching { Base64.getEncoder().encodeToString(file.readBytes()) }.getOrNull()
+                } else {
+                    null
+                }
+                results.add(
+                    SyncExtensionPackage(
+                        packageId = pkgName,
+                        name = name,
+                        kind = "cloudstream",
+                        versionCode = versionCode,
+                        repoUrl = repoUrl,
+                        fileName = file.name,
+                        sizeBytes = size,
+                        isPayloadIncluded = isPayload && payload != null,
+                        payloadBase64 = payload,
+                    )
+                )
+            }
+        }
+
+        return results
+    }
+
+    private suspend fun MangaDatabase.restoreRepositories(snapshot: GoogleDriveSyncSnapshot) {
+        snapshot.repositories.forEach { repo ->
+            val existing = getExternalExtensionRepoDao().get(repo.type, repo.baseUrl)
+            if (existing == null) {
+                getExternalExtensionRepoDao().upsert(repo.toEntity())
+            } else if (existing.name != repo.name || existing.website != repo.website || existing.signingKeyFingerprint != repo.signingKeyFingerprint) {
+                getExternalExtensionRepoDao().upsert(
+                    existing.copy(
+                        name = repo.name.ifBlank { existing.name },
+                        website = repo.website.ifBlank { existing.website },
+                        signingKeyFingerprint = repo.signingKeyFingerprint.ifBlank { existing.signingKeyFingerprint },
+                        updatedAt = maxOf(existing.updatedAt, repo.updatedAt),
+                    )
+                )
+            }
+        }
+    }
+
+    private suspend fun MangaDatabase.restoreSourceStates(snapshot: GoogleDriveSyncSnapshot) {
+        snapshot.sourceStates.forEach { state ->
+            val existing = getSourcesDao().find(state.source)
+            if (existing != null) {
+                getSourcesDao().upsert(
+                    existing.copy(
+                        isEnabled = state.isEnabled,
+                        isPinned = state.isPinned,
+                        sortKey = state.sortKey,
+                        lastUsedAt = maxOf(existing.lastUsedAt, state.usedAt),
+                    )
+                )
+            } else {
+                getSourcesDao().upsert(
+                    MangaSourceEntity(
+                        source = state.source,
+                        isEnabled = state.isEnabled,
+                        sortKey = state.sortKey,
+                        addedIn = BuildConfig.VERSION_CODE,
+                        lastUsedAt = state.usedAt,
+                        isPinned = state.isPinned,
+                        cfState = CloudFlareHelper.PROTECTION_NOT_DETECTED,
+                    )
+                )
+            }
+        }
+    }
+
+    private suspend fun MangaDatabase.restoreJsonSources(snapshot: GoogleDriveSyncSnapshot) {
+        snapshot.jsonSources.forEach { remote ->
+            val existing = (if (remote.id.isNotBlank()) getJsonSourceDao().getById(remote.id) else null)
+                ?: getJsonSourceDao().findByName(remote.name)
+            if (existing == null) {
+                getJsonSourceDao().insert(remote.toEntity())
+            } else if (remote.updatedAt >= existing.updatedAt) {
+                getJsonSourceDao().update(
+                    existing.copy(
+                        name = remote.name,
+                        config = remote.config.ifBlank { existing.config },
+                        enabled = remote.isEnabled,
+                        isPinned = remote.isPinned,
+                        iconUrl = remote.iconUrl ?: existing.iconUrl,
+                        updatedAt = remote.updatedAt,
+                        lastUsedAt = maxOf(existing.lastUsedAt, remote.lastUsedAt),
+                    )
+                )
+            }
+        }
+    }
+
+    private fun restoreExtensionPackages(snapshot: GoogleDriveSyncSnapshot) {
+        if (snapshot.extensions.isEmpty()) return
+        var hasJarUpdated = false
+
+        snapshot.extensions.forEach { ext ->
+            if (!ext.isPayloadIncluded || ext.payloadBase64.isNullOrBlank()) {
+                return@forEach
+            }
+            val bytes = runCatching { Base64.getDecoder().decode(ext.payloadBase64) }.getOrNull() ?: return@forEach
+            when (ext.kind.lowercase()) {
+                "jar" -> {
+                    runCatching {
+                        val pluginsDir = File(context.filesDir, "plugins").apply { mkdirs() }
+                        val targetFile = File(pluginsDir, ext.fileName ?: "${ext.packageId}.jar")
+                        val jarPrefs = context.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
+                        val localVersion = jarPrefs.getLong(ext.packageId, 0L)
+                        val remoteVersion = ext.versionCode ?: 0L
+                        if (!targetFile.exists() || remoteVersion >= localVersion) {
+                            targetFile.writeBytes(bytes)
+                            jarPrefs.edit()
+                                .putLong(ext.packageId, remoteVersion)
+                                .apply {
+                                    ext.repoUrl?.let { putString("${ext.packageId}:repo", it) }
+                                }
+                                .apply()
+                            hasJarUpdated = true
+                        }
+                    }.onFailure { Log.e(TAG, "Failed to restore jar extension ${ext.packageId}", it) }
+                }
+                "cloudstream" -> {
+                    runCatching {
+                        val csDir = File(File(context.filesDir, "cloudstream"), "plugins").apply { mkdirs() }
+                        val fileName = ext.fileName ?: "${ext.packageId}.cs3"
+                        val targetFile = File(csDir, fileName)
+                        val csPrefs = context.getSharedPreferences("cloudstream_plugin_versions", Context.MODE_PRIVATE)
+                        val localVersion = csPrefs.getLong(ext.packageId, 0L)
+                        val remoteVersion = ext.versionCode ?: 0L
+                        if (!targetFile.exists() || remoteVersion >= localVersion) {
+                            targetFile.writeBytes(bytes)
+                            csPrefs.edit()
+                                .putLong(ext.packageId, remoteVersion)
+                                .putString("${ext.packageId}:name", ext.name)
+                                .putString("${ext.packageId}:archive", fileName)
+                                .apply {
+                                    ext.repoUrl?.let { putString("${ext.packageId}:repo", it) }
+                                }
+                                .apply()
+                        }
+                    }.onFailure { Log.e(TAG, "Failed to restore cloudstream extension ${ext.packageId}", it) }
+                }
+                "mihon", "aniyomi", "ireader", "tsundoku" -> {
+                    runCatching {
+                        val root = LocalApkExtensionSupport.getManagedExtensionsDir(context, ext.kind.lowercase())
+                        val targetDir = File(root, ext.packageId).apply { mkdirs() }
+                        val targetFile = File(targetDir, "${ext.packageId}.apk")
+                        val existingInfo = if (targetFile.exists()) {
+                            ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(context.packageManager, targetFile)
+                        } else null
+                        val localVersion = existingInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: 0L
+                        val remoteVersion = ext.versionCode ?: 0L
+                        if (!targetFile.exists() || remoteVersion >= localVersion) {
+                            val tempFile = File.createTempFile("sync_ext_${ext.packageId}", ".apk", context.cacheDir)
+                            try {
+                                tempFile.writeBytes(bytes)
+                                LocalApkExtensionSupport.storeManagedApk(context, ext.kind.lowercase(), ext.packageId, tempFile)
+                            } finally {
+                                tempFile.delete()
+                            }
+                        }
+                    }.onFailure { Log.e(TAG, "Failed to restore apk extension ${ext.packageId}", it) }
+                }
+            }
+        }
+
+        if (hasJarUpdated) {
+            runCatching { GlobalExtensionManager.initialize(context) }
+        }
     }
 
     @Serializable

@@ -25,6 +25,9 @@ abstract class MangaSourcesDao {
     @Query("SELECT * FROM sources ORDER BY pinned DESC, sort_key")
     abstract suspend fun findAll(): List<MangaSourceEntity>
 
+    @Query("SELECT * FROM sources WHERE source = :source LIMIT 1")
+    abstract suspend fun find(source: String): MangaSourceEntity?
+
     @Query("SELECT source FROM sources WHERE enabled = 1")
     abstract suspend fun findAllEnabledNames(): List<String>
 

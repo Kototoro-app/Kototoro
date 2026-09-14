@@ -242,6 +242,8 @@ private class MockJsonSourceDao : JsonSourceDao {
     
     override suspend fun getById(id: String) = sources.firstOrNull { it.id == id }
     override suspend fun getByIds(ids: List<String>) = sources.filter { it.id in ids }
+    override suspend fun findAll(): List<JsonSourceEntity> = sources.toList()
+    override suspend fun findByName(name: String): JsonSourceEntity? = sources.firstOrNull { it.name == name }
     override suspend fun countByType(type: JsonSourceType) = sources.count { it.type == type }
     override suspend fun countEnabled() = sources.count { it.enabled }
     

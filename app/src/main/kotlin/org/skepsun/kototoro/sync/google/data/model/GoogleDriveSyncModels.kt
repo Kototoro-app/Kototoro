@@ -2,7 +2,12 @@ package org.skepsun.kototoro.sync.google.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import org.skepsun.kototoro.core.db.entity.ExternalExtensionRepoEntity
+import org.skepsun.kototoro.core.db.entity.JsonSourceEntity
+import org.skepsun.kototoro.core.db.entity.JsonSourceType
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.db.entity.MangaSourceEntity
+import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
 import org.skepsun.kototoro.history.data.WorkHistoryEntity
@@ -23,6 +28,10 @@ class GoogleDriveSyncSnapshot(
     @SerialName("work") val work: SyncWorkState = SyncWorkState(),
     @SerialName("feed") val feed: SyncFeedState = SyncFeedState(),
     @SerialName("config") val config: SyncConfig? = null,
+    @SerialName("repositories") val repositories: List<SyncExtensionRepo> = emptyList(),
+    @SerialName("source_states") val sourceStates: List<SyncSourceState> = emptyList(),
+    @SerialName("json_sources") val jsonSources: List<SyncJsonSource> = emptyList(),
+    @SerialName("extensions") val extensions: List<SyncExtensionPackage> = emptyList(),
 ) {
 
     companion object {
@@ -384,4 +393,120 @@ class SyncTrackLog(
 class SyncConfig(
     @SerialName("revision") val revision: Long = 0L,
     @SerialName("settings") val settings: Map<String, String> = emptyMap(),
+)
+
+const val MAX_SYNC_PACKAGE_SIZE_BYTES = 5 * 1024 * 1024L // 5MB
+
+@Serializable
+class SyncExtensionRepo(
+    @SerialName("type") val type: ExternalExtensionType,
+    @SerialName("base_url") val baseUrl: String,
+    @SerialName("name") val name: String,
+    @SerialName("short_name") val shortName: String? = null,
+    @SerialName("website") val website: String = "",
+    @SerialName("signing_key_fingerprint") val signingKeyFingerprint: String = "",
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long = 0L,
+    @SerialName("last_success_at") val lastSuccessAt: Long = 0L,
+    @SerialName("last_error") val lastError: String? = null,
+    @SerialName("version") val version: String? = null,
+) {
+    constructor(entity: ExternalExtensionRepoEntity) : this(
+        type = entity.type,
+        baseUrl = entity.baseUrl,
+        name = entity.name,
+        shortName = entity.shortName,
+        website = entity.website,
+        signingKeyFingerprint = entity.signingKeyFingerprint,
+        createdAt = entity.createdAt,
+        updatedAt = entity.updatedAt,
+        lastSuccessAt = entity.lastSuccessAt,
+        lastError = entity.lastError,
+        version = entity.version,
+    )
+
+    fun toEntity() = ExternalExtensionRepoEntity(
+        type = type,
+        baseUrl = baseUrl,
+        name = name,
+        shortName = shortName,
+        website = website,
+        signingKeyFingerprint = signingKeyFingerprint,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        lastSuccessAt = lastSuccessAt,
+        lastError = lastError,
+        version = version,
+    )
+}
+
+@Serializable
+class SyncSourceState(
+    @SerialName("source") val source: String,
+    @SerialName("enabled") val isEnabled: Boolean,
+    @SerialName("pinned") val isPinned: Boolean = false,
+    @SerialName("sort_key") val sortKey: Int = 0,
+    @SerialName("used_at") val usedAt: Long = 0L,
+) {
+    constructor(entity: MangaSourceEntity) : this(
+        source = entity.source,
+        isEnabled = entity.isEnabled,
+        isPinned = entity.isPinned,
+        sortKey = entity.sortKey,
+        usedAt = entity.lastUsedAt,
+    )
+}
+
+@Serializable
+class SyncJsonSource(
+    @SerialName("id") val id: String = "",
+    @SerialName("name") val name: String,
+    @SerialName("type") val type: JsonSourceType,
+    @SerialName("config") val config: String,
+    @SerialName("enabled") val isEnabled: Boolean = true,
+    @SerialName("pinned") val isPinned: Boolean = false,
+    @SerialName("created_at") val createdAt: Long = 0L,
+    @SerialName("updated_at") val updatedAt: Long = 0L,
+    @SerialName("last_used_at") val lastUsedAt: Long = 0L,
+    @SerialName("icon_url") val iconUrl: String? = null,
+) {
+    constructor(entity: JsonSourceEntity) : this(
+        id = entity.id,
+        name = entity.name,
+        type = entity.type,
+        config = entity.config,
+        isEnabled = entity.enabled,
+        isPinned = entity.isPinned,
+        createdAt = entity.createdAt,
+        updatedAt = entity.updatedAt,
+        lastUsedAt = entity.lastUsedAt,
+        iconUrl = entity.iconUrl,
+    )
+
+    fun toEntity(localId: String = id.ifBlank { name }) = JsonSourceEntity(
+        id = localId,
+        name = name,
+        type = type,
+        config = config,
+        enabled = isEnabled,
+        createdAt = if (createdAt > 0L) createdAt else System.currentTimeMillis(),
+        updatedAt = if (updatedAt > 0L) updatedAt else System.currentTimeMillis(),
+        lastUsedAt = lastUsedAt,
+        isPinned = isPinned,
+        iconUrl = iconUrl,
+    )
+}
+
+@Serializable
+class SyncExtensionPackage(
+    @SerialName("package_id") val packageId: String,
+    @SerialName("name") val name: String,
+    @SerialName("kind") val kind: String,
+    @SerialName("version_name") val versionName: String? = null,
+    @SerialName("version_code") val versionCode: Long? = null,
+    @SerialName("repo_url") val repoUrl: String? = null,
+    @SerialName("size_bytes") val sizeBytes: Long = 0L,
+    @SerialName("file_name") val fileName: String? = null,
+    @SerialName("payload_base64") val payloadBase64: String? = null,
+    @SerialName("is_payload_included") val isPayloadIncluded: Boolean = false,
 )

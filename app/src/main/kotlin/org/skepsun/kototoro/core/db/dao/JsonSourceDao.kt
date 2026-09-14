@@ -65,6 +65,18 @@ interface JsonSourceDao {
     fun observeAll(): Flow<List<JsonSourceEntity>>
 
     /**
+     * Get all sources, ordered by name
+     */
+    @Query("SELECT * FROM json_sources ORDER BY name")
+    suspend fun findAll(): List<JsonSourceEntity>
+
+    /**
+     * Find a source by name
+     */
+    @Query("SELECT * FROM json_sources WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): JsonSourceEntity?
+
+    /**
      * Observe sources by type
      * Uses index on 'type' column for efficient filtering
      */

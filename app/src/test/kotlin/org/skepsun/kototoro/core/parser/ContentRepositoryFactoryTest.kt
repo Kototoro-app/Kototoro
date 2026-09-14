@@ -397,6 +397,8 @@ class ContentRepositoryFactoryTest {
 		override fun observeRecentlyUsed(limit: Int): Flow<List<JsonSourceEntity>> = throw UnsupportedOperationException()
 		override suspend fun getById(id: String): JsonSourceEntity? = sources.find { it.id == id }
 		override suspend fun getByIds(ids: List<String>): List<JsonSourceEntity> = sources.filter { it.id in ids }
+		override suspend fun findAll(): List<JsonSourceEntity> = sources
+		override suspend fun findByName(name: String): JsonSourceEntity? = sources.find { it.name == name }
 		override suspend fun countByType(type: JsonSourceType): Int = sources.count { it.type == type }
 		override suspend fun countEnabled(): Int = sources.count { it.enabled }
 		override suspend fun insert(source: JsonSourceEntity) = Unit

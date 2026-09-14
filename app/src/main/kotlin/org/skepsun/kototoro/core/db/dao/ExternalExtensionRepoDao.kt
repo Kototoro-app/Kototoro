@@ -11,6 +11,9 @@ import org.skepsun.kototoro.extensions.repo.ExternalExtensionType
 @Dao
 interface ExternalExtensionRepoDao {
 
+    @Query("SELECT * FROM extension_repos ORDER BY type, name, base_url")
+    suspend fun getAll(): List<ExternalExtensionRepoEntity>
+
     @Query("SELECT * FROM extension_repos WHERE type = :type ORDER BY name, base_url")
     fun observeByType(type: ExternalExtensionType): Flow<List<ExternalExtensionRepoEntity>>
 
