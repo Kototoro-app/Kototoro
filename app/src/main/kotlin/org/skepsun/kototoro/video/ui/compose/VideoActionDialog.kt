@@ -45,6 +45,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import kotlin.math.roundToInt
 
@@ -122,6 +123,7 @@ internal fun VideoActionDialog(
     onDismissRequest: () -> Unit,
     onItemSelected: (VideoActionDialogItem, IntRect) -> Unit,
 ) {
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
     val maxHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp
@@ -132,7 +134,8 @@ internal fun VideoActionDialog(
             gapPx = gapPx,
             marginPx = marginPx,
         ),
-        onDismissRequest = onDismissRequest,
+        // Focusable popups receive remote Back before the Activity's back dispatcher.
+        onDismissRequest = if (isTvPresentation) state.onBack ?: onDismissRequest else onDismissRequest,
         properties = PopupProperties(focusable = true, clippingEnabled = true),
     ) {
         Surface(
@@ -152,7 +155,13 @@ internal fun VideoActionDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         state.onBack?.let { onBack ->
-                            IconButton(onClick = onBack) {
+                            IconButton(
+                                onClick = onBack,
+                                modifier = Modifier.tvFocusable(
+                                    shape = RoundedCornerShape(12.dp),
+                                    addFocusTarget = false,
+                                ),
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = stringResource(R.string.back),
