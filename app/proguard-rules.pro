@@ -485,6 +485,15 @@
 -keep class androidx.collection.** { *; }
 -keep interface androidx.collection.** { *; }
 
+# AndroidX Fragment & AppCompat - Cloudstream cs3 plugins and external extension JARs
+# are compiled against AndroidX and loaded via DexClassLoader at runtime.
+# R8 may strip classes or methods (such as FragmentManager.getFragments()) if the
+# host Compose UI does not directly reference them, causing NoSuchMethodError in plugins (#532).
+-keep class androidx.fragment.app.** { *; }
+-keep interface androidx.fragment.app.** { *; }
+-keep class androidx.appcompat.app.** { *; }
+-keep interface androidx.appcompat.app.** { *; }
+
 
 # ONNX Runtime JNI classes
 -keep class ai.onnxruntime.** { *; }
