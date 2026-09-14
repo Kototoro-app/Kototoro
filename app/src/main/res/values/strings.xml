@@ -2145,6 +2145,8 @@
     <string name="auto_double_foldable">Auto Two-Page On Foldable</string>
     <string name="two_page_scroll_sensitivity">Two-Page Scroll Sensitivity</string>
     <string name="default_webtoon_zoom_out">Default webtoon zoom out</string>
+    <string name="webtoon_volume_key_scroll_distance">Volume key scroll distance</string>
+    <string name="webtoon_volume_key_scroll_distance_summary">Percentage of the viewport scrolled by each volume key press in webtoon mode</string>
     <string name="fullscreen_mode">Fullscreen mode</string>
     <string name="reader_fullscreen_summary">Hide system status and navigation bars</string>
     <string name="fraction_pattern" translatable="false">%1$d/%2$d</string>

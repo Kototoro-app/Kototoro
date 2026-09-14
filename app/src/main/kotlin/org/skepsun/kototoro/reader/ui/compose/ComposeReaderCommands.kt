@@ -8,9 +8,23 @@ data class ComposeReaderScrollRequest(
     val smooth: Boolean,
 )
 
+/** One-shot page-turn commands whose distance is resolved from the webtoon viewport. */
+data class ComposeWebtoonPageTurnRequest(
+    val id: Long,
+    val delta: Int,
+    val cumulativeDelta: Long,
+)
+
 internal fun resolveScrollRequestDelta(
     previous: ComposeReaderScrollRequest?,
     current: ComposeReaderScrollRequest,
+): Long {
+    return previous?.let { current.cumulativeDelta - it.cumulativeDelta } ?: current.delta.toLong()
+}
+
+internal fun resolveWebtoonPageTurnRequestDelta(
+    previous: ComposeWebtoonPageTurnRequest?,
+    current: ComposeWebtoonPageTurnRequest,
 ): Long {
     return previous?.let { current.cumulativeDelta - it.cumulativeDelta } ?: current.delta.toLong()
 }

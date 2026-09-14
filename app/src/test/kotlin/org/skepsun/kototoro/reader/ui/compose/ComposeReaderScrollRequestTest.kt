@@ -19,4 +19,12 @@ class ComposeReaderScrollRequestTest {
 
 		assertEquals(2L, resolveScrollRequestDelta(previous = null, current = current))
 	}
+
+	@Test
+	fun `coalesced webtoon page turns retain all pending turns`() {
+		val previous = ComposeWebtoonPageTurnRequest(id = 1L, delta = 1, cumulativeDelta = 1L)
+		val current = ComposeWebtoonPageTurnRequest(id = 3L, delta = 1, cumulativeDelta = 3L)
+
+		assertEquals(2L, resolveWebtoonPageTurnRequestDelta(previous, current))
+	}
 }

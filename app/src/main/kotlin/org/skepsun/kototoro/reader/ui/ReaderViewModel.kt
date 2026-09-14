@@ -270,6 +270,11 @@ class ReaderViewModel @Inject constructor(
         valueProducer = { isWebtoonPullGestureEnabled },
     )
 
+    val webtoonVolumeKeyScrollDistanceFraction = settings.observeAsStateFlow(
+        scope = viewModelScope + Dispatchers.Default,
+        key = AppSettings.KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+        valueProducer = { webtoonVolumeKeyScrollDistancePercent / 100f },
+    )
 
     val defaultWebtoonZoomOut = isWebtoonZooEnabled.flatMapLatest {
         if (it) {

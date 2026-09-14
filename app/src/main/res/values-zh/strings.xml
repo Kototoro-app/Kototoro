@@ -712,6 +712,8 @@
     <string name="default_s">默认值：%s</string>
     <string name="default_tab">漫画详情页默认界面</string>
     <string name="default_webtoon_zoom_out">条漫默认缩小值</string>
+    <string name="webtoon_volume_key_scroll_distance">条漫音量键滚动距离</string>
+    <string name="webtoon_volume_key_scroll_distance_summary">条漫模式下每次按音量键滚动视口高度的比例</string>
     <string name="delete">删除</string>
     <string name="delete_manga">删除漫画</string>
     <string name="delete_old_backups">删除旧备份文件</string>

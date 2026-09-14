@@ -274,6 +274,26 @@ class WebtoonViewportPolicyTest {
 	}
 
 	@Test
+	fun `page turn advances by most of the logical viewport`() {
+		assertEquals(1800f, resolveWebtoonPageTurnDistance(viewportHeightPx = 2000, scale = 1f, delta = 1))
+		assertEquals(-1800f, resolveWebtoonPageTurnDistance(viewportHeightPx = 2000, scale = 1f, delta = -1))
+		assertEquals(2250f, resolveWebtoonPageTurnDistance(viewportHeightPx = 2000, scale = 0.8f, delta = 1))
+	}
+
+	@Test
+	fun `page turn honors the configured viewport fraction`() {
+		assertEquals(
+			1000f,
+			resolveWebtoonPageTurnDistance(
+				viewportHeightPx = 2000,
+				scale = 1f,
+				delta = 1,
+				distanceFraction = 0.5f,
+			),
+		)
+	}
+
+	@Test
 	fun `long image keeps its natural fitted height`() {
 		assertEquals(
 			WebtoonViewportMeasurement(itemHeightPx = 5000),

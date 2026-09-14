@@ -2298,6 +2298,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_WEBTOON_PULL_GESTURE, false)
         set(value) = prefs.edit { putBoolean(KEY_WEBTOON_PULL_GESTURE, value) }
 
+    val webtoonVolumeKeyScrollDistancePercent: Int
+        get() = prefs.getSafeInt(
+            KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+            DEFAULT_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+        ).coerceIn(
+            MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+            MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+        )
 
     @get:FloatRange(from = 0.0, to = 0.5)
     val defaultWebtoonZoomOut: Float
@@ -3148,6 +3156,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_WEBTOON_GAPS = "webtoon_gaps"
         const val KEY_WEBTOON_ZOOM = "webtoon_zoom"
         const val KEY_WEBTOON_ZOOM_OUT = "webtoon_zoom_out"
+        const val KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = "webtoon_volume_key_scroll_distance"
+        const val DEFAULT_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 90
+        const val MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 10
+        const val MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE = 100
         private const val DOWNLOADS_REQUEST_DELAY_DEFAULT = 1600
         private const val DOWNLOADS_RETRY_COUNT_DEFAULT = 5
         private const val DOWNLOADS_RETRY_DELAY_DEFAULT = 2000

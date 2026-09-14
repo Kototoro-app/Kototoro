@@ -36,6 +36,7 @@ fun ComposeReaderScreenRoot(
     requestedPageKey: Long? = null,
     requestedPageSmooth: Boolean = false,
     webtoonScrollRequest: ComposeReaderScrollRequest? = null,
+    webtoonPageTurnRequest: ComposeWebtoonPageTurnRequest? = null,
     zoomCommand: ComposeReaderZoomCommand? = null,
     webtoonZoomCommand: ComposeWebtoonZoomCommand? = null,
     animationsEnabled: Boolean = true,
@@ -61,6 +62,8 @@ fun ComposeReaderScreenRoot(
     val defaultWebtoonZoomOut by viewModel.defaultWebtoonZoomOut.collectAsStateWithLifecycle(initialValue = 0f)
     val isWebtoonGapsEnabled by viewModel.isWebtoonGapsEnabled.collectAsStateWithLifecycle(initialValue = false)
     val isWebtoonPullGestureEnabled by viewModel.isWebtoonPullGestureEnabled.collectAsStateWithLifecycle(initialValue = false)
+    val webtoonVolumeKeyScrollDistanceFraction by viewModel.webtoonVolumeKeyScrollDistanceFraction
+        .collectAsStateWithLifecycle()
     val readerUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val pageAnimation by viewModel.pageAnimation.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettingsProducer.collectAsStateWithLifecycle()
@@ -202,6 +205,8 @@ fun ComposeReaderScreenRoot(
             requestedPage = requestedPage,
             requestedPageSmooth = requestedPageSmooth,
             webtoonScrollRequest = webtoonScrollRequest,
+            webtoonPageTurnRequest = webtoonPageTurnRequest,
+            webtoonPageTurnDistanceFraction = webtoonVolumeKeyScrollDistanceFraction,
             zoomCommand = zoomCommand,
             webtoonZoomCommand = webtoonZoomCommand,
             isZoomEnabled = isWebtoonZoomEnabled,

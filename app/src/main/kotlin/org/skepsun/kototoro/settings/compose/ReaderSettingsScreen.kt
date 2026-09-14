@@ -805,6 +805,23 @@ private fun ReaderMangaSettingsPage(
             )
         }
         item {
+            SettingsSliderPreference(
+                title = stringResource(R.string.webtoon_volume_key_scroll_distance),
+                summary = stringResource(R.string.webtoon_volume_key_scroll_distance_summary),
+                iconRes = R.drawable.ic_volume_up,
+                value = settings.observeAsState(AppSettings.KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE) {
+                    webtoonVolumeKeyScrollDistancePercent
+                }.value,
+                valueRange = AppSettings.MIN_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE..
+                    AppSettings.MAX_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE,
+                step = 10,
+                valueText = { "$it%" },
+                onValueChange = {
+                    settings.prefs.edit { putInt(AppSettings.KEY_WEBTOON_VOLUME_KEY_SCROLL_DISTANCE, it) }
+                },
+            )
+        }
+        item {
             SettingsSwitchPreference(
                 title = stringResource(R.string.webtoon_gaps),
                 summary = stringResource(R.string.webtoon_gaps_summary),

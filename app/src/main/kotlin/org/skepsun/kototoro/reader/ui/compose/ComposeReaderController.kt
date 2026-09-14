@@ -49,6 +49,8 @@ internal class ComposeReaderController(
     private var requestedPositionSmooth by mutableStateOf(false)
     private var scrollRequest: ComposeReaderScrollRequest? by mutableStateOf(null)
     private var cumulativeScrollDelta = 0L
+    private var webtoonPageTurnRequest: ComposeWebtoonPageTurnRequest? by mutableStateOf(null)
+    private var cumulativeWebtoonPageTurnDelta = 0L
     private var zoomCommand: ComposeReaderZoomCommand? by mutableStateOf(null)
     private var webtoonZoomCommand: ComposeWebtoonZoomCommand? by mutableStateOf(null)
     var readerMode by mutableStateOf(viewModel.readerMode.value ?: ReaderMode.STANDARD)
@@ -117,6 +119,7 @@ internal class ComposeReaderController(
                         requestedPageKey = requestedPageKey,
                         requestedPageSmooth = requestedPositionSmooth,
                         webtoonScrollRequest = scrollRequest,
+                        webtoonPageTurnRequest = webtoonPageTurnRequest,
                         zoomCommand = zoomCommand,
                         webtoonZoomCommand = webtoonZoomCommand,
                         animationsEnabled = !chromeState.eInkModeEnabled,
@@ -226,6 +229,10 @@ internal class ComposeReaderController(
                 "anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
                 "requestedKey=$requestedPageKey contentState=${viewModel.getCurrentState()}",
         )
+        if (readerMode == ReaderMode.WEBTOON && mode != ReaderMode.WEBTOON) {
+            webtoonPageTurnRequest = null
+            cumulativeWebtoonPageTurnDelta = 0L
+        }
         if (anchorState != null) {
             lastLayoutAnchor = anchorState
             requestPagePosition(anchorPosition, smooth = false)
@@ -509,6 +516,17 @@ internal class ComposeReaderController(
         get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
     override fun switchPageBy(delta: Int) {
+        if (readerMode == ReaderMode.WEBTOON) {
+            // A webtoon page turn is a viewport-sized scroll; image boundaries are not
+            // meaningful page boundaries when source images have different heights.
+            cumulativeWebtoonPageTurnDelta += delta
+            webtoonPageTurnRequest = ComposeWebtoonPageTurnRequest(
+                id = ++nextCommandId,
+                delta = delta,
+                cumulativeDelta = cumulativeWebtoonPageTurnDelta,
+            )
+            return
+        }
         val pages = viewModel.content.value.pages
         val basePosition = resolvePageNavigationBasePosition(
             pageKeys = pages.map { it.readerKey },

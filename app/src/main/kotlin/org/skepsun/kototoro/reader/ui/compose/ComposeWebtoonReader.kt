@@ -111,6 +111,8 @@ fun ComposeWebtoonReader(
     requestedPage: Int? = null,
     requestedPageSmooth: Boolean = false,
     webtoonScrollRequest: ComposeReaderScrollRequest? = null,
+    webtoonPageTurnRequest: ComposeWebtoonPageTurnRequest? = null,
+    webtoonPageTurnDistanceFraction: Float = 0.9f,
     zoomCommand: ComposeReaderZoomCommand? = null,
     webtoonZoomCommand: ComposeWebtoonZoomCommand? = null,
     isZoomEnabled: Boolean = false,
@@ -519,6 +521,42 @@ fun ComposeWebtoonReader(
             } else {
                 listState.scrollToItem(position)
             }
+        }
+    }
+    // Content can be temporarily replaced with an empty window during a chapter switch. Seed the
+    // request anchor so a turn already consumed by the previous list instance is not replayed.
+    var previousWebtoonPageTurnRequest by remember {
+        mutableStateOf(webtoonPageTurnRequest)
+    }
+    LaunchedEffect(
+        webtoonPageTurnRequest,
+        viewportHeightPx,
+        webtoonPageTurnDistanceFraction,
+        isAnimationEnabled,
+        isAnchorRestorePending,
+    ) {
+        val request = webtoonPageTurnRequest ?: return@LaunchedEffect
+        if (isAnchorRestorePending || viewportHeightPx <= 0) return@LaunchedEffect
+        val requestDelta = resolveWebtoonPageTurnRequestDelta(previousWebtoonPageTurnRequest, request)
+        previousWebtoonPageTurnRequest = request
+        val scrollDelta = resolveWebtoonPageTurnDistance(
+            viewportHeightPx = viewportHeightPx,
+            scale = canvasScale,
+            delta = requestDelta,
+            distanceFraction = webtoonPageTurnDistanceFraction,
+        )
+        if (!scrollDelta.isFinite() || scrollDelta == 0f) return@LaunchedEffect
+        if (isAnimationEnabled) {
+            var previousValue = 0f
+            animate(
+                initialValue = 0f,
+                targetValue = scrollDelta,
+            ) { value, _ ->
+                dispatchWebtoonScroll(value - previousValue)
+                previousValue = value
+            }
+        } else {
+            dispatchWebtoonScroll(scrollDelta)
         }
     }
     var previousWebtoonScrollRequest by remember { mutableStateOf<ComposeReaderScrollRequest?>(null) }

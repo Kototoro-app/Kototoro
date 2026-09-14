@@ -139,6 +139,21 @@ fun resolveWebtoonBoundaryHandoff(scale: Float, desiredY: Float, boundedY: Float
     return ((boundedY - desiredY) / scale).roundToInt()
 }
 
+internal fun resolveWebtoonPageTurnDistance(
+    viewportHeightPx: Int,
+    scale: Float,
+    delta: Long,
+    distanceFraction: Float = WEBTOON_PAGE_TURN_FRACTION,
+): Float {
+    val logicalViewportHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx, scale)
+    val safeDistanceFraction = if (distanceFraction.isFinite()) {
+        distanceFraction.coerceIn(0f, 1f)
+    } else {
+        WEBTOON_PAGE_TURN_FRACTION
+    }
+    return logicalViewportHeight * safeDistanceFraction * delta.toFloat()
+}
+
 fun measureWebtoonViewport(
     viewportHeightPx: Int,
     availableWidthPx: Int,
@@ -154,3 +169,5 @@ fun measureWebtoonViewport(
     val sourceHeight = (imageHeightPx.toFloat() * availableWidthPx / imageWidthPx).toInt().coerceAtLeast(1)
     return WebtoonViewportMeasurement(itemHeightPx = sourceHeight)
 }
+
+private const val WEBTOON_PAGE_TURN_FRACTION = 0.9f
