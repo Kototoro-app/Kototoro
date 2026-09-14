@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -230,20 +231,12 @@ internal fun EntityWorkbenchSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
                 WorkbenchSelectionSummaryCard(
-                    selectedStage = selectedStage,
-                    summary = workbenchSummary,
-                    hasMergePreviewSelection = uiState.mergePreviewReady,
-                    hasTrackingPreviews = uiState.trackingPreviewReady,
-                    onSelectAllRows = {},
-                    onClearAllRows = {},
                     statusFilter = viewState.statusFilter,
                     onStatusFilterChange = { onViewStateChange(viewState.copy(statusFilter = it)) },
                     sortMode = viewState.sortMode,
                     onSortModeChange = { onViewStateChange(viewState.copy(sortMode = it)) },
                     stageFilters = viewState.stageFilters,
                     onStageFiltersChange = { onViewStateChange(viewState.copy(stageFilters = it)) },
-                    showSelectedOnly = false,
-                    onToggleSelectedOnly = {},
                     hasVisibleRows = pagedRows.items.isNotEmpty(),
                 )
             EntityBrowseSection(
@@ -313,19 +306,21 @@ internal fun EntityWorkbenchSection(
                     onToggleSelectAll = onToggleSelectAll,
                 )
                 visibleRows.forEach { row ->
-                    EntityWorkbenchRowCard(
-                        selectedStage = selectedStage,
-                        row = row,
-                        uiState = uiState,
-                        onToggleGroup = onToggleGroup,
-                        onToggleReadingScopeGroup = onToggleReadingScopeGroup,
-                        onToggleItem = onToggleItem,
-                        onToggleTrackingPreview = onToggleTrackingPreview,
-                        onToggleReadingPreview = onToggleReadingPreview,
-                        onSplitLocalProjection = onSplitLocalProjection,
-                        onDetachLocalProjection = onDetachLocalProjection,
-                        onRepairDuplicateProjections = onRepairDuplicateProjections,
-                    )
+                    key(row.group.id) {
+                        EntityWorkbenchRowCard(
+                            selectedStage = selectedStage,
+                            row = row,
+                            uiState = uiState,
+                            onToggleGroup = onToggleGroup,
+                            onToggleReadingScopeGroup = onToggleReadingScopeGroup,
+                            onToggleItem = onToggleItem,
+                            onToggleTrackingPreview = onToggleTrackingPreview,
+                            onToggleReadingPreview = onToggleReadingPreview,
+                            onSplitLocalProjection = onSplitLocalProjection,
+                            onDetachLocalProjection = onDetachLocalProjection,
+                            onRepairDuplicateProjections = onRepairDuplicateProjections,
+                        )
+                    }
                 }
             }
         }
@@ -353,7 +348,7 @@ internal fun EntityWorkbenchRow.isRowSelectionChecked(
     return when (selectedStage) {
         EntityOrganizeStage.MERGE -> if (uiState.mergePreviewReady) isMergeSelected(uiState) else isInOperationScope
         EntityOrganizeStage.TRACKING -> if (uiState.trackingPreviewReady) hasTrackingSelected(uiState) else isInOperationScope
-        EntityOrganizeStage.READING -> isInOperationScope
+        EntityOrganizeStage.READING -> if (uiState.readingSourcePreviews.isNotEmpty()) hasReadingSelected(uiState) else isInOperationScope
     }
 }
 
@@ -364,7 +359,7 @@ internal fun EntityWorkbenchRow.isRowSelectionEnabled(
     return when (selectedStage) {
         EntityOrganizeStage.MERGE -> !uiState.mergePreviewReady || isMergeCandidate
         EntityOrganizeStage.TRACKING -> !uiState.trackingPreviewReady || trackingCandidates.isNotEmpty()
-        EntityOrganizeStage.READING -> true
+        EntityOrganizeStage.READING -> if (uiState.readingSourcePreviews.isNotEmpty()) readingCandidates.isNotEmpty() else true
     }
 }
 
@@ -457,8 +452,14 @@ internal fun sortWorkbenchRows(
 ): List<EntityWorkbenchRow> {
     return when (sortMode) {
         WorkbenchSortMode.ACTION_FIRST -> rows.sortedWith(
-            compareByDescending<EntityWorkbenchRow> { it.needsAction(uiState) }
-                .thenByDescending { it.hasTrackingSelected(uiState) || it.hasReadingSelected(uiState) || it.isMergeSelected(uiState) }
+            compareByDescending<EntityWorkbenchRow> {
+                it.isMergeCandidate ||
+                    it.trackingCandidates.isNotEmpty() ||
+                    it.readingCandidates.isNotEmpty() ||
+                    it.duplicateProjectionCount > 0 ||
+                    it.hasLowConfidenceTracking()
+            }
+                .thenByDescending { it.duplicateProjectionCount > 0 }
                 .thenByDescending { it.group.matchScore }
                 .thenByDescending { it.group.items.size }
                 .thenBy { it.group.title.lowercase(Locale.ROOT) },

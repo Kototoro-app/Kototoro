@@ -49,6 +49,8 @@ import org.skepsun.kototoro.favourites.ui.migration.EntityOrganizeStage
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.ui.migration.MigrationUiState
+import org.skepsun.kototoro.parsers.model.ContentType
+import androidx.compose.ui.unit.sp
 import java.util.Locale
 
 @Composable
@@ -214,7 +216,15 @@ internal fun EntityWorkbenchRowCard(
                 }
             }
             EntityOrganizeStage.READING -> {
-                onToggleReadingScopeGroup(row.group.id)
+                if (uiState.readingSourcePreviews.isNotEmpty()) {
+                    val candidate = row.readingCandidates.firstOrNull { it.mangaId in uiState.acceptedReadingPreviewIds }
+                        ?: row.readingCandidates.firstOrNull()
+                    if (candidate != null) {
+                        onToggleReadingPreview(candidate.mangaId)
+                    }
+                } else {
+                    onToggleReadingScopeGroup(row.group.id)
+                }
             }
         }
     }
@@ -278,7 +288,7 @@ internal fun EntityWorkbenchRowCard(
         )
     }
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = rowContainerColor,
         border = BorderStroke(
             1.dp,
@@ -291,81 +301,189 @@ internal fun EntityWorkbenchRowCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    WorkbenchEntityInfoColumn(
-                        row = row,
-                        titleColor = titleColor,
-                        entityMeta = entityMeta,
-                        entityDetail = entityDetail,
-                        snapshot = snapshot,
-                        rowChecked = rowChecked,
-                        rowEnabled = rowEnabled,
-                        onToggleRowSelection = onToggleRowSelection,
-                        onRepairDuplicateProjections = onRepairDuplicateProjections,
-                        isExecuting = uiState.isExecuting,
-                    )
-
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                        thickness = 0.5.dp,
-                    )
-
-                    Text(
-                        text = stringResource(R.string.entity_organize_workbench_members_column) + " (${row.group.items.size})",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    WorkbenchMembersColumn(
-                        row = row,
-                        visibleMembers = visibleMembers,
-                        expanded = expanded,
-                        uiState = uiState,
-                        onToggleItem = onToggleItem,
-                        onToggleExpand = { expanded = !expanded },
-                        onSplitClick = { pendingSplitMemberId = it },
-                        onDetachClick = { pendingDetachMemberId = it },
-                    )
-
-                    if (row.existingTrackingBindings.isNotEmpty() || row.trackingCandidates.isNotEmpty()) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            thickness = 0.5.dp,
+                    // Header Row: Checkbox, Title, Badges, StageMiniDots, Details Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Checkbox(
+                            checked = rowChecked,
+                            onCheckedChange = { onToggleRowSelection() },
+                            enabled = rowEnabled,
+                            modifier = Modifier.size(20.dp),
                         )
-                        Text(
-                            text = stringResource(R.string.entity_organize_tracking_title),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        WorkbenchTrackingColumn(
-                            row = row,
-                            expanded = expanded,
-                            selectedTrackingId = selectedTrackingId,
-                            recommendedTracking = recommendedTracking,
-                            onToggleTrackingPreview = onToggleTrackingPreview,
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = row.group.title,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = titleColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                ContentTypeBadge(row.group.contentType)
+                                if (row.group.matchScore > 0f) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                    ) {
+                                        Text(
+                                            text = "${row.group.matchScore.toPercentInt()}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = entityMeta,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (row.duplicateProjectionCount > 0) {
+                                    InlineStatusBadge(
+                                        text = stringResource(
+                                            R.string.entity_organize_duplicate_projections_badge,
+                                            row.duplicateProjectionCount + 1,
+                                        ),
+                                        state = WorkbenchStageState.WARNING,
+                                    )
+                                    if (onRepairDuplicateProjections != null) {
+                                        Text(
+                                            text = stringResource(R.string.entity_organize_clean_duplicate_projections_action),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.clickable(enabled = !uiState.isExecuting) {
+                                                onRepairDuplicateProjections(row.group.resolvedEntityId)
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            StageMiniDots(snapshot)
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.clickable { expanded = !expanded },
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        if (expanded) R.string.collapse else R.string.details,
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                )
+                            }
+                        }
                     }
 
-                    if (row.readingCandidates.isNotEmpty() || row.currentProjectionItem() != null) {
-                        HorizontalDivider(
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
-                            thickness = 0.5.dp,
-                        )
-                        Text(
-                            text = stringResource(R.string.entity_organize_reading_title),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        WorkbenchReadingColumn(
-                            row = row,
-                            expanded = expanded,
-                            uiState = uiState,
-                            onToggleReadingPreview = onToggleReadingPreview,
-                        )
+                    // Stage-Aware Body
+                    if (!expanded) {
+                        when (selectedStage) {
+                            EntityOrganizeStage.MERGE -> {
+                                WorkbenchMembersColumn(
+                                    row = row,
+                                    visibleMembers = visibleMembers,
+                                    expanded = expanded,
+                                    uiState = uiState,
+                                    onToggleItem = onToggleItem,
+                                    onToggleExpand = { expanded = !expanded },
+                                    onSplitClick = { pendingSplitMemberId = it },
+                                    onDetachClick = { pendingDetachMemberId = it },
+                                )
+                            }
+                            EntityOrganizeStage.TRACKING -> {
+                                WorkbenchTrackingColumn(
+                                    row = row,
+                                    expanded = expanded,
+                                    selectedTrackingId = selectedTrackingId,
+                                    recommendedTracking = recommendedTracking,
+                                    onToggleTrackingPreview = onToggleTrackingPreview,
+                                )
+                            }
+                            EntityOrganizeStage.READING -> {
+                                WorkbenchReadingColumn(
+                                    row = row,
+                                    expanded = expanded,
+                                    uiState = uiState,
+                                    onToggleReadingPreview = onToggleReadingPreview,
+                                )
+                            }
+                        }
+                    } else {
+                        // Expanded view showing all details compactly
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = stringResource(R.string.entity_organize_workbench_members_column) + " (${row.group.items.size})",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            WorkbenchMembersColumn(
+                                row = row,
+                                visibleMembers = row.group.items,
+                                expanded = true,
+                                uiState = uiState,
+                                onToggleItem = onToggleItem,
+                                onToggleExpand = { expanded = !expanded },
+                                onSplitClick = { pendingSplitMemberId = it },
+                                onDetachClick = { pendingDetachMemberId = it },
+                            )
+                            if (row.existingTrackingBindings.isNotEmpty() || row.trackingCandidates.isNotEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.entity_organize_tracking_title),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                WorkbenchTrackingColumn(
+                                    row = row,
+                                    expanded = true,
+                                    selectedTrackingId = selectedTrackingId,
+                                    recommendedTracking = recommendedTracking,
+                                    onToggleTrackingPreview = onToggleTrackingPreview,
+                                )
+                            }
+                            if (row.readingCandidates.isNotEmpty() || row.currentProjectionItem() != null) {
+                                Text(
+                                    text = stringResource(R.string.entity_organize_reading_title),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                WorkbenchReadingColumn(
+                                    row = row,
+                                    expanded = true,
+                                    uiState = uiState,
+                                    onToggleReadingPreview = onToggleReadingPreview,
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -627,9 +745,10 @@ private fun WorkbenchMembersColumn(
             }
         }
         if (row.group.items.size > 3) {
-            OutlinedButton(
+            TextButton(
                 onClick = onToggleExpand,
                 modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
             ) {
                 Text(
                     text = stringResource(
@@ -993,20 +1112,20 @@ private fun MemberCoverThumb(
     title: String,
     coverUrl: String?,
 ) {
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
     if (!coverUrl.isNullOrBlank()) {
         AsyncImage(
             model = coverUrl,
             contentDescription = null,
             modifier = Modifier
-                .size(width = 28.dp, height = 40.dp)
+                .size(width = 24.dp, height = 34.dp)
                 .clip(shape),
             contentScale = ContentScale.Crop,
         )
     } else {
         Surface(
             modifier = Modifier
-                .size(width = 28.dp, height = 40.dp),
+                .size(width = 24.dp, height = 34.dp),
             shape = shape,
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
         ) {
@@ -1019,6 +1138,130 @@ private fun MemberCoverThumb(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ContentTypeBadge(
+    contentType: ContentType?,
+    modifier: Modifier = Modifier,
+) {
+    if (contentType == null) return
+    val (label, containerColor, contentColor) = when (contentType) {
+        ContentType.MANGA,
+        ContentType.MANHWA,
+        ContentType.MANHUA,
+        ContentType.COMICS,
+        ContentType.ONE_SHOT,
+        ContentType.DOUJINSHI ->
+            Triple(
+                stringResource(R.string.manga),
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.primary,
+            )
+        ContentType.NOVEL ->
+            Triple(
+                stringResource(R.string.novel),
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.secondary,
+            )
+        ContentType.VIDEO ->
+            Triple(
+                stringResource(R.string.video),
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.tertiary,
+            )
+        ContentType.HENTAI_MANGA,
+        ContentType.HENTAI_NOVEL,
+        ContentType.HENTAI_VIDEO ->
+            Triple(
+                "18+",
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.error,
+            )
+        else ->
+            Triple(
+                contentType.name,
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(4.dp),
+        color = containerColor,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+        )
+    }
+}
+
+@Composable
+private fun StageMiniDots(
+    snapshot: WorkbenchRowStageSnapshot,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StageMiniDot(
+            char = stringResource(R.string.entity_organize_stage_short_merge).take(1).uppercase(),
+            state = snapshot.mergeState,
+        )
+        StageMiniDot(
+            char = stringResource(R.string.entity_organize_stage_short_tracking).take(1).uppercase(),
+            state = snapshot.trackingState,
+        )
+        StageMiniDot(
+            char = stringResource(R.string.entity_organize_stage_short_reading).take(1).uppercase(),
+            state = snapshot.readingState,
+        )
+    }
+}
+
+@Composable
+private fun StageMiniDot(
+    char: String,
+    state: WorkbenchStageState,
+) {
+    val (bgColor, textColor) = when (state) {
+        WorkbenchStageState.READY -> Pair(
+            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+            MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+        WorkbenchStageState.WARNING -> Pair(
+            MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+            MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        WorkbenchStageState.MISSING -> Pair(
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+            MaterialTheme.colorScheme.onErrorContainer,
+        )
+        WorkbenchStageState.EMPTY -> Pair(
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        )
+    }
+    Surface(
+        shape = RoundedCornerShape(3.dp),
+        color = bgColor,
+    ) {
+        Text(
+            text = char,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+            ),
+            color = textColor,
+            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
+        )
     }
 }
 

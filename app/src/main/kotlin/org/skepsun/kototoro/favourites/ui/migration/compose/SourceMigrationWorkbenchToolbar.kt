@@ -41,35 +41,27 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 
 @Composable
 internal fun WorkbenchSelectionSummaryCard(
-    selectedStage: EntityOrganizeStage,
-    summary: WorkbenchSelectionSummary,
-    hasMergePreviewSelection: Boolean,
-    hasTrackingPreviews: Boolean,
     statusFilter: WorkbenchStatusFilter,
     onStatusFilterChange: (WorkbenchStatusFilter) -> Unit,
     sortMode: WorkbenchSortMode,
     onSortModeChange: (WorkbenchSortMode) -> Unit,
     stageFilters: WorkbenchStageFilters,
     onStageFiltersChange: (WorkbenchStageFilters) -> Unit,
-    showSelectedOnly: Boolean,
-    onToggleSelectedOnly: () -> Unit,
-    onSelectAllRows: () -> Unit,
-    onClearAllRows: () -> Unit,
     hasVisibleRows: Boolean,
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 FilterDropdown(
@@ -184,76 +176,6 @@ internal fun WorkbenchSelectionSummaryCard(
                                 ),
                             )
                         },
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = onSelectAllRows,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp),
-                ) {
-                    ButtonLabel(
-                        stringResource(
-                            when (selectedStage) {
-                                EntityOrganizeStage.MERGE -> if (!hasMergePreviewSelection) {
-                                    R.string.entity_organize_workbench_select_all_scope
-                                } else {
-                                    R.string.entity_organize_workbench_select_all_merge_groups
-                                }
-                                EntityOrganizeStage.TRACKING -> if (!hasTrackingPreviews) {
-                                    R.string.entity_organize_workbench_select_all_scope
-                                } else {
-                                    R.string.entity_organize_workbench_select_all
-                                }
-                                EntityOrganizeStage.READING -> R.string.entity_organize_workbench_select_all
-                            },
-                        ),
-                    )
-                }
-                OutlinedButton(
-                    onClick = onClearAllRows,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp),
-                ) {
-                    ButtonLabel(
-                        stringResource(
-                            when (selectedStage) {
-                                EntityOrganizeStage.MERGE -> if (!hasMergePreviewSelection) {
-                                    R.string.entity_organize_workbench_clear_all_scope
-                                } else {
-                                    R.string.entity_organize_workbench_clear_all_merge_groups
-                                }
-                                EntityOrganizeStage.TRACKING -> if (!hasTrackingPreviews) {
-                                    R.string.entity_organize_workbench_clear_all_scope
-                                } else {
-                                    R.string.entity_organize_workbench_clear_all
-                                }
-                                EntityOrganizeStage.READING -> R.string.entity_organize_workbench_clear_all
-                            },
-                        ),
-                    )
-                }
-                OutlinedButton(
-                    onClick = onToggleSelectedOnly,
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 44.dp),
-                ) {
-                    ButtonLabel(
-                        stringResource(
-                            if (showSelectedOnly) {
-                                R.string.entity_organize_show_all
-                            } else {
-                                R.string.entity_organize_show_selected_only
-                            },
-                        ),
                     )
                 }
             }

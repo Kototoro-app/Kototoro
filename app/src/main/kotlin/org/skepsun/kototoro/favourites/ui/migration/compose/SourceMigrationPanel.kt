@@ -3,10 +3,17 @@ package org.skepsun.kototoro.favourites.ui.migration.compose
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -220,6 +227,7 @@ fun SourceMigrationPanel(
     var selectedStage by rememberSaveable { mutableStateOf(EntityOrganizeStage.MERGE) }
     var selectedDatasetBridge by rememberSaveable { mutableStateOf(EntityOrganizeDatasetBridge.ANIME_OFFLINE) }
     var showEntityResetConfirm by rememberSaveable { mutableStateOf(false) }
+    var showAdvancedTools by rememberSaveable { mutableStateOf(false) }
     val entryMode = remember(initialSelectedContentIds.size) {
         resolveEntityOrganizeEntryMode(initialSelectedContentIds.size)
     }
@@ -278,6 +286,10 @@ fun SourceMigrationPanel(
             )
         }
     }
+    val totalRepairs = (uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0) +
+        (uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) +
+        (uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) +
+        (uiState.repairReport?.workEntityMissingSyncIdCount ?: 0)
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -313,101 +325,6 @@ fun SourceMigrationPanel(
                 EntityOrganizeScopeSummary(
                     uiState = uiState,
                     selectedCount = initialSelectedContentIds.size,
-                )
-            }
-
-            if ((uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0) > 0) {
-                item {
-                    MixedWorkContentTypesRepairCard(
-                        uiState = uiState,
-                        onRepairClick = viewModel::repairMixedWorkContentTypeEntities,
-                    )
-                }
-            }
-
-            if ((uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) > 0) {
-                item {
-                    DuplicateProjectionsRepairCard(
-                        uiState = uiState,
-                        onRepairClick = viewModel::repairDuplicateLocalProjections,
-                    )
-                }
-            }
-
-            if ((uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) > 0) {
-                item {
-                    DanglingWorkAnchorsRepairCard(
-                        uiState = uiState,
-                        onRepairClick = viewModel::repairDanglingWorkProjectionAnchors,
-                    )
-                }
-            }
-
-            if ((uiState.repairReport?.workEntityMissingSyncIdCount ?: 0) > 0) {
-                item {
-                    MissingWorkSyncIdsRepairCard(
-                        uiState = uiState,
-                        onRepairClick = viewModel::repairWorkEntitiesMissingSyncId,
-                    )
-                }
-            }
-
-            item {
-                EntityIdentityResetCard(
-                    uiState = uiState,
-                    onResetClick = { showEntityResetConfirm = true },
-                    onConfirmResultClick = viewModel::confirmEntityResetResult,
-                )
-            }
-
-            item {
-                DatasetBridgeCard(
-                    selectedBridge = selectedDatasetBridge,
-                    animeStatus = uiState.animeDatasetStatus,
-                    mangaBakaStatus = uiState.mangaBakaDatasetStatus,
-                    onBridgeSelected = { selectedDatasetBridge = it },
-                    onRefreshAnime = viewModel::refreshAnimeDatasetStatus,
-                    onUpdateAnime = viewModel::updateAnimeDataset,
-                    onDeleteAnime = viewModel::deleteAnimeDataset,
-                    onRefreshMangaBaka = viewModel::refreshMangaBakaDatasetStatus,
-                    onUpdateMangaBaka = viewModel::updateMangaBakaDataset,
-                    onDeleteMangaBaka = viewModel::deleteMangaBakaDataset,
-                    onBuildMangaBakaIndex = viewModel::buildMangaBakaSearchIndex,
-                )
-            }
-
-            if (uiState.isExecuting || uiState.migrationProgress?.isFinished == true) {
-                item {
-                    MigrationProgressSection(
-                        uiState = uiState,
-                        selectedStage = selectedStage,
-                    )
-                }
-            }
-
-            item {
-                EntityWorkbenchSection(
-                    selectedStage = selectedStage,
-                    rows = workbenchRows,
-                    uiState = uiState,
-                    viewState = workbenchViewState,
-                    workbenchDefaults = workbenchDefaults,
-                    onViewStateChange = { workbenchViewState = it },
-                    onToggleGroup = viewModel::toggleMergeGroup,
-                    onToggleReadingScopeGroup = viewModel::toggleReadingScopeGroup,
-                    onSetGroupsSelected = viewModel::setMergeGroupsSelected,
-                    onSetReadingScopeGroupsSelected = viewModel::setReadingScopeGroupsSelected,
-                    onToggleItem = viewModel::toggleMergeItem,
-                    onToggleTrackingPreview = viewModel::toggleTrackingPreview,
-                    onToggleReadingPreview = viewModel::toggleReadingPreview,
-                    onSelectRecommendedTracking = viewModel::selectRecommendedTrackingPreviews,
-                    onClearLowConfidenceTracking = viewModel::clearLowConfidenceTrackingSelections,
-                    onClearTrackingSelections = viewModel::clearTrackingSelections,
-                    onAcceptReadingPreviews = viewModel::acceptReadingPreviews,
-                    onClearReadingPreviews = viewModel::clearReadingPreviews,
-                    onSplitLocalProjection = viewModel::splitLocalWorkProjection,
-                    onDetachLocalProjection = viewModel::detachLocalWorkProjection,
-                    onRepairDuplicateProjections = viewModel::repairDuplicateLocalProjections,
                 )
             }
 
@@ -449,6 +366,152 @@ fun SourceMigrationPanel(
                     concurrency = uiState.concurrency,
                     onConcurrencyChange = viewModel::setConcurrency,
                 )
+            }
+
+            if (uiState.isExecuting || uiState.migrationProgress?.isFinished == true) {
+                item {
+                    MigrationProgressSection(
+                        uiState = uiState,
+                        selectedStage = selectedStage,
+                    )
+                }
+            }
+
+            item {
+                EntityWorkbenchSection(
+                    selectedStage = selectedStage,
+                    rows = workbenchRows,
+                    uiState = uiState,
+                    viewState = workbenchViewState,
+                    workbenchDefaults = workbenchDefaults,
+                    onViewStateChange = { workbenchViewState = it },
+                    onToggleGroup = viewModel::toggleMergeGroup,
+                    onToggleReadingScopeGroup = viewModel::toggleReadingScopeGroup,
+                    onSetGroupsSelected = viewModel::setMergeGroupsSelected,
+                    onSetReadingScopeGroupsSelected = viewModel::setReadingScopeGroupsSelected,
+                    onToggleItem = viewModel::toggleMergeItem,
+                    onToggleTrackingPreview = viewModel::toggleTrackingPreview,
+                    onToggleReadingPreview = viewModel::toggleReadingPreview,
+                    onSelectRecommendedTracking = viewModel::selectRecommendedTrackingPreviews,
+                    onClearLowConfidenceTracking = viewModel::clearLowConfidenceTrackingSelections,
+                    onClearTrackingSelections = viewModel::clearTrackingSelections,
+                    onAcceptReadingPreviews = viewModel::acceptReadingPreviews,
+                    onClearReadingPreviews = viewModel::clearReadingPreviews,
+                    onSplitLocalProjection = viewModel::splitLocalWorkProjection,
+                    onDetachLocalProjection = viewModel::detachLocalWorkProjection,
+                    onRepairDuplicateProjections = viewModel::repairDuplicateLocalProjections,
+                )
+            }
+
+            // Advanced maintenance and dataset bridge at the bottom, collapsed by default
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showAdvancedTools = !showAdvancedTools },
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.advanced),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (totalRepairs > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                ) {
+                                    Text(
+                                        text = "$totalRepairs",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = stringResource(if (showAdvancedTools) R.string.collapse else R.string.expand),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+
+            if (showAdvancedTools || uiState.entityResetFeedback != null) {
+                if ((uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0) > 0) {
+                    item {
+                        MixedWorkContentTypesRepairCard(
+                            uiState = uiState,
+                            onRepairClick = viewModel::repairMixedWorkContentTypeEntities,
+                        )
+                    }
+                }
+
+                if ((uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) > 0) {
+                    item {
+                        DuplicateProjectionsRepairCard(
+                            uiState = uiState,
+                            onRepairClick = viewModel::repairDuplicateLocalProjections,
+                        )
+                    }
+                }
+
+                if ((uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) > 0) {
+                    item {
+                        DanglingWorkAnchorsRepairCard(
+                            uiState = uiState,
+                            onRepairClick = viewModel::repairDanglingWorkProjectionAnchors,
+                        )
+                    }
+                }
+
+                if ((uiState.repairReport?.workEntityMissingSyncIdCount ?: 0) > 0) {
+                    item {
+                        MissingWorkSyncIdsRepairCard(
+                            uiState = uiState,
+                            onRepairClick = viewModel::repairWorkEntitiesMissingSyncId,
+                        )
+                    }
+                }
+
+                item {
+                    EntityIdentityResetCard(
+                        uiState = uiState,
+                        onResetClick = { showEntityResetConfirm = true },
+                        onConfirmResultClick = viewModel::confirmEntityResetResult,
+                    )
+                }
+
+                item {
+                    DatasetBridgeCard(
+                        selectedBridge = selectedDatasetBridge,
+                        animeStatus = uiState.animeDatasetStatus,
+                        mangaBakaStatus = uiState.mangaBakaDatasetStatus,
+                        onBridgeSelected = { selectedDatasetBridge = it },
+                        onRefreshAnime = viewModel::refreshAnimeDatasetStatus,
+                        onUpdateAnime = viewModel::updateAnimeDataset,
+                        onDeleteAnime = viewModel::deleteAnimeDataset,
+                        onRefreshMangaBaka = viewModel::refreshMangaBakaDatasetStatus,
+                        onUpdateMangaBaka = viewModel::updateMangaBakaDataset,
+                        onDeleteMangaBaka = viewModel::deleteMangaBakaDataset,
+                        onBuildMangaBakaIndex = viewModel::buildMangaBakaSearchIndex,
+                    )
+                }
             }
         }
     }

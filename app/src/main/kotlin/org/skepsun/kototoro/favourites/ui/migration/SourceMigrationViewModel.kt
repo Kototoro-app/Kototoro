@@ -47,6 +47,7 @@ import org.skepsun.kototoro.favourites.domain.MergeFavoriteEntitiesUseCase
 import org.skepsun.kototoro.favourites.domain.OrganizableWork
 import org.skepsun.kototoro.favourites.domain.PreviewReadingSourceMigrationUseCase
 import org.skepsun.kototoro.favourites.domain.ReadingSourcePreview
+import org.skepsun.kototoro.favourites.domain.ReadingSourcePreviewAction
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreview
 import org.skepsun.kototoro.favourites.domain.TrackingBindingPreviewOptions
 import org.skepsun.kototoro.favourites.work.SourceMigrationWorker
@@ -1541,15 +1542,19 @@ class SourceMigrationViewModel @Inject constructor(
     fun previewReadingSources() {
         val state = _uiState.value
         val targetSources = state.selectedTargetSources
-        val hasScope = state.selectedContentIds.isNotEmpty() || state.selectedFromSource != null
+        val hasScope = state.selectedContentIds.isNotEmpty() ||
+            state.selectedFromSource != null ||
+            state.selectedManualMergeMangaIds.isNotEmpty() ||
+            state.scopedFavouriteContents.isNotEmpty()
         if (!hasScope || targetSources.isEmpty() || state.isExecuting) {
             return
         }
+        val scopeIds = state.selectedContentIds.ifEmpty { state.selectedManualMergeMangaIds }
         _uiState.value = state.copy(
             isExecuting = true,
             isFinished = false,
             migrationProgress = MigrationProgress(
-                total = state.selectedContentIds.size.takeIf { it > 0 } ?: loadPreviewScopeEstimate(state),
+                total = scopeIds.size.takeIf { it > 0 } ?: loadPreviewScopeEstimate(state),
                 completed = 0,
                 failed = 0,
                 notFound = 0,
@@ -1562,7 +1567,11 @@ class SourceMigrationViewModel @Inject constructor(
         )
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val favourites = loadScopedFavouriteContents(state)
+                val favourites = when {
+                    scopeIds.isNotEmpty() -> entityOrganizeRepository.listFavouriteContentsByMangaIds(scopeIds)
+                    state.selectedFromSource != null -> entityOrganizeRepository.listFavouriteContents(state.selectedFromSource.name)
+                    else -> loadScopedFavouriteContents(state)
+                }
                 _uiState.value = _uiState.value.copy(
                     migrationProgress = MigrationProgress(
                         total = favourites.size,
@@ -1592,7 +1601,8 @@ class SourceMigrationViewModel @Inject constructor(
                         message = appContext.getString(
                             R.string.entity_organize_reading_preview_feedback,
                             result.previews.size,
-                            result.skipped,
+                            result.previews.count { it.action == ReadingSourcePreviewAction.ACTIVATE_EXISTING },
+                            result.previews.count { it.action == ReadingSourcePreviewAction.ATTACH_NEW },
                         ),
                     ),
                 )
@@ -1625,63 +1635,70 @@ class SourceMigrationViewModel @Inject constructor(
 
     fun toggleReadingScopeGroup(groupId: String) {
         val state = _uiState.value
-        val scopeMangaIds = state.mergeCandidateGroups
-            .firstOrNull { it.id == groupId }
-            ?.mangaIds
-            ?.takeIf { it.isNotEmpty() }
-            ?: return
-        val next = if (scopeMangaIds.all(state.selectedContentIds::contains)) {
-            clearSelectionIds(state.selectedContentIds, scopeMangaIds)
+        if (state.readingSourcePreviews.isNotEmpty()) {
+            val groupReadingMangaIds = state.readingSourcePreviews
+                .filter { it.mangaId in (state.mergeCandidateGroups.firstOrNull { g -> g.id == groupId }?.mangaIds.orEmpty()) }
+                .map { it.mangaId }
+            if (groupReadingMangaIds.isNotEmpty()) {
+                val allAccepted = groupReadingMangaIds.all(state.acceptedReadingPreviewIds::contains)
+                val next = if (allAccepted) {
+                    clearSelectionIds(state.acceptedReadingPreviewIds, groupReadingMangaIds.toSet())
+                } else {
+                    state.acceptedReadingPreviewIds + groupReadingMangaIds
+                }
+                _uiState.value = state.copy(acceptedReadingPreviewIds = next)
+                return
+            }
+        }
+        val group = state.mergeCandidateGroups.firstOrNull { it.id == groupId } ?: return
+        val current = state.selectedMergeItemsByGroup[groupId].orEmpty()
+        val selectAll = current.size < group.mangaIds.size
+        val nextItems = if (selectAll) group.mangaIds else emptySet()
+        val nextManual = if (selectAll) {
+            state.selectedManualMergeMangaIds + group.mangaIds
         } else {
-            state.selectedContentIds + scopeMangaIds
+            state.selectedManualMergeMangaIds - group.mangaIds
         }
         _uiState.value = state.copy(
-            selectedContentIds = next,
-            selectedFromSource = null,
-            mergePreviewReady = false,
-            selectedMergeGroupIds = emptySet(),
-            selectedTrackingPreviewIds = emptySet(),
-            trackingPreviews = emptyList(),
-            trackingPreviewReady = false,
-            readingSourcePreviews = emptyList(),
-            acceptedReadingPreviewIds = emptySet(),
-            stageFeedbacks = state.stageFeedbacks
-                .without(EntityOrganizeStage.MERGE)
-                .without(EntityOrganizeStage.TRACKING)
-                .without(EntityOrganizeStage.READING),
+            selectedMergeItemsByGroup = state.selectedMergeItemsByGroup + (groupId to nextItems),
+            selectedManualMergeMangaIds = nextManual,
         )
-        refreshMergeCandidates()
     }
 
     fun setReadingScopeGroupsSelected(groupIds: Set<String>, selected: Boolean) {
         if (groupIds.isEmpty()) return
         val state = _uiState.value
-        val scopeMangaIds = state.mergeCandidateGroups
-            .asSequence()
-            .filter { it.id in groupIds }
-            .flatMap { it.mangaIds.asSequence() }
-            .toSet()
-        if (scopeMangaIds.isEmpty()) return
+        if (state.readingSourcePreviews.isNotEmpty()) {
+            val targetMangaIds = state.readingSourcePreviews
+                .filter { preview ->
+                    state.mergeCandidateGroups.any { it.id in groupIds && preview.mangaId in it.mangaIds }
+                }
+                .mapTo(LinkedHashSet()) { it.mangaId }
+            if (targetMangaIds.isNotEmpty()) {
+                val next = if (selected) {
+                    state.acceptedReadingPreviewIds + targetMangaIds
+                } else {
+                    clearSelectionIds(state.acceptedReadingPreviewIds, targetMangaIds)
+                }
+                _uiState.value = state.copy(acceptedReadingPreviewIds = next)
+                return
+            }
+        }
+        val groups = state.mergeCandidateGroups.filter { it.id in groupIds }
+        val affectedMangaIds = groups.flatMapTo(LinkedHashSet()) { it.mangaIds }
+        val nextItemsByGroup = state.selectedMergeItemsByGroup.toMutableMap()
+        groups.forEach { group ->
+            nextItemsByGroup[group.id] = if (selected) group.mangaIds else emptySet()
+        }
+        val nextManual = if (selected) {
+            state.selectedManualMergeMangaIds + affectedMangaIds
+        } else {
+            state.selectedManualMergeMangaIds - affectedMangaIds
+        }
         _uiState.value = state.copy(
-            selectedContentIds = if (selected) {
-                state.selectedContentIds + scopeMangaIds
-            } else {
-                clearSelectionIds(state.selectedContentIds, scopeMangaIds)
-            },
-            selectedFromSource = null,
-            mergePreviewReady = false,
-            selectedMergeGroupIds = emptySet(),
-            selectedTrackingPreviewIds = emptySet(),
-            trackingPreviews = emptyList(),
-            trackingPreviewReady = false,
-            readingSourcePreviews = emptyList(),
-            acceptedReadingPreviewIds = emptySet(),
-            stageFeedbacks = state.stageFeedbacks
-                .without(EntityOrganizeStage.MERGE)
-                .without(EntityOrganizeStage.TRACKING)
-                .without(EntityOrganizeStage.READING),
+            selectedMergeItemsByGroup = nextItemsByGroup,
+            selectedManualMergeMangaIds = nextManual,
         )
-        refreshMergeCandidates()
     }
 
     fun acceptReadingPreviews(mangaIds: Set<Long>) {
@@ -1704,7 +1721,9 @@ class SourceMigrationViewModel @Inject constructor(
         val state = _uiState.value
         val selectedTargetSourceNames = state.selectedTargetSources.map { it.name }.distinct()
         val hasSourceScope = state.selectedFromSource != null
-        val hasSelectionScope = state.selectedContentIds.isNotEmpty()
+        val hasSelectionScope = state.selectedContentIds.isNotEmpty() ||
+            state.selectedManualMergeMangaIds.isNotEmpty() ||
+            state.acceptedReadingPreviewIds.isNotEmpty()
         val acceptedPreviews = state.readingSourcePreviews.filter { it.mangaId in state.acceptedReadingPreviewIds }
         if ((!hasSelectionScope && !hasSourceScope) || selectedTargetSourceNames.isEmpty() || acceptedPreviews.isEmpty()) {
             return
@@ -1716,10 +1735,11 @@ class SourceMigrationViewModel @Inject constructor(
                 "targets=${selectedTargetSourceNames.joinToString()} concurrency=${state.concurrency}",
         )
 
+        val targetScopeIds = (state.selectedContentIds.ifEmpty { state.selectedManualMergeMangaIds }.ifEmpty { state.acceptedReadingPreviewIds }).toLongArray()
         val input = workDataOf(
             SourceMigrationWorker.KEY_CONCURRENCY to state.concurrency,
             SourceMigrationWorker.KEY_TARGET_SOURCES to selectedTargetSourceNames.toTypedArray(),
-            SourceMigrationWorker.KEY_SELECTED_CONTENT_IDS to state.selectedContentIds.toLongArray(),
+            SourceMigrationWorker.KEY_SELECTED_CONTENT_IDS to targetScopeIds,
             SourceMigrationWorker.KEY_FROM_SOURCE to state.selectedFromSource?.name,
             SourceMigrationWorker.KEY_PREVIEW_MANGA_IDS to acceptedPreviews.map { it.mangaId }.toLongArray(),
             SourceMigrationWorker.KEY_PREVIEW_TARGET_IDS to acceptedPreviews.map { it.targetContentId }.toLongArray(),
