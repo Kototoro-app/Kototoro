@@ -20,6 +20,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -742,13 +743,17 @@ fun ComposeWebtoonReader(
             }
         }
         val pageGap = if (isGapsEnabled) dimensionResource(R.dimen.webtoon_pages_gap) else 0.dp
+        // Keep the transformed scroll target as wide as the screen. Inset the items inside
+        // it so zooming out preserves image width while the side gutters remain draggable.
+        val canvasWidth = if (canvasScale < 1f) maxWidth / canvasScale else maxWidth
+        val horizontalContentPadding = (canvasWidth - maxWidth) / 2
         // Keep the scroll container inside a separate scaled canvas. This mirrors the legacy
         // WebtoonScalingFrame and keeps content outside the current list window in the same
         // transform coordinate space.
         Box(
             modifier = Modifier
                 .requiredSize(
-                    width = maxWidth,
+                    width = canvasWidth,
                     height = if (canvasScale < 1f) maxHeight / canvasScale else maxHeight,
                 )
                 .graphicsLayer {
@@ -762,6 +767,7 @@ fun ComposeWebtoonReader(
         ) {
             LazyColumn(
                 state = listState,
+                contentPadding = PaddingValues(horizontal = horizontalContentPadding),
                 verticalArrangement = Arrangement.spacedBy(pageGap),
                 modifier = Modifier
                     .fillMaxSize()
@@ -1197,4 +1203,3 @@ internal fun AnimatedDrawableLifecycle(animatable: Animatable?, isPageVisible: B
         }
     }
 }
-

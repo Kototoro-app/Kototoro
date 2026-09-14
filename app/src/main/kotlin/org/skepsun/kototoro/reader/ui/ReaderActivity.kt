@@ -819,6 +819,9 @@ class ReaderActivity :
 
     override fun onResume() {
         super.onResume()
+        // State saving also runs when this Activity stays alive in the background. The
+        // retained pager need not report its anchor again before the next two-page turn.
+        viewModel.clearTransientCrossChapterSuppression()
         if (!enableTranslationAfterSetup) {
             return
         }
