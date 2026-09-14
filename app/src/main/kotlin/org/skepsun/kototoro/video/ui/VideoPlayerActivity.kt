@@ -1618,14 +1618,30 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
             return
         }
 
-        if (manga != null && !manga.chapters.isNullOrEmpty()) {
+        if (manga != null) {
             lifecycleScope.launch {
                 try {
-                    val repo = mangaRepositoryFactory.create(manga.source)
-                    android.util.Log.d("VideoPlayer", "repo=${repo!!::class.simpleName} chapters=${manga.chapters?.size} source=${manga.source.name}")
-                    val chapters = manga.chapters ?: emptyList()
+                    val effectiveManga = if (!manga.chapters.isNullOrEmpty()) {
+                        manga
+                    } else {
+                        runCatching {
+                            val details = mangaRepositoryFactory.create(manga.source).getDetails(manga)
+                            mangaContent = details
+                            updateTitleAndSubtitle()
+                            details
+                        }.getOrNull() ?: manga
+                    }
+                    val chapters = effectiveManga.chapters ?: emptyList()
+                    if (chapters.isEmpty()) {
+                        android.util.Log.e("VideoPlayer", "Cannot resolve non-direct URL without chapters")
+                        showPlayerMessage(org.skepsun.kototoro.R.string.error_occurred, SnackbarDuration.Long)
+                        return@launch
+                    }
+                    val repo = mangaRepositoryFactory.create(effectiveManga.source)
+                    android.util.Log.d("VideoPlayer", "repo=${repo::class.simpleName} chapters=${chapters.size} source=${effectiveManga.source.name}")
                     val currentChapter = if (currentState != null) {
                         chapters.find { it.id == currentState.chapterId }
+                            ?: chapters.find { it.url == url }
                     } else {
                         chapters.find { it.url == url }
                     } ?: chapters.firstOrNull()
