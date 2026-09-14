@@ -41,6 +41,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.catch
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
 import com.google.android.material.snackbar.Snackbar
@@ -70,6 +71,8 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
 import org.skepsun.kototoro.core.nav.applyHorizontalRouteCloseTransition
 import org.skepsun.kototoro.core.nav.router
+import org.skepsun.kototoro.core.background.BackgroundArtwork
+import org.skepsun.kototoro.core.background.BackgroundArtworkRepository
 import org.skepsun.kototoro.core.network.BaseHttpClient
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.os.OpenDocumentTreeHelper
@@ -79,7 +82,6 @@ import org.skepsun.kototoro.core.ui.adaptive.resolveUiPresentationConfig
 import org.skepsun.kototoro.core.ui.compose.DynamicArtworkBackdrop
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
-import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.explore.data.ContentSourcesRepository
 import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
@@ -207,7 +209,7 @@ class SettingsActivity :
     lateinit var storageManager: LocalStorageManager
 
     @Inject
-    lateinit var historyRepository: HistoryRepository
+    lateinit var backgroundArtworkRepository: BackgroundArtworkRepository
 
     @Inject
     lateinit var downloadsScheduler: DownloadWorker.Scheduler
@@ -463,8 +465,16 @@ class SettingsActivity :
         val initialComposeDestination = restoredDestination ?: resolveDefaultComposeDestination(intent)
         composeDestination = initialComposeDestination
         setComposeContent {
-            val lastReadContent by historyRepository.observeLast().collectAsStateWithLifecycle(initialValue = null)
-            DynamicArtworkBackdrop(content = lastReadContent) {
+            val backgroundArtwork by backgroundArtworkRepository.observe()
+                .catch { emit(BackgroundArtwork()) }
+                .collectAsStateWithLifecycle(initialValue = BackgroundArtwork())
+            DynamicArtworkBackdrop(
+                content = backgroundArtwork.content,
+                imageUri = backgroundArtwork.imageUri,
+                imageOpacity = backgroundArtwork.imageOpacity,
+                overlayStrength = backgroundArtwork.overlayStrength,
+                blurRadius = backgroundArtwork.blurRadius,
+            ) {
                 SettingsAdaptiveShell(
                     isTwoPane = isMasterDetails,
                     destination = composeDestination,

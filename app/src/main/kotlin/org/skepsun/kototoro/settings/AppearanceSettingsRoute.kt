@@ -7,6 +7,8 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,6 +31,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.os.AppShortcutManager
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
+import org.skepsun.kototoro.core.prefs.BackgroundArtworkSource
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
@@ -61,6 +64,7 @@ import org.skepsun.kototoro.core.ui.util.ActivityRecreationHandle
 import org.skepsun.kototoro.core.util.LocaleComparator
 import org.skepsun.kototoro.core.util.ext.getLocalesConfig
 import org.skepsun.kototoro.core.util.ext.processLifecycleScope
+import org.skepsun.kototoro.core.util.ext.resolveName
 import org.skepsun.kototoro.core.util.ext.sortedWithSafe
 import org.skepsun.kototoro.core.util.ext.toList
 import org.skepsun.kototoro.explore.data.SourcePreset
@@ -113,6 +117,22 @@ fun AppearanceSettingsRoute(
     val interfaceStyle = settings.observeAsState(AppSettings.KEY_INTERFACE_STYLE) { interfaceStyle }.value
     val theme = settings.observeAsState(AppSettings.KEY_THEME) { theme }.value
     val backgroundStyle = settings.observeAsState(AppSettings.KEY_BACKGROUND_STYLE) { backgroundStyle }.value
+    val backgroundArtworkOpacity = settings.observeAsState(
+        AppSettings.KEY_BACKGROUND_ARTWORK_OPACITY,
+    ) { backgroundArtworkOpacity }.value
+    val backgroundArtworkOverlayStrength = settings.observeAsState(
+        AppSettings.KEY_BACKGROUND_ARTWORK_OVERLAY_STRENGTH,
+    ) { backgroundArtworkOverlayStrength }.value
+    val backgroundArtworkBlur = settings.observeAsState(
+        AppSettings.KEY_BACKGROUND_ARTWORK_BLUR,
+    ) { backgroundArtworkBlur }.value
+    val backgroundArtworkSource = settings.observeAsState(
+        AppSettings.KEY_BACKGROUND_ARTWORK_SOURCE,
+    ) { backgroundArtworkSource }.value
+    val backgroundArtworkUri = settings.observeAsState(
+        AppSettings.KEY_BACKGROUND_ARTWORK_URI,
+    ) { backgroundArtworkUri }.value
+    val isSuggestionsEnabled = settings.observeAsState(AppSettings.KEY_SUGGESTIONS) { isSuggestionsEnabled }.value
     val isAmoledTheme = settings.observeAsState(AppSettings.KEY_THEME_AMOLED) { isAmoledTheme }.value
     val appFontPreset = settings.observeAsState(AppSettings.KEY_APP_FONT_PRESET) { appFontPreset }.value
     val expressiveAppFontPreset =
@@ -291,11 +311,35 @@ fun AppearanceSettingsRoute(
     val effectiveBackgroundStyle = backgroundStyle.takeIf { selected ->
         backgroundStyleOptions.any { it.value == selected }
     } ?: BackgroundStyle.DEFAULT
+    val backgroundArtworkSourceOptions = coordinator.buildBackgroundArtworkSourceOptions(isSuggestionsEnabled)
+    val effectiveBackgroundArtworkSource = backgroundArtworkSource.takeIf { selected ->
+        backgroundArtworkSourceOptions.any { it.value == selected }
+    } ?: BackgroundArtworkSource.LAST_READ
+    val customBackgroundImageName = remember(backgroundArtworkUri) {
+        backgroundArtworkUri?.let { uri ->
+            context.contentResolver.resolveName(uri)?.takeIf { it.isNotBlank() }
+        }
+    }
+    val selectBackgroundArtworkImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            settings.backgroundArtworkUri = uri
+            settings.backgroundArtworkSource = BackgroundArtworkSource.CUSTOM
+        }
+    }
     val options = AppearanceSettingsOptions(
         colorSchemes = coordinator.buildColorSchemeOptions(interfaceStyle),
         interfaceStyles = coordinator.buildInterfaceStyleOptions(),
         themes = coordinator.buildThemeOptions(),
         backgroundStyles = backgroundStyleOptions,
+        backgroundArtworkSources = backgroundArtworkSourceOptions,
         fontPresets = coordinator.buildFontPresetOptions(),
         tabletListPreviewModes = coordinator.buildTabletListPreviewModeOptions(),
         tabletUiModes = coordinator.buildTabletUiModeOptions(),
@@ -335,6 +379,11 @@ fun AppearanceSettingsRoute(
         colorScheme = colorScheme,
         theme = theme,
         backgroundStyle = effectiveBackgroundStyle,
+        backgroundArtworkSource = effectiveBackgroundArtworkSource,
+        customBackgroundImageName = customBackgroundImageName,
+        backgroundArtworkOpacity = backgroundArtworkOpacity,
+        backgroundArtworkOverlayStrength = backgroundArtworkOverlayStrength,
+        backgroundArtworkBlur = backgroundArtworkBlur,
         isAmoledTheme = isAmoledTheme,
         appFontPreset = appFontPreset,
         expressiveAppFontPreset = expressiveAppFontPreset,
@@ -406,6 +455,19 @@ fun AppearanceSettingsRoute(
         onColorSchemeChange = { coordinator.updateAndRestart(coroutineScope) { settings.colorScheme = it } },
         onThemeChange = coordinator::updateTheme,
         onBackgroundStyleChange = { coordinator.updateAndRestart(coroutineScope) { settings.backgroundStyle = it } },
+        onBackgroundArtworkSourceChange = { source ->
+            if (source == BackgroundArtworkSource.CUSTOM) {
+                selectBackgroundArtworkImage.launch(arrayOf("image/*"))
+            } else {
+                settings.backgroundArtworkSource = source
+            }
+        },
+        onSelectBackgroundArtworkImage = {
+            selectBackgroundArtworkImage.launch(arrayOf("image/*"))
+        },
+        onBackgroundArtworkOpacityChange = { settings.backgroundArtworkOpacity = it },
+        onBackgroundArtworkOverlayStrengthChange = { settings.backgroundArtworkOverlayStrength = it },
+        onBackgroundArtworkBlurChange = { settings.backgroundArtworkBlur = it },
         onAmoledThemeChange = {
             coordinator.updateAndRestart(coroutineScope) { settings.isAmoledTheme = it }
         },
@@ -634,6 +696,16 @@ private class AppearanceSettingsCoordinator(
         return BackgroundStyle.selectableEntries.map { style ->
             SettingsChoiceOption(style, context.getString(style.titleResId))
         }
+    }
+
+    fun buildBackgroundArtworkSourceOptions(
+        suggestionsEnabled: Boolean,
+    ): List<SettingsChoiceOption<BackgroundArtworkSource>> {
+        return BackgroundArtworkSource.selectableEntries
+            .filter { source -> suggestionsEnabled || source != BackgroundArtworkSource.RANDOM_SUGGESTION }
+            .map { source ->
+                SettingsChoiceOption(source, context.getString(source.titleResId))
+            }
     }
 
     fun buildFontPresetOptions(): List<SettingsChoiceOption<AppFontPreset>> {

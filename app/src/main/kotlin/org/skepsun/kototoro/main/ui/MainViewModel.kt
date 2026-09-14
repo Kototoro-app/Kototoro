@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
@@ -13,6 +14,8 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.skepsun.kototoro.core.exceptions.EmptyHistoryException
+import org.skepsun.kototoro.core.background.BackgroundArtwork
+import org.skepsun.kototoro.core.background.BackgroundArtworkRepository
 import org.skepsun.kototoro.core.github.AppUpdateRepository
 import org.skepsun.kototoro.core.model.LocalVideoSource
 import org.skepsun.kototoro.core.model.getContentType
@@ -42,6 +45,7 @@ data class MainReaderRequest(
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
+    private val backgroundArtworkRepository: BackgroundArtworkRepository,
     private val appUpdateRepository: AppUpdateRepository,
     trackingRepository: TrackingRepository,
     private val settings: AppSettings,
@@ -93,6 +97,14 @@ class MainViewModel @Inject constructor(
             scope = viewModelScope + Dispatchers.Default,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null,
+        )
+
+    val backgroundArtwork = backgroundArtworkRepository.observe()
+        .catch { emit(BackgroundArtwork()) }
+        .stateIn(
+            scope = viewModelScope + Dispatchers.Default,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = BackgroundArtwork(),
         )
 
     val appUpdate = appUpdateRepository.observeAvailableUpdate()

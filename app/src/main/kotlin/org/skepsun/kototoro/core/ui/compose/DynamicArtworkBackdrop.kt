@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
@@ -20,6 +21,7 @@ import coil3.size.Size
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkOverlayColor
+import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
 
 internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
@@ -27,11 +29,24 @@ internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
 @Composable
 fun DynamicArtworkBackdrop(
     content: Content?,
+    imageUri: String? = null,
+    imageOpacity: Float = 1f,
+    overlayStrength: Float = 1f,
+    blurRadius: Float = 35f,
     modifier: Modifier = Modifier,
     children: @Composable BoxScope.() -> Unit,
 ) {
     val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-    val cover = content?.coverUrl ?: content?.publicUrl
+    val cover = imageUri?.takeIf { it.isNotBlank() } ?: content?.coverUrl ?: content?.publicUrl
+    val context = LocalContext.current
+    val imageRequest = remember(context, content?.id, content?.source?.name, content?.url, cover) {
+        ImageRequest.Builder(context)
+            .data(cover)
+            .size(DynamicArtworkRequestSize)
+            .crossfade(true)
+            .mangaExtra(content)
+            .build()
+    }
 
     Box(
         modifier = modifier
@@ -41,24 +56,23 @@ fun DynamicArtworkBackdrop(
         if (isArtworkBackground && !cover.isNullOrEmpty()) {
             Image(
                 painter = rememberAsyncImagePainter(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(cover)
-                        .size(DynamicArtworkRequestSize)
-                        .crossfade(true)
-                        .build(),
+                    model = imageRequest,
                 ),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        renderEffect = BlurEffect(35f, 35f)
+                        alpha = imageOpacity.coerceIn(0f, 1f)
+                        renderEffect = blurRadius.coerceAtLeast(0f).takeIf { it > 0f }?.let {
+                            BlurEffect(it, it)
+                        }
                     },
             )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.artworkOverlayColor()),
+                    .background(MaterialTheme.colorScheme.artworkOverlayColor(overlayStrength)),
             )
         }
         children()

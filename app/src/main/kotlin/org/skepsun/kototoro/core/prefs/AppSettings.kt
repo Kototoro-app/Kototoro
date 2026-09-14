@@ -370,6 +370,32 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_BACKGROUND_STYLE, BackgroundStyle.DEFAULT)
         set(value) = prefs.edit { putEnumValue(KEY_BACKGROUND_STYLE, value) }
 
+    var backgroundArtworkOpacity: Int
+        get() = prefs.getSafeInt(KEY_BACKGROUND_ARTWORK_OPACITY, 100).coerceIn(0, 100)
+        set(value) = prefs.edit { putInt(KEY_BACKGROUND_ARTWORK_OPACITY, value.coerceIn(0, 100)) }
+
+    var backgroundArtworkOverlayStrength: Int
+        get() = prefs.getSafeInt(KEY_BACKGROUND_ARTWORK_OVERLAY_STRENGTH, 100).coerceIn(0, 100)
+        set(value) = prefs.edit { putInt(KEY_BACKGROUND_ARTWORK_OVERLAY_STRENGTH, value.coerceIn(0, 100)) }
+
+    var backgroundArtworkBlur: Int
+        get() = prefs.getSafeInt(KEY_BACKGROUND_ARTWORK_BLUR, 35).coerceIn(0, 100)
+        set(value) = prefs.edit { putInt(KEY_BACKGROUND_ARTWORK_BLUR, value.coerceIn(0, 100)) }
+
+    var backgroundArtworkSource: BackgroundArtworkSource
+        get() = prefs.getEnumValue(KEY_BACKGROUND_ARTWORK_SOURCE, BackgroundArtworkSource.LAST_READ)
+        set(value) = prefs.edit { putEnumValue(KEY_BACKGROUND_ARTWORK_SOURCE, value) }
+
+    var backgroundArtworkUri: Uri?
+        get() = prefs.getString(KEY_BACKGROUND_ARTWORK_URI, null)?.let(Uri::parse)
+        set(value) = prefs.edit {
+            if (value == null) {
+                remove(KEY_BACKGROUND_ARTWORK_URI)
+            } else {
+                putString(KEY_BACKGROUND_ARTWORK_URI, value.toString())
+            }
+        }
+
     var tabletUiMode: TabletUiMode
         get() = prefs.getEnumValue(KEY_TABLET_UI_MODE, TabletUiMode.RELAXED)
         set(value) = prefs.edit { putEnumValue(KEY_TABLET_UI_MODE, value) }
@@ -2857,6 +2883,11 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_COLOR_THEME = "color_theme"
         const val KEY_THEME_AMOLED = "amoled_theme"
         const val KEY_BACKGROUND_STYLE = "background_style"
+        const val KEY_BACKGROUND_ARTWORK_OPACITY = "background_artwork_opacity"
+        const val KEY_BACKGROUND_ARTWORK_OVERLAY_STRENGTH = "background_artwork_overlay_strength"
+        const val KEY_BACKGROUND_ARTWORK_BLUR = "background_artwork_blur"
+        const val KEY_BACKGROUND_ARTWORK_SOURCE = "background_artwork_source"
+        const val KEY_BACKGROUND_ARTWORK_URI = "background_artwork_uri"
         const val KEY_MATERIAL_EXPRESSIVE_COMPONENTS = "material_expressive_components"
         const val KEY_INTERFACE_STYLE = "interface_style"
         const val KEY_APP_FONT_PRESET = "app_font_preset"

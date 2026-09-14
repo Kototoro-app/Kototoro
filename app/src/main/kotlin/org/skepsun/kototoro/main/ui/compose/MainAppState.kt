@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.main.ui.compose
 
 import androidx.compose.runtime.Composable
+import org.skepsun.kototoro.core.background.BackgroundArtwork
 import kotlinx.coroutines.flow.StateFlow
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.prefs.AppSettings
@@ -36,6 +37,7 @@ data class MainAppState(
     val navStateFlow: StateFlow<BottomNavState>,
     val pageSaveHelper: org.skepsun.kototoro.reader.ui.PageSaveHelper,
     val lastReadContent: Content? = null,
+    val backgroundArtwork: BackgroundArtwork = BackgroundArtwork(),
     val query: String = "",
     val suggestions: List<SearchSuggestionItem> = emptyList(),
     val onQueryChanged: (String) -> Unit = {},

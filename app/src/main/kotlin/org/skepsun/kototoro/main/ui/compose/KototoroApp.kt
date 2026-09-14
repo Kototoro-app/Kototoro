@@ -375,6 +375,7 @@ fun KototoroApp(
     val navStateFlow = mainAppState.navStateFlow
     val pageSaveHelper = mainAppState.pageSaveHelper
     val lastReadContent = mainAppState.lastReadContent
+    val backgroundArtwork = mainAppState.backgroundArtwork
     val query = mainAppState.query
     val suggestions = mainAppState.suggestions
     val onQueryChanged = mainAppState.onQueryChanged
@@ -1280,7 +1281,11 @@ fun KototoroApp(
                 }
             }
             DynamicArtworkBackdrop(
-                content = lastReadContent,
+                content = backgroundArtwork.content,
+                imageUri = backgroundArtwork.imageUri,
+                imageOpacity = backgroundArtwork.imageOpacity,
+                overlayStrength = backgroundArtwork.overlayStrength,
+                blurRadius = backgroundArtwork.blurRadius,
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)

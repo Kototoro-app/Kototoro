@@ -8,10 +8,13 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 
 internal fun ColorScheme.isDarkTheme(): Boolean = onBackground.luminance() > 0.5f
 
-internal fun ColorScheme.artworkOverlayColor(): Color = if (isDarkTheme()) {
-    Color.Black.copy(alpha = 0.60f)
-} else {
-    Color.White.copy(alpha = 0.68f)
+internal fun ColorScheme.artworkOverlayColor(strength: Float = 1f): Color {
+    val baseColor = if (isDarkTheme()) {
+        Color.Black.copy(alpha = 0.60f)
+    } else {
+        Color.White.copy(alpha = 0.68f)
+    }
+    return baseColor.copy(alpha = baseColor.alpha * strength.coerceIn(0f, 1f))
 }
 
 /**

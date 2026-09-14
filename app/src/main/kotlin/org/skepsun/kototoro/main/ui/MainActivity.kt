@@ -225,6 +225,7 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
             val isResumeEnabled by viewModel.isResumeEnabled.collectAsStateWithLifecycle()
             val sourcePresets by sourcePresetsRepository.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
             val lastReadContent by viewModel.lastReadContent.collectAsStateWithLifecycle()
+            val backgroundArtwork by viewModel.backgroundArtwork.collectAsStateWithLifecycle()
             val spaceFlags by spaceFeatureFlagsRepository.flags.collectAsStateWithLifecycle()
             val spaceEnabled = spaceFlags.entitySpaceEnabled
             val spaceUiState by if (spaceEnabled) {
@@ -257,6 +258,7 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                     navStateFlow = navStateFlow,
                     pageSaveHelper = pageSaveHelper,
                     lastReadContent = lastReadContent,
+                    backgroundArtwork = backgroundArtwork,
                     suggestions = suggestions,
                     onQueryChanged = topBarController::updateSearchQuery,
                     onSearch = { query -> submitSearch(query) },

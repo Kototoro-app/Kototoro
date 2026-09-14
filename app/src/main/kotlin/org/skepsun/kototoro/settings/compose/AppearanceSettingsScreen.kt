@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.AppFontPreset
+import org.skepsun.kototoro.core.prefs.BackgroundArtworkSource
 import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.ColorScheme
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
@@ -54,6 +55,11 @@ data class AppearanceSettingsUiState(
     val colorScheme: ColorScheme,
     val theme: Int,
     val backgroundStyle: BackgroundStyle,
+    val backgroundArtworkSource: BackgroundArtworkSource,
+    val customBackgroundImageName: String?,
+    val backgroundArtworkOpacity: Int,
+    val backgroundArtworkOverlayStrength: Int,
+    val backgroundArtworkBlur: Int,
     val isAmoledTheme: Boolean,
     val appFontPreset: AppFontPreset,
     val expressiveAppFontPreset: AppFontPreset,
@@ -122,6 +128,7 @@ data class AppearanceSettingsOptions(
     val interfaceStyles: List<SettingsChoiceOption<InterfaceStyle>>,
     val themes: List<SettingsChoiceOption<Int>>,
     val backgroundStyles: List<SettingsChoiceOption<BackgroundStyle>>,
+    val backgroundArtworkSources: List<SettingsChoiceOption<BackgroundArtworkSource>>,
     val fontPresets: List<SettingsChoiceOption<AppFontPreset>>,
     val tabletListPreviewModes: List<SettingsChoiceOption<TabletListPreviewMode>>,
     val tabletUiModes: List<SettingsChoiceOption<TabletUiMode>>,
@@ -169,6 +176,11 @@ fun AppearanceSettingsScreen(
     onColorSchemeChange: (ColorScheme) -> Unit,
     onThemeChange: (Int) -> Unit,
     onBackgroundStyleChange: (BackgroundStyle) -> Unit,
+    onBackgroundArtworkSourceChange: (BackgroundArtworkSource) -> Unit,
+    onSelectBackgroundArtworkImage: () -> Unit,
+    onBackgroundArtworkOpacityChange: (Int) -> Unit,
+    onBackgroundArtworkOverlayStrengthChange: (Int) -> Unit,
+    onBackgroundArtworkBlurChange: (Int) -> Unit,
     onAmoledThemeChange: (Boolean) -> Unit,
     onAppFontPresetChange: (AppFontPreset) -> Unit,
     onExpressiveAppFontPresetChange: (AppFontPreset) -> Unit,
@@ -388,6 +400,65 @@ fun AppearanceSettingsScreen(
                         summary = stringResource(R.string.background_style_summary),
                         onValueChange = onBackgroundStyleChange,
                     )
+                }
+                if (state.backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+                    item {
+                        SettingsChoicePreference(
+                            title = stringResource(R.string.background_artwork_source),
+                            iconRes = R.drawable.ic_images,
+                            value = state.backgroundArtworkSource,
+                            options = options.backgroundArtworkSources,
+                            summary = stringResource(R.string.background_artwork_source_summary),
+                            onValueChange = onBackgroundArtworkSourceChange,
+                        )
+                    }
+                    if (state.backgroundArtworkSource == BackgroundArtworkSource.CUSTOM) {
+                        item {
+                            SettingsActionPreference(
+                                title = stringResource(R.string.background_artwork_select),
+                                summary = state.customBackgroundImageName
+                                    ?: stringResource(R.string.background_artwork_not_selected),
+                                iconRes = R.drawable.ic_folder_file,
+                                onClick = onSelectBackgroundArtworkImage,
+                            )
+                        }
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.background_artwork_opacity),
+                            iconRes = R.drawable.ic_eye,
+                            value = state.backgroundArtworkOpacity,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.background_artwork_opacity_summary),
+                            valueText = { "$it%" },
+                            onValueChange = onBackgroundArtworkOpacityChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.background_artwork_overlay_strength),
+                            iconRes = R.drawable.ic_palette,
+                            value = state.backgroundArtworkOverlayStrength,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.background_artwork_overlay_strength_summary),
+                            valueText = { "$it%" },
+                            onValueChange = onBackgroundArtworkOverlayStrengthChange,
+                        )
+                    }
+                    item {
+                        SettingsSliderPreference(
+                            title = stringResource(R.string.background_artwork_blur),
+                            iconRes = R.drawable.ic_auto_fix,
+                            value = state.backgroundArtworkBlur,
+                            valueRange = 0..100,
+                            step = 5,
+                            summary = stringResource(R.string.background_artwork_blur_summary),
+                            valueText = { "$it%" },
+                            onValueChange = onBackgroundArtworkBlurChange,
+                        )
+                    }
                 }
             }
         }
