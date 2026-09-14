@@ -1324,9 +1324,9 @@ class GoogleDriveSyncRepository @Inject constructor(
                         val pluginsDir = File(context.filesDir, "plugins").apply { mkdirs() }
                         val targetFile = File(pluginsDir, ext.fileName ?: "${ext.packageId}.jar")
                         val jarPrefs = context.getSharedPreferences("jar_plugin_versions", Context.MODE_PRIVATE)
-                        val localVersion = jarPrefs.getLong(ext.packageId, 0L)
+                        val localVersion = jarPrefs.getLong(ext.packageId, -1L)
                         val remoteVersion = ext.versionCode ?: 0L
-                        if (!targetFile.exists() || remoteVersion >= localVersion) {
+                        if (!targetFile.exists() || targetFile.length() == 0L || remoteVersion > localVersion) {
                             targetFile.writeBytes(bytes)
                             jarPrefs.edit()
                                 .putLong(ext.packageId, remoteVersion)
@@ -1344,9 +1344,9 @@ class GoogleDriveSyncRepository @Inject constructor(
                         val fileName = ext.fileName ?: "${ext.packageId}.cs3"
                         val targetFile = File(csDir, fileName)
                         val csPrefs = context.getSharedPreferences("cloudstream_plugin_versions", Context.MODE_PRIVATE)
-                        val localVersion = csPrefs.getLong(ext.packageId, 0L)
+                        val localVersion = csPrefs.getLong(ext.packageId, -1L)
                         val remoteVersion = ext.versionCode ?: 0L
-                        if (!targetFile.exists() || remoteVersion >= localVersion) {
+                        if (!targetFile.exists() || targetFile.length() == 0L || remoteVersion > localVersion) {
                             targetFile.writeBytes(bytes)
                             csPrefs.edit()
                                 .putLong(ext.packageId, remoteVersion)
@@ -1363,28 +1363,42 @@ class GoogleDriveSyncRepository @Inject constructor(
                 "mihon", "aniyomi", "ireader", "tsundoku" -> {
                     runCatching {
                         val ecosystem = ext.kind.lowercase()
+                        val remoteVersion = ext.versionCode ?: 0L
+
+                        // 1. Check if already installed in system (as a normal APK)
+                        val systemInfo = ExternalExtensionLoaderSupport.getPackageInfoOrNull(context.packageManager, ext.packageId)
+                        val systemVersion = systemInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: -1L
+                        if (systemVersion >= remoteVersion) {
+                            // System package already exists with equal or newer version, skip redundant sideload
+                            return@runCatching
+                        }
+
+                        // 2. Check if already installed in local managed storage
                         val root = LocalApkExtensionSupport.getManagedExtensionsDir(context, ecosystem)
                         val targetDir = File(root, ext.packageId).apply { mkdirs() }
                         val targetFile = File(targetDir, "${ext.packageId}.apk")
-                        val existingInfo = if (targetFile.exists()) {
+                        val existingInfo = if (targetFile.exists() && targetFile.length() > 0L) {
                             ExternalExtensionLoaderSupport.getPackageArchiveInfoOrNull(context.packageManager, targetFile)
                         } else null
-                        val localVersion = existingInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: 0L
-                        val remoteVersion = ext.versionCode ?: 0L
-                        if (!targetFile.exists() || remoteVersion >= localVersion) {
-                            val tempFile = File.createTempFile("sync_ext_${ext.packageId}", ".apk", context.cacheDir)
-                            try {
-                                tempFile.writeBytes(bytes)
-                                LocalApkExtensionSupport.storeManagedApk(context, ecosystem, ext.packageId, tempFile)
-                                when (ecosystem) {
-                                    "mihon" -> hasMihonUpdated = true
-                                    "aniyomi" -> hasAniyomiUpdated = true
-                                    "ireader" -> hasIReaderUpdated = true
-                                    "tsundoku" -> hasTsundokuUpdated = true
-                                }
-                            } finally {
-                                tempFile.delete()
+                        val localVersion = existingInfo?.let { PackageInfoCompat.getLongVersionCode(it) } ?: -1L
+                        if (targetFile.exists() && targetFile.length() > 0L && localVersion >= remoteVersion) {
+                            // Local managed APK already exists with equal or newer version, skip redundant write
+                            return@runCatching
+                        }
+
+                        // 3. Otherwise store/update managed APK
+                        val tempFile = File.createTempFile("sync_ext_${ext.packageId}", ".apk", context.cacheDir)
+                        try {
+                            tempFile.writeBytes(bytes)
+                            LocalApkExtensionSupport.storeManagedApk(context, ecosystem, ext.packageId, tempFile)
+                            when (ecosystem) {
+                                "mihon" -> hasMihonUpdated = true
+                                "aniyomi" -> hasAniyomiUpdated = true
+                                "ireader" -> hasIReaderUpdated = true
+                                "tsundoku" -> hasTsundokuUpdated = true
                             }
+                        } finally {
+                            tempFile.delete()
                         }
                     }.onFailure { Log.e(TAG, "Failed to restore apk extension ${ext.packageId}", it) }
                 }
