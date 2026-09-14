@@ -30,6 +30,7 @@ class FavouriteCategoriesActivity :
                 onSelectionChanged = { selectedIds = it },
                 onAdd = { router.openFavoriteCategoryCreate() },
                 onOpenAll = { router.openFavorites() },
+                onNavigateBack = ::finishAfterTransition,
                 onOpenCategory = { router.openFavorites(it) },
                 onEditCategory = { router.openFavoriteCategoryEdit(it.id) },
                 onShowAllChanged = viewModel::setAllCategoriesVisible,

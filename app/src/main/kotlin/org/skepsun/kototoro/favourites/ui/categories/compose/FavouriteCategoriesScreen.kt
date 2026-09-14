@@ -7,8 +7,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -21,36 +23,48 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -59,10 +73,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -71,6 +88,10 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
+import org.skepsun.kototoro.core.ui.compose.CompactTopBarItemSpacing
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.favourites.domain.model.Cover
 import org.skepsun.kototoro.favourites.ui.categories.adapter.AllCategoriesListModel
@@ -78,6 +99,7 @@ import org.skepsun.kototoro.favourites.ui.categories.adapter.CategoryListModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import org.skepsun.kototoro.main.ui.compose.TopBarControlSurface
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +109,7 @@ internal fun FavouriteCategoriesScreen(
     onSelectionChanged: (Set<Long>) -> Unit,
     onAdd: () -> Unit,
     onOpenAll: () -> Unit,
+    onNavigateBack: () -> Unit,
     onOpenCategory: (FavouriteCategory) -> Unit,
     onEditCategory: (FavouriteCategory) -> Unit,
     onShowAllChanged: (Boolean) -> Unit,
@@ -98,66 +121,79 @@ internal fun FavouriteCategoriesScreen(
     val listState = rememberLazyListState()
     var pendingDelete by remember { mutableStateOf(false) }
     var draggedCategoryId by remember { mutableStateOf<Long?>(null) }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(items) {
         localItems.clear()
         localItems.addAll(items)
     }
-    BackHandler(enabled = selectedIds.isNotEmpty()) {
-        onSelectionChanged(emptySet())
+    val closeSearch = {
+        isSearchActive = false
+        searchQuery = ""
+    }
+    LaunchedEffect(selectedIds.isNotEmpty()) {
+        if (selectedIds.isNotEmpty()) {
+            closeSearch()
+        }
+    }
+    BackHandler(enabled = selectedIds.isNotEmpty() || isSearchActive) {
+        if (selectedIds.isNotEmpty()) {
+            onSelectionChanged(emptySet())
+        } else {
+            closeSearch()
+        }
     }
 
     val selectedCategories = items.filterIsInstance<CategoryListModel>()
         .filter { it.category.id in selectedIds }
     val canShow = selectedCategories.isNotEmpty() && selectedCategories.all { !it.category.isVisibleInLibrary }
     val canHide = selectedCategories.isNotEmpty() && selectedCategories.all { it.category.isVisibleInLibrary }
+    val normalizedSearchQuery = searchQuery.trim()
+    val hasCategories = localItems.any { it is CategoryListModel }
+    val allFavoritesTitle = stringResource(R.string.all_favourites)
+    val visibleItems = if (normalizedSearchQuery.isEmpty() || !hasCategories) {
+        localItems
+    } else {
+        localItems.filter { item ->
+            when (item) {
+                is AllCategoriesListModel -> allFavoritesTitle.contains(normalizedSearchQuery, ignoreCase = true)
+                is CategoryListModel -> item.category.title.contains(normalizedSearchQuery, ignoreCase = true)
+                else -> false
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                modifier = Modifier.windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal)),
-                title = {
-                    Text(
-                        if (selectedIds.isEmpty()) stringResource(R.string.manage_categories) else selectedIds.size.toString(),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (selectedIds.isEmpty()) onOpenAll() else onSelectionChanged(emptySet())
-                    }) {
-                        Icon(
-                            painter = painterResource(
-                                if (selectedIds.isEmpty()) R.drawable.ic_arrow_forward else R.drawable.ic_clear_all,
-                            ),
-                            contentDescription = null,
-                        )
+            FavouriteCategoriesTopBar(
+                title = if (selectedIds.isEmpty()) stringResource(R.string.manage_categories) else selectedIds.size.toString(),
+                isSelectionMode = selectedIds.isNotEmpty(),
+                isSearchActive = isSearchActive && selectedIds.isEmpty(),
+                searchQuery = searchQuery,
+                onSearchQueryChanged = { searchQuery = it },
+                onSearchClick = { isSearchActive = true },
+                onCloseSearch = closeSearch,
+                onNavigateBack = {
+                    when {
+                        selectedIds.isNotEmpty() -> onSelectionChanged(emptySet())
+                        isSearchActive -> closeSearch()
+                        else -> onNavigateBack()
                     }
                 },
-                actions = {
-                    if (canShow) {
-                        IconButton(onClick = {
-                            onSetVisible(selectedIds, true)
-                            onSelectionChanged(emptySet())
-                        }) {
-                            Icon(painterResource(R.drawable.ic_eye), stringResource(R.string.show))
-                        }
-                    } else if (canHide) {
-                        IconButton(onClick = {
-                            onSetVisible(selectedIds, false)
-                            onSelectionChanged(emptySet())
-                        }) {
-                            Icon(painterResource(R.drawable.ic_eye_off), stringResource(R.string.hide))
-                        }
-                    }
-                    if (selectedIds.isNotEmpty()) {
-                        IconButton(onClick = { pendingDelete = true }) {
-                            Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.remove))
-                        }
-                    }
+                canShow = canShow,
+                canHide = canHide,
+                onShow = {
+                    onSetVisible(selectedIds, true)
+                    onSelectionChanged(emptySet())
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
+                onHide = {
+                    onSetVisible(selectedIds, false)
+                    onSelectionChanged(emptySet())
+                },
+                onDelete = { pendingDelete = true },
             )
         },
         floatingActionButton = {
@@ -188,52 +224,65 @@ internal fun FavouriteCategoriesScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.list_spacing_normal)),
         ) {
-            itemsIndexed(
-                items = localItems,
-                key = { _, item -> itemKey(item) },
-                contentType = { _, item -> item::class },
-            ) { _, item ->
-                when (item) {
-                    LoadingState -> Unit
-                    is EmptyState -> EmptyCategoryState(item)
-                    is AllCategoriesListModel -> AllCategoriesRow(
-                        item = item,
-                        onClick = { if (selectedIds.isEmpty()) onOpenAll() },
-                        onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
+            if (visibleItems.isEmpty() && normalizedSearchQuery.isNotEmpty() && hasCategories) {
+                item(key = "category-search-empty") {
+                    EmptyCategoryState(
+                        EmptyState(
+                            icon = R.drawable.ic_search,
+                            textPrimary = R.string.nothing_found,
+                            textSecondary = R.string.text_search_holder_secondary,
+                            actionStringRes = 0,
+                        ),
                     )
-                    is CategoryListModel -> CategoryRow(
-                        modifier = Modifier
-                            .then(
-                                if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
-                            )
-                            .zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
-                        item = item,
-                        isSelected = item.category.id in selectedIds,
-                        isDragging = draggedCategoryId == item.category.id,
-                        actionsEnabled = selectedIds.isEmpty() && item.isActionsEnabled,
-                        onClick = {
-                            if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-                        },
-                        onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
-                        onEdit = {
-                            if (selectedIds.isEmpty()) onEditCategory(item.category)
-                            else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
-                        },
-                        onMove = { targetIndex ->
-                            val currentIndex = localItems.indexOfFirst {
-                                (it as? CategoryListModel)?.category?.id == item.category.id
-                            }
-                            selectedIds.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
-                        },
-                        onDragStateChanged = { isDragging ->
-                            draggedCategoryId = item.category.id.takeIf { isDragging }
-                        },
-                        onDragFinished = { moved ->
-                            draggedCategoryId = null
-                            if (moved) onSaveOrder(localItems.toList())
-                        },
-                        listState = listState,
-                    )
+                }
+            } else {
+                itemsIndexed(
+                    items = visibleItems,
+                    key = { _, item -> itemKey(item) },
+                    contentType = { _, item -> item::class },
+                ) { _, item ->
+                    when (item) {
+                        LoadingState -> Unit
+                        is EmptyState -> EmptyCategoryState(item)
+                        is AllCategoriesListModel -> AllCategoriesRow(
+                            item = item,
+                            onClick = { if (selectedIds.isEmpty()) onOpenAll() },
+                            onVisibilityChanged = { onShowAllChanged(!item.isVisible) },
+                        )
+                        is CategoryListModel -> CategoryRow(
+                            modifier = Modifier
+                                .then(
+                                    if (draggedCategoryId == item.category.id) Modifier else Modifier.animateItem(),
+                                )
+                                .zIndex(if (draggedCategoryId == item.category.id) 1f else 0f),
+                            item = item,
+                            isSelected = item.category.id in selectedIds,
+                            isDragging = draggedCategoryId == item.category.id,
+                            actionsEnabled = selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && item.isActionsEnabled,
+                            onClick = {
+                                if (selectedIds.isEmpty()) onOpenCategory(item.category) else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                            },
+                            onLongClick = { toggleSelection(item.category.id, selectedIds, onSelectionChanged) },
+                            onEdit = {
+                                if (selectedIds.isEmpty()) onEditCategory(item.category)
+                                else toggleSelection(item.category.id, selectedIds, onSelectionChanged)
+                            },
+                            onMove = { targetIndex ->
+                                val currentIndex = localItems.indexOfFirst {
+                                    (it as? CategoryListModel)?.category?.id == item.category.id
+                                }
+                                selectedIds.isEmpty() && normalizedSearchQuery.isEmpty() && moveItem(localItems, currentIndex, targetIndex)
+                            },
+                            onDragStateChanged = { isDragging ->
+                                draggedCategoryId = item.category.id.takeIf { isDragging }
+                            },
+                            onDragFinished = { moved ->
+                                draggedCategoryId = null
+                                if (moved) onSaveOrder(localItems.toList())
+                            },
+                            listState = listState,
+                        )
+                    }
                 }
             }
         }
@@ -257,6 +306,239 @@ internal fun FavouriteCategoriesScreen(
                 }
             },
         )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FavouriteCategoriesTopBar(
+    title: String,
+    isSelectionMode: Boolean,
+    isSearchActive: Boolean,
+    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    onCloseSearch: () -> Unit,
+    onNavigateBack: () -> Unit,
+    canShow: Boolean,
+    canHide: Boolean,
+    onShow: () -> Unit,
+    onHide: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val controlSize = tokens.topBarButtonSize
+    val iconSize = tokens.topBarIconSize
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val closeSearch = {
+        keyboardController?.hide()
+        onCloseSearch()
+    }
+
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            focusRequester.requestFocus()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+            .padding(top = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(tokens.mainTopBarHeight)
+                .padding(horizontal = CompactTopBarHorizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TopBarControlSurface {
+                IconButton(
+                    onClick = if (isSearchActive) closeSearch else onNavigateBack,
+                    modifier = Modifier
+                        .size(controlSize)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
+                    Icon(
+                        imageVector = when {
+                            isSearchActive -> Icons.AutoMirrored.Filled.ArrowBack
+                            isSelectionMode -> Icons.Default.Close
+                            else -> Icons.AutoMirrored.Filled.ArrowBack
+                        },
+                        contentDescription = stringResource(
+                            when {
+                                isSearchActive -> R.string.close
+                                isSelectionMode -> R.string.close
+                                else -> R.string.back
+                            },
+                        ),
+                        modifier = Modifier.size(iconSize),
+                    )
+                }
+            }
+
+            if (isSearchActive) {
+                TopBarControlSurface(modifier = Modifier.weight(1f)) {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides controlSize) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(controlSize)
+                                .padding(horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = onSearchQueryChanged,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequester)
+                                    .padding(horizontal = 8.dp),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyLarge.merge(
+                                    TextStyle(color = MaterialTheme.colorScheme.onSurface),
+                                ),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.CenterStart,
+                                    ) {
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = stringResource(R.string.search),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
+                                },
+                            )
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = { onSearchQueryChanged("") },
+                                    modifier = Modifier
+                                        .size(controlSize)
+                                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = stringResource(R.string.clear),
+                                        modifier = Modifier.size(iconSize),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = if (isSelectionMode) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (isSelectionMode) {
+                    CategorySelectionActions(
+                        controlSize = controlSize,
+                        iconSize = iconSize,
+                        canShow = canShow,
+                        canHide = canHide,
+                        onShow = onShow,
+                        onHide = onHide,
+                        onDelete = onDelete,
+                    )
+                } else {
+                    TopBarControlSurface {
+                        IconButton(
+                            onClick = onSearchClick,
+                            modifier = Modifier
+                                .size(controlSize)
+                                .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = stringResource(R.string.search),
+                                modifier = Modifier.size(iconSize),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategorySelectionActions(
+    controlSize: androidx.compose.ui.unit.Dp,
+    iconSize: androidx.compose.ui.unit.Dp,
+    canShow: Boolean,
+    canHide: Boolean,
+    onShow: () -> Unit,
+    onHide: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    TopBarControlSurface(pressFeedbackEnabled = false) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides controlSize) {
+            Row(
+                modifier = Modifier
+                    .height(controlSize)
+                    .padding(horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (canShow) {
+                    IconButton(
+                        onClick = onShow,
+                        modifier = Modifier
+                            .size(controlSize)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_eye),
+                            contentDescription = stringResource(R.string.show),
+                            modifier = Modifier.size(iconSize),
+                        )
+                    }
+                } else if (canHide) {
+                    IconButton(
+                        onClick = onHide,
+                        modifier = Modifier
+                            .size(controlSize)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_eye_off),
+                            contentDescription = stringResource(R.string.hide),
+                            modifier = Modifier.size(iconSize),
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .size(controlSize)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_delete),
+                        contentDescription = stringResource(R.string.remove),
+                        modifier = Modifier.size(iconSize),
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -486,6 +768,7 @@ private fun FavouriteCategoriesScreenPreview() {
             onSelectionChanged = {},
             onAdd = {},
             onOpenAll = {},
+            onNavigateBack = {},
             onOpenCategory = {},
             onEditCategory = {},
             onShowAllChanged = {},
