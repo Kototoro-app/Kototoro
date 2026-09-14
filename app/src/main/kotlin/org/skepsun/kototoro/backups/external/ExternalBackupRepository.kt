@@ -16,6 +16,7 @@ import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
@@ -119,11 +120,25 @@ class ExternalBackupRepository @Inject constructor(
                     .groupBy { it.nameHash }
                     .forEach { (hash, records) -> existingByHash.merge(hash, records) { old, new -> old + new } }
             }
+            val candidateSyncIds = pending.mapNotNull { entry ->
+                val projectionKey = ProjectionIdentityKeys.bindingKey(
+                    url = entry.record.url,
+                    publicUrl = entry.record.publicUrl,
+                )
+                projectionKey?.let { computeProjectionSyncId(entry.record.sourceName, it) }
+            }.distinct()
+            val existingBySyncId = HashMap<String, EntityRecord>()
+            candidateSyncIds.chunked(MAX_BATCH_QUERY_PARAMS).forEach { chunk ->
+                dao.findEntitiesBySyncIds(chunk).forEach { record ->
+                    existingBySyncId[record.syncId] = record
+                }
+            }
             val newEntities = planWorkEntityAssignment(
                 entries = pending,
                 existingEntitiesByHash = existingByHash,
                 now = now,
                 localBindingByMangaId = localBindingByMangaId,
+                existingEntitiesBySyncId = existingBySyncId,
             )
 
             // Pass 3 (bulk writes, single transaction):

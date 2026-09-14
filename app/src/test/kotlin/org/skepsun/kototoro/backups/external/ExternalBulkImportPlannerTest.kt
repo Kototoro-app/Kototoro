@@ -6,8 +6,10 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
 import org.skepsun.kototoro.entitygraph.data.computeNameHash
+import org.skepsun.kototoro.entitygraph.data.computeProjectionSyncId
 import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.parsers.model.ContentType
 
@@ -240,5 +242,47 @@ class ExternalBulkImportPlannerTest {
         normalManga.mergeFrom(record("One Piece", "https://a/4", tags = listOf("Smut")))
         assertTrue(normalManga.mangaEntity.isNsfw)
         assertEquals("ADULT", normalManga.mangaEntity.contentRating)
+    }
+
+    @Test
+    fun `existing sync_id match attaches to existing entity`() {
+        val bindingKey = ProjectionIdentityKeys.bindingKey("https://a/op", "")!!
+        val syncId = computeProjectionSyncId("MIHON_1", bindingKey)
+        val existing = existingEntity(id = 99L, primaryName = "One Piece").copy(syncId = syncId)
+        val entry = BulkImportEntry(record("Different Title", "https://a/op", sourceName = "MIHON_1"), mangaId = 1L)
+
+        val newEntities = planWorkEntityAssignment(
+            entries = listOf(entry),
+            existingEntitiesByHash = emptyMap(),
+            now = 7L,
+            existingEntitiesBySyncId = mapOf(syncId to existing),
+        )
+
+        assertTrue(newEntities.isEmpty())
+        assertFalse(entry.isNewEntity)
+        assertEquals(99L, entry.entityId)
+    }
+
+    @Test
+    fun `sync_id collision avoids duplicate sync_id on new entity`() {
+        val bindingKey = ProjectionIdentityKeys.bindingKey("https://a/op", "")!!
+        val syncId = computeProjectionSyncId("MIHON_1", bindingKey)
+        val existing = existingEntity(id = 99L, primaryName = "One Piece", contentType = ContentType.VIDEO.name).copy(syncId = syncId)
+        val entry = BulkImportEntry(record("One Piece", "https://a/op", sourceName = "MIHON_1", contentType = ContentType.MANGA), mangaId = 1L)
+
+        val takenSyncIds = HashSet<String>()
+        val newEntities = planWorkEntityAssignment(
+            entries = listOf(entry),
+            existingEntitiesByHash = emptyMap(),
+            now = 7L,
+            existingEntitiesBySyncId = mapOf(syncId to existing),
+            takenSyncIds = takenSyncIds,
+        )
+
+        assertEquals(1, newEntities.size)
+        assertTrue(entry.isNewEntity)
+        assertNotEquals(syncId, newEntities[0].syncId)
+        assertTrue(newEntities[0].syncId.isNotBlank())
+        assertTrue(newEntities[0].syncId in takenSyncIds)
     }
 }

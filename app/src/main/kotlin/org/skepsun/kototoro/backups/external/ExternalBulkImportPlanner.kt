@@ -153,8 +153,12 @@ internal fun planWorkEntityAssignment(
     now: Long,
     takenSlots: MutableSet<String> = HashSet(),
     localBindingByMangaId: Map<Long, Long> = emptyMap(),
+    existingEntitiesBySyncId: Map<String, EntityRecord> = emptyMap(),
+    takenSyncIds: MutableSet<String> = HashSet(),
 ): List<EntityRecord> {
     val newEntities = ArrayList<EntityRecord>()
+    takenSyncIds.addAll(existingEntitiesBySyncId.keys)
+
     for (entry in entries) {
         // Highest precedence: a manga id that already carries a local binding belongs to
         // that entity — re-anchoring it elsewhere would steal the (source, external_id)
@@ -168,6 +172,24 @@ internal fun planWorkEntityAssignment(
             continue
         }
         val contentTypeName = entry.record.contentType.name
+        val projectionKey = ProjectionIdentityKeys.bindingKey(
+            url = entry.record.url,
+            publicUrl = entry.record.publicUrl,
+        )
+        val projectionSyncId = projectionKey?.let {
+            computeProjectionSyncId(entry.record.sourceName, it)
+        }
+
+        // Secondary precedence: if an existing entity in the database already carries this
+        // projection's exact sync_id and matching content type, attach to it directly.
+        val existingBySync = projectionSyncId?.let(existingEntitiesBySyncId::get)
+        if (existingBySync != null && existingBySync.contentType == contentTypeName) {
+            entry.entityId = existingBySync.id
+            entry.isNewEntity = false
+            entry.newEntityRecord = null
+            continue
+        }
+
         val baseHash = computeNameHash(entry.title)
         val attachTarget = existingEntitiesByHash[baseHash].orEmpty().firstOrNull { candidate ->
             candidate.contentType == contentTypeName &&
@@ -186,18 +208,23 @@ internal fun planWorkEntityAssignment(
             baseHash
         }
         takenSlots += slotKey
-        val projectionKey = ProjectionIdentityKeys.bindingKey(
-            url = entry.record.url,
-            publicUrl = entry.record.publicUrl,
-        )
+
+        // Ensure the syncId is strictly unique across both existing DB entities and newly created ones.
+        val resolvedSyncId = if (projectionSyncId != null && projectionSyncId !in takenSyncIds) {
+            projectionSyncId
+        } else {
+            var candidateUuid = java.util.UUID.randomUUID().toString()
+            while (candidateUuid in takenSyncIds) {
+                candidateUuid = java.util.UUID.randomUUID().toString()
+            }
+            candidateUuid
+        }
+        takenSyncIds += resolvedSyncId
+
         val entityRecord = EntityRecord(
             type = EntityType.WORK.name,
             contentType = contentTypeName,
-            syncId = if (projectionKey != null) {
-                computeProjectionSyncId(entry.record.sourceName, projectionKey)
-            } else {
-                java.util.UUID.randomUUID().toString()
-            },
+            syncId = resolvedSyncId,
             primaryName = entry.title,
             nameHash = nameHash,
             aliases = null,
