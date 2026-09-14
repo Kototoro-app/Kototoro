@@ -12,11 +12,14 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +43,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -64,6 +68,10 @@ private val StableSheetAnimationSpec = spring<Float>(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMedium,
 )
+
+internal fun calculateStableSheetWidth(availableWidth: Dp, sheetMaxWidth: Dp?): Dp {
+    return sheetMaxWidth?.coerceAtMost(availableWidth) ?: availableWidth
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Stable
@@ -218,6 +226,7 @@ private fun rememberStableSheetNestedScrollConnection(
 fun StableAnchoredBottomSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    sheetMaxWidth: Dp? = null,
     shape: Shape = MaterialTheme.shapes.extraLarge,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
     contentColor: Color = Color.Unspecified,
@@ -264,11 +273,12 @@ fun StableAnchoredBottomSheet(
             decorFitsSystemWindows = false,
         ),
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = modifier
                 .fillMaxSize()
                 .onSizeChanged { state.updateHostHeight(it.height.toFloat()) },
         ) {
+            val sheetWidth = calculateStableSheetWidth(maxWidth, sheetMaxWidth)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -286,7 +296,9 @@ fun StableAnchoredBottomSheet(
                 color = containerColor,
                 contentColor = contentColor,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .width(sheetWidth)
+                    .fillMaxHeight()
+                    .align(Alignment.TopCenter)
                     .offset { IntOffset(0, offset.roundToInt()) }
                     .nestedScroll(nestedScrollConnection),
             ) {

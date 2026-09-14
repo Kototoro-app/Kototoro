@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import org.skepsun.kototoro.core.ui.compose.StableAnchoredBottomSheet
+import org.skepsun.kototoro.reader.ui.compose.design.ReaderControlTokens
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
@@ -23,6 +24,7 @@ internal fun ReaderAnchoredBottomSheet(
     StableAnchoredBottomSheet(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
+        sheetMaxWidth = ReaderControlTokens.SheetMaxWidth,
         shape = shape,
         containerColor = containerColor,
         contentColor = contentColor,
