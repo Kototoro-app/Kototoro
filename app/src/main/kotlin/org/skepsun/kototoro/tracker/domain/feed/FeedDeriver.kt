@@ -135,7 +135,7 @@ object FeedDeriver {
         // selected favourite category
         val selectedCategoryId = input.selectedCategoryId
         if (selectedCategoryId != null) {
-            val categoryIds = input.mangaCategoryIdsByFeedKey[feedKey()].orEmpty()
+            val categoryIds = resolveCategoryIds(input)
             if (selectedCategoryId !in categoryIds) return false
         }
         // NSFW exclusion
@@ -146,12 +146,21 @@ object FeedDeriver {
         return matchesQuickFilters(input.filters, input)
     }
 
+    private fun FeedCardRow.resolveCategoryIds(input: Input): Set<Long> {
+        val set = LinkedHashSet<Long>()
+        entityId?.let { id -> input.mangaCategoryIdsByFeedKey["entity:$id"]?.let(set::addAll) }
+        displayMangaId?.let { id -> input.mangaCategoryIdsByFeedKey["manga:$id"]?.let(set::addAll) }
+        anchorMangaId.takeIf { it != 0L }?.let { id -> input.mangaCategoryIdsByFeedKey["manga:$id"]?.let(set::addAll) }
+        input.mangaCategoryIdsByFeedKey[feedKey()]?.let(set::addAll)
+        return set
+    }
+
     private fun FeedCardRow.matchesQuickFilters(
         filters: Set<ListFilterOption>,
         input: Input,
     ): Boolean {
         if (filters.isEmpty()) return true
-        val categoryIds = input.mangaCategoryIdsByFeedKey[feedKey()].orEmpty()
+        val categoryIds = resolveCategoryIds(input)
         return filters.all { option ->
             when (option) {
                 // the feed quick filter offers favourite categories only; the SQL

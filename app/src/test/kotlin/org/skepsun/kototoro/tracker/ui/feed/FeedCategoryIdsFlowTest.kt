@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.FavouriteCategory
+import org.skepsun.kototoro.list.domain.ListFilterOption
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 
 class FeedCategoryIdsFlowTest {
@@ -30,6 +32,32 @@ class FeedCategoryIdsFlowTest {
         val expected = mapOf("source|url" to setOf(1L))
 
         val result = observeFeedCategoryIdsForSelection(flowOf(1L)) {
+            subscriptions += 1
+            flowOf(expected)
+        }.first()
+
+        assertEquals(expected, result)
+        assertEquals(1, subscriptions)
+    }
+
+    @Test
+    fun `applied favourite filter loads favourite category membership even if no category selected`() = runTest {
+        var subscriptions = 0
+        val expected = mapOf("source|url" to setOf(1L))
+        val category = FavouriteCategory(
+            id = 10L,
+            title = "Reading",
+            sortKey = 0,
+            order = ListSortOrder.NEWEST,
+            createdAt = java.time.Instant.EPOCH,
+            isTrackingEnabled = true,
+            isVisibleInLibrary = true,
+        )
+
+        val result = observeFeedCategoryIdsForSelection(
+            selectedCategoryId = flowOf(FavouriteCategory.NO_ID),
+            appliedFilters = flowOf(setOf(ListFilterOption.Favorite(category))),
+        ) {
             subscriptions += 1
             flowOf(expected)
         }.first()

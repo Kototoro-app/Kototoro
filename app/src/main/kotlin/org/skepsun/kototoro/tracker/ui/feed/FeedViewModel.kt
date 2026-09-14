@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -79,14 +80,18 @@ private const val UPDATED_CONTENT_LOOKAHEAD_SIZE = 200
 
 internal fun observeFeedCategoryIdsForSelection(
     selectedCategoryId: Flow<Long>,
+    appliedFilters: Flow<Set<ListFilterOption>> = flowOf(emptySet()),
     observeCategoryIds: () -> Flow<Map<String, Set<Long>>>,
-): Flow<Map<String, Set<Long>>> = selectedCategoryId.flatMapLatest { categoryId ->
-    if (categoryId == NO_ID) {
-        flowOf(emptyMap())
-    } else {
-        observeCategoryIds()
+): Flow<Map<String, Set<Long>>> = combine(selectedCategoryId, appliedFilters) { categoryId, filters ->
+    categoryId != NO_ID || filters.any { it is ListFilterOption.Favorite || it == ListFilterOption.Macro.FAVORITE }
+}.distinctUntilChanged()
+    .flatMapLatest { needed ->
+        if (needed) {
+            observeCategoryIds()
+        } else {
+            flowOf(emptyMap())
+        }
     }
-}
 
 internal fun observeFeedHeaderContent(
     isHeaderEnabled: Flow<Boolean>,
@@ -177,7 +182,10 @@ class FeedViewModel @Inject constructor(
     override fun bindSpace(spaceId: org.skepsun.kototoro.space.domain.SpaceId?) = spaceBinding.bindSpace(spaceId)
     val currentSourceTags = globalFavoritesState.selectedSourceTags
 
-    private val feedCategoryIds = observeFeedCategoryIdsForSelection(selectedCategoryId) {
+    private val feedCategoryIds = observeFeedCategoryIdsForSelection(
+        selectedCategoryId = selectedCategoryId,
+        appliedFilters = quickFilter.appliedOptions,
+    ) {
         favouritesRepository.observeFeedCategoryIds()
     }
         .stateIn(viewModelScope + Dispatchers.Default, SharingStarted.Eagerly, emptyMap())
@@ -520,7 +528,11 @@ class FeedViewModel @Inject constructor(
         val contentGroup = sourceGroupManager.getContentGroup(contentSource)
         val originGroup = sourceGroupManager.getOriginGroup(contentSource)
         val matchesCategory = scope.categoryId == NO_ID ||
-            scope.categoryId in scope.mangaCategoryIds[feedLookupKey()].orEmpty()
+            scope.categoryId in (
+                scope.mangaCategoryIds[feedLookupKey()]
+                    ?: scope.mangaCategoryIds["manga:$id"]
+                    ?: emptySet()
+            )
         val matchesGroup = scope.groupTab.matchesContentGroup(contentGroup)
         val matchesSourceTag = scope.sourceTags.isEmpty() ||
             scope.sourceTags.any { it.matches(contentGroup, originGroup) }
