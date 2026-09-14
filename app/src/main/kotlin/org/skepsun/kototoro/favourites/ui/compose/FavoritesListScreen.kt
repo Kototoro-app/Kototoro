@@ -11,6 +11,8 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.favourites.ui.list.FavouritesListHost
 import org.skepsun.kototoro.list.ui.compose.AppContentListRoute
 import org.skepsun.kototoro.list.ui.compose.SelectionAction
+import org.skepsun.kototoro.list.ui.compose.SortOrderControl
+import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.main.ui.compose.CompactFilterRailOverrideState
 import org.skepsun.kototoro.main.ui.compose.TopBarOverrideState
 import org.skepsun.kototoro.list.ui.model.ContentListModel
@@ -29,6 +31,9 @@ fun KototoroFavoritesListScreen(
     onEntityOrganizeSelection: ((Set<Long>) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     isActivePage: Boolean = true,
+    sortOrders: List<ListSortOrder> = emptyList(),
+    selectedSortOrder: ListSortOrder? = null,
+    onSortOrderSelected: (ListSortOrder) -> Unit = {},
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     onFilterRailOverrideChanged: (CompactFilterRailOverrideState?) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -103,6 +108,18 @@ fun KototoroFavoritesListScreen(
         },
         fixSelectionActionTitleRes = R.string.entity_organize_title,
         showQuickFilterInline = true,
+        quickFilterLeadingContent = if (sortOrders.isNotEmpty()) {
+            {
+                SortOrderControl(
+                    sortOrders = sortOrders,
+                    selectedSortOrder = selectedSortOrder,
+                    onSortOrderSelected = onSortOrderSelected,
+                    compact = true,
+                )
+            }
+        } else {
+            null
+        },
         quickFilterOverride = quickFilter,
         enableItemAnimations = false,
     )

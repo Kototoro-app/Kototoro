@@ -221,6 +221,7 @@ fun KototoroContentListScreen(
     inlineSelectionSupportedActions: Set<SelectionAction>? = null,
     inlineSelectionIncludeContextualActions: Boolean = true,
     showQuickFilterInline: Boolean = true,
+    quickFilterLeadingContent: (@Composable () -> Unit)? = null,
     enableItemAnimations: Boolean = true,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -481,6 +482,7 @@ fun KototoroContentListScreen(
                                             horizontalBleed = GridHorizontalPadding,
                                             onQuickFilterOptionClick = onQuickFilterOptionClick,
                                             showQuickFilterInline = showQuickFilterInline,
+                                            leadingContent = quickFilterLeadingContent,
                                             onEmptyActionClick = onEmptyActionClick,
                                             onRetry = onRetry,
                                             onSecondaryAction = secondaryAction,
@@ -561,6 +563,7 @@ fun KototoroContentListScreen(
                                                 gridScale = gridScale,
                                                 onQuickFilterOptionClick = onQuickFilterOptionClick,
                                                 showQuickFilterInline = showQuickFilterInline,
+                                                leadingContent = quickFilterLeadingContent,
                                                 onEmptyActionClick = onEmptyActionClick,
                                                 onRetry = onRetry,
                                                 onSecondaryAction = secondaryAction,
@@ -641,6 +644,7 @@ fun KototoroContentListScreen(
                                                 gridScale = gridScale,
                                                 onQuickFilterOptionClick = onQuickFilterOptionClick,
                                                 showQuickFilterInline = showQuickFilterInline,
+                                                leadingContent = quickFilterLeadingContent,
                                                 onEmptyActionClick = onEmptyActionClick,
                                                 onRetry = onRetry,
                                                 onSecondaryAction = secondaryAction,
@@ -759,6 +763,7 @@ private fun SupplementaryListItem(
     horizontalBleed: androidx.compose.ui.unit.Dp = 0.dp,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
     showQuickFilterInline: Boolean,
+    leadingContent: (@Composable () -> Unit)? = null,
     onEmptyActionClick: () -> Unit,
     onRetry: () -> Unit,
     onSecondaryAction: (Throwable) -> Unit,
@@ -769,6 +774,7 @@ private fun SupplementaryListItem(
             QuickFilterSection(
                 quickFilter = item,
                 onQuickFilterOptionClick = onQuickFilterOptionClick,
+                leadingContent = leadingContent,
                 modifier = Modifier.horizontalBleed(horizontalBleed),
             )
         }
@@ -809,6 +815,7 @@ private fun ListHeaderItem(item: ListHeader) {
 fun QuickFilterSection(
     quickFilter: QuickFilter,
     onQuickFilterOptionClick: (ListFilterOption) -> Unit,
+    leadingContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -834,6 +841,15 @@ fun QuickFilterSection(
             .fillMaxWidth()
             .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
     ) {
+        leadingContent?.let { content ->
+            item(key = "quick_filter_leading_content", contentType = "quick_filter_leading_content") {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentSize provides 0.dp,
+                ) {
+                    content()
+                }
+            }
+        }
         items(
             items = quickFilter.groups,
             key = { group -> "filter_group:${group.key}" },

@@ -3863,4 +3863,8 @@ SHA-256 指纹:
     <string name="video_note_saved">视频笔记已保存</string>
     <string name="quote_dialogue">台词引用</string>
     <string name="save_note">保存笔记</string>
+    <string name="sort_by_added_date">添加时间</string>
+    <string name="sort_by_title">名称</string>
+    <string name="sort_by_last_read">上次阅读</string>
+    <string name="sort_by_rating">评分</string>
 </resources>

@@ -4049,4 +4049,8 @@
     <string name="video_note_saved">Video note saved</string>
     <string name="quote_dialogue">Subtitle Quote</string>
     <string name="save_note">Save note</string>
+    <string name="sort_by_added_date">Date added</string>
+    <string name="sort_by_title">Title</string>
+    <string name="sort_by_last_read">Last read</string>
+    <string name="sort_by_rating">Rating</string>
 </resources>

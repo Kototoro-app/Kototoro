@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.list.ui.compose
 
 import android.util.Log
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -48,9 +50,6 @@ import org.skepsun.kototoro.core.ui.compose.KototoroSheetSurface
 import org.skepsun.kototoro.core.ui.compose.SheetDragHandle
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.list.domain.ListSortOrder
-import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
-import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
-import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuText
 
 private const val DISPLAY_OPTIONS_SHEET_TAG = "DisplayOptionsSheet"
 
@@ -130,6 +129,7 @@ fun DisplayOptionsSheet(
                 Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp)
                             .padding(bottom = 24.dp, top = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -309,9 +309,6 @@ private fun SortOrderSection(
     selectedSortOrder: ListSortOrder?,
     onSortOrderSelected: (ListSortOrder) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedOrder = selectedSortOrder ?: sortOrders.firstOrNull()
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -321,58 +318,11 @@ private fun SortOrderSection(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Box {
-            AssistChip(
-                onClick = { expanded = true },
-                label = {
-                    Text(
-                        text = selectedOrder?.let { stringResource(it.titleResId) }.orEmpty(),
-                        maxLines = 1,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_sort),
-                        contentDescription = null,
-                    )
-                },
-                trailingIcon = {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_expand_more),
-                        contentDescription = null,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
-                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    leadingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    trailingIconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                ),
-            )
-            GlassDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-            ) {
-                sortOrders.forEach { order ->
-                    CompactDropdownMenuItem(
-                        text = { CompactDropdownMenuText(stringResource(order.titleResId)) },
-                        onClick = {
-                            expanded = false
-                            onSortOrderSelected(order)
-                        },
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(
-                                    if (order == selectedOrder) R.drawable.ic_check else R.drawable.ic_sort,
-                                ),
-                                contentDescription = null,
-                            )
-                        },
-                    )
-                }
-            }
-        }
+        SortOrderControl(
+            sortOrders = sortOrders,
+            selectedSortOrder = selectedSortOrder,
+            onSortOrderSelected = onSortOrderSelected,
+        )
     }
 }
 

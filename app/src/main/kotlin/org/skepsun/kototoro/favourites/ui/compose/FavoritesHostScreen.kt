@@ -361,6 +361,11 @@ fun KototoroFavoritesHostRoute(
                 ) { page ->
                     val category = displayCategories.getOrNull(page) ?: return@HorizontalPager
                     val enabled = page == activePage
+                    val categorySortOrder = if (category.id == NO_ID) {
+                        allFavoritesSortOrder
+                    } else {
+                        category.order ?: allFavoritesSortOrder
+                    }
                     KototoroFavoritesListScreen(
                         categoryId = category.id,
                         listHost = viewModel.listHost(category.id),
@@ -371,6 +376,9 @@ fun KototoroFavoritesHostRoute(
                         onEntityOrganizeSelection = onOpenEntityOrganize,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,
+                        sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },
+                        selectedSortOrder = categorySortOrder,
+                        onSortOrderSelected = { order -> viewModel.setSortOrder(category.id, order) },
                         onTopBarOverrideChanged = { overrideState ->
                             if (enabled && category.id == activeCategoryId) {
                                 childTopBarOverrideState = overrideState
