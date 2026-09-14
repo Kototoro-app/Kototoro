@@ -13,6 +13,10 @@ internal enum class VideoPlayerTvKeyAction {
     PASS_TO_FOCUS,
     SHOW_CONTROLS,
     TOGGLE_PLAYBACK,
+    PLAY,
+    PAUSE,
+    PREVIOUS_CHAPTER,
+    NEXT_CHAPTER,
     SEEK_BACKWARD,
     SEEK_FORWARD,
     CONSUME,
@@ -23,39 +27,47 @@ internal fun resolveVideoPlayerTvKeyAction(
     controlsVisible: Boolean,
     screenLocked: Boolean,
 ): VideoPlayerTvKeyAction {
-    if (screenLocked) return VideoPlayerTvKeyAction.CONSUME
-    return when (keyCode) {
+    val action = when (keyCode) {
         KeyEvent.KEYCODE_DPAD_CENTER,
         KeyEvent.KEYCODE_ENTER,
         KeyEvent.KEYCODE_NUMPAD_ENTER,
         KeyEvent.KEYCODE_DPAD_UP,
         KeyEvent.KEYCODE_DPAD_DOWN,
-        -> if (controlsVisible) {
+        -> if (controlsVisible && !screenLocked) {
             VideoPlayerTvKeyAction.PASS_TO_FOCUS
         } else {
             VideoPlayerTvKeyAction.SHOW_CONTROLS
         }
 
-        KeyEvent.KEYCODE_MEDIA_PLAY,
-        KeyEvent.KEYCODE_MEDIA_PAUSE,
+        KeyEvent.KEYCODE_MEDIA_PLAY -> VideoPlayerTvKeyAction.PLAY
+        KeyEvent.KEYCODE_MEDIA_PAUSE -> VideoPlayerTvKeyAction.PAUSE
         KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
         -> VideoPlayerTvKeyAction.TOGGLE_PLAYBACK
+
+        KeyEvent.KEYCODE_MEDIA_PREVIOUS -> VideoPlayerTvKeyAction.PREVIOUS_CHAPTER
+        KeyEvent.KEYCODE_MEDIA_NEXT -> VideoPlayerTvKeyAction.NEXT_CHAPTER
 
         KeyEvent.KEYCODE_MEDIA_REWIND -> VideoPlayerTvKeyAction.SEEK_BACKWARD
         KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> VideoPlayerTvKeyAction.SEEK_FORWARD
 
-        KeyEvent.KEYCODE_DPAD_LEFT -> if (controlsVisible) {
+        KeyEvent.KEYCODE_DPAD_LEFT -> if (controlsVisible && !screenLocked) {
             VideoPlayerTvKeyAction.PASS_TO_FOCUS
         } else {
             VideoPlayerTvKeyAction.SEEK_BACKWARD
         }
 
-        KeyEvent.KEYCODE_DPAD_RIGHT -> if (controlsVisible) {
+        KeyEvent.KEYCODE_DPAD_RIGHT -> if (controlsVisible && !screenLocked) {
             VideoPlayerTvKeyAction.PASS_TO_FOCUS
         } else {
             VideoPlayerTvKeyAction.SEEK_FORWARD
         }
 
         else -> VideoPlayerTvKeyAction.PASS_TO_FOCUS
+    }
+    // Lock only player commands; Back must reach the unlock handler and volume belongs to the system.
+    return if (screenLocked && action != VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
+        VideoPlayerTvKeyAction.CONSUME
+    } else {
+        action
     }
 }

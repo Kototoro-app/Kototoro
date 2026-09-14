@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
@@ -443,6 +444,23 @@ fun KototoroSearchOverlay(
                             },
                         ),
                     )
+                    if (isTvPresentation) {
+                        FilledIconButton(
+                            onClick = {
+                                keyboardController?.hide()
+                                submitSearch(query)
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.search),
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                    }
                     TopBarControlSurface(allowBackdrop = false) {
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides CompactTopBarPillHeight) {
                             Row(

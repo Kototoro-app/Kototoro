@@ -59,7 +59,9 @@ class FavouritesFeedCategoryIdsTest {
 
         assertEquals(setOf(1L), result["source|/1"])
         assertEquals(setOf(2L), result["source|/2000"])
-        assertEquals(2_000, result.size)
+        assertEquals(setOf(1L), result["entity:1"])
+        assertEquals(setOf(1L), result["manga:1"])
+        assertEquals(6_000, result.size)
         coVerify(exactly = 1) { mangaDao.findEntitiesByIds(any()) }
         coVerify(exactly = 0) { workResolver.resolveManyByEntityIds(any()) }
     }

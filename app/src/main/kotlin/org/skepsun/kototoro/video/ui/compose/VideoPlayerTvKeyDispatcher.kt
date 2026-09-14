@@ -38,6 +38,11 @@ internal class VideoPlayerTvKeyDispatcher {
 
         val previous = interceptedKeys[keyCode]
         if (previous != null) {
+            if (screenLocked && previous != VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
+                // Once interrupted by lock, this press stays cancelled even if unlocked before release.
+                interceptedKeys[keyCode] = VideoPlayerTvKeyAction.CONSUME
+                return DispatchResult.CONSUME to VideoPlayerTvKeyAction.CONSUME
+            }
             return if (previous == VideoPlayerTvKeyAction.PASS_TO_FOCUS) {
                 DispatchResult.DELEGATE to null
             } else {

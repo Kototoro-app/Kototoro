@@ -9,6 +9,67 @@ class VideoPlayerTvKeyDispatcherTest {
     private val dispatcher = VideoPlayerTvKeyDispatcher()
 
     @Test
+    fun `locking during held seek cancels repeats until release`() {
+        val key = KeyEvent.KEYCODE_DPAD_RIGHT
+        assertEquals(
+            VideoPlayerTvKeyDispatcher.DispatchResult.EXECUTE_ACTION,
+            dispatcher.dispatch(key, KeyEvent.ACTION_DOWN, true, false, false).first,
+        )
+        assertEquals(
+            VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME,
+            dispatcher.dispatch(key, KeyEvent.ACTION_DOWN, true, true, true, 1).first,
+        )
+        // Unlocking must not revive the same held press.
+        assertEquals(
+            VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME,
+            dispatcher.dispatch(key, KeyEvent.ACTION_DOWN, true, true, false, 2).first,
+        )
+        assertEquals(
+            VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME,
+            dispatcher.dispatch(key, KeyEvent.ACTION_UP, true, true, false).first,
+        )
+        assertEquals(
+            VideoPlayerTvKeyDispatcher.DispatchResult.EXECUTE_ACTION,
+            dispatcher.dispatch(key, KeyEvent.ACTION_DOWN, true, false, false).first,
+        )
+    }
+
+    @Test
+    fun `locked back press and release reach the unlock handler`() {
+        for (eventAction in listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
+            val result = dispatcher.dispatch(
+                keyCode = KeyEvent.KEYCODE_BACK,
+                action = eventAction,
+                isTvPresentation = true,
+                controlsVisible = false,
+                screenLocked = true,
+            )
+            assertEquals(VideoPlayerTvKeyDispatcher.DispatchResult.DELEGATE, result.first)
+        }
+    }
+
+    @Test
+    fun `media playback and chapter keys execute once and own their release`() {
+        for ((keyCode, expectedAction) in listOf(
+            KeyEvent.KEYCODE_MEDIA_NEXT to VideoPlayerTvKeyAction.NEXT_CHAPTER,
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS to VideoPlayerTvKeyAction.PREVIOUS_CHAPTER,
+            KeyEvent.KEYCODE_MEDIA_PLAY to VideoPlayerTvKeyAction.PLAY,
+            KeyEvent.KEYCODE_MEDIA_PAUSE to VideoPlayerTvKeyAction.PAUSE,
+        )) {
+            for ((eventAction, repeatCount, expectedResult) in listOf(
+                Triple(KeyEvent.ACTION_DOWN, 0, VideoPlayerTvKeyDispatcher.DispatchResult.EXECUTE_ACTION),
+                Triple(KeyEvent.ACTION_DOWN, 1, VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME),
+                Triple(KeyEvent.ACTION_UP, 0, VideoPlayerTvKeyDispatcher.DispatchResult.CONSUME),
+            )) {
+                assertEquals(
+                    expectedResult to expectedAction,
+                    dispatcher.dispatch(keyCode, eventAction, true, false, false, repeatCount),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `hidden controls own center press through release`() {
         val down = dispatcher.dispatch(
             keyCode = KeyEvent.KEYCODE_DPAD_CENTER,

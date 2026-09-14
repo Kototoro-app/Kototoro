@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
@@ -57,6 +59,7 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
+import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.ui.compose.HorizontalRailAnimatedVisibility
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -149,7 +152,11 @@ internal fun HomeContentRowSection(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.titleMedium
+                    } else {
+                        MaterialTheme.typography.titleSmall
+                    },
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -164,23 +171,30 @@ internal fun HomeContentRowSection(
             if (onConfigureClick != null) {
                 IconButton(
                     onClick = onConfigureClick,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .tvFocusable(shape = CircleShape, addFocusTarget = false),
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_settings),
                         contentDescription = stringResource(R.string.list_options),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(if (isTvPresentation) 24.dp else 14.dp),
                     )
                 }
             }
             TextButton(
                 onClick = onMoreClick,
+                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
             ) {
                 Text(
                     text = stringResource(R.string.more),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = if (isTvPresentation) {
+                        MaterialTheme.typography.labelLarge
+                    } else {
+                        MaterialTheme.typography.labelMedium
+                    },
                 )
             }
         }
@@ -194,9 +208,9 @@ internal fun HomeContentRowSection(
                     flingBehavior = rememberSnapFlingBehavior(rowState),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+                        .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier)
                         .extendHorizontalViewport(CompactTopBarHorizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isTvPresentation) 12.dp else 3.dp),
                     contentPadding = PaddingValues(
                         // Keep the first item aligned with the section title while
                         // the viewport itself extends to the screen edge.
@@ -252,7 +266,7 @@ internal fun HomeContentRowSection(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier)
+                            .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier)
                             .extendHorizontalViewport(CompactTopBarHorizontalPadding),
                         horizontalArrangement = Arrangement.spacedBy(rowSpacing),
                         contentPadding = horizontalPadding,

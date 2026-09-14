@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -68,9 +69,14 @@ internal fun VideoSelectionDialog(
         val isTvPresentation = LocalUiPresentationConfig.current.isTv
         val initialFocusIndex = state.selectedIndex.takeIf { it in state.options.indices } ?: 0
         val itemFocusRequester = remember { FocusRequester() }
+        val listState = rememberLazyListState(
+            initialFirstVisibleItemIndex = if (isTvPresentation) initialFocusIndex else 0,
+        )
 
-        LaunchedEffect(isTvPresentation) {
+        LaunchedEffect(isTvPresentation, initialFocusIndex, state.options.size) {
             if (isTvPresentation && state.options.isNotEmpty()) {
+                // Lazy items outside the viewport have no focus target yet.
+                listState.scrollToItem(initialFocusIndex)
                 withFrameNanos { }
                 runCatching { itemFocusRequester.requestFocus() }
             }
@@ -94,7 +100,7 @@ internal fun VideoSelectionDialog(
                     color = Color.White,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 )
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxWidth()) {
                     itemsIndexed(state.options) { index, label ->
                         val isTarget = index == initialFocusIndex
                         Row(

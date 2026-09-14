@@ -7,6 +7,54 @@ import org.junit.jupiter.api.Test
 class VideoPlayerTvKeyPolicyTest {
 
     @Test
+    fun `media chapter keys navigate with either control visibility`() {
+        for (visible in listOf(false, true)) {
+            assertEquals(
+                VideoPlayerTvKeyAction.NEXT_CHAPTER,
+                resolveVideoPlayerTvKeyAction(KeyEvent.KEYCODE_MEDIA_NEXT, visible, false),
+            )
+            assertEquals(
+                VideoPlayerTvKeyAction.PREVIOUS_CHAPTER,
+                resolveVideoPlayerTvKeyAction(KeyEvent.KEYCODE_MEDIA_PREVIOUS, visible, false),
+            )
+        }
+    }
+
+    @Test
+    fun `locked player consumes chapter keys`() {
+        for (keyCode in listOf(KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS)) {
+            assertEquals(
+                VideoPlayerTvKeyAction.CONSUME,
+                resolveVideoPlayerTvKeyAction(keyCode, controlsVisible = true, screenLocked = true),
+            )
+        }
+    }
+
+    @Test
+    fun `dedicated media keys preserve play and pause intent`() {
+        for (visible in listOf(false, true)) {
+            assertEquals(
+                VideoPlayerTvKeyAction.PLAY,
+                resolveVideoPlayerTvKeyAction(KeyEvent.KEYCODE_MEDIA_PLAY, visible, false),
+            )
+            assertEquals(
+                VideoPlayerTvKeyAction.PAUSE,
+                resolveVideoPlayerTvKeyAction(KeyEvent.KEYCODE_MEDIA_PAUSE, visible, false),
+            )
+        }
+    }
+
+    @Test
+    fun `screen lock preserves back and system volume keys`() {
+        for (keyCode in listOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            assertEquals(
+                VideoPlayerTvKeyAction.PASS_TO_FOCUS,
+                resolveVideoPlayerTvKeyAction(keyCode, controlsVisible = false, screenLocked = true),
+            )
+        }
+    }
+
+    @Test
     fun `confirm reveals hidden controls`() {
         assertEquals(
             VideoPlayerTvKeyAction.SHOW_CONTROLS,
@@ -71,7 +119,7 @@ class VideoPlayerTvKeyPolicyTest {
     }
 
     @Test
-    fun `media playback keys always toggle playback`() {
+    fun `combined media key toggles playback`() {
         assertEquals(
             VideoPlayerTvKeyAction.TOGGLE_PLAYBACK,
             resolveVideoPlayerTvKeyAction(

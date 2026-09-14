@@ -148,6 +148,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
 import androidx.activity.viewModels
 import androidx.activity.OnBackPressedCallback
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -506,7 +507,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     }
 
     private val autoHideDelayMs = 3500
-    private val hideUiRunnable = Runnable { setUiIsVisible(false) }
+    private val hideUiRunnable = Runnable {
+        // Also check at execution time: a dialog can open before Compose cancels this callback.
+        if (!keepTvControlsVisibleForDialog) setUiIsVisible(false)
+    }
     private val progressUpdateIntervalMs = 1000
     private val progressUpdateRunnable = object : Runnable {
         override fun run() {
@@ -672,6 +676,12 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
     private fun installComposeContent() {
         setFullscreenComposeContent {
             val presentationConfig = LocalUiPresentationConfig.current
+            val keepControlsVisible = keepTvControlsVisibleForDialog
+            LaunchedEffect(presentationConfig.isTv, keepControlsVisible) {
+                if (presentationConfig.isTv) {
+                    if (keepControlsVisible) pauseControlsAutoHide() else restartControlsAutoHide()
+                }
+            }
             KototoroTheme {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
                     VideoPlayerRenderLayer(
@@ -884,6 +894,10 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
                 if (event.isCanceled) return true
                 when (action) {
                     VideoPlayerTvKeyAction.SHOW_CONTROLS -> setUiIsVisible(true)
+                    VideoPlayerTvKeyAction.PREVIOUS_CHAPTER -> navigateChapter(-1)
+                    VideoPlayerTvKeyAction.NEXT_CHAPTER -> navigateChapter(1)
+                    VideoPlayerTvKeyAction.PLAY -> videoPlayer?.play()
+                    VideoPlayerTvKeyAction.PAUSE -> videoPlayer?.pause()
                     VideoPlayerTvKeyAction.TOGGLE_PLAYBACK -> onComposePlayerAction(VideoPlayerAction.TogglePlayback)
                     VideoPlayerTvKeyAction.SEEK_BACKWARD -> seekFromTvRemote(-quickTapBackMs)
                     VideoPlayerTvKeyAction.SEEK_FORWARD -> seekFromTvRemote(quickTapJumpMs)
@@ -1376,7 +1390,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
     private fun handleTvBackPressed() {
         if (isScreenLocked) {
-            showLockedUi()
+            exitScreenLock()
             return
         }
         when {
@@ -2557,13 +2571,20 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
         applyPlayerUiState(if (visible) PlayerUiState.ControlsVisible else PlayerUiState.Hidden)
     }
 
+    private val keepTvControlsVisibleForDialog: Boolean
+        get() = tvPresentationEnabled && (
+            actionDialogState != null || selectionDialogState != null || chapterDialogState != null ||
+                subtitleSettingsDialogVisible || superResolutionDialogVisible || dlnaDialogState != null ||
+                videoAnnotationState != null || videoInfoDialogText != null || nativeInitErrorVisible
+            )
+
     private fun pauseControlsAutoHide() {
         playerRoot.removeCallbacks(hideUiRunnable)
     }
 
     private fun restartControlsAutoHide() {
         playerRoot.removeCallbacks(hideUiRunnable)
-        if (playerUiState == PlayerUiState.ControlsVisible) {
+        if (playerUiState == PlayerUiState.ControlsVisible && !keepTvControlsVisibleForDialog) {
             playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
         }
     }
@@ -2584,7 +2605,7 @@ class VideoPlayerActivity : BaseComposeFullscreenActivity(), ReaderNavigationCal
 
         if (controlsVisible) {
             if (!isHorizontalScrubbing && !isUserScrubbing && verticalAdjustMode == 0) {
-                playerRoot.postDelayed(hideUiRunnable, autoHideDelayMs.toLong())
+                restartControlsAutoHide()
             }
             playerRoot.postDelayed(progressUpdateRunnable, progressUpdateIntervalMs.toLong())
             playerRoot.postDelayed(controllerProgressRunnable, progressUpdateIntervalMs.toLong())

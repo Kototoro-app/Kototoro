@@ -39,11 +39,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -56,6 +61,7 @@ import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.VerticalScrollbar
+import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.parsers.model.ContentChapter
 import org.skepsun.kototoro.video.ui.PlayerChapterGroup
@@ -79,6 +85,7 @@ internal fun VideoChapterDialog(
 ) {
     if (state.groups.isEmpty()) return
 
+    val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { 6.dp.roundToPx() }
     val marginPx = with(androidx.compose.ui.platform.LocalDensity.current) { 8.dp.roundToPx() }
     val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.72f).dp
@@ -160,14 +167,28 @@ internal fun VideoChapterDialog(
                     key = { page -> "$page:${state.groups[page].name.orEmpty()}" },
                 ) { page ->
                     val group = state.groups[page]
-                    val currentChapterIndex = group.chapters
-                        .indexOfFirst { it.id == state.currentChapterId }
-                        .coerceAtLeast(0)
+                    val chapterIds = remember(group.chapters) { group.chapters.map { it.id } }
+                    var focusedChapterId by rememberSaveable { mutableStateOf<Long?>(null) }
+                    val focusIndex = resolveVideoChapterFocusIndex(chapterIds, focusedChapterId, state.currentChapterId)
+                    val currentChapterIndex = resolveVideoChapterFocusIndex(chapterIds, null, state.currentChapterId) ?: 0
+                    val chapterFocusRequester = remember { FocusRequester() }
+                    val isCurrentPage = page == pagerState.settledPage && !pagerState.isScrollInProgress
                     val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentChapterIndex)
                     val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = currentChapterIndex)
 
-                    LaunchedEffect(isGridView) {
-                        if (isGridView) {
+                    // Do not key this effect on focusedChapterId: ordinary D-pad movement must not scroll or steal focus.
+                    LaunchedEffect(isGridView, isCurrentPage, isTvPresentation, chapterIds) {
+                        if (isTvPresentation) {
+                            if (isCurrentPage && focusIndex != null) {
+                                if (isGridView) {
+                                    gridState.scrollToItem(focusIndex)
+                                } else {
+                                    listState.scrollToItem(focusIndex)
+                                }
+                                withFrameNanos { }
+                                chapterFocusRequester.requestFocus()
+                            }
+                        } else if (isGridView) {
                             gridState.scrollToItem(listState.firstVisibleItemIndex)
                         } else {
                             listState.scrollToItem(gridState.firstVisibleItemIndex)
@@ -198,6 +219,19 @@ internal fun VideoChapterDialog(
                                         index = index,
                                         checked = chapter.id == state.currentChapterId,
                                         onClick = { onChapterSelected(chapter) },
+                                        modifier = if (isTvPresentation) {
+                                            Modifier
+                                                .then(
+                                                    if (index == focusIndex) {
+                                                        Modifier.focusRequester(chapterFocusRequester)
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                )
+                                                .onFocusChanged { if (it.isFocused) focusedChapterId = chapter.id }
+                                        } else {
+                                            Modifier
+                                        },
                                     )
                                 }
                             }
@@ -224,6 +258,19 @@ internal fun VideoChapterDialog(
                                         index = index,
                                         checked = chapter.id == state.currentChapterId,
                                         onClick = { onChapterSelected(chapter) },
+                                        modifier = if (isTvPresentation) {
+                                            Modifier
+                                                .then(
+                                                    if (index == focusIndex) {
+                                                        Modifier.focusRequester(chapterFocusRequester)
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                )
+                                                .onFocusChanged { if (it.isFocused) focusedChapterId = chapter.id }
+                                        } else {
+                                            Modifier
+                                        },
                                     )
                                 }
                             }
@@ -290,10 +337,11 @@ private fun ChapterRow(
     index: Int,
     checked: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .tvFocusable(shape = RoundedCornerShape(8.dp), addFocusTarget = false)
             .clickable(onClick = onClick)
@@ -329,10 +377,11 @@ private fun ChapterGridItem(
     index: Int,
     checked: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .tvFocusable(shape = RoundedCornerShape(6.dp), addFocusTarget = false),
@@ -368,3 +417,12 @@ private fun ChapterGridItem(
         }
     }
 }
+
+/** Prefer the last browsed chapter, then the playing chapter, then the first available item. */
+internal fun resolveVideoChapterFocusIndex(
+    chapterIds: List<Long>,
+    focusedChapterId: Long?,
+    currentChapterId: Long?,
+): Int? = chapterIds.indexOf(focusedChapterId).takeIf { it >= 0 }
+    ?: chapterIds.indexOf(currentChapterId).takeIf { it >= 0 }
+    ?: 0.takeIf { chapterIds.isNotEmpty() }

@@ -663,16 +663,30 @@ class FavouritesRepository @Inject constructor(
 
         val result = LinkedHashMap<String, LinkedHashSet<Long>>()
         for (entry in entries) {
-            val manga = entry.anchorMangaId?.let(mangaById::get) ?: identitiesByEntityId[entry.entityId]
-                ?.let { identity ->
-                    sequenceOf(identity.preferredMangaId)
-                        .plus(identity.localMangaIds.asSequence())
-                        .filterNotNull()
-                        .mapNotNull(mangaById::get)
-                        .firstOrNull()
+            result.getOrPut("entity:${entry.entityId}") { linkedSetOf() } += entry.categoryId
+
+            entry.anchorMangaId?.let { anchorId ->
+                result.getOrPut("manga:$anchorId") { linkedSetOf() } += entry.categoryId
+                mangaById[anchorId]?.feedLookupKey()?.let { key ->
+                    result.getOrPut(key) { linkedSetOf() } += entry.categoryId
                 }
-                ?: continue
-            result.getOrPut(manga.feedLookupKey()) { linkedSetOf() } += entry.categoryId
+            }
+
+            val identity = identitiesByEntityId[entry.entityId]
+            if (identity != null) {
+                identity.preferredMangaId?.let { prefId ->
+                    result.getOrPut("manga:$prefId") { linkedSetOf() } += entry.categoryId
+                    mangaById[prefId]?.feedLookupKey()?.let { key ->
+                        result.getOrPut(key) { linkedSetOf() } += entry.categoryId
+                    }
+                }
+                for (localId in identity.localMangaIds) {
+                    result.getOrPut("manga:$localId") { linkedSetOf() } += entry.categoryId
+                    mangaById[localId]?.feedLookupKey()?.let { key ->
+                        result.getOrPut(key) { linkedSetOf() } += entry.categoryId
+                    }
+                }
+            }
         }
         return result
     }

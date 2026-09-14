@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -60,12 +61,11 @@ internal fun QuickActionsSection(
     actions: List<HomeQuickAction>,
     modifier: Modifier = Modifier,
 ) {
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (isTvPresentation) Modifier.focusGroup() else Modifier),
+            .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
@@ -75,9 +75,9 @@ internal fun QuickActionsSection(
             color = MaterialTheme.colorScheme.onSurface,
         )
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val itemSpacing = 6.dp
-            val rowSpacing = if (isIosStyle) 6.dp else 6.dp
-            val preferredItemWidth = 68.dp
+            val itemSpacing = if (isTvPresentation) 12.dp else 6.dp
+            val rowSpacing = if (isTvPresentation) 12.dp else 6.dp
+            val preferredItemWidth = if (isTvPresentation) 112.dp else 68.dp
             val columns = ((maxWidth + itemSpacing) / (preferredItemWidth + itemSpacing))
                 .toInt()
                 .coerceAtLeast(2)
@@ -102,7 +102,7 @@ internal fun QuickActionsSection(
                                     paletteIndex = index,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(64.dp),
+                                        .height(if (isTvPresentation) 88.dp else 64.dp),
                                 )
                             }
                         }
@@ -178,12 +178,16 @@ private fun QuickAccessButton(
             HomeQuickActionIcon(
                 iconRes = action.iconRes,
                 tint = iconTint,
-                modifier = Modifier.size(if (expressive) 20.dp else 18.dp),
+                modifier = Modifier.size(if (isTvPresentation) 28.dp else if (expressive) 20.dp else 18.dp),
             )
             Text(
                 text = action.label,
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelSmall,
+                style = if (isTvPresentation) {
+                    MaterialTheme.typography.labelLarge
+                } else {
+                    MaterialTheme.typography.labelSmall
+                },
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
