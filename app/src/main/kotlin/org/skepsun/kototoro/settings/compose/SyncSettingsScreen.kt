@@ -185,7 +185,9 @@ fun SyncSettingsScreen(
                             SettingsActionPreference(
                                 title = stringResource(R.string.sync_sign_in),
                                 iconRes = R.drawable.ic_user,
-                                summary = stringResource(R.string.sync_sign_in_summary),
+                                summary = state.googleDriveErrorSummary?.let {
+                                    "${stringResource(R.string.sync_sign_in_summary)}\n\n⚠️ $it"
+                                } ?: stringResource(R.string.sync_sign_in_summary),
                                 onClick = onGoogleDriveSignInClick,
                             )
                         }

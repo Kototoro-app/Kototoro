@@ -150,6 +150,22 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
         }
     }
 
+    fun onAuthorizationFailed(resultCode: Int, data: Intent?) {
+        viewModelScope.launch(Dispatchers.Default) {
+            if (data != null) {
+                try {
+                    auth.authorizationFromIntent(data)
+                } catch (e: Exception) {
+                    settings.lastSyncError = e.message ?: e.javaClass.simpleName
+                    refresh()
+                    return@launch
+                }
+            }
+            settings.lastSyncError = "Google Drive authorization was canceled or failed ($resultCode)"
+            refresh()
+        }
+    }
+
     fun signOut() {
         viewModelScope.launch(Dispatchers.Default) {
             repository.signOut()

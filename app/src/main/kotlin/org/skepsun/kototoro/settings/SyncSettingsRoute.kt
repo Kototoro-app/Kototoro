@@ -38,6 +38,8 @@ fun SyncSettingsRoute(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             googleDriveSyncViewModel.onAuthorizationResult(result.data)
+        } else {
+            googleDriveSyncViewModel.onAuthorizationFailed(result.resultCode, result.data)
         }
     }
 

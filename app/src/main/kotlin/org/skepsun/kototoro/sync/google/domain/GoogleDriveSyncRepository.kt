@@ -5,7 +5,13 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
 import androidx.room.withTransaction
+import dagger.Lazy
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.skepsun.kototoro.mihon.MihonExtensionManager
+import org.skepsun.kototoro.aniyomi.AniyomiExtensionManager
+import org.skepsun.kototoro.ireader.IReaderExtensionManager
+import org.skepsun.kototoro.tsundoku.TsundokuExtensionManager
+import org.skepsun.kototoro.cloudstream.runtime.CloudstreamRuntimeManager
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -93,6 +99,11 @@ class GoogleDriveSyncRepository @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val trackingRepository: TrackingRepository,
     private val workResolver: WorkResolver,
+    private val mihonExtensionManager: Lazy<MihonExtensionManager>,
+    private val aniyomiExtensionManager: Lazy<AniyomiExtensionManager>,
+    private val ireaderExtensionManager: Lazy<IReaderExtensionManager>,
+    private val tsundokuExtensionManager: Lazy<TsundokuExtensionManager>,
+    private val cloudstreamRuntimeManager: Lazy<CloudstreamRuntimeManager>,
 ) {
 
     val isSyncing = MutableStateFlow(false)
@@ -1293,9 +1304,14 @@ class GoogleDriveSyncRepository @Inject constructor(
         }
     }
 
-    private fun restoreExtensionPackages(snapshot: GoogleDriveSyncSnapshot) {
+    private suspend fun restoreExtensionPackages(snapshot: GoogleDriveSyncSnapshot) {
         if (snapshot.extensions.isEmpty()) return
         var hasJarUpdated = false
+        var hasCloudstreamUpdated = false
+        var hasMihonUpdated = false
+        var hasAniyomiUpdated = false
+        var hasIReaderUpdated = false
+        var hasTsundokuUpdated = false
 
         snapshot.extensions.forEach { ext ->
             if (!ext.isPayloadIncluded || ext.payloadBase64.isNullOrBlank()) {
@@ -1340,12 +1356,14 @@ class GoogleDriveSyncRepository @Inject constructor(
                                     ext.repoUrl?.let { putString("${ext.packageId}:repo", it) }
                                 }
                                 .apply()
+                            hasCloudstreamUpdated = true
                         }
                     }.onFailure { Log.e(TAG, "Failed to restore cloudstream extension ${ext.packageId}", it) }
                 }
                 "mihon", "aniyomi", "ireader", "tsundoku" -> {
                     runCatching {
-                        val root = LocalApkExtensionSupport.getManagedExtensionsDir(context, ext.kind.lowercase())
+                        val ecosystem = ext.kind.lowercase()
+                        val root = LocalApkExtensionSupport.getManagedExtensionsDir(context, ecosystem)
                         val targetDir = File(root, ext.packageId).apply { mkdirs() }
                         val targetFile = File(targetDir, "${ext.packageId}.apk")
                         val existingInfo = if (targetFile.exists()) {
@@ -1357,7 +1375,13 @@ class GoogleDriveSyncRepository @Inject constructor(
                             val tempFile = File.createTempFile("sync_ext_${ext.packageId}", ".apk", context.cacheDir)
                             try {
                                 tempFile.writeBytes(bytes)
-                                LocalApkExtensionSupport.storeManagedApk(context, ext.kind.lowercase(), ext.packageId, tempFile)
+                                LocalApkExtensionSupport.storeManagedApk(context, ecosystem, ext.packageId, tempFile)
+                                when (ecosystem) {
+                                    "mihon" -> hasMihonUpdated = true
+                                    "aniyomi" -> hasAniyomiUpdated = true
+                                    "ireader" -> hasIReaderUpdated = true
+                                    "tsundoku" -> hasTsundokuUpdated = true
+                                }
                             } finally {
                                 tempFile.delete()
                             }
@@ -1369,6 +1393,21 @@ class GoogleDriveSyncRepository @Inject constructor(
 
         if (hasJarUpdated) {
             runCatching { GlobalExtensionManager.initialize(context) }
+        }
+        if (hasCloudstreamUpdated) {
+            runCatching { cloudstreamRuntimeManager.get().initialize() }
+        }
+        if (hasMihonUpdated) {
+            runCatching { mihonExtensionManager.get().loadExtensions() }
+        }
+        if (hasAniyomiUpdated) {
+            runCatching { aniyomiExtensionManager.get().loadExtensions() }
+        }
+        if (hasIReaderUpdated) {
+            runCatching { ireaderExtensionManager.get().loadExtensions() }
+        }
+        if (hasTsundokuUpdated) {
+            runCatching { tsundokuExtensionManager.get().loadExtensions() }
         }
     }
 
