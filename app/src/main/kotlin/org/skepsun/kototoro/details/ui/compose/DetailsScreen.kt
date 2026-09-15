@@ -882,6 +882,7 @@ private fun DetailsScreenContent(
 
     val effectiveGlassPrefs = rememberGlassPrefsOrFallback()
     val routeLayerBackdrop = LocalLiquidGlassLayerBackdrop.current
+    val detailsBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 1f)
     val detailsBackdropBackground = MaterialTheme.colorScheme.background
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val detailsBackgroundBackdrop = if (isIosStyle) {
@@ -975,7 +976,7 @@ private fun DetailsScreenContent(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(MaterialTheme.colorScheme.surface),
+                        .background(detailsBackgroundColor),
                 )
                 if (panoramaPrefs.isEnabled) {
                     if (currentPanoramaCoverUrl != null || sharedElementKey != null) {
@@ -1008,7 +1009,7 @@ private fun DetailsScreenContent(
                             snapshotKey = sharedElementKey,
                             contentAlpha = 1f,
                             contentAlphaProvider = panoramaContentAlphaProvider,
-                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            backgroundColor = detailsBackgroundColor,
                             crossfadeEnabled = false,
                             onLoadError = {
                                 if (!hasPanoramaLoadFailed && normalizedFallbackCoverUrl != null && normalizedFallbackCoverUrl != normalizedPrimaryCoverUrl) {
@@ -1893,4 +1894,3 @@ private fun DetailsScreenContent(
         }
     }
 }
-
