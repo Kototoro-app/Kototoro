@@ -3815,6 +3815,9 @@
     <string name="pref_tablet_list_preview_side_pane">Right-side preview</string>
     <string name="pref_tablet_list_preview_floating">Floating preview</string>
     <string name="preview_details_unavailable">More details are temporarily unavailable.</string>
+    <string name="preview_latest_chapters">Latest chapters</string>
+    <string name="preview_first_chapters">First chapters</string>
+    <string name="start_reading">Start reading</string>
     <string name="pref_tablet_list_filter_panel">Open filter panel on entering list</string>
     <string name="pref_tablet_list_filter_panel_summary">On tablets, show the filter panel in the right half when opening a manga list.</string>
     <string name="appearance_group_list_interaction">List interaction and motion</string>

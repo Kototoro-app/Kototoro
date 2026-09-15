@@ -106,6 +106,7 @@ import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
+import org.skepsun.kototoro.reader.ui.ReaderState
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
@@ -127,7 +128,6 @@ private val SearchFilterSheetLightMinAlpha = 0.88f
 private val SearchFilterSheetLightMaxAlpha = 0.92f
 private val SearchFilterSheetDarkMinAlpha = 0.82f
 private val SearchFilterSheetDarkMaxAlpha = 0.88f
-private const val ExpandedListDetailMinWidthDp = 840
 
 private enum class SearchSidePaneMode {
     Filter,
@@ -331,16 +331,10 @@ fun AppSearchContentListRoute(
     val isWideAdaptiveLayout = remember(context, configuration.orientation, configuration.screenWidthDp, tabletUiMode) {
         FoldableUtils.shouldUseTabletLayout(context, settings, configuration)
     }
-    // A 600dp width is enough for a tablet-aware filter panel, but not enough for a
-    // comfortable persistent list/detail experience in landscape. Keep the preview
-    // interaction for the Expanded window size so phones do not get a cramped second step.
-    val isExpandedListDetailLayout = isWideAdaptiveLayout &&
-        configuration.screenWidthDp >= ExpandedListDetailMinWidthDp
     val isSidePanePreviewAvailable = tabletListPreviewMode == TabletListPreviewMode.SIDE_PANE &&
-        isExpandedListDetailLayout
+        isWideAdaptiveLayout
     val isFloatingPreviewAvailable = tabletListPreviewMode == TabletListPreviewMode.FLOATING &&
-        isWideAdaptiveLayout &&
-        configuration.screenWidthDp >= 600
+        isWideAdaptiveLayout
 
     val preparedItems = remember(items) { prepareSearchContentItems(items) }
     val quickFilter = preparedItems.quickFilter
@@ -386,6 +380,7 @@ fun AppSearchContentListRoute(
     var showFilterPanel by rememberSaveable(isWideAdaptiveLayout) {
         mutableStateOf(isWideAdaptiveLayout && isTabletListFilterPanelDefaultOpen)
     }
+    var wasFilterPanelOpenBeforePreview by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(false) }
     var sidePaneMode by rememberSaveable(isWideAdaptiveLayout) { mutableStateOf(SearchSidePaneMode.Filter) }
     var previewContentId by rememberSaveable { mutableStateOf<Long?>(null) }
     var previewContent by remember { mutableStateOf<Content?>(null) }
@@ -408,6 +403,9 @@ fun AppSearchContentListRoute(
                 if (previewContent?.id == content.id) {
                     openDetailsHandler(previewContent ?: content, sharedElementKey)
                 } else {
+                    if (sidePaneMode != SearchSidePaneMode.Preview) {
+                        wasFilterPanelOpenBeforePreview = showFilterPanel
+                    }
                     previewContentId = content.id
                     previewContent = content
                     sidePaneMode = SearchSidePaneMode.Preview
@@ -504,7 +502,6 @@ fun AppSearchContentListRoute(
 
     LaunchedEffect(
         isWideAdaptiveLayout,
-        isExpandedListDetailLayout,
         tabletListPreviewMode,
         isTabletListFilterPanelDefaultOpen,
     ) {
@@ -520,28 +517,18 @@ fun AppSearchContentListRoute(
             }
 
             tabletListPreviewMode == TabletListPreviewMode.SIDE_PANE -> {
-                if (isSidePanePreviewAvailable) {
-                    if (sidePaneMode != SearchSidePaneMode.Preview) {
-                        sidePaneMode = SearchSidePaneMode.Filter
-                        showFilterPanel = isTabletListFilterPanelDefaultOpen
-                    }
-                } else {
-                    clearPreview()
+                if (sidePaneMode != SearchSidePaneMode.Preview) {
+                    sidePaneMode = SearchSidePaneMode.Filter
                     showFilterPanel = isTabletListFilterPanelDefaultOpen
                 }
             }
 
             tabletListPreviewMode == TabletListPreviewMode.FLOATING -> {
-                if (isFloatingPreviewAvailable) {
-                    sidePaneMode = SearchSidePaneMode.Filter
-                    showFilterPanel = if (previewContentId == null) {
-                        isTabletListFilterPanelDefaultOpen
-                    } else {
-                        false
-                    }
+                sidePaneMode = SearchSidePaneMode.Filter
+                showFilterPanel = if (previewContentId == null) {
+                    isTabletListFilterPanelDefaultOpen
                 } else {
-                    clearPreview()
-                    showFilterPanel = isTabletListFilterPanelDefaultOpen
+                    false
                 }
             }
         }
@@ -630,7 +617,13 @@ fun AppSearchContentListRoute(
         Modifier
     }
 
-    fun restoreFilterPane() {
+    fun closePreviewPane() {
+        val restoreFilter = wasFilterPanelOpenBeforePreview
+        clearPreview()
+        showFilterPanel = restoreFilter
+    }
+
+    fun openFilterPaneFromPreview() {
         clearPreview()
         showFilterPanel = true
     }
@@ -640,7 +633,7 @@ fun AppSearchContentListRoute(
         enabled = (isWideSplitLayout && sidePaneMode == SearchSidePaneMode.Preview) || isFloatingPreviewVisible,
     ) {
         if (sidePaneMode == SearchSidePaneMode.Preview) {
-            restoreFilterPane()
+            closePreviewPane()
         } else {
             clearPreview()
         }
@@ -768,7 +761,7 @@ fun AppSearchContentListRoute(
                     if (isWideAdaptiveLayout) {
                         when {
                             sidePaneMode == SearchSidePaneMode.Preview -> {
-                                restoreFilterPane()
+                                openFilterPaneFromPreview()
                             }
                             else -> showFilterPanel = !showFilterPanel
                         }
@@ -911,12 +904,19 @@ fun AppSearchContentListRoute(
                                     content = content,
                                     isLoading = isPreviewDetailsLoading,
                                     hasLoadError = hasPreviewDetailsError,
+                                    onClose = ::closePreviewPane,
                                     onAddToFavorites = { appRouter.showFavoriteDialog(content) },
                                     onOpenDetails = {
                                         val sharedElementKey = contentCoverSharedKey(content, content.coverUrl)
                                         openDetailsHandler(
                                             content,
                                             sharedElementKey,
+                                        )
+                                    },
+                                    onOpenChapter = { chapter ->
+                                        appRouter.openReader(
+                                            manga = content,
+                                            state = ReaderState(chapterId = chapter.id, page = 0, scroll = 0),
                                         )
                                     },
                                 )
@@ -1071,6 +1071,12 @@ fun AppSearchContentListRoute(
                                 openDetailsHandler(
                                     content,
                                     contentCoverSharedKey(content, content.coverUrl),
+                                )
+                            },
+                            onOpenChapter = { chapter ->
+                                appRouter.openReader(
+                                    manga = content,
+                                    state = ReaderState(chapterId = chapter.id, page = 0, scroll = 0),
                                 )
                             },
                         )
