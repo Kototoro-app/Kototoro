@@ -241,6 +241,18 @@ fun HomeScreen(
     val heroHeightDp by remember(heroPx, density) {
         derivedStateOf { with(density) { heroPx.toDp() } }
     }
+    val heroContent: @Composable (Modifier) -> Unit = { heroModifier ->
+        HomeHeroSection(
+            entries = heroEntries,
+            mode = heroMode,
+            fixedPresentation = HomeHeroPresentation(heroBackground, heroContentLayout),
+            panoramaPrefs = homeHeroPanoramaPrefs,
+            onClick = onContentClick,
+            topContentInset = topInset + 8.dp,
+            autoAdvance = autoAdvanceHero,
+            modifier = heroModifier,
+        )
+    }
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -265,8 +277,16 @@ fun HomeScreen(
                 recentSearches.isNotEmpty()
             if (hasHighlights) {
                 if (heroEntries.isNotEmpty()) {
-                    item(key = "home_hero_spacer") {
-                        Spacer(modifier = Modifier.height(heroHeightDp))
+                    if (isTvPresentation) {
+                        // Keep the focused pager inside the vertical lazy layout so D-pad
+                        // search can compose and scroll to content below the viewport.
+                        item(key = "home_hero") {
+                            heroContent(Modifier)
+                        }
+                    } else {
+                        item(key = "home_hero_spacer") {
+                            Spacer(modifier = Modifier.height(heroHeightDp))
+                        }
                     }
                 }
                 item(key = "home_highlights") {
@@ -303,16 +323,9 @@ fun HomeScreen(
             }
         }
 
-        if (heroEntries.isNotEmpty()) {
-            HomeHeroSection(
-                entries = heroEntries,
-                mode = heroMode,
-                fixedPresentation = HomeHeroPresentation(heroBackground, heroContentLayout),
-                panoramaPrefs = homeHeroPanoramaPrefs,
-                onClick = onContentClick,
-                topContentInset = topInset + 8.dp,
-                autoAdvance = autoAdvanceHero,
-                modifier = Modifier
+        if (heroEntries.isNotEmpty() && !isTvPresentation) {
+            heroContent(
+                Modifier
                     .align(Alignment.TopCenter)
                     // A layout offset, not a draw-phase graphicsLayer: the cover's
                     // shared-element rect is measured from this subtree's layout

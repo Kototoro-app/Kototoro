@@ -3,6 +3,7 @@ package org.skepsun.kototoro.home.ui.compose.hero
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -108,6 +110,8 @@ internal fun HomeHeroSection(
     val pagerState = rememberPagerState(pageCount = { entries.size })
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     val heroFocusRequester = remember { FocusRequester() }
+    val initialFocusPage = remember { pagerState.currentPage }
+    var initialFocusAttempted by rememberSaveable { mutableStateOf(false) }
     val selectedIndex by remember(entries, pagerState) {
         derivedStateOf { pagerState.currentPage.coerceIn(0, entries.lastIndex) }
     }
@@ -129,8 +133,10 @@ internal fun HomeHeroSection(
     )
     // Recommendation refreshes must not steal focus from another row or the navigation rail.
     LaunchedEffect(isTvPresentation) {
-        if (isTvPresentation) {
+        if (isTvPresentation && !initialFocusAttempted) {
             withFrameNanos { }
+            // Lazy item re-entry must not pull focus back from a lower content row.
+            initialFocusAttempted = true
             runCatching { heroFocusRequester.requestFocus() }
         }
     }
@@ -140,10 +146,11 @@ internal fun HomeHeroSection(
             .padding(top = topContentInset),
     ) {
         val edgePadding = CompactTopBarHorizontalPadding
-        val cardWidth = minOf(312.dp, maxWidth * 0.78f).coerceAtMost(
+        val preferredCardWidth = if (isTvPresentation) 440.dp else 312.dp
+        val cardWidth = minOf(preferredCardWidth, maxWidth * 0.78f).coerceAtMost(
             (maxWidth - edgePadding * 2).coerceAtLeast(0.dp),
         )
-        val pageSpacing = 6.dp
+        val pageSpacing = if (isTvPresentation) 16.dp else 6.dp
         val contentPadding = PaddingValues(horizontal = edgePadding)
         val viewportWidth = maxWidth
         val density = LocalDensity.current
@@ -163,7 +170,15 @@ internal fun HomeHeroSection(
                     "home_hero_${entry.kind.name}_${entry.groupKey}_${entry.content.id}"
                 } ?: "home_hero_pending_$page"
             },
-            modifier = Modifier.width(viewportWidth),
+            modifier = Modifier
+                .width(viewportWidth)
+                .then(
+                    if (isTvPresentation) {
+                        Modifier.focusRestorer().focusGroup()
+                    } else {
+                        Modifier
+                    },
+                ),
         ) { page ->
             entries.getOrNull(page)?.let { entry ->
                 val presentation = resolveHomeHeroPresentation(
@@ -181,7 +196,7 @@ internal fun HomeHeroSection(
                 HomeHeroCard(
                     entry = entry,
                     presentation = presentation,
-                    cardHeight = HOME_HERO_CARD_HEIGHT,
+                    cardHeight = if (isTvPresentation) 240.dp else HOME_HERO_CARD_HEIGHT,
                     panoramaPrefs = panoramaPrefs,
                     showIndicator = page == selectedIndex,
                     indicator = if (entries.size > 1) {
@@ -240,7 +255,7 @@ internal fun HomeHeroSection(
                             alpha = 0.64f + (0.36f * visualFocus)
                             transformOrigin = TransformOrigin(hOrigin, 0.5f)
                         },
-                    focusRequester = heroFocusRequester.takeIf { page == 0 },
+                    focusRequester = heroFocusRequester.takeIf { page == initialFocusPage },
                 )
             }
         }
@@ -308,7 +323,7 @@ private fun HomeHeroCard(
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
-                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.large)
                 } else {
                     Modifier
                 },

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
@@ -30,11 +31,13 @@ fun PresentationModeExitButton(
     Button(
         onClick = { settings.uiPresentationMode = UiPresentationMode.STANDARD },
         modifier = modifier
-            .tvFocusable(shape = RoundedCornerShape(12.dp))
             .padding(
                 WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)
                     .asPaddingValues(),
-            ),
+            )
+            .heightIn(min = 48.dp)
+            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+        shape = RoundedCornerShape(12.dp),
     ) {
         Text(stringResource(R.string.presentation_mode_restore_standard))
     }

@@ -41,6 +41,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -141,6 +143,7 @@ internal fun TvNavigationRail(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(68.dp)
+                            .semantics { selected = isSelected }
                             .focusRequester(itemFocusRequester)
                             .onFocusChanged { focusState ->
                                 if (focusState.hasFocus) {
@@ -181,13 +184,13 @@ internal fun TvNavigationRail(
                             ) {
                                 Icon(
                                     painter = painterResource(tvNavigationIconResId(item.id, isSelected)),
-                                    contentDescription = stringResource(item.title),
+                                    contentDescription = null,
                                     modifier = Modifier.width(28.dp),
                                 )
                             }
                             Text(
                                 text = stringResource(item.title),
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 textAlign = TextAlign.Center,
@@ -266,12 +269,12 @@ private fun TvNavigationAction(
         ) {
             Icon(
                 painter = painterResource(iconRes),
-                contentDescription = stringResource(contentDescriptionRes),
+                contentDescription = null,
                 modifier = Modifier.width(28.dp),
             )
             Text(
                 text = stringResource(contentDescriptionRes),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
