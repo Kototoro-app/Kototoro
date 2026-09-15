@@ -2213,6 +2213,8 @@
     <string name="mirror_probe_finished">最快：%1$s（%2$d 毫秒）· %3$d/%4$d 可用</string>
     <string name="mirror_probe_none_available">无可达镜像</string>
     <string name="mirror_probe_timeout">超时</string>
+    <string name="mirror_probe_select_fastest">选择最快</string>
+    <string name="mirror_probe_fastest_badge">最快</string>
     <string name="mirror_sync_url_title">镜像列表地址（可选）</string>
     <string name="mirror_sync_url_summary">留空使用默认的非 GitHub 地址（jsDelivr）。</string>
     <string name="mirror_sync_url_default">默认：%1$s</string>

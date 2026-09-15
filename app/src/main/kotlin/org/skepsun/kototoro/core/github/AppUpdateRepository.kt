@@ -65,7 +65,9 @@ class AppUpdateRepository @Inject constructor(
         .build()
 
     val defaultSource: AppUpdateSource
-        get() = settings.appUpdateSource ?: preferredUpdateSource(primaryLocale)
+        get() = (settings.appUpdateSource?.takeIf { it != AppUpdateSource.GITCODE }
+            ?: preferredUpdateSource(primaryLocale))
+            .takeIf { it != AppUpdateSource.GITCODE } ?: AppUpdateSource.GITHUB
 
     val isUpdateAvailable: Boolean
         get() = availableUpdate.value != null
@@ -77,7 +79,7 @@ class AppUpdateRepository @Inject constructor(
     ): List<AppVersion> = fetchAvailableVersions(source)
 
     suspend fun probeUpdateSources(): Map<AppUpdateSource, AppUpdateSourceProbe> = coroutineScope {
-        AppUpdateSource.entries.map { source ->
+        AppUpdateSource.entries.filter { it != AppUpdateSource.GITCODE }.map { source ->
             async {
                 val startedAt = SystemClock.elapsedRealtime()
                 val available = try {
@@ -163,9 +165,8 @@ class AppUpdateRepository @Inject constructor(
 }
 
 internal fun preferredUpdateSource(locale: Locale): AppUpdateSource {
-    val prefersGitCode = locale.country.equals("CN", ignoreCase = true) ||
-        (locale.language.equals("zh", ignoreCase = true) && locale.script.equals("Hans", ignoreCase = true))
-    return if (prefersGitCode) AppUpdateSource.GITCODE else AppUpdateSource.GITHUB
+    // GitCode route is temporarily disabled due to instability
+    return AppUpdateSource.GITHUB
 }
 
 internal fun parseUpdateReleases(

@@ -3250,4 +3250,14 @@ SHA-256 指纹:
     <string name="video_note_saved">视频笔记已保存</string>
     <string name="quote_dialogue">台词引用</string>
     <string name="save_note">保存笔记</string>
+    <string name="mirror_probe_action">测试镜像连通性</string>
+    <string name="mirror_probe_short_action">测试</string>
+    <string name="mirror_probe_cancel">取消测试</string>
+    <string name="mirror_probe_summary">通过每个镜像拉取一个小文件以测量延迟。</string>
+    <string name="mirror_probe_running">正在测试镜像（%1$d/%2$d）…</string>
+    <string name="mirror_probe_finished">最快：%1$s（%2$d 毫秒）· %3$d/%4$d 可用</string>
+    <string name="mirror_probe_none_available">无可达镜像</string>
+    <string name="mirror_probe_timeout">超时</string>
+    <string name="mirror_probe_select_fastest">选择最快</string>
+    <string name="mirror_probe_fastest_badge">最快</string>
 </resources>

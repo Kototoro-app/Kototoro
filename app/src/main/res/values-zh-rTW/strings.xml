@@ -2750,4 +2750,14 @@ SHA-256 指紋:
     <string name="reading_status_completed">已讀完</string>
     <string name="reading_status_on_hold">擱置</string>
     <string name="reading_status_dropped">棄讀</string>
+    <string name="mirror_probe_action">測試鏡像連通性</string>
+    <string name="mirror_probe_short_action">測試</string>
+    <string name="mirror_probe_cancel">取消測試</string>
+    <string name="mirror_probe_summary">透過每個鏡像拉取一個小檔案以測量延遲。</string>
+    <string name="mirror_probe_running">正在測試鏡像（%1$d/%2$d）…</string>
+    <string name="mirror_probe_finished">最快：%1$s（%2$d 毫秒）· %3$d/%4$d 可用</string>
+    <string name="mirror_probe_none_available">無可達鏡像</string>
+    <string name="mirror_probe_timeout">超時</string>
+    <string name="mirror_probe_select_fastest">選擇最快</string>
+    <string name="mirror_probe_fastest_badge">最快</string>
 </resources>

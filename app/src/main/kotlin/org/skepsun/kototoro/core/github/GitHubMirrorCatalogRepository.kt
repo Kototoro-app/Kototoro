@@ -34,12 +34,40 @@ import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
 import org.skepsun.kototoro.core.prefs.GitHubMirrorManifest
+import org.skepsun.kototoro.core.prefs.displayName
 
 /** Suffix shown next to a mirror label once a probe result exists, e.g. " · 213 ms" / " · timeout". */
 fun GitHubMirrorProbeResult?.latencyLabel(context: Context): String = when {
     this == null -> ""
     isAvailable -> " · ${latencyMillis ?: "?"} ms"
     else -> " · ${context.getString(R.string.mirror_probe_timeout)}"
+}
+
+/** Formats the status or results of mirror probing for UI summaries. */
+fun mirrorProbeSummary(
+    context: Context,
+    state: GitHubMirrorProbeState,
+    entries: List<GitHubMirrorEntry>,
+): String = when (state) {
+    is GitHubMirrorProbeState.Running -> context.getString(R.string.mirror_probe_running, state.completed, state.total)
+    is GitHubMirrorProbeState.Finished -> when {
+        state.total == 0 -> context.getString(R.string.mirror_probe_summary)
+        state.available == 0 -> context.getString(R.string.mirror_probe_none_available)
+        else -> {
+            val fastestName = state.fastestId
+                ?.let { id -> entries.firstOrNull { it.id == id } }
+                ?.let { it.displayName(context) }
+                ?: state.fastestId.orEmpty()
+            context.getString(
+                R.string.mirror_probe_finished,
+                fastestName,
+                state.fastestMillis ?: 0L,
+                state.available,
+                state.total,
+            )
+        }
+    }
+    GitHubMirrorProbeState.Idle -> context.getString(R.string.mirror_probe_summary)
 }
 
 sealed interface GitHubMirrorSyncState {

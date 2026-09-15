@@ -72,6 +72,7 @@ class AppUpdateActivity : BaseComposeActivity() {
             val downloadState = viewModel.downloadState.collectAsStateWithLifecycle().value
             val selectedMirror = viewModel.selectedMirror.collectAsStateWithLifecycle().value
             val mirrorOptions = viewModel.mirrorOptions.collectAsStateWithLifecycle().value
+            val mirrorProbeState = viewModel.mirrorProbeState.collectAsStateWithLifecycle().value
             val selectedSource = viewModel.selectedSource.collectAsStateWithLifecycle().value
             val sourceProbes = viewModel.sourceProbes.collectAsStateWithLifecycle().value
             val updateMessage = viewModel.updateMessage.collectAsStateWithLifecycle().value
@@ -87,8 +88,13 @@ class AppUpdateActivity : BaseComposeActivity() {
                 selectedMirror = selectedMirror,
                 selectedSource = selectedSource,
                 sourceProbes = sourceProbes,
+                mirrorProbeState = mirrorProbeState,
                 onSourceSelected = viewModel::setSource,
                 onMirrorSelected = viewModel::setMirror,
+                onProbeMirrors = viewModel::probeMirrors,
+                onCancelMirrorProbes = viewModel::cancelMirrorProbes,
+                onSelectFastestMirror = viewModel::selectFastestMirror,
+                onRetry = viewModel::retry,
                 onCancel = ::finishAfterTransition,
                 onUpdate = ::doUpdate,
             )

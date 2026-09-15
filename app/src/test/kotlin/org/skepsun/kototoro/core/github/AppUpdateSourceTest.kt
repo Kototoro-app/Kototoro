@@ -8,23 +8,15 @@ import java.util.Locale
 class AppUpdateSourceTest {
 
 	@Test
-	fun `simplified Chinese locale defaults to GitCode`() {
+	fun `locales default to GitHub while GitCode route is temporarily disabled`() {
 		assertEquals(
-			AppUpdateSource.GITCODE,
+			AppUpdateSource.GITHUB,
 			preferredUpdateSource(Locale.forLanguageTag("zh-Hans-SG")),
 		)
-	}
-
-	@Test
-	fun `China region defaults to GitCode regardless of language`() {
 		assertEquals(
-			AppUpdateSource.GITCODE,
+			AppUpdateSource.GITHUB,
 			preferredUpdateSource(Locale.Builder().setLanguage("en").setRegion("CN").build()),
 		)
-	}
-
-	@Test
-	fun `other locales default to GitHub`() {
 		assertEquals(
 			AppUpdateSource.GITHUB,
 			preferredUpdateSource(Locale.US),

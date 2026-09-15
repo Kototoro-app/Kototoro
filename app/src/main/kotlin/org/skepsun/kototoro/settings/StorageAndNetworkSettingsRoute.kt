@@ -48,6 +48,7 @@ import org.skepsun.kototoro.core.github.GitHubMirrorCatalogMeta
 import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.github.GitHubMirrorSyncState
 import org.skepsun.kototoro.core.github.latencyLabel
+import org.skepsun.kototoro.core.github.mirrorProbeSummary
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.CloudflareStrategy
 import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
@@ -906,28 +907,3 @@ private fun mirrorSyncSummary(
     }
 }
 
-private fun mirrorProbeSummary(
-    context: android.content.Context,
-    state: GitHubMirrorProbeState,
-    entries: List<GitHubMirrorEntry>,
-): String = when (state) {
-    is GitHubMirrorProbeState.Running -> context.getString(R.string.mirror_probe_running, state.completed, state.total)
-    is GitHubMirrorProbeState.Finished -> when {
-        state.total == 0 -> context.getString(R.string.mirror_probe_summary)
-        state.available == 0 -> context.getString(R.string.mirror_probe_none_available)
-        else -> {
-            val fastestName = state.fastestId
-                ?.let { id -> entries.firstOrNull { it.id == id } }
-                ?.let { it.displayName(context) }
-                ?: state.fastestId.orEmpty()
-            context.getString(
-                R.string.mirror_probe_finished,
-                fastestName,
-                state.fastestMillis ?: 0L,
-                state.available,
-                state.total,
-            )
-        }
-    }
-    GitHubMirrorProbeState.Idle -> context.getString(R.string.mirror_probe_summary)
-}

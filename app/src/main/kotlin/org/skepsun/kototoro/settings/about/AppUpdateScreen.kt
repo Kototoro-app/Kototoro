@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -23,15 +24,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +53,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -57,14 +64,21 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.AppVersion
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
 import org.skepsun.kototoro.core.ui.widgets.SelectableTextView
 import org.skepsun.kototoro.core.util.FileSize
 
 data class AppUpdateMirrorOption(
     val id: String,
-    val label: String,
-)
+    val name: String,
+    val probeResult: GitHubMirrorProbeResult? = null,
+    val isFastest: Boolean = false,
+) {
+    val label: String
+        get() = name
+}
 
 internal data class AppUpdateSourceOption(
     val source: AppUpdateSource,
@@ -73,9 +87,11 @@ internal data class AppUpdateSourceOption(
 
 internal fun buildAppUpdateSourceOptions(
     probes: Map<AppUpdateSource, AppUpdateSourceProbe>,
-): List<AppUpdateSourceOption> = AppUpdateSource.entries.map { source ->
-    AppUpdateSourceOption(source = source, probe = probes[source])
-}
+): List<AppUpdateSourceOption> = AppUpdateSource.entries
+    .filter { it != AppUpdateSource.GITCODE }
+    .map { source ->
+        AppUpdateSourceOption(source = source, probe = probes[source])
+    }
 
 @Composable
 fun AppUpdateScreen(
@@ -89,8 +105,13 @@ fun AppUpdateScreen(
     selectedMirror: String,
     selectedSource: AppUpdateSource,
     sourceProbes: Map<AppUpdateSource, AppUpdateSourceProbe>,
+    mirrorProbeState: GitHubMirrorProbeState = GitHubMirrorProbeState.Idle,
     onSourceSelected: (AppUpdateSource) -> Unit,
     onMirrorSelected: (String) -> Unit,
+    onProbeMirrors: () -> Unit = {},
+    onCancelMirrorProbes: () -> Unit = {},
+    onSelectFastestMirror: () -> Unit = {},
+    onRetry: () -> Unit = {},
     onCancel: () -> Unit,
     onUpdate: () -> Unit,
     modifier: Modifier = Modifier,
@@ -103,6 +124,7 @@ fun AppUpdateScreen(
     }
     val criticalErrorMessage = operationErrorMessage ?: downloadError
     val scrollState = rememberScrollState()
+    val sourceOptions = remember(sourceProbes) { buildAppUpdateSourceOptions(sourceProbes) }
 
     Surface(
         modifier = modifier
@@ -129,24 +151,38 @@ fun AppUpdateScreen(
                 )
 
                 criticalErrorMessage?.let { message ->
-                    UpdateStatusBanner(message = message, isError = true)
+                    UpdateStatusBanner(
+                        message = message,
+                        isError = true,
+                        onRetry = onRetry,
+                    )
                 }
                 updateMessage?.let { message ->
-                    UpdateStatusBanner(message = message, isError = false)
+                    UpdateStatusBanner(
+                        message = message,
+                        isError = false,
+                        onRetry = if (version == null) onRetry else null,
+                    )
                 }
 
-                SourceSelector(
-                    selectedSource = selectedSource,
-                    probes = sourceProbes,
-                    onSourceSelected = onSourceSelected,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (sourceOptions.size > 1) {
+                    SourceSelector(
+                        options = sourceOptions,
+                        selectedSource = selectedSource,
+                        onSourceSelected = onSourceSelected,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
 
                 AnimatedVisibility(visible = selectedSource == AppUpdateSource.GITHUB) {
                     MirrorSelector(
                         options = mirrorOptions,
                         selectedId = selectedMirror,
+                        probeState = mirrorProbeState,
                         onMirrorSelected = onMirrorSelected,
+                        onProbeMirrors = onProbeMirrors,
+                        onCancelMirrorProbes = onCancelMirrorProbes,
+                        onSelectFastestMirror = onSelectFastestMirror,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -249,6 +285,7 @@ private fun UpdateHero(
 private fun UpdateStatusBanner(
     message: String,
     isError: Boolean,
+    onRetry: (() -> Unit)? = null,
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -264,18 +301,35 @@ private fun UpdateStatusBanner(
         },
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (onRetry != null) {
+                TextButton(onClick = onRetry) {
+                    Text(
+                        text = stringResource(R.string.retry),
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun SourceSelector(
+    options: List<AppUpdateSourceOption>,
     selectedSource: AppUpdateSource,
-    probes: Map<AppUpdateSource, AppUpdateSourceProbe>,
     onSourceSelected: (AppUpdateSource) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -304,7 +358,7 @@ private fun SourceSelector(
                     modifier = Modifier.padding(start = 10.dp),
                 )
             }
-            buildAppUpdateSourceOptions(probes).forEach { option ->
+            options.forEach { option ->
                 val isSelected = option.source == selectedSource
                 Surface(
                     onClick = { onSourceSelected(option.source) },
@@ -406,7 +460,11 @@ private fun sourceProbeColor(probe: AppUpdateSourceProbe?) = when {
 private fun MirrorSelector(
     options: List<AppUpdateMirrorOption>,
     selectedId: String,
+    probeState: GitHubMirrorProbeState,
     onMirrorSelected: (String) -> Unit,
+    onProbeMirrors: () -> Unit,
+    onCancelMirrorProbes: () -> Unit,
+    onSelectFastestMirror: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ElevatedCard(
@@ -419,33 +477,251 @@ private fun MirrorSelector(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_web),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    text = stringResource(R.string.pref_github_mirror),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 10.dp),
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f, fill = false),
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_code),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = stringResource(R.string.pref_github_mirror),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = when (probeState) {
+                                is GitHubMirrorProbeState.Running -> stringResource(
+                                    R.string.mirror_probe_running,
+                                    probeState.completed,
+                                    probeState.total,
+                                )
+                                is GitHubMirrorProbeState.Finished -> when {
+                                    probeState.total == 0 -> stringResource(R.string.mirror_probe_summary)
+                                    probeState.available == 0 -> stringResource(R.string.mirror_probe_none_available)
+                                    else -> stringResource(
+                                        R.string.mirror_probe_finished,
+                                        options.firstOrNull { it.id == probeState.fastestId }?.name
+                                            ?: probeState.fastestId.orEmpty(),
+                                        probeState.fastestMillis ?: 0L,
+                                        probeState.available,
+                                        probeState.total,
+                                    )
+                                }
+                                GitHubMirrorProbeState.Idle -> stringResource(R.string.mirror_probe_summary)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                val isProbing = probeState is GitHubMirrorProbeState.Running
+                FilledTonalButton(
+                    onClick = if (isProbing) onCancelMirrorProbes else onProbeMirrors,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp),
+                ) {
+                    if (isProbing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.mirror_probe_cancel),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_wifi),
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.mirror_probe_short_action),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
             }
+
+            val finishedState = probeState as? GitHubMirrorProbeState.Finished
+            val fastestOption = finishedState?.fastestId?.let { id -> options.firstOrNull { it.id == id } }
+            if (fastestOption != null && fastestOption.id != selectedId) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_bolt),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "${fastestOption.name} (${finishedState.fastestMillis ?: 0L} ms)",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+                        TextButton(
+                            onClick = onSelectFastestMirror,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.mirror_probe_select_fastest),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 options.forEach { option ->
+                    val isSelected = option.id == selectedId
+                    val probe = option.probeResult
                     FilterChip(
-                        selected = option.id == selectedId,
+                        selected = isSelected,
                         onClick = { onMirrorSelected(option.id) },
-                        label = { Text(option.label) },
+                        shape = RoundedCornerShape(12.dp),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = isSelected,
+                            borderColor = if (option.isFastest && !isSelected) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            } else {
+                                MaterialTheme.colorScheme.outlineVariant
+                            },
+                            selectedBorderColor = MaterialTheme.colorScheme.primary,
+                            borderWidth = if (isSelected) 1.5.dp else 1.dp,
+                        ),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSurface,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        label = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                if (option.isFastest) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_bolt),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                }
+                                Text(
+                                    text = option.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                                if (probe != null) {
+                                    val isFast = (probe.latencyMillis ?: 0L) < 300L
+                                    val isMedium = (probe.latencyMillis ?: 0L) < 800L
+                                    val tagBg = when {
+                                        !probe.isAvailable -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+                                        isFast -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        isMedium -> MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f)
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                    val tagColor = when {
+                                        !probe.isAvailable -> MaterialTheme.colorScheme.error
+                                        isFast -> MaterialTheme.colorScheme.primary
+                                        isMedium -> MaterialTheme.colorScheme.tertiary
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = tagBg,
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .clip(CircleShape)
+                                                    .background(tagColor),
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = if (probe.isAvailable) {
+                                                    "${probe.latencyMillis ?: "?"} ms"
+                                                } else {
+                                                    stringResource(R.string.mirror_probe_timeout)
+                                                },
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = tagColor,
+                                                fontWeight = FontWeight.Medium,
+                                            )
+                                        }
+                                    }
+                                } else if (probeState is GitHubMirrorProbeState.Running) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(10.dp),
+                                        strokeWidth = 1.5.dp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        },
                     )
                 }
             }
+
             Text(
                 text = stringResource(R.string.pref_github_mirror_summary),
                 style = MaterialTheme.typography.bodySmall,
@@ -573,15 +849,25 @@ private fun AppUpdateScreenPreview() {
     KototoroTheme {
         AppUpdateScreen(
             version = null,
-            isLoading = true,
+            isLoading = false,
             downloadProgress = -1f,
             downloadState = DownloadManager.STATUS_PENDING,
             updateMessage = null,
             operationErrorMessage = null,
-            mirrorOptions = emptyList(),
-            selectedMirror = "native",
-            selectedSource = AppUpdateSource.GITCODE,
+            mirrorOptions = listOf(
+                AppUpdateMirrorOption("native", "Direct Native", GitHubMirrorProbeResult(120L, true), isFastest = false),
+                AppUpdateMirrorOption("gh_proxy_com", "gh-proxy.com", GitHubMirrorProbeResult(45L, true), isFastest = true),
+                AppUpdateMirrorOption("moeyy", "moeyy.xyz", GitHubMirrorProbeResult(null, false), isFastest = false),
+            ),
+            selectedMirror = "gh_proxy_com",
+            selectedSource = AppUpdateSource.GITHUB,
             sourceProbes = emptyMap(),
+            mirrorProbeState = GitHubMirrorProbeState.Finished(
+                available = 2,
+                total = 3,
+                fastestId = "gh_proxy_com",
+                fastestMillis = 45L,
+            ),
             onSourceSelected = {},
             onMirrorSelected = {},
             onCancel = {},

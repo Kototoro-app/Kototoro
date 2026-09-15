@@ -3147,6 +3147,8 @@
     <string name="mirror_probe_finished">Fastest: %1$s (%2$d ms) · %3$d/%4$d reachable</string>
     <string name="mirror_probe_none_available">No mirror reachable</string>
     <string name="mirror_probe_timeout">timeout</string>
+    <string name="mirror_probe_select_fastest">Select fastest</string>
+    <string name="mirror_probe_fastest_badge">Fastest</string>
     <string name="mirror_sync_url_title">Mirror list URL (optional)</string>
     <string name="mirror_sync_url_summary">Leave blank to use the default non-GitHub address (jsDelivr).</string>
     <string name="mirror_sync_url_default">Default: %1$s</string>

@@ -8,7 +8,7 @@ import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 class AppUpdateSourceOptionsTest {
 
     @Test
-    fun `all update sources remain visible with their probe results`() {
+    fun `active update sources exclude disabled GitCode route`() {
         val probes = mapOf(
             AppUpdateSource.GITHUB to AppUpdateSourceProbe(
                 latencyMillis = 120L,
@@ -22,7 +22,7 @@ class AppUpdateSourceOptionsTest {
 
         val options = buildAppUpdateSourceOptions(probes)
 
-        assertEquals(AppUpdateSource.entries, options.map { it.source })
-        assertEquals(probes.values.toList(), options.map { it.probe })
+        assertEquals(listOf(AppUpdateSource.GITHUB), options.map { it.source })
+        assertEquals(listOf(probes[AppUpdateSource.GITHUB]), options.map { it.probe })
     }
 }

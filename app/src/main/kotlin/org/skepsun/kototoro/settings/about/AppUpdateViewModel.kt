@@ -14,7 +14,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import org.skepsun.kototoro.R
@@ -22,8 +23,11 @@ import org.skepsun.kototoro.core.github.AppUpdateRepository
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.github.AppUpdateSourceProbe
 import org.skepsun.kototoro.core.github.GitHubMirrorCatalogRepository
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeResult
+import org.skepsun.kototoro.core.github.GitHubMirrorProbeState
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.GitHubMirrorCatalog
+import org.skepsun.kototoro.core.prefs.GitHubMirrorEntry
 import org.skepsun.kototoro.core.prefs.displayName
 import org.skepsun.kototoro.core.ui.BaseViewModel
 import org.skepsun.kototoro.core.util.ext.MutableEventFlow
@@ -41,11 +45,30 @@ class AppUpdateViewModel @Inject constructor(
 ) : BaseViewModel() {
 
     val nextVersion = repository.observeAvailableUpdate()
-    val selectedSource = MutableStateFlow(repository.defaultSource)
+    val selectedSource = MutableStateFlow(
+        repository.defaultSource.takeIf { it != AppUpdateSource.GITCODE } ?: AppUpdateSource.GITHUB,
+    )
     val sourceProbes = MutableStateFlow<Map<AppUpdateSource, AppUpdateSourceProbe>>(emptyMap())
     val selectedMirror = MutableStateFlow(settings.gitHubMirrorId)
-    val mirrorOptions = mirrorRepository.entries.map { entries ->
-        entries.map { entry -> AppUpdateMirrorOption(entry.id, entry.displayName(context)) }
+
+    val mirrorEntries: StateFlow<List<GitHubMirrorEntry>> = mirrorRepository.entries
+    val mirrorProbeState: StateFlow<GitHubMirrorProbeState> = mirrorRepository.probeState
+    val mirrorProbeResults: StateFlow<Map<String, GitHubMirrorProbeResult>> = mirrorRepository.probeResults
+
+    val mirrorOptions = combine(
+        mirrorRepository.entries,
+        mirrorRepository.probeResults,
+        mirrorRepository.probeState,
+    ) { entries, probeResults, probeState ->
+        val fastestId = (probeState as? GitHubMirrorProbeState.Finished)?.fastestId
+        entries.map { entry ->
+            AppUpdateMirrorOption(
+                id = entry.id,
+                name = entry.displayName(context),
+                probeResult = probeResults[entry.id],
+                isFastest = entry.id == fastestId,
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val downloadProgress = MutableStateFlow(-1f)
     val downloadState = MutableStateFlow(DownloadManager.STATUS_PENDING)
@@ -61,18 +84,38 @@ class AppUpdateViewModel @Inject constructor(
         launchJob(Dispatchers.IO) {
             sourceProbes.value = repository.probeUpdateSources()
         }
+        probeMirrors()
         if (nextVersion.value == null) {
             loadSource(selectedSource.value, showEmptyMessage = true)
         }
     }
 
     fun setSource(source: AppUpdateSource) {
-        if (source == selectedSource.value) {
+        if (source == AppUpdateSource.GITCODE || source == selectedSource.value) {
             return
         }
         settings.appUpdateSource = source
         selectedSource.value = source
         loadSource(source, showEmptyMessage = true)
+    }
+
+    fun probeMirrors() {
+        mirrorRepository.probeMirrors()
+    }
+
+    fun cancelMirrorProbes() {
+        mirrorRepository.cancelProbes()
+    }
+
+    fun selectFastestMirror() {
+        val fastestId = (mirrorRepository.probeState.value as? GitHubMirrorProbeState.Finished)?.fastestId
+        if (fastestId != null) {
+            setMirror(fastestId)
+        }
+    }
+
+    fun retry() {
+        loadSource(selectedSource.value, showEmptyMessage = true)
     }
 
     fun startDownload() {
