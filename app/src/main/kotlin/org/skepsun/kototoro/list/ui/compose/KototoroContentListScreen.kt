@@ -27,6 +27,7 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -1022,6 +1023,7 @@ private fun QuickFilterGroupChip(
             }
         }
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {

@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -413,6 +414,7 @@ internal fun SearchFilterPanel(
                                 )
                             }
                             DropdownMenu(
+                                containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
                                 expanded = savedFilterMenuPreset == preset,
                                 onDismissRequest = { savedFilterMenuPreset = null },
                             ) {

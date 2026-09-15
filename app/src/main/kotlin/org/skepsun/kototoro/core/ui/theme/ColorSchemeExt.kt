@@ -8,6 +8,15 @@ import org.skepsun.kototoro.core.prefs.BackgroundStyle
 
 internal fun ColorScheme.isDarkTheme(): Boolean = onBackground.luminance() > 0.5f
 
+/** Popup menus have no backdrop blur, so only allow a restrained amount of artwork to show through. */
+@Composable
+internal fun ColorScheme.popupMenuContainerColor(): Color =
+    if (LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+        surfaceContainer.copy(alpha = 0.96f)
+    } else {
+        surfaceContainer
+    }
+
 internal fun ColorScheme.artworkOverlayColor(strength: Float = 1f): Color {
     val baseColor = if (isDarkTheme()) {
         Color.Black.copy(alpha = 0.60f)

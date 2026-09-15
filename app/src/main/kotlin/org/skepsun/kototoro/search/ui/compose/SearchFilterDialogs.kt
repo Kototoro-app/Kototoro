@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -179,6 +180,7 @@ internal fun SortOrderFilterSection(
         )
 
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
             modifier = Modifier.widthIn(min = 180.dp, max = 280.dp),
@@ -226,6 +228,7 @@ internal fun LocaleFilterSection(
             onClick = { onExpandedChange(!expanded) },
         )
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { onExpandedChange(false) },
             modifier = Modifier.widthIn(min = 160.dp, max = 260.dp),
@@ -531,6 +534,7 @@ private fun TagGroupDropdown(
             )
         }
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier

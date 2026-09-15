@@ -58,6 +58,7 @@ import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
+import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 
 /**
  * Specular highlight angle for every glass surface.
@@ -273,8 +274,8 @@ private fun Shape.liquidLensCornerRadii(
  *
  * Material 3 always receives a stable semantic surface. iOS uses Backdrop only
  * when a same-window backdrop is available; dialogs and unsupported contexts
- * intentionally fall back to an opaque surface, while menus provide their own
- * artwork-aware translucent fallback.
+ * intentionally fall back to an opaque surface, while menus retain only a
+ * restrained amount of artwork translucency to protect text readability.
  */
 @Composable
 fun GlassSurface(
@@ -313,9 +314,7 @@ fun GlassSurface(
     val colors = MaterialTheme.colorScheme
     val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
     val fallbackColor = if (componentRole == GlassComponentRole.Menu && isArtworkBackground) {
-        // Menus are rendered in a separate Popup window. Keep their single visual
-        // layer translucent so the artwork background is not replaced by a white plate.
-        colors.surfaceContainer.copy(alpha = 0.50f)
+        colors.popupMenuContainerColor()
     } else if (dialogSurface && isArtworkBackground) {
         colors.surfaceContainer.copy(alpha = 1f)
     } else if (!isIosStyle && isArtworkBackground) {

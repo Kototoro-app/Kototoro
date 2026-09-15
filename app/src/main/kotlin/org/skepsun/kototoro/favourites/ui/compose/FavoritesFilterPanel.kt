@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.DropdownMenu
+import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -222,6 +223,7 @@ private fun QuickFilterGroupDropdown(
             },
         )
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
@@ -310,6 +312,7 @@ private fun SourceTagFilterDropdown(
             },
         )
         DropdownMenu(
+            containerColor = MaterialTheme.colorScheme.popupMenuContainerColor(),
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
