@@ -183,6 +183,7 @@ internal fun HomeHeroSection(
                     presentation = presentation,
                     cardHeight = HOME_HERO_CARD_HEIGHT,
                     panoramaPrefs = panoramaPrefs,
+                    showIndicator = page == selectedIndex,
                     indicator = if (entries.size > 1) {
                         HeroIndicatorState(
                             pageCount = entries.size,
@@ -261,6 +262,7 @@ private fun HomeHeroCard(
     cardHeight: Dp,
     panoramaPrefs: PanoramaBackdropPrefs,
     indicator: HeroIndicatorState?,
+    showIndicator: Boolean,
     onClick: (Content, Rect?, String?) -> Unit,
     focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier,
@@ -396,7 +398,7 @@ private fun HomeHeroCard(
             bottomAvoidance = indicatorPlacement?.bottomAvoidance ?: 0.dp,
             onBoundsChanged = { coverBounds = it },
         )
-        if (indicator != null && indicatorPlacement != null) {
+        if (showIndicator && indicator != null && indicatorPlacement != null) {
             val onArtwork = presentation.background != HomeHeroBackground.PLAIN
             HeroPagerIndicator(
                 pageCount = indicator.pageCount,
