@@ -534,6 +534,11 @@
     <string name="cache">缓存</string>
     <string name="cache_limit_applies_on_restart">重启应用后完全生效</string>
     <string name="cache_limits">缓存限制</string>
+    <string name="cache_limits_total_quota">配置上限总计：%s</string>
+    <string name="cache_limits_quick_presets">快捷预设</string>
+    <string name="cache_preset_compact">精简省流</string>
+    <string name="cache_preset_balanced">标准均衡</string>
+    <string name="cache_preset_performance">极速充裕</string>
     <string name="cancel_all">取消所有下载任务</string>
     <string name="cancel_all_downloads_confirm">将取消所有进行中的下载，部分已下载完成的数据将会丢失</string>
     <string name="cancel_update_all_extensions">取消全部更新</string>

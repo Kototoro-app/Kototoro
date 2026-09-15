@@ -5,21 +5,38 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.core.content.edit
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.net.Proxy
@@ -179,9 +196,29 @@ fun StorageAndNetworkSettingsRoute(
         SettingsChoiceOption(AppSettings.BangumiMirror.CUSTOM, "Custom"),
     )
 
+    val totalCacheLimitMb = settings.observeAsState(AppSettings.KEY_THUMBS_CACHE_MB) { thumbsCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_FAVICON_CACHE_MB) { faviconCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_PAGES_CACHE_MB) { pagesCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_NOVEL_CACHE_MB) { novelCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_TTS_CACHE_MB) { ttsCacheSizeMb }.value +
+        (settings.observeAsState(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT) {
+            settings.prefs.getString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512") ?: "512"
+        }.value.toIntOrNull() ?: 512) +
+        settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) { videoDanmakuCacheSizeMb }.value +
+        settings.observeAsState(AppSettings.KEY_HTTP_CACHE_MB_LIMIT) { httpCacheSizeMb }.value
+
+    val cacheLimitsSummary = context.getString(
+        R.string.cache_limits_total_quota,
+        formatCacheLimitMb(totalCacheLimitMb),
+    )
+
     StorageAndNetworkSettingsScreen(
         storageTitle = context.getString(R.string.storage_usage),
         cacheLimitsTitle = context.getString(R.string.cache_limits),
+        cacheLimitsSummary = cacheLimitsSummary,
         dataRemovalTitle = context.getString(R.string.data_removal),
         networkTitle = context.getString(R.string.network),
         proxyMirrorsTitle = context.getString(R.string.network_group_proxy_mirrors),
@@ -429,6 +466,67 @@ fun StorageAndNetworkSettingsRoute(
     )
 }
 
+enum class CacheLimitsPreset {
+    COMPACT,
+    BALANCED,
+    PERFORMANCE,
+    CUSTOM,
+}
+
+internal fun formatCacheLimitMb(mb: Int): String = when {
+    mb >= 1024 && mb % 1024 == 0 -> "${mb / 1024} GB"
+    mb >= 1024 -> String.format(Locale.getDefault(), "%.1f GB", mb / 1024f)
+    else -> "$mb MB"
+}
+
+@Composable
+private fun CachePresetChip(
+    label: String,
+    sublabel: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = sublabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
 @Composable
 fun CacheLimitsSettingsRoute(
     settings: AppSettings,
@@ -436,7 +534,9 @@ fun CacheLimitsSettingsRoute(
 ) {
     val context = LocalContext.current
     val videoCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_CACHE_MB) { videoCacheSizeMb }.value
-    val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) { videoProxyCacheSizeMb }.value
+    val videoProxyCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_PROXY_CACHE_MB) {
+        videoProxyCacheSizeMb
+    }.value
     val torrentCacheMb = settings.observeAsState(AppSettings.KEY_TORRENT_CACHE_MB) { torrentCacheSizeMb }.value
     val videoDanmakuCacheMb = settings.observeAsState(AppSettings.KEY_VIDEO_DANMAKU_CACHE_MB) {
         videoDanmakuCacheSizeMb
@@ -456,22 +556,199 @@ fun CacheLimitsSettingsRoute(
         Toast.makeText(context, R.string.settings_apply_restart_required, Toast.LENGTH_SHORT).show()
     }
 
+    val srMb = srCacheLimit.toIntOrNull() ?: 512
+    val totalLimitMb = thumbsCacheMb + faviconCacheMb + pagesCacheMb + novelCacheMb +
+        ttsCacheMb + srMb + videoCacheMb + videoProxyCacheMb +
+        torrentCacheMb + videoDanmakuCacheMb + httpCacheMb
+
+    val activePreset = when {
+        thumbsCacheMb == 128 && faviconCacheMb == 4 && pagesCacheMb == 128 && novelCacheMb == 64 &&
+            ttsCacheMb == 64 && srCacheLimit == "256" && videoCacheMb == 512 && videoProxyCacheMb == 512 &&
+            torrentCacheMb == 1024 && videoDanmakuCacheMb == 32 && httpCacheMb == 128 -> CacheLimitsPreset.COMPACT
+
+        thumbsCacheMb == 256 && faviconCacheMb == 8 && pagesCacheMb == 200 && novelCacheMb == 100 &&
+            ttsCacheMb == 100 && srCacheLimit == "512" && videoCacheMb == 1024 && videoProxyCacheMb == 1024 &&
+            torrentCacheMb == 4096 && videoDanmakuCacheMb == 64 && httpCacheMb == 250 -> CacheLimitsPreset.BALANCED
+
+        thumbsCacheMb == 512 && faviconCacheMb == 16 && pagesCacheMb == 1024 && novelCacheMb == 256 &&
+            ttsCacheMb == 256 && srCacheLimit == "1024" && videoCacheMb == 2048 && videoProxyCacheMb == 2048 &&
+            torrentCacheMb == 8192 && videoDanmakuCacheMb == 128 && httpCacheMb == 512 -> CacheLimitsPreset.PERFORMANCE
+
+        else -> CacheLimitsPreset.CUSTOM
+    }
+
+    val applyPreset = { preset: CacheLimitsPreset ->
+        when (preset) {
+            CacheLimitsPreset.COMPACT -> {
+                settings.thumbsCacheSizeMb = 128
+                settings.faviconCacheSizeMb = 4
+                settings.pagesCacheSizeMb = 128
+                settings.novelCacheSizeMb = 64
+                settings.ttsCacheSizeMb = 64
+                settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "256").apply()
+                settings.videoCacheSizeMb = 512
+                settings.videoProxyCacheSizeMb = 512
+                settings.torrentCacheSizeMb = 1024
+                settings.videoDanmakuCacheSizeMb = 32
+                settings.httpCacheSizeMb = 128
+            }
+            CacheLimitsPreset.BALANCED -> {
+                settings.thumbsCacheSizeMb = 256
+                settings.faviconCacheSizeMb = 8
+                settings.pagesCacheSizeMb = 200
+                settings.novelCacheSizeMb = 100
+                settings.ttsCacheSizeMb = 100
+                settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "512").apply()
+                settings.videoCacheSizeMb = 1024
+                settings.videoProxyCacheSizeMb = 1024
+                settings.torrentCacheSizeMb = 4096
+                settings.videoDanmakuCacheSizeMb = 64
+                settings.httpCacheSizeMb = 250
+            }
+            CacheLimitsPreset.PERFORMANCE -> {
+                settings.thumbsCacheSizeMb = 512
+                settings.faviconCacheSizeMb = 16
+                settings.pagesCacheSizeMb = 1024
+                settings.novelCacheSizeMb = 256
+                settings.ttsCacheSizeMb = 256
+                settings.prefs.edit().putString(AppSettings.KEY_READER_SUPER_RESOLUTION_CACHE_LIMIT, "1024").apply()
+                settings.videoCacheSizeMb = 2048
+                settings.videoProxyCacheSizeMb = 2048
+                settings.torrentCacheSizeMb = 8192
+                settings.videoDanmakuCacheSizeMb = 128
+                settings.httpCacheSizeMb = 512
+            }
+            CacheLimitsPreset.CUSTOM -> {}
+        }
+        showRestartRequired()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(top = settingsContentTopInset())
             .padding(horizontal = SettingsContentHorizontalPadding, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.cache_limits),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.cache_limits_total_quota,
+                                formatCacheLimitMb(totalLimitMb),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Text(
+                            text = formatCacheLimitMb(totalLimitMb),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            shape = RoundedCornerShape(10.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.cache_limit_applies_on_restart),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = stringResource(R.string.cache_limits_quick_presets),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        CachePresetChip(
+                            label = stringResource(R.string.cache_preset_compact),
+                            sublabel = "~2.8 GB",
+                            isSelected = activePreset == CacheLimitsPreset.COMPACT,
+                            onClick = { applyPreset(CacheLimitsPreset.COMPACT) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        CachePresetChip(
+                            label = stringResource(R.string.cache_preset_balanced),
+                            sublabel = "~7.5 GB",
+                            isSelected = activePreset == CacheLimitsPreset.BALANCED,
+                            onClick = { applyPreset(CacheLimitsPreset.BALANCED) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        CachePresetChip(
+                            label = stringResource(R.string.cache_preset_performance),
+                            sublabel = "~16 GB",
+                            isSelected = activePreset == CacheLimitsPreset.PERFORMANCE,
+                            onClick = { applyPreset(CacheLimitsPreset.PERFORMANCE) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+
         SettingsPreferenceGroup(title = context.getString(R.string.image_caches)) {
             item { SettingsSliderPreference(
                 title = context.getString(R.string.thumbnails_cache_limit),
                 iconRes = R.drawable.ic_images,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = thumbsCacheMb,
                 valueRange = 32..2048,
                 step = 32,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.thumbsCacheSizeMb = it
                     showRestartRequired()
@@ -480,11 +757,10 @@ fun CacheLimitsSettingsRoute(
             item { SettingsSliderPreference(
                 title = context.getString(R.string.favicons_cache_limit),
                 iconRes = R.drawable.ic_web,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = faviconCacheMb,
                 valueRange = 4..128,
                 step = 4,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.faviconCacheSizeMb = it
                     showRestartRequired()
@@ -493,11 +769,10 @@ fun CacheLimitsSettingsRoute(
             item { SettingsSliderPreference(
                 title = context.getString(R.string.pages_cache_limit),
                 iconRes = R.drawable.ic_book_page,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = pagesCacheMb,
                 valueRange = 64..4096,
                 step = 64,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.pagesCacheSizeMb = it
                     showRestartRequired()
@@ -506,11 +781,10 @@ fun CacheLimitsSettingsRoute(
             item { SettingsSliderPreference(
                 title = context.getString(R.string.novel_cache_limit),
                 iconRes = R.drawable.ic_read,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = novelCacheMb,
                 valueRange = 32..2048,
                 step = 32,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.novelCacheSizeMb = it
                     showRestartRequired()
@@ -519,11 +793,10 @@ fun CacheLimitsSettingsRoute(
             item { SettingsSliderPreference(
                 title = context.getString(R.string.tts_audio_cache_limit),
                 iconRes = R.drawable.ic_voice_input,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = ttsCacheMb,
                 valueRange = 32..2048,
                 step = 32,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.ttsCacheSizeMb = it
                     showRestartRequired()
@@ -548,7 +821,7 @@ fun CacheLimitsSettingsRoute(
                 value = videoCacheMb,
                 valueRange = 256..4096,
                 step = 128,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = { settings.videoCacheSizeMb = it },
             ) }
             item { SettingsSliderPreference(
@@ -557,7 +830,7 @@ fun CacheLimitsSettingsRoute(
                 value = videoProxyCacheMb,
                 valueRange = 128..4096,
                 step = 128,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = { settings.videoProxyCacheSizeMb = it },
             ) }
             item { SettingsSliderPreference(
@@ -566,7 +839,7 @@ fun CacheLimitsSettingsRoute(
                 value = torrentCacheMb,
                 valueRange = 512..16384,
                 step = 512,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = { settings.torrentCacheSizeMb = it },
             ) }
             item { SettingsSliderPreference(
@@ -575,7 +848,7 @@ fun CacheLimitsSettingsRoute(
                 value = videoDanmakuCacheMb,
                 valueRange = 16..1024,
                 step = 16,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = { settings.videoDanmakuCacheSizeMb = it },
             ) }
         }
@@ -583,11 +856,10 @@ fun CacheLimitsSettingsRoute(
             item { SettingsSliderPreference(
                 title = context.getString(R.string.network_cache_limit),
                 iconRes = R.drawable.ic_web,
-                summary = context.getString(R.string.cache_limit_applies_on_restart),
                 value = httpCacheMb,
                 valueRange = 32..2048,
                 step = 32,
-                valueText = { "$it MB" },
+                valueText = { formatCacheLimitMb(it) },
                 onValueChange = {
                     settings.httpCacheSizeMb = it
                     showRestartRequired()

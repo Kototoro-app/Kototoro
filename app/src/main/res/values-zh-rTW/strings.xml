@@ -880,6 +880,11 @@
     <string name="cache">緩存</string>
     <string name="cache_limit_applies_on_restart">重啓應用後完全生效</string>
     <string name="cache_limits">緩存限制</string>
+    <string name="cache_limits_total_quota">設定上限總計：%s</string>
+    <string name="cache_limits_quick_presets">快捷預設</string>
+    <string name="cache_preset_compact">精簡省流</string>
+    <string name="cache_preset_balanced">標準均衡</string>
+    <string name="cache_preset_performance">極速充裕</string>
     <string name="cancel_update_all_extensions">取消全部更新</string>
     <string name="cancel_update_all_packages">取消全部更新</string>
     <string name="captcha_required_message">此圖源需要通過人機驗證以繼續操作</string>

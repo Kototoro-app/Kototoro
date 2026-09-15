@@ -38,6 +38,7 @@ fun StorageAndNetworkSettingsScreen(
     proxyMirrorsTitle: String,
     securityTitle: String,
     storageUsage: StorageUsage?,
+    cacheLimitsSummary: String? = null,
     onCacheLimitsClick: () -> Unit,
     onDataRemovalClick: () -> Unit,
     prefetchContent: SettingsItemGroupScope.() -> Unit,
@@ -97,7 +98,7 @@ fun StorageAndNetworkSettingsScreen(
                         SettingsActionPreference(
                             title = cacheLimitsTitle,
                             iconRes = R.drawable.ic_storage,
-                            summary = LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
+                            summary = cacheLimitsSummary ?: LocalContext.current.getString(R.string.cache_limit_applies_on_restart),
                             onClick = onCacheLimitsClick,
                         )
                     }

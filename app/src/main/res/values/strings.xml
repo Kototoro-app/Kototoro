@@ -960,6 +960,11 @@
     <string name="storage_usage">Storage usage</string>
     <string name="cache_limits">Cache limits</string>
     <string name="cache_limit_applies_on_restart">Takes full effect after app restart</string>
+    <string name="cache_limits_total_quota">Total Quota: %s</string>
+    <string name="cache_limits_quick_presets">Quick Presets</string>
+    <string name="cache_preset_compact">Compact</string>
+    <string name="cache_preset_balanced">Balanced</string>
+    <string name="cache_preset_performance">Performance</string>
     <string name="image_caches">Image and reader caches</string>
     <string name="video_caches">Video caches</string>
     <string name="cache">Cache</string>
