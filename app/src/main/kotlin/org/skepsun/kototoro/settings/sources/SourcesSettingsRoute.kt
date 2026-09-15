@@ -186,6 +186,12 @@ fun SourcesSettingsRoute(
             }
         },
         onExtensionInstallPolicyChange = settings::setExtensionInstallPolicy,
+        onBatchSetExtensionInstallPolicy = { policy ->
+            settings.setAllExtensionInstallPolicies(
+                types = extensionInstallBehaviorTypes.map { it.name },
+                policy = policy,
+            )
+        },
     )
 }
 

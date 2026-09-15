@@ -13,7 +13,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -78,6 +82,7 @@ fun SourcesSettingsScreen(
     onMirrorSwitchingChange: (Boolean) -> Unit,
     onHandleLinksEnabledChange: (Boolean) -> Unit,
     onExtensionInstallPolicyChange: (String, ExtensionInstallPolicy) -> Unit,
+    onBatchSetExtensionInstallPolicy: (ExtensionInstallPolicy) -> Unit,
 ) {
     val adultContentFilterOptions = listOf(
         SettingsChoiceOption(
@@ -98,6 +103,16 @@ fun SourcesSettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
+        var isExtensionInstallSheetVisible by rememberSaveable { mutableStateOf(false) }
+        val extensionInstallBehaviorSummary = remember(state.extensionInstallBehaviors, extensionInstallPolicyOptions) {
+            val distinctPolicies = state.extensionInstallBehaviors.map { it.policy }.distinct()
+            if (distinctPolicies.size == 1) {
+                extensionInstallPolicyOptions.firstOrNull { it.value == distinctPolicies.first() }?.label
+            } else {
+                null
+            }
+        } ?: stringResource(R.string.custom)
+
         val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) }
         LazyColumn(
             state = listState,
@@ -159,21 +174,12 @@ fun SourcesSettingsScreen(
                         summary = stringResource(R.string.show_broken_sources_summary),
                         onCheckedChange = onShowBrokenSourcesChange,
                     ) }
-                }
-            }
-            item(key = "extension_install_behavior") {
-                SettingsPreferenceGroup(title = stringResource(R.string.extension_install_behavior)) {
-                    state.extensionInstallBehaviors.forEach { behavior ->
-                        item { SettingsChoicePreference(
-                            title = behavior.title,
-                            iconRes = behavior.iconRes,
-                            value = behavior.policy,
-                            options = extensionInstallPolicyOptions,
-                            onValueChange = { policy ->
-                                onExtensionInstallPolicyChange(behavior.type, policy)
-                            },
-                        ) }
-                    }
+                    item { SettingsActionPreference(
+                        title = stringResource(R.string.extension_install_behavior),
+                        iconRes = R.drawable.ic_extension,
+                        summary = extensionInstallBehaviorSummary,
+                        onClick = { isExtensionInstallSheetVisible = true },
+                    ) }
                 }
             }
             item(key = "adult_filtering") {
@@ -230,6 +236,16 @@ fun SourcesSettingsScreen(
                     ) }
                 }
             }
+        }
+
+        if (isExtensionInstallSheetVisible) {
+            ExtensionInstallBehaviorSheet(
+                behaviors = state.extensionInstallBehaviors,
+                policyOptions = extensionInstallPolicyOptions,
+                onPolicyChange = onExtensionInstallPolicyChange,
+                onBatchSetPolicy = onBatchSetExtensionInstallPolicy,
+                onDismissRequest = { isExtensionInstallSheetVisible = false },
+            )
         }
     }
 }

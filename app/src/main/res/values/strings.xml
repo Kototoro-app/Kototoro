@@ -3071,6 +3071,9 @@
     <string name="extension_install_only">Install only</string>
     <string name="extension_install_and_enable">Install and enable</string>
     <string name="extension_install_behavior">Extension installation behavior</string>
+    <string name="extension_install_behavior_batch_title">Apply to all sources</string>
+    <string name="extension_install_behavior_per_source">Per-source configuration</string>
+    <string name="extension_install_behavior_sheet_summary">Choose how to handle extension sources when installing or importing</string>
     <string name="update_extension">Update</string>
     <string name="update_all_extensions">Update all</string>
     <string name="cancel_update_all_extensions">Cancel update all</string>

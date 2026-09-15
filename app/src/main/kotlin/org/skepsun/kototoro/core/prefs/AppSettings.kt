@@ -960,6 +960,21 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         }
     }
 
+    fun setAllExtensionInstallPolicies(
+        types: Collection<String>,
+        policy: ExtensionInstallPolicy,
+    ) {
+        val updated = extensionInstallPolicies.toMutableMap()
+        for (type in types) {
+            if (policy == ExtensionInstallPolicy.ASK_EVERY_TIME) {
+                updated.remove(type)
+            } else {
+                updated[type] = policy
+            }
+        }
+        extensionInstallPolicies = updated
+    }
+
     var isLocalApkHotReloadEnabled: Boolean
         get() = prefs.getBoolean(KEY_LOCAL_APK_HOT_RELOAD, false)
         set(value) = prefs.edit { putBoolean(KEY_LOCAL_APK_HOT_RELOAD, value) }

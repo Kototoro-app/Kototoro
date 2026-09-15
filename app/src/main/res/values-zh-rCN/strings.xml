@@ -2876,6 +2876,9 @@
     <string name="extension_install_only">仅安装</string>
     <string name="extension_install_and_enable">安装并启用</string>
     <string name="extension_install_behavior">扩展安装行为</string>
+    <string name="extension_install_behavior_batch_title">批量统一设置</string>
+    <string name="extension_install_behavior_per_source">按源类型设置</string>
+    <string name="extension_install_behavior_sheet_summary">设置安装或导入各类型扩展源插件时的默认处理行为</string>
     <string name="installed">已安装</string>
     <string name="installed_extension">已安装</string>
     <string name="installed_repo_label">已安装</string>
