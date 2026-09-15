@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -71,6 +72,7 @@ import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeader
 import org.skepsun.kototoro.tracker.ui.feed.model.UpdatedContentHeaderItem
 import kotlin.math.abs
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 @Immutable
 data class UpdatedContentCarouselPrefs(
@@ -394,21 +396,73 @@ private class FeedCarouselCardShape(
         val topRight = if (rightSideHigher) 0f else heightDelta
         val bottomLeft = if (rightSideHigher) size.height - heightDelta else size.height
         val bottomRight = if (rightSideHigher) size.height else size.height - heightDelta
+        val topLeftCorner = Offset(0f, topLeft)
+        val topRightCorner = Offset(size.width, topRight)
+        val bottomRightCorner = Offset(size.width, bottomRight)
+        val bottomLeftCorner = Offset(0f, bottomLeft)
+        val topDirection = normalizedDirection(topLeftCorner, topRightCorner)
+        val rightDirection = normalizedDirection(topRightCorner, bottomRightCorner)
+        val bottomDirection = normalizedDirection(bottomRightCorner, bottomLeftCorner)
+        val leftDirection = normalizedDirection(bottomLeftCorner, topLeftCorner)
+        val topLeftOnTop = topLeftCorner.offsetBy(topDirection, cornerRadius)
+        val topRightOnTop = topRightCorner.offsetBy(topDirection, -cornerRadius)
+        val topRightOnRight = topRightCorner.offsetBy(rightDirection, cornerRadius)
+        val bottomRightOnRight = bottomRightCorner.offsetBy(rightDirection, -cornerRadius)
+        val bottomRightOnBottom = bottomRightCorner.offsetBy(bottomDirection, cornerRadius)
+        val bottomLeftOnBottom = bottomLeftCorner.offsetBy(bottomDirection, -cornerRadius)
+        val bottomLeftOnLeft = bottomLeftCorner.offsetBy(leftDirection, cornerRadius)
+        val topLeftOnLeft = topLeftCorner.offsetBy(leftDirection, -cornerRadius)
         val path = Path().apply {
-            moveTo(cornerRadius, topLeft)
-            lineTo(size.width - cornerRadius, topRight)
-            quadraticTo(size.width, topRight, size.width, topRight + cornerRadius)
-            lineTo(size.width, bottomRight - cornerRadius)
-            quadraticTo(size.width, bottomRight, size.width - cornerRadius, bottomRight)
-            lineTo(cornerRadius, bottomLeft)
-            quadraticTo(0f, bottomLeft, 0f, bottomLeft - cornerRadius)
-            lineTo(0f, topLeft + cornerRadius)
-            quadraticTo(0f, topLeft, cornerRadius, topLeft)
+            moveTo(topLeftOnTop.x, topLeftOnTop.y)
+            lineTo(topRightOnTop.x, topRightOnTop.y)
+            quadraticTo(
+                topRightCorner.x,
+                topRightCorner.y,
+                topRightOnRight.x,
+                topRightOnRight.y,
+            )
+            lineTo(bottomRightOnRight.x, bottomRightOnRight.y)
+            quadraticTo(
+                bottomRightCorner.x,
+                bottomRightCorner.y,
+                bottomRightOnBottom.x,
+                bottomRightOnBottom.y,
+            )
+            lineTo(bottomLeftOnBottom.x, bottomLeftOnBottom.y)
+            quadraticTo(
+                bottomLeftCorner.x,
+                bottomLeftCorner.y,
+                bottomLeftOnLeft.x,
+                bottomLeftOnLeft.y,
+            )
+            lineTo(topLeftOnLeft.x, topLeftOnLeft.y)
+            quadraticTo(
+                topLeftCorner.x,
+                topLeftCorner.y,
+                topLeftOnTop.x,
+                topLeftOnTop.y,
+            )
             close()
         }
         return Outline.Generic(path)
     }
 }
+
+private fun normalizedDirection(from: Offset, to: Offset): Offset {
+    val dx = to.x - from.x
+    val dy = to.y - from.y
+    val length = sqrt((dx * dx) + (dy * dy))
+    return if (length > 0f) {
+        Offset(dx / length, dy / length)
+    } else {
+        Offset.Zero
+    }
+}
+
+private fun Offset.offsetBy(direction: Offset, distance: Float): Offset = Offset(
+    x = x + direction.x * distance,
+    y = y + direction.y * distance,
+)
 
 private const val FEED_CAROUSEL_TILT_PER_POSITION = 0.07f
 private const val FEED_CAROUSEL_MAX_TILT = 0.22f
