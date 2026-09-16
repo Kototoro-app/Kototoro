@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import coil3.ImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -35,6 +36,7 @@ import org.skepsun.kototoro.reader.core.VerticalReaderScene
 import org.skepsun.kototoro.reader.core.ViewportMotion
 import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
+import org.skepsun.kototoro.reader.render.arr.AdaptiveRefreshRateHelper
 import org.skepsun.kototoro.reader.render.compose.ComposeSceneRenderer
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import kotlin.math.roundToInt
@@ -63,6 +65,7 @@ fun ComposeSceneWebtoonReader(
     if (pages.isEmpty()) return
 
     val context = LocalContext.current
+    val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
 
     var viewportWidthPx by remember { mutableFloatStateOf(0f) }
@@ -177,6 +180,7 @@ fun ComposeSceneWebtoonReader(
             },
             onMotionChanged = { motion ->
                 currentMotion = motion
+                AdaptiveRefreshRateHelper.applyPreference(view, motion)
             },
         )
     }
