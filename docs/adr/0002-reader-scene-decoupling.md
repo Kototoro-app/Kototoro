@@ -8,7 +8,7 @@
   - PoC A (ReaderScene 几何抽象)：待开始（Pending）
   - PoC B (Webtoon 双 Canvas 视口实验)：待开始（Pending）
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
-- 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义，ImagePipeline 掌管图像策略，Renderer 仅负责呈现绘制）
+- 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
 ---
 
@@ -81,12 +81,12 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
 - **绝对禁忌**：**绝不知晓图片文件的下载、解码、路径与失败状态**。
 
 ### 2. 第二层：Image Resource 主权 (`ImagePipeline`)
-- **职责**：决定“如何准备像素”。根据视口物理尺寸、设备 RAM 等级、缩放倍率计算动态 LOD 采样率，管理分块切片（Tiling）、预取队列与内存缓存。
+- **职责**：决定“如何准备像素”。根据视口物理尺寸、设备 RAM 等级、缩放倍率计算动态 LOD 采样率，管理分块切片（Tiling）、执行预取请求及资源调度队列与内存缓存。
 - **输出**：多态呈现资产 `ReaderImageAsset`。
 - **绝对禁忌**：不持有任何 Android UI 组件或阅读器章节/进度状态。
 
 ### 3. 第三层：Rendering 主权 (`ReaderRenderer`)
-- **职责**：决定“如何把像素画在屏幕上”。
+- **职责**：决定“如何把像素画在屏幕上”，掌管具体的视觉呈现。
 - **形态**：各 Backend（Compose、Canvas、WebGPU）作为插件式适配器接入。
 - **绝对禁忌**：**不得成为阅读进度、页面布局和章节语义的 Source of Truth**。
 
@@ -161,7 +161,9 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
 
 ```text
 reader/
-├── core/                  // 纯 Kotlin，无 Android UI 依赖，100% JVM 单测覆盖
+├── core/                  // 纯 Kotlin，零 Android 依赖（禁用 android.graphics.*、androidx.compose.* 等几何与 UI 类）
+│   ├── FloatRect.kt       // 跨平台自包含几何基础类型
+│   ├── IntSize.kt
 │   ├── PageId.kt
 │   ├── PageGeometryHint.kt
 │   ├── ReaderViewport.kt
@@ -188,6 +190,8 @@ reader/
 └── ui/                    // Activity, ViewModel, Chrome, Menu, Settings
 ```
 
+> **测试原则**：`core/` 下的几何相交计算（`VisibleRegionResolver`）、锚定修正（`AnchoredCorrection`）、页面排布与进度结算必须具备高分支覆盖度与边界值单元测试，不追求全包盲目的 100% 形式主义覆盖率。
+
 ---
 
 ## 五、 验证路线图与评判准则
@@ -200,7 +204,7 @@ reader/
 2. **Phase 0：基准建立（Benchmark Baseline）**：
    - 使用 `androidx.benchmark.macro` 在 120Hz 测试机上对现有 Compose/Telephoto 运行固定数据集（100 页普通、100 页 Webtoon、极端超长图）的快速滚动性能基准。
 3. **PoC A：Scene 几何抽象**：
-   - 实现纯几何的 `ReaderScene`，让现有阅读器与新 Scene 并行计算，验证位置、可见区域与当前页计算 100% 一致。
+   - 实现纯几何的 `ReaderScene`，让现有阅读器与新 Scene 并行计算，验证页面几何、可见集合及阅读语义与现有行为等价（浮点几何允许定义明确的 epsilon 容差；若发现旧实现缺陷，以显式行为变更记录处理而非机械迁就旧 bug）。
 4. **PoC B：Webtoon 视口实验（A/B 对照）**：
    - 保持功能极简（仅垂直滚动、无缩放、无 OCR、固定图集），同时构建两个极小渲染器：
      - `ComposeCanvasRenderer`（基于 Compose `Canvas(Modifier.fillMaxSize())`）
@@ -239,7 +243,7 @@ reader/
 
 未来所有与阅读器相关的代码提交与代码审查（PR Review），必须严格核对是否违背以下 6 条不变量：
 
-- **I1**: `ReaderCore` MUST NOT depend on Android UI toolkit or renderer APIs.（ReaderCore 绝不得依赖 Android UI 工具包或具体渲染器 API）
+- **I1**: `ReaderCore` MUST NOT depend on Android UI toolkit or renderer APIs, nor Android platform geometry types (`android.graphics.Rect/RectF/Matrix`, `androidx.compose.ui.geometry.*`).（ReaderCore 绝不得依赖 Android UI 工具包、渲染器 API 或 Android 平台几何类，必须使用自包含的跨平台几何抽象）
 - **I2**: `ImagePipeline` MUST NOT own chapter progress, reading direction, spread semantics, or viewport UI state.（ImagePipeline 绝不得持有章节进度、阅读方向、双页语义或视口 UI 状态）
 - **I3**: `Renderer` MUST NOT be the source of truth for reader semantics.（Renderer 绝不得成为阅读语义的真相之源）
 - **I4**: Renderer-specific resource representations ARE allowed.（允许 Renderer 拥有特化的资源表征形态）
