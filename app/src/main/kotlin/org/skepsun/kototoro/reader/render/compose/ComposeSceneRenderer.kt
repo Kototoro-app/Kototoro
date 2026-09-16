@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,7 +39,9 @@ import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.VerticalReaderScene
+import org.skepsun.kototoro.reader.core.ViewportMotion
 import org.skepsun.kototoro.reader.core.VisibleNode
+import org.skepsun.kototoro.reader.image.ReaderImageAsset
 import kotlin.math.roundToInt
 
 /**
@@ -58,8 +61,10 @@ fun ComposeSceneRenderer(
     initialScrollY: Float = 0f,
     placeholderColor: Color = Color.DarkGray,
     assetProvider: (PageId) -> ImageBitmap? = { null },
+    readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
     onActivePageChanged: (PageId) -> Unit = {},
     onScrollProgressChanged: (scrollY: Float, maxScrollY: Float) -> Unit = { _, _ -> },
+    onMotionChanged: (ViewportMotion) -> Unit = {},
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -102,6 +107,12 @@ fun ComposeSceneRenderer(
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     flingJob?.cancel()
                     isFlinging = false
+                    onMotionChanged(
+                        ViewportMotion(
+                            isDragging = true,
+                            timestampNanos = down.uptimeMillis * 1_000_000L,
+                        ),
+                    )
 
                     val velocityTracker = VelocityTracker()
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
@@ -120,6 +131,14 @@ fun ComposeSceneRenderer(
                         val newScroll = (scrollYState.floatValue + deltaY).coerceIn(0f, maxScroll)
                         scrollYState.floatValue = newScroll
                         onScrollProgressChanged(newScroll, maxScroll)
+                        onMotionChanged(
+                            ViewportMotion(
+                                velocityX = 0f,
+                                velocityY = deltaY * 60f,
+                                isDragging = true,
+                                timestampNanos = change.uptimeMillis * 1_000_000L,
+                            ),
+                        )
 
                         change.consume()
                     } while (event.changes.any { it.pressed })
@@ -129,6 +148,14 @@ fun ComposeSceneRenderer(
 
                     if (kotlin.math.abs(initialVelocityY) > 100f) {
                         isFlinging = true
+                        onMotionChanged(
+                            ViewportMotion(
+                                velocityX = 0f,
+                                velocityY = initialVelocityY,
+                                isDragging = false,
+                                timestampNanos = System.nanoTime(),
+                            ),
+                        )
                         flingJob = coroutineScope.launch {
                             try {
                                 val anim = AnimationState(
@@ -140,6 +167,14 @@ fun ComposeSceneRenderer(
                                     val clamped = value.coerceIn(0f, maxScroll)
                                     scrollYState.floatValue = clamped
                                     onScrollProgressChanged(clamped, maxScroll)
+                                    onMotionChanged(
+                                        ViewportMotion(
+                                            velocityX = 0f,
+                                            velocityY = this.velocity,
+                                            isDragging = false,
+                                            timestampNanos = System.nanoTime(),
+                                        ),
+                                    )
                                     if (clamped == 0f || clamped == maxScroll) {
                                         cancelAnimation()
                                     }
@@ -148,8 +183,11 @@ fun ComposeSceneRenderer(
                                 // Fling was interrupted by a new touch down
                             } finally {
                                 isFlinging = false
+                                onMotionChanged(ViewportMotion.Idle)
                             }
                         }
+                    } else {
+                        onMotionChanged(ViewportMotion.Idle)
                     }
                 }
             }
@@ -165,7 +203,7 @@ fun ComposeSceneRenderer(
                         bounds = FloatRect.fromLtwh(0f, currentY, vWidth, vHeight),
                     )
                     val frame = scene.resolve(viewport)
-                    drawFrameNodes(frame, currentY, placeholderColor, assetProvider)
+                    drawFrameNodes(frame, currentY, placeholderColor, assetProvider, readerAssetProvider)
                 }
 
                 drawContent()
@@ -180,7 +218,8 @@ internal fun DrawScope.drawFrameNodes(
     frame: org.skepsun.kototoro.reader.core.ReaderFrame,
     viewportScrollY: Float,
     placeholderColor: Color,
-    assetProvider: (PageId) -> ImageBitmap?,
+    assetProvider: (PageId) -> ImageBitmap? = { null },
+    readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
 ) {
     for (node in frame.visibleNodes) {
         val screenTop = node.sceneBounds.top - viewportScrollY
@@ -188,10 +227,15 @@ internal fun DrawScope.drawFrameNodes(
         val nodeWidth = node.sceneBounds.width
         val nodeHeight = node.sceneBounds.height
 
-        val bitmap = assetProvider(node.pageId)
-        if (bitmap != null) {
+        val resolvedBitmap: ImageBitmap? = when (val asset = readerAssetProvider?.invoke(node.pageId)) {
+            is ReaderImageAsset.ComposeImage -> asset.imageBitmap
+            is ReaderImageAsset.AndroidBitmap -> asset.bitmap.asImageBitmap()
+            else -> assetProvider(node.pageId)
+        }
+
+        if (resolvedBitmap != null) {
             drawImage(
-                image = bitmap,
+                image = resolvedBitmap,
                 dstOffset = IntOffset(screenLeft.roundToInt(), screenTop.roundToInt()),
                 dstSize = IntSize(nodeWidth.roundToInt(), nodeHeight.roundToInt()),
             )

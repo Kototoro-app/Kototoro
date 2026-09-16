@@ -15,6 +15,7 @@ import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.VerticalReaderScene
+import org.skepsun.kototoro.reader.image.ReaderImageAsset
 import kotlin.math.roundToInt
 
 /**
@@ -37,6 +38,7 @@ class AndroidViewSceneView @JvmOverloads constructor(
         }
 
     var assetProvider: ((PageId) -> Bitmap?)? = null
+    var readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null
 
     var onActivePageChanged: ((PageId) -> Unit)? = null
 
@@ -135,10 +137,13 @@ class AndroidViewSceneView @JvmOverloads constructor(
 
             dstRectF.set(screenLeft, screenTop, screenRight, screenBottom)
 
-            val bitmap = assetProvider?.invoke(node.pageId)
-            if (bitmap != null && !bitmap.isRecycled) {
-                srcRect.set(0, 0, bitmap.width, bitmap.height)
-                canvas.drawBitmap(bitmap, srcRect, dstRectF, bitmapPaint)
+            val resolvedBitmap = when (val asset = readerAssetProvider?.invoke(node.pageId)) {
+                is ReaderImageAsset.AndroidBitmap -> asset.bitmap
+                else -> assetProvider?.invoke(node.pageId)
+            }
+            if (resolvedBitmap != null && !resolvedBitmap.isRecycled) {
+                srcRect.set(0, 0, resolvedBitmap.width, resolvedBitmap.height)
+                canvas.drawBitmap(resolvedBitmap, srcRect, dstRectF, bitmapPaint)
             } else {
                 canvas.drawRect(dstRectF, placeholderPaint)
             }
