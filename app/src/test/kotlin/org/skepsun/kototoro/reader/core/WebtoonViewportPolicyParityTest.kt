@@ -121,4 +121,40 @@ class WebtoonViewportPolicyParityTest {
 
         assertEquals(201L, legacyActiveKey)
     }
+
+    @Test
+    fun `scene indexOf matches legacy resolveWebtoonAnchorPosition`() {
+        val pageKeys = listOf(18201L, 18202L, 18301L, 18302L)
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = pageKeys.map { PageId(it) to PageGeometryHint.Estimated(1f) },
+        )
+
+        val targetKey = 18301L
+        val legacyIndex = org.skepsun.kototoro.reader.ui.compose.resolveWebtoonAnchorPosition(pageKeys, targetKey)
+        val sceneIndex = scene.indexOf(PageId(targetKey))
+
+        assertEquals(legacyIndex, sceneIndex)
+        assertEquals(2, sceneIndex)
+    }
+
+    @Test
+    fun `scene page position resolution gives exact layout coordinates matching accumulated heights`() {
+        val pages = listOf(
+            PageId(1L) to PageGeometryHint.Exact(1000, 1500),
+            PageId(2L) to PageGeometryHint.Exact(1000, 2500),
+            PageId(3L) to PageGeometryHint.Exact(1000, 3500),
+        )
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = pages,
+        )
+
+        assertEquals(0f, scene.resolvePageScrollPosition(PageId(1L)))
+        assertEquals(1500f, scene.resolvePageScrollPosition(PageId(2L)))
+        assertEquals(4000f, scene.resolvePageScrollPosition(PageId(3L)))
+    }
 }
+
