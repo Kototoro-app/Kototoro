@@ -180,12 +180,37 @@ fun ComposeReaderScreenRoot(
             modifier = readerModifier,
         )
     } else if (mode == ReaderMode.WEBTOON) {
-        ComposeWebtoonReader(
-            pages = content.pages,
-            initialPage = initialPosition,
-            initialScroll = restoredState?.scroll ?: 0,
-            imageLoader = imageLoader,
-            imagePipeline = imagePipeline,
+        if (readerSettings.isExperimentalSceneReaderEnabled) {
+            ComposeSceneWebtoonReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                initialScroll = restoredState?.scroll ?: 0,
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
+                onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
+                    val selectedPosition = content.pages.indexOfFirst { it.readerKey == activePageKey }
+                    if (selectedPosition >= 0) {
+                        viewModel.onWebtoonPageChanged(lowerPageKey, upperPageKey, activePageKey)
+                    }
+                    if (selectedPosition >= 0 && shouldAcceptReaderPageKey(activePageKey)) {
+                        onReaderPageKeyChanged(activePageKey, 0)
+                    } else if (selectedPosition >= 0) {
+                        Log.d("ReaderDebug", "Ignore transitional webtoon controller key=$activePageKey")
+                    }
+                },
+                onInternalScrollChanged = { page, scroll ->
+                    onReaderInternalScrollChanged(page.readerKey, scroll)
+                },
+                modifier = readerModifier,
+                readerBackgroundColor = readerBackgroundColor,
+            )
+        } else {
+            ComposeWebtoonReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                initialScroll = restoredState?.scroll ?: 0,
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
                 onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
                     val selectedPosition = content.pages.indexOfFirst { it.readerKey == activePageKey }
                     if (selectedPosition >= 0) {
@@ -199,35 +224,36 @@ fun ComposeReaderScreenRoot(
                         Log.d("ReaderDebug", "Ignore transitional webtoon controller key=$activePageKey")
                     }
                 },
-            onInternalScrollChanged = { page, scroll ->
-                onReaderInternalScrollChanged(page.readerKey, scroll)
-            },
-            requestedPage = requestedPage,
-            requestedPageSmooth = requestedPageSmooth,
-            webtoonScrollRequest = webtoonScrollRequest,
-            webtoonPageTurnRequest = webtoonPageTurnRequest,
-            webtoonPageTurnDistanceFraction = webtoonVolumeKeyScrollDistanceFraction,
-            zoomCommand = zoomCommand,
-            webtoonZoomCommand = webtoonZoomCommand,
-            isZoomEnabled = isWebtoonZoomEnabled,
-            defaultScale = 1f - defaultWebtoonZoomOut,
-            isGapsEnabled = isWebtoonGapsEnabled,
-            isPullGestureEnabled = isWebtoonPullGestureEnabled,
-            canGoPreviousChapter = readerUiState?.hasPreviousChapter() != false,
-            canGoNextChapter = readerUiState?.hasNextChapter() != false,
-            onPullChapter = viewModel::switchChapterBy,
-            onShowErrorDetails = onShowErrorDetails,
-            onRetryError = onRetryError,
-            resolveErrorStringId = resolveErrorStringId,
-            isAnimationEnabled = isAnimationEnabled,
-            readerBackgroundColor = readerBackgroundColor,
-            imageColorFilter = readerImageColorFilter,
-            bitmapConfig = readerSettings.bitmapConfig,
-            isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
-            isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
-            isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
+                onInternalScrollChanged = { page, scroll ->
+                    onReaderInternalScrollChanged(page.readerKey, scroll)
+                },
+                requestedPage = requestedPage,
+                requestedPageSmooth = requestedPageSmooth,
+                webtoonScrollRequest = webtoonScrollRequest,
+                webtoonPageTurnRequest = webtoonPageTurnRequest,
+                webtoonPageTurnDistanceFraction = webtoonVolumeKeyScrollDistanceFraction,
+                zoomCommand = zoomCommand,
+                webtoonZoomCommand = webtoonZoomCommand,
+                isZoomEnabled = isWebtoonZoomEnabled,
+                defaultScale = 1f - defaultWebtoonZoomOut,
+                isGapsEnabled = isWebtoonGapsEnabled,
+                isPullGestureEnabled = isWebtoonPullGestureEnabled,
+                canGoPreviousChapter = readerUiState?.hasPreviousChapter() != false,
+                canGoNextChapter = readerUiState?.hasNextChapter() != false,
+                onPullChapter = viewModel::switchChapterBy,
+                onShowErrorDetails = onShowErrorDetails,
+                onRetryError = onRetryError,
+                resolveErrorStringId = resolveErrorStringId,
+                isAnimationEnabled = isAnimationEnabled,
+                readerBackgroundColor = readerBackgroundColor,
+                imageColorFilter = readerImageColorFilter,
+                bitmapConfig = readerSettings.bitmapConfig,
+                isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
                 modifier = readerModifier,
-        )
+            )
+        }
     } else ComposePagedReader(
         pages = content.pages,
         initialPage = initialPosition,

@@ -31,6 +31,7 @@ data class ReaderSettings(
     val colorFilter: ReaderColorFilter?,
     val isReaderOptimizationEnabled: Boolean,
     val isReaderPreloadReductionEnabled: Boolean,
+    val isExperimentalSceneReaderEnabled: Boolean = false,
     val bitmapConfig: Bitmap.Config,
     val isPagesNumbersEnabled: Boolean,
     val isPagesCropEnabledStandard: Boolean,
@@ -85,6 +86,7 @@ data class ReaderSettings(
         colorFilter = colorFilterOverride?.takeUnless { it.isEmpty } ?: settings.readerColorFilter,
         isReaderOptimizationEnabled = settings.isReaderOptimizationEnabled,
         isReaderPreloadReductionEnabled = settings.isReaderPreloadReductionEnabled,
+        isExperimentalSceneReaderEnabled = settings.isExperimentalSceneReaderEnabled,
         bitmapConfig = if (settings.is32BitColorsEnabled) {
             Bitmap.Config.ARGB_8888
         } else {
@@ -311,6 +313,7 @@ data class ReaderSettings(
             AppSettings.KEY_32BIT_COLOR,
             AppSettings.KEY_READER_OPTIMIZE,
             AppSettings.KEY_READER_REDUCE_PRELOAD,
+            AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE,
             AppSettings.KEY_CF_CONTRAST,
             AppSettings.KEY_CF_BRIGHTNESS,
             AppSettings.KEY_CF_INVERTED,
