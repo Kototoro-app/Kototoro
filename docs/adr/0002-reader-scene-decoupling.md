@@ -3,10 +3,10 @@
 - 状态：Accepted
 - 日期：2026-09-16
 - 实施状态：
-  - WebGPU 分支隔离：已完成（`feat/webgpu-reader`）
-  - Phase 0 性能基准：待开始（Pending）
+  - WebGPU 分支隔离：已完成（`feat/webgpu-reader`，作为 `UPSTREAM-TRACKED` 资产）
+  - Phase 0 性能与功耗基准：待开始（Pending）
   - PoC A (ReaderScene 几何抽象)：待开始（Pending）
-  - PoC B (Webtoon 双 Canvas 视口实验)：待开始（Pending）
+  - PoC B (Webtoon 视口实验：Compose Scene vs. View Scene)：待开始（Pending）
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
@@ -67,16 +67,17 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
 ┌──────────────────────────────────────────────────────────────────┐
 │ 3. Rendering 主权 (ReaderRenderer)                              │
 │ ────────────────────────────────────────────────────────────     │
-│   ┌────────────────────┬────────────────────┬────────────────┐   │
-│   │      Compose       │       Canvas       │     WebGPU     │   │
-│   │      [STABLE]      │   [EXPERIMENTAL]   │[UPSTREAM-TRACK]│   │
-│   │   现有 Telephoto   │  新 Webtoon 单视口 │  Mihon 翻页/特效│   │
-│   └────────────────────┴────────────────────┴────────────────┘   │
+│   ┌──────────────────────────┬────────────────┬──────────────┐   │
+│   │   ComposeSceneRenderer   │ ViewScene      │    WebGPU    │   │
+│   │   [PRIMARY CANDIDATE]    │ [CONTROL]      │[UPSTREAM-TRK]│   │
+│   │ DrawModifierNode/Graphics│ Custom View    │ Mihon 翻页/  │   │
+│   │ Layer (跳过 Composition) │ onDraw(Canvas) │ 着色器特效   │   │
+│   └──────────────────────────┴────────────────┴──────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ### 1. 第一层：Reader Semantics 主权 (`ReaderCore`)
-- **职责**：维护二维漫画虚拟世界坐标系，负责页面几何排列、视口相交计算、阅读进度结算。
+- **职责**：维护二维漫画虚拟世界坐标系，负责页面几何排列、视口相交计算、阅读进度结算与运动预测。
 - **输出**：纯几何与语义帧 `ReaderFrame`，告知下游“当前视口内应当在哪些矩形位置绘制哪些页面的哪些区域”。
 - **绝对禁忌**：**绝不知晓图片文件的下载、解码、路径与失败状态**。
 
@@ -87,7 +88,10 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
 
 ### 3. 第三层：Rendering 主权 (`ReaderRenderer`)
 - **职责**：决定“如何把像素画在屏幕上”，掌管具体的视觉呈现。
-- **形态**：各 Backend（Compose、Canvas、WebGPU）作为插件式适配器接入。
+- **战略重心更新**：
+  - **首选主攻候选：`ComposeSceneRenderer`**。利用 Compose 现代高性能特性（`DrawModifierNode`、`GraphicsLayer` 保留显示列表、Draw phase 状态读取），将高频变换限制在 Draw 阶段，彻底跳过 Composition 与 Layout。
+  - **对照参考候选：`AndroidViewSceneRenderer`**。作为标准单 View `Canvas.onDraw` 的性能基准对照组。
+  - **决策决胜原则（Tie-Breaker）**：若 Compose Scene 与 View Scene 在关键帧指标与内存上无显著质差，**坚决优先采纳 Compose Scene**，以消除 `AndroidView` 互操作、生命周期桥接、手势穿透与合成层黑盒问题。
 - **绝对禁忌**：**不得成为阅读进度、页面布局和章节语义的 Source of Truth**。
 
 ---
@@ -108,13 +112,13 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
 - 图片下载中、等待解码或解码失败，Scene 几何排版骨架完全独立；若资源不可用，Renderer 仅负责在对应几何区域绘制占位块。
 - **锚定修正（Anchored Correction）**：当估算尺寸（`Estimated`）被精确尺寸（`Exact`）修正引起总高度变化时，通过 Viewport Anchor Compensation（保持当前主要可见页面及其内部相对偏移比例不变）避免用户可感知的位置跳动。
 
-### 约束 2：ImagePipeline 职责细分，Prefetch 归属清晰
+### 约束 2：ImagePipeline 职责细分，运动遥测与 ARR 协作
 - 严禁将 `ImagePipeline` 做成巨型上帝对象。内部明确拆分为：
   - `ImageSource`：原始字节流与资源句柄；
-  - `DecodePlanner`：决定“解多少、怎么解”；
+  - `DecodePlanner`：按像素用途（`PixelUsage: DISPLAY_ONLY | CPU_READ_REQUIRED | REGION_TILE`）精细化解码规格；
   - `ResourceStore`：缓存生命周期；
   - `DecodeExecutor`：执行解码产出目标资产。
-- **运动遥测（ViewportMotion）与预取驱动**：在 Phase 1 物理引擎尚未统一时，运动状态由各 Renderer/宿主采集并以遥测形式注入：
+- **运动遥测（ViewportMotion）的双重用途**：
   ```kotlin
   data class ViewportMotion(
       val velocityX: Float,
@@ -123,12 +127,14 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
       val timestampNanos: Long,
   )
   ```
-  数据流为：`Renderer/Host Motion -> ViewportMotion -> ReaderCore/Prediction -> PrefetchRequest -> ImagePipeline`。
-  这保证了第一阶段无需重写物理引擎，未来统一 `ReaderPhysics` 时预取预测层亦无需改动。
+  数据流分支为：
+  1. `ViewportMotion -> ReaderCore/Prediction -> PrefetchRequest -> ImagePipeline`（驱动预测预加载）；
+  2. `ViewportMotion -> PlatformPresentationAdapter`（协作 Android 15/16 自适应刷新率 ARR：Compose 映射至 `preferredFrameRate`，View 映射至 `frameContentVelocity`），在高速滑动时拉升 120Hz，静止时降频降功耗。
 
 ### 约束 3：Renderer 拥有“呈现状态”，而非“语义状态”
-- Renderer 允许且应当拥有后端特有的绘制资源状态（如 Canvas 的 `Paint`、`Matrix`，WebGPU 的 `TextureCache`、`BindGroup`）。
-- 但严禁 Renderer 内部私自维护 `currentChapter`、`currentPageProgress`、`isDoublePage` 等阅读语义字段。
+- Renderer 允许且应当拥有后端特有的绘制与保留资源状态（如 Compose 的 `GraphicsLayer`、`DrawModifierNode`，Canvas 的 `Paint`、`Matrix`，WebGPU 的 `TextureCache`）。
+- 高频 Camera 变换（位移/缩放）严格约束在 Draw Phase（或 `GraphicsLayer.matrix`）消费，严禁逆向触发父级重组或布局。
+- 严禁 Renderer 内部私自维护 `currentChapter`、`currentPageProgress`、`isDoublePage` 等阅读语义字段。
 
 ### 约束 4：多态呈现资产（句柄化），拒绝为统一而二次拷贝
 - `ReaderImageAsset` 采用密封接口（Sealed Interface），描述资源的**访问句柄**而非强行具象化到堆内存：
@@ -151,7 +157,7 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
       ) : ReaderImageAsset
   }
   ```
-- 各 Renderer 可向 Pipeline 声明其 `preferredRepresentation`（如 WebGPU 声明 `ENCODED`，Canvas 声明 `BITMAP` 或 `TILE_SET`）。**严禁将 EncodedAsset 设计为单纯的 `ByteArray`**，以避免大图在 Java Heap 与 JNI 之间发生数十兆的冗余拷贝。
+- 各 Renderer 可向 Pipeline 声明其 `preferredRepresentation`（如 WebGPU 声明 `ENCODED`，Canvas/Compose 声明 `BITMAP` 或 `TILE_SET`）。严禁将 EncodedAsset 设计为单纯的 `ByteArray`，以避免大图在 Java Heap 与 JNI 之间发生数十兆的冗余拷贝。
 
 ---
 
@@ -179,12 +185,13 @@ reader/
 │   ├── ReaderImagePipeline.kt
 │   ├── ReaderLodPolicy.kt
 │   ├── ReaderTileManager.kt
+│   ├── PixelUsage.kt
 │   └── DecodePlanner.kt
 │
 ├── render/                // 可插拔渲染器实现
 │   ├── ReaderRenderer.kt
-│   ├── compose/           // 现有稳定 Telephoto 实现
-│   ├── canvas/            // 新建 CanvasWebtoon 原型
+│   ├── compose/           // Telephoto 现有实现 + 新 ComposeSceneRenderer (DrawModifierNode/GraphicsLayer)
+│   ├── canvas/            // 对照组 AndroidViewSceneRenderer (View onDraw)
 │   └── webgpu/            // 隔离的 WebGPU 适配器
 │
 └── ui/                    // Activity, ViewModel, Chrome, Menu, Settings
@@ -201,19 +208,26 @@ reader/
 1. **分支隔离（已完成）**：
    - 将现有 13 个 WebGPU 提交完整封存在 `feat/webgpu-reader` 分支，状态标记为 `UPSTREAM-TRACKED`。
    - `devel` 恢复纯净，消除 NDK 依赖与冷启动监控对主干的干扰。
-2. **Phase 0：基准建立（Benchmark Baseline）**：
-   - 使用 `androidx.benchmark.macro` 在 120Hz 测试机上对现有 Compose/Telephoto 运行固定数据集（100 页普通、100 页 Webtoon、极端超长图）的快速滚动性能基准。
+2. **Phase 0：多维基准建立（Benchmark Baseline）**：
+   - 升级至 AndroidX Benchmark 1.5+，在 ARR / 120Hz 测试机上运行固定数据集（100 页普通、100 页 Webtoon、极端超长图）；
+   - **执行两套模式**：
+     - *Primary Mode*：`CompilationMode.Partial(BaselineProfileMode.Require)`，拟合真实用户环境；
+     - *Diagnostic Mode*：`CompilationMode.Full`，消除 JIT 噪音，观察纯渲染器理论差距；
+   - **涵盖突发与持续测试**：
+     - *Burst Benchmark*（10~20s 快速连续 Fling）：考察 P99 逾期、GC 尖峰、纹理上传 Stall；
+     - *Sustained Benchmark*（5~10min 滚动）：记录 GPU 显存增长、功耗趋势（PowerMetric）与热节流。
 3. **PoC A：Scene 几何抽象**：
    - 实现纯几何的 `ReaderScene`，让现有阅读器与新 Scene 并行计算，验证页面几何、可见集合及阅读语义与现有行为等价（浮点几何允许定义明确的 epsilon 容差；若发现旧实现缺陷，以显式行为变更记录处理而非机械迁就旧 bug）。
-4. **PoC B：Webtoon 视口实验（A/B 对照）**：
-   - 保持功能极简（仅垂直滚动、无缩放、无 OCR、固定图集），同时构建两个极小渲染器：
-     - `ComposeCanvasRenderer`（基于 Compose `Canvas(Modifier.fillMaxSize())`）
-     - `AndroidViewCanvasRenderer`（基于自定义 `View.onDraw(canvas)`）
-   - 探究性能收益的根源究竟是“Canvas 本身”还是“脱离了 LazyColumn 虚拟列表抽象”。
+4. **PoC B：Webtoon 视口实验（战略 A/B 对照）**：
+   - 保持功能极简（仅垂直滚动、无缩放、无 OCR、固定图集），构建两个极小渲染器：
+     - **Candidate A（首选主力）**：`ComposeSceneRenderer`
+       - 测试 Immediate（`DrawModifierNode` / `drawBehind`）与 Retained（单页独立 `GraphicsLayer`）两种机制；
+     - **Candidate B（参考对照）**：`AndroidViewSceneRenderer`（单 View `onDraw(Canvas)`）；
+   - 归因分析：验证性能红利是否本质源自“脱离通用 LazyColumn 抽象与建立专属 2D Scene”，而非“必须退回 Android View”。
 
 ### 评估指标与 Go/No-Go 准则
 
-评判标准**相对于 Phase 0 建立的 Baseline 定义**，绝不在基准未出前预设绝对毫秒阈值。关注 Android 官方推荐的 `frameOverrunMs` 与硬件 Deadline：
+评判标准**相对于 Phase 0 建立的 Baseline 定义**，统一纳入刷新率意图（`preferredFrameRate` 协同）：
 
 | 评估维度 | 核心主指标 (Primary) | 辅助指标 (Secondary) | 达到标准（GO） | 放弃或退回（NO-GO） |
 | :--- | :--- | :--- | :--- | :--- |
@@ -221,10 +235,13 @@ reader/
 | **卡顿率** | Deadline Miss Rate | Worst-frame Trace | 严重丢帧率明显下降 | 掉帧率持平或恶化 |
 | **Java 内存** | Heap Max | Allocations / GC Count | Fling 期间垃圾回收暂停次数与瞬时分配量趋近于零 | 内存抖动未减，GC 依然打断渲染管线 |
 | **Native 内存** | RSS Anon Max | RSS Shmem | 内存峰值有界平稳 | 存在非托管内存堆积或泄漏风险 |
-| **GPU 显存** | GPU Memory Max | Texture Upload Trace | 纹理上传平稳，无主线程 Stall | 突发显存占用过大导致 OOM |
+| **GPU 显存** | `memoryGpuKb` Max | Texture Upload Trace | 纹理显存平稳有界，无主线程 Stall | 突发显存占用过大导致 OOM |
+| **功耗与持续性** | Energy / Battery Drain | Thermal / Headroom Drift | 长时间滚动能耗平稳，无剧烈热降频 | 持续功耗异常飙升，迅速触发系统温控降频 |
 | **系统复杂度** | 代码增量 (LOC) / 异常率 | OEM-specific Workarounds | 逻辑清晰，无特定厂商驱动黑洞与穿孔 Bug | 代码量膨胀严重，引入新的系统级黑盒缺陷 |
 
-**Go/No-Go 判定**：优先要求在 P99 `frameOverrunMs`、GC/Allocation 次数或内存峰值中**至少一项出现显著改善**，且其他关键指标不存在明显回归；同时新增架构复杂度在可控范围内。
+**Go/No-Go 判定**：
+- 优先要求在 P99 `frameOverrunMs`、GC/Allocation 次数或内存峰值中**至少一项出现显著改善**，且其他关键指标不存在明显回归；
+- 若 `ComposeSceneRenderer` 表现与 `AndroidViewSceneRenderer` 相当，**直接采纳 Compose 方案**，终止 View 方案的进一步扩张。
 
 ---
 
@@ -235,7 +252,8 @@ reader/
 2. **不**重写物理惯性引擎（`Physics`，通过 `ViewportMotion` 承接）；
 3. **不**在第一阶段直接开发完整的 Tile 动态切片与 LOD 高级引擎；
 4. **不**在第一阶段废弃或替换现有的 Telephoto 单页/双页阅读模式；
-5. **不**自行实现或重构 WebGPU 的 Continuous 条漫模式（交由上游 Mihon 推进）。
+5. **不**自行实现或重构 WebGPU 的 Continuous 条漫模式（交由上游 Mihon 推进）；
+6. **不**将 `LowLatencyCanvasView`（前台双缓冲/画笔向）纳入 Webtoon 实验。
 
 ---
 
