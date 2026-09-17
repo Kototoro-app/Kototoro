@@ -302,6 +302,27 @@ reader/
 - **帧渲染余量显著扩增**：`frameDurationCpuMs` 衡量 UI/RenderThread 的 CPU 执行耗时，`frameOverrunMs` 决定是否错过显示硬件 VSYNC Deadline。在 120Hz 刷新率下，旧版 `ComposeWebtoonReader` 的 P99 CPU 达到 10.20ms（逼近显示周期），P99 Overrun 为 -2.40ms；而 `ComposeSceneWebtoonReader` 将 P99 CPU 压降至 6.20ms（-39.2%），P99 Overrun 进一步拓宽至 -5.90ms（突发）与 -6.90ms（长程），**为系统调度与突发波动留出了 +3.3~3.5ms 的硬件截止期安全缓冲**；
 - **内存架构闭环验证**：双向 `PRESENTATION_READY` ↔ `SOURCE_READY` 状态机经受住了 72 页全图往复长程遍历的严苛考验。在本次 72 页双向重复遍历中，Scene Reader 的 presentation working set 始终保持在 8~11 个 asset，RSS Anon 未随遍历轮次呈现 Legacy 路径的高位驻留（Sustained 稳态 RSS Anon 降低 **35.8% / 118.7 MB**，峰值降低 **33.1% / 116.9 MB**）。
 
+#### Phase 1 实施进度（图像解码决策与切片瓦片引擎）
+
+**Phase 1A：解码决策智能（Decode Intelligence，已完成，commit `4410872b2`）**
+- 纯 Kotlin 决策核心，零 Android/UI 依赖：`IntRect` / `PixelUsage` / `DecodeAllocatorPolicy` / `RendererCapabilities`（Unknown → 首帧 Resolved，保守回退 4096）/ `TilePolicy`（策略与硬件能力拆分）/ `ImageSourceMetadata` / `ImageSourceGeometry`（Crop contentRect + EXIF 方向的逻辑→源图坐标映射）/ `ReaderLodPolicy`（Target-Based Sampling：`targetDecodeWidthPx = min(source, ceil(display × scale × overscan))`，2 的幂 sampleSize，滞后防抖）/ `DecodePlan`（Single / SampledSingle / Tiled / AnimatedSingle + `AnimatedFallback` 超限安全降级）/ `DecodePlanner`（多维决策矩阵）。
+- 测试：`IntRectTest` / `ReaderLodPolicyTest` / `DecodePlannerTest` / `ImageSourceGeometryTest` 全绿（纯 JVM）。
+
+**Phase 0C/P0 修复：Warm Backend Switch 首屏模糊（commit `81e5e946a`）**
+- 根因：`getCachedAsset()` 把未知质量的 Coil memoryCache 位图直接包装为 `ComposeImage` 并 `storeAsset` 晋级为 `PRESENTATION_READY` 资产；资源窗口看到已有 `ComposeImage` 即跳过重解码，首屏持续低清拉伸，直至页面离开再回到 presentation window 才触发正式解码。
+- 修复：拆分"几何探测"与"正式呈现资产晋级"两个职责 —— 新增 `ReaderImagePipeline.probeCachedDimensions(pageId)` 仅供 `PageGeometryHint.Exact` 使用（零资产副作用）；`getCachedAsset()` 不再晋级 memoryCache 条目（回落 `Encoded`），presentation 一律经 `acquireAsset()` 正式解码。新增 `Trace.setCounter("Reader.PresentationWidthPx")` 供后续质量基准沿用。
+- 验证：回归测试 `warm backend switch from legacy with low-res memoryCache entry does not pollute presentation assets`（160×480 低清 cache → `Encoded` → `PRESENTATION_READY` 触发 1080×3240 正式解码）；`ReaderImageAssetTest` 14/14 全绿；真机复测模糊现象消失。
+
+**Phase 1B：图源与切片运行时（Source + Tile Runtime，已完成）**
+- `RegionDecodeSource` / `TileDecodeSession`（计划 1.4 命名）：区域解码源与会话抽象；**会话复用 = 每页仅一次原生解码器解析**，任意长条图的全部瓦片共享同一 `TileDecodeSession`。解码坐标均为原始编码空间（EXIF / Crop / Split 由几何层折算）。
+- `TileGrid`：逻辑页 → 源图坐标变换（Crop contentRect → Split 左右半页 → EXIF 方向旋转）。**Gutter 与 sampleSize 联动**（计划 1.6）：`sourceGutterPx = outputGutterPx × sampleSize`，源图解码区域向外扩展 gutter 消除独立采样相位差导致的黑缝；屏幕目标渲染矩形（`logicalRect`）严格拓扑拼接不重叠。`TileKey` 以 `TileKind.LATTICE / OVERVIEW` 区分格点瓦片与整页 LOD0 底带，键空间零冲突。
+- `TileMemoryBudget`（四级智能驱逐）：保留级 `VISIBLE（钉驻，压力下永不驱逐）→ NEARBY（前瞻窗口）→ STANDBY（首次脱离需求）→ CACHE（二次脱离）`；同级按 LRU；时钟可注入（确定性测试）；超预算的 VISIBLE 突发允许临时超额（宁可超预算不可丢可见像素）。
+- `ReaderTileManager`：请求驱动编排 —— 会话复用（`putIfAbsent` 注册竞态收敛）、瓦片任务 `LAZY` 启动去重、脱离需求的在飞任务取消、驱逐回调（payload 释放钩子 `payloadReleaser`，1C 可接 `Bitmap.recycle()`）、会话打开失败去重上报且支持重试（`Result` 包装阻断结构化并发向父级 scope 传播业务失败）。
+- `AndroidRegionDecoderFactory`：`BitmapRegionDecoder` API 26~37 兼容构造（SDK ≥ S 走非废弃重载）；URI 三态分发（`content+zip://` 流式扫描 / `zip://`+`ZipFile` 直读条目 / 通用 `contentResolver.openInputStream`），与既有 `ZipSubSamplingImageSource` / `NativeSubSamplingImageSource` 的取流策略对齐；EXIF 旋转一次性折入 `ImageSourceGeometry`；`ARGB_8888` SOFTWARE 解码对齐 `PixelUsage.REGION_TILE` 的分配策略；`ReentrantReadWriteLock` 守护 decode 与 recycle 的关闭顺序。
+- 测试：`TileGridTest`（13）/ `TileMemoryBudgetTest`（9）/ `ReaderTileManagerTest`（11）全绿，共 33 例纯 JVM（fake session 模拟 Android 解码器：会话复用、四级驱逐、在飞取消、失败重试、overview 钉驻、缺源去重上报）。
+
+**下一步（Phase 1C：渲染器集成）**：`TileStore` ↔ `TileDrawModifierNode.invalidateDraw()` 渲染无重组刷新桥（计划 1.3）；`ComposeSceneRenderer` LOD0 底带 + 高精瓦片 Gutter 绘制（payload 方向变换由 `ImageSourceGeometry.orientationDegrees` 描述）；`KototoroImagePipelineAdapter` 接入（`TileSplit` ↔ `ReaderPageSplit`、crop bounds → `ImageSourceGeometry.contentRect` 映射）。
+
 ---
 
 ## 六、 Non-Goals（第一阶段明确不做的事项）
