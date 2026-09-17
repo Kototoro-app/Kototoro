@@ -493,4 +493,46 @@ class ReaderImageAssetTest {
         // Cache holds at most the Encoded source
         assertTrue(adapter.getCachedAsset(pageId) is ReaderImageAsset.Encoded)
     }
+
+    @Test
+    fun `getCachedAsset returns Encoded when page readiness is SOURCE_READY even if Coil memoryCache has bitmap`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        val uriString = "file:///downloaded/page1.jpg"
+        every { uri.toString() } returns uriString
+
+        val bitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        val memoryCache = mockk<coil3.memory.MemoryCache>()
+        val memoryImage = bitmap.asImage()
+        every { memoryCache[coil3.memory.MemoryCache.Key(uriString)] } returns coil3.memory.MemoryCache.Value(memoryImage)
+        every { imageLoader.memoryCache } returns memoryCache
+
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            pageLookup = { page1 },
+        )
+
+        val pageId = PageId(page1.readerKey)
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.MEDIUM,
+                        readiness = PrefetchReadiness.SOURCE_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val cached = adapter.getCachedAsset(pageId)
+        assertTrue(cached is ReaderImageAsset.Encoded, "Should return Encoded when readiness is SOURCE_READY")
+        assertNull(adapter.assets.value[pageId], "Must not populate renderer-facing assets")
+    }
 }

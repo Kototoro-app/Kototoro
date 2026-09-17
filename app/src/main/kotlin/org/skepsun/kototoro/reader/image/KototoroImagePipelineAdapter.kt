@@ -106,8 +106,9 @@ class KototoroImagePipelineAdapter(
             val bmp = runCatching { memoryImage.toBitmap() }.getOrNull()
             if (bmp != null) {
                 val composeAsset = ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
-                storeAsset(pageId, composeAsset)
-                return composeAsset
+                if (storeAsset(pageId, composeAsset)) {
+                    return composeAsset
+                }
             }
         }
 
