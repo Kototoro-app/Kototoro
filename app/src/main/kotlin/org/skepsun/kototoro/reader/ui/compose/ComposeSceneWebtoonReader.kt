@@ -58,6 +58,8 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.core.util.ext.getDisplayMessage
 import org.skepsun.kototoro.reader.core.FloatRect
+import org.skepsun.kototoro.reader.core.IntRect
+import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageGeometryHint
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderPrediction
@@ -143,6 +145,12 @@ fun ComposeSceneWebtoonReader(
             pageLookup = pageLookup,
             isCropEnabled = isCropEnabled,
             bitmapConfig = bitmapConfig,
+            viewportSizeProvider = {
+                IntSize(
+                    viewportWidthPx.toInt().coerceAtLeast(100),
+                    viewportHeightPx.toInt().coerceAtLeast(100),
+                )
+            },
         )
     }
 
@@ -261,6 +269,28 @@ fun ComposeSceneWebtoonReader(
         // 2. Pixel-level scroll updates do not resubmit an unchanged resource window.
         predictor.predictWindowIfChanged(currentScene, frame, motion)?.let {
             adapter.updateResourceWindow(it)
+        }
+
+        // 3. For visible Tiled pages, request intersecting lattice tiles
+        for (node in frame.visibleNodes) {
+            val asset = retainedAssets[node.pageId]
+            if (asset is ReaderImageAsset.Tiled && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
+                val scaleX = asset.grid.pageSize.width.toFloat() / node.sceneBounds.width
+                val scaleY = asset.grid.pageSize.height.toFloat() / node.sceneBounds.height
+
+                val visRelLeft = (node.visibleRegion.left - node.sceneBounds.left) * scaleX
+                val visRelTop = (node.visibleRegion.top - node.sceneBounds.top) * scaleY
+                val visRelRight = (node.visibleRegion.right - node.sceneBounds.left) * scaleX
+                val visRelBottom = (node.visibleRegion.bottom - node.sceneBounds.top) * scaleY
+
+                val visibleLogical = IntRect(
+                    left = visRelLeft.toInt().coerceIn(0, asset.grid.pageSize.width),
+                    top = visRelTop.toInt().coerceIn(0, asset.grid.pageSize.height),
+                    right = kotlin.math.ceil(visRelRight).toInt().coerceIn(0, asset.grid.pageSize.width),
+                    bottom = kotlin.math.ceil(visRelBottom).toInt().coerceIn(0, asset.grid.pageSize.height),
+                )
+                adapter.requestTiles(node.pageId, visibleLogical)
+            }
         }
     }
 
@@ -731,6 +761,7 @@ fun ComposeSceneWebtoonReader(
                     readerAssetProvider = { id ->
                         retainedAssets[id]
                     },
+                    tileStore = adapter.tileStore,
                     onScrollProgressChanged = { currentY, _ ->
                         updateResourceWindow(activeScene, currentY, currentMotion)
                     },

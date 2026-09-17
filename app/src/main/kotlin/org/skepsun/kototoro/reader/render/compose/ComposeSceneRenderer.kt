@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.render.compose
 
+import android.graphics.Bitmap
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.splineBasedDecay
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -42,12 +44,18 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.reader.core.FloatRect
+import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.VerticalReaderScene
 import org.skepsun.kototoro.reader.core.ViewportMotion
 import org.skepsun.kototoro.reader.core.VisibleNode
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
+import org.skepsun.kototoro.reader.image.TileGrid
+import org.skepsun.kototoro.reader.image.TileSpec
+import org.skepsun.kototoro.reader.image.TileSplit
+import org.skepsun.kototoro.reader.image.TileStore
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /**
@@ -70,6 +78,7 @@ fun ComposeSceneRenderer(
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
+    tileStore: TileStore? = null,
     onScrollProgressChanged: (scrollY: Float, maxScrollY: Float) -> Unit = { _, _ -> },
     onMotionChanged: (ViewportMotion) -> Unit = {},
     onOverScroll: ((deltaY: Float) -> Unit)? = null,
@@ -87,6 +96,7 @@ fun ComposeSceneRenderer(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .tileDrawBridge(tileStore)
             .onSizeChanged { size ->
                 viewportWidth = size.width.toFloat()
                 viewportHeight = size.height.toFloat()
@@ -287,7 +297,28 @@ internal fun DrawScope.drawFrameNodes(
         val rightInt = (screenLeft + nodeWidth).roundToInt()
         val widthInt = (rightInt - leftInt).coerceAtLeast(1)
 
-        val resolvedBitmap: ImageBitmap? = when (val asset = readerAssetProvider?.invoke(node.pageId)) {
+        val asset = readerAssetProvider?.invoke(node.pageId)
+        if (asset is ReaderImageAsset.Tiled) {
+            drawTiledPage(
+                asset = asset,
+                node = node,
+                screenLeft = screenLeft,
+                screenTop = screenTop,
+                nodeWidth = nodeWidth,
+                nodeHeight = nodeHeight,
+                leftInt = leftInt,
+                topInt = topInt,
+                widthInt = widthInt,
+                heightInt = heightInt,
+                imageColorFilter = imageColorFilter,
+                placeholderColor = placeholderColor,
+                pageLabelProvider = pageLabelProvider,
+                textMeasurer = textMeasurer,
+            )
+            continue
+        }
+
+        val resolvedBitmap: ImageBitmap? = when (asset) {
             is ReaderImageAsset.ComposeImage -> asset.imageBitmap
             is ReaderImageAsset.AndroidBitmap -> asset.bitmap.asImageBitmap()
             else -> assetProvider(node.pageId)
@@ -303,80 +334,309 @@ internal fun DrawScope.drawFrameNodes(
                 filterQuality = FilterQuality.Medium,
             )
         } else {
-            // 1. Base placeholder background fill
-            drawRect(
-                color = placeholderColor,
-                topLeft = Offset(screenLeft, screenTop),
-                size = Size(nodeWidth, nodeHeight),
+            drawPlaceholder(
+                pageId = node.pageId,
+                screenLeft = screenLeft,
+                screenTop = screenTop,
+                nodeWidth = nodeWidth,
+                nodeHeight = nodeHeight,
+                placeholderColor = placeholderColor,
+                pageLabelProvider = pageLabelProvider,
+                textMeasurer = textMeasurer,
             )
+        }
+    }
+}
 
-            // Subtle alternating tint for adjacent placeholders
-            val isEven = (node.pageId.value % 2L == 0L)
-            if (!isEven) {
-                drawRect(
-                    color = Color(0x0FFFFFFF),
-                    topLeft = Offset(screenLeft, screenTop),
-                    size = Size(nodeWidth, nodeHeight),
+/**
+ * Draws a tiled page consisting of an optional LOD0 base band and high-precision lattice tiles.
+ */
+private fun DrawScope.drawTiledPage(
+    asset: ReaderImageAsset.Tiled,
+    node: VisibleNode,
+    screenLeft: Float,
+    screenTop: Float,
+    nodeWidth: Float,
+    nodeHeight: Float,
+    leftInt: Int,
+    topInt: Int,
+    widthInt: Int,
+    heightInt: Int,
+    imageColorFilter: ColorFilter?,
+    placeholderColor: Color,
+    pageLabelProvider: ((PageId) -> String)?,
+    textMeasurer: TextMeasurer?,
+) {
+    val grid = asset.grid
+    val tileStore = asset.tileStore
+    val orientation = grid.geometry.orientationDegrees
+
+    var hasRenderedAnyContent = false
+
+    // 1. LOD0 Overview Base Band (底带保底)
+    val overviewTile = asset.overviewKey?.let { tileStore.tile(it) }
+    val overviewBmp = (overviewTile?.payload as? Bitmap)?.asImageBitmap()
+    if (overviewBmp != null) {
+        hasRenderedAnyContent = true
+        drawBitmapTransformed(
+            image = overviewBmp,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(overviewBmp.width, overviewBmp.height),
+            dstOffset = IntOffset(leftInt, topInt),
+            dstSize = IntSize(widthInt, heightInt),
+            orientationDegrees = orientation,
+            colorFilter = imageColorFilter,
+        )
+    }
+
+    // 2. High-precision lattice tiles with gutter cropping
+    if (grid.pageSize.width > 0 && grid.pageSize.height > 0 && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
+        val scaleX = grid.pageSize.width.toFloat() / node.sceneBounds.width
+        val scaleY = grid.pageSize.height.toFloat() / node.sceneBounds.height
+
+        val visRelLeft = (node.visibleRegion.left - node.sceneBounds.left) * scaleX
+        val visRelTop = (node.visibleRegion.top - node.sceneBounds.top) * scaleY
+        val visRelRight = (node.visibleRegion.right - node.sceneBounds.left) * scaleX
+        val visRelBottom = (node.visibleRegion.bottom - node.sceneBounds.top) * scaleY
+
+        val visibleLogical = IntRect(
+            left = visRelLeft.toInt().coerceIn(0, grid.pageSize.width),
+            top = visRelTop.toInt().coerceIn(0, grid.pageSize.height),
+            right = ceil(visRelRight).toInt().coerceIn(0, grid.pageSize.width),
+            bottom = ceil(visRelBottom).toInt().coerceIn(0, grid.pageSize.height),
+        )
+
+        val intersectingSpecs = grid.tilesIntersecting(visibleLogical)
+        val splitOriginX = when (grid.split) {
+            TileSplit.NONE -> 0
+            TileSplit.LEFT -> 0
+            TileSplit.RIGHT -> grid.contentLogicalSize.width - grid.pageSize.width
+        }
+
+        val toScreenX = nodeWidth / grid.pageSize.width.toFloat()
+        val toScreenY = nodeHeight / grid.pageSize.height.toFloat()
+
+        for (spec in intersectingSpecs) {
+            val resident = tileStore.tile(spec.key) ?: continue
+            val tileBitmap = (resident.payload as? Bitmap)?.asImageBitmap() ?: continue
+            hasRenderedAnyContent = true
+
+            val params = TiledPageDrawMath.computeTileDrawParams(
+                grid = grid,
+                spec = spec,
+                tileBitmapWidth = tileBitmap.width,
+                tileBitmapHeight = tileBitmap.height,
+                splitOriginX = splitOriginX,
+                screenLeft = screenLeft,
+                screenTop = screenTop,
+                toScreenX = toScreenX,
+                toScreenY = toScreenY,
+            ) ?: continue
+
+            drawBitmapTransformed(
+                image = tileBitmap,
+                srcOffset = params.srcOffset,
+                srcSize = params.srcSize,
+                dstOffset = params.dstOffset,
+                dstSize = params.dstSize,
+                orientationDegrees = orientation,
+                colorFilter = imageColorFilter,
+            )
+        }
+    }
+
+    // 3. Fallback placeholder if neither overview nor any tiles were ready
+    if (!hasRenderedAnyContent) {
+        drawPlaceholder(
+            pageId = node.pageId,
+            screenLeft = screenLeft,
+            screenTop = screenTop,
+            nodeWidth = nodeWidth,
+            nodeHeight = nodeHeight,
+            placeholderColor = placeholderColor,
+            pageLabelProvider = pageLabelProvider,
+            textMeasurer = textMeasurer,
+        )
+    }
+}
+
+private fun DrawScope.drawBitmapTransformed(
+    image: ImageBitmap,
+    srcOffset: IntOffset,
+    srcSize: IntSize,
+    dstOffset: IntOffset,
+    dstSize: IntSize,
+    orientationDegrees: Int,
+    colorFilter: ColorFilter?,
+) {
+    if (orientationDegrees == 0) {
+        drawImage(
+            image = image,
+            srcOffset = srcOffset,
+            srcSize = srcSize,
+            dstOffset = dstOffset,
+            dstSize = dstSize,
+            colorFilter = colorFilter,
+            filterQuality = FilterQuality.Medium,
+        )
+    } else {
+        val centerX = dstOffset.x + dstSize.width / 2f
+        val centerY = dstOffset.y + dstSize.height / 2f
+        withTransform({
+            rotate(orientationDegrees.toFloat(), pivot = Offset(centerX, centerY))
+        }) {
+            drawImage(
+                image = image,
+                srcOffset = srcOffset,
+                srcSize = srcSize,
+                dstOffset = dstOffset,
+                dstSize = dstSize,
+                colorFilter = colorFilter,
+                filterQuality = FilterQuality.Medium,
+            )
+        }
+    }
+}
+
+private fun DrawScope.drawPlaceholder(
+    pageId: PageId,
+    screenLeft: Float,
+    screenTop: Float,
+    nodeWidth: Float,
+    nodeHeight: Float,
+    placeholderColor: Color,
+    pageLabelProvider: ((PageId) -> String)?,
+    textMeasurer: TextMeasurer?,
+) {
+    // 1. Base placeholder background fill
+    drawRect(
+        color = placeholderColor,
+        topLeft = Offset(screenLeft, screenTop),
+        size = Size(nodeWidth, nodeHeight),
+    )
+
+    // Subtle alternating tint for adjacent placeholders
+    val isEven = (pageId.value % 2L == 0L)
+    if (!isEven) {
+        drawRect(
+            color = Color(0x0FFFFFFF),
+            topLeft = Offset(screenLeft, screenTop),
+            size = Size(nodeWidth, nodeHeight),
+        )
+    }
+
+    // 2. Light outline border
+    drawRect(
+        color = Color(0x33FFFFFF),
+        topLeft = Offset(screenLeft, screenTop),
+        size = Size(nodeWidth, nodeHeight),
+        style = Stroke(width = 2f),
+    )
+
+    // 3. Top and bottom boundary divider lines
+    drawLine(
+        color = Color(0xFF4A4A4D),
+        start = Offset(screenLeft, screenTop),
+        end = Offset(screenLeft + nodeWidth, screenTop),
+        strokeWidth = 3f,
+    )
+    drawLine(
+        color = Color(0xFF4A4A4D),
+        start = Offset(screenLeft, screenTop + nodeHeight),
+        end = Offset(screenLeft + nodeWidth, screenTop + nodeHeight),
+        strokeWidth = 3f,
+    )
+
+    // 4. Centered floating page label badge in visible viewport slice
+    if (pageLabelProvider != null && textMeasurer != null) {
+        val label = pageLabelProvider(pageId)
+        if (label.isNotBlank()) {
+            val textLayout = textMeasurer.measure(
+                text = label,
+                style = TextStyle(
+                    color = Color(0x99FFFFFF),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                ),
+            )
+            val visibleNodeTop = maxOf(screenTop, 0f)
+            val visibleNodeBottom = minOf(screenTop + nodeHeight, size.height)
+            if (visibleNodeBottom > visibleNodeTop) {
+                val badgePaddingH = 24f
+                val badgePaddingV = 12f
+                val badgeWidth = textLayout.size.width + badgePaddingH * 2
+                val badgeHeight = textLayout.size.height + badgePaddingV * 2
+                val centerY = (visibleNodeTop + visibleNodeBottom) / 2f
+                val centerX = screenLeft + (nodeWidth - badgeWidth) / 2f
+
+                drawRoundRect(
+                    color = Color(0xCC141416),
+                    topLeft = Offset(centerX, centerY - badgeHeight / 2f),
+                    size = Size(badgeWidth, badgeHeight),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
                 )
-            }
-
-            // 2. Light outline border
-            drawRect(
-                color = Color(0x33FFFFFF),
-                topLeft = Offset(screenLeft, screenTop),
-                size = Size(nodeWidth, nodeHeight),
-                style = Stroke(width = 2f),
-            )
-
-            // 3. Top and bottom boundary divider lines
-            drawLine(
-                color = Color(0xFF4A4A4D),
-                start = Offset(screenLeft, screenTop),
-                end = Offset(screenLeft + nodeWidth, screenTop),
-                strokeWidth = 3f,
-            )
-            drawLine(
-                color = Color(0xFF4A4A4D),
-                start = Offset(screenLeft, screenTop + nodeHeight),
-                end = Offset(screenLeft + nodeWidth, screenTop + nodeHeight),
-                strokeWidth = 3f,
-            )
-
-            // 4. Centered floating page label badge in visible viewport slice
-            if (pageLabelProvider != null && textMeasurer != null) {
-                val label = pageLabelProvider(node.pageId)
-                if (label.isNotBlank()) {
-                    val textLayout = textMeasurer.measure(
-                        text = label,
-                        style = TextStyle(
-                            color = Color(0x99FFFFFF),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                        ),
-                    )
-                    val visibleNodeTop = maxOf(screenTop, 0f)
-                    val visibleNodeBottom = minOf(screenTop + nodeHeight, size.height)
-                    if (visibleNodeBottom > visibleNodeTop) {
-                        val badgePaddingH = 24f
-                        val badgePaddingV = 12f
-                        val badgeWidth = textLayout.size.width + badgePaddingH * 2
-                        val badgeHeight = textLayout.size.height + badgePaddingV * 2
-                        val centerY = (visibleNodeTop + visibleNodeBottom) / 2f
-                        val centerX = screenLeft + (nodeWidth - badgeWidth) / 2f
-
-                        drawRoundRect(
-                            color = Color(0xCC141416),
-                            topLeft = Offset(centerX, centerY - badgeHeight / 2f),
-                            size = Size(badgeWidth, badgeHeight),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
-                        )
-                        drawText(
-                            textLayoutResult = textLayout,
-                            topLeft = Offset(centerX + badgePaddingH, centerY - textLayout.size.height / 2f),
-                        )
-                    }
-                }
+                drawText(
+                    textLayoutResult = textLayout,
+                    topLeft = Offset(centerX + badgePaddingH, centerY - textLayout.size.height / 2f),
+                )
             }
         }
     }
 }
+
+internal object TiledPageDrawMath {
+    data class TileDrawParams(
+        val srcOffset: IntOffset,
+        val srcSize: IntSize,
+        val dstOffset: IntOffset,
+        val dstSize: IntSize,
+    )
+
+    fun computeTileDrawParams(
+        grid: TileGrid,
+        spec: org.skepsun.kototoro.reader.image.TileSpec,
+        tileBitmapWidth: Int,
+        tileBitmapHeight: Int,
+        splitOriginX: Int,
+        screenLeft: Float,
+        screenTop: Float,
+        toScreenX: Float,
+        toScreenY: Float,
+    ): TileDrawParams? {
+        val contentLogical = spec.logicalRect.translate(splitOriginX, 0)
+        val encodedContent = grid.geometry.mapLogicalToEncodedRegion(contentLogical)
+
+        val rawSrcLeft = (encodedContent.left - spec.decodeRegion.left).coerceAtLeast(0)
+        val rawSrcTop = (encodedContent.top - spec.decodeRegion.top).coerceAtLeast(0)
+        val rawSrcWidth = encodedContent.width
+        val rawSrcHeight = encodedContent.height
+
+        val sampleSize = spec.sampleSize.coerceAtLeast(1)
+        val srcX = rawSrcLeft / sampleSize
+        val srcY = rawSrcTop / sampleSize
+        val srcW = (rawSrcWidth / sampleSize).coerceAtMost(tileBitmapWidth - srcX)
+        val srcH = (rawSrcHeight / sampleSize).coerceAtMost(tileBitmapHeight - srcY)
+
+        if (srcW <= 0 || srcH <= 0) return null
+
+        val tileScreenLeft = screenLeft + spec.logicalRect.left * toScreenX
+        val tileScreenTop = screenTop + spec.logicalRect.top * toScreenY
+        val tileScreenWidth = spec.logicalRect.width * toScreenX
+        val tileScreenHeight = spec.logicalRect.height * toScreenY
+
+        val dstLeft = tileScreenLeft.roundToInt()
+        val dstTop = tileScreenTop.roundToInt()
+        val dstRight = (tileScreenLeft + tileScreenWidth).roundToInt()
+        val dstBottom = (tileScreenTop + tileScreenHeight).roundToInt()
+        val dstW = (dstRight - dstLeft).coerceAtLeast(1)
+        val dstH = (dstBottom - dstTop).coerceAtLeast(1)
+
+        return TileDrawParams(
+            srcOffset = IntOffset(srcX, srcY),
+            srcSize = IntSize(srcW, srcH),
+            dstOffset = IntOffset(dstLeft, dstTop),
+            dstSize = IntSize(dstW, dstH),
+        )
+    }
+}
+

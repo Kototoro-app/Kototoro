@@ -54,7 +54,7 @@ class ReaderTileManager(
     private val sourceFactory: (PageId) -> RegionDecodeSource?,
     private val costOf: (payload: Any) -> Long,
     private val payloadReleaser: (payload: Any) -> Unit = {},
-) {
+) : TileStore {
     interface Listener {
         /** A tile finished decoding and is now resident. */
         fun onTileReady(tile: ReaderTile) {}
@@ -82,15 +82,15 @@ class ReaderTileManager(
     /** Snapshot of resident tiles. Follows the budget ledger; not gap-free under churn. */
     val tiles: StateFlow<Map<TileKey, ReaderTile>> = mutableTiles.asStateFlow()
 
-    fun addListener(listener: Listener) {
+    override fun addListener(listener: Listener) {
         synchronized(listenersLock) { listeners.add(listener) }
     }
 
-    fun removeListener(listener: Listener) {
+    override fun removeListener(listener: Listener) {
         synchronized(listenersLock) { listeners.remove(listener) }
     }
 
-    fun tile(key: TileKey): ReaderTile? = mutableTiles.value[key]
+    override fun tile(key: TileKey): ReaderTile? = mutableTiles.value[key]
 
     /**
      * Replaces the desired tile window of [grid.pageId].

@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import androidx.exifinterface.media.ExifInterface
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
@@ -37,7 +38,10 @@ import kotlin.concurrent.write
  * performs the logical → encoded mapping. This factory is intentionally thin:
  * all scheduling/eviction policy lives in [ReaderTileManager] and pure-Kotlin types.
  */
-class AndroidRegionDecoderFactory(context: Context) {
+class AndroidRegionDecoderFactory(
+    context: Context,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+) : RegionDecoderFactory {
 
     private val appContext = context.applicationContext
 
@@ -48,11 +52,11 @@ class AndroidRegionDecoderFactory(context: Context) {
      *   when null, only `image/gif` is treated as animated from the MIME type.
      * @param geometryOverride Optional geometry override (e.g. persisted crop bounds).
      */
-    suspend fun create(
+    override suspend fun create(
         uri: Uri,
-        isAnimatedHint: Boolean? = null,
-        geometryOverride: ImageSourceGeometry? = null,
-    ): RegionDecodeSource = withContext(Dispatchers.IO) {
+        isAnimatedHint: Boolean?,
+        geometryOverride: ImageSourceGeometry?,
+    ): RegionDecodeSource = withContext(ioDispatcher) {
         val (width, height, mimeType) = probeBounds(uri)
         if (width <= 0 || height <= 0) {
             throw IOException("Cannot decode image bounds for $uri")
@@ -133,7 +137,7 @@ class AndroidRegionDecoderFactory(context: Context) {
     private class AndroidRegionDecodeSource(
         private val uri: Uri,
         override val metadata: ImageSourceMetadata,
-        val geometry: ImageSourceGeometry,
+        override val geometry: ImageSourceGeometry,
         private val factory: AndroidRegionDecoderFactory,
     ) : RegionDecodeSource {
         override val mimeType: String? get() = metadata.mimeType

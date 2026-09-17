@@ -18,6 +18,10 @@ interface RegionDecodeSource {
     /** Fundamental metadata discovered prior to any pixel decoding. */
     val metadata: ImageSourceMetadata
 
+    /** Geometric mapping between raw encoded image bytes and logical page space. */
+    val geometry: ImageSourceGeometry
+        get() = ImageSourceGeometry(metadata.size)
+
     /** MIME type of the encoded payload, when known. */
     val mimeType: String?
         get() = metadata.mimeType
@@ -56,3 +60,15 @@ interface TileDecodeSession : AutoCloseable {
      */
     suspend fun decodeRegion(region: IntRect, sampleSize: Int): Any
 }
+
+/**
+ * Factory creating [RegionDecodeSource] instances from image URIs.
+ */
+interface RegionDecoderFactory {
+    suspend fun create(
+        uri: android.net.Uri,
+        isAnimatedHint: Boolean? = null,
+        geometryOverride: ImageSourceGeometry? = null,
+    ): RegionDecodeSource
+}
+

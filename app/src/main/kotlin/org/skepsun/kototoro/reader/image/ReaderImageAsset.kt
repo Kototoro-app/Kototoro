@@ -37,4 +37,17 @@ sealed interface ReaderImageAsset {
         override val pageId: PageId,
         val imageBitmap: ImageBitmap,
     ) : ReaderImageAsset
+
+    /**
+     * Tiled presentation asset backed by a [TileGrid] and queried through a [TileStore].
+     *
+     * Used for ultra-long webtoon strips or images that exceed maximum hardware/memory limits.
+     * Optionally points to an [overviewKey] representing the coarse LOD0 whole-page base band.
+     */
+    data class Tiled(
+        override val pageId: PageId,
+        val grid: TileGrid,
+        val tileStore: TileStore,
+        val overviewKey: TileKey? = null,
+    ) : ReaderImageAsset
 }

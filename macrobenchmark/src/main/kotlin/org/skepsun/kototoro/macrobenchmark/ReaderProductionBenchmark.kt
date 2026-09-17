@@ -61,6 +61,22 @@ class ReaderProductionBenchmark {
         compilationMode = CompilationMode.Full(),
     )
 
+    // --- Phase 1D: Ultra-Long Webtoon Suite (10,000px ~ 40,000px) ---
+
+    @Test
+    fun ultraLongSceneFull() = measureBurst(
+        backend = BACKEND_SCENE_WEBTOON,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_ULTRA_LONG,
+    )
+
+    @Test
+    fun ultraLongLegacyFull() = measureBurst(
+        backend = BACKEND_LEGACY_WEBTOON,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_ULTRA_LONG,
+    )
+
     // --- 2. Sustained Suite (Primary: Partial, Diagnostic: Full) ---
 
     @Test
@@ -95,7 +111,11 @@ class ReaderProductionBenchmark {
     @Test
     fun energyScene() = measureEnergy(BACKEND_SCENE_WEBTOON)
 
-    private fun measureBurst(backend: String, compilationMode: CompilationMode) {
+    private fun measureBurst(
+        backend: String,
+        compilationMode: CompilationMode,
+        fixtureMode: String = FIXTURE_MODE_STANDARD,
+    ) {
         benchmarkRule.measureRepeated(
             packageName = TARGET_PACKAGE,
             metrics = listOf(
@@ -115,7 +135,7 @@ class ReaderProductionBenchmark {
             compilationMode = compilationMode,
             startupMode = null,
             iterations = 5,
-            setupBlock = { setupIteration(backend) },
+            setupBlock = { setupIteration(backend, fixtureMode) },
         ) {
             burstFling()
         }
@@ -178,14 +198,17 @@ class ReaderProductionBenchmark {
         }
     }
 
-    private fun MacrobenchmarkScope.setupIteration(backend: String) {
+    private fun MacrobenchmarkScope.setupIteration(
+        backend: String,
+        fixtureMode: String = FIXTURE_MODE_STANDARD,
+    ) {
         killProcess()
         pressHome()
         val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
         val latch = CountDownLatch(1)
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                android.util.Log.e("ReaderBenchmark", "Received ACTION_BENCHMARK_READY broadcast for backend=$backend")
+                android.util.Log.e("ReaderBenchmark", "Received ACTION_BENCHMARK_READY broadcast for backend=$backend, fixtureMode=$fixtureMode")
                 latch.countDown()
             }
         }
@@ -197,11 +220,11 @@ class ReaderProductionBenchmark {
         }
 
         try {
-            android.util.Log.e("ReaderBenchmark", "setupIteration startBenchmarkActivity for backend=$backend")
-            startBenchmarkActivity(backend)
-            val ready = latch.await(15, TimeUnit.SECONDS)
-            android.util.Log.e("ReaderBenchmark", "setupIteration latch await returned ready=$ready for backend=$backend")
-            check(ready) { "benchmark_ready broadcast was not received within 15s for backend=$backend" }
+            android.util.Log.e("ReaderBenchmark", "setupIteration startBenchmarkActivity for backend=$backend, fixtureMode=$fixtureMode")
+            startBenchmarkActivity(backend, fixtureMode)
+            val ready = latch.await(30, TimeUnit.SECONDS)
+            android.util.Log.e("ReaderBenchmark", "setupIteration latch await returned ready=$ready for backend=$backend, fixtureMode=$fixtureMode")
+            check(ready) { "benchmark_ready broadcast was not received within 30s for backend=$backend, fixtureMode=$fixtureMode" }
         } finally {
             try {
                 targetContext.unregisterReceiver(receiver)
@@ -239,10 +262,14 @@ class ReaderProductionBenchmark {
         device.waitForIdle()
     }
 
-    private fun MacrobenchmarkScope.startBenchmarkActivity(backend: String) {
+    private fun MacrobenchmarkScope.startBenchmarkActivity(
+        backend: String,
+        fixtureMode: String = FIXTURE_MODE_STANDARD,
+    ) {
         val intent = Intent().apply {
             component = ComponentName(TARGET_PACKAGE, TARGET_ACTIVITY)
             putExtra(EXTRA_BACKEND, backend)
+            putExtra(EXTRA_FIXTURE_MODE, fixtureMode)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         startActivityAndWait(intent)
@@ -254,7 +281,11 @@ class ReaderProductionBenchmark {
         const val TARGET_ACTIVITY =
             "org.skepsun.kototoro.reader.benchmark.ReaderProductionBenchmarkActivity"
         const val EXTRA_BACKEND = "backend"
+        const val EXTRA_FIXTURE_MODE = "fixture_mode"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
+
+        const val FIXTURE_MODE_STANDARD = "standard"
+        const val FIXTURE_MODE_ULTRA_LONG = "ultra_long"
     }
 }

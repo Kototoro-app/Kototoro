@@ -63,8 +63,12 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
 
         requestHighRefreshRate()
 
-        // 1. Prepare deterministic 72-page fixture
-        pages = getOrCreateFixture(this)
+        val backend = intent.getStringExtra(EXTRA_BACKEND) ?: BACKEND_SCENE_WEBTOON
+        val fixtureMode = intent.getStringExtra(EXTRA_FIXTURE_MODE) ?: FIXTURE_MODE_STANDARD
+        android.util.Log.e("BenchmarkActivity", "onCreate starting for backend=$backend, fixtureMode=$fixtureMode")
+
+        // 1. Prepare deterministic fixture
+        pages = getOrCreateFixture(this, fixtureMode)
         pipeline = BenchmarkProductionImagePipeline(pages)
 
         // 2. Setup view hierarchy with explicit Android View readiness marker
@@ -86,9 +90,6 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             )
         }
-
-        val backend = intent.getStringExtra(EXTRA_BACKEND) ?: BACKEND_SCENE_WEBTOON
-        android.util.Log.e("BenchmarkActivity", "onCreate starting for backend=$backend")
 
         val composeView = ComposeView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -253,37 +254,55 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
     companion object {
         const val ACTION_BENCHMARK_READY = "org.skepsun.kototoro.BENCHMARK_READY"
         const val EXTRA_BACKEND = "backend"
+        const val EXTRA_FIXTURE_MODE = "fixture_mode"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
         const val BENCHMARK_SURFACE_TAG = "reader_benchmark_surface"
 
-        private const val FIXTURE_VERSION = "v1"
-        private const val PAGE_COUNT = 72
+        const val FIXTURE_MODE_STANDARD = "standard"
+        const val FIXTURE_MODE_ULTRA_LONG = "ultra_long"
 
-        private val DIMENSION_HEIGHTS = intArrayOf(
+        private const val FIXTURE_VERSION_STANDARD = "v1"
+        private const val FIXTURE_VERSION_ULTRA_LONG = "v1_ultra_long"
+        private const val PAGE_COUNT_STANDARD = 72
+        private const val PAGE_COUNT_ULTRA_LONG = 12
+
+        private val DIMENSION_HEIGHTS_STANDARD = intArrayOf(
             1440, 2400, 1280, 800, 950, 1750, 2100, 3200,
             1080, 2560, 1350, 1920,
         )
-        private val DIMENSION_WIDTHS = intArrayOf(
+        private val DIMENSION_WIDTHS_STANDARD = intArrayOf(
             800, 800, 800, 1200, 800, 800, 800, 800,
             800, 800, 800, 800,
         )
 
-        fun getOrCreateFixture(context: Context): List<ReaderPage> {
-            val fixtureDir = File(context.filesDir, "reader-benchmark/$FIXTURE_VERSION")
+        private val DIMENSION_HEIGHTS_ULTRA_LONG = intArrayOf(
+            12000, 20000, 16000, 30000, 40000, 15000,
+            25000, 35000, 18000, 28000, 14000, 40000,
+        )
+        private const val DIMENSION_WIDTH_ULTRA_LONG = 1080
+
+        fun getOrCreateFixture(
+            context: Context,
+            mode: String = FIXTURE_MODE_STANDARD,
+        ): List<ReaderPage> {
+            val isUltra = mode == FIXTURE_MODE_ULTRA_LONG
+            val version = if (isUltra) FIXTURE_VERSION_ULTRA_LONG else FIXTURE_VERSION_STANDARD
+            val pageCount = if (isUltra) PAGE_COUNT_ULTRA_LONG else PAGE_COUNT_STANDARD
+            val heights = if (isUltra) DIMENSION_HEIGHTS_ULTRA_LONG else DIMENSION_HEIGHTS_STANDARD
+            val fixtureDir = File(context.filesDir, "reader-benchmark/$version")
             if (!fixtureDir.exists()) {
                 fixtureDir.mkdirs()
             }
 
-            val pages = ArrayList<ReaderPage>(PAGE_COUNT)
+            val pages = ArrayList<ReaderPage>(pageCount)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-            for (index in 0 until PAGE_COUNT) {
+            for (index in 0 until pageCount) {
                 val file = File(fixtureDir, "page_%03d.jpg".format(index))
                 if (!file.exists() || file.length() == 0L) {
-                    val patternIndex = index % DIMENSION_HEIGHTS.size
-                    val width = DIMENSION_WIDTHS[patternIndex]
-                    val height = DIMENSION_HEIGHTS[patternIndex]
+                    val width = if (isUltra) DIMENSION_WIDTH_ULTRA_LONG else DIMENSION_WIDTHS_STANDARD[index % DIMENSION_WIDTHS_STANDARD.size]
+                    val height = heights[index % heights.size]
 
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                     val canvas = AndroidCanvas(bitmap)

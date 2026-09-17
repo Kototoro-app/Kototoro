@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PrefetchReadiness
@@ -41,6 +42,7 @@ import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderPageTransformation
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
+import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -59,12 +61,47 @@ class KototoroImagePipelineAdapter(
     private val isCropEnabled: Boolean = false,
     private val bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    regionDecoderFactory: RegionDecoderFactory? = null,
+    private val decodePlanner: DecodePlanner = DecodePlanner(),
+    tileManager: ReaderTileManager? = null,
+    private val viewportSizeProvider: () -> IntSize = { IntSize(1080, 2400) },
     private val pageLookup: (PageId) -> ReaderPage? = { null },
 ) : ReaderImagePipeline {
 
     private val cachedAssets = ConcurrentHashMap<PageId, ReaderImageAsset>()
     private val inFlightLoads = ConcurrentHashMap<PageId, Deferred<ReaderImageAsset?>>()
     private val inFlightSourceLoads = ConcurrentHashMap<PageId, Job>()
+    private val regionSources = ConcurrentHashMap<PageId, RegionDecodeSource>()
+
+    val actualRegionDecoderFactory: RegionDecoderFactory? by lazy {
+        regionDecoderFactory ?: runCatching { AndroidRegionDecoderFactory(context, ioDispatcher) }.getOrNull()
+    }
+
+    val actualTileManager: ReaderTileManager by lazy {
+        tileManager ?: ReaderTileManager(
+            scope = scope,
+            decodeDispatcher = ioDispatcher,
+            sourceFactory = { id -> regionSources[id] },
+            costOf = { payload ->
+                when (payload) {
+                    is Bitmap -> payload.allocationByteCount.toLong()
+                    else -> 0L
+                }
+            },
+            payloadReleaser = { payload ->
+                if (payload is Bitmap && !payload.isRecycled) {
+                    payload.recycle()
+                }
+            },
+        )
+    }
+
+    val tileStore: TileStore get() = actualTileManager
+
+    fun requestTiles(pageId: PageId, visibleRegion: IntRect, lookaheadRegion: IntRect? = null) {
+        val asset = cachedAssets[pageId] as? ReaderImageAsset.Tiled ?: return
+        actualTileManager.requestTiles(asset.grid, visibleRegion, lookaheadRegion)
+    }
     @Volatile
     private var desiredReadiness: Map<PageId, PrefetchReadiness>? = null
     private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
@@ -109,6 +146,9 @@ class KototoroImagePipelineAdapter(
         if (inMemory is ReaderImageAsset.AndroidBitmap) {
             return IntSize(inMemory.bitmap.width, inMemory.bitmap.height)
         }
+        if (inMemory is ReaderImageAsset.Tiled) {
+            return inMemory.grid.pageSize
+        }
 
         val state = composePipeline.cachedState(pageId.value)
         val uri = when (state) {
@@ -151,7 +191,7 @@ class KototoroImagePipelineAdapter(
             if (!force) {
                 if (loadStates.value[pageId] is ReaderImageLoadState.Failed) return null
                 val cached = cachedAssets[pageId]
-                if (cached is ReaderImageAsset.ComposeImage) return cached
+                if (cached is ReaderImageAsset.ComposeImage || cached is ReaderImageAsset.Tiled) return cached
             }
             val page = pageLookup(pageId) ?: return null
             scope.async(ioDispatcher, start = CoroutineStart.LAZY) {
@@ -175,6 +215,74 @@ class KototoroImagePipelineAdapter(
                         is ComposeReaderImageState.OriginalReady -> readyState.original
                         is ComposeReaderImageState.EnhancedReady -> readyState.enhanced
                         else -> error("Image source did not produce a display URI")
+                    }
+
+                    // Attempt region decoding and planning for non-animated images
+                    val factory = actualRegionDecoderFactory
+                    val tiledAsset: ReaderImageAsset.Tiled? = if (factory != null) {
+                        runCatching {
+                            val cropBounds = if (isCropEnabled) composePipeline.getTrimmedBounds(uri) else null
+                            val initialSource = factory.create(uri)
+                            if (!initialSource.metadata.isAnimated) {
+                                val contentRect = if (cropBounds != null) {
+                                    IntRect(cropBounds.left, cropBounds.top, cropBounds.right, cropBounds.bottom)
+                                        .intersectionOrNull(IntRect.fromLtwh(0, 0, initialSource.metadata.size.width, initialSource.metadata.size.height))
+                                        ?: IntRect.fromLtwh(0, 0, initialSource.metadata.size.width, initialSource.metadata.size.height)
+                                } else {
+                                    IntRect.fromLtwh(0, 0, initialSource.metadata.size.width, initialSource.metadata.size.height)
+                                }
+                                val geometry = ImageSourceGeometry(
+                                    encodedSize = initialSource.metadata.size,
+                                    contentRect = contentRect,
+                                    orientationDegrees = initialSource.geometry.orientationDegrees,
+                                )
+                                val vpSize = viewportSizeProvider()
+                                val plan = decodePlanner.plan(
+                                    pageId = pageId,
+                                    metadata = initialSource.metadata,
+                                    geometry = geometry,
+                                    viewportWidth = vpSize.width.coerceAtLeast(100),
+                                    viewportHeight = vpSize.height.coerceAtLeast(100),
+                                )
+                                if (plan is DecodePlan.Tiled) {
+                                    regionSources[pageId] = initialSource
+                                    val split = page.split.toTileSplit()
+                                    val grid = TileGrid(
+                                        pageId = pageId,
+                                        geometry = geometry,
+                                        split = split,
+                                        tileDimension = plan.tileDimension,
+                                        sampleSize = plan.lod.sampleSize,
+                                    )
+                                    actualTileManager.requestOverview(grid, plan.overviewLod.sampleSize)
+                                    val overviewKey = grid.overviewTile(plan.overviewLod.sampleSize).key
+                                    val asset = ReaderImageAsset.Tiled(
+                                        pageId = pageId,
+                                        grid = grid,
+                                        tileStore = actualTileManager,
+                                        overviewKey = overviewKey,
+                                    )
+                                    val retained = storeAsset(pageId, asset)
+                                    composePipeline.onImageDecoded(page, grid.pageSize.width, grid.pageSize.height)
+                                    if (retained) {
+                                        withContext(Dispatchers.Main) {
+                                            onAssetLoaded?.invoke(pageId, asset)
+                                        }
+                                    }
+                                    asset
+                                } else {
+                                    null
+                                }
+                            } else {
+                                null
+                            }
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+
+                    if (tiledAsset != null) {
+                        return@async tiledAsset
                     }
                     val request = ImageRequest.Builder(context)
                         .data(uri)
@@ -246,7 +354,8 @@ class KototoroImagePipelineAdapter(
 
             val targetReadiness = desired[pageId] ?: request.readiness
             if (targetReadiness == PrefetchReadiness.PRESENTATION_READY) {
-                if (cachedAssets[pageId] is ReaderImageAsset.ComposeImage || inFlightLoads.containsKey(pageId)) {
+                val current = cachedAssets[pageId]
+                if (current is ReaderImageAsset.ComposeImage || current is ReaderImageAsset.Tiled || inFlightLoads.containsKey(pageId)) {
                     continue
                 }
                 inFlightSourceLoads.remove(pageId)?.cancel()
@@ -302,6 +411,9 @@ class KototoroImagePipelineAdapter(
 
             val current = cachedAssets[pageId]
             if (current != null && current !is ReaderImageAsset.Encoded) {
+                if (current is ReaderImageAsset.Tiled) {
+                    actualTileManager.releasePage(pageId)
+                }
                 // Remove presentation asset from renderer-facing state flow and ready state
                 updateAssets { it - pageId }
                 mutableLoadStates.update { it - pageId }
@@ -325,7 +437,7 @@ class KototoroImagePipelineAdapter(
         val cached = cachedAssets[pageId]
         if (cached != null) {
             emit(cached)
-            if (cached is ReaderImageAsset.ComposeImage) return@flow
+            if (cached is ReaderImageAsset.ComposeImage || cached is ReaderImageAsset.Tiled) return@flow
         }
         val acquired = acquireAsset(pageId)
         if (acquired != null && acquired != cached) {
@@ -353,7 +465,15 @@ class KototoroImagePipelineAdapter(
         inFlightLoads.remove(pageId)?.cancel()
         cachedAssets.remove(pageId)
         inFlightSourceLoads.remove(pageId)?.cancel()
+        actualTileManager.releasePage(pageId)
+        regionSources.remove(pageId)
         updateAssets { it - pageId }
         mutableLoadStates.update { it - pageId }
     }
+}
+
+internal fun ReaderPageSplit.toTileSplit(): TileSplit = when (this) {
+    ReaderPageSplit.NONE -> TileSplit.NONE
+    ReaderPageSplit.LEFT -> TileSplit.LEFT
+    ReaderPageSplit.RIGHT -> TileSplit.RIGHT
 }
