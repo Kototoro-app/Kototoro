@@ -11,8 +11,8 @@ import kotlin.math.abs
  * @property maxLookaheadExtraPx Maximum additional lookahead distance in pixels capped to prevent unbounded prefetching on violent flings.
  */
 data class ReaderPredictionConfig(
-    val staticAheadFraction: Float = 1.0f,
-    val staticBehindFraction: Float = 0.5f,
+    val staticAheadFraction: Float = 2.5f,
+    val staticBehindFraction: Float = 1.0f,
     val lookaheadHorizonSeconds: Float = 0.6f,
     val maxLookaheadExtraPx: Float = 6000f,
 )

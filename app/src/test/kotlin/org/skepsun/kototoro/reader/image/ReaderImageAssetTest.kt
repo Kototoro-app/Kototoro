@@ -3,18 +3,29 @@ package org.skepsun.kototoro.reader.image
 import android.content.Context
 import android.net.Uri
 import coil3.ImageLoader
+import coil3.asImage
+import coil3.request.SuccessResult
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.reader.core.PageId
@@ -25,17 +36,70 @@ import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderImageAssetTest {
 
+    @Test
+    fun `download failure remains observable instead of becoming an empty asset`() = runTest {
+        val failure = java.net.SocketTimeoutException("Image connection timed out")
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.Failed(null, failure)
+        }
+        val adapter = KototoroImagePipelineAdapter(context, pipeline, imageLoader, this) { page1 }
+        val pageId = PageId(page1.readerKey)
+
+        assertNull(adapter.acquireAsset(pageId))
+
+        val state = adapter.loadStates.value[pageId]
+        assertTrue(state is ReaderImageLoadState.Failed)
+        assertSame(failure, (state as ReaderImageLoadState.Failed).cause)
+    }
+
     private val context = mockk<Context>(relaxed = true)
     private val imageLoader = mockk<ImageLoader>(relaxed = true)
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
 
+    @BeforeEach
+    fun setUp() {
+        every { imageLoader.memoryCache } returns null
+        Dispatchers.setMain(testDispatcher)
+        val bitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { bitmap.width } returns 640
+        every { bitmap.height } returns 1280
+        val result = mockk<SuccessResult>()
+        every { result.image } returns bitmap.asImage()
+        coEvery { imageLoader.execute(any()) } returns result
+    }
+
+    @AfterEach
+    fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `failed page stays failed until explicit retry then becomes drawable`() = runTest(testDispatcher) {
+        val failure = java.net.SocketTimeoutException("Image connection timed out")
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.Failed(null, failure)
+        }
+        val adapter = KototoroImagePipelineAdapter(context, pipeline, imageLoader, this) { page1 }
+        val pageId = PageId(page1.readerKey)
+        assertNull(adapter.acquireAsset(pageId))
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///recovered.png"
+        pipeline.stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+
+        assertNull(adapter.acquireAsset(pageId), "Scrolling must not silently retry a failed page")
+        val recovered = adapter.retryAsset(pageId)
+        assertTrue(recovered is ReaderImageAsset.ComposeImage)
+        assertEquals(ReaderImageLoadState.Ready, adapter.loadStates.value[pageId])
+        assertTrue(pipeline.lastForce)
+    }
+
     private class FakeComposeReaderImagePipeline : ComposeReaderImagePipeline {
         var stateToReturn: ComposeReaderImageState? = null
+        var lastForce = false
 
         override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateToReturn
 
         override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = flow {
+            lastForce = force
             stateToReturn?.let { emit(it) }
         }
     }
@@ -93,7 +157,7 @@ class ReaderImageAssetTest {
     }
 
     @Test
-    fun `adapter observeAsset maps ComposeReaderImageState to ReaderImageAsset`() = testScope.run {
+    fun `adapter observeAsset maps ComposeReaderImageState to ReaderImageAsset`() = runTest(testDispatcher) {
         val mockUri = mockk<Uri>()
         every { mockUri.toString() } returns "file:///downloaded/page1.jpg"
 
@@ -104,15 +168,71 @@ class ReaderImageAssetTest {
             context = context,
             composePipeline = fakePipeline,
             imageLoader = imageLoader,
+            scope = this,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+
+        val emitted = adapter.observeAsset(PageId(page1.readerKey)).first()
+        assertNotNull(emitted)
+        assertTrue(emitted is ReaderImageAsset.ComposeImage)
+    }
+
+    @Test
+    fun `adapter acquireAsset retrieves asset and deduplicates concurrent requests`() = runTest(testDispatcher) {
+        val mockUri = mockk<Uri>()
+        every { mockUri.toString() } returns "file:///downloaded/page1.jpg"
+
+        val fakePipeline = FakeComposeReaderImagePipeline()
+        fakePipeline.stateToReturn = ComposeReaderImageState.OriginalReady(mockUri)
+
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+
+        // Multiple concurrent acquire calls
+        val pageId = PageId(page1.readerKey)
+        val deferred1 = async { adapter.acquireAsset(pageId) }
+        val deferred2 = async { adapter.acquireAsset(pageId) }
+
+        val asset1 = deferred1.await()
+        val asset2 = deferred2.await()
+
+        assertNotNull(asset1)
+        assertNotNull(asset2)
+        assertEquals(asset1, asset2)
+        assertEquals(asset1, adapter.getCachedAsset(pageId))
+    }
+
+    @Test
+    fun `adapter retrieves ComposeImage directly if present in Coil memoryCache`() {
+        val mockUri = mockk<Uri>()
+        every { mockUri.toString() } returns "file:///cached/page1.jpg"
+
+        val fakePipeline = FakeComposeReaderImagePipeline()
+        fakePipeline.stateToReturn = ComposeReaderImageState.OriginalReady(mockUri)
+
+        val mockMemoryCache = mockk<coil3.memory.MemoryCache>()
+        val mockValue = mockk<coil3.memory.MemoryCache.Value>()
+        val mockBitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        val mockImage = mockBitmap.asImage()
+        every { mockValue.image } returns mockImage
+        every { mockMemoryCache.get(coil3.memory.MemoryCache.Key("file:///cached/page1.jpg")) } returns mockValue
+        every { imageLoader.memoryCache } returns mockMemoryCache
+
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
             scope = testScope,
             pageLookup = { if (it.value == page1.readerKey) page1 else null },
         )
 
-        val emitted = kotlinx.coroutines.runBlocking {
-            adapter.observeAsset(PageId(page1.readerKey)).first()
-        }
-        assertNotNull(emitted)
-        assertTrue(emitted is ReaderImageAsset.Encoded)
-        assertEquals("file:///downloaded/page1.jpg", (emitted as ReaderImageAsset.Encoded).uriString)
+        val asset = adapter.getCachedAsset(PageId(page1.readerKey))
+        assertNotNull(asset)
+        assertTrue(asset is ReaderImageAsset.ComposeImage)
     }
 }

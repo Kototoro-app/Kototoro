@@ -109,27 +109,17 @@ class VerticalReaderScene(
     }
 
     /**
-     * Resolves the active reading page key matching legacy [resolveLastEndVisibleWebtoonPageKey] semantics.
+     * Resolves the active reading page ID for a given [viewport].
      *
-     * Selects the last page whose bottom edge is strictly inside the viewport:
-     * `bottom > viewport.top && bottom <= viewport.bottom`.
-     * If no page ends inside the viewport (e.g. a tall strip spans the entire viewport), falls back to the
-     * first visible page.
+     * In vertical webtoon reading, the reading anchor is the first visible page spanning
+     * the top of the viewport (`nodes.first().pageId`), which guarantees that intra-page
+     * scroll offsets are strictly positive, invertible, and prevent progress drift across sessions.
      */
     fun resolveActivePageId(viewport: ReaderViewport): PageId? {
         val frame = resolve(viewport)
         val nodes = frame.visibleNodes
         if (nodes.isEmpty()) return null
-
-        val viewportTop = viewport.bounds.top
-        val viewportBottom = viewport.bounds.bottom
-
-        val lastEndingNode = nodes.lastOrNull { node ->
-            val pageBottom = node.sceneBounds.bottom
-            pageBottom > viewportTop && pageBottom <= viewportBottom
-        }
-
-        return lastEndingNode?.pageId ?: nodes.first().pageId
+        return nodes.first().pageId
     }
 
     /**
@@ -198,12 +188,18 @@ class VerticalReaderScene(
             // Case 2: Page was completely above viewport -> shift viewport down by deltaHeight
             oldBottom <= viewportTop -> deltaHeight
 
-            // Case 3: Viewport was currently intersecting this page -> anchored intra-page compensation
+            // Case 3: Viewport was currently intersecting this page -> preserve intra-page pixel offset
             else -> {
-                val intraPageOffset = (viewportTop - oldTop).coerceAtLeast(0f)
-                val relativeRatio = if (oldHeight > 0f) (intraPageOffset / oldHeight).coerceIn(0f, 1f) else 0f
-                val newIntraPageOffset = relativeRatio * newHeight
-                newIntraPageOffset - intraPageOffset
+                val intraPageOffset = viewportTop - oldTop
+                if (intraPageOffset > 0f) {
+                    if (intraPageOffset > newHeight) {
+                        newHeight - intraPageOffset
+                    } else {
+                        0f
+                    }
+                } else {
+                    0f
+                }
             }
         }
 

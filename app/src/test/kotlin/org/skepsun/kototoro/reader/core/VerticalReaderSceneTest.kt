@@ -66,7 +66,7 @@ class VerticalReaderSceneTest {
     }
 
     @Test
-    fun `resolveActivePageId matches last visible end semantics`() {
+    fun `resolveActivePageId anchors to first visible page at viewport top`() {
         val scene = VerticalReaderScene(
             availableWidth = 1000,
             defaultViewportHeight = 1000,
@@ -76,13 +76,51 @@ class VerticalReaderSceneTest {
             ),
         )
 
-        // Viewport looking at 200..1200 (both pages visible; page 105 ends at 400, page 201 ends at 1200)
+        // Viewport looking at 200..1200 (page 105 spans 0..400, covering viewport top at 200)
         val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 200f, 1000f, 1000f))
-        assertEquals(PageId(201L), scene.resolveActivePageId(viewport))
+        assertEquals(PageId(105L), scene.resolveActivePageId(viewport))
 
-        // Viewport looking at 0..300 (only page 105 visible, none ends in viewport -> fallback to first)
+        // Viewport looking at 0..300 (page 105 spans 0..400, covering viewport top at 0)
         val topViewport = ReaderViewport(FloatRect.fromLtwh(0f, 0f, 1000f, 300f))
         assertEquals(PageId(105L), scene.resolveActivePageId(topViewport))
+
+        // Viewport looking at 500..1500 (page 201 spans 400..1200, covering viewport top at 500)
+        val nextViewport = ReaderViewport(FloatRect.fromLtwh(0f, 500f, 1000f, 1000f))
+        assertEquals(PageId(201L), scene.resolveActivePageId(nextViewport))
+    }
+
+    @Test
+    fun `save and restore roundtrip preserves exact viewport position across sessions without page drift`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Exact(1000, 1200), // 0..1200
+                PageId(2L) to PageGeometryHint.Exact(1000, 1200), // 1200..2400
+                PageId(3L) to PageGeometryHint.Exact(1000, 1200), // 2400..3600
+                PageId(4L) to PageGeometryHint.Exact(1000, 1200), // 3600..4800
+            ),
+        )
+
+        // User is reading at scrollY = 1500 (inside Page 2: 1200..2400, 300px into Page 2)
+        val initialScrollY = 1500f
+        val vp = ReaderViewport(FloatRect.fromLtwh(0f, initialScrollY, 1000f, 2000f))
+        val activeId = scene.resolveActivePageId(vp)
+        assertEquals(PageId(2L), activeId)
+
+        val frame = scene.resolve(vp)
+        val node = frame.visibleNodes.first { it.pageId == activeId }
+        val savedScroll = (vp.bounds.top - node.sceneBounds.top).toInt()
+        assertEquals(300, savedScroll)
+
+        // Session 2: User re-enters at Page 2 with savedScroll = 300
+        val restoredPageTop = scene.resolvePageScrollPosition(activeId!!)!!
+        val restoredScrollY = restoredPageTop + savedScroll.toFloat()
+        assertEquals(initialScrollY, restoredScrollY)
+
+        // Verify active page on re-entry is still Page 2, not Page 3 or Page 4
+        val restoredVp = ReaderViewport(FloatRect.fromLtwh(0f, restoredScrollY, 1000f, 2000f))
+        assertEquals(PageId(2L), scene.resolveActivePageId(restoredVp))
     }
 
     @Test
@@ -138,7 +176,7 @@ class VerticalReaderSceneTest {
     }
 
     @Test
-    fun `updatePageHint performs anchored intra-page compensation when reading the changing page`() {
+    fun `updatePageHint preserves intra-page absolute offset when reading the changing page`() {
         val scene = VerticalReaderScene(
             availableWidth = 1000,
             defaultViewportHeight = 2000,
@@ -147,18 +185,43 @@ class VerticalReaderSceneTest {
             ),
         )
 
-        // Viewport is 500px into Page 1 (25% progress within the 2000px page)
+        // Viewport is 500px into Page 1
         val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 500f, 1000f, 1000f))
 
         // Page 1 resolves exact dimensions: 1000x4000 (new height = 4000px)
-        // 25% into 4000px page is 1000px. Delta from 500px is +500px.
+        // Since intraPageOffset (500px) <= newHeight (4000px), reading offset must remain exactly 500px (deltaY = 0f)
         val compensation = scene.updatePageHint(
             pageId = PageId(1L),
             newHint = PageGeometryHint.Exact(1000, 4000),
             currentViewport = viewport,
         )
 
-        assertEquals(500f, compensation?.deltaY)
+        assertEquals(0f, compensation?.deltaY)
+        assertEquals(500f, compensation?.compensatedViewport?.bounds?.top)
+    }
+
+    @Test
+    fun `updatePageHint clamps intra-page offset when page shrinks below viewport top`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Estimated(1f), // 0..2000
+            ),
+        )
+
+        // Viewport is 1500px into Page 1
+        val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 1500f, 1000f, 1000f))
+
+        // Page 1 resolves exact dimensions: 1000x1000 (new height = 1000px)
+        // Since intraPageOffset (1500px) > newHeight (1000px), viewport clamps to 1000px (deltaY = -500f)
+        val compensation = scene.updatePageHint(
+            pageId = PageId(1L),
+            newHint = PageGeometryHint.Exact(1000, 1000),
+            currentViewport = viewport,
+        )
+
+        assertEquals(-500f, compensation?.deltaY)
         assertEquals(1000f, compensation?.compensatedViewport?.bounds?.top)
     }
 }

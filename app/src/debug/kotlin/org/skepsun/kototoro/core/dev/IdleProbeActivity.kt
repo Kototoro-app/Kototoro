@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,12 +39,21 @@ class IdleProbeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val isGrid = intent?.getStringExtra(EXTRA_MODE) != MODE_BOX
+        val isSceneRecovery = intent?.getBooleanExtra(EXTRA_SCENE_RECOVERY, false) == true
         setContent {
-            KototoroTheme {
-                if (isGrid) {
-                    ProbeGrid()
-                } else {
-                    ProbeBox()
+            if (isSceneRecovery) {
+                // ComposeSceneWebtoonReader tests replace this content immediately. Keep the
+                // initial composition free of KototoroTheme's Hilt-backed network providers.
+                MaterialTheme {
+                    Box(modifier = Modifier.fillMaxSize())
+                }
+            } else {
+                KototoroTheme {
+                    if (isGrid) {
+                        ProbeGrid()
+                    } else {
+                        ProbeBox()
+                    }
                 }
             }
         }
@@ -86,6 +96,7 @@ class IdleProbeActivity : ComponentActivity() {
     private companion object {
         const val EXTRA_MODE = "mode"
         const val MODE_BOX = "box"
+        const val EXTRA_SCENE_RECOVERY = "scene_recovery"
     }
 }
 

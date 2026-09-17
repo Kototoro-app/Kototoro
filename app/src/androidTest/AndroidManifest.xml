@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!-- The Hilt test application does not provide the production WorkManager configuration. -->
+        <service
+            android:name="androidx.work.impl.background.systemjob.SystemJobService"
+            android:enabled="false"
+            tools:replace="android:enabled" />
+        <service
+            android:name="androidx.work.impl.background.systemalarm.SystemAlarmService"
+            android:enabled="false"
+            tools:replace="android:enabled" />
+    </application>
+
+</manifest>

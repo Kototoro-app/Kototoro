@@ -201,6 +201,10 @@ fun ComposeReaderScreenRoot(
                 onInternalScrollChanged = { page, scroll ->
                     onReaderInternalScrollChanged(page.readerKey, scroll)
                 },
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
+                bitmapConfig = readerSettings.bitmapConfig,
+                imageColorFilter = readerImageColorFilter,
                 modifier = readerModifier,
                 readerBackgroundColor = readerBackgroundColor,
             )

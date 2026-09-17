@@ -1,9 +1,8 @@
 package org.skepsun.kototoro.reader.render.compose
 
 import androidx.compose.animation.core.AnimationState
-import androidx.compose.animation.core.FloatExponentialDecaySpec
 import androidx.compose.animation.core.animateDecay
-import androidx.compose.animation.core.generateDecayAnimationSpec
+import androidx.compose.animation.splineBasedDecay
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -22,13 +21,22 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CancellationException
@@ -59,7 +67,10 @@ fun ComposeSceneRenderer(
     scene: VerticalReaderScene,
     modifier: Modifier = Modifier,
     initialScrollY: Float = 0f,
+    scrollState: ComposeSceneScrollState = rememberComposeSceneScrollState(initialScrollY),
     placeholderColor: Color = Color.DarkGray,
+    pageLabelProvider: ((PageId) -> String)? = null,
+    imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
     onActivePageChanged: (PageId) -> Unit = {},
@@ -69,19 +80,17 @@ fun ComposeSceneRenderer(
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
 
-    // High-frequency scroll offset. Read ONLY in the Draw Phase to bypass Composition/Layout!
-    val scrollYState = remember { mutableFloatStateOf(initialScrollY) }
-    var isFlinging by remember { mutableStateOf(false) }
-
     val coroutineScope = rememberCoroutineScope()
     var flingJob by remember { mutableStateOf<Job?>(null) }
-    val decaySpec = remember { FloatExponentialDecaySpec().generateDecayAnimationSpec<Float>() }
+    val density = LocalDensity.current
+    val decaySpec = remember(density) { splineBasedDecay<Float>(density) }
+    val textMeasurer = rememberTextMeasurer()
 
     // Low-frequency active page observer (fires only when active page index changes)
-    LaunchedEffect(scene) {
+    LaunchedEffect(scene, scrollState) {
         snapshotFlow {
             if (viewportWidth <= 0f || viewportHeight <= 0f) return@snapshotFlow null
-            val currentY = scrollYState.floatValue
+            val currentY = scrollState.scrollY
             val viewport = ReaderViewport(
                 bounds = FloatRect.fromLtwh(0f, currentY, viewportWidth, viewportHeight),
             )
@@ -101,12 +110,14 @@ fun ComposeSceneRenderer(
             .onSizeChanged { size ->
                 viewportWidth = size.width.toFloat()
                 viewportHeight = size.height.toFloat()
+                scrollState.maxScrollY = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
             }
-            .pointerInput(scene) {
+            .pointerInput(scene, scrollState) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     flingJob?.cancel()
-                    isFlinging = false
+                    scrollState.isFlinging = false
+                    scrollState.isDragging = true
                     onMotionChanged(
                         ViewportMotion(
                             isDragging = true,
@@ -117,6 +128,7 @@ fun ComposeSceneRenderer(
                     val velocityTracker = VelocityTracker()
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     var lastPointerY = down.position.y
+                    var lastUptimeMillis = down.uptimeMillis
 
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -127,14 +139,21 @@ fun ComposeSceneRenderer(
                         val deltaY = lastPointerY - currentPointerY
                         lastPointerY = currentPointerY
 
+                        val currentUptimeMillis = change.uptimeMillis
+                        val dtMillis = (currentUptimeMillis - lastUptimeMillis).coerceAtLeast(1L)
+                        lastUptimeMillis = currentUptimeMillis
+
+                        val instantVelocityY = (deltaY * 1000f) / dtMillis
+
                         val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
-                        val newScroll = (scrollYState.floatValue + deltaY).coerceIn(0f, maxScroll)
-                        scrollYState.floatValue = newScroll
+                        scrollState.maxScrollY = maxScroll
+                        val newScroll = (scrollState.scrollY + deltaY).coerceIn(0f, maxScroll)
+                        scrollState.snapTo(newScroll)
                         onScrollProgressChanged(newScroll, maxScroll)
                         onMotionChanged(
                             ViewportMotion(
                                 velocityX = 0f,
-                                velocityY = deltaY * 60f,
+                                velocityY = instantVelocityY,
                                 isDragging = true,
                                 timestampNanos = change.uptimeMillis * 1_000_000L,
                             ),
@@ -143,11 +162,12 @@ fun ComposeSceneRenderer(
                         change.consume()
                     } while (event.changes.any { it.pressed })
 
+                    scrollState.isDragging = false
                     val velocity = velocityTracker.calculateVelocity()
                     val initialVelocityY = -velocity.y
 
                     if (kotlin.math.abs(initialVelocityY) > 100f) {
-                        isFlinging = true
+                        scrollState.isFlinging = true
                         onMotionChanged(
                             ViewportMotion(
                                 velocityX = 0f,
@@ -158,14 +178,18 @@ fun ComposeSceneRenderer(
                         )
                         flingJob = coroutineScope.launch {
                             try {
-                                val anim = AnimationState(
-                                    initialValue = scrollYState.floatValue,
+                                val animState = AnimationState(
+                                    initialValue = scrollState.scrollY,
                                     initialVelocity = initialVelocityY,
                                 )
-                                anim.animateDecay(decaySpec) {
+                                var lastAnimatedY = scrollState.scrollY
+                                animState.animateDecay(decaySpec) {
+                                    val frameDelta = value - lastAnimatedY
+                                    lastAnimatedY = value
                                     val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
-                                    val clamped = value.coerceIn(0f, maxScroll)
-                                    scrollYState.floatValue = clamped
+                                    scrollState.maxScrollY = maxScroll
+                                    val clamped = (scrollState.scrollY + frameDelta).coerceIn(0f, maxScroll)
+                                    scrollState.snapTo(clamped)
                                     onScrollProgressChanged(clamped, maxScroll)
                                     onMotionChanged(
                                         ViewportMotion(
@@ -175,14 +199,14 @@ fun ComposeSceneRenderer(
                                             timestampNanos = System.nanoTime(),
                                         ),
                                     )
-                                    if (clamped == 0f || clamped == maxScroll) {
+                                    if (clamped <= 0f || clamped >= maxScroll) {
                                         cancelAnimation()
                                     }
                                 }
                             } catch (_: CancellationException) {
                                 // Fling was interrupted by a new touch down
                             } finally {
-                                isFlinging = false
+                                scrollState.isFlinging = false
                                 onMotionChanged(ViewportMotion.Idle)
                             }
                         }
@@ -192,9 +216,9 @@ fun ComposeSceneRenderer(
                 }
             }
             .drawWithContent {
-                // DRAW PHASE: Read scrollYState here.
-                // Modifying scrollYState schedules a redraw without triggering Composition or Layout!
-                val currentY = scrollYState.floatValue
+                // DRAW PHASE: Read scrollState.scrollY here.
+                // Modifying scrollState schedules a redraw without triggering Composition or Layout!
+                val currentY = scrollState.scrollY
                 val vWidth = size.width
                 val vHeight = size.height
 
@@ -203,7 +227,16 @@ fun ComposeSceneRenderer(
                         bounds = FloatRect.fromLtwh(0f, currentY, vWidth, vHeight),
                     )
                     val frame = scene.resolve(viewport)
-                    drawFrameNodes(frame, currentY, placeholderColor, assetProvider, readerAssetProvider)
+                    drawFrameNodes(
+                        frame = frame,
+                        viewportScrollY = currentY,
+                        placeholderColor = placeholderColor,
+                        pageLabelProvider = pageLabelProvider,
+                        textMeasurer = textMeasurer,
+                        imageColorFilter = imageColorFilter,
+                        assetProvider = assetProvider,
+                        readerAssetProvider = readerAssetProvider,
+                    )
                 }
 
                 drawContent()
@@ -218,6 +251,9 @@ internal fun DrawScope.drawFrameNodes(
     frame: org.skepsun.kototoro.reader.core.ReaderFrame,
     viewportScrollY: Float,
     placeholderColor: Color,
+    pageLabelProvider: ((PageId) -> String)? = null,
+    textMeasurer: TextMeasurer? = null,
+    imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
 ) {
@@ -234,17 +270,88 @@ internal fun DrawScope.drawFrameNodes(
         }
 
         if (resolvedBitmap != null) {
+            // Actual image loaded: draw seamlessly without any borders, dividers, or text overlays
             drawImage(
                 image = resolvedBitmap,
                 dstOffset = IntOffset(screenLeft.roundToInt(), screenTop.roundToInt()),
                 dstSize = IntSize(nodeWidth.roundToInt(), nodeHeight.roundToInt()),
+                colorFilter = imageColorFilter,
             )
         } else {
+            // 1. Base placeholder background fill
             drawRect(
                 color = placeholderColor,
                 topLeft = Offset(screenLeft, screenTop),
                 size = Size(nodeWidth, nodeHeight),
             )
+
+            // Subtle alternating tint for adjacent placeholders
+            val isEven = (node.pageId.value % 2L == 0L)
+            if (!isEven) {
+                drawRect(
+                    color = Color(0x0FFFFFFF),
+                    topLeft = Offset(screenLeft, screenTop),
+                    size = Size(nodeWidth, nodeHeight),
+                )
+            }
+
+            // 2. Light outline border
+            drawRect(
+                color = Color(0x33FFFFFF),
+                topLeft = Offset(screenLeft, screenTop),
+                size = Size(nodeWidth, nodeHeight),
+                style = Stroke(width = 2f),
+            )
+
+            // 3. Top and bottom boundary divider lines
+            drawLine(
+                color = Color(0xFF4A4A4D),
+                start = Offset(screenLeft, screenTop),
+                end = Offset(screenLeft + nodeWidth, screenTop),
+                strokeWidth = 3f,
+            )
+            drawLine(
+                color = Color(0xFF4A4A4D),
+                start = Offset(screenLeft, screenTop + nodeHeight),
+                end = Offset(screenLeft + nodeWidth, screenTop + nodeHeight),
+                strokeWidth = 3f,
+            )
+
+            // 4. Centered floating page label badge in visible viewport slice
+            if (pageLabelProvider != null && textMeasurer != null) {
+                val label = pageLabelProvider(node.pageId)
+                if (label.isNotBlank()) {
+                    val textLayout = textMeasurer.measure(
+                        text = label,
+                        style = TextStyle(
+                            color = Color(0x99FFFFFF),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                    )
+                    val visibleNodeTop = maxOf(screenTop, 0f)
+                    val visibleNodeBottom = minOf(screenTop + nodeHeight, size.height)
+                    if (visibleNodeBottom > visibleNodeTop) {
+                        val badgePaddingH = 24f
+                        val badgePaddingV = 12f
+                        val badgeWidth = textLayout.size.width + badgePaddingH * 2
+                        val badgeHeight = textLayout.size.height + badgePaddingV * 2
+                        val centerY = (visibleNodeTop + visibleNodeBottom) / 2f
+                        val centerX = screenLeft + (nodeWidth - badgeWidth) / 2f
+
+                        drawRoundRect(
+                            color = Color(0xCC141416),
+                            topLeft = Offset(centerX, centerY - badgeHeight / 2f),
+                            size = Size(badgeWidth, badgeHeight),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(16f, 16f),
+                        )
+                        drawText(
+                            textLayoutResult = textLayout,
+                            topLeft = Offset(centerX + badgePaddingH, centerY - textLayout.size.height / 2f),
+                        )
+                    }
+                }
+            }
         }
     }
 }

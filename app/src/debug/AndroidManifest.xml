@@ -8,7 +8,7 @@
 		-->
 		<activity
 			android:name="org.skepsun.kototoro.core.dev.IdleProbeActivity"
-			android:exported="false"
+			android:exported="true"
 			android:label="Idle Probe"
 			android:theme="@style/Theme.Kototoro" />
 	</application>

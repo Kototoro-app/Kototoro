@@ -73,4 +73,53 @@ class ComposeSceneWebtoonReaderTest {
         val vp = ReaderViewport(FloatRect.fromLtwh(0f, 100f, 1000f, 2000f))
         assertEquals(0, resolveActivePageRelativeScroll(scene, vp, null))
     }
+
+    @Test
+    fun `ComposeSceneScrollState clamps to maxScrollY and supports snapBy anchor compensation`() {
+        val state = org.skepsun.kototoro.reader.render.compose.ComposeSceneScrollState(initialScrollY = 100f)
+        state.maxScrollY = 5000f
+
+        assertEquals(100f, state.scrollY)
+
+        // Test snapBy positive
+        state.snapBy(250f)
+        assertEquals(350f, state.scrollY)
+
+        // Test snapBy negative
+        state.snapBy(-100f)
+        assertEquals(250f, state.scrollY)
+
+        // Test clamping beyond max
+        state.snapBy(10000f)
+        assertEquals(5000f, state.scrollY)
+
+        // Test clamping below zero
+        state.snapBy(-20000f)
+        assertEquals(0f, state.scrollY)
+    }
+
+    @Test
+    fun `initial page scroll position resolves pageTop plus intraPageOffset`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Exact(1000, 1500), // Page 1: 0..1500
+                PageId(2L) to PageGeometryHint.Exact(1000, 3000), // Page 2: 1500..4500
+                PageId(3L) to PageGeometryHint.Exact(1000, 2000), // Page 3: 4500..6500
+            ),
+        )
+
+        val page2Top = scene.resolvePageScrollPosition(PageId(2L))
+        assertEquals(1500f, page2Top)
+
+        val intraPageScroll = 300
+        val targetScrollY = (page2Top!! + intraPageScroll.toFloat())
+        assertEquals(1800f, targetScrollY)
+
+        val vp = ReaderViewport(FloatRect.fromLtwh(0f, targetScrollY, 1000f, 2000f))
+        val activeId = scene.resolveActivePageId(vp)
+        val relativeScroll = resolveActivePageRelativeScroll(scene, vp, activeId)
+        assertEquals(300, relativeScroll)
+    }
 }
