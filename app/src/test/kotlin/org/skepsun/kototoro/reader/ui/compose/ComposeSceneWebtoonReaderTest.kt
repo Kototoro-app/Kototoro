@@ -42,7 +42,7 @@ class ComposeSceneWebtoonReaderTest {
     }
 
     @Test
-    fun `resolveActivePageRelativeScroll computes offset from node top to viewport top`() {
+    fun `scene frame computes progress offset from active page top`() {
         val scene = VerticalReaderScene(
             availableWidth = 1000,
             defaultViewportHeight = 2000,
@@ -54,24 +54,15 @@ class ComposeSceneWebtoonReaderTest {
 
         // Viewport is at scrollY = 500, so PageId(1L) node starts at Y=0, viewport top is at 500
         val vp1 = ReaderViewport(FloatRect.fromLtwh(0f, 500f, 1000f, 2000f))
-        val scroll1 = resolveActivePageRelativeScroll(scene, vp1, PageId(1L))
-        assertEquals(500, scroll1)
+        val progress1 = scene.resolve(vp1).progress
+        assertEquals(PageId(1L), progress1.activePageId)
+        assertEquals(500f, progress1.intraPageOffsetPx)
 
         // Viewport is at scrollY = 1800, so PageId(2L) starts at Y=1500, relative scroll is 1800 - 1500 = 300
         val vp2 = ReaderViewport(FloatRect.fromLtwh(0f, 1800f, 1000f, 2000f))
-        val scroll2 = resolveActivePageRelativeScroll(scene, vp2, PageId(2L))
-        assertEquals(300, scroll2)
-    }
-
-    @Test
-    fun `resolveActivePageRelativeScroll handles null active page gracefully`() {
-        val scene = VerticalReaderScene(
-            availableWidth = 1000,
-            defaultViewportHeight = 2000,
-            initialPages = listOf(PageId(1L) to PageGeometryHint.Exact(1000, 1000)),
-        )
-        val vp = ReaderViewport(FloatRect.fromLtwh(0f, 100f, 1000f, 2000f))
-        assertEquals(0, resolveActivePageRelativeScroll(scene, vp, null))
+        val progress2 = scene.resolve(vp2).progress
+        assertEquals(PageId(2L), progress2.activePageId)
+        assertEquals(300f, progress2.intraPageOffsetPx)
     }
 
     @Test
@@ -118,8 +109,8 @@ class ComposeSceneWebtoonReaderTest {
         assertEquals(1800f, targetScrollY)
 
         val vp = ReaderViewport(FloatRect.fromLtwh(0f, targetScrollY, 1000f, 2000f))
-        val activeId = scene.resolveActivePageId(vp)
-        val relativeScroll = resolveActivePageRelativeScroll(scene, vp, activeId)
-        assertEquals(300, relativeScroll)
+        val progress = scene.resolve(vp).progress
+        assertEquals(PageId(2L), progress.activePageId)
+        assertEquals(300f, progress.intraPageOffsetPx)
     }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <profileable android:shell="true" />
+        <activity
+            android:name="org.skepsun.kototoro.reader.benchmark.ReaderRendererBenchmarkActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Kototoro" />
+    </application>
+</manifest>

@@ -6,19 +6,24 @@ import coil3.ImageLoader
 import coil3.asImage
 import coil3.request.SuccessResult
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -29,6 +34,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.reader.core.PageId
+import org.skepsun.kototoro.reader.core.PrefetchPriority
+import org.skepsun.kototoro.reader.core.PrefetchReadiness
+import org.skepsun.kototoro.reader.core.PrefetchRequest
+import org.skepsun.kototoro.reader.core.ReaderResourceWindow
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -95,10 +104,12 @@ class ReaderImageAssetTest {
     private class FakeComposeReaderImagePipeline : ComposeReaderImagePipeline {
         var stateToReturn: ComposeReaderImageState? = null
         var lastForce = false
+        var observeCount = 0
 
         override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateToReturn
 
         override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = flow {
+            observeCount++
             lastForce = force
             stateToReturn?.let { emit(it) }
         }
@@ -150,10 +161,11 @@ class ReaderImageAssetTest {
         assertTrue(asset is ReaderImageAsset.Encoded)
         assertEquals("file:///cached/page1.jpg", (asset as ReaderImageAsset.Encoded).uriString)
 
-        // Evict removes from in-memory cache
-        adapter.evictAsset(PageId(page1.readerKey))
+        // Replacing the resource window owns eviction; callers do not evict individual assets.
+        adapter.updateResourceWindow(ReaderResourceWindow(emptyList()))
         fakePipeline.stateToReturn = null
         assertNull(adapter.getCachedAsset(PageId(page1.readerKey)))
+        assertTrue(adapter.assets.value.isEmpty())
     }
 
     @Test
@@ -205,6 +217,122 @@ class ReaderImageAssetTest {
         assertNotNull(asset2)
         assertEquals(asset1, asset2)
         assertEquals(asset1, adapter.getCachedAsset(pageId))
+    }
+
+    @Test
+    fun `source-ready window downloads source without decoding presentation image`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.MEDIUM,
+                        readiness = PrefetchReadiness.SOURCE_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.Encoded)
+        coVerify(exactly = 0) { imageLoader.execute(any()) }
+    }
+
+    @Test
+    fun `presentation-ready window decodes once and publishes renderer asset`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+        val window = ReaderResourceWindow(
+            listOf(
+                PrefetchRequest(
+                    pageId = pageId,
+                    priority = PrefetchPriority.IMMEDIATE,
+                    readiness = PrefetchReadiness.PRESENTATION_READY,
+                ),
+            ),
+        )
+
+        adapter.updateResourceWindow(window)
+        adapter.updateResourceWindow(window)
+        advanceUntilIdle()
+
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.ComposeImage)
+        assertEquals(1, fakePipeline.observeCount)
+        coVerify(exactly = 1) { imageLoader.execute(any()) }
+    }
+
+    @Test
+    fun `evicted in-flight decode cannot republish an asset`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val decodeGate = CompletableDeferred<Unit>()
+        val bitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { bitmap.width } returns 640
+        every { bitmap.height } returns 1280
+        val result = mockk<SuccessResult>()
+        every { result.image } returns bitmap.asImage()
+        coEvery { imageLoader.execute(any()) } coAnswers {
+            withContext(NonCancellable) { decodeGate.await() }
+            result
+        }
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        adapter.updateResourceWindow(ReaderResourceWindow(emptyList()))
+        decodeGate.complete(Unit)
+        advanceUntilIdle()
+
+        assertTrue(adapter.assets.value.isEmpty())
+        fakePipeline.stateToReturn = null
+        assertNull(adapter.getCachedAsset(pageId))
     }
 
     @Test

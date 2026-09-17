@@ -103,6 +103,11 @@ android {
 				signingConfig signingConfigs.release
 			}
 		}
+		benchmark {
+			initWith release
+			signingConfig signingConfigs.debug
+			matchingFallbacks = ['release']
+		}
 		nightly {
 			initWith release
 			applicationIdSuffix = '.nightly'
@@ -154,6 +159,8 @@ android {
 	sourceSets {
 		androidTest.assets.srcDirs += files("$projectDir/schemas".toString())
 		main.java.srcDirs += 'src/main/kotlin/'
+		benchmark.kotlin.srcDirs += 'src/release/kotlin/'
+		benchmark.res.srcDirs += 'src/release/res/'
 		test.java.srcDirs += 'src/test/kotlin/'
 		androidTest.java.srcDirs += 'src/androidTest/kotlin/'
 	}
@@ -408,7 +415,8 @@ configurations.all {
 	}
 }
 
-	dependencies {
+dependencies {
+	implementation libs.androidx.profileinstaller
 	implementation project(':parser-api')
 	// UMA/Usagi plugins are compiled against Tsuki. The host must provide this API at runtime.
 	add(tsukiRuntimeSource.name, libs.tsuki)

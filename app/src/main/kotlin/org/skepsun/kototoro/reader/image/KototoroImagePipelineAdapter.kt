@@ -14,10 +14,12 @@ import coil3.toBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,11 +27,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.reader.core.PageId
-import org.skepsun.kototoro.reader.core.PrefetchPriority
-import org.skepsun.kototoro.reader.core.PrefetchRequest
+import org.skepsun.kototoro.reader.core.PrefetchReadiness
+import org.skepsun.kototoro.reader.core.ReaderResourceWindow
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderPageTransformation
@@ -51,17 +54,32 @@ class KototoroImagePipelineAdapter(
     private val scope: CoroutineScope,
     private val isCropEnabled: Boolean = false,
     private val bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val pageLookup: (PageId) -> ReaderPage? = { null },
 ) : ReaderImagePipeline {
 
     private val cachedAssets = ConcurrentHashMap<PageId, ReaderImageAsset>()
     private val inFlightLoads = ConcurrentHashMap<PageId, Deferred<ReaderImageAsset?>>()
-    private val inFlightPrefetches = ConcurrentHashMap<PageId, Job>()
+    private val inFlightSourceLoads = ConcurrentHashMap<PageId, Job>()
+    @Volatile
+    private var retainedPageIds: Set<PageId>? = null
+    private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
+    override val assets = mutableAssets.asStateFlow()
     private val mutableLoadStates = MutableStateFlow<Map<PageId, ReaderImageLoadState>>(emptyMap())
     override val loadStates = mutableLoadStates.asStateFlow()
 
     private fun setLoadState(pageId: PageId, state: ReaderImageLoadState) {
         mutableLoadStates.update { it + (pageId to state) }
+    }
+
+    private fun storeAsset(pageId: PageId, asset: ReaderImageAsset): Boolean {
+        if (retainedPageIds?.contains(pageId) == false) return false
+        cachedAssets[pageId] = asset
+        mutableAssets.update { it + (pageId to asset) }
+        if (asset is ReaderImageAsset.ComposeImage) {
+            setLoadState(pageId, ReaderImageLoadState.Ready)
+        }
+        return true
     }
 
     var onAssetLoaded: ((PageId, ReaderImageAsset) -> Unit)? = null
@@ -82,14 +100,13 @@ class KototoroImagePipelineAdapter(
             val bmp = runCatching { memoryImage.toBitmap() }.getOrNull()
             if (bmp != null) {
                 val composeAsset = ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
-                cachedAssets[pageId] = composeAsset
-                setLoadState(pageId, ReaderImageLoadState.Ready)
+                storeAsset(pageId, composeAsset)
                 return composeAsset
             }
         }
 
         val encoded = ReaderImageAsset.Encoded(pageId, uri.toString())
-        cachedAssets[pageId] = encoded
+        storeAsset(pageId, encoded)
         return encoded
     }
 
@@ -109,7 +126,7 @@ class KototoroImagePipelineAdapter(
                 if (cached is ReaderImageAsset.ComposeImage) return cached
             }
             val page = pageLookup(pageId) ?: return null
-            scope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            scope.async(ioDispatcher, start = CoroutineStart.LAZY) {
                 try {
                     setLoadState(pageId, ReaderImageLoadState.Loading())
                     val readyState = composePipeline.observe(page, force).onEach {
@@ -144,11 +161,12 @@ class KototoroImagePipelineAdapter(
                     if (result is SuccessResult) {
                         val bmp = result.image.toBitmap()
                         val composeAsset = ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
-                        cachedAssets[pageId] = composeAsset
+                        val retained = storeAsset(pageId, composeAsset)
                         composePipeline.onImageDecoded(page, bmp.width, bmp.height)
-                        setLoadState(pageId, ReaderImageLoadState.Ready)
-                        withContext(Dispatchers.Main) {
-                            onAssetLoaded?.invoke(pageId, composeAsset)
+                        if (retained) {
+                            withContext(Dispatchers.Main) {
+                                onAssetLoaded?.invoke(pageId, composeAsset)
+                            }
                         }
                         composeAsset
                     } else {
@@ -170,33 +188,39 @@ class KototoroImagePipelineAdapter(
         return deferred.await()
     }
 
-    override fun schedulePrefetch(requests: List<PrefetchRequest>) {
-        for (request in requests) {
+    override fun updateResourceWindow(window: ReaderResourceWindow) {
+        val retainedPageIds = HashSet<PageId>(window.requests.size)
+        for (request in window.requests) {
+            retainedPageIds.add(request.pageId)
+        }
+        this.retainedPageIds = retainedPageIds
+        evictOutside(retainedPageIds)
+
+        for (request in window.requests) {
             val pageId = request.pageId
             val page = pageLookup(pageId) ?: continue
-            val priority = request.priority
 
-            // Skip if already decoded in memory as ComposeImage
-            if (cachedAssets[pageId] is ReaderImageAsset.ComposeImage ||
-                loadStates.value[pageId] is ReaderImageLoadState.Failed
-            ) {
+            if (loadStates.value[pageId] is ReaderImageLoadState.Failed) {
                 continue
             }
 
-            // Foreground acquire takes precedence
-            if (inFlightLoads.containsKey(pageId)) {
-                continue
-            }
-
-            if (priority == PrefetchPriority.IMMEDIATE || priority == PrefetchPriority.HIGH) {
-                scope.launch {
-                    acquireAsset(pageId)
-                }
-            } else if (priority == PrefetchPriority.MEDIUM || priority == PrefetchPriority.LOW) {
-                if (inFlightPrefetches.containsKey(pageId)) {
+            if (request.readiness == PrefetchReadiness.PRESENTATION_READY) {
+                if (cachedAssets[pageId] is ReaderImageAsset.ComposeImage || inFlightLoads.containsKey(pageId)) {
                     continue
                 }
-                val job = scope.launch(Dispatchers.IO) {
+                inFlightSourceLoads.remove(pageId)?.cancel()
+                // UNDISPATCHED registers the in-flight Deferred before another window update can race it.
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    acquireAsset(pageId)
+                }
+            } else {
+                if (cachedAssets.containsKey(pageId) ||
+                    inFlightLoads.containsKey(pageId) ||
+                    inFlightSourceLoads.containsKey(pageId)
+                ) {
+                    continue
+                }
+                val job = scope.launch(ioDispatcher, start = CoroutineStart.LAZY) {
                     try {
                         val readyState = composePipeline.observe(page).firstOrNull {
                             it is ComposeReaderImageState.OriginalReady || it is ComposeReaderImageState.EnhancedReady ||
@@ -212,22 +236,18 @@ class KototoroImagePipelineAdapter(
                             else -> null
                         }
                         if (uri != null) {
-                            val req = ImageRequest.Builder(context)
-                                .data(uri)
-                                .apply {
-                                    if (bitmapConfig == Bitmap.Config.RGB_565) {
-                                        allowHardware(false)
-                                    }
-                                    transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
-                                }
-                                .build()
-                            imageLoader.enqueue(req)
+                            storeAsset(pageId, ReaderImageAsset.Encoded(pageId, uri.toString()))
                         }
                     } finally {
-                        inFlightPrefetches.remove(pageId)
+                        inFlightSourceLoads.remove(pageId, currentCoroutineContext().job)
                     }
                 }
-                inFlightPrefetches[pageId] = job
+                val existing = inFlightSourceLoads.putIfAbsent(pageId, job)
+                if (existing == null) {
+                    job.start()
+                } else {
+                    job.cancel()
+                }
             }
         }
     }
@@ -244,17 +264,27 @@ class KototoroImagePipelineAdapter(
         }
     }
 
-    override fun evictAsset(pageId: PageId) {
-        inFlightLoads.remove(pageId)?.cancel()
-        cachedAssets.remove(pageId)
-        inFlightPrefetches.remove(pageId)?.cancel()
-        mutableLoadStates.update { it - pageId }
+    private fun evictOutside(retainedPageIds: Set<PageId>) {
+        val evictedPageIds = HashSet<PageId>()
+        for (pageId in cachedAssets.keys) {
+            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+        }
+        for (pageId in inFlightLoads.keys) {
+            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+        }
+        for (pageId in inFlightSourceLoads.keys) {
+            if (pageId !in retainedPageIds) evictedPageIds.add(pageId)
+        }
+        for (pageId in evictedPageIds) {
+            evictAsset(pageId)
+        }
     }
 
-    fun storeAsset(pageId: PageId, asset: ReaderImageAsset) {
-        cachedAssets[pageId] = asset
-        if (asset is ReaderImageAsset.ComposeImage) {
-            setLoadState(pageId, ReaderImageLoadState.Ready)
-        }
+    private fun evictAsset(pageId: PageId) {
+        inFlightLoads.remove(pageId)?.cancel()
+        cachedAssets.remove(pageId)
+        inFlightSourceLoads.remove(pageId)?.cancel()
+        mutableAssets.update { it - pageId }
+        mutableLoadStates.update { it - pageId }
     }
 }

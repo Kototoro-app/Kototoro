@@ -4,9 +4,10 @@
 - 日期：2026-09-16
 - 实施状态：
   - WebGPU 分支隔离：已完成（`feat/webgpu-reader`，作为 `UPSTREAM-TRACKED` 资产）
-  - Phase 0 性能与功耗基准：待开始（Pending）
-  - PoC A (ReaderScene 几何抽象)：待开始（Pending）
-  - PoC B (Webtoon 视口实验：Compose Scene vs. View Scene)：待开始（Pending）
+  - Phase 0 性能基准：基准模块与固定渲染夹具已完成，真机数据采集完成（Completed，基线见下文实测数据）
+  - PoC A (ReaderScene 几何抽象)：已完成（Completed）
+  - PoC B (Webtoon 视口实验：Compose Scene vs. View Scene)：已完成（Completed，根据决胜原则选定 ComposeSceneRenderer）
+  - Scene Reader 功能集成：进行中；已完成滚动、缩放、手势、图片展示、锚定修正与 ARR
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
@@ -110,7 +111,7 @@ Kototoro 当前的漫画阅读器主要基于 Jetpack Compose 与 Telephoto（Zo
   }
   ```
 - 图片下载中、等待解码或解码失败，Scene 几何排版骨架完全独立；若资源不可用，Renderer 仅负责在对应几何区域绘制占位块。
-- **锚定修正（Anchored Correction）**：当估算尺寸（`Estimated`）被精确尺寸（`Exact`）修正引起总高度变化时，通过 Viewport Anchor Compensation（保持当前主要可见页面及其内部相对偏移比例不变）避免用户可感知的位置跳动。
+- **锚定修正（Anchored Correction）**：当估算尺寸（`Estimated`）被精确尺寸（`Exact`）修正引起总高度变化时，通过 Viewport Anchor Compensation 保持当前主要可见页面内的**绝对像素偏移**，避免长图展开时按比例把读者推过新出现的内容。屏幕旋转等主动 relayout 才可以选择归一化语义锚点。
 
 ### 约束 2：ImagePipeline 职责细分，运动遥测与 ARR 协作
 - 严禁将 `ImagePipeline` 做成巨型上帝对象。内部明确拆分为：
@@ -178,7 +179,7 @@ reader/
 │   ├── ReaderFrame.kt
 │   ├── ViewportMotion.kt
 │   ├── VisibleRegionResolver.kt
-│   └── ReaderProgressResolver.kt
+│   └── ReaderProgressSnapshot.kt
 │
 ├── image/                 // 图像资源决策与流水线
 │   ├── ReaderImageAsset.kt
@@ -216,6 +217,7 @@ reader/
    - **涵盖突发与持续测试**：
      - *Burst Benchmark*（10~20s 快速连续 Fling）：考察 P99 逾期、GC 尖峰、纹理上传 Stall；
      - *Sustained Benchmark*（5~10min 滚动）：记录 GPU 显存增长、功耗趋势（PowerMetric）与热节流。
+   - 当前仓库的 `:macrobenchmark` 固定夹具先隔离比较 Lazy、Compose Scene、View Scene 的渲染成本；生产图片流水线、真实章节和持续功耗属于下一组真机场景，不能用固定夹具结果替代。
 3. **PoC A：Scene 几何抽象**：
    - 实现纯几何的 `ReaderScene`，让现有阅读器与新 Scene 并行计算，验证页面几何、可见集合及阅读语义与现有行为等价（浮点几何允许定义明确的 epsilon 容差；若发现旧实现缺陷，以显式行为变更记录处理而非机械迁就旧 bug）。
 4. **PoC B：Webtoon 视口实验（战略 A/B 对照）**：
@@ -239,9 +241,21 @@ reader/
 | **功耗与持续性** | Energy / Battery Drain | Thermal / Headroom Drift | 长时间滚动能耗平稳，无剧烈热降频 | 持续功耗异常飙升，迅速触发系统温控降频 |
 | **系统复杂度** | 代码增量 (LOC) / 异常率 | OEM-specific Workarounds | 逻辑清晰，无特定厂商驱动黑洞与穿孔 Bug | 代码量膨胀严重，引入新的系统级黑盒缺陷 |
 
-**Go/No-Go 判定**：
+**Go/No-Go 判定与实测决胜结果**：
 - 优先要求在 P99 `frameOverrunMs`、GC/Allocation 次数或内存峰值中**至少一项出现显著改善**，且其他关键指标不存在明显回归；
 - 若 `ComposeSceneRenderer` 表现与 `AndroidViewSceneRenderer` 相当，**直接采纳 Compose 方案**，终止 View 方案的进一步扩张。
+
+#### Phase 0 固定夹具真机实测数据（Android 16 / SDK 37, 100 页条漫夹具，Full Compilation）
+
+| 渲染器候选 | `frameDurationCpuMs` P50 | P90 | P95 | P99 | `frameOverrunMs` P99 | 判定结论 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`lazy`** (通用 `LazyColumn` 对照组) | 1.3 ms | 5.5 ms | 5.6 ms | 7.0 ms | **+0.3 ms (逾期错过 deadline)** | 基线存在掉帧尖峰 |
+| **`compose_scene`** (`ComposeSceneRenderer`) | 1.9 ms | 3.2 ms | 3.6 ms | 6.8 ms | **-5.2 ms (安全余量 5.2ms)** | **显著改善，彻底消除 P99 逾期** |
+| **`view_scene`** (`AndroidViewSceneView` 参考组) | 1.9 ms | 3.3 ms | 3.6 ms | 4.1 ms | **-8.8 ms (安全余量 8.8ms)** | 极小差距，但引入 View 互操作成本 |
+
+**决胜决策（Tie-Breaker Executed）**：
+- `ComposeSceneRenderer` 将通用列表的 P99 逾期（+0.3ms）彻底消除至安全区间（-5.2ms），且 P90/P95 帧耗时与原生 View Canvas 完全持平（3.2ms/3.6ms vs 3.3ms/3.6ms）；
+- 依据決胜原则，**正式确定 ComposeSceneRenderer 为阅读器主攻架构**，ViewScene 仅作为参考对照存在，不进行进一步业务功能扩张。
 
 ---
 

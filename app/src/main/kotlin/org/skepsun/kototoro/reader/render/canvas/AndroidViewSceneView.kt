@@ -151,6 +151,7 @@ class AndroidViewSceneView @JvmOverloads constructor(
     }
 
     private fun checkActivePageChanged() {
+        val callback = onActivePageChanged ?: return
         val currentScene = scene ?: return
         if (width <= 0 || height <= 0) return
         val viewport = ReaderViewport(
@@ -159,7 +160,7 @@ class AndroidViewSceneView @JvmOverloads constructor(
         val activeId = currentScene.resolveActivePageId(viewport)
         if (activeId != null && activeId != lastActivePageId) {
             lastActivePageId = activeId
-            onActivePageChanged?.invoke(activeId)
+            callback(activeId)
         }
     }
 }

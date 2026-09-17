@@ -9,4 +9,5 @@ package org.skepsun.kototoro.reader.core
 data class ReaderFrame(
     val viewport: ReaderViewport,
     val visibleNodes: List<VisibleNode>,
+    val progress: ReaderProgressSnapshot = ReaderProgressSnapshot.from(viewport, visibleNodes),
 )

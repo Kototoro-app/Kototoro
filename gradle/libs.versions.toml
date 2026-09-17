@@ -5,6 +5,7 @@ adapterdelegates = "4.3.2"
 appcompat = "1.7.1"
 avifDecoder = "1.1.1.14d8e3c4"
 biometric = "1.4.0-alpha04"
+benchmark = "1.5.0"
 coil = "3.4.0"
 kyantShapes = "1.2.0"
 collections = "1.5.0"
@@ -59,6 +60,7 @@ telephoto = "0.19.0"
 swiperefreshlayout = "1.1.0"
 testRules = "1.7.0"
 testRunner = "1.7.0"
+uiautomator = "2.4.0"
 transition = "1.6.0"
 viewpager2 = "1.1.0"
 webkit = "1.16.0"
@@ -121,6 +123,7 @@ adapterdelegates-viewbinding = { module = "com.hannesdorfmann:adapterdelegates4-
 androidx-activity = { module = "androidx.activity:activity-ktx", version.ref = "activity" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+androidx-benchmark-macro-junit4 = { module = "androidx.benchmark:benchmark-macro-junit4", version.ref = "benchmark" }
 androidx-collection = { module = "androidx.collection:collection-ktx", version.ref = "collections" }
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
 androidx-core = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -145,6 +148,8 @@ androidx-paging-runtime = { module = "androidx.paging:paging-runtime", version.r
 androidx-paging-testing = { module = "androidx.paging:paging-testing", version.ref = "paging" }
 androidx-rules = { module = "androidx.test:rules", version.ref = "testRules" }
 androidx-runner = { module = "androidx.test:runner", version.ref = "testRunner" }
+androidx-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "uiautomator" }
+androidx-profileinstaller = { module = "androidx.profileinstaller:profileinstaller", version = "1.4.1" }
 androidx-swiperefreshlayout = { module = "androidx.swiperefreshlayout:swiperefreshlayout", version.ref = "swiperefreshlayout" }
 androidx-test-core = { module = "androidx.test:core-ktx", version.ref = "testRules" }
 androidx-transition = { module = "androidx.transition:transition-ktx", version.ref = "transition" }
@@ -247,6 +252,7 @@ kyant-shapes = { group = "io.github.kyant0", name = "shapes", version.ref = "kya
 [plugins]
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-application = { id = "com.android.application", version.ref = "gradle" }
+android-test = { id = "com.android.test", version.ref = "gradle" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "dagger" }
 kotlin = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlinx-serizliation = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

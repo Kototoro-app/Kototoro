@@ -30,6 +30,10 @@ class VerticalReaderScene(
     var totalSceneHeight: Float = 0f
         private set
 
+    /** Monotonic geometry revision used to invalidate derived resource windows. */
+    var revision: Long = 0L
+        private set
+
     val pageCount: Int get() = entries.size
 
     init {
@@ -59,6 +63,7 @@ class VerticalReaderScene(
             currentY += pageHeight
         }
         totalSceneHeight = currentY
+        revision++
     }
 
     /**
@@ -116,10 +121,7 @@ class VerticalReaderScene(
      * scroll offsets are strictly positive, invertible, and prevent progress drift across sessions.
      */
     fun resolveActivePageId(viewport: ReaderViewport): PageId? {
-        val frame = resolve(viewport)
-        val nodes = frame.visibleNodes
-        if (nodes.isEmpty()) return null
-        return nodes.first().pageId
+        return resolve(viewport).progress.activePageId
     }
 
     /**
@@ -175,6 +177,7 @@ class VerticalReaderScene(
             currentY += height
         }
         totalSceneHeight = currentY
+        revision++
 
         if (currentViewport == null) return null
 

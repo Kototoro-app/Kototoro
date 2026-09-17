@@ -27,6 +27,24 @@ class ReaderPrediction(
     private val config: ReaderPredictionConfig = ReaderPredictionConfig(),
 ) {
 
+    private var lastWindowKey: ResourceWindowKey? = null
+
+    /**
+     * Returns a new resource window only when its page range, geometry revision, viewport size, or
+     * coarse motion class changed. Pixel-level scroll updates within the same window are ignored.
+     */
+    fun predictWindowIfChanged(
+        scene: VerticalReaderScene,
+        frame: ReaderFrame,
+        motion: ViewportMotion = ViewportMotion.Idle,
+        force: Boolean = false,
+    ): ReaderResourceWindow? {
+        val key = ResourceWindowKey.from(scene, frame, motion)
+        if (!force && key == lastWindowKey) return null
+        lastWindowKey = key
+        return ReaderResourceWindow(predict(scene, frame, motion))
+    }
+
     /**
      * Resolves an ordered list of [PrefetchRequest] based on the current [viewport] and [motion].
      */
@@ -34,7 +52,15 @@ class ReaderPrediction(
         scene: VerticalReaderScene,
         viewport: ReaderViewport,
         motion: ViewportMotion = ViewportMotion.Idle,
+    ): List<PrefetchRequest> = predict(scene, scene.resolve(viewport), motion)
+
+    /** Resolves prediction from an already-computed visible frame. */
+    fun predict(
+        scene: VerticalReaderScene,
+        frame: ReaderFrame,
+        motion: ViewportMotion = ViewportMotion.Idle,
     ): List<PrefetchRequest> {
+        val viewport = frame.viewport
         val vpTop = viewport.bounds.top
         val vpHeight = viewport.bounds.height
         val vpWidth = viewport.bounds.width
@@ -43,20 +69,20 @@ class ReaderPrediction(
         if (vpHeight <= 0f || vpWidth <= 0f) return emptyList()
 
         // 1. Resolve immediate visible pages
-        val immediateFrame = scene.resolve(viewport)
-        val immediatePageIds = immediateFrame.visibleNodes.map { it.pageId }.toSet()
-
         val requests = mutableListOf<PrefetchRequest>()
+        val requestedPageIds = HashSet<PageId>()
 
         // Add IMMEDIATE priority for all visible nodes
-        for (node in immediateFrame.visibleNodes) {
+        for (node in frame.visibleNodes) {
             requests.add(
                 PrefetchRequest(
                     pageId = node.pageId,
                     priority = PrefetchPriority.IMMEDIATE,
+                    readiness = PrefetchReadiness.PRESENTATION_READY,
                     predictedVisibleRegion = node.visibleRegion,
                 ),
             )
+            requestedPageIds.add(node.pageId)
         }
 
         // 2. Compute directional lookahead expansion
@@ -81,11 +107,12 @@ class ReaderPrediction(
         val highFrame = scene.resolve(highWindow)
 
         for (node in highFrame.visibleNodes) {
-            if (node.pageId !in immediatePageIds) {
+            if (requestedPageIds.add(node.pageId)) {
                 requests.add(
                     PrefetchRequest(
                         pageId = node.pageId,
                         priority = PrefetchPriority.HIGH,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
                         predictedVisibleRegion = node.visibleRegion,
                     ),
                 )
@@ -103,14 +130,14 @@ class ReaderPrediction(
             ),
         )
         val mediumFrame = scene.resolve(mediumWindow)
-        val existingIds = requests.map { it.pageId }.toSet()
 
         for (node in mediumFrame.visibleNodes) {
-            if (node.pageId !in existingIds) {
+            if (requestedPageIds.add(node.pageId)) {
                 requests.add(
                     PrefetchRequest(
                         pageId = node.pageId,
                         priority = PrefetchPriority.MEDIUM,
+                        readiness = PrefetchReadiness.SOURCE_READY,
                         predictedVisibleRegion = node.visibleRegion,
                     ),
                 )
@@ -118,5 +145,50 @@ class ReaderPrediction(
         }
 
         return requests
+    }
+
+    private data class ResourceWindowKey(
+        val scene: VerticalReaderScene,
+        val sceneRevision: Long,
+        val viewportWidth: Int,
+        val viewportHeight: Int,
+        val firstVisiblePageId: PageId?,
+        val lastVisiblePageId: PageId?,
+        val motionClass: MotionClass,
+    ) {
+        companion object {
+            fun from(
+                scene: VerticalReaderScene,
+                frame: ReaderFrame,
+                motion: ViewportMotion,
+            ): ResourceWindowKey {
+                val viewportHeight = frame.viewport.bounds.height
+                val speed = abs(motion.velocityY)
+                val motionClass = when {
+                    speed < 1f && !motion.isDragging -> MotionClass.IDLE
+                    motion.velocityY < 0f && speed >= viewportHeight * 1.5f -> MotionClass.FAST_BACKWARD
+                    motion.velocityY < 0f -> MotionClass.BACKWARD
+                    speed >= viewportHeight * 1.5f -> MotionClass.FAST_FORWARD
+                    else -> MotionClass.FORWARD
+                }
+                return ResourceWindowKey(
+                    scene = scene,
+                    sceneRevision = scene.revision,
+                    viewportWidth = frame.viewport.bounds.width.toInt(),
+                    viewportHeight = viewportHeight.toInt(),
+                    firstVisiblePageId = frame.progress.lowerPageId,
+                    lastVisiblePageId = frame.progress.upperPageId,
+                    motionClass = motionClass,
+                )
+            }
+        }
+    }
+
+    private enum class MotionClass {
+        IDLE,
+        FORWARD,
+        FAST_FORWARD,
+        BACKWARD,
+        FAST_BACKWARD,
     }
 }

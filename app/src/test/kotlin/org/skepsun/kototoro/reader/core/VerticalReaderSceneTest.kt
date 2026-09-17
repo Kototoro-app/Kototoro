@@ -63,6 +63,10 @@ class VerticalReaderSceneTest {
         assertEquals(PageId(26L), frame.visibleNodes[0].pageId) // Page 26: 25000..26000
         assertEquals(PageId(27L), frame.visibleNodes[1].pageId) // Page 27: 26000..27000
         assertEquals(PageId(28L), frame.visibleNodes[2].pageId) // Page 28: 27000..28000
+        assertEquals(PageId(26L), frame.progress.lowerPageId)
+        assertEquals(PageId(28L), frame.progress.upperPageId)
+        assertEquals(PageId(26L), frame.progress.activePageId)
+        assertEquals(500f, frame.progress.intraPageOffsetPx)
     }
 
     @Test

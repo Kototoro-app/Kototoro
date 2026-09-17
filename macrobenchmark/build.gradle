@@ -1,0 +1,29 @@
+plugins {
+    alias(libs.plugins.android.test)
+}
+
+android {
+    namespace = 'org.skepsun.kototoro.macrobenchmark'
+    compileSdk = 37
+
+    defaultConfig {
+        minSdk = 28
+        targetSdk = 37
+        testInstrumentationRunner = 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    targetProjectPath = ':app'
+    experimentalProperties['android.experimental.self-instrumenting'] = true
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+}
+
+dependencies {
+    implementation libs.androidx.benchmark.macro.junit4
+    implementation libs.androidx.junit
+    implementation libs.androidx.runner
+    implementation libs.androidx.uiautomator
+}

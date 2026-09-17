@@ -8,14 +8,12 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -42,7 +40,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageId
@@ -60,8 +57,7 @@ import kotlin.math.roundToInt
  * 1. Restricts high-frequency scroll state consumption strictly to the Draw Phase (bypassing
  *    Composition and Layout phases entirely during touch drags and flings).
  * 2. Directly consumes [VerticalReaderScene.resolve] to draw only intersecting pages (O(visible)).
- * 3. Low-frequency semantic state (active page) is emitted via [onActivePageChanged] without
- *    triggering recomposition of the rendering viewport.
+ * 3. Reading semantics remain in the scene frame and are not recomputed by the renderer.
  */
 @Composable
 fun ComposeSceneRenderer(
@@ -74,7 +70,6 @@ fun ComposeSceneRenderer(
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
-    onActivePageChanged: (PageId) -> Unit = {},
     onScrollProgressChanged: (scrollY: Float, maxScrollY: Float) -> Unit = { _, _ -> },
     onMotionChanged: (ViewportMotion) -> Unit = {},
     onOverScroll: ((deltaY: Float) -> Unit)? = null,
@@ -88,24 +83,6 @@ fun ComposeSceneRenderer(
     val density = LocalDensity.current
     val decaySpec = remember(density) { splineBasedDecay<Float>(density) }
     val textMeasurer = rememberTextMeasurer()
-
-    // Low-frequency active page observer (fires only when active page index changes)
-    LaunchedEffect(scene, scrollState) {
-        snapshotFlow {
-            if (viewportWidth <= 0f || viewportHeight <= 0f) return@snapshotFlow null
-            val currentY = scrollState.scrollY
-            val viewport = ReaderViewport(
-                bounds = FloatRect.fromLtwh(0f, currentY, viewportWidth, viewportHeight),
-            )
-            scene.resolveActivePageId(viewport)
-        }
-            .distinctUntilChanged()
-            .collect { activeId ->
-                if (activeId != null) {
-                    onActivePageChanged(activeId)
-                }
-            }
-    }
 
     Box(
         modifier = modifier
@@ -179,16 +156,15 @@ fun ComposeSceneRenderer(
                                 onOverScroll(overscrollDelta)
                             }
 
-                            scrollState.snapTo(newScroll)
-                            onScrollProgressChanged(newScroll, maxScroll)
-                            onMotionChanged(
-                                ViewportMotion(
-                                    velocityX = 0f,
-                                    velocityY = instantVelocityY,
-                                    isDragging = true,
-                                    timestampNanos = change.uptimeMillis * 1_000_000L,
-                                ),
+                            val motion = ViewportMotion(
+                                velocityX = 0f,
+                                velocityY = instantVelocityY,
+                                isDragging = true,
+                                timestampNanos = change.uptimeMillis * 1_000_000L,
                             )
+                            scrollState.snapTo(newScroll)
+                            onMotionChanged(motion)
+                            onScrollProgressChanged(newScroll, maxScroll)
                         }
                     } while (event.changes.any { it.pressed })
 
@@ -222,16 +198,15 @@ fun ComposeSceneRenderer(
                                         val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
                                         scrollState.maxScrollY = maxScroll
                                         val clamped = (scrollState.scrollY + frameDelta).coerceIn(0f, maxScroll)
-                                        scrollState.snapTo(clamped)
-                                        onScrollProgressChanged(clamped, maxScroll)
-                                        onMotionChanged(
-                                            ViewportMotion(
-                                                velocityX = 0f,
-                                                velocityY = this.velocity,
-                                                isDragging = false,
-                                                timestampNanos = System.nanoTime(),
-                                            ),
+                                        val motion = ViewportMotion(
+                                            velocityX = 0f,
+                                            velocityY = this.velocity,
+                                            isDragging = false,
+                                            timestampNanos = System.nanoTime(),
                                         )
+                                        scrollState.snapTo(clamped)
+                                        onMotionChanged(motion)
+                                        onScrollProgressChanged(clamped, maxScroll)
                                         if (clamped <= 0f || clamped >= maxScroll) {
                                             cancelAnimation()
                                         }

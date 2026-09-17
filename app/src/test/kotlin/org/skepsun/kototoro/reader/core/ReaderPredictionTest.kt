@@ -57,6 +57,14 @@ class ReaderPredictionTest {
 
         // Medium window: further ahead (Page 5)
         assertTrue(PageId(5L) in medium)
+        assertTrue(
+            requests.filter { it.priority != PrefetchPriority.MEDIUM }
+                .all { it.readiness == PrefetchReadiness.PRESENTATION_READY },
+        )
+        assertTrue(
+            requests.filter { it.priority == PrefetchPriority.MEDIUM }
+                .all { it.readiness == PrefetchReadiness.SOURCE_READY },
+        )
     }
 
     @Test
@@ -87,5 +95,28 @@ class ReaderPredictionTest {
         // Behind window expands from 5000 - 500 - 2000 = 2500 -> reaches Page 3 (2000..3000) and Page 4 (3000..4000)
         assertTrue(PageId(3L) in highPages)
         assertTrue(PageId(4L) in highPages)
+    }
+
+    @Test
+    fun `predictWindowIfChanged ignores pixel scroll inside same page range and motion class`() {
+        val firstViewport = ReaderViewport(FloatRect.fromLtwh(0f, 1100f, 1000f, 700f))
+        val secondViewport = ReaderViewport(FloatRect.fromLtwh(0f, 1200f, 1000f, 700f))
+
+        val first = predictor.predictWindowIfChanged(scene, scene.resolve(firstViewport), ViewportMotion.Idle)
+        val unchanged = predictor.predictWindowIfChanged(scene, scene.resolve(secondViewport), ViewportMotion.Idle)
+
+        assertTrue(first != null)
+        assertEquals(null, unchanged)
+    }
+
+    @Test
+    fun `predictWindowIfChanged invalidates after scene geometry revision changes`() {
+        val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 1100f, 1000f, 700f))
+        predictor.predictWindowIfChanged(scene, scene.resolve(viewport), ViewportMotion.Idle)
+
+        scene.updatePageHint(PageId(7L), PageGeometryHint.Exact(1000, 1500))
+
+        val updated = predictor.predictWindowIfChanged(scene, scene.resolve(viewport), ViewportMotion.Idle)
+        assertTrue(updated != null)
     }
 }
