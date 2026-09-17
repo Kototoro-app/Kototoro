@@ -12,7 +12,10 @@
     - Phase 1A（纯 Kotlin 解码决策智能）：已完成（Completed）
     - Phase 1B（图源与切片运行时）：已完成（Completed）
     - Phase 1C（渲染器集成与管线适配）：已完成（Completed，Compose 瓦片无重组刷新与无缝拓扑渲染闭环）
-  - Scene Reader 功能集成：已完成滚动、缩放、手势、图片展示、锚定修正、ARR 及多态分块解码渲染闭环
+    - Phase 1D（真机超长条漫效能与长图画质基准）：已完成（Completed）
+  - Phase 2 (生产化功能对齐与多章节视口锚定)：
+    - Phase 2A (页面间隔、跨章节平滑扩缩窗与无感锚定、统一错误重试交互、低内存优化)：已完成（Completed）
+  - Scene Reader 功能集成：已完成滚动、缩放、手势、页面间隙、跨章节平滑扩窗、双向锚定修正、ARR、统一错误重试及多态分块解码渲染闭环
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
@@ -377,6 +380,29 @@ reader/
 **Phase 1 总体结论**：
 从 Phase 1A 解码决策到 1B 切片运行时、1C 无重组刷新桥、1D 真机超长图极限压测，**完整闭环证明了 ADR 0002 架构设计的正确性与卓越效能**：
 在应对 10,000 ~ 40,000 像素极高条漫长图时，不仅打破了 Android GPU 16384px 的硬件纹理上限天花板，同时斩获 **62% 的显存节省** 与 **50%+ 的 CPU 帧执行耗时压降**，在 120Hz 高刷物理设备上实现了绝对平稳的无白屏、无掉帧连续呈现。
+
+#### Phase 2 实施进度（生产化功能对齐与多章节视口锚定）
+
+**Phase 2A：生产级功能对齐与跨章节无感锚定（已完成）**
+- **页面间隙（Page Gaps）**：
+  - `VerticalReaderScene` 构造注入 `pageSpacingPx: Int = 0`，排版算法在连续页面间插入物理间隔，总高度精确涵盖间隙；
+  - 二分查找视口相交时，视口落在两页间隙时平滑归属，无丢帧或索引崩溃；
+  - `ComposeSceneWebtoonReader` 接入 `isGapsEnabled` 与 `R.dimen.webtoon_pages_gap`，支持动态开启与关闭。
+- **跨章节平滑扩缩窗与无感锚定（Seamless Cross-Chapter Window Expansion & Preserved Anchoring）**：
+  - `VerticalReaderScene.updatePages(newPages, currentViewport)`：
+    1. **保留 Exact 几何尺寸**：动态换章或窗口滑动时，保留已成功解码的精确尺寸，严禁退回 Estimated 默认估算；
+    2. **精准滚动位移补偿**：前向插入上一章节或后向扩展下一章节时，以当前视口主导阅读页面为锚点计算新旧坐标差 `deltaY`，由 `scrollState.snapBy(deltaY)` 实施绝对像素级补偿，用户眼前画面**零跳跃、零白屏、零状态重置**。
+- **统一错误与重试交互（Unified Error & Retry UX）**：
+  - `SceneReaderLoadStatus` 对齐 Kototoro 统一的 `ReaderPageError` 组件；
+  - 完整串联 `onRetryError`、`onShowErrorDetails` 与 `resolveErrorStringId`，消除占位 UI，实现与其他阅读器完全一致的错误处理与重试弹窗交互。
+- **内存优化模式对齐（Reader Optimization）**：
+  - `KototoroImagePipelineAdapter` 接入 `isReaderOptimizationEnabled`，在开启时将 Coil 图像请求的 `memoryCachePolicy` 设为 `DISABLED`，完全由 Reader 专用状态机与 `TileMemoryBudget` 管控缓存，杜绝底层图片库的双重内存驻留。
+- **自动化测试验证**：
+  - `VerticalReaderSceneTest` 新增 3 项核心用例：
+    - `lays out pages with pageSpacingPx between pages`
+    - `updatePages preserves existing exact hints and anchors prepended pages with zero jump`
+    - `updatePages appending pages returns zero deltaY`
+  - 全套 Reader JVM 单元测试（46 例）100% 通过。
 
 ---
 

@@ -15,10 +15,12 @@ class VerticalReaderScene(
     val availableWidth: Int,
     val defaultViewportHeight: Int,
     initialPages: List<Pair<PageId, PageGeometryHint>> = emptyList(),
+    val pageSpacingPx: Int = 0,
 ) {
     init {
         require(availableWidth > 0) { "availableWidth must be > 0: $availableWidth" }
         require(defaultViewportHeight > 0) { "defaultViewportHeight must be > 0: $defaultViewportHeight" }
+        require(pageSpacingPx >= 0) { "pageSpacingPx must be >= 0: $pageSpacingPx" }
     }
 
     private val entries = ArrayList<PageEntry>(initialPages.size)
@@ -55,15 +57,80 @@ class VerticalReaderScene(
         entries.clear()
         entries.ensureCapacity(pages.size)
         var currentY = 0f
-        for ((pageId, hint) in pages) {
+        for (i in pages.indices) {
+            val (pageId, hint) = pages[i]
             val pageHeight = computePageHeight(hint)
             val bounds = FloatRect.fromLtwh(0f, currentY, availableWidth.toFloat(), pageHeight)
             val geometry = PageGeometry(pageId, bounds)
             entries.add(PageEntry(pageId, hint, geometry))
             currentY += pageHeight
+            if (i < pages.size - 1) {
+                currentY += pageSpacingPx.toFloat()
+            }
         }
         totalSceneHeight = currentY
         revision++
+    }
+
+    /**
+     * Updates the page list in the continuous scene, preserving exact geometry hints for pages
+     * that already have them, and computing an [AnchorCompensation] to prevent perceptual jumps
+     * when pages are prepended or appended (e.g. cross-chapter window expansions).
+     *
+     * @param newPages The updated sequence of page IDs and initial geometry hints.
+     * @param currentViewport Optional current viewport, used to preserve the visual reading anchor.
+     * @return [AnchorCompensation] with the required [deltaY] if an active anchor was preserved, or null.
+     */
+    fun updatePages(
+        newPages: List<Pair<PageId, PageGeometryHint>>,
+        currentViewport: ReaderViewport? = null,
+    ): AnchorCompensation? {
+        if (newPages.isEmpty()) {
+            entries.clear()
+            totalSceneHeight = 0f
+            revision++
+            return null
+        }
+
+        val existingHints = entries.associate { it.pageId to it.hint }
+        val activeAnchorId = currentViewport?.let { resolveActivePageId(it) }
+        val oldAnchorTop = activeAnchorId?.let { resolvePageScrollPosition(it) }
+        val oldIntraPageOffset = if (currentViewport != null && oldAnchorTop != null) {
+            currentViewport.bounds.top - oldAnchorTop
+        } else null
+
+        entries.clear()
+        entries.ensureCapacity(newPages.size)
+        var currentY = 0f
+        for (i in newPages.indices) {
+            val (pageId, hint) = newPages[i]
+            val existing = existingHints[pageId]
+            val effectiveHint = if (existing is PageGeometryHint.Exact) existing else hint
+            val pageHeight = computePageHeight(effectiveHint)
+            val bounds = FloatRect.fromLtwh(0f, currentY, availableWidth.toFloat(), pageHeight)
+            val geometry = PageGeometry(pageId, bounds)
+            entries.add(PageEntry(pageId, effectiveHint, geometry))
+            currentY += pageHeight
+            if (i < newPages.size - 1) {
+                currentY += pageSpacingPx.toFloat()
+            }
+        }
+        totalSceneHeight = currentY
+        revision++
+
+        if (currentViewport == null || activeAnchorId == null || oldAnchorTop == null || oldIntraPageOffset == null) {
+            return null
+        }
+
+        val newAnchorTop = resolvePageScrollPosition(activeAnchorId) ?: return null
+        val targetViewportTop = newAnchorTop + oldIntraPageOffset
+        val deltaY = targetViewportTop - currentViewport.bounds.top
+
+        val newBounds = currentViewport.bounds.translate(0f, deltaY)
+        return AnchorCompensation(
+            deltaY = deltaY,
+            compensatedViewport = currentViewport.copy(bounds = newBounds),
+        )
     }
 
     /**
@@ -100,15 +167,19 @@ class VerticalReaderScene(
         val visibleNodes = ArrayList<VisibleNode>(8)
         for (i in firstIdx until entries.size) {
             val page = entries[i].geometry
-            val intersection = page.sceneBounds.intersectionOrNull(viewport.bounds) ?: break
-            visibleNodes.add(
-                VisibleNode(
-                    pageId = page.pageId,
-                    sceneBounds = page.sceneBounds,
-                    visibleRegion = intersection,
-                    zIndex = page.zIndex,
-                ),
-            )
+            val intersection = page.sceneBounds.intersectionOrNull(viewport.bounds)
+            if (intersection != null) {
+                visibleNodes.add(
+                    VisibleNode(
+                        pageId = page.pageId,
+                        sceneBounds = page.sceneBounds,
+                        visibleRegion = intersection,
+                        zIndex = page.zIndex,
+                    ),
+                )
+            } else if (page.sceneBounds.top >= viewport.bounds.bottom) {
+                break
+            }
         }
         return ReaderFrame(viewport, visibleNodes)
     }
@@ -175,6 +246,9 @@ class VerticalReaderScene(
                 zIndex = currentEntry.geometry.zIndex,
             )
             currentY += height
+            if (i < entries.size - 1) {
+                currentY += pageSpacingPx.toFloat()
+            }
         }
         totalSceneHeight = currentY
         revision++

@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +44,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -130,13 +133,19 @@ fun ComposeSceneWebtoonReader(
     var viewportWidthPx by remember { mutableFloatStateOf(0f) }
     var viewportHeightPx by remember { mutableFloatStateOf(0f) }
 
-    val pageLookup: (PageId) -> ReaderPage? = remember(pages) {
-        val map = pages.associateBy { it.readerKey }
-        val lookup: (PageId) -> ReaderPage? = { id -> map[id.value] }
-        lookup
+    val currentPages by rememberUpdatedState(pages)
+    val pageLookup: (PageId) -> ReaderPage? = remember {
+        { id -> currentPages.firstOrNull { it.readerKey == id.value } }
     }
 
-    val adapter = remember(imagePipeline, imageLoader, pages, isCropEnabled, bitmapConfig) {
+    val density = LocalDensity.current
+    val pageGapPx = if (isGapsEnabled) {
+        with(density) { dimensionResource(R.dimen.webtoon_pages_gap).roundToPx() }
+    } else {
+        0
+    }
+
+    val adapter = remember(imagePipeline, imageLoader, isCropEnabled, bitmapConfig, isReaderOptimizationEnabled) {
         KototoroImagePipelineAdapter(
             context = context,
             composePipeline = imagePipeline,
@@ -145,6 +154,7 @@ fun ComposeSceneWebtoonReader(
             pageLookup = pageLookup,
             isCropEnabled = isCropEnabled,
             bitmapConfig = bitmapConfig,
+            isReaderOptimizationEnabled = isReaderOptimizationEnabled,
             viewportSizeProvider = {
                 IntSize(
                     viewportWidthPx.toInt().coerceAtLeast(100),
@@ -173,14 +183,15 @@ fun ComposeSceneWebtoonReader(
         ReaderPrediction(config)
     }
 
-    // Scene is created once width is measured
-    val scene = remember(pages, viewportWidthPx, adapter) {
+    // Scene is created once width is measured, supporting gaps between pages
+    val scene = remember(viewportWidthPx, pageGapPx) {
         if (viewportWidthPx <= 0f) null
         else {
             VerticalReaderScene(
                 availableWidth = viewportWidthPx.toInt(),
                 defaultViewportHeight = viewportHeightPx.toInt().coerceAtLeast(1000),
                 initialPages = createInitialScenePageHints(pages, adapter),
+                pageSpacingPx = pageGapPx,
             )
         }
     }
@@ -209,11 +220,11 @@ fun ComposeSceneWebtoonReader(
         maxScrollY = initialMaxScroll,
         key = scene,
     )
-    var hasAppliedInitialPosition by remember(pages) { mutableStateOf(false) }
+    var hasAppliedInitialPosition by remember { mutableStateOf(false) }
     val retainedAssets by adapter.assets.collectAsStateWithLifecycle()
     var currentMotion by remember { mutableStateOf(ViewportMotion.Idle) }
-    var lastReportedPages by remember(pages) { mutableStateOf<Triple<Long, Long, Long>?>(null) }
-    var statusPageId by remember(pages) { mutableStateOf(PageId(pages[initialPosition].readerKey)) }
+    var lastReportedPages by remember { mutableStateOf<Triple<Long, Long, Long>?>(null) }
+    var statusPageId by remember { mutableStateOf(PageId(pages[initialPosition].readerKey)) }
 
     var pullState by remember { mutableStateOf(WebtoonPullState()) }
     var canvasScale by remember(defaultScale) { mutableFloatStateOf(defaultScale.coerceIn(0.5f, 1f)) }
@@ -291,6 +302,31 @@ fun ComposeSceneWebtoonReader(
                 )
                 adapter.requestTiles(node.pageId, visibleLogical)
             }
+        }
+    }
+
+    // Preserve visual reading anchor and exact geometry hints across cross-chapter window expansions
+    LaunchedEffect(pages, scene) {
+        if (scene != null && hasAppliedInitialPosition) {
+            val currentVp = ReaderViewport(
+                FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
+            )
+            val newHints = createInitialScenePageHints(pages, adapter)
+            val compensation = scene.updatePages(newHints, currentVp)
+            if (viewportHeightPx > 0f) {
+                scrollState.maxScrollY = (scene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
+            }
+            if (compensation != null) {
+                if (compensation.deltaY != 0f) {
+                    scrollState.snapBy(compensation.deltaY)
+                }
+            } else if (initialPosition in pages.indices) {
+                val targetPage = pages[initialPosition]
+                val newTop = scene.resolvePageScrollPosition(PageId(targetPage.readerKey)) ?: 0f
+                val targetScroll = (newTop + initialScroll.toFloat()).coerceIn(0f, scrollState.maxScrollY)
+                scrollState.snapTo(targetScroll)
+            }
+            updateResourceWindow(scene, scrollState.scrollY, currentMotion)
         }
     }
 
@@ -779,6 +815,10 @@ fun ComposeSceneWebtoonReader(
                 SceneReaderLoadStatus(
                     pipeline = adapter,
                     pageId = statusPageId,
+                    page = pageLookup(statusPageId),
+                    onRetryError = onRetryError,
+                    onShowErrorDetails = onShowErrorDetails,
+                    resolveErrorStringId = resolveErrorStringId,
                     onRetry = { coroutineScope.launch { adapter.retryAsset(statusPageId) } },
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -802,6 +842,10 @@ fun ComposeSceneWebtoonReader(
 private fun SceneReaderLoadStatus(
     pipeline: ReaderImagePipeline,
     pageId: PageId,
+    page: ReaderPage?,
+    onRetryError: (Throwable, retry: () -> Unit) -> Unit,
+    onShowErrorDetails: (Throwable, String?) -> Unit,
+    resolveErrorStringId: (Throwable) -> Int,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -812,16 +856,12 @@ private fun SceneReaderLoadStatus(
             modifier = modifier.padding(24.dp),
             shape = MaterialTheme.shapes.medium,
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = state.cause.getDisplayMessage(LocalContext.current.resources),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-            }
+            ReaderPageError(
+                cause = state.cause,
+                onRetry = { onRetryError(state.cause, onRetry) },
+                onShowDetails = { onShowErrorDetails(state.cause, page?.url) },
+                resolveStringId = resolveErrorStringId(state.cause),
+            )
         }
         else -> Box(modifier) {
             ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)

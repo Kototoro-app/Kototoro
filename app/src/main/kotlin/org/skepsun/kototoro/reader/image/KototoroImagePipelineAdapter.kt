@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import coil3.ImageLoader
 import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
+import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
@@ -60,6 +61,7 @@ class KototoroImagePipelineAdapter(
     private val scope: CoroutineScope,
     private val isCropEnabled: Boolean = false,
     private val bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
+    private val isReaderOptimizationEnabled: Boolean = false,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     regionDecoderFactory: RegionDecoderFactory? = null,
     private val decodePlanner: DecodePlanner = DecodePlanner(),
@@ -289,6 +291,9 @@ class KototoroImagePipelineAdapter(
                         .apply {
                             if (bitmapConfig == Bitmap.Config.RGB_565) {
                                 allowHardware(false)
+                            }
+                            if (isReaderOptimizationEnabled) {
+                                memoryCachePolicy(CachePolicy.DISABLED)
                             }
                             transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
                         }

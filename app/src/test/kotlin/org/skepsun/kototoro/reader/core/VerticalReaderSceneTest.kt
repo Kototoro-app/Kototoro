@@ -228,4 +228,116 @@ class VerticalReaderSceneTest {
         assertEquals(-500f, compensation?.deltaY)
         assertEquals(1000f, compensation?.compensatedViewport?.bounds?.top)
     }
+
+    @Test
+    fun `lays out pages with pageSpacingPx between pages`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Exact(1000, 1500),
+                PageId(2L) to PageGeometryHint.Exact(1000, 2000),
+                PageId(3L) to PageGeometryHint.Exact(1000, 1000),
+            ),
+            pageSpacingPx = 50,
+        )
+
+        assertEquals(3, scene.pageCount)
+        // Heights: 1500 + 2000 + 1000 = 4500. Spacings: 2 * 50 = 100. Total = 4600.
+        assertEquals(4600f, scene.totalSceneHeight)
+
+        val pages = scene.pageGeometries
+        assertEquals(FloatRect.fromLtwh(0f, 0f, 1000f, 1500f), pages[0].sceneBounds)
+        assertEquals(FloatRect.fromLtwh(0f, 1550f, 1000f, 2000f), pages[1].sceneBounds)
+        assertEquals(FloatRect.fromLtwh(0f, 3600f, 1000f, 1000f), pages[2].sceneBounds)
+
+        // Resolving page scroll positions
+        assertEquals(0f, scene.resolvePageScrollPosition(PageId(1L)))
+        assertEquals(1550f, scene.resolvePageScrollPosition(PageId(2L)))
+        assertEquals(3600f, scene.resolvePageScrollPosition(PageId(3L)))
+
+        // Viewport falling exactly into the gap (1500..1550)
+        val gapViewport = ReaderViewport(FloatRect.fromLtwh(0f, 1520f, 1000f, 1000f))
+        val frame = scene.resolve(gapViewport)
+        // Page 1 ends at 1500 (does not intersect 1520..2520). Page 2 spans 1550..3550 (intersects).
+        assertEquals(1, frame.visibleNodes.size)
+        assertEquals(PageId(2L), frame.visibleNodes[0].pageId)
+        assertEquals(PageId(2L), scene.resolveActivePageId(gapViewport))
+    }
+
+    @Test
+    fun `updatePages preserves existing exact hints and anchors prepended pages with zero jump`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(10L) to PageGeometryHint.Exact(1000, 1000), // 0..1000
+                PageId(20L) to PageGeometryHint.Estimated(1f),     // 1020..3020
+            ),
+            pageSpacingPx = 20,
+        )
+
+        // Page 20 gets resolved to Exact(1000, 1800) during reading
+        scene.updatePageHint(PageId(20L), PageGeometryHint.Exact(1000, 1800))
+
+        // Reader is currently looking at Page 20, 300px into the page
+        // Page 20 starts at 1020f. Viewport top = 1320f.
+        val currentViewport = ReaderViewport(FloatRect.fromLtwh(0f, 1320f, 1000f, 1500f))
+        assertEquals(PageId(20L), scene.resolveActivePageId(currentViewport))
+
+        // Previous chapter is prepended: Page 1, Page 2
+        val newPages = listOf(
+            PageId(1L) to PageGeometryHint.Exact(1000, 1200),
+            PageId(2L) to PageGeometryHint.Exact(1000, 800),
+            PageId(10L) to PageGeometryHint.Estimated(1f), // Re-passed as Estimated in new list
+            PageId(20L) to PageGeometryHint.Estimated(1f), // Re-passed as Estimated in new list
+        )
+
+        val compensation = scene.updatePages(newPages, currentViewport)
+        assertTrue(compensation != null)
+
+        // Verify that Page 10 and Page 20 retained their Exact dimensions!
+        // Page 1: 1200
+        // Gap: 20
+        // Page 2: 800
+        // Gap: 20
+        // Page 10: 1000 (retained Exact from initial)
+        // Gap: 20
+        // Page 20: 1800 (retained Exact from updatePageHint)
+        // New top of Page 20 = 1200 + 20 + 800 + 20 + 1000 + 20 = 3060f.
+        assertEquals(3060f, scene.resolvePageScrollPosition(PageId(20L)))
+
+        // Old Page 20 top was 1020f. Delta = 3060 - 1020 = +2040f.
+        assertEquals(2040f, compensation!!.deltaY)
+        assertEquals(1320f + 2040f, compensation.compensatedViewport.bounds.top)
+
+        // In the compensated viewport (top = 3360), active page is still Page 20 and intra-page offset is 300px!
+        val compensatedFrame = scene.resolve(compensation.compensatedViewport)
+        assertEquals(PageId(20L), compensatedFrame.progress.activePageId)
+        assertEquals(300f, compensatedFrame.progress.intraPageOffsetPx)
+    }
+
+    @Test
+    fun `updatePages appending pages returns zero deltaY`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Exact(1000, 1000),
+            ),
+            pageSpacingPx = 10,
+        )
+
+        val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 200f, 1000f, 1500f))
+        val newPages = listOf(
+            PageId(1L) to PageGeometryHint.Exact(1000, 1000),
+            PageId(2L) to PageGeometryHint.Exact(1000, 1500),
+            PageId(3L) to PageGeometryHint.Exact(1000, 1200),
+        )
+
+        val compensation = scene.updatePages(newPages, viewport)
+        assertTrue(compensation != null)
+        assertEquals(0f, compensation!!.deltaY)
+        assertEquals(200f, compensation.compensatedViewport.bounds.top)
+    }
 }
