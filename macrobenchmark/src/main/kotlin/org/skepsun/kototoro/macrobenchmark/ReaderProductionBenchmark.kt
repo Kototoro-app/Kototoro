@@ -1,8 +1,14 @@
 package org.skepsun.kototoro.macrobenchmark
 
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.hardware.display.DisplayManager
+import android.os.Build
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.ExperimentalMetricApi
@@ -174,16 +180,41 @@ class ReaderProductionBenchmark {
 
     private fun MacrobenchmarkScope.setupIteration(backend: String) {
         killProcess()
-        startBenchmarkActivity(backend)
-        // Allow initial pages to decode and settle textures before measurement begins
-        Thread.sleep(1500)
+        pressHome()
+        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val latch = CountDownLatch(1)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                android.util.Log.e("ReaderBenchmark", "Received ACTION_BENCHMARK_READY broadcast for backend=$backend")
+                latch.countDown()
+            }
+        }
+        val filter = IntentFilter(ACTION_BENCHMARK_READY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            targetContext.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            targetContext.registerReceiver(receiver, filter)
+        }
+
+        try {
+            android.util.Log.e("ReaderBenchmark", "setupIteration startBenchmarkActivity for backend=$backend")
+            startBenchmarkActivity(backend)
+            val ready = latch.await(15, TimeUnit.SECONDS)
+            android.util.Log.e("ReaderBenchmark", "setupIteration latch await returned ready=$ready for backend=$backend")
+            check(ready) { "benchmark_ready broadcast was not received within 15s for backend=$backend" }
+        } finally {
+            try {
+                targetContext.unregisterReceiver(receiver)
+            } catch (_: IllegalArgumentException) {}
+        }
+        Thread.sleep(200)
         device.waitForIdle()
 
-        // Log actual refresh rate at setup (ADR 0002 Phase 0B: request 120Hz + verify/record actual)
-        val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
+        // Verify actual refresh rate precondition (ADR 0002 Phase 0B: request 120Hz + verify actual)
         val dm = targetContext.getSystemService(DisplayManager::class.java)
         val refreshRate = dm?.getDisplay(0)?.refreshRate ?: 60f
         android.util.Log.i("ReaderProductionBenchmark", "Device display refresh rate at setup: $refreshRate Hz")
+        require(refreshRate >= 119f) { "Expected ~120Hz display refresh rate, actual=$refreshRate Hz" }
     }
 
     private fun MacrobenchmarkScope.burstFling() {
@@ -218,6 +249,7 @@ class ReaderProductionBenchmark {
     }
 
     companion object {
+        const val ACTION_BENCHMARK_READY = "org.skepsun.kototoro.BENCHMARK_READY"
         const val TARGET_PACKAGE = "org.skepsun.kototoro"
         const val TARGET_ACTIVITY =
             "org.skepsun.kototoro.reader.benchmark.ReaderProductionBenchmarkActivity"

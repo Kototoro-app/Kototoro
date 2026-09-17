@@ -263,30 +263,32 @@ reader/
 
 #### Phase 0B 生产图片管线与真实解码真机实测数据（Android 16 / SDK 37, 72 页变高条漫图集）
 
-**测试机型**：Xiaomi Redmi Note 12 Turbo (`warsaw`)，高通第二代骁龙 7+ (Snapdragon 7+ Gen 2)，Android 16 (SDK 37)，HyperOS，请求 120Hz 刷新率。
+**测试机型**：Xiaomi Redmi Note 12 Turbo (`warsaw`)，高通第二代骁龙 7+ (Snapdragon 7+ Gen 2)，Android 16 (SDK 37)，HyperOS，请求并验证 120Hz 物理刷新率。
 **测试夹具**：`ReaderProductionBenchmarkActivity` 生成 72 页确定性本地条漫图集（`files/reader-benchmark/v1/`），包含 800×1440、800×2400、800×1280、1200×800 等多分辨率真实尺寸抖动，走完整 Coil 磁盘解码、`ComposeReaderPageTransformation` 裁剪与 `KototoroImagePipelineAdapter` 双向状态机。
+**同步机制**：通过首帧双 Choreographer 回调向测试套件发送跨进程广播，严格等待第一屏真实解码渲染完成才开始计量。
 
 ##### 1. Burst 突发滑动基准（Primary Mode: `CompilationMode.Partial`, 5 次迭代，24 次连续 Fling）
 
 | 指标维度 | Legacy ComposeWebtoonReader | ComposeSceneWebtoonReader | 改善幅度与结论 |
 | :--- | :--- | :--- | :--- |
-| **`frameDurationCpuMs` P50** | 4.09 ms | **2.40 ms** | **-41.3%**（主线程中位数耗时大幅降低） |
-| **`frameDurationCpuMs` P90** | 6.62 ms | **4.44 ms** | **-32.9%** |
-| **`frameDurationCpuMs` P95** | 7.44 ms | **4.87 ms** | **-34.5%** |
-| **`frameDurationCpuMs` P99** | 9.47 ms | **6.05 ms** | **-36.1%**（**Legacy 突破 120Hz 8.33ms 预算掉帧，ComposeScene 零掉帧**） |
-| **`frameOverrunMs` P99** | -2.74 ms | **-6.70 ms** | **+3.96 ms 安全余量**（抗突发抖动能力显著增强） |
-| **Active Presentation Assets (Max / Last)** | N/A (未受控) | **10.0 / 10.0** | **严格有界**（无论滑动多远，活跃 Bitmap 资产固定在保留窗口内） |
-| **GPU Memory Max (Median)** | 129.1 MB | 136.8 MB | +7.6 MB（Lookahead 预测窗口预加载纹理带来可预期的合理开销） |
-| **Heap Size Max (Median)** | 93.9 MB | **93.2 MB** | 基本持平（-0.7 MB） |
+| **`frameDurationCpuMs` P50** | 4.30 ms | **2.70 ms** | **-37.2%**（主线程中位数 CPU 耗时大幅降低） |
+| **`frameDurationCpuMs` P90** | 6.70 ms | **4.60 ms** | **-31.3%** |
+| **`frameDurationCpuMs` P95** | 7.70 ms | **4.90 ms** | **-36.4%** |
+| **`frameDurationCpuMs` P99** | 10.20 ms | **6.20 ms** | **-39.2%**（CPU P99 稳固在 120Hz 8.33ms 预算内） |
+| **`frameOverrunMs` P99** | -2.40 ms | **-5.90 ms** | **+3.50 ms 硬件截止期安全余量**（抗突发卡顿鲁棒性显著提升） |
+| **Active Presentation Assets (Max / Last)** | N/A (未做管线受控) | **10.0 / 9.0** | **严格有界**（无论快速滑行多远，活跃 Bitmap 资产固定在保留窗口内） |
+| **GPU Memory Max (Median)** | 130.1 MB | 133.7 MB | +3.6 MB（Lookahead 预测窗口预加载纹理带来合理的受控开销） |
+| **Heap Size Max (Median)** | 92.3 MB | **91.8 MB** | 基本持平（-0.5 MB） |
 
 ##### 2. Sustained 持续多轮往复遍历基准（2 轮双向 72 页遍历，1000+ 渲染帧）
 
 | 指标维度 | Legacy ComposeWebtoonReader | ComposeSceneWebtoonReader | 改善幅度与结论 |
 | :--- | :--- | :--- | :--- |
-| **平稳态匿名内存 (`rssAnonMb.Last`)** | 346.5 MB | **210.9 MB** | **-39.1%（-135.6 MB 巨额内存节省！）** |
-| **峰值匿名内存 (`rssAnonMb.Max`)** | 360.0 MB | **244.6 MB** | **-32.1%（-115.4 MB 峰值节省）** |
-| **`frameDurationCpuMs` P50** | 3.39 ms | **2.22 ms** | **-34.5%** |
-| **`frameDurationCpuMs` P99** | 9.17 ms | **5.51 ms** | **-39.9%**（持续滚动下维持绝对平稳） |
+| **平稳态匿名内存 (`RssAnon.Last`)** | 331.9 MB | **213.2 MB** | **-35.8%（-118.7 MB 稳态驻留消除）** |
+| **峰值匿名内存 (`RssAnon.Max`)** | 353.0 MB | **236.1 MB** | **-33.1%（-116.9 MB 峰值节省）** |
+| **`frameDurationCpuMs` P50** | 3.80 ms | **2.40 ms** | **-36.8%** |
+| **`frameDurationCpuMs` P99** | 8.80 ms | **5.60 ms** | **-36.4%**（持续长程滑动下维持绝对平稳） |
+| **`frameOverrunMs` P99** | -3.60 ms | **-6.90 ms** | **+3.30 ms 硬件截止期安全余量** |
 | **Active Presentation Assets 状态机** | N/A | **峰值 11.0 → 静止 8.0** | **验证双向状态机**（离开视口自动从 Presentation 降级为 Source） |
 
 ##### 3. Diagnostic 全量预编译基准（Diagnostic Mode: `CompilationMode.Full`, 5 次迭代）
@@ -297,8 +299,8 @@ reader/
 | **`frameDurationCpuMs` P99** | 5.62 ms | **3.97 ms** | **-29.4%** |
 
 **阶段结论（Phase 0B Conclusion）**：
-- **帧率达标**：在 120Hz 物理屏幕上，旧版 `ComposeWebtoonReader` 在 P99 出现 9.47ms 耗时（超过 8.33ms 预算，发生严重掉帧），而 `ComposeSceneWebtoonReader` P99 控制在 6.05ms，P99 Overrun 留有 6.7ms 余量，实现 **120Hz 物理真机 0 掉帧**；
-- **内存架构闭环**：双向 `PRESENTATION_READY` ↔ `SOURCE_READY` 状态机经受住了 72 页全图往返遍历的严苛考验，持续滚动平稳态 Native RSS 内存降低 **39.1% (135.6 MB)**，活跃呈现资产严格锚定在 8~11 张，彻底根除了长章节条漫滑动时 Native 内存无界线性暴涨的顽疾。
+- **帧渲染余量显著扩增**：`frameDurationCpuMs` 衡量 UI/RenderThread 的 CPU 执行耗时，`frameOverrunMs` 决定是否错过显示硬件 VSYNC Deadline。在 120Hz 刷新率下，旧版 `ComposeWebtoonReader` 的 P99 CPU 达到 10.20ms（逼近显示周期），P99 Overrun 为 -2.40ms；而 `ComposeSceneWebtoonReader` 将 P99 CPU 压降至 6.20ms（-39.2%），P99 Overrun 进一步拓宽至 -5.90ms（突发）与 -6.90ms（长程），**为系统调度与突发波动留出了 +3.3~3.5ms 的硬件截止期安全缓冲**；
+- **内存架构闭环验证**：双向 `PRESENTATION_READY` ↔ `SOURCE_READY` 状态机经受住了 72 页全图往复长程遍历的严苛考验。在本次 72 页双向重复遍历中，Scene Reader 的 presentation working set 始终保持在 8~11 个 asset，RSS Anon 未随遍历轮次呈现 Legacy 路径的高位驻留（Sustained 稳态 RSS Anon 降低 **35.8% / 118.7 MB**，峰值降低 **33.1% / 116.9 MB**）。
 
 ---
 

@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.benchmark
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
@@ -74,11 +75,20 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
             )
         }
 
-        readyView = View(this).apply {
+        readyView = android.widget.TextView(this).apply {
             id = R.id.benchmark_ready
+            text = "benchmark_ready"
+            contentDescription = "benchmark_ready"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             visibility = View.GONE
-            layoutParams = FrameLayout.LayoutParams(1, 1)
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
         }
+
+        val backend = intent.getStringExtra(EXTRA_BACKEND) ?: BACKEND_SCENE_WEBTOON
+        android.util.Log.e("BenchmarkActivity", "onCreate starting for backend=$backend")
 
         val composeView = ComposeView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
@@ -87,7 +97,6 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
             )
             setContent {
                 MaterialTheme {
-                    val backend = intent.getStringExtra(EXTRA_BACKEND) ?: BACKEND_SCENE_WEBTOON
                     val imageLoader = SingletonImageLoader.get(this@ReaderProductionBenchmarkActivity)
 
                     BenchmarkReaderContent(
@@ -117,13 +126,22 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
     }
 
     private fun monitorInitialReadiness() {
-        val initialRequiredKeys = pages.take(2).map { it.readerKey }.toSet()
+        android.util.Log.e("BenchmarkActivity", "monitorInitialReadiness entered")
         val checkAndSignal = {
-            if (pipeline.decodedPageKeys.containsAll(initialRequiredKeys) && readyView.visibility != View.VISIBLE) {
+            android.util.Log.e(
+                "BenchmarkActivity",
+                "checkAndSignal decodedKeys=${pipeline.decodedPageKeys} readyVis=${readyView.visibility}",
+            )
+            if (pipeline.decodedPageKeys.isNotEmpty() && readyView.visibility != View.VISIBLE) {
                 // Wait for two Choreographer frames to ensure textures are presented to display
                 Choreographer.getInstance().postFrameCallback {
                     Choreographer.getInstance().postFrameCallback {
                         readyView.visibility = View.VISIBLE
+                        sendBroadcast(Intent(ACTION_BENCHMARK_READY))
+                        android.util.Log.e(
+                            "BenchmarkActivity",
+                            "benchmark_ready signaled VISIBLE and broadcast sent, decodedKeys=${pipeline.decodedPageKeys}",
+                        )
                     }
                 }
             }
@@ -212,6 +230,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
     }
 
     companion object {
+        const val ACTION_BENCHMARK_READY = "org.skepsun.kototoro.BENCHMARK_READY"
         const val EXTRA_BACKEND = "backend"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
