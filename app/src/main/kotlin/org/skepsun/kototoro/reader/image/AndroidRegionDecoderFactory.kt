@@ -41,6 +41,7 @@ import kotlin.concurrent.write
 class AndroidRegionDecoderFactory(
     context: Context,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    val preferredBitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
 ) : RegionDecoderFactory {
 
     private val appContext = context.applicationContext
@@ -131,7 +132,7 @@ class AndroidRegionDecoderFactory(
             decoder = createBitmapRegionDecoder(input)
         }
         val resolved = decoder ?: throw IOException("Cannot create region decoder for $uri")
-        return AndroidTileDecodeSession(resolved)
+        return AndroidTileDecodeSession(resolved, preferredBitmapConfig)
     }
 
     private class AndroidRegionDecodeSource(
@@ -151,6 +152,7 @@ class AndroidRegionDecoderFactory(
 
     private class AndroidTileDecodeSession(
         private val decoder: BitmapRegionDecoder,
+        private val preferredBitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
     ) : TileDecodeSession {
         private val lock = ReentrantReadWriteLock(true)
 
@@ -166,7 +168,7 @@ class AndroidRegionDecoderFactory(
                         ?: throw IOException("Decode region $region is outside encoded bounds $encodedSize")
                     val options = BitmapFactory.Options().apply {
                         inSampleSize = sampleSize.coerceAtLeast(1)
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                        inPreferredConfig = preferredBitmapConfig
                     }
                     val bitmap = decoder.decodeRegion(
                         Rect(clamped.left, clamped.top, clamped.right, clamped.bottom),

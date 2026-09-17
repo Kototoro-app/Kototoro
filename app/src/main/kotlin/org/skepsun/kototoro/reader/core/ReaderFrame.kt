@@ -9,5 +9,15 @@ package org.skepsun.kototoro.reader.core
 data class ReaderFrame(
     val viewport: ReaderViewport,
     val visibleNodes: List<VisibleNode>,
-    val progress: ReaderProgressSnapshot = ReaderProgressSnapshot.from(viewport, visibleNodes),
-)
+    val progress: ReaderProgressSnapshot,
+) {
+    constructor(
+        viewport: ReaderViewport,
+        visibleNodes: List<VisibleNode>,
+        readingDirection: SceneReadingDirection = SceneReadingDirection.TOP_TO_BOTTOM,
+    ) : this(
+        viewport = viewport,
+        visibleNodes = visibleNodes,
+        progress = ReaderProgressSnapshot.from(viewport, visibleNodes, readingDirection),
+    )
+}

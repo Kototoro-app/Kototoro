@@ -34,7 +34,7 @@ class ReaderPrediction(
      * coarse motion class changed. Pixel-level scroll updates within the same window are ignored.
      */
     fun predictWindowIfChanged(
-        scene: VerticalReaderScene,
+        scene: ReaderScene,
         frame: ReaderFrame,
         motion: ViewportMotion = ViewportMotion.Idle,
         force: Boolean = false,
@@ -49,24 +49,22 @@ class ReaderPrediction(
      * Resolves an ordered list of [PrefetchRequest] based on the current [viewport] and [motion].
      */
     fun predict(
-        scene: VerticalReaderScene,
+        scene: ReaderScene,
         viewport: ReaderViewport,
         motion: ViewportMotion = ViewportMotion.Idle,
     ): List<PrefetchRequest> = predict(scene, scene.resolve(viewport), motion)
 
     /** Resolves prediction from an already-computed visible frame. */
     fun predict(
-        scene: VerticalReaderScene,
+        scene: ReaderScene,
         frame: ReaderFrame,
         motion: ViewportMotion = ViewportMotion.Idle,
     ): List<PrefetchRequest> {
         val viewport = frame.viewport
-        val vpTop = viewport.bounds.top
-        val vpHeight = viewport.bounds.height
-        val vpWidth = viewport.bounds.width
-        val vpBottom = viewport.bounds.bottom
+        val direction = scene.readingDirection
+        val primaryDim = SceneAxisProjection.primaryDimension(viewport.bounds, direction)
 
-        if (vpHeight <= 0f || vpWidth <= 0f) return emptyList()
+        if (primaryDim <= 0f || viewport.bounds.width <= 0f || viewport.bounds.height <= 0f) return emptyList()
 
         // 1. Resolve immediate visible pages
         val requests = mutableListOf<PrefetchRequest>()
@@ -86,24 +84,18 @@ class ReaderPrediction(
         }
 
         // 2. Compute directional lookahead expansion
-        val velocityY = motion.velocityY
-        val dynamicExtraPx = (abs(velocityY) * config.lookaheadHorizonSeconds).coerceAtMost(config.maxLookaheadExtraPx)
+        val forwardVelocity = SceneAxisProjection.forwardVelocity(motion, direction)
+        val speed = abs(forwardVelocity)
+        val dynamicExtraPx = (speed * config.lookaheadHorizonSeconds).coerceAtMost(config.maxLookaheadExtraPx)
 
-        val aheadExtra = if (velocityY >= 0) dynamicExtraPx else 0f
-        val behindExtra = if (velocityY < 0) dynamicExtraPx else 0f
+        val aheadExtra = if (forwardVelocity >= 0) dynamicExtraPx else 0f
+        val behindExtra = if (forwardVelocity < 0) dynamicExtraPx else 0f
 
-        val highAheadPx = vpHeight * config.staticAheadFraction + aheadExtra
-        val highBehindPx = vpHeight * config.staticBehindFraction + behindExtra
+        val highAheadPx = primaryDim * config.staticAheadFraction + aheadExtra
+        val highBehindPx = primaryDim * config.staticBehindFraction + behindExtra
 
         // HIGH priority window
-        val highWindow = ReaderViewport(
-            FloatRect.fromLtwh(
-                left = 0f,
-                top = (vpTop - highBehindPx).coerceAtLeast(0f),
-                width = vpWidth,
-                height = vpHeight + highBehindPx + highAheadPx,
-            ),
-        )
+        val highWindow = SceneAxisProjection.expand(viewport, direction, highAheadPx, highBehindPx)
         val highFrame = scene.resolve(highWindow)
 
         for (node in highFrame.visibleNodes) {
@@ -120,20 +112,13 @@ class ReaderPrediction(
         }
 
         // 3. MEDIUM priority window (extended lookahead along scroll direction)
-        val extraMedium = vpHeight * 1.5f
-        val (mediumBehindPx, mediumAheadPx) = if (velocityY < 0) {
+        val extraMedium = primaryDim * 1.5f
+        val (mediumBehindPx, mediumAheadPx) = if (forwardVelocity < 0) {
             (highBehindPx + extraMedium) to highAheadPx
         } else {
             highBehindPx to (highAheadPx + extraMedium)
         }
-        val mediumWindow = ReaderViewport(
-            FloatRect.fromLtwh(
-                left = 0f,
-                top = (vpTop - mediumBehindPx).coerceAtLeast(0f),
-                width = vpWidth,
-                height = vpHeight + mediumBehindPx + mediumAheadPx,
-            ),
-        )
+        val mediumWindow = SceneAxisProjection.expand(viewport, direction, mediumAheadPx, mediumBehindPx)
         val mediumFrame = scene.resolve(mediumWindow)
 
         for (node in mediumFrame.visibleNodes) {
@@ -153,7 +138,7 @@ class ReaderPrediction(
     }
 
     private data class ResourceWindowKey(
-        val scene: VerticalReaderScene,
+        val scene: ReaderScene,
         val sceneRevision: Long,
         val viewportWidth: Int,
         val viewportHeight: Int,
@@ -164,33 +149,35 @@ class ReaderPrediction(
     ) {
         companion object {
             fun from(
-                scene: VerticalReaderScene,
+                scene: ReaderScene,
                 frame: ReaderFrame,
                 motion: ViewportMotion,
                 config: ReaderPredictionConfig,
             ): ResourceWindowKey {
-                val viewportHeight = frame.viewport.bounds.height
-                val speed = abs(motion.velocityY)
+                val direction = scene.readingDirection
+                val primaryDim = SceneAxisProjection.primaryDimension(frame.viewport.bounds, direction)
+                val forwardVelocity = SceneAxisProjection.forwardVelocity(motion, direction)
+                val speed = abs(forwardVelocity)
                 val dynamicExtraPx = (speed * config.lookaheadHorizonSeconds).coerceAtMost(config.maxLookaheadExtraPx)
-                val lookaheadBucket = if (viewportHeight > 0f) {
-                    (dynamicExtraPx / viewportHeight).toInt().coerceIn(0, 8)
+                val lookaheadBucket = if (primaryDim > 0f) {
+                    (dynamicExtraPx / primaryDim).toInt().coerceIn(0, 8)
                 } else {
                     0
                 }
                 val motionClass = when {
                     speed < 1f && !motion.isDragging -> MotionClass.IDLE
-                    motion.velocityY < 0f && speed >= viewportHeight * 1.5f -> MotionClass.FAST_BACKWARD
-                    motion.velocityY < 0f -> MotionClass.BACKWARD
-                    speed >= viewportHeight * 1.5f -> MotionClass.FAST_FORWARD
+                    forwardVelocity < 0f && speed >= primaryDim * 1.5f -> MotionClass.FAST_BACKWARD
+                    forwardVelocity < 0f -> MotionClass.BACKWARD
+                    speed >= primaryDim * 1.5f -> MotionClass.FAST_FORWARD
                     else -> MotionClass.FORWARD
                 }
                 return ResourceWindowKey(
                     scene = scene,
                     sceneRevision = scene.revision,
                     viewportWidth = frame.viewport.bounds.width.toInt(),
-                    viewportHeight = viewportHeight.toInt(),
-                    firstVisiblePageId = frame.progress.lowerPageId,
-                    lastVisiblePageId = frame.progress.upperPageId,
+                    viewportHeight = frame.viewport.bounds.height.toInt(),
+                    firstVisiblePageId = frame.progress.firstVisiblePageId,
+                    lastVisiblePageId = frame.progress.lastVisiblePageId,
                     motionClass = motionClass,
                     lookaheadBucket = lookaheadBucket,
                 )

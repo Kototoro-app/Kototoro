@@ -31,6 +31,7 @@ class DecodePlanner(
         pixelUsage: PixelUsage = PixelUsage.DISPLAY_ONLY,
         capabilities: RendererCapabilities = RendererCapabilities.Unknown,
         currentLod: LodSpec? = null,
+        format: RasterFormat = RasterFormat.ARGB_8888,
     ): DecodePlan {
         require(viewportWidth > 0) { "viewportWidth must be > 0: $viewportWidth" }
         require(viewportHeight > 0) { "viewportHeight must be > 0: $viewportHeight" }
@@ -40,6 +41,7 @@ class DecodePlanner(
         val limits = capabilities.effectiveLimits(tilePolicy.safetyDimensionLimitPx)
         val maxDrawableW = limits.width
         val maxDrawableH = limits.height
+        val bytesPerPixel = format.estimatedBytesPerPixel.toLong()
 
         // 1. Handle animated images (GIF / Animated WebP / Animated AVIF)
         if (metadata.isAnimated) {
@@ -49,7 +51,7 @@ class DecodePlanner(
             } else {
                 AnimatedFallback.NativeAnimated
             }
-            val estBytes = logicalSize.width.toLong() * logicalSize.height.toLong() * 4L
+            val estBytes = logicalSize.width.toLong() * logicalSize.height.toLong() * bytesPerPixel
             return DecodePlan.AnimatedSingle(
                 pageId = pageId,
                 originalSize = logicalSize,
@@ -70,7 +72,7 @@ class DecodePlanner(
         val targetW = maxOf(1, logicalSize.width / sampleSize)
         val targetH = maxOf(1, logicalSize.height / sampleSize)
         val targetSize = IntSize(targetW, targetH)
-        val estimatedSingleBytes = targetW.toLong() * targetH.toLong() * 4L
+        val estimatedSingleBytes = targetW.toLong() * targetH.toLong() * bytesPerPixel
 
         val allocatorPolicy = DecodeAllocatorPolicy.resolve(
             usage = pixelUsage,
@@ -106,7 +108,7 @@ class DecodePlanner(
         // 4. Fallback to Tiled plan: calculate overview LOD and tile specs
         val overviewLod = resolveOverviewLod(logicalSize, limits)
         val tileDimension = resolveTileDimension(logicalSize)
-        val singleTileBytes = tileDimension.width.toLong() * tileDimension.height.toLong() * 4L
+        val singleTileBytes = tileDimension.width.toLong() * tileDimension.height.toLong() * bytesPerPixel
         // Estimated working set: 4-6 tiles covering the viewport plus 1 lookahead
         val estimatedWorkingSet = minOf(
             tilePolicy.defaultWorkingSetCostBudgetBytes,

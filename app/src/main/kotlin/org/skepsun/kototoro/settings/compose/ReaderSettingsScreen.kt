@@ -1051,7 +1051,7 @@ private fun ReaderMangaSettingsPage(
                 summary = stringResource(R.string.reader_experimental_scene_engine_summary),
                 iconRes = R.drawable.ic_bolt,
                 checked = settings.observeAsState(AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE) {
-                    prefs.getBoolean(AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE, false)
+                    prefs.getBoolean(AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE, true)
                 }.value,
                 onCheckedChange = {
                     settings.prefs.edit { putBoolean(AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE, it) }

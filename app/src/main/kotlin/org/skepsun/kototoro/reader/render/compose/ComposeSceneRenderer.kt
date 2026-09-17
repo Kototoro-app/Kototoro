@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -26,7 +27,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -79,6 +82,7 @@ fun ComposeSceneRenderer(
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
     tileStore: TileStore? = null,
+    animatedBridge: AnimatedDrawBridge? = remember { AnimatedDrawBridge() },
     onScrollProgressChanged: (scrollY: Float, maxScrollY: Float) -> Unit = { _, _ -> },
     onMotionChanged: (ViewportMotion) -> Unit = {},
     onOverScroll: ((deltaY: Float) -> Unit)? = null,
@@ -86,6 +90,12 @@ fun ComposeSceneRenderer(
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
+
+    DisposableEffect(animatedBridge) {
+        onDispose {
+            animatedBridge?.stopAll()
+        }
+    }
 
     val coroutineScope = rememberCoroutineScope()
     var flingJob by remember { mutableStateOf<Job?>(null) }
@@ -97,6 +107,7 @@ fun ComposeSceneRenderer(
         modifier = modifier
             .fillMaxSize()
             .tileDrawBridge(tileStore)
+            .animatedDrawBridge(animatedBridge)
             .onSizeChanged { size ->
                 viewportWidth = size.width.toFloat()
                 viewportHeight = size.height.toFloat()
@@ -250,16 +261,20 @@ fun ComposeSceneRenderer(
                         bounds = FloatRect.fromLtwh(0f, currentY, scene.availableWidth.toFloat(), vHeight),
                     )
                     val frame = scene.resolve(viewport)
+                    val seamPolicy = PageSeamPolicy.forScene(scene.pageSpacingPx, isVertical = true)
                     drawFrameNodes(
                         frame = frame,
+                        viewportScrollX = 0f,
                         viewportScrollY = currentY,
                         horizontalOffset = horizontalOffset,
+                        seamPolicy = seamPolicy,
                         placeholderColor = placeholderColor,
                         pageLabelProvider = pageLabelProvider,
                         textMeasurer = textMeasurer,
                         imageColorFilter = imageColorFilter,
                         assetProvider = assetProvider,
                         readerAssetProvider = readerAssetProvider,
+                        animatedBridge = animatedBridge,
                     )
                 }
 
@@ -269,33 +284,42 @@ fun ComposeSceneRenderer(
 }
 
 /**
- * Pure drawing function rendering visible scene nodes onto the DrawScope canvas.
+ * Pure 2D drawing function rendering visible scene nodes onto the DrawScope canvas.
  */
 internal fun DrawScope.drawFrameNodes(
     frame: org.skepsun.kototoro.reader.core.ReaderFrame,
-    viewportScrollY: Float,
+    viewportScrollX: Float = 0f,
+    viewportScrollY: Float = 0f,
     horizontalOffset: Float = 0f,
+    seamPolicy: PageSeamPolicy = PageSeamPolicy.VerticalContinuous,
     placeholderColor: Color,
     pageLabelProvider: ((PageId) -> String)? = null,
     textMeasurer: TextMeasurer? = null,
     imageColorFilter: ColorFilter? = null,
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
+    animatedBridge: AnimatedDrawBridge? = null,
 ) {
+    val visiblePageIds = HashSet<PageId>(frame.visibleNodes.size)
+    for (node in frame.visibleNodes) {
+        visiblePageIds.add(node.pageId)
+    }
+    animatedBridge?.updateVisiblePages(visiblePageIds)
+
     for (node in frame.visibleNodes) {
         val screenTop = node.sceneBounds.top - viewportScrollY
-        val screenLeft = node.sceneBounds.left + horizontalOffset
+        val screenLeft = node.sceneBounds.left - viewportScrollX + horizontalOffset
         val nodeWidth = node.sceneBounds.width
         val nodeHeight = node.sceneBounds.height
 
         val topInt = screenTop.roundToInt()
         val bottomInt = (screenTop + nodeHeight).roundToInt()
-        // 1px vertical overlap (+1) completely eliminates GPU bilinear rasterization hairline cracks between adjacent slices
-        val heightInt = (bottomInt - topInt + 1).coerceAtLeast(1)
+        // PageSeamPolicy eliminates GPU bilinear rasterization hairline cracks between adjacent slices
+        val heightInt = (bottomInt - topInt + seamPolicy.overlapY).coerceAtLeast(1)
 
         val leftInt = screenLeft.roundToInt()
         val rightInt = (screenLeft + nodeWidth).roundToInt()
-        val widthInt = (rightInt - leftInt).coerceAtLeast(1)
+        val widthInt = (rightInt - leftInt + seamPolicy.overlapX).coerceAtLeast(1)
 
         val asset = readerAssetProvider?.invoke(node.pageId)
         if (asset is ReaderImageAsset.Tiled) {
@@ -318,11 +342,26 @@ internal fun DrawScope.drawFrameNodes(
             continue
         }
 
-        val resolvedBitmap: ImageBitmap? = when (asset) {
+        if (asset is ReaderImageAsset.Animated) {
+            animatedBridge?.register(node.pageId, asset.drawable)
+            drawIntoCanvas { canvas ->
+                asset.drawable.setBounds(leftInt, topInt, rightInt, bottomInt)
+                asset.drawable.draw(canvas.nativeCanvas)
+            }
+            continue
+        }
+
+        val authoritativeBitmap: ImageBitmap? = when (asset) {
             is ReaderImageAsset.ComposeImage -> asset.imageBitmap
             is ReaderImageAsset.AndroidBitmap -> asset.bitmap.asImageBitmap()
             else -> assetProvider(node.pageId)
         }
+
+        val previewBitmap: ImageBitmap? = if (asset is ReaderImageAsset.Preview) {
+            asset.imageBitmap
+        } else null
+
+        val resolvedBitmap = authoritativeBitmap ?: previewBitmap
 
         if (resolvedBitmap != null) {
             // Actual image loaded: draw seamlessly without any borders, dividers, or text overlays
@@ -331,7 +370,7 @@ internal fun DrawScope.drawFrameNodes(
                 dstOffset = IntOffset(leftInt, topInt),
                 dstSize = IntSize(widthInt, heightInt),
                 colorFilter = imageColorFilter,
-                filterQuality = FilterQuality.Medium,
+                filterQuality = if (authoritativeBitmap != null) FilterQuality.Medium else FilterQuality.Low,
             )
         } else {
             drawPlaceholder(
@@ -349,10 +388,39 @@ internal fun DrawScope.drawFrameNodes(
 }
 
 /**
- * Draws a tiled page consisting of an optional LOD0 base band and high-precision lattice tiles.
+ * Backward-compatible 1D overload for vertical scenes.
  */
-private fun DrawScope.drawTiledPage(
-    asset: ReaderImageAsset.Tiled,
+internal fun DrawScope.drawFrameNodes(
+    frame: org.skepsun.kototoro.reader.core.ReaderFrame,
+    viewportScrollY: Float,
+    horizontalOffset: Float = 0f,
+    placeholderColor: Color,
+    pageLabelProvider: ((PageId) -> String)? = null,
+    textMeasurer: TextMeasurer? = null,
+    imageColorFilter: ColorFilter? = null,
+    assetProvider: (PageId) -> ImageBitmap? = { null },
+    readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
+    animatedBridge: AnimatedDrawBridge? = null,
+) = drawFrameNodes(
+    frame = frame,
+    viewportScrollX = 0f,
+    viewportScrollY = viewportScrollY,
+    horizontalOffset = horizontalOffset,
+    seamPolicy = PageSeamPolicy.VerticalContinuous,
+    placeholderColor = placeholderColor,
+    pageLabelProvider = pageLabelProvider,
+    textMeasurer = textMeasurer,
+    imageColorFilter = imageColorFilter,
+    assetProvider = assetProvider,
+    readerAssetProvider = readerAssetProvider,
+    animatedBridge = animatedBridge,
+)
+
+/**
+ * Draws a tiled page consisting of a base layer and an optional progressive target LOD layer.
+ */
+private fun DrawScope.drawTileLayer(
+    layer: ReaderImageAsset.TileLayer,
     node: VisibleNode,
     screenLeft: Float,
     screenTop: Float,
@@ -363,33 +431,30 @@ private fun DrawScope.drawTiledPage(
     widthInt: Int,
     heightInt: Int,
     imageColorFilter: ColorFilter?,
-    placeholderColor: Color,
-    pageLabelProvider: ((PageId) -> String)?,
-    textMeasurer: TextMeasurer?,
-) {
-    val grid = asset.grid
-    val tileStore = asset.tileStore
+    tileStore: TileStore,
+    drawOverview: Boolean,
+): Boolean {
+    val grid = layer.grid
     val orientation = grid.geometry.orientationDegrees
-
     var hasRenderedAnyContent = false
 
-    // 1. LOD0 Overview Base Band (底带保底)
-    val overviewTile = asset.overviewKey?.let { tileStore.tile(it) }
-    val overviewBmp = (overviewTile?.payload as? Bitmap)?.asImageBitmap()
-    if (overviewBmp != null) {
-        hasRenderedAnyContent = true
-        drawBitmapTransformed(
-            image = overviewBmp,
-            srcOffset = IntOffset.Zero,
-            srcSize = IntSize(overviewBmp.width, overviewBmp.height),
-            dstOffset = IntOffset(leftInt, topInt),
-            dstSize = IntSize(widthInt, heightInt),
-            orientationDegrees = orientation,
-            colorFilter = imageColorFilter,
-        )
+    if (drawOverview) {
+        val overviewTile = layer.overviewKey?.let { tileStore.tile(it) }
+        val overviewBmp = (overviewTile?.payload as? Bitmap)?.asImageBitmap()
+        if (overviewBmp != null) {
+            hasRenderedAnyContent = true
+            drawBitmapTransformed(
+                image = overviewBmp,
+                srcOffset = IntOffset.Zero,
+                srcSize = IntSize(overviewBmp.width, overviewBmp.height),
+                dstOffset = IntOffset(leftInt, topInt),
+                dstSize = IntSize(widthInt, heightInt),
+                orientationDegrees = orientation,
+                colorFilter = imageColorFilter,
+            )
+        }
     }
 
-    // 2. High-precision lattice tiles with gutter cropping
     if (grid.pageSize.width > 0 && grid.pageSize.height > 0 && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
         val scaleX = grid.pageSize.width.toFloat() / node.sceneBounds.width
         val scaleY = grid.pageSize.height.toFloat() / node.sceneBounds.height
@@ -445,8 +510,61 @@ private fun DrawScope.drawTiledPage(
         }
     }
 
-    // 3. Fallback placeholder if neither overview nor any tiles were ready
-    if (!hasRenderedAnyContent) {
+    return hasRenderedAnyContent
+}
+
+private fun DrawScope.drawTiledPage(
+    asset: ReaderImageAsset.Tiled,
+    node: VisibleNode,
+    screenLeft: Float,
+    screenTop: Float,
+    nodeWidth: Float,
+    nodeHeight: Float,
+    leftInt: Int,
+    topInt: Int,
+    widthInt: Int,
+    heightInt: Int,
+    imageColorFilter: ColorFilter?,
+    placeholderColor: Color,
+    pageLabelProvider: ((PageId) -> String)?,
+    textMeasurer: TextMeasurer?,
+) {
+    val renderedBase = drawTileLayer(
+        layer = asset.base,
+        node = node,
+        screenLeft = screenLeft,
+        screenTop = screenTop,
+        nodeWidth = nodeWidth,
+        nodeHeight = nodeHeight,
+        leftInt = leftInt,
+        topInt = topInt,
+        widthInt = widthInt,
+        heightInt = heightInt,
+        imageColorFilter = imageColorFilter,
+        tileStore = asset.tileStore,
+        drawOverview = true,
+    )
+
+    val renderedTarget = asset.target?.let { target ->
+        drawTileLayer(
+            layer = target,
+            node = node,
+            screenLeft = screenLeft,
+            screenTop = screenTop,
+            nodeWidth = nodeWidth,
+            nodeHeight = nodeHeight,
+            leftInt = leftInt,
+            topInt = topInt,
+            widthInt = widthInt,
+            heightInt = heightInt,
+            imageColorFilter = imageColorFilter,
+            tileStore = asset.tileStore,
+            drawOverview = false,
+        )
+    } ?: false
+
+    // Fallback placeholder if neither overview nor any tiles were ready
+    if (!renderedBase && !renderedTarget) {
         drawPlaceholder(
             pageId = node.pageId,
             screenLeft = screenLeft,

@@ -59,6 +59,7 @@ sealed interface ComposeReaderImageState {
     data class EnhancedReady(
         val original: Uri,
         val enhanced: Uri,
+        val isAnimated: Boolean = false,
     ) : ComposeReaderImageState
 
     data class Failed(

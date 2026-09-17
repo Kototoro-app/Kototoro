@@ -16,27 +16,31 @@ class VerticalReaderScene(
     val defaultViewportHeight: Int,
     initialPages: List<Pair<PageId, PageGeometryHint>> = emptyList(),
     val pageSpacingPx: Int = 0,
-) {
+) : MutableReaderScene {
     init {
         require(availableWidth > 0) { "availableWidth must be > 0: $availableWidth" }
         require(defaultViewportHeight > 0) { "defaultViewportHeight must be > 0: $defaultViewportHeight" }
         require(pageSpacingPx >= 0) { "pageSpacingPx must be >= 0: $pageSpacingPx" }
     }
 
+    override val readingDirection: SceneReadingDirection get() = SceneReadingDirection.TOP_TO_BOTTOM
+
     private val entries = ArrayList<PageEntry>(initialPages.size)
 
     /** Ordered list of laid-out page geometries. */
-    val pageGeometries: List<PageGeometry> get() = entries.map { it.geometry }
+    override val pageGeometries: List<PageGeometry> get() = entries.map { it.geometry }
 
     /** Total height of the continuous scene in pixels. */
     var totalSceneHeight: Float = 0f
         private set
 
+    override val totalSceneExtent: Float get() = totalSceneHeight
+
     /** Monotonic geometry revision used to invalidate derived resource windows. */
-    var revision: Long = 0L
+    override var revision: Long = 0L
         private set
 
-    val pageCount: Int get() = entries.size
+    override val pageCount: Int get() = entries.size
 
     init {
         if (initialPages.isNotEmpty()) {
@@ -53,7 +57,7 @@ class VerticalReaderScene(
     /**
      * Fully replaces the current pages with a new page list (e.g. chapter window load or replacement).
      */
-    fun setPages(pages: List<Pair<PageId, PageGeometryHint>>) {
+    override fun setPages(pages: List<Pair<PageId, PageGeometryHint>>) {
         entries.clear()
         entries.ensureCapacity(pages.size)
         var currentY = 0f
@@ -81,9 +85,9 @@ class VerticalReaderScene(
      * @param currentViewport Optional current viewport, used to preserve the visual reading anchor.
      * @return [AnchorCompensation] with the required [deltaY] if an active anchor was preserved, or null.
      */
-    fun updatePages(
+    override fun updatePages(
         newPages: List<Pair<PageId, PageGeometryHint>>,
-        currentViewport: ReaderViewport? = null,
+        currentViewport: ReaderViewport?,
     ): AnchorCompensation? {
         if (newPages.isEmpty()) {
             entries.clear()
@@ -136,7 +140,7 @@ class VerticalReaderScene(
     /**
      * Returns the 0-indexed position of [pageId] in the scene, or -1 if absent.
      */
-    fun indexOf(pageId: PageId): Int {
+    override fun indexOf(pageId: PageId): Int {
         for (i in entries.indices) {
             if (entries[i].pageId == pageId) return i
         }
@@ -146,7 +150,7 @@ class VerticalReaderScene(
     /**
      * Resolves the top Y coordinate for [pageId] in scene coordinates, or null if absent.
      */
-    fun resolvePageScrollPosition(pageId: PageId): Float? {
+    override fun resolvePageScrollPosition(pageId: PageId): Float? {
         val index = indexOf(pageId)
         if (index < 0) return null
         return entries[index].geometry.sceneBounds.top
@@ -155,13 +159,13 @@ class VerticalReaderScene(
     /**
      * Computes the visible nodes and active reading semantic state for a given [viewport].
      */
-    fun resolve(viewport: ReaderViewport): ReaderFrame {
+    override fun resolve(viewport: ReaderViewport): ReaderFrame {
         if (entries.isEmpty() || viewport.bounds.isEmpty) {
-            return ReaderFrame(viewport, emptyList())
+            return ReaderFrame(viewport, emptyList(), readingDirection)
         }
         val firstIdx = findFirstVisibleIndex(viewport.bounds.top)
         if (firstIdx < 0) {
-            return ReaderFrame(viewport, emptyList())
+            return ReaderFrame(viewport, emptyList(), readingDirection)
         }
 
         val visibleNodes = ArrayList<VisibleNode>(8)
@@ -181,7 +185,7 @@ class VerticalReaderScene(
                 break
             }
         }
-        return ReaderFrame(viewport, visibleNodes)
+        return ReaderFrame(viewport, visibleNodes, readingDirection)
     }
 
     /**
@@ -191,20 +195,9 @@ class VerticalReaderScene(
      * the top of the viewport (`nodes.first().pageId`), which guarantees that intra-page
      * scroll offsets are strictly positive, invertible, and prevent progress drift across sessions.
      */
-    fun resolveActivePageId(viewport: ReaderViewport): PageId? {
+    override fun resolveActivePageId(viewport: ReaderViewport): PageId? {
         return resolve(viewport).progress.activePageId
     }
-
-    /**
-     * Result of an anchored layout compensation when page dimensions change.
-     *
-     * @property deltaY The change in scroll offset required to keep the active view visually fixed.
-     * @property compensatedViewport The adjusted viewport matching the new scene layout.
-     */
-    data class AnchorCompensation(
-        val deltaY: Float,
-        val compensatedViewport: ReaderViewport,
-    )
 
     /**
      * Updates the geometry hint for a specific page (e.g. from [PageGeometryHint.Estimated] to
@@ -213,10 +206,10 @@ class VerticalReaderScene(
      * If [currentViewport] is provided, computes an [AnchorCompensation] preserving the visual reading position
      * without any perceptual jump (Zero CLS with Anchored Correction).
      */
-    fun updatePageHint(
+    override fun updatePageHint(
         pageId: PageId,
         newHint: PageGeometryHint,
-        currentViewport: ReaderViewport? = null,
+        currentViewport: ReaderViewport?,
     ): AnchorCompensation? {
         val index = indexOf(pageId)
         if (index < 0) return null

@@ -55,6 +55,7 @@ import coil3.ImageLoader
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
@@ -65,6 +66,7 @@ import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageGeometryHint
 import org.skepsun.kototoro.reader.core.PageId
+import org.skepsun.kototoro.reader.core.ReaderCameraSnapshot
 import org.skepsun.kototoro.reader.core.ReaderPrediction
 import org.skepsun.kototoro.reader.core.ReaderPredictionConfig
 import org.skepsun.kototoro.reader.core.ReaderViewport
@@ -133,9 +135,12 @@ fun ComposeSceneWebtoonReader(
     var viewportWidthPx by remember { mutableFloatStateOf(0f) }
     var viewportHeightPx by remember { mutableFloatStateOf(0f) }
 
-    val currentPages by rememberUpdatedState(pages)
+    val pageMap = remember(pages) {
+        pages.associateBy { it.readerKey }
+    }
+    val currentPageMap = rememberUpdatedState(pageMap)
     val pageLookup: (PageId) -> ReaderPage? = remember {
-        { id -> currentPages.firstOrNull { it.readerKey == id.value } }
+        { id -> currentPageMap.value.get(id.value) }
     }
 
     val density = LocalDensity.current
@@ -602,14 +607,20 @@ fun ComposeSceneWebtoonReader(
     DisposableEffect(adapter, activeScene) {
         if (activeScene != null) {
             adapter.onAssetLoaded = { pageId, asset ->
-                if (asset is ReaderImageAsset.ComposeImage) {
-                    val bmp = asset.imageBitmap
+                val exactSize = when (asset) {
+                    is ReaderImageAsset.ComposeImage -> IntSize(asset.imageBitmap.width, asset.imageBitmap.height)
+                    is ReaderImageAsset.AndroidBitmap -> IntSize(asset.bitmap.width, asset.bitmap.height)
+                    is ReaderImageAsset.Animated -> IntSize(asset.width, asset.height)
+                    is ReaderImageAsset.Tiled -> asset.grid.pageSize
+                    else -> null
+                }
+                if (exactSize != null) {
                     val vp = ReaderViewport(
                         FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
                     )
                     val compensation = activeScene.updatePageHint(
                         pageId = pageId,
-                        newHint = PageGeometryHint.Exact(bmp.width, bmp.height),
+                        newHint = PageGeometryHint.Exact(exactSize.width, exactSize.height),
                         currentViewport = vp,
                     )
                     if (viewportHeightPx > 0f) {
@@ -625,6 +636,33 @@ fun ComposeSceneWebtoonReader(
         }
         onDispose {
             adapter.onAssetLoaded = null
+        }
+    }
+
+    // 150ms Zoom settle signal to trigger multi-LOD progressive replacement
+    LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.scrollY, activeScene) {
+        if (activeScene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
+            delay(150)
+            val layoutHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx.toInt(), canvasScale)
+            val centerX = viewportWidthPx / 2f
+            val centerY = layoutHeight / 2f
+            val left = (centerX + (0f - canvasOffsetX - centerX) / canvasScale).coerceIn(0f, viewportWidthPx)
+            val right = (centerX + (viewportWidthPx - canvasOffsetX - centerX) / canvasScale).coerceIn(0f, viewportWidthPx)
+            val topRel = (centerY + (0f - canvasOffsetY - centerY) / canvasScale).coerceAtLeast(0f)
+            val bottomRel = (centerY + (viewportHeightPx - canvasOffsetY - centerY) / canvasScale).coerceAtLeast(0f)
+            val top = (scrollState.scrollY + topRel).coerceIn(0f, activeScene.totalSceneHeight)
+            val bottom = (scrollState.scrollY + bottomRel).coerceIn(0f, activeScene.totalSceneHeight)
+
+            val visibleBounds = FloatRect(
+                left = left,
+                top = top,
+                right = right,
+                bottom = bottom,
+            )
+            adapter.onCameraSettled(
+                ReaderCameraSnapshot(scale = canvasScale, visibleBoundsInScene = visibleBounds),
+                scene = activeScene,
+            )
         }
     }
 

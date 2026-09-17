@@ -193,6 +193,36 @@ class ReaderTileManager(
         missCounts.keys.removeAll { it.pageId == pageId }
     }
 
+    /**
+     * Drops all tiles matching [predicate] and cancels their in-flight jobs.
+     */
+    fun releaseTiles(predicate: (TileKey) -> Boolean) {
+        val jobKeys = tileJobs.keys.filter(predicate)
+        for (key in jobKeys) {
+            tileJobs.remove(key)?.cancel()
+        }
+
+        val droppedKeys = ArrayList<TileKey>()
+        val releasedPayloads = ArrayList<Any>()
+        mutableTiles.update { map ->
+            val kept = HashMap<TileKey, ReaderTile>(map.size)
+            for ((key, tile) in map) {
+                if (predicate(key)) {
+                    droppedKeys.add(key)
+                    releasedPayloads.add(tile.payload)
+                } else {
+                    kept[key] = tile
+                }
+            }
+            kept
+        }
+        budget.releaseWhere(predicate)
+        releasedPayloads.forEach(payloadReleaser)
+        for (key in droppedKeys) notifyTileDropped(key)
+
+        missCounts.keys.removeAll(predicate)
+    }
+
     /** Releases everything. Terminal. */
     fun close() {
         for (pageId in sessions.keys.toList()) releasePage(pageId)

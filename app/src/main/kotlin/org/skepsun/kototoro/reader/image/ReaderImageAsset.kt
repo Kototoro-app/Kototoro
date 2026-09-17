@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.reader.image
 
 import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import androidx.compose.ui.graphics.ImageBitmap
 import org.skepsun.kototoro.reader.core.PageId
 
@@ -23,6 +24,15 @@ sealed interface ReaderImageAsset {
     ) : ReaderImageAsset
 
     /**
+     * Provisional preview asset shown on slow networks while full original is downloading.
+     * Does NOT satisfy [isAuthoritativePresentation] and does not alter scene geometry.
+     */
+    data class Preview(
+        override val pageId: PageId,
+        val imageBitmap: ImageBitmap,
+    ) : ReaderImageAsset
+
+    /**
      * Standard Android Bitmap asset for View Canvas or legacy views.
      */
     data class AndroidBitmap(
@@ -39,15 +49,59 @@ sealed interface ReaderImageAsset {
     ) : ReaderImageAsset
 
     /**
+     * Animated drawable asset (GIF, Animated WebP, Animated AVIF) preserving multi-frame playback.
+     */
+    data class Animated(
+        override val pageId: PageId,
+        val drawable: Drawable,
+        val width: Int,
+        val height: Int,
+    ) : ReaderImageAsset
+
+    /**
+     * Represents a single LOD lattice and base overview band for tiled rendering.
+     */
+    data class TileLayer(
+        val grid: TileGrid,
+        val sampleSize: Int = grid.sampleSize,
+        val overviewKey: TileKey? = null,
+    )
+
+    /**
      * Tiled presentation asset backed by a [TileGrid] and queried through a [TileStore].
      *
-     * Used for ultra-long webtoon strips or images that exceed maximum hardware/memory limits.
-     * Optionally points to an [overviewKey] representing the coarse LOD0 whole-page base band.
+     * Supports multi-LOD coexistence: [base] is always fully rendered, while [target]
+     * progressively overlays sharper tiles as they arrive, eliminating white/flickering flashes.
      */
     data class Tiled(
         override val pageId: PageId,
-        val grid: TileGrid,
+        val base: TileLayer,
+        val target: TileLayer? = null,
         val tileStore: TileStore,
-        val overviewKey: TileKey? = null,
-    ) : ReaderImageAsset
+    ) : ReaderImageAsset {
+        constructor(
+            pageId: PageId,
+            grid: TileGrid,
+            tileStore: TileStore,
+            overviewKey: TileKey? = null,
+        ) : this(
+            pageId = pageId,
+            base = TileLayer(grid, grid.sampleSize, overviewKey),
+            target = null,
+            tileStore = tileStore,
+        )
+
+        val grid: TileGrid get() = base.grid
+        val overviewKey: TileKey? get() = base.overviewKey
+    }
 }
+
+/**
+ * Returns true if this asset is a fully decoded authoritative presentation asset
+ * (i.e. not an encoded placeholder or provisional low-res preview).
+ */
+val ReaderImageAsset.isAuthoritativePresentation: Boolean
+    get() = this is ReaderImageAsset.ComposeImage ||
+        this is ReaderImageAsset.AndroidBitmap ||
+        this is ReaderImageAsset.Animated ||
+        this is ReaderImageAsset.Tiled
