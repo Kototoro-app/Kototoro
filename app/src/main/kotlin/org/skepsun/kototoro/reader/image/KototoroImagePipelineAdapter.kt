@@ -62,7 +62,7 @@ class KototoroImagePipelineAdapter(
     private val inFlightLoads = ConcurrentHashMap<PageId, Deferred<ReaderImageAsset?>>()
     private val inFlightSourceLoads = ConcurrentHashMap<PageId, Job>()
     @Volatile
-    private var retainedPageIds: Set<PageId>? = null
+    private var desiredReadiness: Map<PageId, PrefetchReadiness>? = null
     private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
     override val assets = mutableAssets.asStateFlow()
     private val mutableLoadStates = MutableStateFlow<Map<PageId, ReaderImageLoadState>>(emptyMap())
@@ -73,7 +73,13 @@ class KototoroImagePipelineAdapter(
     }
 
     private fun storeAsset(pageId: PageId, asset: ReaderImageAsset): Boolean {
-        if (retainedPageIds?.contains(pageId) == false) return false
+        val readinessMap = desiredReadiness
+        if (readinessMap != null) {
+            val targetReadiness = readinessMap[pageId] ?: return false
+            if (asset !is ReaderImageAsset.Encoded && targetReadiness != PrefetchReadiness.PRESENTATION_READY) {
+                return false
+            }
+        }
         cachedAssets[pageId] = asset
         if (asset !is ReaderImageAsset.Encoded) {
             mutableAssets.update { it + (pageId to asset) }
@@ -189,13 +195,22 @@ class KototoroImagePipelineAdapter(
     }
 
     override fun updateResourceWindow(window: ReaderResourceWindow) {
-        val retainedPageIds = HashSet<PageId>(window.requests.size)
+        val desired = HashMap<PageId, PrefetchReadiness>(window.requests.size)
         for (request in window.requests) {
-            retainedPageIds.add(request.pageId)
+            val existing = desired[request.pageId]
+            if (existing == null || request.readiness == PrefetchReadiness.PRESENTATION_READY) {
+                desired[request.pageId] = request.readiness
+            }
         }
-        this.retainedPageIds = retainedPageIds
-        evictOutside(retainedPageIds)
+        this.desiredReadiness = desired
 
+        // 1. Evict pages completely outside the window
+        evictOutside(desired.keys)
+
+        // 2. Downgrade presentation assets that are now only requested as SOURCE_READY
+        downgradeToSource(desired)
+
+        // 3. Process requests
         for (request in window.requests) {
             val pageId = request.pageId
             val page = pageLookup(pageId) ?: continue
@@ -204,7 +219,8 @@ class KototoroImagePipelineAdapter(
                 continue
             }
 
-            if (request.readiness == PrefetchReadiness.PRESENTATION_READY) {
+            val targetReadiness = desired[pageId] ?: request.readiness
+            if (targetReadiness == PrefetchReadiness.PRESENTATION_READY) {
                 if (cachedAssets[pageId] is ReaderImageAsset.ComposeImage || inFlightLoads.containsKey(pageId)) {
                     continue
                 }
@@ -247,6 +263,34 @@ class KototoroImagePipelineAdapter(
                     job.start()
                 } else {
                     job.cancel()
+                }
+            }
+        }
+    }
+
+    private fun downgradeToSource(desired: Map<PageId, PrefetchReadiness>) {
+        for ((pageId, readiness) in desired) {
+            if (readiness != PrefetchReadiness.SOURCE_READY) continue
+
+            // Cancel any speculative decode that is no longer within the presentation window
+            inFlightLoads.remove(pageId)?.cancel()
+
+            val current = cachedAssets[pageId]
+            if (current != null && current !is ReaderImageAsset.Encoded) {
+                // Remove presentation asset from renderer-facing state flow and ready state
+                mutableAssets.update { it - pageId }
+                mutableLoadStates.update { it - pageId }
+
+                // Downgrade in-memory cache to lightweight Encoded handle
+                val uri = when (val state = composePipeline.cachedState(pageId.value)) {
+                    is ComposeReaderImageState.OriginalReady -> state.original
+                    is ComposeReaderImageState.EnhancedReady -> state.enhanced
+                    else -> null
+                }
+                if (uri != null) {
+                    cachedAssets[pageId] = ReaderImageAsset.Encoded(pageId, uri.toString())
+                } else {
+                    cachedAssets.remove(pageId)
                 }
             }
         }

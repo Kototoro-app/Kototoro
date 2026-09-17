@@ -365,4 +365,132 @@ class ReaderImageAssetTest {
         assertNotNull(asset)
         assertTrue(asset is ReaderImageAsset.ComposeImage)
     }
+
+    @Test
+    fun `window transition downgrades presentation asset to source asset when page leaves presentation window`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        // Step 1: PRESENTATION_READY -> Decodes into ComposeImage
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.ComposeImage)
+        assertTrue(adapter.getCachedAsset(pageId) is ReaderImageAsset.ComposeImage)
+
+        // Step 2: Downgrade to SOURCE_READY -> Presentation asset released from StateFlow, downgraded to Encoded in cache
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.MEDIUM,
+                        readiness = PrefetchReadiness.SOURCE_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertNull(adapter.assets.value[pageId], "Presentation asset must be dropped from renderer-facing assets")
+        val cached = adapter.getCachedAsset(pageId)
+        assertTrue(cached is ReaderImageAsset.Encoded, "Cache must be downgraded to lightweight Encoded handle")
+        assertEquals("file:///downloaded/page1.jpg", (cached as ReaderImageAsset.Encoded).uriString)
+
+        // Step 3: Upgrade back to PRESENTATION_READY -> Upgraded to ComposeImage
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.ComposeImage)
+    }
+
+    @Test
+    fun `downgraded page rejects late-finishing in-flight decode from resurrecting into presentation assets`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val decodeGate = CompletableDeferred<Unit>()
+        val bitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { bitmap.width } returns 640
+        every { bitmap.height } returns 1280
+        val result = mockk<SuccessResult>()
+        every { result.image } returns bitmap.asImage()
+        coEvery { imageLoader.execute(any()) } coAnswers {
+            withContext(NonCancellable) { decodeGate.await() }
+            result
+        }
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        // Request PRESENTATION_READY -> start background decode
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+
+        // Before decode completes, page is downgraded to SOURCE_READY
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.MEDIUM,
+                        readiness = PrefetchReadiness.SOURCE_READY,
+                    ),
+                ),
+            ),
+        )
+        decodeGate.complete(Unit)
+        advanceUntilIdle()
+
+        // Presentation asset must NOT resurrect into renderer assets
+        assertNull(adapter.assets.value[pageId])
+        // Cache holds at most the Encoded source
+        assertTrue(adapter.getCachedAsset(pageId) is ReaderImageAsset.Encoded)
+    }
 }
