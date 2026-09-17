@@ -106,6 +106,44 @@ public data class ContentChapter(
 		sourceData = sourceData,
 	)
 
+	/**
+	 * 二进制兼容桥：对应 kototoro-parsers 解析器 jar 中主构造
+	 * `(9固定 + ebookFormats: List<EbookFormat> = emptyList())` 的完整构造器
+	 * （解析器显式传 ebookFormats 时的调用签名，如 Z-Library/LibraryGenesis）。
+	 *
+	 * jar 端主构造第 10 参数是 `List<EbookFormat>`，宿主主构造第 10 参数是
+	 * `String sourceData`（宿主私有），两者签名不同；此桥以 List 为第 10 参，
+	 * 供动态加载的解析器按 jar 侧签名构造章节。
+	 */
+	@Deprecated(
+		message = "Binary compatibility bridge for parsers compiled with ebookFormats as 10th constructor param",
+		level = DeprecationLevel.HIDDEN,
+	)
+	public constructor(
+		id: Long,
+		title: String?,
+		number: Float,
+		volume: Int,
+		url: String,
+		scanlator: String?,
+		uploadDate: Long,
+		branch: String?,
+		source: ContentSource,
+		ebookFormats: List<EbookFormat>,
+	) : this(
+		id = id,
+		title = title,
+		number = number,
+		volume = volume,
+		url = url,
+		scanlator = scanlator,
+		uploadDate = uploadDate,
+		branch = branch,
+		source = source,
+		sourceData = null,
+		ebookFormats = ebookFormats,
+	)
+
 	@Deprecated("Use title instead of name", ReplaceWith("ContentChapter(id, title, number, volume, url, scanlator, uploadDate, branch, source)"))
 	public constructor(
 		id: Long,
@@ -128,6 +166,46 @@ public data class ContentChapter(
 		uploadDate = uploadDate,
 		branch = branch,
 		source = source,
+	)
+
+	/**
+	 * 二进制兼容桥：对应 kototoro-parsers 解析器 jar 中主构造
+	 * `(9固定 + ebookFormats: List<EbookFormat> = emptyList())` 的 `$default`
+	 * 合成构造器（省略 ebookFormats 时 Kotlin 编译器生成的调用签名）。
+	 *
+	 * jar 端（如旧版 GodaParser）省略第 10 个带默认值的参数时，字节码会调用
+	 * `<init>(9固定, List, int, DefaultConstructorMarker)`；宿主需要提供同签名
+	 * 构造器才能让动态加载的解析器正常构造章节。
+	 */
+	@Deprecated(
+		message = "Binary compatibility bridge for parsers compiled with ebookFormats as trailing default",
+		level = DeprecationLevel.HIDDEN,
+	)
+	public constructor(
+		id: Long,
+		title: String?,
+		number: Float,
+		volume: Int,
+		url: String,
+		scanlator: String?,
+		uploadDate: Long,
+		branch: String?,
+		source: ContentSource,
+		ebookFormats: List<EbookFormat>,
+		mask: Int,
+		@Suppress("UNUSED_PARAMETER") marker: kotlin.jvm.internal.DefaultConstructorMarker,
+	) : this(
+		id = id,
+		title = title,
+		number = number,
+		volume = volume,
+		url = url,
+		scanlator = scanlator,
+		uploadDate = uploadDate,
+		branch = branch,
+		source = source,
+		sourceData = null,
+		ebookFormats = if (mask and (1 shl 9) != 0) emptyList() else ebookFormats,
 	)
 
 	@Deprecated("Use title instead", ReplaceWith("title"))

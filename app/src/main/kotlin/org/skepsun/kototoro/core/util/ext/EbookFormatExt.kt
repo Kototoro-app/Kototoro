@@ -7,9 +7,10 @@ import org.skepsun.kototoro.parsers.model.EbookFormat
 /**
  * 电子书格式解析与阅读模态判定（宿主侧）。
  *
- * 解析器侧通过 [ContentChapter.ebookFormats] 携带规范化格式候选；旧版解析器
- * （尚无该字段）仍把格式塞在 [ContentPage.preview]（如 "EPUB"/"PDF"），此处
- * 提供统一入口，两条路径都兼容。
+ * 解析器（jar）侧不再把格式放进 [ContentChapter.ebookFormats]（为保证二进制
+ * ABI 稳定，jar 端 ContentChapter 保持 9 参构造），而是统一经
+ * [ContentPage.preview] 携带（如 "EPUB"/"PDF"/"FB2"）。宿主侧字段
+ * `ebookFormats` 仅由宿主内部填充，可能为空；此处提供统一入口，两条路径都兼容。
  *
  * 阅读模态：
  * - 文本模态（EPUB/FB2/TXT/MOBI/AZW3/DOCX）：下载后解析正文，展开为内部文本章节
