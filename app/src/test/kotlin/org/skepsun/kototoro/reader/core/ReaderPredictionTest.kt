@@ -95,6 +95,10 @@ class ReaderPredictionTest {
         // Behind window expands from 5000 - 500 - 2000 = 2500 -> reaches Page 3 (2000..3000) and Page 4 (3000..4000)
         assertTrue(PageId(3L) in highPages)
         assertTrue(PageId(4L) in highPages)
+
+        // Symmetrically expanded MEDIUM window extends another 1500px upward (down to 1000) reaching Page 2
+        val mediumPages = requests.filter { it.priority == PrefetchPriority.MEDIUM }.map { it.pageId }
+        assertTrue(PageId(2L) in mediumPages)
     }
 
     @Test
@@ -107,6 +111,27 @@ class ReaderPredictionTest {
 
         assertTrue(first != null)
         assertEquals(null, unchanged)
+    }
+
+    @Test
+    fun `predictWindowIfChanged invalidates when velocity jumps across lookahead buckets`() {
+        val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 1100f, 1000f, 1000f))
+        val frame = scene.resolve(viewport)
+
+        // Moderate fling: 1500 px/s -> dynamicExtra = 750px -> lookaheadBucket = 750/1000 = 0
+        val motion1 = ViewportMotion(velocityY = 1500f)
+        val first = predictor.predictWindowIfChanged(scene, frame, motion1)
+        assertTrue(first != null)
+
+        // Same page, slightly faster velocity: 1600 px/s -> dynamicExtra = 800px -> lookaheadBucket = 0 -> suppressed
+        val motion2 = ViewportMotion(velocityY = 1600f)
+        val second = predictor.predictWindowIfChanged(scene, frame, motion2)
+        assertEquals(null, second)
+
+        // Violent fling: 8000 px/s -> dynamicExtra = 4000px -> lookaheadBucket = 4 -> triggers invalidation!
+        val motion3 = ViewportMotion(velocityY = 8000f)
+        val third = predictor.predictWindowIfChanged(scene, frame, motion3)
+        assertTrue(third != null)
     }
 
     @Test

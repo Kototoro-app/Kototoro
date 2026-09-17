@@ -75,8 +75,8 @@ class KototoroImagePipelineAdapter(
     private fun storeAsset(pageId: PageId, asset: ReaderImageAsset): Boolean {
         if (retainedPageIds?.contains(pageId) == false) return false
         cachedAssets[pageId] = asset
-        mutableAssets.update { it + (pageId to asset) }
-        if (asset is ReaderImageAsset.ComposeImage) {
+        if (asset !is ReaderImageAsset.Encoded) {
+            mutableAssets.update { it + (pageId to asset) }
             setLoadState(pageId, ReaderImageLoadState.Ready)
         }
         return true

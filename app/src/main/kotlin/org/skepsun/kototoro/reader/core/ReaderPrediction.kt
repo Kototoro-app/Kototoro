@@ -39,7 +39,7 @@ class ReaderPrediction(
         motion: ViewportMotion = ViewportMotion.Idle,
         force: Boolean = false,
     ): ReaderResourceWindow? {
-        val key = ResourceWindowKey.from(scene, frame, motion)
+        val key = ResourceWindowKey.from(scene, frame, motion, config)
         if (!force && key == lastWindowKey) return null
         lastWindowKey = key
         return ReaderResourceWindow(predict(scene, frame, motion))
@@ -119,14 +119,19 @@ class ReaderPrediction(
             }
         }
 
-        // 3. MEDIUM priority window (extended lookahead ahead of scroll direction)
-        val mediumAheadPx = highAheadPx + vpHeight * 1.5f
+        // 3. MEDIUM priority window (extended lookahead along scroll direction)
+        val extraMedium = vpHeight * 1.5f
+        val (mediumBehindPx, mediumAheadPx) = if (velocityY < 0) {
+            (highBehindPx + extraMedium) to highAheadPx
+        } else {
+            highBehindPx to (highAheadPx + extraMedium)
+        }
         val mediumWindow = ReaderViewport(
             FloatRect.fromLtwh(
                 left = 0f,
-                top = (vpTop - highBehindPx).coerceAtLeast(0f),
+                top = (vpTop - mediumBehindPx).coerceAtLeast(0f),
                 width = vpWidth,
-                height = vpHeight + highBehindPx + mediumAheadPx,
+                height = vpHeight + mediumBehindPx + mediumAheadPx,
             ),
         )
         val mediumFrame = scene.resolve(mediumWindow)
@@ -155,15 +160,23 @@ class ReaderPrediction(
         val firstVisiblePageId: PageId?,
         val lastVisiblePageId: PageId?,
         val motionClass: MotionClass,
+        val lookaheadBucket: Int,
     ) {
         companion object {
             fun from(
                 scene: VerticalReaderScene,
                 frame: ReaderFrame,
                 motion: ViewportMotion,
+                config: ReaderPredictionConfig,
             ): ResourceWindowKey {
                 val viewportHeight = frame.viewport.bounds.height
                 val speed = abs(motion.velocityY)
+                val dynamicExtraPx = (speed * config.lookaheadHorizonSeconds).coerceAtMost(config.maxLookaheadExtraPx)
+                val lookaheadBucket = if (viewportHeight > 0f) {
+                    (dynamicExtraPx / viewportHeight).toInt().coerceIn(0, 8)
+                } else {
+                    0
+                }
                 val motionClass = when {
                     speed < 1f && !motion.isDragging -> MotionClass.IDLE
                     motion.velocityY < 0f && speed >= viewportHeight * 1.5f -> MotionClass.FAST_BACKWARD
@@ -179,6 +192,7 @@ class ReaderPrediction(
                     firstVisiblePageId = frame.progress.lowerPageId,
                     lastVisiblePageId = frame.progress.upperPageId,
                     motionClass = motionClass,
+                    lookaheadBucket = lookaheadBucket,
                 )
             }
         }

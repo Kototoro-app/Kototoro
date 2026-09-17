@@ -2,6 +2,7 @@ package org.skepsun.kototoro.macrobenchmark
 
 import android.content.ComponentName
 import android.content.Intent
+import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
@@ -20,13 +21,22 @@ class ReaderRendererBenchmark {
     val benchmarkRule = MacrobenchmarkRule()
 
     @Test
-    fun lazyPartial() = measure(BACKEND_LAZY, CompilationMode.Partial())
+    fun lazyPartial() = measure(
+        BACKEND_LAZY,
+        CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+    )
 
     @Test
-    fun composeScenePartial() = measure(BACKEND_COMPOSE_SCENE, CompilationMode.Partial())
+    fun composeScenePartial() = measure(
+        BACKEND_COMPOSE_SCENE,
+        CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+    )
 
     @Test
-    fun viewScenePartial() = measure(BACKEND_VIEW_SCENE, CompilationMode.Partial())
+    fun viewScenePartial() = measure(
+        BACKEND_VIEW_SCENE,
+        CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+    )
 
     @Test
     fun lazyFull() = measure(BACKEND_LAZY, CompilationMode.Full())

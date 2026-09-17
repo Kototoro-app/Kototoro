@@ -249,7 +249,9 @@ class ReaderImageAssetTest {
         )
         advanceUntilIdle()
 
-        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.Encoded)
+        // Encoded asset is cached internally in the pipeline without polluting renderer-facing assets
+        assertTrue(adapter.getCachedAsset(pageId) is ReaderImageAsset.Encoded)
+        assertNull(adapter.assets.value[pageId])
         coVerify(exactly = 0) { imageLoader.execute(any()) }
     }
 

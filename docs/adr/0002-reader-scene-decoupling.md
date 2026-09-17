@@ -4,7 +4,8 @@
 - 日期：2026-09-16
 - 实施状态：
   - WebGPU 分支隔离：已完成（`feat/webgpu-reader`，作为 `UPSTREAM-TRACKED` 资产）
-  - Phase 0 性能基准：基准模块与固定渲染夹具已完成，真机数据采集完成（Completed，基线见下文实测数据）
+  - Phase 0A 渲染器基线（Renderer Baseline）：已完成（Completed，固定夹具真机实测数据见下，Compose Scene 决胜成立）
+  - Phase 0B 生产阅读器基准（Production Reader Benchmark）：待执行（Pending；生产图片流水线、真实章节解码、5~10min sustained scroll 与 Memory/PowerMetric 实测）
   - PoC A (ReaderScene 几何抽象)：已完成（Completed）
   - PoC B (Webtoon 视口实验：Compose Scene vs. View Scene)：已完成（Completed，根据决胜原则选定 ComposeSceneRenderer）
   - Scene Reader 功能集成：进行中；已完成滚动、缩放、手势、图片展示、锚定修正与 ARR
@@ -210,14 +211,17 @@ reader/
    - 将现有 13 个 WebGPU 提交完整封存在 `feat/webgpu-reader` 分支，状态标记为 `UPSTREAM-TRACKED`。
    - `devel` 恢复纯净，消除 NDK 依赖与冷启动监控对主干的干扰。
 2. **Phase 0：多维基准建立（Benchmark Baseline）**：
-   - 升级至 AndroidX Benchmark 1.5+，在 ARR / 120Hz 测试机上运行固定数据集（100 页普通、100 页 Webtoon、极端超长图）；
-   - **执行两套模式**：
-     - *Primary Mode*：`CompilationMode.Partial(BaselineProfileMode.Require)`，拟合真实用户环境；
-     - *Diagnostic Mode*：`CompilationMode.Full`，消除 JIT 噪音，观察纯渲染器理论差距；
-   - **涵盖突发与持续测试**：
-     - *Burst Benchmark*（10~20s 快速连续 Fling）：考察 P99 逾期、GC 尖峰、纹理上传 Stall；
-     - *Sustained Benchmark*（5~10min 滚动）：记录 GPU 显存增长、功耗趋势（PowerMetric）与热节流。
-   - 当前仓库的 `:macrobenchmark` 固定夹具先隔离比较 Lazy、Compose Scene、View Scene 的渲染成本；生产图片流水线、真实章节和持续功耗属于下一组真机场景，不能用固定夹具结果替代。
+   - **Phase 0A：渲染器基线（Renderer Baseline，已完成）**：
+     - 在 ARR / 120Hz 物理测试机上运行固定渲染夹具（100 页条漫，隔离 UI/Layout/Renderer 抽象开销）；
+     - 依据真机实测数据执行 Tie-Breaker 决策：`ComposeSceneRenderer` P99 Overrun 达到 -5.2ms，彻底消除通用列表掉帧，胜出 View 对照组。
+   - **Phase 0B：生产阅读器基准（Production Reader Benchmark，待执行）**：
+     - 升级至完整生产链路：包含真实章节内容、真实网络/Coil 解码、真实图片尺寸、真实资源窗口（Retention/Eviction）与纹理抖动；
+     - **执行两套模式**：
+       - *Primary Mode*：`CompilationMode.Partial(BaselineProfileMode.Require)`，拟合真机生产 + Baseline Profile 场景；
+       - *Diagnostic Mode*：`CompilationMode.Full`，消除 JIT 噪音，观察纯理论上限；
+     - **涵盖突发与持续测试**：
+       - *Burst Benchmark*（10~20s 快速连续 Fling）：考察 P99 逾期、GC 尖峰、纹理上传 Stall；
+       - *Sustained Benchmark*（5~10min 连续滚动）：记录 `MemoryUsageMetric`、显存增长、功耗趋势（`PowerMetric`）与热节流。
 3. **PoC A：Scene 几何抽象**：
    - 实现纯几何的 `ReaderScene`，让现有阅读器与新 Scene 并行计算，验证页面几何、可见集合及阅读语义与现有行为等价（浮点几何允许定义明确的 epsilon 容差；若发现旧实现缺陷，以显式行为变更记录处理而非机械迁就旧 bug）。
 4. **PoC B：Webtoon 视口实验（战略 A/B 对照）**：
@@ -245,7 +249,7 @@ reader/
 - 优先要求在 P99 `frameOverrunMs`、GC/Allocation 次数或内存峰值中**至少一项出现显著改善**，且其他关键指标不存在明显回归；
 - 若 `ComposeSceneRenderer` 表现与 `AndroidViewSceneRenderer` 相当，**直接采纳 Compose 方案**，终止 View 方案的进一步扩张。
 
-#### Phase 0 固定夹具真机实测数据（Android 16 / SDK 37, 100 页条漫夹具，Full Compilation）
+#### Phase 0A 固定夹具真机实测数据（Android 16 / SDK 37, 100 页条漫夹具，Full Compilation）
 
 | 渲染器候选 | `frameDurationCpuMs` P50 | P90 | P95 | P99 | `frameOverrunMs` P99 | 判定结论 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
