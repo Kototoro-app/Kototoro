@@ -3,6 +3,7 @@ package org.skepsun.kototoro.reader.render
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.IntOffset
@@ -150,7 +151,8 @@ class SceneRendererParityTest {
             drawScope.drawImage(
                 image = mockBitmap,
                 dstOffset = IntOffset(0, 1500),
-                dstSize = IntSize(1080, 1500),
+                dstSize = IntSize(1080, 1501),
+                filterQuality = FilterQuality.Medium,
             )
         }
     }

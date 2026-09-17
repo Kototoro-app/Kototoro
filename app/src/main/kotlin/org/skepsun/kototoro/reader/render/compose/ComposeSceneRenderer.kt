@@ -22,6 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -76,6 +77,8 @@ fun ComposeSceneRenderer(
     onActivePageChanged: (PageId) -> Unit = {},
     onScrollProgressChanged: (scrollY: Float, maxScrollY: Float) -> Unit = { _, _ -> },
     onMotionChanged: (ViewportMotion) -> Unit = {},
+    onOverScroll: ((deltaY: Float) -> Unit)? = null,
+    onReleaseOverScroll: (() -> Unit)? = null,
 ) {
     var viewportWidth by remember { mutableFloatStateOf(0f) }
     var viewportHeight by remember { mutableFloatStateOf(0f) }
@@ -114,28 +117,32 @@ fun ComposeSceneRenderer(
             }
             .pointerInput(scene, scrollState) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Main)
+                    val wasFlinging = scrollState.isFlinging || flingJob?.isActive == true
                     flingJob?.cancel()
                     scrollState.isFlinging = false
-                    scrollState.isDragging = true
-                    onMotionChanged(
-                        ViewportMotion(
-                            isDragging = true,
-                            timestampNanos = down.uptimeMillis * 1_000_000L,
-                        ),
-                    )
+                    if (wasFlinging) {
+                        onMotionChanged(ViewportMotion.Idle)
+                        down.consume()
+                    }
 
                     val velocityTracker = VelocityTracker()
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     var lastPointerY = down.position.y
                     var lastUptimeMillis = down.uptimeMillis
+                    var dragStarted = false
+                    val touchSlop = viewConfiguration.touchSlop
 
                     do {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        if (event.changes.any { it.isConsumed } && !dragStarted) {
+                            break
+                        }
                         val change = event.changes.firstOrNull { it.pressed } ?: break
                         velocityTracker.addPosition(change.uptimeMillis, change.position)
 
                         val currentPointerY = change.position.y
+                        val currentPointerX = change.position.x
                         val deltaY = lastPointerY - currentPointerY
                         lastPointerY = currentPointerY
 
@@ -143,74 +150,104 @@ fun ComposeSceneRenderer(
                         val dtMillis = (currentUptimeMillis - lastUptimeMillis).coerceAtLeast(1L)
                         lastUptimeMillis = currentUptimeMillis
 
-                        val instantVelocityY = (deltaY * 1000f) / dtMillis
-
-                        val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
-                        scrollState.maxScrollY = maxScroll
-                        val newScroll = (scrollState.scrollY + deltaY).coerceIn(0f, maxScroll)
-                        scrollState.snapTo(newScroll)
-                        onScrollProgressChanged(newScroll, maxScroll)
-                        onMotionChanged(
-                            ViewportMotion(
-                                velocityX = 0f,
-                                velocityY = instantVelocityY,
-                                isDragging = true,
-                                timestampNanos = change.uptimeMillis * 1_000_000L,
-                            ),
-                        )
-
-                        change.consume()
-                    } while (event.changes.any { it.pressed })
-
-                    scrollState.isDragging = false
-                    val velocity = velocityTracker.calculateVelocity()
-                    val initialVelocityY = -velocity.y
-
-                    if (kotlin.math.abs(initialVelocityY) > 100f) {
-                        scrollState.isFlinging = true
-                        onMotionChanged(
-                            ViewportMotion(
-                                velocityX = 0f,
-                                velocityY = initialVelocityY,
-                                isDragging = false,
-                                timestampNanos = System.nanoTime(),
-                            ),
-                        )
-                        flingJob = coroutineScope.launch {
-                            try {
-                                val animState = AnimationState(
-                                    initialValue = scrollState.scrollY,
-                                    initialVelocity = initialVelocityY,
+                        if (!dragStarted) {
+                            val totalDisplacementY = kotlin.math.abs(down.position.y - currentPointerY)
+                            val totalDisplacementX = kotlin.math.abs(down.position.x - currentPointerX)
+                            if (totalDisplacementY > touchSlop || totalDisplacementX > touchSlop) {
+                                dragStarted = true
+                                scrollState.isDragging = true
+                                onMotionChanged(
+                                    ViewportMotion(
+                                        isDragging = true,
+                                        timestampNanos = change.uptimeMillis * 1_000_000L,
+                                    ),
                                 )
-                                var lastAnimatedY = scrollState.scrollY
-                                animState.animateDecay(decaySpec) {
-                                    val frameDelta = value - lastAnimatedY
-                                    lastAnimatedY = value
-                                    val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
-                                    scrollState.maxScrollY = maxScroll
-                                    val clamped = (scrollState.scrollY + frameDelta).coerceIn(0f, maxScroll)
-                                    scrollState.snapTo(clamped)
-                                    onScrollProgressChanged(clamped, maxScroll)
-                                    onMotionChanged(
-                                        ViewportMotion(
-                                            velocityX = 0f,
-                                            velocityY = this.velocity,
-                                            isDragging = false,
-                                            timestampNanos = System.nanoTime(),
-                                        ),
-                                    )
-                                    if (clamped <= 0f || clamped >= maxScroll) {
-                                        cancelAnimation()
-                                    }
-                                }
-                            } catch (_: CancellationException) {
-                                // Fling was interrupted by a new touch down
-                            } finally {
-                                scrollState.isFlinging = false
-                                onMotionChanged(ViewportMotion.Idle)
                             }
                         }
+
+                        if (dragStarted) {
+                            change.consume()
+                            val instantVelocityY = (deltaY * 1000f) / dtMillis
+
+                            val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
+                            scrollState.maxScrollY = maxScroll
+
+                            val desiredScroll = scrollState.scrollY + deltaY
+                            val newScroll = desiredScroll.coerceIn(0f, maxScroll)
+                            val overscrollDelta = desiredScroll - newScroll
+                            if (overscrollDelta != 0f && onOverScroll != null) {
+                                onOverScroll(overscrollDelta)
+                            }
+
+                            scrollState.snapTo(newScroll)
+                            onScrollProgressChanged(newScroll, maxScroll)
+                            onMotionChanged(
+                                ViewportMotion(
+                                    velocityX = 0f,
+                                    velocityY = instantVelocityY,
+                                    isDragging = true,
+                                    timestampNanos = change.uptimeMillis * 1_000_000L,
+                                ),
+                            )
+                        }
+                    } while (event.changes.any { it.pressed })
+
+                    onReleaseOverScroll?.invoke()
+
+                    if (dragStarted) {
+                        scrollState.isDragging = false
+                        val velocity = velocityTracker.calculateVelocity()
+                        val initialVelocityY = -velocity.y
+
+                        if (kotlin.math.abs(initialVelocityY) > 100f) {
+                            scrollState.isFlinging = true
+                            onMotionChanged(
+                                ViewportMotion(
+                                    velocityX = 0f,
+                                    velocityY = initialVelocityY,
+                                    isDragging = false,
+                                    timestampNanos = System.nanoTime(),
+                                ),
+                            )
+                            flingJob = coroutineScope.launch {
+                                try {
+                                    val animState = AnimationState(
+                                        initialValue = scrollState.scrollY,
+                                        initialVelocity = initialVelocityY,
+                                    )
+                                    var lastAnimatedY = scrollState.scrollY
+                                    animState.animateDecay(decaySpec) {
+                                        val frameDelta = value - lastAnimatedY
+                                        lastAnimatedY = value
+                                        val maxScroll = (scene.totalSceneHeight - viewportHeight).coerceAtLeast(0f)
+                                        scrollState.maxScrollY = maxScroll
+                                        val clamped = (scrollState.scrollY + frameDelta).coerceIn(0f, maxScroll)
+                                        scrollState.snapTo(clamped)
+                                        onScrollProgressChanged(clamped, maxScroll)
+                                        onMotionChanged(
+                                            ViewportMotion(
+                                                velocityX = 0f,
+                                                velocityY = this.velocity,
+                                                isDragging = false,
+                                                timestampNanos = System.nanoTime(),
+                                            ),
+                                        )
+                                        if (clamped <= 0f || clamped >= maxScroll) {
+                                            cancelAnimation()
+                                        }
+                                    }
+                                } catch (_: CancellationException) {
+                                    // Fling was interrupted by a new touch down
+                                } finally {
+                                    scrollState.isFlinging = false
+                                    onMotionChanged(ViewportMotion.Idle)
+                                }
+                            }
+                        } else {
+                            onMotionChanged(ViewportMotion.Idle)
+                        }
                     } else {
+                        scrollState.isDragging = false
                         onMotionChanged(ViewportMotion.Idle)
                     }
                 }
@@ -223,13 +260,15 @@ fun ComposeSceneRenderer(
                 val vHeight = size.height
 
                 if (vWidth > 0f && vHeight > 0f) {
+                    val horizontalOffset = ((vWidth - scene.availableWidth) / 2f).coerceAtLeast(0f)
                     val viewport = ReaderViewport(
-                        bounds = FloatRect.fromLtwh(0f, currentY, vWidth, vHeight),
+                        bounds = FloatRect.fromLtwh(0f, currentY, scene.availableWidth.toFloat(), vHeight),
                     )
                     val frame = scene.resolve(viewport)
                     drawFrameNodes(
                         frame = frame,
                         viewportScrollY = currentY,
+                        horizontalOffset = horizontalOffset,
                         placeholderColor = placeholderColor,
                         pageLabelProvider = pageLabelProvider,
                         textMeasurer = textMeasurer,
@@ -250,6 +289,7 @@ fun ComposeSceneRenderer(
 internal fun DrawScope.drawFrameNodes(
     frame: org.skepsun.kototoro.reader.core.ReaderFrame,
     viewportScrollY: Float,
+    horizontalOffset: Float = 0f,
     placeholderColor: Color,
     pageLabelProvider: ((PageId) -> String)? = null,
     textMeasurer: TextMeasurer? = null,
@@ -259,9 +299,18 @@ internal fun DrawScope.drawFrameNodes(
 ) {
     for (node in frame.visibleNodes) {
         val screenTop = node.sceneBounds.top - viewportScrollY
-        val screenLeft = node.sceneBounds.left
+        val screenLeft = node.sceneBounds.left + horizontalOffset
         val nodeWidth = node.sceneBounds.width
         val nodeHeight = node.sceneBounds.height
+
+        val topInt = screenTop.roundToInt()
+        val bottomInt = (screenTop + nodeHeight).roundToInt()
+        // 1px vertical overlap (+1) completely eliminates GPU bilinear rasterization hairline cracks between adjacent slices
+        val heightInt = (bottomInt - topInt + 1).coerceAtLeast(1)
+
+        val leftInt = screenLeft.roundToInt()
+        val rightInt = (screenLeft + nodeWidth).roundToInt()
+        val widthInt = (rightInt - leftInt).coerceAtLeast(1)
 
         val resolvedBitmap: ImageBitmap? = when (val asset = readerAssetProvider?.invoke(node.pageId)) {
             is ReaderImageAsset.ComposeImage -> asset.imageBitmap
@@ -273,9 +322,10 @@ internal fun DrawScope.drawFrameNodes(
             // Actual image loaded: draw seamlessly without any borders, dividers, or text overlays
             drawImage(
                 image = resolvedBitmap,
-                dstOffset = IntOffset(screenLeft.roundToInt(), screenTop.roundToInt()),
-                dstSize = IntSize(nodeWidth.roundToInt(), nodeHeight.roundToInt()),
+                dstOffset = IntOffset(leftInt, topInt),
+                dstSize = IntSize(widthInt, heightInt),
                 colorFilter = imageColorFilter,
+                filterQuality = FilterQuality.Medium,
             )
         } else {
             // 1. Base placeholder background fill

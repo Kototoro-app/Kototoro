@@ -877,7 +877,7 @@ fun ComposeWebtoonReader(
 }
 
 @Composable
-private fun WebtoonPullFeedback(progress: Float, text: String, modifier: Modifier = Modifier) {
+internal fun WebtoonPullFeedback(progress: Float, text: String, modifier: Modifier = Modifier) {
     if (progress <= 0f) return
     Text(
         text = text,
