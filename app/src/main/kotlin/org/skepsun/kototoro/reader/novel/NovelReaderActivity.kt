@@ -62,6 +62,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.core.util.ext.isPageEbookChapter
+import org.skepsun.kototoro.core.util.ext.isTextEbookChapter
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.core.model.isLocal
@@ -2421,17 +2423,19 @@ class NovelReaderActivity :
                 }
                 android.util.Log.d("NovelReaderActivity", "Original chapters count: ${originalChapters.size}")
 
-                // 本地 CBZ/ZIP 或无 EPUB 迹象时直接使用原章节，避免错误展开
-                val hasLikelyEpub = !manga.isLocal && originalChapters.any {
-                    val url = it.url.lowercase()
-                    url.contains(".epub") || url.contains("epub://")
+                // 本地 CBZ/ZIP 或无电子书迹象时直接使用原章节，避免错误展开
+                // 优先用解析器填充的 ebookFormats；旧解析器回退 URL 猜测（.epub / epub://）
+                val hasLikelyEbook = !manga.isLocal && originalChapters.any {
+                    it.ebookFormats.isNotEmpty() || it.url.lowercase().let { url ->
+                        url.contains(".epub") || url.contains("epub://")
+                    }
                 }
-                if (hasLikelyEpub) {
-                    android.util.Log.d("NovelReaderActivity", "Expanding EPUB chapters...")
+                if (hasLikelyEbook) {
+                    android.util.Log.d("NovelReaderActivity", "Expanding ebook chapters...")
                     chapters = expandEpubChapters(originalChapters)
                     android.util.Log.d("NovelReaderActivity", "After expansion: ${chapters.size} chapters")
                 } else {
-                    android.util.Log.d("NovelReaderActivity", "Skip EPUB expansion (local or no epub hints)")
+                    android.util.Log.d("NovelReaderActivity", "Skip ebook expansion (local or no ebook hints)")
                     chapters = originalChapters
                 }
 
@@ -2555,9 +2559,9 @@ class NovelReaderActivity :
 
                     android.util.Log.d("NovelReaderActivity", "Got ${pages.size} pages, first page preview: ${pages.firstOrNull()?.preview}, url: ${pages.firstOrNull()?.url?.take(100)}")
 
-                    // 检查是否为EPUB章节（通过preview字段标记）
-                    if (pages.size == 1 && pages[0].preview == "EPUB") {
-                        android.util.Log.d("NovelReaderActivity", "Detected EPUB chapter, loading EPUB content")
+                    // 检查是否为文本模态电子书章节（EPUB/FB2/TXT）；页面模态（PDF/DJVU）走文件阅读路径
+                    if (chapter.isTextEbookChapter(pages)) {
+                        android.util.Log.d("NovelReaderActivity", "Detected text ebook chapter, loading ebook content")
                         // 尝试读取EPUB内容
                         val epubContent = loadEpubContent(index, chapter)
                         showLoading(false)
@@ -2579,6 +2583,20 @@ class NovelReaderActivity :
                             }
                             renderChapter(index, chapter, epubMessage)
                         }
+                        return@launch
+                    }
+
+                    // 页面模态电子书（PDF/DJVU）：正文是扫描页而非文本，在线阅读无法直接渲染，
+                    // 引导用户下载后通过文件阅读器逐页查看
+                    if (chapter.isPageEbookChapter(pages)) {
+                        android.util.Log.d("NovelReaderActivity", "Detected page-mode ebook chapter (PDF/DJVU), guiding to download")
+                        showLoading(false)
+                        val pageBookMessage = buildString {
+                            append(getString(R.string.novel_epub_volume_not_downloaded_title))
+                            append("\n\n")
+                            append(getString(R.string.novel_epub_download_guide))
+                        }
+                        renderChapter(index, chapter, pageBookMessage)
                         return@launch
                     }
                 }
@@ -3075,9 +3093,10 @@ class NovelReaderActivity :
 
         for (chapter in originalChapters) {
             try {
-                // 快速检查：如果URL不像EPUB文件，直接跳过
-                // EPUB文件通常以.epub结尾，或者URL中包含epub关键字
-                val isLikelyEpub = chapter.url.contains(".epub", ignoreCase = true) ||
+                // 快速检查：解析器已填充格式候选，或 URL 像 EPUB 文件，才进入网络探测
+                // EPUB 文件通常以.epub结尾，或者URL中包含epub关键字
+                val isLikelyEpub = chapter.ebookFormats.isNotEmpty() ||
+                    chapter.url.contains(".epub", ignoreCase = true) ||
                     chapter.url.contains("epub", ignoreCase = true)
 
                 if (!isLikelyEpub) {
@@ -3087,13 +3106,13 @@ class NovelReaderActivity :
                     continue
                 }
 
-                // 可能是EPUB，需要检查
-                android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': Checking if EPUB...")
+                // 可能是电子书，需要检查（解析器格式候选优先，旧解析器回退 preview 标记）
+                android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': Checking if text ebook...")
                 val pages = repository.getPages(chapter)
                 android.util.Log.d("NovelReaderActivity", "Chapter '${chapter.title}': ${pages.size} pages, preview='${pages.firstOrNull()?.preview}'")
 
-                if (pages.size == 1 && pages[0].preview == "EPUB") {
-                    android.util.Log.d("NovelReaderActivity", "Found EPUB chapter: ${chapter.title}, ID=${chapter.id}, expanding...")
+                if (chapter.isTextEbookChapter(pages)) {
+                    android.util.Log.d("NovelReaderActivity", "Found text ebook chapter: ${chapter.title}, ID=${chapter.id}, expanding...")
 
                     // 首先尝试从数据库读取已保存的章节映射
                     val dbMappings = try {

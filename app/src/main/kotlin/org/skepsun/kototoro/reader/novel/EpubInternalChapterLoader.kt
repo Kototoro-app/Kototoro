@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.dao.EpubChapterMappingDao
 import org.skepsun.kototoro.core.db.entity.EpubChapterMappingEntity
+import org.skepsun.kototoro.local.epub.EbookTextParser
 import org.skepsun.kototoro.local.epub.EpubContent
 import org.skepsun.kototoro.local.epub.EpubContentCache
 import org.skepsun.kototoro.local.epub.EpubError
@@ -192,16 +193,25 @@ class EpubInternalChapterLoader(
     }
 
     /**
-     * Loads EPUB content from file with caching.
+     * Loads ebook content from file with caching（EPUB/FB2/TXT 统一入口）。
      *
-     * @param file The EPUB file
-     * @return The EPUB content, or null if parsing fails
+     * - EPUB：epublib([EpubReaderImpl])
+     * - FB2/TXT：文本解析([EbookTextParser])，输出与 EPUB 同构
+     *
+     * @param file 已下载的电子书文件（按扩展名分派解析器）
+     * @return 与 EPUB 同构的内容，或 null
      *
      * Performance: Uses LRU cache (Requirement 11.2)
      */
     private suspend fun loadEpubContent(file: File): EpubContent? {
-        // The cache is now handled by EpubReaderImpl
-        return epubReader.readEpub(file)
+        return when (file.extension.lowercase()) {
+            "fb2" -> EbookTextParser().parseFb2(file)
+            "txt" -> EbookTextParser().parseTxt(file)
+            else -> {
+                // The cache is now handled by EpubReaderImpl
+                epubReader.readEpub(file)
+            }
+        }
     }
 
     /**

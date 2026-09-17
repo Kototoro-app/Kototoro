@@ -44,6 +44,12 @@ public data class ContentChapter(
 	 * Opaque source-owned metadata preserved across storage and adapter round trips.
 	 */
 	@JvmField public val sourceData: String? = null,
+	/**
+	 * 该章节可下载的电子书格式候选。空 = 普通在线章节（图片/文本页）。
+	 * 下载型书源（libgen/Z-Library/archive.org...）填充此字段；宿主按格式
+	 * 选择阅读模态（文本模态 EPUB/FB2/TXT 展开内部章节；页面模态 PDF/DJVU 按页渲染）。
+	 */
+	@JvmField public val ebookFormats: List<EbookFormat> = emptyList(),
 ) {
 	@Deprecated(
 		message = "Binary compatibility bridge for parsers compiled before sourceData",
@@ -70,6 +76,34 @@ public data class ContentChapter(
 		branch = branch,
 		source = source,
 		sourceData = null,
+	)
+
+	@Deprecated(
+		message = "Binary compatibility bridge for parsers compiled with sourceData but before ebookFormats",
+		level = DeprecationLevel.HIDDEN,
+	)
+	public constructor(
+		id: Long,
+		title: String?,
+		number: Float,
+		volume: Int,
+		url: String,
+		scanlator: String?,
+		uploadDate: Long,
+		branch: String?,
+		source: ContentSource,
+		sourceData: String?,
+	) : this(
+		id = id,
+		title = title,
+		number = number,
+		volume = volume,
+		url = url,
+		scanlator = scanlator,
+		uploadDate = uploadDate,
+		branch = branch,
+		source = source,
+		sourceData = sourceData,
 	)
 
 	@Deprecated("Use title instead of name", ReplaceWith("ContentChapter(id, title, number, volume, url, scanlator, uploadDate, branch, source)"))
@@ -145,6 +179,7 @@ public data class ContentChapter(
 				branch = if (mask and (1 shl 7) != 0) chapter.branch else branch,
 				source = if (mask and (1 shl 8) != 0) chapter.source else requireNotNull(source),
 				sourceData = chapter.sourceData,
+				ebookFormats = chapter.ebookFormats,
 			)
 		}
 	}

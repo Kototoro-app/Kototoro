@@ -139,6 +139,42 @@ class EpubStorageManager @Inject constructor(
     }
 
     /**
+     * 保存电子书文件（泛化版本，按格式扩展名命名）
+     *
+     * @param mangaId 漫画ID
+     * @param sourceFile 源电子书文件
+     * @param chapterId 章节ID（用于区分同一manga的多个文件）
+     * @param extension 文件扩展名（如 epub/fb2/txt/pdf/djvu）
+     */
+    suspend fun saveEbookFile(mangaId: Long, sourceFile: File, chapterId: Long? = null, extension: String = "epub"): File = withContext(Dispatchers.IO) {
+        val epubDir = getEpubDir(mangaId, create = true)
+        val safeExt = extension.lowercase().ifEmpty { "epub" }
+
+        val fileName = if (chapterId != null) {
+            "chapter_${chapterId}.$safeExt"
+        } else {
+            "book.$safeExt"
+        }
+
+        val ebookFile = File(epubDir, fileName)
+
+        android.util.Log.d("EpubStorageManager", "Copying ebook file from ${sourceFile.absolutePath} to ${ebookFile.absolutePath}")
+
+        // 如果文件已存在，先删除
+        if (ebookFile.exists()) {
+            android.util.Log.d("EpubStorageManager", "Deleting existing ebook file")
+            ebookFile.delete()
+        }
+
+        // 复制文件
+        sourceFile.copyTo(ebookFile, overwrite = true)
+
+        android.util.Log.d("EpubStorageManager", "Ebook file copied successfully, size: ${ebookFile.length()} bytes")
+
+        ebookFile
+    }
+
+    /**
      * 删除EPUB文件
      */
     suspend fun deleteEpubFile(mangaId: Long): Boolean = withContext(Dispatchers.IO) {
