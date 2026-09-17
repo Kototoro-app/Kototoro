@@ -805,9 +805,9 @@ internal fun createInitialScenePageHints(
 ): List<Pair<PageId, PageGeometryHint>> {
     return pages.map { page ->
         val pageId = PageId(page.readerKey)
-        val cached = adapter?.getCachedAsset(pageId)
-        val hint = if (cached is ReaderImageAsset.ComposeImage) {
-            PageGeometryHint.Exact(cached.imageBitmap.width, cached.imageBitmap.height)
+        val cachedDims = adapter?.probeCachedDimensions(pageId)
+        val hint = if (cachedDims != null) {
+            PageGeometryHint.Exact(cachedDims.width, cachedDims.height)
         } else {
             PageGeometryHint.Estimated(ratio = defaultRatio)
         }

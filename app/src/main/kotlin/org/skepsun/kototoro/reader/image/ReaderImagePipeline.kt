@@ -25,6 +25,12 @@ interface ReaderImagePipeline {
     fun getCachedAsset(pageId: PageId): ReaderImageAsset?
 
     /**
+     * Probes cached dimensions for page geometry hints without promoting unverified bitmaps
+     * into authoritative presentation assets.
+     */
+    fun probeCachedDimensions(pageId: PageId): org.skepsun.kototoro.reader.core.IntSize? = null
+
+    /**
      * Replaces the desired resource window. The pipeline owns acquisition, retention, and eviction.
      */
     fun updateResourceWindow(window: ReaderResourceWindow)

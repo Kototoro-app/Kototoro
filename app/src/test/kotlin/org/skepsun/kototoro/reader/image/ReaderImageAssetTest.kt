@@ -338,16 +338,17 @@ class ReaderImageAssetTest {
     }
 
     @Test
-    fun `adapter retrieves ComposeImage directly if present in Coil memoryCache`() {
+    fun `adapter probes dimensions from Coil memoryCache without promoting to ComposeImage in getCachedAsset`() {
         val mockUri = mockk<Uri>()
         every { mockUri.toString() } returns "file:///cached/page1.jpg"
-
         val fakePipeline = FakeComposeReaderImagePipeline()
         fakePipeline.stateToReturn = ComposeReaderImageState.OriginalReady(mockUri)
 
         val mockMemoryCache = mockk<coil3.memory.MemoryCache>()
         val mockValue = mockk<coil3.memory.MemoryCache.Value>()
         val mockBitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { mockBitmap.width } returns 800
+        every { mockBitmap.height } returns 1200
         val mockImage = mockBitmap.asImage()
         every { mockValue.image } returns mockImage
         every { mockMemoryCache.get(coil3.memory.MemoryCache.Key("file:///cached/page1.jpg")) } returns mockValue
@@ -361,9 +362,16 @@ class ReaderImageAssetTest {
             pageLookup = { if (it.value == page1.readerKey) page1 else null },
         )
 
-        val asset = adapter.getCachedAsset(PageId(page1.readerKey))
+        val pageId = PageId(page1.readerKey)
+        val probed = adapter.probeCachedDimensions(pageId)
+        assertNotNull(probed)
+        assertEquals(800, probed?.width)
+        assertEquals(1200, probed?.height)
+
+        val asset = adapter.getCachedAsset(pageId)
         assertNotNull(asset)
-        assertTrue(asset is ReaderImageAsset.ComposeImage)
+        assertTrue(asset is ReaderImageAsset.Encoded, "getCachedAsset must NOT promote memoryCache entry to ComposeImage")
+        assertNull(adapter.assets.value[pageId], "Must not contaminate renderer presentation assets")
     }
 
     @Test
@@ -534,5 +542,68 @@ class ReaderImageAssetTest {
         val cached = adapter.getCachedAsset(pageId)
         assertTrue(cached is ReaderImageAsset.Encoded, "Should return Encoded when readiness is SOURCE_READY")
         assertNull(adapter.assets.value[pageId], "Must not populate renderer-facing assets")
+    }
+
+    @Test
+    fun `warm backend switch from legacy with low-res memoryCache entry does not pollute presentation assets`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        val uriString = "file:///downloaded/page1.jpg"
+        every { uri.toString() } returns uriString
+
+        val lowResBitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { lowResBitmap.width } returns 160
+        every { lowResBitmap.height } returns 480
+        val memoryCache = mockk<coil3.memory.MemoryCache>()
+        every { memoryCache[coil3.memory.MemoryCache.Key(uriString)] } returns coil3.memory.MemoryCache.Value(lowResBitmap.asImage())
+        every { imageLoader.memoryCache } returns memoryCache
+
+        val highResBitmap = mockk<android.graphics.Bitmap>(relaxed = true)
+        every { highResBitmap.width } returns 1080
+        every { highResBitmap.height } returns 3240
+        val successResult = mockk<coil3.request.SuccessResult>()
+        every { successResult.image } returns highResBitmap.asImage()
+        coEvery { imageLoader.execute(any()) } returns successResult
+
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { page1 },
+        )
+
+        val pageId = PageId(page1.readerKey)
+
+        // 1. Probing cached dimensions for scene hints returns geometry without polluting assets
+        val probed = adapter.probeCachedDimensions(pageId)
+        assertEquals(160, probed?.width)
+        assertEquals(480, probed?.height)
+        assertNull(adapter.assets.value[pageId], "Probing dimensions must NEVER populate presentation assets")
+
+        // 2. getCachedAsset returns Encoded source, not the low-res ComposeImage
+        val cached = adapter.getCachedAsset(pageId)
+        assertTrue(cached is ReaderImageAsset.Encoded)
+
+        // 3. When page enters PRESENTATION_READY, it must execute full decode (acquireAsset)
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        // 4. Assert full-res presentation asset is now loaded
+        val presentationAsset = adapter.assets.value[pageId]
+        assertTrue(presentationAsset is ReaderImageAsset.ComposeImage, "Authoritative presentation asset should be loaded")
     }
 }

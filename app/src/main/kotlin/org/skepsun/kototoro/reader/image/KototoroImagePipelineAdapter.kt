@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PrefetchReadiness
 import org.skepsun.kototoro.reader.core.ReaderResourceWindow
@@ -100,6 +101,27 @@ class KototoroImagePipelineAdapter(
 
     var onAssetLoaded: ((PageId, ReaderImageAsset) -> Unit)? = null
 
+    override fun probeCachedDimensions(pageId: PageId): IntSize? {
+        val inMemory = cachedAssets[pageId]
+        if (inMemory is ReaderImageAsset.ComposeImage) {
+            return IntSize(inMemory.imageBitmap.width, inMemory.imageBitmap.height)
+        }
+        if (inMemory is ReaderImageAsset.AndroidBitmap) {
+            return IntSize(inMemory.bitmap.width, inMemory.bitmap.height)
+        }
+
+        val state = composePipeline.cachedState(pageId.value)
+        val uri = when (state) {
+            is ComposeReaderImageState.OriginalReady -> state.original
+            is ComposeReaderImageState.EnhancedReady -> state.enhanced
+            else -> null
+        } ?: return null
+
+        val memoryImage = imageLoader.memoryCache?.get(MemoryCache.Key(uri.toString()))?.image ?: return null
+        val bmp = runCatching { memoryImage.toBitmap() }.getOrNull() ?: return null
+        return IntSize(bmp.width, bmp.height)
+    }
+
     override fun getCachedAsset(pageId: PageId): ReaderImageAsset? {
         val inMemory = cachedAssets[pageId]
         if (inMemory != null) return inMemory
@@ -110,17 +132,6 @@ class KototoroImagePipelineAdapter(
             is ComposeReaderImageState.EnhancedReady -> state.enhanced
             else -> null
         } ?: return null
-
-        val memoryImage = imageLoader.memoryCache?.get(MemoryCache.Key(uri.toString()))?.image
-        if (memoryImage != null) {
-            val bmp = runCatching { memoryImage.toBitmap() }.getOrNull()
-            if (bmp != null) {
-                val composeAsset = ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
-                if (storeAsset(pageId, composeAsset)) {
-                    return composeAsset
-                }
-            }
-        }
 
         val encoded = ReaderImageAsset.Encoded(pageId, uri.toString())
         storeAsset(pageId, encoded)
@@ -177,6 +188,9 @@ class KototoroImagePipelineAdapter(
                     val result = imageLoader.execute(request)
                     if (result is SuccessResult) {
                         val bmp = result.image.toBitmap()
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+                            Trace.setCounter("Reader.PresentationWidthPx", bmp.width.toLong())
+                        }
                         val composeAsset = ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
                         val retained = storeAsset(pageId, composeAsset)
                         composePipeline.onImageDecoded(page, bmp.width, bmp.height)
