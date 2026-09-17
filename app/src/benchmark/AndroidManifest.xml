@@ -6,5 +6,9 @@
             android:name="org.skepsun.kototoro.reader.benchmark.ReaderRendererBenchmarkActivity"
             android:exported="true"
             android:theme="@style/Theme.Kototoro" />
+        <activity
+            android:name="org.skepsun.kototoro.reader.benchmark.ReaderProductionBenchmarkActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Kototoro" />
     </application>
 </manifest>

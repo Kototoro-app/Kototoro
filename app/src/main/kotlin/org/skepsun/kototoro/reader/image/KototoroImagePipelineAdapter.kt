@@ -2,6 +2,8 @@ package org.skepsun.kototoro.reader.image
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.Trace
 import androidx.compose.ui.graphics.asImageBitmap
 import coil3.ImageLoader
 import coil3.memory.MemoryCache
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
@@ -68,6 +71,13 @@ class KototoroImagePipelineAdapter(
     private val mutableLoadStates = MutableStateFlow<Map<PageId, ReaderImageLoadState>>(emptyMap())
     override val loadStates = mutableLoadStates.asStateFlow()
 
+    private fun updateAssets(transform: (Map<PageId, ReaderImageAsset>) -> Map<PageId, ReaderImageAsset>) {
+        val updated = mutableAssets.updateAndGet(transform)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            Trace.setCounter("Reader.ActivePresentationAssets", updated.size.toLong())
+        }
+    }
+
     private fun setLoadState(pageId: PageId, state: ReaderImageLoadState) {
         mutableLoadStates.update { it + (pageId to state) }
     }
@@ -82,7 +92,7 @@ class KototoroImagePipelineAdapter(
         }
         cachedAssets[pageId] = asset
         if (asset !is ReaderImageAsset.Encoded) {
-            mutableAssets.update { it + (pageId to asset) }
+            updateAssets { it + (pageId to asset) }
             setLoadState(pageId, ReaderImageLoadState.Ready)
         }
         return true
@@ -279,7 +289,7 @@ class KototoroImagePipelineAdapter(
             val current = cachedAssets[pageId]
             if (current != null && current !is ReaderImageAsset.Encoded) {
                 // Remove presentation asset from renderer-facing state flow and ready state
-                mutableAssets.update { it - pageId }
+                updateAssets { it - pageId }
                 mutableLoadStates.update { it - pageId }
 
                 // Downgrade in-memory cache to lightweight Encoded handle
@@ -329,7 +339,7 @@ class KototoroImagePipelineAdapter(
         inFlightLoads.remove(pageId)?.cancel()
         cachedAssets.remove(pageId)
         inFlightSourceLoads.remove(pageId)?.cancel()
-        mutableAssets.update { it - pageId }
+        updateAssets { it - pageId }
         mutableLoadStates.update { it - pageId }
     }
 }
