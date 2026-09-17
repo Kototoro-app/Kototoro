@@ -271,7 +271,7 @@ reader/
 
 | 指标维度 | Legacy ComposeWebtoonReader | ComposeSceneWebtoonReader | 改善幅度与结论 |
 | :--- | :--- | :--- | :--- |
-| **`frameDurationCpuMs` P50** | 4.30 ms | **2.70 ms** | **-37.2%**（主线程中位数 CPU 耗时大幅降低） |
+| **`frameDurationCpuMs` P50** | 4.30 ms | **2.70 ms** | **-37.2%**（帧 CPU 中位耗时大幅降低） |
 | **`frameDurationCpuMs` P90** | 6.70 ms | **4.60 ms** | **-31.3%** |
 | **`frameDurationCpuMs` P95** | 7.70 ms | **4.90 ms** | **-36.4%** |
 | **`frameDurationCpuMs` P99** | 10.20 ms | **6.20 ms** | **-39.2%**（CPU P99 稳固在 120Hz 8.33ms 预算内） |
@@ -284,7 +284,7 @@ reader/
 
 | 指标维度 | Legacy ComposeWebtoonReader | ComposeSceneWebtoonReader | 改善幅度与结论 |
 | :--- | :--- | :--- | :--- |
-| **平稳态匿名内存 (`RssAnon.Last`)** | 331.9 MB | **213.2 MB** | **-35.8%（-118.7 MB 稳态驻留消除）** |
+| **平稳态匿名内存 (`RssAnon.Last`)** | 331.9 MB | **213.2 MB** | **-35.8%（-118.7 MB 稳态驻留降低）** |
 | **峰值匿名内存 (`RssAnon.Max`)** | 353.0 MB | **236.1 MB** | **-33.1%（-116.9 MB 峰值节省）** |
 | **`frameDurationCpuMs` P50** | 3.80 ms | **2.40 ms** | **-36.8%** |
 | **`frameDurationCpuMs` P99** | 8.80 ms | **5.60 ms** | **-36.4%**（持续长程滑动下维持绝对平稳） |

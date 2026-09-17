@@ -117,6 +117,10 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         monitorInitialReadiness()
     }
 
+    @Volatile
+    private var visiblePageKeys: Set<Long> = emptySet()
+    private var checkAndSignalAction: (() -> Unit)? = null
+
     override fun onDestroy() {
         super.onDestroy()
         displayListener?.let {
@@ -126,13 +130,13 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
     }
 
     private fun monitorInitialReadiness() {
-        android.util.Log.e("BenchmarkActivity", "monitorInitialReadiness entered")
         val checkAndSignal = {
-            android.util.Log.e(
-                "BenchmarkActivity",
-                "checkAndSignal decodedKeys=${pipeline.decodedPageKeys} readyVis=${readyView.visibility}",
-            )
-            if (pipeline.decodedPageKeys.isNotEmpty() && readyView.visibility != View.VISIBLE) {
+            val isReady = if (visiblePageKeys.isNotEmpty()) {
+                pipeline.decodedPageKeys.containsAll(visiblePageKeys)
+            } else {
+                pipeline.decodedPageKeys.isNotEmpty()
+            }
+            if (isReady && readyView.visibility != View.VISIBLE) {
                 // Wait for two Choreographer frames to ensure textures are presented to display
                 Choreographer.getInstance().postFrameCallback {
                     Choreographer.getInstance().postFrameCallback {
@@ -140,12 +144,13 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                         sendBroadcast(Intent(ACTION_BENCHMARK_READY))
                         android.util.Log.e(
                             "BenchmarkActivity",
-                            "benchmark_ready signaled VISIBLE and broadcast sent, decodedKeys=${pipeline.decodedPageKeys}",
+                            "benchmark_ready signaled VISIBLE, visible=$visiblePageKeys, decoded=${pipeline.decodedPageKeys}",
                         )
                     }
                 }
             }
         }
+        checkAndSignalAction = checkAndSignal
         pipeline.onPageDecoded = {
             runOnUiThread {
                 checkAndSignal()
@@ -161,6 +166,22 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         imageLoader: ImageLoader,
         pipeline: BenchmarkProductionImagePipeline,
     ) {
+        val onVisiblePagesChanged: (Long, Long, Long) -> Unit = androidx.compose.runtime.remember(pages) {
+            { lowerKey, upperKey, _ ->
+                val lowerIdx = pages.indexOfFirst { it.readerKey == lowerKey }
+                val upperIdx = pages.indexOfFirst { it.readerKey == upperKey }
+                if (lowerIdx in pages.indices && upperIdx in pages.indices) {
+                    val range = minOf(lowerIdx, upperIdx)..maxOf(lowerIdx, upperIdx)
+                    visiblePageKeys = range.map { pages[it].readerKey }.toSet()
+                } else {
+                    visiblePageKeys = setOf(lowerKey, upperKey)
+                }
+                runOnUiThread {
+                    checkAndSignalAction?.invoke()
+                }
+            }
+        }
+
         if (backend == BACKEND_LEGACY_WEBTOON) {
             ComposeWebtoonReader(
                 pages = pages,
@@ -168,7 +189,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 initialScroll = 0,
                 imageLoader = imageLoader,
                 imagePipeline = pipeline,
-                onPagesChanged = { _, _, _ -> },
+                onPagesChanged = onVisiblePagesChanged,
                 onInternalScrollChanged = { _, _ -> },
                 isAnimationEnabled = false,
                 bitmapConfig = Bitmap.Config.ARGB_8888,
@@ -183,7 +204,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 initialScroll = 0,
                 imageLoader = imageLoader,
                 imagePipeline = pipeline,
-                onPagesChanged = { _, _, _ -> },
+                onPagesChanged = onVisiblePagesChanged,
                 onInternalScrollChanged = { _, _ -> },
                 isAnimationEnabled = false,
                 bitmapConfig = Bitmap.Config.ARGB_8888,
