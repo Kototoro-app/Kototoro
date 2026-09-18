@@ -53,6 +53,7 @@ export default defineConfig({
         items: [
           { text: "Architecture Review", link: "/architecture/architecture-review" },
           { text: "Architecture Roadmap", link: "/architecture/architecture-roadmap" },
+          { text: "Reader Scene Closure Plan (2026-09)", link: "/architecture/reader-scene-closure-plan-2026-09" },
           { text: "Favourites Library Plan", link: "/architecture/favourites-komikku-alignment-implementation-plan-2026-09" },
           { text: "Unified Cloudflare Solver", link: "/architecture/unified-cloudflare-solver-plan-2026-08" },
           { text: "Entity Graph Plan", link: "/architecture/entity-graph-implementation-plan" },
