@@ -70,6 +70,31 @@ class PagedSlotScreenVisibilityTest {
 
         assertEquals(1, zoomed.size)
         assertTrue(zoomed.first().visibleRegion.width < wide.first().visibleRegion.width)
+        // Zooming in must shrink the reported region in both axes, not only in width: a region that
+        // keeps the full page height while narrowing in x is what the tile probe caught on device
+        // (a strip of ~1031 x 9000 logical pixels at level zero, 4012 times in one run).
+        assertTrue(zoomed.first().visibleRegion.height < wide.first().visibleRegion.height)
+    }
+
+    @Test
+    fun `panning the camera never reports more than the camera sees`() {
+        val current = slot(slotIndex = 0, left = 0f)
+
+        // A pan pushes the camera rect past the page edge; the intersection with the page must clamp
+        // to what the camera covers, not re-expand to the page.
+        val panned = current.screenVisibleContentNodes(
+            screenViewportBounds = screenViewport,
+            scale = 2.5f,
+            offsetX = -600f,
+            offsetY = -900f,
+        )
+
+        assertEquals(1, panned.size)
+        val sceneRegion = panned.first().visibleRegion
+        assertTrue(
+            sceneRegion.height <= 2772f / 2.5f + 1f,
+            "panned region height ${sceneRegion.height} exceeds the magnified viewport",
+        )
     }
 
     private companion object {

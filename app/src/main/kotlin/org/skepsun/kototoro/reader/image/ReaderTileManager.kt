@@ -86,6 +86,9 @@ class ReaderTileManager(
 
     /** Cumulative tile decode launches, reported as telemetry to expose churn. */
     private val decodeRequests = java.util.concurrent.atomic.AtomicLong()
+
+    /** Anomaly probe counter; only the first few oversized requests carry a stack trace. */
+    private val probeLogged = java.util.concurrent.atomic.AtomicLong()
     override fun addListener(listener: Listener) {
         synchronized(listenersLock) { listeners.add(listener) }
     }
@@ -118,6 +121,20 @@ class ReaderTileManager(
             Trace.setCounter("Reader.TileResidentCount", tiles.value.size.toLong())
         }
         val visibleSpecs = grid.tilesIntersecting(visibleRegion)
+        // Anomaly probe: a request far larger than a viewport's worth of tiles is the shape that
+        // pins hundreds of megabytes, and it is otherwise invisible in aggregate telemetry.
+        val requestedArea = visibleRegion.width.toLong() * visibleRegion.height.toLong()
+        if (visibleSpecs.size > 12 || requestedArea > 6_000_000L) {
+            val probeCount = probeLogged.incrementAndGet()
+            android.util.Log.w(
+                "TileProbe",
+                "huge tile request page=${grid.pageId.value} specs=${visibleSpecs.size} " +
+                    "region=$visibleRegion area=$requestedArea sampleSize=${grid.sampleSize} " +
+                    "pageSize=${grid.pageSize} lookahead=$lookaheadRegion",
+                // A handful of stack traces identify which caller builds these regions.
+                if (probeCount <= 5) Throwable("tile probe caller") else null,
+            )
+        }
         val visibleKeys = HashSet<TileKey>(visibleSpecs.size)
         visibleSpecs.forEach { visibleKeys.add(it.key) }
 

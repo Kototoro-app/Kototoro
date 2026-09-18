@@ -218,6 +218,18 @@ CS-5   experiment flag 删除 / 隐藏
      level-0 请求远超可见范围的瓦片（预期约 6 块/页、24MB/页）。下一轮应从两处继续：
      ①`onCameraSettled` 的 target 层与 base 层可能同时驻留（`requestTiles` 同时驱动两者）；
      ②大量解码请求（1951）表明存在按页级粒度的重复请求，需要按 `TileKey` 粒度核对请求来源。
+  5. **请求来源已定案（2026-09-19，异常探针 + 调用栈）**：在 `ReaderTileManager.requestTiles`
+     加了"异常即记录"探针（`specs > 12` 或区域 > 6M 逻辑像素时打日志，前 5 条附调用栈）。
+     一次放大旅程共 **4012 次异常请求**，形态高度一致：
+     `region=IntRect(0, 0, ~1031, 9000)`、`sampleSize=1`、`pageSize=6000×9000`、`specs=18/27/36/45`
+     —— 即**整页高度 × 约一个瓦片宽的竖条**（正确形态应是约 1153×2494、specs≈6）。
+     调用栈显示来源**正是上一轮已经改过的两处**（`updateResourceWindow` 第 4 步与 settle 效果里的
+     `coordinateVisibleTiles`），因此问题不在调用点，而在**传进去的几何**。
+  6. **已排除 helper 本身**：新增两个纯几何测试（放大后区域必须在 y 方向也收缩；pan 之后区域不得
+     超过放大视口），在 scale=2.5 与带 pan 偏移下均通过（4/4）。所以 host 传参是下一步的落点：
+     下一轮应在两处调用点打印 `resolveSlotTransform(slotIndex)` 的结果（scale/offsetX/offsetY）、
+     `zoomMode` 推导出的 `layoutScale` 与 `canvasOffsetX/Y`，确认是否出现"该 slot 的 scale 被当成 1"
+     （即 `zoomedSlotIndex` 与当前可见 slot 不一致）导致整页高度进入请求。
 
 ### CS-1B 分页场景转正（翻转默认开关）
 
