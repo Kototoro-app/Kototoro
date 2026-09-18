@@ -300,6 +300,7 @@ internal fun DrawScope.drawFrameNodes(
     assetProvider: (PageId) -> ImageBitmap? = { null },
     readerAssetProvider: ((PageId) -> ReaderImageAsset?)? = null,
     animatedBridge: AnimatedDrawBridge? = null,
+    screenPositionProvider: ((VisibleNode) -> Offset)? = null,
 ) {
     val visiblePageIds = HashSet<PageId>(frame.visibleNodes.size)
     for (node in frame.visibleNodes) {
@@ -308,8 +309,9 @@ internal fun DrawScope.drawFrameNodes(
     animatedBridge?.updateVisiblePages(visiblePageIds)
 
     for (node in frame.visibleNodes) {
-        val screenTop = node.sceneBounds.top - viewportScrollY + verticalOffset
-        val screenLeft = node.sceneBounds.left - viewportScrollX + horizontalOffset
+        val customPos = screenPositionProvider?.invoke(node)
+        val screenTop = customPos?.y ?: (node.sceneBounds.top - viewportScrollY + verticalOffset)
+        val screenLeft = customPos?.x ?: (node.sceneBounds.left - viewportScrollX + horizontalOffset)
         val nodeWidth = node.sceneBounds.width
         val nodeHeight = node.sceneBounds.height
 

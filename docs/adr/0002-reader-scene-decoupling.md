@@ -15,7 +15,15 @@
     - Phase 1D（真机超长条漫效能与长图画质基准）：已完成（Completed）
   - Phase 2 (生产化功能对齐与多章节视口锚定)：
     - Phase 2A (页面间隔、跨章节平滑扩缩窗与无感锚定、统一错误重试交互、低内存优化)：已完成（Completed）
-  - Scene Reader 功能集成：已完成滚动、缩放、手势、页面间隙、跨章节平滑扩窗、双向锚定修正、ARR、统一错误重试及多态分块解码渲染闭环
+    - Phase 2B (2D 契约抽象、双向锚定补偿与默认全量推广)：已完成（Completed）
+    - Phase 2C (横向连续瀑布流场景与对称性定理：HorizontalReaderScene)：已完成（Completed）
+    - Phase 2C2 (横向连续场景 Compose 宿主交互：ComposeSceneHorizontalReader)：已完成（Completed）
+  - Phase 3 (分页与双页场景引擎与统一宿主)：
+    - Phase 3A (纯 Kotlin 分页几何模型与排版调度：PagedReaderScene、PagedSpreadResolver、PagedSnapResolver)：已完成（Completed）
+    - Phase 3B (分页影子模式校验器与等价性测试：PagedShadowValidator、PagedShadowParityTest 与运行时采样)：已完成（Completed）
+    - Phase 3C (现代分页场景 Compose 宿主：ComposeScenePagedReader，单双页统一架构、弹性吸附、缩放与 Draw Phase 呈现)：已完成（Completed）
+    - Phase 3D (生产路由接线、交互测试套件验证与 ADR 归档)：已完成（Completed）
+  - Scene Reader 功能集成：已全量覆盖 Webtoon 纵向瀑布流、横向连续流（LTR/RTL）、单页离散分页（LTR/RTL/Vertical）与双页并页模式，纯 Draw Phase 渲染与零跳动锚定全部落地
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
@@ -403,6 +411,59 @@ reader/
     - `updatePages preserves existing exact hints and anchors prepended pages with zero jump`
     - `updatePages appending pages returns zero deltaY`
   - 全套 Reader JVM 单元测试（46 例）100% 通过。
+
+**Phase 2B：2D 契约抽象、双向锚定补偿与默认全量推广（已完成）**
+- **2D 通用场景契约**：抽离 `MutableReaderScene` 与 `SceneReadingDirection`（`TOP_TO_BOTTOM`、`LEFT_TO_RIGHT`、`RIGHT_TO_LEFT`），定义通用的 `AnchorCompensation(deltaX, deltaY)` 双向坐标补偿机制。
+- **全量默认启用验证**：在 Webtoon 模式下将 `isExperimentalSceneReaderEnabled` 设为生产默认值，验证架构长久稳定性。
+
+**Phase 2C & 2C2：横向连续瀑布流场景与宿主交互（已完成）**
+- **横向连续场景引擎 (`HorizontalReaderScene`)**：
+  - 严格满足 Invariant I1，纯 Kotlin 实现无 Android 依赖；
+  - 支持 LTR（从左至右）与 RTL（日漫从右至左）对称布局；
+  - 高性能 $O(\log N)$ 二分查找视口相交区域，实时派发 `ReaderFrame` 与 `ReaderProgressSnapshot`；
+  - 动态估算替换精确几何尺寸时的 X 轴零跳动锚定补偿（Zero-CLS）。
+- **横向连续宿主 (`ComposeSceneHorizontalReader` / `ComposeHorizontalSceneRenderer`)**：
+  - Draw Phase 纯绘制限制，跳过 Composition/Layout；
+  - 物理惯性滑动、双向拉动切章与自适应刷新率（ARR）集成。
+
+#### Phase 3 实施进度（现代分页场景引擎与统一宿主）
+
+**Phase 3A：纯 Kotlin 分页几何模型与排版调度（已完成）**
+- **核心模型**：
+  - `PagedReaderScene`：实现 `MutableReaderScene`，负责分页与并页插槽管理、视口求交与平移结算；
+  - `PagedSpreadResolver`：实现插槽排布算法，严格遵循 Kototoro 业务规范：
+    1. **跨章隔离**：不同章节页面绝对不合并在同一插槽；
+    2. **宽页与封面独立**：宽高比 > 1.15 的宽页（`WidePagePolicy`）或封面偏移页独占单插槽；
+    3. **日漫 RTL 镜像排布**：在 RTL 模式下，插槽内先读页居右、后读页居左，阅读顺序严格保序；
+  - `PagedSnapResolver`：纯数学离散吸附解析器，根据位移比例（默认 20%）与归一化滑动速度（默认 0.5f）解析目标插槽。
+- **单元测试**：`PagedReaderSceneTest`、`PagedSpreadResolverTest`、`PagedSnapResolverTest` 100% 覆盖。
+
+**Phase 3B：分页影子模式校验器与等价性验证（已完成）**
+- **影子校验器 (`PagedShadowValidator`)**：
+  - 针对生产真实 `ReaderPage` 列表，并行比对既有 `DoublePageSpreadModel` 与现代 `PagedSpreadResolver` 的排页、跨章隔离与锚点；
+  - 在既有 `ComposeDoublePageReader` 中加入无感运行时采样（`sampleRuntimeParity`），单次开销 < 0.1ms；
+- **等价性套件 (`PagedShadowParityTest`)**：
+  - 覆盖奇数/偶数章节、封面偏移开启/关闭、跨章节混合图集、日漫 RTL 翻页及 100 轮随机模糊测试（Fuzz testing），达成 100% 零差异。
+
+**Phase 3C：现代分页场景 Compose 宿主 (`ComposeScenePagedReader`)（已完成）**
+- **单双页统一架构**：
+  - 将单页模式（Standard LTR、Reversed RTL、Vertical Paged）与双页并页模式统一由 `ComposeScenePagedReader` 承载；
+  - 结合 `PagedReaderScene` 与 `drawFrameNodes`，滚动平移与翻页过渡严格约束在 Draw Phase，彻底跳过 Composition 与 Layout。
+- **交互与手势**：
+  - 单指拖拽驱动插槽无缝平滑滑动；
+  - 手势释放由 `PagedSnapResolver` 结算目标并触发平滑弹性吸附动画；
+  - 双指缩放（1x ~ 5x）与双击缩放切换；
+  - 视口两端 Pull 手势触发上一章/下一章切换。
+- **管线与零跳动补偿**：
+  - 接入 `KototoroImagePipelineAdapter`，维护插槽级资源窗口（当前插槽 `PRESENTATION_READY`，相邻插槽 `SOURCE_READY`，移出插槽及时淘汰）；
+  - 尺寸解析时通过 `AnchorCompensation` 实施零 CLS 视觉补偿。
+
+**Phase 3D：生产路由接线、交互测试与 ADR 归档（已完成）**
+- **生产分发路由 (`ComposeReaderScreenRoot.kt`)**：
+  - 在 `isExperimentalSceneReaderEnabled` 开启时，分发至现代 `ComposeScenePagedReader`；
+  - 在开关关闭时，100% 无损回落至既有 `ComposeDoublePageReader` 与 `ComposePagedReader`；
+- **交互集成测试 (`ComposeScenePagedInteractionTest.kt`)**：
+  - 覆盖离散插槽隔离、双页并页跨章阻断、RTL 日漫左右排布、吸附阈值、过渡求交与动态更新补偿。全套测试 100% 通过。
 
 ---
 

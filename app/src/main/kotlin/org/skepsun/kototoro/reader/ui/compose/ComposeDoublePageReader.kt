@@ -99,6 +99,13 @@ fun ComposeDoublePageReader(
     val displayPagePositions = remember(displayItems) { displayItems.map { it.originalPosition } }
     val spreadModel = remember(displayItems.size) { DoublePageSpreadModel.create(displayItems.size) }
     val spreads = spreadModel.spreads
+    LaunchedEffect(displayedPages, coverPage, reverseLayout) {
+        PagedShadowValidator.sampleRuntimeParity(
+            pages = displayedPages,
+            coverPage = coverPage,
+            reverseLayout = reverseLayout,
+        )
+    }
     val pageKeys = displayItems.map { it.page?.readerKey ?: DoublePageSpreadModel.SPACER_KEY }
     val initialDisplayPosition = displayPagePositions.indexOf(initialPage).takeIf { it >= 0 } ?: 0
     var anchorPageKey by remember { mutableStateOf(pageKeys[initialDisplayPosition.coerceIn(pageKeys.indices)]) }

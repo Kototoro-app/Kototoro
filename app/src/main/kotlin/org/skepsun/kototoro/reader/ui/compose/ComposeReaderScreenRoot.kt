@@ -23,6 +23,7 @@ import org.skepsun.kototoro.reader.ui.resolveVisiblePageSelection
 import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderRestoredState
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.reader.core.SceneReadingDirection
 
 /**
  * Reader Compose entry point. ReaderViewModel remains the only owner of chapter,
@@ -115,70 +116,132 @@ fun ComposeReaderScreenRoot(
 
     key(mode, isDoublePage, layoutGeneration) {
     if (isDoublePage) {
-        ComposeDoublePageReader(
-            pages = content.pages,
-            initialPage = initialPosition,
-            reverseLayout = mode == ReaderMode.REVERSED,
-            coverPage = readerSettings.isReaderDoubleCoverPage,
-            imageLoader = imageLoader,
-            imagePipeline = imagePipeline,
-            onPagesChanged = pagesChanged@ { lowerPage, upperPage ->
-                val lower = content.pages.indexOfFirst { it.readerKey == lowerPage.readerKey }
-                val upper = content.pages.indexOfFirst { it.readerKey == upperPage.readerKey }
-                if (lower < 0 || upper < lower) {
+        if (readerSettings.isExperimentalSceneReaderEnabled) {
+            ComposeScenePagedReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                isDoublePage = true,
+                coverPage = readerSettings.isReaderDoubleCoverPage,
+                readingDirection = if (mode == ReaderMode.REVERSED) {
+                    SceneReadingDirection.RIGHT_TO_LEFT
+                } else {
+                    SceneReadingDirection.LEFT_TO_RIGHT
+                },
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
+                onPagesChanged = pagesChanged@ { lowerKey, upperKey, activeKey ->
+                    val lower = content.pages.indexOfFirst { it.readerKey == lowerKey }
+                    val upper = content.pages.indexOfFirst { it.readerKey == upperKey }
+                    if (lower < 0 || upper < lower) {
+                        Log.d(
+                            "ReaderDebug",
+                            "Ignore stale double page callback lowerKey=$lowerKey upperKey=$upperKey contentPages=${content.pages.size}",
+                        )
+                        return@pagesChanged
+                    }
+                    val stateBefore = viewModel.getCurrentState()
                     Log.d(
                         "ReaderDebug",
-                        "Ignore stale double page callback lowerKey=${lowerPage.readerKey} " +
-                            "upperKey=${upperPage.readerKey} contentPages=${content.pages.size}",
+                        "doublePagesChanged lower=$lower upper=$upper stateBefore=$stateBefore " +
+                            "requested=$requestedPage contentPages=${content.pages.size}",
                     )
-                    return@pagesChanged
-                }
-                val stateBefore = viewModel.getCurrentState()
-                Log.d(
-                    "ReaderDebug",
-                    "doublePagesChanged lower=$lower upper=$upper stateBefore=$stateBefore " +
-                        "requested=$requestedPage contentPages=${content.pages.size} " +
-                        "lowerPage=${content.pages.getOrNull(lower)?.chapterId}:${content.pages.getOrNull(lower)?.index} " +
-                        "upperPage=${content.pages.getOrNull(upper)?.chapterId}:${content.pages.getOrNull(upper)?.index}",
-                )
-                viewModel.onCurrentPageChanged(lower, upper)
-                // Keep the controller's page key aligned with the same visible-page
-                // policy used by ReaderViewModel. Reporting only the spread's lower
-                // page makes a rotation back to single-page mode restore stale state.
-                val currentState = viewModel.getCurrentState()
-                val selectedPosition = resolveVisiblePageSelection(
-                    pages = content.pages,
-                    lowerPos = lower,
-                    upperPos = upper,
-                    currentChapterId = currentState?.chapterId,
-                    boundsPageOffset = 1,
-                )
-                Log.d(
-                    "ReaderDebug",
-                    "doublePagesChanged selected=$selectedPosition " +
-                        "selectedPage=${content.pages.getOrNull(selectedPosition)?.chapterId}:${content.pages.getOrNull(selectedPosition)?.index}",
-                )
-                onReaderPositionChanged(selectedPosition, 0)
-            },
-            requestedPage = requestedPage,
-            requestedPageSmooth = requestedPageSmooth,
-            zoomCommand = zoomCommand,
-            onShowErrorDetails = onShowErrorDetails,
-            onRetryError = onRetryError,
-            resolveErrorStringId = resolveErrorStringId,
-            isAnimationEnabled = isAnimationEnabled,
-            pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
-            readerBackground = readerSettings.background,
-            readerBackgroundColor = readerBackgroundColor,
-            bookBackgroundTint = bookBackgroundTint,
-            imageColorFilter = readerImageColorFilter,
-            bitmapConfig = readerSettings.bitmapConfig,
-            isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
-            isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
-            isCropEnabled = readerSettings.isPagesCropEnabledStandard,
-            pageOverlay = pageOverlay,
-            modifier = readerModifier,
-        )
+                    viewModel.onCurrentPageChanged(lower, upper)
+                    val currentState = viewModel.getCurrentState()
+                    val selectedPosition = resolveVisiblePageSelection(
+                        pages = content.pages,
+                        lowerPos = lower,
+                        upperPos = upper,
+                        currentChapterId = currentState?.chapterId,
+                        boundsPageOffset = 1,
+                    )
+                    Log.d(
+                        "ReaderDebug",
+                        "doublePagesChanged selected=$selectedPosition",
+                    )
+                    onReaderPositionChanged(selectedPosition, 0)
+                },
+                requestedPage = requestedPage,
+                requestedPageSmooth = requestedPageSmooth,
+                zoomCommand = zoomCommand,
+                onShowErrorDetails = onShowErrorDetails,
+                onRetryError = onRetryError,
+                resolveErrorStringId = resolveErrorStringId,
+                isAnimationEnabled = isAnimationEnabled,
+                readerBackgroundColor = readerBackgroundColor,
+                imageColorFilter = readerImageColorFilter,
+                bitmapConfig = readerSettings.bitmapConfig,
+                isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+                pageOverlay = pageOverlay,
+                modifier = readerModifier,
+            )
+        } else {
+            ComposeDoublePageReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                reverseLayout = mode == ReaderMode.REVERSED,
+                coverPage = readerSettings.isReaderDoubleCoverPage,
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
+                onPagesChanged = pagesChanged@ { lowerPage, upperPage ->
+                    val lower = content.pages.indexOfFirst { it.readerKey == lowerPage.readerKey }
+                    val upper = content.pages.indexOfFirst { it.readerKey == upperPage.readerKey }
+                    if (lower < 0 || upper < lower) {
+                        Log.d(
+                            "ReaderDebug",
+                            "Ignore stale double page callback lowerKey=${lowerPage.readerKey} " +
+                                "upperKey=${upperPage.readerKey} contentPages=${content.pages.size}",
+                        )
+                        return@pagesChanged
+                    }
+                    val stateBefore = viewModel.getCurrentState()
+                    Log.d(
+                        "ReaderDebug",
+                        "doublePagesChanged lower=$lower upper=$upper stateBefore=$stateBefore " +
+                            "requested=$requestedPage contentPages=${content.pages.size} " +
+                            "lowerPage=${content.pages.getOrNull(lower)?.chapterId}:${content.pages.getOrNull(lower)?.index} " +
+                            "upperPage=${content.pages.getOrNull(upper)?.chapterId}:${content.pages.getOrNull(upper)?.index}",
+                    )
+                    viewModel.onCurrentPageChanged(lower, upper)
+                    // Keep the controller's page key aligned with the same visible-page
+                    // policy used by ReaderViewModel. Reporting only the spread's lower
+                    // page makes a rotation back to single-page mode restore stale state.
+                    val currentState = viewModel.getCurrentState()
+                    val selectedPosition = resolveVisiblePageSelection(
+                        pages = content.pages,
+                        lowerPos = lower,
+                        upperPos = upper,
+                        currentChapterId = currentState?.chapterId,
+                        boundsPageOffset = 1,
+                    )
+                    Log.d(
+                        "ReaderDebug",
+                        "doublePagesChanged selected=$selectedPosition " +
+                            "selectedPage=${content.pages.getOrNull(selectedPosition)?.chapterId}:${content.pages.getOrNull(selectedPosition)?.index}",
+                    )
+                    onReaderPositionChanged(selectedPosition, 0)
+                },
+                requestedPage = requestedPage,
+                requestedPageSmooth = requestedPageSmooth,
+                zoomCommand = zoomCommand,
+                onShowErrorDetails = onShowErrorDetails,
+                onRetryError = onRetryError,
+                resolveErrorStringId = resolveErrorStringId,
+                isAnimationEnabled = isAnimationEnabled,
+                pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
+                readerBackground = readerSettings.background,
+                readerBackgroundColor = readerBackgroundColor,
+                bookBackgroundTint = bookBackgroundTint,
+                imageColorFilter = readerImageColorFilter,
+                bitmapConfig = readerSettings.bitmapConfig,
+                isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+                pageOverlay = pageOverlay,
+                modifier = readerModifier,
+            )
+        }
     } else if (mode == ReaderMode.WEBTOON) {
         if (readerSettings.isExperimentalSceneReaderEnabled) {
             ComposeSceneWebtoonReader(
@@ -277,32 +340,73 @@ fun ComposeReaderScreenRoot(
                 modifier = readerModifier,
             )
         }
-    } else ComposePagedReader(
-        pages = content.pages,
-        initialPage = initialPosition,
-        mode = mode ?: ReaderMode.STANDARD,
-        imageLoader = imageLoader,
-        imagePipeline = imagePipeline,
-        onPageChanged = pageChanged,
-        modifier = readerModifier,
-        requestedPage = requestedPage,
-        requestedPageSmooth = requestedPageSmooth,
-        zoomCommand = zoomCommand,
-        onShowErrorDetails = onShowErrorDetails,
-        onRetryError = onRetryError,
-        resolveErrorStringId = resolveErrorStringId,
-        isAnimationEnabled = isAnimationEnabled,
-        pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
-        readerBackground = readerSettings.background,
-        readerBackgroundColor = readerBackgroundColor,
-        bookBackgroundTint = bookBackgroundTint,
-        imageColorFilter = readerImageColorFilter,
-        bitmapConfig = readerSettings.bitmapConfig,
-        isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
-        isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
-        zoomMode = readerSettings.zoomMode,
-        isCropEnabled = readerSettings.isPagesCropEnabledStandard,
-        pageOverlay = pageOverlay,
-    )
+    } else {
+        if (readerSettings.isExperimentalSceneReaderEnabled) {
+            ComposeScenePagedReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                isDoublePage = false,
+                coverPage = false,
+                readingDirection = when (mode) {
+                    ReaderMode.REVERSED -> SceneReadingDirection.RIGHT_TO_LEFT
+                    ReaderMode.VERTICAL -> SceneReadingDirection.TOP_TO_BOTTOM
+                    else -> SceneReadingDirection.LEFT_TO_RIGHT
+                },
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
+                onPagesChanged = { lowerKey, _, activeKey ->
+                    val selectedPosition = content.pages.indexOfFirst { it.readerKey == activeKey }
+                        .takeIf { it >= 0 } ?: content.pages.indexOfFirst { it.readerKey == lowerKey }
+                    if (selectedPosition >= 0 && shouldAcceptReaderPosition(selectedPosition)) {
+                        viewModel.onCurrentPageChanged(selectedPosition, selectedPosition)
+                        onReaderPositionChanged(selectedPosition, 0)
+                    }
+                },
+                requestedPage = requestedPage,
+                requestedPageSmooth = requestedPageSmooth,
+                zoomCommand = zoomCommand,
+                onShowErrorDetails = onShowErrorDetails,
+                onRetryError = onRetryError,
+                resolveErrorStringId = resolveErrorStringId,
+                isAnimationEnabled = isAnimationEnabled,
+                readerBackgroundColor = readerBackgroundColor,
+                imageColorFilter = readerImageColorFilter,
+                bitmapConfig = readerSettings.bitmapConfig,
+                isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+                pageOverlay = pageOverlay,
+                modifier = readerModifier,
+            )
+        } else {
+            ComposePagedReader(
+                pages = content.pages,
+                initialPage = initialPosition,
+                mode = mode ?: ReaderMode.STANDARD,
+                imageLoader = imageLoader,
+                imagePipeline = imagePipeline,
+                onPageChanged = pageChanged,
+                modifier = readerModifier,
+                requestedPage = requestedPage,
+                requestedPageSmooth = requestedPageSmooth,
+                zoomCommand = zoomCommand,
+                onShowErrorDetails = onShowErrorDetails,
+                onRetryError = onRetryError,
+                resolveErrorStringId = resolveErrorStringId,
+                isAnimationEnabled = isAnimationEnabled,
+                pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
+                readerBackground = readerSettings.background,
+                readerBackgroundColor = readerBackgroundColor,
+                bookBackgroundTint = bookBackgroundTint,
+                imageColorFilter = readerImageColorFilter,
+                bitmapConfig = readerSettings.bitmapConfig,
+                isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+                isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+                zoomMode = readerSettings.zoomMode,
+                isCropEnabled = readerSettings.isPagesCropEnabledStandard,
+                pageOverlay = pageOverlay,
+            )
+        }
+    }
     }
 }
