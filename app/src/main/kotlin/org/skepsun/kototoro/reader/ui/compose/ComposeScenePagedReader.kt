@@ -93,6 +93,7 @@ import org.skepsun.kototoro.reader.image.ReaderImageAsset
 import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridge
+import org.skepsun.kototoro.reader.render.compose.PageSeamPolicy
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.render.compose.animatedDrawBridge
 import org.skepsun.kototoro.reader.render.compose.drawFrameNodes
@@ -248,7 +249,8 @@ fun ComposeScenePagedReader(
     val scrollState = rememberComposeScenePrimaryScrollState(
         initialOffset = 0f,
         maxOffset = Float.MAX_VALUE,
-        key = scene,
+        // Scale modes rebuild placements, but do not change slot navigation coordinates.
+        key = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection) { Any() },
     )
     var hasAppliedInitialPosition by remember { mutableStateOf(false) }
     var sceneRevision by remember { mutableLongStateOf(0L) }
@@ -371,7 +373,28 @@ fun ComposeScenePagedReader(
         return initX to initY
     }
 
-    val slotZoomMap = remember { HashMap<PageId, PagedSlotZoom>() }
+    val slotZoomMap = remember(zoomMode) { HashMap<PageId, PagedSlotZoom>() }
+
+    var appliedZoomMode by remember { mutableStateOf(zoomMode) }
+    LaunchedEffect(zoomMode, scene) {
+        if (scene == null || appliedZoomMode == zoomMode) return@LaunchedEffect
+        snapAnimationJob?.cancel()
+        zoomAnimationJob?.cancel()
+        canvasFlingJob?.cancel()
+        val currentSlot = (scrollState.offset / primaryExtent.coerceAtLeast(1f)).roundToInt()
+            .coerceIn(0, (scene.slotCount - 1).coerceAtLeast(0))
+        canvasScale = 1f
+        val (initialX, initialY) = resolveSlotInitialOffsets(currentSlot)
+        canvasOffsetX = initialX
+        canvasOffsetY = initialY
+        zoomedSlotIndex = currentSlot
+        scrollState.snapTo(currentSlot * primaryExtent)
+        scrollState.isDragging = false
+        scrollState.isFlinging = false
+        pullStartDistancePx = 0f
+        pullEndDistancePx = 0f
+        appliedZoomMode = zoomMode
+    }
 
     fun saveSlotZoom(slotIndex: Int, scale: Float, offsetX: Float, offsetY: Float) {
         val currentScene = scene ?: return
@@ -383,6 +406,17 @@ fun ComposeScenePagedReader(
         val currentScene = scene ?: return null
         val key = currentScene.allSlots.getOrNull(slotIndex)?.progressAnchorPageId ?: return null
         return slotZoomMap[key]
+    }
+
+    fun resolveSlotTransform(slotIndex: Int): PagedSlotZoom {
+        if (slotIndex == zoomedSlotIndex) return PagedSlotZoom(canvasScale, canvasOffsetX, canvasOffsetY)
+        val saved = getSlotZoom(slotIndex)
+        if (saved != null) {
+            val (panX, panY) = getSlotPanRanges(slotIndex, saved.scale)
+            return saved.copy(offsetX = saved.offsetX.coerceIn(panX), offsetY = saved.offsetY.coerceIn(panY))
+        }
+        val (initialX, initialY) = resolveSlotInitialOffsets(slotIndex)
+        return PagedSlotZoom(1f, initialX, initialY)
     }
 
     fun updateResourceWindow(
@@ -440,7 +474,15 @@ fun ComposeScenePagedReader(
         adapter.updateResourceWindow(ReaderResourceWindow(requests))
 
         // 4. For visible Tiled pages, request intersecting lattice tiles
-        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
+        val contentNodes = currentScene.allSlots
+            .filter { it.bounds.intersects(vp.bounds) }
+            .flatMap { slot ->
+                val transform = resolveSlotTransform(slot.slotIndex)
+                slot.visibleContentNodes(transform.scale, transform.offsetX, transform.offsetY)
+            }
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(
+            frame.copy(visibleNodes = contentNodes), retainedAssets, adapter,
+        )
     }
 
     LaunchedEffect(scrollState.offset, scene, retainedAssets) {
@@ -478,24 +520,24 @@ fun ComposeScenePagedReader(
     }
 
     // 150ms Zoom settle signal to trigger multi-LOD progressive replacement
-    LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset, scene) {
+    LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset, scene, sceneRevision) {
         if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
             delay(150)
-            val isHorizontal = readingDirection.isHorizontal
-            val visibleBounds = SceneImagePresentationCoordinator.computeVisibleBounds(
-                viewportWidth = viewportWidthPx,
-                viewportHeight = viewportHeightPx,
-                scrollOffset = scrollState.offset,
-                isHorizontal = isHorizontal,
-                canvasScale = canvasScale,
-                canvasOffsetX = canvasOffsetX,
-                canvasOffsetY = canvasOffsetY,
-                totalSceneExtent = scene.totalSceneExtent,
-                totalCrossExtent = if (isHorizontal) viewportHeightPx else viewportWidthPx,
-            )
+            val slot = scene.allSlots.getOrNull(zoomedSlotIndex) ?: return@LaunchedEffect
+            val visibleBounds = slot.contentViewport(canvasScale, canvasOffsetX, canvasOffsetY)
+            // Decode LOD is relative to fit-to-screen, whereas canvasScale is relative
+            // to the selected layout. Native-size and fill modes can already exceed fit.
+            val layoutScale = slot.placements.maxOfOrNull {
+                maxOf(it.boundsInSlot.width / viewportWidthPx, it.boundsInSlot.height / viewportHeightPx)
+            } ?: 1f
             adapter.onCameraSettled(
-                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale, visibleBounds),
+                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale * layoutScale, visibleBounds),
                 scene = scene,
+            )
+            val frame = scene.resolve(ReaderViewport(slot.bounds))
+            SceneImagePresentationCoordinator.coordinateVisibleTiles(
+                frame.copy(visibleNodes = slot.visibleContentNodes(canvasScale, canvasOffsetX, canvasOffsetY)),
+                retainedAssets, adapter,
             )
         }
     }
@@ -522,6 +564,7 @@ fun ComposeScenePagedReader(
                         newHint = PageGeometryHint.Exact(exactSize.width, exactSize.height),
                         currentViewport = vp,
                     )
+                    sceneRevision = scene.revision
                     if (viewportWidthPx > 0f && viewportHeightPx > 0f) {
                         val pe = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
                         scrollState.maxOffset = ((scene.slotCount - 1) * pe).coerceAtLeast(0f)
@@ -864,6 +907,14 @@ fun ComposeScenePagedReader(
                             val (panX, panY) = getSlotPanRanges(initialSlot, canvasScale)
                             val primaryDelta = if (isVertical) pan.y else pan.x
                             val crossDelta = if (isVertical) pan.x else pan.y
+                            // Content that overflows the viewport in the reading axis — whether from the
+                            // layout fit (FIT_HEIGHT widens a page past the screen, native-size mode
+                            // exceeds it) or from user zoom — pans within the page first. The drag only
+                            // hands off to page navigation once it reaches the content edge:
+                            // dragState.dragBy clamps the in-bounds portion into the pan and converts
+                            // the leftover past the pan range into a page turn. Content that fits the
+                            // viewport resolves a degenerate pan range, so the whole drag feeds
+                            // navigation, preserving plain swipe-to-flip for fit pages.
                             val movement = dragState.dragBy(
                                 delta = primaryDelta,
                                 contentOffset = if (isVertical) canvasOffsetY else canvasOffsetX,
@@ -1009,6 +1060,8 @@ fun ComposeScenePagedReader(
                     alpha = if (hasAppliedInitialPosition) 1f else 0f
                 }
                 .drawWithContent {
+                    // Header/decode geometry can change after the asset snapshot was published.
+                    sceneRevision
                     if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
                         val currentOffset = scrollState.offset
                         val vp = if (readingDirection.isHorizontal) {
@@ -1041,19 +1094,7 @@ fun ComposeScenePagedReader(
                                         0f to (slotIndex * viewportHeightPx - currentOffset)
                                     }
                                 }
-                                val (slotScale, slotPanX, slotPanY) = if (slotIndex == zoomedSlotIndex) {
-                                    Triple(canvasScale, canvasOffsetX, canvasOffsetY)
-                                } else {
-                                    val saved = getSlotZoom(slotIndex)
-                                    if (saved != null) {
-                                        val (panX, panY) = getSlotPanRanges(slotIndex, saved.scale)
-                                        Triple(saved.scale, saved.offsetX.coerceIn(panX), saved.offsetY.coerceIn(panY))
-                                    } else {
-                                        val (initX, initY) = resolveSlotInitialOffsets(slotIndex)
-                                        Triple(1f, initX, initY)
-                                    }
-                                }
-                                val isZoomedSlot = slotScale > 1f
+                                val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
                                 val slotCenter = Offset(
                                     slotScreenX + viewportWidthPx / 2f,
                                     slotScreenY + viewportHeightPx / 2f,
@@ -1073,16 +1114,15 @@ fun ComposeScenePagedReader(
                                         size = Size(viewportWidthPx, viewportHeightPx),
                                     )
 
-                                    val slotNodes = frame.visibleNodes.filter { scene.slotIndexOf(it.pageId) == slotIndex }
+                                    val slotNodes = slot.visibleContentNodes(slotScale, slotPanX, slotPanY)
                                     if (slotNodes.isNotEmpty()) {
                                         withTransform({
-                                            if (isZoomedSlot) {
-                                                translate(slotPanX, slotPanY)
-                                                scale(slotScale, slotScale, pivot = slotCenter)
-                                            }
+                                            translate(slotPanX, slotPanY)
+                                            scale(slotScale, slotScale, pivot = slotCenter)
                                         }) {
                                             drawFrameNodes(
                                                 frame = frame.copy(visibleNodes = slotNodes),
+                                                seamPolicy = PageSeamPolicy.Zero,
                                                 viewportScrollX = if (readingDirection == SceneReadingDirection.LEFT_TO_RIGHT) currentOffset else 0f,
                                                 viewportScrollY = if (readingDirection.isVertical) currentOffset else 0f,
                                                 placeholderColor = Color.DarkGray,
@@ -1111,6 +1151,7 @@ fun ComposeScenePagedReader(
 
         val loadingPlacements = remember(
             scene,
+            sceneRevision,
             scrollState.offset,
             viewportWidthPx,
             viewportHeightPx,
@@ -1139,18 +1180,7 @@ fun ComposeScenePagedReader(
                             SceneReadingDirection.RIGHT_TO_LEFT -> (currentOffset - slotIndex * viewportWidthPx) to 0f
                             SceneReadingDirection.TOP_TO_BOTTOM -> 0f to (slotIndex * viewportHeightPx - currentOffset)
                         }
-                        val (slotScale, slotPanX, slotPanY) = if (slotIndex == zoomedSlotIndex) {
-                            Triple(canvasScale, canvasOffsetX, canvasOffsetY)
-                        } else {
-                            val saved = getSlotZoom(slotIndex)
-                            if (saved != null) {
-                                val (panX, panY) = getSlotPanRanges(slotIndex, saved.scale)
-                                Triple(saved.scale, saved.offsetX.coerceIn(panX), saved.offsetY.coerceIn(panY))
-                            } else {
-                                val (initX, initY) = resolveSlotInitialOffsets(slotIndex)
-                                Triple(1f, initX, initY)
-                            }
-                        }
+                        val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
                         val slotCenter = Offset(
                             slotScreenX + viewportWidthPx / 2f,
                             slotScreenY + viewportHeightPx / 2f,
@@ -1159,16 +1189,8 @@ fun ComposeScenePagedReader(
                             if (retainedAssets[placement.pageId] == null) {
                                 val unscaledCenterX = slotScreenX + placement.boundsInSlot.left + placement.boundsInSlot.width / 2f
                                 val unscaledCenterY = slotScreenY + placement.boundsInSlot.top + placement.boundsInSlot.height / 2f
-                                val pageCenterX = if (slotScale > 1f) {
-                                    slotCenter.x + (unscaledCenterX - slotCenter.x) * slotScale + slotPanX
-                                } else {
-                                    unscaledCenterX
-                                }
-                                val pageCenterY = if (slotScale > 1f) {
-                                    slotCenter.y + (unscaledCenterY - slotCenter.y) * slotScale + slotPanY
-                                } else {
-                                    unscaledCenterY
-                                }
+                                val pageCenterX = slotCenter.x + (unscaledCenterX - slotCenter.x) * slotScale + slotPanX
+                                val pageCenterY = slotCenter.y + (unscaledCenterY - slotCenter.y) * slotScale + slotPanY
                                 if (pageCenterX in -viewportWidthPx..(viewportWidthPx * 2f) &&
                                     pageCenterY in -viewportHeightPx..(viewportHeightPx * 2f)
                                 ) {
