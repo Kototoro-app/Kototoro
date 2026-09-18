@@ -178,6 +178,16 @@ class ReaderProductionBenchmark {
         zoomMode = ZOOM_MODE_FIT_HEIGHT,
     )
 
+    /// Scenario 3b: oversized page opened at a zoomed camera, which must decode its own LOD.
+    @Test
+    fun pagedLargeZoomedSceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+        zoomMode = ZOOM_MODE_FIT_HEIGHT,
+        defaultScale = 2.5f,
+    )
+
     private fun measurePaged(
         backend: String,
         compilationMode: CompilationMode,
@@ -185,6 +195,7 @@ class ReaderProductionBenchmark {
         isDoublePage: Boolean = false,
         zoomMode: String = ZOOM_MODE_FIT_CENTER,
         animation: String = ANIMATION_DEFAULT,
+        defaultScale: Float = 1f,
         iterations: Int = 5,
     ) {
         benchmarkRule.measureRepeated(
@@ -212,6 +223,7 @@ class ReaderProductionBenchmark {
                     metricNameSuffix = "Last",
                 ),
                 ActivePresentationAssetsMetric(),
+                PresentationWidthMetric(),
             ),
             compilationMode = compilationMode,
             startupMode = null,
@@ -223,6 +235,7 @@ class ReaderProductionBenchmark {
                     isDoublePage = isDoublePage,
                     zoomMode = zoomMode,
                     animation = animation,
+                    defaultScale = defaultScale,
                 )
             },
         ) {
@@ -335,6 +348,7 @@ class ReaderProductionBenchmark {
         isDoublePage: Boolean = false,
         zoomMode: String = ZOOM_MODE_FIT_CENTER,
         animation: String = ANIMATION_DEFAULT,
+        defaultScale: Float = 1f,
     ) {
         killProcess()
         pressHome()
@@ -361,6 +375,7 @@ class ReaderProductionBenchmark {
                 isDoublePage = isDoublePage,
                 zoomMode = zoomMode,
                 animation = animation,
+                defaultScale = defaultScale,
             )
             // The oversized fixtures are rendered on first use, which can exceed the original
             // 30s window; readiness still gates the measurement either way.
@@ -410,6 +425,7 @@ class ReaderProductionBenchmark {
         isDoublePage: Boolean = false,
         zoomMode: String = ZOOM_MODE_FIT_CENTER,
         animation: String = ANIMATION_DEFAULT,
+        defaultScale: Float = 1f,
     ) {
         val intent = Intent().apply {
             component = ComponentName(TARGET_PACKAGE, TARGET_ACTIVITY)
@@ -418,6 +434,7 @@ class ReaderProductionBenchmark {
             putExtra(EXTRA_ANIMATION, animation)
             putExtra(EXTRA_DOUBLE_PAGE, isDoublePage)
             putExtra(EXTRA_ZOOM_MODE, zoomMode)
+            putExtra(EXTRA_DEFAULT_SCALE, defaultScale)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         startActivityAndWait(intent)
@@ -433,6 +450,7 @@ class ReaderProductionBenchmark {
         const val EXTRA_ANIMATION = "animation"
         const val EXTRA_DOUBLE_PAGE = "double_page"
         const val EXTRA_ZOOM_MODE = "zoom_mode"
+        const val EXTRA_DEFAULT_SCALE = "default_scale"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
         const val BACKEND_LEGACY_PAGED = "legacy_paged"

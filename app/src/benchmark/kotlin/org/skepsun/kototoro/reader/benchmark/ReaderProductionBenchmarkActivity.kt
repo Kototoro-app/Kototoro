@@ -74,10 +74,11 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         val animation = resolveBenchmarkAnimation(intent.getStringExtra(EXTRA_ANIMATION))
         val isDoublePage = intent.getBooleanExtra(EXTRA_DOUBLE_PAGE, false)
         val zoomMode = resolveBenchmarkZoomMode(intent.getStringExtra(EXTRA_ZOOM_MODE))
+        val defaultScale = intent.getFloatExtra(EXTRA_DEFAULT_SCALE, 1f)
         android.util.Log.e(
             "BenchmarkActivity",
             "onCreate starting for backend=$backend, fixtureMode=$fixtureMode, animation=$animation, " +
-                "doublePage=$isDoublePage, zoomMode=$zoomMode",
+                "doublePage=$isDoublePage, zoomMode=$zoomMode, defaultScale=$defaultScale",
         )
 
         // 1. Prepare deterministic fixture
@@ -121,6 +122,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                         animation = animation,
                         isDoublePage = isDoublePage,
                         zoomMode = zoomMode,
+                        defaultScale = defaultScale,
                     )
                 }
             }
@@ -185,6 +187,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         animation: ReaderAnimation,
         isDoublePage: Boolean,
         zoomMode: ZoomMode,
+        defaultScale: Float,
     ) {
         val onVisiblePagesChanged: (Long, Long, Long) -> Unit = androidx.compose.runtime.remember(pages) {
             { lowerKey, upperKey, _ ->
@@ -244,6 +247,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 isAnimationEnabled = animation != ReaderAnimation.NONE,
                 pageAnimation = animation,
                 zoomMode = zoomMode,
+                defaultScale = defaultScale,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(BENCHMARK_SURFACE_TAG),
@@ -308,6 +312,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         const val EXTRA_ANIMATION = "animation"
         const val EXTRA_DOUBLE_PAGE = "double_page"
         const val EXTRA_ZOOM_MODE = "zoom_mode"
+        const val EXTRA_DEFAULT_SCALE = "default_scale"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
         const val BACKEND_LEGACY_PAGED = "legacy_paged"

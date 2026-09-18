@@ -171,6 +171,34 @@ CS-5   experiment flag 删除 / 隐藏
         在 6000×9000 这个量级上没有调好（overview LOD 与相邻页预取同时驻留），需要单独定位。
   - 因此**当前证据是"有条件 Go"，不是无条件 Go**：需要在"接受两个回归并在 ADR 记录"
     与"先修其中至少一个（建议先修 (b)，因为它最可能是预算参数问题）"之间做决策。
+- **回归 (b) 已定位并修复（2026-09-19）**：根因不在瓦片预算，而在**适配器丢弃了 planner 的 LOD** ——
+  `KototoroImagePipelineAdapter` 的非瓦片路径构造 Coil 请求时没有设置尺寸
+  （`ImageRequest.Builder(context).data(uri)`），于是 6000×9000 被按**原始分辨率解码 = 216MB**，
+  而 planner 明明算出了 `SampledSingle(≈1500×2250, 13.5MB)`。修复：把 plan 的目标尺寸传给请求
+  （`DecodePlan?.requestedDecodeSize()`，仅 `SampledSingle` 生效）。
+  真机前后对比（同场景、同夹具、逐次清理）：
+
+  | 场景 2（6000×9000，Scene） | 修复前 | 修复后 | Legacy 对照 |
+  | :--- | ---: | ---: | ---: |
+  | CPU P99 (ms) | 8.934 | **7.597** | 5.351 |
+  | Overrun P99 (ms) | −2.995 | **−4.890** | −7.039 |
+  | RssAnon Max (KB) | 523,324 | **247,228（−52.8%）** | 449,812 |
+  | GPU Max (KB) | 172,292 | **108,752（−36.9%）** | 122,360 |
+
+  场景 3 同样改善（Max 434,056 → 246,372；GPU 172,136 → 108,764），场景 1（小页，不走该路径）**完全不变**
+  （175,184 → 175,416 / 86,776 → 86,764）。**回归 (b) 消除，且超大页场景现在在内存与 GPU 上都优于 legacy。**
+  新增 `Reader.PresentationWidthPx` 指标（`PresentationWidthMetric`）用于验证解码宽度：
+  1× 实测 **1500px**，与 planner 的预测一致。
+- **修复时发现的第二个缺口（已修）**：`onCameraSettled` 只处理 Tiled 资产，且 planner 调用未传
+  `cameraScale`，因此限制解码尺寸后，用户**捏合放大**时采样页不会被重解码（会变糊）。
+  已补：`cameraScale` 进入 plan，并新增 `shouldReacquireForZoom`（缺额超过 25% 才重解码，避免抖动）。
+- **新旅程暴露的既有严重问题（未修，列为下一优先项）**：`pagedLargeZoomedSceneFull`
+  （6000×9000 + `default_scale=2.5`）实测 **RssAnon Max 855,884 KB、GPU 306,512 KB、CPU P99 458ms**，
+  而 `PresentationWidthPx` 为 0 —— 即在 2.5× 下 planner 直接给出 **Tiled**（`sampleSize=1`、1024² 瓦片），
+  瓦片机制在这个量级的放大下失控。**该路径与本轮修复无关**（Tiled 计划时 `requestedDecodeSize()` 返回 null，
+  请求与修复前逐字一致），属于既有问题；legacy 宿主靠 Telephoto 的 SubSampling 不会这样。
+  这是"场景阅读器真正成熟"的当前最大阻碍，优先级高于升格：需要在 4K 级放大下重新审视
+  瓦片尺寸/LOD 策略（例如放大时用采样瓦片而不是 level-0 瓦片）与在飞解码的取消/回收。
 
 ### CS-1B 分页场景转正（翻转默认开关）
 

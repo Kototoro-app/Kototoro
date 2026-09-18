@@ -117,6 +117,10 @@ class KototoroImagePipelineAdapter(
 
     @Volatile
     private var desiredReadiness: Map<PageId, PrefetchReadiness>? = null
+
+    /** Camera scale of the last settle, fed into the decode plan so zoom resolves its own LOD. */
+    @Volatile
+    private var cameraScale: Float = 1f
     private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
     override val assets = mutableAssets.asStateFlow()
     private val mutableLoadStates = MutableStateFlow<Map<PageId, ReaderImageLoadState>>(emptyMap())
@@ -280,6 +284,10 @@ class KototoroImagePipelineAdapter(
 
                     // Attempt region decoding and planning for non-animated images
                     val factory = actualRegionDecoderFactory
+                    // The plan's LOD has to survive into the request: without a size constraint Coil
+                    // decodes the original resolution, which turns a 6000x9000 page into a ~216MB
+                    // bitmap even though the planner resolved a ~13.5MB sampled decode for it.
+                    var plannedDecodeSize: IntSize? = null
                     val tiledAsset: ReaderImageAsset.Tiled? = if (factory != null && !isAnimatedHint) {
                         runCatching {
                             val cropBounds = if (isCropEnabled) composePipeline.getTrimmedBounds(uri) else null
@@ -304,6 +312,7 @@ class KototoroImagePipelineAdapter(
                                     geometry = geometry,
                                     viewportWidth = vpSize.width.coerceAtLeast(100),
                                     viewportHeight = vpSize.height.coerceAtLeast(100),
+                                    cameraScale = cameraScale,
                                     format = if (bitmapConfig == Bitmap.Config.RGB_565) RasterFormat.RGB_565 else RasterFormat.ARGB_8888,
                                 )
                                 if (plan is DecodePlan.Tiled) {
@@ -333,6 +342,7 @@ class KototoroImagePipelineAdapter(
                                     }
                                     asset
                                 } else {
+                                    plannedDecodeSize = plan.requestedDecodeSize()
                                     null
                                 }
                             } else {
@@ -349,6 +359,7 @@ class KototoroImagePipelineAdapter(
                     val request = ImageRequest.Builder(context)
                         .data(uri)
                         .apply {
+                            plannedDecodeSize?.let { size(it.width, it.height) }
                             if (bitmapConfig == Bitmap.Config.RGB_565) {
                                 allowHardware(false)
                             }
@@ -572,6 +583,9 @@ class KototoroImagePipelineAdapter(
     fun onCameraSettled(snapshot: ReaderCameraSnapshot, scene: ReaderScene? = null) {
         val scale = snapshot.scale
         val visibleBounds = snapshot.visibleBoundsInScene
+        // The camera feeds the next decode plan, so a zoomed page asks for its own LOD instead of
+        // reusing the fit-to-screen target resolved when the page was first acquired.
+        cameraScale = scale
 
         if (scale <= 1.0f) {
             // Zoom-out: drop target layers and release over-sampled tiles
@@ -666,6 +680,20 @@ class KototoroImagePipelineAdapter(
                 }
             }
         }
+
+        // Sampled pages are not tiles: they were decoded for the fit scale, so a zoomed reader
+        // would be shown an upscaled bitmap unless the page is decoded again for this camera.
+        val viewportWidth = viewportSizeProvider().width
+        for ((pageId, asset) in cachedAssets) {
+            val decodedWidth = when (asset) {
+                is ReaderImageAsset.ComposeImage -> asset.imageBitmap.width
+                is ReaderImageAsset.AndroidBitmap -> asset.bitmap.width
+                else -> continue
+            }
+            if (shouldReacquireForZoom(scale, decodedWidth, viewportWidth)) {
+                scope.launch(ioDispatcher) { acquireAsset(pageId, force = true) }
+            }
+        }
     }
 }
 
@@ -673,4 +701,37 @@ internal fun ReaderPageSplit.toTileSplit(): TileSplit = when (this) {
     ReaderPageSplit.NONE -> TileSplit.NONE
     ReaderPageSplit.LEFT -> TileSplit.LEFT
     ReaderPageSplit.RIGHT -> TileSplit.RIGHT
+}
+
+/**
+ * Decode size the image request must carry for [this] plan, or `null` to leave it unconstrained.
+ *
+ * A sampled plan resolved its target from the viewport and the source size, and dropping that
+ * decision makes the loader decode the original resolution instead - a 6000x9000 page becomes a
+ * ~216MB bitmap where the plan asked for ~13.5MB. Tiled plans draw from the tile store and single
+ * plans are already exactly one bitmap at the source size, so neither needs a constraint.
+ */
+internal fun DecodePlan?.requestedDecodeSize(): IntSize? = when (this) {
+    is DecodePlan.SampledSingle -> targetSize
+    else -> null
+}
+
+/** Shortfall below which a sampled page is left as it is rather than decoded again. */
+private const val ZOOM_REACQUIRE_THRESHOLD = 1.25f
+
+/**
+ * Whether a sampled page must be decoded again for the current camera.
+ *
+ * A page decoded to [decodedWidthPx] and shown across a [viewportWidthPx] viewport is only
+ * upscaled once the zoomed demand passes the decoded width by [threshold]; anything smaller is
+ * within the resampling headroom and not worth the memory churn.
+ */
+internal fun shouldReacquireForZoom(
+    scale: Float,
+    decodedWidthPx: Int,
+    viewportWidthPx: Int,
+    threshold: Float = ZOOM_REACQUIRE_THRESHOLD,
+): Boolean {
+    if (scale <= 1f || decodedWidthPx <= 0 || viewportWidthPx <= 0) return false
+    return decodedWidthPx * threshold < viewportWidthPx * scale
 }
