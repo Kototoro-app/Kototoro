@@ -241,6 +241,7 @@
     <string name="standard">標準</string>
     <string name="webtoon">Webtoon</string>
     <string name="continuous_horizontal">橫向條漫（連續）</string>
+    <string name="continuous_horizontal_reversed">從右向左閱讀</string>
     <string name="search_on_s">在 %s 上搜尋</string>
     <string name="delete_manga">刪除漫畫</string>
     <string name="switch_pages">切換頁面</string>

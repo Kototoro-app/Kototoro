@@ -24,6 +24,7 @@ import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderRestoredState
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.ui.config.resolveSceneReadingDirection
 
 /**
  * Reader Compose entry point. ReaderViewModel remains the only owner of chapter,
@@ -358,7 +359,10 @@ fun ComposeReaderScreenRoot(
             initialScroll = restoredState?.scroll ?: 0,
             imageLoader = imageLoader,
             imagePipeline = imagePipeline,
-            readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+            readingDirection = resolveSceneReadingDirection(
+                mode = ReaderMode.CONTINUOUS_HORIZONTAL,
+                isContinuousHorizontalReversed = readerSettings.isContinuousHorizontalReversed,
+            ),
             onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
                 val selectedPosition = content.pages.indexOfFirst { it.readerKey == activePageKey }
                 if (selectedPosition >= 0) {
@@ -403,11 +407,10 @@ fun ComposeReaderScreenRoot(
                 initialPage = initialPosition,
                 isDoublePage = false,
                 coverPage = false,
-                readingDirection = when (mode) {
-                    ReaderMode.REVERSED -> SceneReadingDirection.RIGHT_TO_LEFT
-                    ReaderMode.VERTICAL -> SceneReadingDirection.TOP_TO_BOTTOM
-                    else -> SceneReadingDirection.LEFT_TO_RIGHT
-                },
+                readingDirection = resolveSceneReadingDirection(
+                    mode = mode ?: ReaderMode.STANDARD,
+                    isContinuousHorizontalReversed = readerSettings.isContinuousHorizontalReversed,
+                ),
                 imageLoader = imageLoader,
                 imagePipeline = imagePipeline,
                 onPagesChanged = { lowerKey, _, activeKey ->

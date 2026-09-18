@@ -179,6 +179,7 @@
     <string name="standard">默认</string>
     <string name="webtoon">条漫</string>
     <string name="continuous_horizontal">横向条漫（连续）</string>
+    <string name="continuous_horizontal_reversed">从右向左阅读</string>
     <string name="read_mode">阅读模式</string>
     <string name="ai">AI</string>
     <string name="reader_translation_long_press_hint">长按翻译按钮可快捷切换语言</string>

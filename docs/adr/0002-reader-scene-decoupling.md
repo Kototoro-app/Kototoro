@@ -25,6 +25,14 @@
     - Phase 3D (生产路由接线、交互测试套件验证与 ADR 归档)：已完成（Completed）
     - Phase 3E (图像呈现 Parity 补齐与生产门控解耦：SceneImagePresentationCoordinator、可见切片请求、多 LOD 缩放、动图生命周期与独立安全门控)：已完成（Completed）
   - Scene Reader 功能集成：已全量覆盖 Webtoon 纵向瀑布流、横向连续流（LTR/RTL）、单页离散分页（LTR/RTL/Vertical）与双页并页模式，纯 Draw Phase 渲染、可见切片多 LOD 驱动与零跳动锚定全部落地
+  - 翻页动画样式（ReaderAnimation）：已完成 SLIDE / COVER / CURL 三样式在场景分页宿主的 Draw Phase 实现，并以 `resolveComposeReaderPageTransform` 为 oracle 做同输入同输出 parity（见 `docs/architecture/reader-scene-closure-plan-2026-09.md`）
+- **方向与门控的边界声明（ReaderMode 属 legacy 投影）**：`ReaderMode` 同时编码"布局模式"与"阅读方向"
+  （`STANDARD` / `REVERSED` 同属分页布局），这是 legacy 偏好模型的遗留耦合。**Scene core 不得继承该耦合**：
+  `ReaderCore` 只接收 `SceneReadingDirection` 参数，模式到方向的折算集中在配置层
+  （`reader/ui/config/SceneReadingDirectionResolver.kt`）。因此连续横向的 RTL 不是新增一个 `ReaderMode` 枚举值，
+  而是独立偏好 `isContinuousHorizontalReversed`（`AppSettings.KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED`），
+  并在阅读选项面板中仅当该模式被选中时显示。若将来整理 settings schema 为 `LayoutMode × ReadingDirection`，
+  迁移点只有这一个解析函数。
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 

@@ -162,6 +162,16 @@ CS-5   experiment flag 删除 / 隐藏
 - **DoD**：短期只补 Continuous Horizontal RTL（选项面板 + 组合语义 + 单测）；附带给该模式补上与其他场景一致的
   门控，或在 ADR 明确记录为何不需要。
 - **规模**：S（RTL 本身）+ S（ADR 记录）
+- **实施状态（2026-09-19）**：
+  - 方式：**不新增 `ReaderMode` 枚举值**，而是独立偏好 `isContinuousHorizontalReversed`
+    （`AppSettings.KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED`），把"布局 × 方向"的折算收敛到
+    `reader/ui/config/SceneReadingDirectionResolver.kt` 一个纯函数；分页分支原先内联的 `when (mode)` 也改为走同一函数。
+  - 界面：阅读选项面板在 `CONTINUOUS_HORIZONTAL` 被选中时显示"从右向左阅读"开关（4 份语言字符串）。
+  - 测试：`SceneReadingDirectionResolverTest`（4 例，覆盖全部模式的映射矩阵与 totality）、
+    `AppSettingsReadingDirectionTest`（3 例，默认值 / 显式值 / 写入往返）。
+  - ADR 已记录 `ReaderMode` 属 legacy 投影、Scene core 不得复制该耦合。
+  - **门控结论**：不给该模式新增实验开关 —— 该模式本身即新入口且无 legacy 回退，其渲染宿主与其他场景同源，
+    单独再加一层门控只会制造不一致；此结论已写入 ADR。
 
 ### CS-4 legacy 宿主与对照组件清账
 

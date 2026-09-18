@@ -33,6 +33,7 @@ data class ReaderSettings(
     val isReaderPreloadReductionEnabled: Boolean,
     val isExperimentalSceneReaderEnabled: Boolean = true,
     val isExperimentalPagedSceneReaderEnabled: Boolean = false,
+    val isContinuousHorizontalReversed: Boolean = false,
     val bitmapConfig: Bitmap.Config,
     val isPagesNumbersEnabled: Boolean,
     val isPagesCropEnabledStandard: Boolean,
@@ -89,6 +90,7 @@ data class ReaderSettings(
         isReaderPreloadReductionEnabled = settings.isReaderPreloadReductionEnabled,
         isExperimentalSceneReaderEnabled = settings.isExperimentalSceneReaderEnabled,
         isExperimentalPagedSceneReaderEnabled = settings.isExperimentalPagedSceneReaderEnabled,
+        isContinuousHorizontalReversed = settings.isContinuousHorizontalReversed,
         bitmapConfig = if (settings.is32BitColorsEnabled) {
             Bitmap.Config.ARGB_8888
         } else {

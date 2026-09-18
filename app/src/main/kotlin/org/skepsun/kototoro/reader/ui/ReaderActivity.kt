@@ -382,6 +382,10 @@ class ReaderActivity :
                         settings.readerAnimation = animation
                         composeReaderController.updateOptions { copy(animation = animation) }
                     },
+                    onContinuousHorizontalReversedChanged = { reversed ->
+                        settings.isContinuousHorizontalReversed = reversed
+                        composeReaderController.updateOptions { copy(continuousHorizontalReversed = reversed) }
+                    },
                     onZoomModeChanged = { zoomMode ->
                         settings.zoomMode = zoomMode
                         composeReaderController.updateOptions { copy(zoomMode = zoomMode) }
@@ -1145,6 +1149,7 @@ class ReaderActivity :
         composeReaderController.showOptions(
             ComposeReaderOptionsState(
                 mode = composeReaderController.readerMode,
+                continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
                 animation = settings.readerAnimation,
                 zoomMode = settings.zoomMode,
                 doublePage = settings.isReaderDoubleOnLandscape,

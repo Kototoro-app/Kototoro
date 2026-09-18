@@ -1417,6 +1417,17 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
     val isReaderModeDetectionEnabled: Boolean
         get() = prefs.getBoolean(KEY_READER_MODE_DETECT, true)
 
+    /**
+     * Reading direction of the continuous-horizontal mode.
+     *
+     * A preference of its own rather than another [ReaderMode] value: the mode describes how pages
+     * are laid out, the direction is what the scene engine consumes, and folding the two together
+     * in the mode enum is exactly the legacy coupling the reader architecture moved away from.
+     */
+    var isContinuousHorizontalReversed: Boolean
+        get() = prefs.getBoolean(KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED, false)
+        set(value) = prefs.edit { putBoolean(KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED, value) }
+
     var isHistoryGroupingEnabled: Boolean
         get() = prefs.getBoolean(KEY_HISTORY_GROUPING, true)
         set(value) = prefs.edit { putBoolean(KEY_HISTORY_GROUPING, value) }
@@ -2994,6 +3005,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_NOVEL_READER_CONTROLS = "novel_reader_controls"
         const val KEY_READER_MODE = "reader_mode"
         const val KEY_READER_MODE_DETECT = "reader_mode_detect"
+        const val KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED = "reader_continuous_horizontal_reversed"
         const val KEY_READER_CROP = "reader_crop"
         const val EINK_REFRESH_DURATION_DEFAULT = 300
         const val EINK_REFRESH_DURATION_MIN = 100

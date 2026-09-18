@@ -2854,6 +2854,7 @@ SHA-256 指纹:
     <string name="webdav_restore_success_legacy_jar_hint">已从 WebDAV 恢复数据。检测到旧版备份，已补充兼容的 JAR 仓库。</string>
     <string name="webtoon">条漫</string>
     <string name="continuous_horizontal">横向条漫（连续）</string>
+    <string name="continuous_horizontal_reversed">从右向左阅读</string>
     <string name="webtoon_gaps">条漫分割</string>
     <string name="webtoon_gaps_summary">条漫模式下在页与页之间添加添加间距</string>
     <string name="webtoon_zoom">条漫缩放</string>

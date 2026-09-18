@@ -80,6 +80,7 @@ import org.skepsun.kototoro.reader.ui.compose.design.ReaderSegmentedChoice
 internal data class ComposeReaderOptionsState(
     val visible: Boolean = false,
     val mode: ReaderMode = ReaderMode.STANDARD,
+    val continuousHorizontalReversed: Boolean = false,
     val animation: ReaderAnimation = ReaderAnimation.DEFAULT,
     val zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
     val doublePage: Boolean = false,
@@ -110,6 +111,7 @@ internal data class ComposeReaderOptionsState(
 internal data class ComposeReaderOptionsCallbacks(
     val onDismiss: () -> Unit = {},
     val onModeChanged: (ReaderMode) -> Unit = {},
+    val onContinuousHorizontalReversedChanged: (Boolean) -> Unit = {},
     val onAnimationChanged: (ReaderAnimation) -> Unit = {},
     val onZoomModeChanged: (ZoomMode) -> Unit = {},
     val onDoublePageChanged: (Boolean) -> Unit = {},
@@ -285,6 +287,19 @@ private fun ReaderReadingOptionsPage(
                 stackedTitle = true,
                 verticalOptions = true,
             )
+        }
+        if (state.mode == ReaderMode.CONTINUOUS_HORIZONTAL) {
+            // Direction is a preference of its own here rather than another mode entry: the mode
+            // says how pages are laid out, this says which way they are read.
+            item {
+                ReaderOptionGroup {
+                    ReaderOptionSwitchRow(
+                        label = stringResource(R.string.continuous_horizontal_reversed),
+                        checked = state.continuousHorizontalReversed,
+                        onCheckedChange = callbacks.onContinuousHorizontalReversedChanged,
+                    )
+                }
+            }
         }
         item {
             ReaderSegmentedChoice(
