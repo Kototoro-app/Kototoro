@@ -68,6 +68,7 @@ import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.mapNotNull
@@ -119,6 +120,20 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 private const val PAGED_PULL_THRESHOLD_FRACTION = 0.18f
+
+/** Quiet period after the camera stops moving before multi-LOD replacement is requested. */
+private const val CAMERA_SETTLE_DEBOUNCE_MS = 150L
+
+/**
+ * Identity of one camera resting position, used to debounce settle work without keying a
+ * [LaunchedEffect] on values that change every frame.
+ */
+private data class CameraSettleKey(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+    val scrollOffset: Float,
+)
 
 internal fun createInitialPagedPageSpecs(
     pages: List<ReaderPage>,
@@ -555,27 +570,33 @@ fun ComposeScenePagedReader(
             }
     }
 
-    // 150ms Zoom settle signal to trigger multi-LOD progressive replacement
-    LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset, scene, sceneRevision) {
-        if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
-            delay(150)
-            val slot = scene.allSlots.getOrNull(zoomedSlotIndex) ?: return@LaunchedEffect
-            val visibleBounds = slot.contentViewport(canvasScale, canvasOffsetX, canvasOffsetY)
-            // Decode LOD is relative to fit-to-screen, whereas canvasScale is relative
-            // to the selected layout. Native-size and fill modes can already exceed fit.
-            val layoutScale = slot.placements.maxOfOrNull {
-                maxOf(it.boundsInSlot.width / viewportWidthPx, it.boundsInSlot.height / viewportHeightPx)
-            } ?: 1f
-            adapter.onCameraSettled(
-                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale * layoutScale, visibleBounds),
-                scene = scene,
-            )
-            val frame = scene.resolve(ReaderViewport(slot.bounds))
-            SceneImagePresentationCoordinator.coordinateVisibleTiles(
-                frame.copy(visibleNodes = slot.visibleContentNodes(canvasScale, canvasOffsetX, canvasOffsetY)),
-                retainedAssets, adapter,
-            )
-        }
+    // 150ms Zoom settle signal to trigger multi-LOD progressive replacement.
+    // The camera is a snapshotFlow with a real debounce rather than effect keys, because keying on
+    // a scroll offset restarts (cancels and relaunches) the coroutine on every frame of a turn,
+    // which is pure overhead next to the settle work this exists to perform.
+    LaunchedEffect(scene, sceneRevision) {
+        if (scene == null) return@LaunchedEffect
+        snapshotFlow { CameraSettleKey(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset) }
+            .debounce(CAMERA_SETTLE_DEBOUNCE_MS)
+            .collect {
+                if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) return@collect
+                val slot = scene.allSlots.getOrNull(zoomedSlotIndex) ?: return@collect
+                val visibleBounds = slot.contentViewport(canvasScale, canvasOffsetX, canvasOffsetY)
+                // Decode LOD is relative to fit-to-screen, whereas canvasScale is relative
+                // to the selected layout. Native-size and fill modes can already exceed fit.
+                val layoutScale = slot.placements.maxOfOrNull {
+                    maxOf(it.boundsInSlot.width / viewportWidthPx, it.boundsInSlot.height / viewportHeightPx)
+                } ?: 1f
+                adapter.onCameraSettled(
+                    SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale * layoutScale, visibleBounds),
+                    scene = scene,
+                )
+                val frame = scene.resolve(ReaderViewport(slot.bounds))
+                SceneImagePresentationCoordinator.coordinateVisibleTiles(
+                    frame.copy(visibleNodes = slot.visibleContentNodes(canvasScale, canvasOffsetX, canvasOffsetY)),
+                    retainedAssets, adapter,
+                )
+            }
     }
 
     // Zero-CLS anchor compensation on image decode
@@ -1301,10 +1322,20 @@ fun ComposeScenePagedReader(
                 },
         )
 
+        // The overlay positions track the paging offset, which changes every frame during a turn.
+        // Reading it in composition only while some page still lacks an asset keeps the settled,
+        // fully-loaded case free of per-frame recomposition - the common case while reading.
+        val hasPendingPageAssets = remember(scene, retainedAssets) {
+            scene?.allSlots?.any { slot ->
+                slot.placements.any { retainedAssets[it.pageId] == null }
+            } == true
+        }
+        val observedPagingOffset = if (hasPendingPageAssets) scrollState.offset else 0f
+
         val loadingPlacements = remember(
             scene,
             sceneRevision,
-            scrollState.offset,
+            observedPagingOffset,
             viewportWidthPx,
             viewportHeightPx,
             retainedAssets,
@@ -1316,7 +1347,7 @@ fun ComposeScenePagedReader(
             if (viewportWidthPx <= 0f || viewportHeightPx <= 0f || scene == null) {
                 emptyList()
             } else {
-                val currentOffset = scrollState.offset
+                val currentOffset = observedPagingOffset
                 val vp = if (readingDirection.isHorizontal) {
                     ReaderViewport(FloatRect.fromLtwh(currentOffset, 0f, viewportWidthPx, viewportHeightPx))
                 } else {
