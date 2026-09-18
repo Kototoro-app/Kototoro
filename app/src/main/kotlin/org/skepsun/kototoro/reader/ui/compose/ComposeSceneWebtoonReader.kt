@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -829,16 +831,62 @@ fun ComposeSceneWebtoonReader(
                     onReleaseOverScroll = ::handleReleaseOverScroll,
                     modifier = Modifier.fillMaxSize(),
                 )
-                SceneReaderLoadStatus(
-                    pipeline = adapter,
-                    pageId = statusPageId,
-                    page = pageLookup(statusPageId),
-                    onRetryError = onRetryError,
-                    onShowErrorDetails = onShowErrorDetails,
-                    resolveErrorStringId = resolveErrorStringId,
-                    onRetry = { coroutineScope.launch { adapter.retryAsset(statusPageId) } },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                val webtoonLoadingItems = remember(
+                    activeScene,
+                    scrollState.scrollY,
+                    viewportWidthPx,
+                    viewportHeightPx,
+                    retainedAssets,
+                ) {
+                    if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) {
+                        emptyList()
+                    } else {
+                        val vp = ReaderViewport(FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx))
+                        val frame = activeScene.resolve(vp)
+                        val items = mutableListOf<Triple<PageId, Float, Float>>()
+                        for (node in frame.visibleNodes) {
+                            if (retainedAssets[node.pageId] == null) {
+                                val screenTop = node.sceneBounds.top - scrollState.scrollY
+                                val screenBottom = node.sceneBounds.bottom - scrollState.scrollY
+                                val screenLeft = node.sceneBounds.left
+                                val screenRight = node.sceneBounds.right
+                                val visibleTop = maxOf(screenTop, 0f)
+                                val visibleBottom = minOf(screenBottom, viewportHeightPx)
+                                val visibleLeft = maxOf(screenLeft, 0f)
+                                val visibleRight = minOf(screenRight, viewportWidthPx)
+                                if (visibleBottom > visibleTop && visibleRight > visibleLeft) {
+                                    items.add(
+                                        Triple(
+                                            node.pageId,
+                                            (visibleLeft + visibleRight) / 2f,
+                                            (visibleTop + visibleBottom) / 2f,
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        items
+                    }
+                }
+
+                for ((pageId, centerX, centerY) in webtoonLoadingItems) {
+                    key(pageId) {
+                        CenteredOverlay(
+                            centerX = centerX,
+                            centerY = centerY,
+                        ) {
+                            SceneReaderLoadStatus(
+                                pipeline = adapter,
+                                pageId = pageId,
+                                page = pageLookup(pageId),
+                                onRetryError = onRetryError,
+                                onShowErrorDetails = onShowErrorDetails,
+                                resolveErrorStringId = resolveErrorStringId,
+                                onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                            )
+                        }
+                    }
+                }
             }
         }
         WebtoonPullFeedback(
@@ -902,3 +950,28 @@ internal fun createInitialScenePageHints(
         pageId to hint
     }
 }
+
+@Composable
+private fun CenteredOverlay(
+    centerX: Float,
+    centerY: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(
+        content = content,
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val placeable = measurables.firstOrNull()?.measure(
+            constraints.copy(minWidth = 0, minHeight = 0)
+        )
+        val w = placeable?.width ?: 0
+        val h = placeable?.height ?: 0
+        val left = (centerX - w / 2f).roundToInt()
+        val top = (centerY - h / 2f).roundToInt()
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeable?.place(left, top)
+        }
+    }
+}
+

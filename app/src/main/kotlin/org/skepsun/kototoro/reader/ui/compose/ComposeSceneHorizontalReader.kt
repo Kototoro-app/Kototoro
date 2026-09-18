@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -624,16 +626,68 @@ fun ComposeSceneHorizontalReader(
                     onReleaseOverScroll = ::handleReleaseOverScroll,
                     modifier = Modifier.fillMaxSize(),
                 )
-                HorizontalSceneReaderLoadStatus(
-                    pipeline = adapter,
-                    pageId = statusPageId,
-                    page = pageLookup(statusPageId),
-                    onRetryError = onRetryError,
-                    onShowErrorDetails = onShowErrorDetails,
-                    resolveErrorStringId = resolveErrorStringId,
-                    onRetry = { coroutineScope.launch { adapter.retryAsset(statusPageId) } },
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                val horizontalLoadingItems = remember(
+                    activeScene,
+                    scrollState.offset,
+                    viewportWidthPx,
+                    viewportHeightPx,
+                    retainedAssets,
+                ) {
+                    if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) {
+                        emptyList()
+                    } else {
+                        val currentX = scrollState.offset
+                        val vWidth = viewportWidthPx
+                        val vHeight = viewportHeightPx
+                        val verticalOffset = ((vHeight - activeScene.availableHeight) / 2f).coerceAtLeast(0f)
+                        val viewport = ReaderViewport(
+                            bounds = FloatRect.fromLtwh(currentX, 0f, vWidth, activeScene.availableHeight.toFloat()),
+                        )
+                        val frame = activeScene.resolve(viewport)
+                        val items = mutableListOf<Triple<PageId, Float, Float>>()
+                        for (node in frame.visibleNodes) {
+                            if (retainedAssets[node.pageId] == null) {
+                                val screenLeft = node.sceneBounds.left - currentX
+                                val screenRight = node.sceneBounds.right - currentX
+                                val screenTop = verticalOffset + node.sceneBounds.top
+                                val screenBottom = verticalOffset + node.sceneBounds.bottom
+                                val visibleLeft = maxOf(screenLeft, 0f)
+                                val visibleRight = minOf(screenRight, vWidth)
+                                val visibleTop = maxOf(screenTop, 0f)
+                                val visibleBottom = minOf(screenBottom, vHeight)
+                                if (visibleRight > visibleLeft && visibleBottom > visibleTop) {
+                                    items.add(
+                                        Triple(
+                                            node.pageId,
+                                            (visibleLeft + visibleRight) / 2f,
+                                            (visibleTop + visibleBottom) / 2f,
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        items
+                    }
+                }
+
+                for ((pageId, centerX, centerY) in horizontalLoadingItems) {
+                    key(pageId) {
+                        CenteredOverlay(
+                            centerX = centerX,
+                            centerY = centerY,
+                        ) {
+                            HorizontalSceneReaderLoadStatus(
+                                pipeline = adapter,
+                                pageId = pageId,
+                                page = pageLookup(pageId),
+                                onRetryError = onRetryError,
+                                onShowErrorDetails = onShowErrorDetails,
+                                resolveErrorStringId = resolveErrorStringId,
+                                onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                            )
+                        }
+                    }
+                }
             }
         }
         val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
@@ -682,3 +736,28 @@ private fun HorizontalSceneReaderLoadStatus(
         }
     }
 }
+
+@Composable
+private fun CenteredOverlay(
+    centerX: Float,
+    centerY: Float,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(
+        content = content,
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val placeable = measurables.firstOrNull()?.measure(
+            constraints.copy(minWidth = 0, minHeight = 0)
+        )
+        val w = placeable?.width ?: 0
+        val h = placeable?.height ?: 0
+        val left = (centerX - w / 2f).roundToInt()
+        val top = (centerY - h / 2f).roundToInt()
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeable?.place(left, top)
+        }
+    }
+}
+
