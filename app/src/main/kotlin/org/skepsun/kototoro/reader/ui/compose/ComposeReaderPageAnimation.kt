@@ -552,7 +552,7 @@ private fun lineLineIntersection(
     return Offset((x1 - x2) / denominator, (y1 - y2) / denominator)
 }
 
-private fun List<Offset>.toPath(): Path = Path().apply {
+internal fun List<Offset>.toPath(): Path = Path().apply {
     forEachIndexed { index, point ->
         if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y)
     }

@@ -129,6 +129,18 @@ CS-5   experiment flag 删除 / 隐藏
 - **DoD**：三种样式在 `ComposeScenePagedReader` 各有独立表现；参数化测试直接比对
   `resolveComposeReaderPageTransform` 的输出（同输入同输出）；真机确认无 P99 回归。
 - **规模**：M–L（工作量偏大，但**没有架构风险**）
+- **实施状态（2026-09-18）**：
+  - Seam 1：`reader/core/PagedTransitionResolver.kt`（复用既有 `PagedMotionSnapshot`），6 例纯 JVM；
+  - Seam 2：`reader/render/compose/ScenePageTransitionRenderer.kt`（SLIDE / COVER / CURL 三样式 + curl 几何接线），
+    13 例纯 JVM，其中 COVER 对 legacy 做 240 组、CURL 做 72 组同输入同输出 parity；
+  - Seam 3：`ComposeScenePagedReader` draw phase 接线（zIndex 分层、alpha 分层、卷曲前后页与阴影、斜切路径屏幕化），
+    加载/错误浮层随动画平移；
+  - `SLIDE` 解析为单位变换，因此 `DEFAULT` 与 `NONE` 的**渲染路径与今日完全一致**（回归风险为零，
+    `NONE` 与 `DEFAULT` 的差别仍只在释放时是否补间）；`COVER` / `CURL` 只在用户主动选择相应动画时生效。
+  - **仍未完成**：真机视觉确认与 P99 基准（属 CS-1A 的真机口径），以及把纯 curl 几何从
+    `reader/ui/compose/ComposeReaderPageAnimation.kt` 下移到 render 层 —— 当前 `render/compose` 反向
+    import 了 `ui/compose` 的三个纯函数（`calculatePageCurlGeometry` / `resolvePageCurlFromStart` /
+    `resolvePageCurlStartFraction`），属本次新增的分层债，需在 CS-4 清账时一并了结。
 
 ### CS-3 CONTINUOUS_HORIZONTAL 的方向与门控一致性
 
@@ -379,6 +391,8 @@ CS-5   experiment flag 删除 / 隐藏
 | Webtoon 场景默认开启 | `ReaderSettings.kt:34`、`ComposeReaderScreenRoot.kt:256-303` |
 | 横向连续无回退、硬编码 LTR | `ComposeReaderScreenRoot.kt:354-398`（方向见 `:361`） |
 | 分页动画样式被塌缩 | `ComposeScenePagedReader.kt:244` |
+| 场景过渡三样式实现 | `reader/render/compose/ScenePageTransitionRenderer.kt`、`reader/core/PagedTransitionResolver.kt` |
+| curl 几何纯函数（待下移分层） | `reader/ui/compose/ComposeReaderPageAnimation.kt`（`calculatePageCurlGeometry` 等） |
 | legacy 动画分派与 curl | `ComposeReaderPageAnimation.kt:53-72,171-247` |
 | 动画纯函数 oracle（可复用为对照） | `ComposeReaderPageAnimation.kt:32-74` |
 | O(1) 页面查找（三个宿主） | `ComposeSceneWebtoonReader.kt:142-145`、`ComposeSceneHorizontalReader.kt:142-145`、`ComposeScenePagedReader.kt:194-196` |

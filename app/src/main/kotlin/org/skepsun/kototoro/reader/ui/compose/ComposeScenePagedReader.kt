@@ -38,11 +38,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -79,7 +86,9 @@ import org.skepsun.kototoro.reader.core.PageSegment
 import org.skepsun.kototoro.reader.core.PagedPageSpec
 import org.skepsun.kototoro.reader.core.PagedReaderScene
 import org.skepsun.kototoro.reader.core.PagedDragState
+import org.skepsun.kototoro.reader.core.PagedMotionSnapshot
 import org.skepsun.kototoro.reader.core.PagedSpreadConfig
+import org.skepsun.kototoro.reader.core.PagedTransitionResolver
 import org.skepsun.kototoro.reader.core.PrefetchPriority
 import org.skepsun.kototoro.reader.core.PrefetchReadiness
 import org.skepsun.kototoro.reader.core.PrefetchRequest
@@ -95,9 +104,13 @@ import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridge
 import org.skepsun.kototoro.reader.render.compose.PageSeamPolicy
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
+import org.skepsun.kototoro.reader.render.compose.ScenePageTransform
+import org.skepsun.kototoro.reader.render.compose.ScenePageTransitionRenderer
+import org.skepsun.kototoro.reader.render.compose.ScenePageTransition
 import org.skepsun.kototoro.reader.render.compose.animatedDrawBridge
 import org.skepsun.kototoro.reader.render.compose.drawFrameNodes
 import org.skepsun.kototoro.reader.render.compose.rememberComposeScenePrimaryScrollState
+import org.skepsun.kototoro.reader.render.compose.resolveScenePageTransition
 import org.skepsun.kototoro.reader.render.compose.tileDrawBridge
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
@@ -256,6 +269,12 @@ fun ComposeScenePagedReader(
     var sceneRevision by remember { mutableLongStateOf(0L) }
     val retainedAssets by adapter.assets.collectAsStateWithLifecycle()
 
+    val transitionStyle = remember(pageAnimation) { resolveScenePageTransition(pageAnimation) }
+    val pageCurlState = rememberComposeReaderPageCurlState()
+    // Slot the in-flight page transition is anchored on: the slot the current drag started from,
+    // or the nearest slot while idle. Cover keeps this page in place; curl folds it away.
+    var transitionAnchorSlot by remember { mutableIntStateOf(initialPosition) }
+
     val autoBgColors = remember { mutableStateMapOf<PageId, Int>() }
     LaunchedEffect(retainedAssets, readerBackground) {
         if (readerBackground != ReaderBackground.AUTO) return@LaunchedEffect
@@ -404,6 +423,7 @@ fun ComposeScenePagedReader(
         canvasOffsetX = initialX
         canvasOffsetY = initialY
         zoomedSlotIndex = currentSlot
+        transitionAnchorSlot = currentSlot
         scrollState.snapTo(currentSlot * primaryExtent)
         scrollState.isDragging = false
         scrollState.isFlinging = false
@@ -777,6 +797,7 @@ fun ComposeScenePagedReader(
             .fillMaxSize()
             .tileDrawBridge(adapter.tileStore)
             .animatedDrawBridge(animatedBridge)
+            .trackComposeReaderPageCurl(pageCurlState, pageAnimation == ReaderAnimation.SIMULATION)
             .background(Color(fallbackBackgroundColor))
             .onSizeChanged { size ->
                 viewportWidthPx = size.width.toFloat()
@@ -952,6 +973,9 @@ fun ComposeScenePagedReader(
                             }
 
                             if (movement.pageDelta != 0f) {
+                                // The page the gesture started from anchors cover/curl visuals until
+                                // the release snap settles on its target slot.
+                                transitionAnchorSlot = initialSlot
                                 if (movement.resetVelocity) {
                                     pageVelocityTracker.resetTracking()
                                     velocityPosition = 0f
@@ -1036,6 +1060,7 @@ fun ComposeScenePagedReader(
                                             canvasOffsetY = newInitY
                                         }
                                         zoomedSlotIndex = targetSlot
+                                        transitionAnchorSlot = targetSlot
                                     }
                                 } finally {
                                     scrollState.isFlinging = false
@@ -1093,71 +1118,182 @@ fun ComposeScenePagedReader(
                         }
                         animatedBridge.updateVisiblePages(allVisiblePageIds)
 
-                        // Draw slot-local backgrounds and content for all visible slots in the viewport
-                        for (slot in scene.allSlots) {
-                            val slotIntersect = slot.bounds.intersectionOrNull(vp.bounds)
-                            if (slotIntersect != null && slotIntersect.width > 0f && slotIntersect.height > 0f) {
-                                val slotIndex = slot.slotIndex
-                                val slotColor = resolveSlotBackgroundColor(slot)
-                                val (slotScreenX, slotScreenY) = when (readingDirection) {
-                                    SceneReadingDirection.LEFT_TO_RIGHT -> {
-                                        (slotIndex * viewportWidthPx - currentOffset) to 0f
-                                    }
-                                    SceneReadingDirection.RIGHT_TO_LEFT -> {
-                                        (currentOffset - slotIndex * viewportWidthPx) to 0f
-                                    }
-                                    SceneReadingDirection.TOP_TO_BOTTOM -> {
-                                        0f to (slotIndex * viewportHeightPx - currentOffset)
+                        val isVerticalAxis = readingDirection.isVertical
+                        val isMirrored = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
+                        val primaryExtentPx = if (isVerticalAxis) viewportHeightPx else viewportWidthPx
+                        val motion = resolveSceneTransitionMotion(
+                            currentOffset = currentOffset,
+                            primaryExtentPx = primaryExtentPx,
+                            anchorSlot = transitionAnchorSlot,
+                            isScrollInProgress = scrollState.isScrollInProgress,
+                        )
+                        val isCurlUnfolding = resolvePageCurlUnfolding(
+                            settledPage = transitionAnchorSlot,
+                            targetPage = motion.currentSlot,
+                            horizontalDragFraction = pageCurlState.horizontalDragFraction,
+                            isReadingReversed = isMirrored,
+                            verticalDragFraction = pageCurlState.verticalDragFraction,
+                            isVertical = isVerticalAxis,
+                        )
+
+                        // Slots are drawn back to front so the cover and curl layering reads correctly.
+                        // The slide style resolves zIndex 0 everywhere, which keeps plain slot order.
+                        val drawableSlots = scene.allSlots
+                            .filter { slot ->
+                                val intersect = slot.bounds.intersectionOrNull(vp.bounds)
+                                intersect != null && intersect.width > 0f && intersect.height > 0f
+                            }
+                            .map { slot ->
+                                slot to resolveSceneSlotTransition(
+                                    slotIndex = slot.slotIndex,
+                                    motion = motion,
+                                    style = transitionStyle,
+                                    readingDirection = readingDirection,
+                                    isCurlUnfolding = isCurlUnfolding,
+                                )
+                            }
+                            .sortedBy { (_, transition) -> transition.zIndex }
+
+                        for ((slot, transition) in drawableSlots) {
+                            val slotIndex = slot.slotIndex
+                            val slotColor = resolveSlotBackgroundColor(slot)
+                            // Translation is a fraction of the slot's own size, exactly as in the legacy
+                            // pager; the slide style resolves 0 here because the offset already moves.
+                            val translationPx = transition.translationFactor * primaryExtentPx
+                            val (baseScreenX, baseScreenY) = when (readingDirection) {
+                                SceneReadingDirection.LEFT_TO_RIGHT -> {
+                                    (slotIndex * viewportWidthPx - currentOffset) to 0f
+                                }
+                                SceneReadingDirection.RIGHT_TO_LEFT -> {
+                                    (currentOffset - slotIndex * viewportWidthPx) to 0f
+                                }
+                                SceneReadingDirection.TOP_TO_BOTTOM -> {
+                                    0f to (slotIndex * viewportHeightPx - currentOffset)
+                                }
+                            }
+                            val slotScreenX = baseScreenX + if (isVerticalAxis) 0f else translationPx
+                            val slotScreenY = baseScreenY + if (isVerticalAxis) translationPx else 0f
+                            val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
+                            val slotCenter = Offset(
+                                slotScreenX + viewportWidthPx / 2f,
+                                slotScreenY + viewportHeightPx / 2f,
+                            )
+                            val slotNodes = slot.visibleContentNodes(slotScale, slotPanX, slotPanY)
+                            val slotRect = Rect(
+                                left = slotScreenX,
+                                top = slotScreenY,
+                                right = slotScreenX + viewportWidthPx,
+                                bottom = slotScreenY + viewportHeightPx,
+                            )
+                            val curlGeometry = ScenePageTransitionRenderer.resolveCurlGeometry(
+                                size = Size(viewportWidthPx, viewportHeightPx),
+                                transform = transition,
+                                downFraction = pageCurlState.downFraction,
+                                horizontalDragFraction = pageCurlState.horizontalDragFraction,
+                                isVertical = isVerticalAxis,
+                                isReversed = isMirrored,
+                            )
+
+                            fun DrawScope.drawSlotBody() {
+                                drawRect(
+                                    color = Color(slotColor),
+                                    topLeft = Offset(slotScreenX, slotScreenY),
+                                    size = Size(viewportWidthPx, viewportHeightPx),
+                                )
+                                if (slotNodes.isNotEmpty()) {
+                                    withTransform({
+                                        translate(slotPanX, slotPanY)
+                                        scale(slotScale, slotScale, pivot = slotCenter)
+                                    }) {
+                                        drawFrameNodes(
+                                            frame = frame.copy(visibleNodes = slotNodes),
+                                            seamPolicy = PageSeamPolicy.Zero,
+                                            viewportScrollX = if (readingDirection == SceneReadingDirection.LEFT_TO_RIGHT) currentOffset else 0f,
+                                            viewportScrollY = if (readingDirection.isVertical) currentOffset else 0f,
+                                            placeholderColor = Color.DarkGray,
+                                            imageColorFilter = imageColorFilter,
+                                            readerAssetProvider = { id: PageId -> retainedAssets[id] },
+                                            animatedBridge = animatedBridge,
+                                            screenPositionProvider = if (isMirrored) {
+                                                { node: VisibleNode ->
+                                                    val placement = slot.placements.firstOrNull { it.pageId == node.pageId }
+                                                    val boundsInSlot = placement?.boundsInSlot ?: node.sceneBounds
+                                                    val screenX = currentOffset - slotIndex * viewportWidthPx + boundsInSlot.left
+                                                    val screenY = boundsInSlot.top
+                                                    Offset(screenX, screenY)
+                                                }
+                                            } else null,
+                                        )
                                     }
                                 }
-                                val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
-                                val slotCenter = Offset(
-                                    slotScreenX + viewportWidthPx / 2f,
-                                    slotScreenY + viewportHeightPx / 2f,
+                            }
+
+                            val layerPaint = if (transition.alpha < 1f) {
+                                Paint().apply { alpha = transition.alpha }
+                            } else {
+                                null
+                            }
+                            if (layerPaint != null) {
+                                drawIntoCanvas { canvas -> canvas.saveLayer(slotRect, layerPaint) }
+                            }
+                            withTransform({
+                                clipRect(
+                                    left = slotScreenX,
+                                    top = slotScreenY,
+                                    right = slotScreenX + viewportWidthPx,
+                                    bottom = slotScreenY + viewportHeightPx,
                                 )
-
-                                withTransform({
-                                    clipRect(
-                                        left = slotScreenX,
-                                        top = slotScreenY,
-                                        right = slotScreenX + viewportWidthPx,
-                                        bottom = slotScreenY + viewportHeightPx,
-                                    )
-                                }) {
-                                    drawRect(
-                                        color = Color(slotColor),
-                                        topLeft = Offset(slotScreenX, slotScreenY),
-                                        size = Size(viewportWidthPx, viewportHeightPx),
-                                    )
-
-                                    val slotNodes = slot.visibleContentNodes(slotScale, slotPanX, slotPanY)
-                                    if (slotNodes.isNotEmpty()) {
-                                        withTransform({
-                                            translate(slotPanX, slotPanY)
-                                            scale(slotScale, slotScale, pivot = slotCenter)
-                                        }) {
-                                            drawFrameNodes(
-                                                frame = frame.copy(visibleNodes = slotNodes),
-                                                seamPolicy = PageSeamPolicy.Zero,
-                                                viewportScrollX = if (readingDirection == SceneReadingDirection.LEFT_TO_RIGHT) currentOffset else 0f,
-                                                viewportScrollY = if (readingDirection.isVertical) currentOffset else 0f,
-                                                placeholderColor = Color.DarkGray,
-                                                imageColorFilter = imageColorFilter,
-                                                readerAssetProvider = { id: PageId -> retainedAssets[id] },
-                                                animatedBridge = animatedBridge,
-                                                screenPositionProvider = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) {
-                                                    { node: VisibleNode ->
-                                                        val placement = slot.placements.firstOrNull { it.pageId == node.pageId }
-                                                        val boundsInSlot = placement?.boundsInSlot ?: node.sceneBounds
-                                                        val screenX = currentOffset - slotIndex * viewportWidthPx + boundsInSlot.left
-                                                        val screenY = boundsInSlot.top
-                                                        Offset(screenX, screenY)
-                                                    }
-                                                } else null,
+                            }) {
+                                if (curlGeometry != null) {
+                                    // Fold paths are slot-local; shift them into screen space so the body
+                                    // (which draws in scene-derived screen coordinates) can be clipped
+                                    // and mirrored without a second coordinate convention.
+                                    val origin = Offset(slotScreenX, slotScreenY)
+                                    val frontPath = curlGeometry.frontPath.toPath().apply { translate(origin) }
+                                    val backPath = curlGeometry.backPath.toPath().apply { translate(origin) }
+                                    val curlPivot = curlGeometry.bottomCurlOffset + origin
+                                    val shadowProgress = (
+                                        1f - abs(curlGeometry.curlLineVector.y) / viewportHeightPx.coerceAtLeast(1f)
+                                        ).coerceIn(0f, 1f)
+                                    clipPath(frontPath) {
+                                        drawSlotBody()
+                                    }
+                                    withTransform({
+                                        if (isVerticalAxis) {
+                                            scale(1f, -1f, pivot = curlPivot)
+                                            rotateRad(-curlGeometry.angle, pivot = curlPivot)
+                                        } else {
+                                            scale(-1f, 1f, pivot = curlPivot)
+                                            rotateRad(curlGeometry.angle, pivot = curlPivot)
+                                        }
+                                    }) {
+                                        drawPath(
+                                            path = backPath,
+                                            color = Color.Black.copy(alpha = 0.12f + shadowProgress * 0.12f),
+                                            style = Stroke(width = 18f),
+                                        )
+                                        clipPath(backPath) {
+                                            drawSlotBody()
+                                            drawRect(
+                                                color = Color.White.copy(alpha = 0.1f),
+                                                topLeft = Offset(slotScreenX, slotScreenY),
+                                                size = Size(viewportWidthPx, viewportHeightPx),
                                             )
                                         }
                                     }
+                                } else {
+                                    drawSlotBody()
                                 }
+                                if (transition.revealedPageShade > 0f) {
+                                    drawRect(
+                                        color = Color.Black.copy(alpha = transition.revealedPageShade),
+                                        topLeft = Offset(slotScreenX, slotScreenY),
+                                        size = Size(viewportWidthPx, viewportHeightPx),
+                                    )
+                                }
+                            }
+                            if (layerPaint != null) {
+                                drawIntoCanvas { canvas -> canvas.restore() }
                             }
                         }
                     }
@@ -1191,11 +1327,28 @@ fun ComposeScenePagedReader(
                     val slotIntersect = slot.bounds.intersectionOrNull(vp.bounds)
                     if (slotIntersect != null && slotIntersect.width > 0f && slotIntersect.height > 0f) {
                         val slotIndex = slot.slotIndex
-                        val (slotScreenX, slotScreenY) = when (readingDirection) {
+                        val (baseScreenX, baseScreenY) = when (readingDirection) {
                             SceneReadingDirection.LEFT_TO_RIGHT -> (slotIndex * viewportWidthPx - currentOffset) to 0f
                             SceneReadingDirection.RIGHT_TO_LEFT -> (currentOffset - slotIndex * viewportWidthPx) to 0f
                             SceneReadingDirection.TOP_TO_BOTTOM -> 0f to (slotIndex * viewportHeightPx - currentOffset)
                         }
+                        // Loading and error overlays follow the page while a cover or curl transition
+                        // moves it, so a slow page does not report progress from the wrong position.
+                        val loadingTransition = resolveSceneSlotTransition(
+                            slotIndex = slotIndex,
+                            motion = resolveSceneTransitionMotion(
+                                currentOffset = currentOffset,
+                                primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
+                                anchorSlot = transitionAnchorSlot,
+                                isScrollInProgress = scrollState.isScrollInProgress,
+                            ),
+                            style = transitionStyle,
+                            readingDirection = readingDirection,
+                        )
+                        val translationPx = loadingTransition.translationFactor *
+                            (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
+                        val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else translationPx
+                        val slotScreenY = baseScreenY + if (readingDirection.isVertical) translationPx else 0f
                         val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
                         val slotCenter = Offset(
                             slotScreenX + viewportWidthPx / 2f,
@@ -1290,6 +1443,47 @@ private fun PagedSceneReaderLoadStatus(
         }
     }
 }
+
+/**
+ * Paging motion of the scene at [currentOffset], expressed in the slot-order convention the
+ * transition seam understands: [PagedMotionSnapshot.offsetFraction] is positive while the reader
+ * advances to the next slot in reading order, whatever the physical direction is.
+ */
+private fun resolveSceneTransitionMotion(
+    currentOffset: Float,
+    primaryExtentPx: Float,
+    anchorSlot: Int,
+    isScrollInProgress: Boolean,
+): PagedMotionSnapshot {
+    val position = if (primaryExtentPx > 0f) currentOffset / primaryExtentPx else 0f
+    val nearestSlot = position.roundToInt()
+    return PagedMotionSnapshot(
+        currentSlot = nearestSlot,
+        settledSlot = anchorSlot,
+        targetSlot = nearestSlot,
+        offsetFraction = position - nearestSlot,
+        isScrollInProgress = isScrollInProgress,
+    )
+}
+
+/** Resolves one slot's transition transform from scene state. */
+private fun resolveSceneSlotTransition(
+    slotIndex: Int,
+    motion: PagedMotionSnapshot,
+    style: ScenePageTransition,
+    readingDirection: SceneReadingDirection,
+    isCurlUnfolding: Boolean = false,
+): ScenePageTransform = ScenePageTransitionRenderer.transformFor(
+    transition = style,
+    input = PagedTransitionResolver.resolve(
+        snapshot = motion,
+        slotIndex = slotIndex,
+        direction = readingDirection,
+        isCurlUnfolding = isCurlUnfolding,
+    ),
+    isVertical = readingDirection.isVertical,
+    isReversed = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT,
+)
 
 private data class PagedSlotZoom(
     val scale: Float,
