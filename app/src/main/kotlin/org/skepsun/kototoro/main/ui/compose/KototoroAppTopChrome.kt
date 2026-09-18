@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
+import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -193,10 +194,19 @@ internal fun BoxScope.MainTopChrome(
             )
         }
         if (isLayeredSurface) {
+            val layeredContainerColor = MaterialTheme.colorScheme.surfaceContainer
             Surface(
                 shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                shadowElevation = 4.dp,
+                color = layeredContainerColor,
+                // Over artwork the container colour is translucent, and a surface
+                // shadow reads through a translucent fill as a dark rim hugging
+                // the inside of the shape. Drop the shadow in that case rather
+                // than drawing an edge the fill cannot hide.
+                shadowElevation = resolveFallbackShadowElevation(
+                    styleShadowElevation = 4.dp,
+                    containerAlpha = layeredContainerColor.alpha,
+                    flat = false,
+                ),
                 modifier = topChromeModifier,
             ) {
                 topContent()

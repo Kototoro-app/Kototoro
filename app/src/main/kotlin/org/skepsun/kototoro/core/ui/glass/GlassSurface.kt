@@ -195,6 +195,24 @@ internal fun shouldApplyGlassLens(enabled: Boolean, heightDp: Float, amountDp: F
     enabled && heightDp > 0f && amountDp > 0f
 
 /**
+ * Shadow elevation for the Material fallback surface.
+ *
+ * A translucent container colour cannot hide the surface's own shadow: the shadow is
+ * drawn behind the shape, so it reads through the fill as a dark rim hugging the inside
+ * of the outline and leaves a smaller, brighter plate in the middle. Over artwork every
+ * glass role is deliberately translucent (chrome 0.65-0.92, cards/surfaces 0.40-0.74),
+ * which turned each top-bar pill into a light island inside a darker capsule — an
+ * artifact no amount of tint/alpha tuning removes, because it is drawn by the shadow
+ * rather than by the tint. Flat surfaces (dialogs, and any translucent container) draw
+ * no shadow at all; over artwork the hairline border already carries the edge.
+ */
+internal fun resolveFallbackShadowElevation(
+    styleShadowElevation: Dp,
+    containerAlpha: Float,
+    flat: Boolean,
+): Dp = if (flat || containerAlpha < 1f) 0.dp else styleShadowElevation
+
+/**
  * Maps the [GlassTuningParam.HIGHLIGHT_STYLE] option value to the Kyant
  * [HighlightStyle]: 0 = Default, 1 = Ambient, 2 = Plain.
  */
@@ -359,6 +377,14 @@ fun GlassSurface(
     } else {
         null
     }
+    // Over artwork every role is deliberately translucent, so this is what used to
+    // turn each top-bar pill into a light island inside a darker capsule. See
+    // resolveFallbackShadowElevation above for why the shadow cannot simply stay.
+    val effectiveShadowElevation = resolveFallbackShadowElevation(
+        styleShadowElevation = style.shadowElevation,
+        containerAlpha = fallbackColor.alpha,
+        flat = dialogSurface,
+    )
     CompositionLocalProvider(LocalAbsoluteTonalElevation provides 0.dp) {
         Surface(
             modifier = modifier,
@@ -367,7 +393,7 @@ fun GlassSurface(
             contentColor = colors.onSurface,
             border = fallbackBorder,
             tonalElevation = if (dialogSurface) 0.dp else style.tonalElevation,
-            shadowElevation = if (dialogSurface) 0.dp else style.shadowElevation,
+            shadowElevation = effectiveShadowElevation,
         ) {
             Box(content = content)
         }

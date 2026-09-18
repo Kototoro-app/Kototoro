@@ -114,4 +114,43 @@ class GlassSurfacePolicyTest {
         shouldTrackGlassPress(GlassComponentRole.BottomBar, pressFeedbackEnabled = false) shouldBe false
         shouldTrackGlassPress(GlassComponentRole.PillControl, pressFeedbackEnabled = false) shouldBe false
     }
+
+    @Test
+    fun `translucent container drops the fallback shadow`() {
+        // A translucent fill lets the surface's own shadow read through as a dark
+        // inner rim, which is what produced the nested light plate inside every
+        // top-bar pill over an artwork background.
+        resolveFallbackShadowElevation(
+            styleShadowElevation = 4.dp,
+            containerAlpha = 0.65f,
+            flat = false,
+        ) shouldBe 0.dp
+    }
+
+    @Test
+    fun `opaque container keeps the fallback shadow`() {
+        resolveFallbackShadowElevation(
+            styleShadowElevation = 4.dp,
+            containerAlpha = 1f,
+            flat = false,
+        ) shouldBe 4.dp
+    }
+
+    @Test
+    fun `flat surfaces never draw a fallback shadow`() {
+        resolveFallbackShadowElevation(
+            styleShadowElevation = 6.dp,
+            containerAlpha = 1f,
+            flat = true,
+        ) shouldBe 0.dp
+    }
+
+    @Test
+    fun `zero elevation style stays flat regardless of container alpha`() {
+        resolveFallbackShadowElevation(
+            styleShadowElevation = 0.dp,
+            containerAlpha = 1f,
+            flat = false,
+        ) shouldBe 0.dp
+    }
 }
