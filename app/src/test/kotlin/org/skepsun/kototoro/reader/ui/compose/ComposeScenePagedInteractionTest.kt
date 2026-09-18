@@ -6,8 +6,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageGeometryHint
+import org.skepsun.kototoro.reader.core.PagedPanBoundsResolver
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PageSegment
@@ -17,6 +19,7 @@ import org.skepsun.kototoro.reader.core.PagedSnapResolver
 import org.skepsun.kototoro.reader.core.PagedSpreadConfig
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 
@@ -337,5 +340,113 @@ class ComposeScenePagedInteractionTest {
         assertEquals(2.5f, snapshot.scale)
         assertTrue(snapshot.visibleBoundsInScene.left >= 2000f)
         assertTrue(snapshot.visibleBoundsInScene.right <= 3000f)
+    }
+
+    @Test
+    fun `FIT_WIDTH tall page in PagedReaderScene calculates overflow pan range and start alignment`() {
+        val pages = listOf(createPage(id = 1L, chapterId = 1L, index = 0))
+        val specs = listOf(
+            PagedPageSpec(PageId(pages[0].readerKey), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),
+        )
+        val scene = PagedReaderScene(
+            viewportWidth = 800,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                zoomMode = ZoomMode.FIT_WIDTH,
+            ),
+            initialSpecs = specs,
+        )
+
+        val slot = scene.allSlots.first()
+        val placement = slot.placements.first()
+        val bounds = placement.boundsInSlot
+
+        val panXRange = PagedPanBoundsResolver.resolvePanRange(bounds.left, bounds.right, 800f, 1.0f)
+        val panYRange = PagedPanBoundsResolver.resolvePanRange(bounds.top, bounds.bottom, 1200f, 1.0f)
+
+        // Width fits 800px: panXRange is neutral
+        assertEquals(0f, panXRange.start)
+        assertEquals(0f, panXRange.endInclusive)
+
+        // Height is 1600px in 1200px viewport: vertical pan range allows scrolling full height
+        assertEquals(-200f, panYRange.start, 0.01f)
+        assertEquals(200f, panYRange.endInclusive, 0.01f)
+
+        // Initial offset starts at top of page (+200f)
+        val initialY = PagedPanBoundsResolver.resolveInitialOverflowOffset(
+            contentMin = bounds.top,
+            contentMax = bounds.bottom,
+            viewportSize = 1200f,
+            scale = 1.0f,
+            isStartReversed = false,
+        )
+        assertEquals(200f, initialY, 0.01f)
+    }
+
+    @Test
+    fun `FIT_HEIGHT wide page in PagedReaderScene calculates overflow pan range and RTL start alignment`() {
+        val pages = listOf(createPage(id = 1L, chapterId = 1L, index = 0))
+        val specs = listOf(
+            PagedPageSpec(PageId(pages[0].readerKey), PageGeometryHint.Exact(2000, 1000), chapterId = 1L, chapterPageIndex = 0),
+        )
+        val scene = PagedReaderScene(
+            viewportWidth = 1200,
+            viewportHeight = 800,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                readingDirection = SceneReadingDirection.RIGHT_TO_LEFT,
+                zoomMode = ZoomMode.FIT_HEIGHT,
+            ),
+            initialSpecs = specs,
+        )
+
+        val slot = scene.allSlots.first()
+        val placement = slot.placements.first()
+        val bounds = placement.boundsInSlot
+
+        val panXRange = PagedPanBoundsResolver.resolvePanRange(bounds.left, bounds.right, 1200f, 1.0f)
+        val panYRange = PagedPanBoundsResolver.resolvePanRange(bounds.top, bounds.bottom, 800f, 1.0f)
+
+        // Height fits 800px: panYRange is neutral
+        assertEquals(0f, panYRange.start)
+        assertEquals(0f, panYRange.endInclusive)
+
+        // Width is 1600px in 1200px viewport: horizontal pan allowed
+        assertEquals(-200f, panXRange.start, 0.01f)
+        assertEquals(200f, panXRange.endInclusive, 0.01f)
+
+        // In RTL, initial starts at right/end of page (-200f)
+        val initialX = PagedPanBoundsResolver.resolveInitialOverflowOffset(
+            contentMin = bounds.left,
+            contentMax = bounds.right,
+            viewportSize = 1200f,
+            scale = 1.0f,
+            isStartReversed = true,
+        )
+        assertEquals(-200f, initialX, 0.01f)
+    }
+
+    @Test
+    fun `resolveDoublePageBackground with AUTO merges spread background colors`() {
+        val firstColor = android.graphics.Color.WHITE
+        val secondColor = android.graphics.Color.WHITE
+
+        val merged = resolveDoublePageBackground(
+            background = ReaderBackground.AUTO,
+            configuredColor = android.graphics.Color.BLACK,
+            firstAutoColor = firstColor,
+            secondAutoColor = secondColor,
+        )
+        assertEquals(android.graphics.Color.WHITE, merged)
+
+        // When non-AUTO background configured, returns configuredColor
+        val blackConfigured = resolveDoublePageBackground(
+            background = ReaderBackground.BLACK,
+            configuredColor = android.graphics.Color.BLACK,
+            firstAutoColor = firstColor,
+            secondAutoColor = secondColor,
+        )
+        assertEquals(android.graphics.Color.BLACK, blackConfigured)
     }
 }

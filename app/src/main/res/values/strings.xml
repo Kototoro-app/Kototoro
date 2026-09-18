@@ -1816,6 +1816,8 @@
     <string name="reader_reduce_page_preloading_summary">Keep fewer pages outside the viewport. This does not reduce visible image quality, but adjacent pages may take longer to appear</string>
     <string name="reader_experimental_scene_engine">Modern Webtoon renderer (ADR 0002)</string>
     <string name="reader_experimental_scene_engine_summary">Use high-performance Scene engine with zero-CLS layout and tiled rendering for continuous webtoon reading</string>
+    <string name="reader_experimental_paged_scene_engine">Modern Paged/Double-page renderer (Experimental)</string>
+    <string name="reader_experimental_paged_scene_engine_summary">Use high-performance Paged Scene engine with tiled multi-LOD rendering for paged and double-page modes</string>
     <string name="reader_translation_enabled">Auto translate pages</string>
     <string name="reader_translation_enabled_summary">Use on-device OCR and translation, with optional API fallback</string>
     <string name="reader_translation_action">Manga translation</string>

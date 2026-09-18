@@ -1750,6 +1750,8 @@
     <string name="reader_reduce_page_preloading_summary">减少视口外保留的页面，不降低可见图片质量，但相邻页面首次显示可能稍慢</string>
     <string name="reader_experimental_scene_engine">现代条漫渲染器（ADR 0002）</string>
     <string name="reader_experimental_scene_engine_summary">条漫模式下使用高性能 Scene 引擎（支持零跳动重排与切片分块渲染）</string>
+    <string name="reader_experimental_paged_scene_engine">现代单页/双页渲染器（实验性）</string>
+    <string name="reader_experimental_paged_scene_engine_summary">在单页和双页阅读模式下启用高性能 Paged Scene 引擎与动态切片渲染</string>
     <string name="reader_progress_template">第 %1$d/%2$d 话 · %3$d%%</string>
     <string name="reader_settings">阅读</string>
     <string name="replace_rules">文本替换规则</string>

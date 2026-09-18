@@ -1059,6 +1059,19 @@ private fun ReaderMangaSettingsPage(
             )
         }
         item {
+            SettingsSwitchPreference(
+                title = stringResource(R.string.reader_experimental_paged_scene_engine),
+                summary = stringResource(R.string.reader_experimental_paged_scene_engine_summary),
+                iconRes = R.drawable.ic_book_page,
+                checked = settings.observeAsState(AppSettings.KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE) {
+                    prefs.getBoolean(AppSettings.KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE, false)
+                }.value,
+                onCheckedChange = {
+                    settings.prefs.edit { putBoolean(AppSettings.KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE, it) }
+                },
+            )
+        }
+        item {
             SettingsChoicePreference(
                 title = stringResource(R.string.preload_pages),
                 iconRes = R.drawable.ic_download,

@@ -483,6 +483,24 @@ reader/
   - 新增 `isExperimentalPagedSceneReaderEnabled`（默认 `false`），与成熟且已默认开启的 Webtoon / Horizontal 场景解耦；
   - 保证未手动开启分页实验开关的用户 100% 继续使用稳定的 `Pager + Telephoto`，零生产回退风险。
 
+**Phase 3F：交互溢出闭环、自适应背景与物理基准对齐（已完成）**
+- **基线溢出平移数学解算器 (`PagedPanBoundsResolver`)**：
+  - 严格保持 **I1**（`ReaderCore` 零 Android / Compose 依赖），提取纯数学解算器；
+  - 彻底重构手势判定，将旧有的 `canvasScale > 1f` 单纯缩放判定升级为基于 `transformedContentBounds > viewport` 的轴向精确解算；
+  - 解决 `FIT_WIDTH`（高超出视口）与 `FIT_HEIGHT`（宽超出视口）在 $1\times$ 默认比例下无法单指拖动查看边缘的交互 Blocker；
+  - 支持单页与双页排版模式下的起始点对齐（`resolveInitialOverflowOffset`），翻至新页时自然对齐至页首（LTR/Vertical 从顶部/左侧开始，RTL 从右侧开始）。
+- **`ReaderBackground.AUTO` 自适应背景采样**：
+  - 在 `ComposeScenePagedReader` 中无缝消费 `retainedAssets` 内存位图（`ComposeImage`、`AndroidBitmap`、`Tiled.overviewBitmap`）；
+  - 调用 `ReaderAutoBackground.resolve()` 与 `resolveDoublePageBackground()`，零额外磁盘/网络 IO 开销完成单/双页边缘背景色采样与书籍色调合成。
+- **用户设置开关暴露**：
+  - 在 `ReaderSettingsScreen` 补充 `reader_experimental_paged_scene_engine` 开关项与中英文文案，允许测试人员与用户自主开启或回滚。
+- **物理机基准对齐矩阵（Hardware Parity Matrix）**：
+  - 确立进入生产默认开启的 4 组真机对照场景：
+    1. 普通漫画单页 1x（CPU P99 帧耗时与 Baseline Profile 稳态）；
+    2. $6000 \times 9000$ 超大图 1x（LOD0 Overview 基础切片就绪与防白屏）；
+    3. $6000 \times 9000$ 高倍放大（2.5x / 5x Settle 防抖与高清切片加载延迟及显存上限）；
+    4. 双页跨章节持续往复翻页（RSS Anon 内存泄露审计与 GC 频率）。
+
 ---
 
 ## 六、 Non-Goals（第一阶段明确不做的事项）

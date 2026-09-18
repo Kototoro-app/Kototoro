@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -43,6 +45,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
+import org.skepsun.kototoro.reader.core.PagedPanBoundsResolver
+import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -218,9 +222,6 @@ fun ComposeScenePagedReader(
         }
     }
 
-    val resolvedBackgroundColor = remember(readerBackgroundColor, bookBackgroundTint) {
-        applyAutomaticBookBackgroundTint(readerBackgroundColor, bookBackgroundTint)
-    }
     val shouldAnimate = isAnimationEnabled && pageAnimation != ReaderAnimation.NONE
 
     val primaryExtent = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
@@ -233,6 +234,62 @@ fun ComposeScenePagedReader(
     )
     var hasAppliedInitialPosition by remember { mutableStateOf(false) }
     val retainedAssets by adapter.assets.collectAsStateWithLifecycle()
+
+    val activeSlotIndex = if (primaryExtent > 0f && scene != null && scene.slotCount > 0) {
+        (scrollState.offset / primaryExtent).roundToInt().coerceIn(0, scene.slotCount - 1)
+    } else 0
+    val activeSlot = scene?.allSlots?.getOrNull(activeSlotIndex)
+
+    val autoBackgroundColor by produceState<Int?>(initialValue = null, activeSlot, retainedAssets, readerBackground) {
+        if (readerBackground != ReaderBackground.AUTO || activeSlot == null) {
+            value = null
+            return@produceState
+        }
+        val placements = activeSlot.placements
+        if (placements.isEmpty()) {
+            value = null
+            return@produceState
+        }
+        val firstPageId = placements.first().pageId
+        val secondPageId = placements.getOrNull(1)?.pageId
+
+        fun extractBitmap(id: PageId): Bitmap? = when (val a = retainedAssets[id]) {
+            is ReaderImageAsset.ComposeImage -> a.imageBitmap.asAndroidBitmap()
+            is ReaderImageAsset.AndroidBitmap -> a.bitmap
+            is ReaderImageAsset.Tiled -> a.overviewKey?.let { a.tileStore.tile(it)?.payload as? Bitmap }
+            is ReaderImageAsset.Preview -> a.imageBitmap.asAndroidBitmap()
+            else -> null
+        }
+
+        val firstBmp = extractBitmap(firstPageId)
+        val secondBmp = secondPageId?.let { extractBitmap(it) }
+
+        if (firstBmp == null && secondBmp == null) {
+            value = null
+            return@produceState
+        }
+
+        val firstAuto = firstBmp?.let { ReaderAutoBackground.resolve(it) }
+        val secondAuto = secondBmp?.let { ReaderAutoBackground.resolve(it) }
+
+        val merged = resolveDoublePageBackground(
+            background = readerBackground,
+            configuredColor = readerBackgroundColor,
+            firstAutoColor = firstAuto,
+            secondAutoColor = secondAuto,
+        )
+        value = merged
+    }
+
+    val resolvedBackgroundColor = remember(readerBackground, readerBackgroundColor, autoBackgroundColor, bookBackgroundTint) {
+        val baseColor = if (readerBackground == ReaderBackground.AUTO && autoBackgroundColor != null) {
+            autoBackgroundColor!!
+        } else {
+            readerBackgroundColor
+        }
+        applyAutomaticBookBackgroundTint(baseColor, bookBackgroundTint)
+    }
+
     var lastReportedPages by remember { mutableStateOf<Triple<Long, Long, Long>?>(null) }
     var statusPageId by remember { mutableStateOf(PageId(pages[initialPosition].readerKey)) }
 
@@ -246,6 +303,61 @@ fun ComposeScenePagedReader(
 
     var snapAnimationJob by remember { mutableStateOf<Job?>(null) }
     var zoomAnimationJob by remember { mutableStateOf<Job?>(null) }
+
+    fun getSlotContentBounds(slotIndex: Int): FloatRect? {
+        val currentScene = scene ?: return null
+        val slot = currentScene.allSlots.getOrNull(slotIndex) ?: return null
+        val placements = slot.placements
+        if (placements.isEmpty()) return null
+        return FloatRect(
+            left = placements.minOf { it.boundsInSlot.left },
+            top = placements.minOf { it.boundsInSlot.top },
+            right = placements.maxOf { it.boundsInSlot.right },
+            bottom = placements.maxOf { it.boundsInSlot.bottom },
+        )
+    }
+
+    fun getSlotPanRanges(slotIndex: Int, scale: Float): Pair<ClosedFloatingPointRange<Float>, ClosedFloatingPointRange<Float>> {
+        val bounds = getSlotContentBounds(slotIndex)
+        val contentLeft = bounds?.left ?: 0f
+        val contentRight = bounds?.right ?: viewportWidthPx
+        val contentTop = bounds?.top ?: 0f
+        val contentBottom = bounds?.bottom ?: viewportHeightPx
+
+        val panX = PagedPanBoundsResolver.resolvePanRange(
+            contentMin = contentLeft,
+            contentMax = contentRight,
+            viewportSize = viewportWidthPx,
+            scale = scale,
+        )
+        val panY = PagedPanBoundsResolver.resolvePanRange(
+            contentMin = contentTop,
+            contentMax = contentBottom,
+            viewportSize = viewportHeightPx,
+            scale = scale,
+        )
+        return panX to panY
+    }
+
+    fun resolveSlotInitialOffsets(slotIndex: Int): Pair<Float, Float> {
+        val bounds = getSlotContentBounds(slotIndex) ?: return 0f to 0f
+        val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
+        val initX = PagedPanBoundsResolver.resolveInitialOverflowOffset(
+            contentMin = bounds.left,
+            contentMax = bounds.right,
+            viewportSize = viewportWidthPx,
+            scale = 1f,
+            isStartReversed = isRtl,
+        )
+        val initY = PagedPanBoundsResolver.resolveInitialOverflowOffset(
+            contentMin = bounds.top,
+            contentMax = bounds.bottom,
+            viewportSize = viewportHeightPx,
+            scale = 1f,
+            isStartReversed = false,
+        )
+        return initX to initY
+    }
 
     fun updateResourceWindow(
         currentScene: PagedReaderScene,
@@ -398,6 +510,9 @@ fun ComposeScenePagedReader(
             scrollState.maxOffset = maxScroll
             val targetScroll = (initialSlot * pe).coerceIn(0f, maxScroll)
             scrollState.snapTo(targetScroll)
+            val (initX, initY) = resolveSlotInitialOffsets(initialSlot)
+            canvasOffsetX = initX
+            canvasOffsetY = initY
             hasAppliedInitialPosition = true
             updateResourceWindow(scene, targetScroll)
         }
@@ -426,6 +541,9 @@ fun ComposeScenePagedReader(
                 val targetSlot = scene.slotIndexOf(PageId(targetPage.readerKey))
                 if (targetSlot >= 0) {
                     val targetOffset = (targetSlot * primaryExtent).coerceIn(0f, scrollState.maxOffset)
+                    val (initX, initY) = resolveSlotInitialOffsets(targetSlot)
+                    canvasOffsetX = initX
+                    canvasOffsetY = initY
                     if (requestedPageSmooth && shouldAnimate) {
                         snapAnimationJob?.cancel()
                         snapAnimationJob = coroutineScope.launch {
@@ -467,16 +585,18 @@ fun ComposeScenePagedReader(
                 ) { value, _ ->
                     canvasScale = value
                     if (value <= 1f) {
-                        canvasOffsetX = 0f
-                        canvasOffsetY = 0f
+                        val (initX, initY) = resolveSlotInitialOffsets(activeSlotIndex)
+                        canvasOffsetX = initX
+                        canvasOffsetY = initY
                     }
                 }
             }
         } else {
             canvasScale = targetScale
             if (targetScale <= 1f) {
-                canvasOffsetX = 0f
-                canvasOffsetY = 0f
+                val (initX, initY) = resolveSlotInitialOffsets(activeSlotIndex)
+                canvasOffsetX = initX
+                canvasOffsetY = initY
             }
         }
     }
@@ -525,6 +645,9 @@ fun ComposeScenePagedReader(
                     snapAnimationJob?.cancel()
                     pullStartDistancePx = 0f
                     pullEndDistancePx = 0f
+                    val pe = primaryExtent.coerceAtLeast(1f)
+                    val startOffset = scrollState.offset
+                    val initialSlot = (startOffset / pe).roundToInt()
 
                     val isDoubleTap = isZoomEnabled && isTapGridDoubleTapCandidate(
                         previousPosition = lastTapPosition,
@@ -548,15 +671,17 @@ fun ComposeScenePagedReader(
                                 ) { value, _ ->
                                     canvasScale = value
                                     if (value <= 1f) {
-                                        canvasOffsetX = 0f
-                                        canvasOffsetY = 0f
+                                        val (initX, initY) = resolveSlotInitialOffsets(initialSlot)
+                                        canvasOffsetX = initX
+                                        canvasOffsetY = initY
                                     }
                                 }
                             } else {
                                 canvasScale = targetScale
                                 if (targetScale <= 1f) {
-                                    canvasOffsetX = 0f
-                                    canvasOffsetY = 0f
+                                    val (initX, initY) = resolveSlotInitialOffsets(initialSlot)
+                                    canvasOffsetX = initX
+                                    canvasOffsetY = initY
                                 }
                             }
                         }
@@ -567,9 +692,6 @@ fun ComposeScenePagedReader(
                     velocityTracker.addPosition(down.uptimeMillis, down.position)
                     var isZoomGesture = false
                     var dragAccumulator = 0f
-                    val startOffset = scrollState.offset
-                    val pe = primaryExtent.coerceAtLeast(1f)
-                    val initialSlot = (startOffset / pe).roundToInt()
 
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -582,49 +704,87 @@ fun ComposeScenePagedReader(
                             if (pan.x.isFinite() && pan.y.isFinite() && zoom.isFinite()) {
                                 val nextScale = (canvasScale * zoom).coerceIn(1f, 5f)
                                 canvasScale = nextScale
-                                if (nextScale > 1f) {
-                                    val maxPanX = (viewportWidthPx * (nextScale - 1f)) / 2f
-                                    val maxPanY = (viewportHeightPx * (nextScale - 1f)) / 2f
-                                    canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(-maxPanX, maxPanX)
-                                    canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(-maxPanY, maxPanY)
-                                } else {
-                                    canvasOffsetX = 0f
-                                    canvasOffsetY = 0f
-                                }
+                                val (nextPanX, nextPanY) = getSlotPanRanges(initialSlot, nextScale)
+                                canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(nextPanX)
+                                canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(nextPanY)
                             }
                         } else if (pressedCount == 1) {
                             val change = event.changes.first { it.pressed }
                             velocityTracker.addPosition(change.uptimeMillis, change.position)
+                            val pan = event.calculatePan()
+                            val isVertical = readingDirection.isVertical
+                            val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
+
                             if (canvasScale > 1f) {
-                                val pan = event.calculatePan()
                                 if (pan.x.isFinite() && pan.y.isFinite() && (pan.x != 0f || pan.y != 0f)) {
                                     event.changes.forEach { it.consume() }
-                                    val maxPanX = (viewportWidthPx * (canvasScale - 1f)) / 2f
-                                    val maxPanY = (viewportHeightPx * (canvasScale - 1f)) / 2f
-                                    canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(-maxPanX, maxPanX)
-                                    canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(-maxPanY, maxPanY)
+                                    val (currentPanX, currentPanY) = getSlotPanRanges(initialSlot, canvasScale)
+                                    canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(currentPanX)
+                                    canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
                                 }
                             } else if (!isZoomGesture) {
-                                val pan = event.calculatePan()
-                                val isVertical = readingDirection.isVertical
-                                val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
-                                val forwardDelta = if (isVertical) -pan.y else if (isRtl) pan.x else -pan.x
+                                var consumed = false
+                                val (currentPanX, currentPanY) = getSlotPanRanges(initialSlot, 1f)
+                                val curCanPanX = currentPanX.endInclusive > currentPanX.start
+                                val curCanPanY = currentPanY.endInclusive > currentPanY.start
 
-                                if (forwardDelta != 0f) {
-                                    event.changes.forEach { it.consume() }
-                                    scrollState.isDragging = true
-                                    dragAccumulator += forwardDelta
-                                    val desiredOffset = startOffset + dragAccumulator
-                                    val maxScroll = scrollState.maxOffset
-                                    val newOffset = desiredOffset.coerceIn(0f, maxScroll)
-                                    scrollState.snapTo(newOffset)
-                                    scene?.let { updateResourceWindow(it, newOffset) }
-
-                                    if (desiredOffset < 0f) {
-                                        handlePull(desiredOffset)
-                                    } else if (desiredOffset > maxScroll) {
-                                        handlePull(desiredOffset - maxScroll)
+                                if (isVertical) {
+                                    if (curCanPanX && pan.x.isFinite() && pan.x != 0f) {
+                                        canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(currentPanX)
+                                        consumed = true
                                     }
+                                    if (curCanPanY && pan.y.isFinite() && pan.y != 0f) {
+                                        canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
+                                        consumed = true
+                                    } else if (!curCanPanY) {
+                                        val forwardDelta = -pan.y
+                                        if (forwardDelta != 0f) {
+                                            consumed = true
+                                            scrollState.isDragging = true
+                                            dragAccumulator += forwardDelta
+                                            val desiredOffset = startOffset + dragAccumulator
+                                            val maxScroll = scrollState.maxOffset
+                                            val newOffset = desiredOffset.coerceIn(0f, maxScroll)
+                                            scrollState.snapTo(newOffset)
+                                            scene?.let { updateResourceWindow(it, newOffset) }
+
+                                            if (desiredOffset < 0f) {
+                                                handlePull(desiredOffset)
+                                            } else if (desiredOffset > maxScroll) {
+                                                handlePull(desiredOffset - maxScroll)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    if (curCanPanY && pan.y.isFinite() && pan.y != 0f) {
+                                        canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
+                                        consumed = true
+                                    }
+                                    if (curCanPanX && pan.x.isFinite() && pan.x != 0f) {
+                                        canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(currentPanX)
+                                        consumed = true
+                                    } else if (!curCanPanX) {
+                                        val forwardDelta = if (isRtl) pan.x else -pan.x
+                                        if (forwardDelta != 0f) {
+                                            consumed = true
+                                            scrollState.isDragging = true
+                                            dragAccumulator += forwardDelta
+                                            val desiredOffset = startOffset + dragAccumulator
+                                            val maxScroll = scrollState.maxOffset
+                                            val newOffset = desiredOffset.coerceIn(0f, maxScroll)
+                                            scrollState.snapTo(newOffset)
+                                            scene?.let { updateResourceWindow(it, newOffset) }
+
+                                            if (desiredOffset < 0f) {
+                                                handlePull(desiredOffset)
+                                            } else if (desiredOffset > maxScroll) {
+                                                handlePull(desiredOffset - maxScroll)
+                                            }
+                                        }
+                                    }
+                                }
+                                if (consumed) {
+                                    event.changes.forEach { it.consume() }
                                 }
                             }
                         }
@@ -651,6 +811,11 @@ fun ComposeScenePagedReader(
                             totalSlots = scene.slotCount,
                         )
                         val targetOffset = (targetSlot * pe).coerceIn(0f, scrollState.maxOffset)
+                        if (targetSlot != initialSlot) {
+                            val (newInitX, newInitY) = resolveSlotInitialOffsets(targetSlot)
+                            canvasOffsetX = newInitX
+                            canvasOffsetY = newInitY
+                        }
 
                         snapAnimationJob = coroutineScope.launch {
                             scrollState.isFlinging = true
