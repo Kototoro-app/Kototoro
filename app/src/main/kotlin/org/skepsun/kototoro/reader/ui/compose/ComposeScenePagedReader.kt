@@ -44,9 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
+import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageGeometryHint
@@ -68,8 +72,12 @@ import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
 import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
+import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridge
+import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
+import org.skepsun.kototoro.reader.render.compose.animatedDrawBridge
 import org.skepsun.kototoro.reader.render.compose.drawFrameNodes
 import org.skepsun.kototoro.reader.render.compose.rememberComposeScenePrimaryScrollState
+import org.skepsun.kototoro.reader.render.compose.tileDrawBridge
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
 import kotlin.math.roundToInt
@@ -139,12 +147,16 @@ fun ComposeScenePagedReader(
     onRetryError: (Throwable, retry: () -> Unit) -> Unit = { _, retry -> retry() },
     resolveErrorStringId: (Throwable) -> Int = ExceptionResolver::getResolveStringId,
     isAnimationEnabled: Boolean = true,
+    pageAnimation: ReaderAnimation = ReaderAnimation.DEFAULT,
+    readerBackground: ReaderBackground = ReaderBackground.BLACK,
+    readerBackgroundColor: Int = android.graphics.Color.BLACK,
+    bookBackgroundTint: Int? = null,
+    zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
     isReaderOptimizationEnabled: Boolean = false,
     isPreloadReductionEnabled: Boolean = false,
     isCropEnabled: Boolean = false,
     bitmapConfig: Bitmap.Config = Bitmap.Config.ARGB_8888,
     imageColorFilter: ColorFilter? = null,
-    readerBackgroundColor: Int = android.graphics.Color.BLACK,
     pageOverlay: @Composable BoxScope.() -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -181,7 +193,7 @@ fun ComposeScenePagedReader(
         )
     }
 
-    val scene = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection) {
+    val scene = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection, zoomMode) {
         if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) null
         else {
             PagedReaderScene(
@@ -192,11 +204,24 @@ fun ComposeScenePagedReader(
                     isCoverOffset = coverPage,
                     readingDirection = readingDirection,
                     pageSpacingPx = 0,
+                    zoomMode = zoomMode,
                 ),
                 initialSpecs = createInitialPagedPageSpecs(pages, adapter),
             )
         }
     }
+
+    val animatedBridge = remember { AnimatedDrawBridge() }
+    DisposableEffect(animatedBridge) {
+        onDispose {
+            animatedBridge.stopAll()
+        }
+    }
+
+    val resolvedBackgroundColor = remember(readerBackgroundColor, bookBackgroundTint) {
+        applyAutomaticBookBackgroundTint(readerBackgroundColor, bookBackgroundTint)
+    }
+    val shouldAnimate = isAnimationEnabled && pageAnimation != ReaderAnimation.NONE
 
     val primaryExtent = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
     val initialPosition = remember(pages, initialPage) { initialPage.coerceIn(pages.indices) }
@@ -285,6 +310,38 @@ fun ComposeScenePagedReader(
             }
         }
         adapter.updateResourceWindow(ReaderResourceWindow(requests))
+
+        // 4. For visible Tiled pages, request intersecting lattice tiles
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
+    }
+
+    LaunchedEffect(scrollState.offset, scene, retainedAssets) {
+        if (scene != null) {
+            updateResourceWindow(scene, scrollState.offset)
+        }
+    }
+
+    // 150ms Zoom settle signal to trigger multi-LOD progressive replacement
+    LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset, scene) {
+        if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
+            delay(150)
+            val isHorizontal = readingDirection.isHorizontal
+            val visibleBounds = SceneImagePresentationCoordinator.computeVisibleBounds(
+                viewportWidth = viewportWidthPx,
+                viewportHeight = viewportHeightPx,
+                scrollOffset = scrollState.offset,
+                isHorizontal = isHorizontal,
+                canvasScale = canvasScale,
+                canvasOffsetX = canvasOffsetX,
+                canvasOffsetY = canvasOffsetY,
+                totalSceneExtent = scene.totalSceneExtent,
+                totalCrossExtent = if (isHorizontal) viewportHeightPx else viewportWidthPx,
+            )
+            adapter.onCameraSettled(
+                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale, visibleBounds),
+                scene = scene,
+            )
+        }
     }
 
     // Zero-CLS anchor compensation on image decode
@@ -369,7 +426,7 @@ fun ComposeScenePagedReader(
                 val targetSlot = scene.slotIndexOf(PageId(targetPage.readerKey))
                 if (targetSlot >= 0) {
                     val targetOffset = (targetSlot * primaryExtent).coerceIn(0f, scrollState.maxOffset)
-                    if (requestedPageSmooth && isAnimationEnabled) {
+                    if (requestedPageSmooth && shouldAnimate) {
                         snapAnimationJob?.cancel()
                         snapAnimationJob = coroutineScope.launch {
                             scrollState.isFlinging = true
@@ -401,7 +458,7 @@ fun ComposeScenePagedReader(
         if (pages.none { it.readerKey == command.pageKey }) return@LaunchedEffect
         val targetScale = (canvasScale * command.factor).coerceIn(1f, 5f)
         zoomAnimationJob?.cancel()
-        if (isAnimationEnabled) {
+        if (shouldAnimate) {
             zoomAnimationJob = coroutineScope.launch {
                 animate(
                     initialValue = canvasScale,
@@ -453,7 +510,9 @@ fun ComposeScenePagedReader(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(readerBackgroundColor))
+            .tileDrawBridge(adapter.tileStore)
+            .animatedDrawBridge(animatedBridge)
+            .background(Color(resolvedBackgroundColor))
             .onSizeChanged { size ->
                 viewportWidthPx = size.width.toFloat()
                 viewportHeightPx = size.height.toFloat()
@@ -481,7 +540,7 @@ fun ComposeScenePagedReader(
                         down.consume()
                         val targetScale = if (canvasScale > 1f) 1f else 2.5f
                         coroutineScope.launch {
-                            if (isAnimationEnabled) {
+                            if (shouldAnimate) {
                                 animate(
                                     initialValue = canvasScale,
                                     targetValue = targetScale,
@@ -596,7 +655,7 @@ fun ComposeScenePagedReader(
                         snapAnimationJob = coroutineScope.launch {
                             scrollState.isFlinging = true
                             try {
-                                if (isAnimationEnabled) {
+                                if (shouldAnimate) {
                                     animate(
                                         initialValue = scrollState.offset,
                                         targetValue = targetOffset,
@@ -644,6 +703,7 @@ fun ComposeScenePagedReader(
                             placeholderColor = Color.DarkGray,
                             imageColorFilter = imageColorFilter,
                             readerAssetProvider = { id: PageId -> retainedAssets[id] },
+                            animatedBridge = animatedBridge,
                             screenPositionProvider = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) {
                                 { node: VisibleNode ->
                                     val slotIndex = scene.slotIndexOf(node.pageId)

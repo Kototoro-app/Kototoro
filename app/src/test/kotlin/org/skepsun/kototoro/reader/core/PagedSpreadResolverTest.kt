@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.skepsun.kototoro.core.model.ZoomMode
 
 class PagedSpreadResolverTest {
 
@@ -161,5 +162,88 @@ class PagedSpreadResolverTest {
         assertEquals(listOf(PageId(1L), PageId(2L)), slots[0].pageIds)
         assertEquals(listOf(PageId(3L)), slots[1].pageIds)
         assertEquals(listOf(PageId(4L), PageId(5L)), slots[2].pageIds)
+    }
+
+    @Test
+    fun `fit mode FIT_WIDTH scales page to full viewport width`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),
+        )
+
+        val slots = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 800,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                zoomMode = ZoomMode.FIT_WIDTH,
+            ),
+        )
+
+        assertEquals(1, slots.size)
+        val placement = slots[0].placements[0]
+        assertEquals(800f, placement.boundsInSlot.width)
+        assertEquals(1600f, placement.boundsInSlot.height)
+        assertEquals(0f, placement.boundsInSlot.left)
+    }
+
+    @Test
+    fun `fit mode FIT_HEIGHT scales page to full viewport height`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),
+        )
+
+        val slots = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 1000,
+            viewportHeight = 1500,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                zoomMode = ZoomMode.FIT_HEIGHT,
+            ),
+        )
+
+        assertEquals(1, slots.size)
+        val placement = slots[0].placements[0]
+        assertEquals(1500f, placement.boundsInSlot.height)
+        assertEquals(750f, placement.boundsInSlot.width)
+        assertEquals(125f, placement.boundsInSlot.left)
+    }
+
+    @Test
+    fun `fit mode KEEP_START aligns to start edge`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),
+        )
+
+        // LTR: start is left (0f)
+        val slotsLtr = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 1000,
+            viewportHeight = 1000,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+                zoomMode = ZoomMode.KEEP_START,
+            ),
+        )
+        val pLtr = slotsLtr[0].placements[0]
+        assertEquals(0f, pLtr.boundsInSlot.left)
+        assertEquals(0f, pLtr.boundsInSlot.top)
+
+        // RTL: start is right (viewportWidth - width = 1000 - 500 = 500f)
+        val slotsRtl = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 1000,
+            viewportHeight = 1000,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                readingDirection = SceneReadingDirection.RIGHT_TO_LEFT,
+                zoomMode = ZoomMode.KEEP_START,
+            ),
+        )
+        val pRtl = slotsRtl[0].placements[0]
+        assertEquals(500f, pRtl.boundsInSlot.left)
+        assertEquals(0f, pRtl.boundsInSlot.top)
     }
 }

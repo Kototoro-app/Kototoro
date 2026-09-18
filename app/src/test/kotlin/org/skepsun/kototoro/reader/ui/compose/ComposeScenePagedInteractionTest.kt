@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
+import org.skepsun.kototoro.core.model.ZoomMode
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageGeometryHint
+import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PageSegment
 import org.skepsun.kototoro.reader.core.PagedPageSpec
@@ -290,5 +292,50 @@ class ComposeScenePagedInteractionTest {
         // After applying compensation to viewport, the active anchor page remains Page 3!
         val frameAfter = scene.resolve(compensation.compensatedViewport)
         assertEquals(PageId(pages[2].readerKey), frameAfter.progress.activePageId)
+    }
+
+    @Test
+    fun `ZoomMode config correctly propagates to PagedReaderScene placements`() {
+        val pages = listOf(
+            createPage(id = 1L, chapterId = 1L, index = 0),
+        )
+        val specs = listOf(
+            PagedPageSpec(PageId(pages[0].readerKey), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),
+        )
+        val scene = PagedReaderScene(
+            viewportWidth = 800,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(
+                isDoublePage = false,
+                zoomMode = ZoomMode.FIT_WIDTH,
+            ),
+            initialSpecs = specs,
+        )
+
+        val slot = scene.allSlots.first()
+        val placement = slot.placements.first()
+        assertEquals(800f, placement.boundsInSlot.width)
+        assertEquals(1600f, placement.boundsInSlot.height)
+    }
+
+    @Test
+    fun `paged camera snapshot visible bounds calculation maps zoomed viewport to scene bounds`() {
+        // Slot 2 in horizontal paged reader (offset 2000px, viewport 1000px)
+        val visibleBounds = SceneImagePresentationCoordinator.computeVisibleBounds(
+            viewportWidth = 1000f,
+            viewportHeight = 1500f,
+            scrollOffset = 2000f,
+            isHorizontal = true,
+            canvasScale = 2.5f,
+            canvasOffsetX = 100f,
+            canvasOffsetY = -50f,
+            totalSceneExtent = 10000f,
+            totalCrossExtent = 1500f,
+        )
+
+        val snapshot = SceneImagePresentationCoordinator.createCameraSnapshot(2.5f, visibleBounds)
+        assertEquals(2.5f, snapshot.scale)
+        assertTrue(snapshot.visibleBoundsInScene.left >= 2000f)
+        assertTrue(snapshot.visibleBoundsInScene.right <= 3000f)
     }
 }

@@ -116,7 +116,7 @@ fun ComposeReaderScreenRoot(
 
     key(mode, isDoublePage, layoutGeneration) {
     if (isDoublePage) {
-        if (readerSettings.isExperimentalSceneReaderEnabled) {
+        if (readerSettings.isExperimentalSceneReaderEnabled && readerSettings.isExperimentalPagedSceneReaderEnabled) {
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
@@ -167,7 +167,11 @@ fun ComposeReaderScreenRoot(
                 onRetryError = onRetryError,
                 resolveErrorStringId = resolveErrorStringId,
                 isAnimationEnabled = isAnimationEnabled,
+                pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
+                readerBackground = readerSettings.background,
                 readerBackgroundColor = readerBackgroundColor,
+                bookBackgroundTint = bookBackgroundTint,
+                zoomMode = readerSettings.zoomMode,
                 imageColorFilter = readerImageColorFilter,
                 bitmapConfig = readerSettings.bitmapConfig,
                 isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
@@ -233,6 +237,7 @@ fun ComposeReaderScreenRoot(
                 readerBackground = readerSettings.background,
                 readerBackgroundColor = readerBackgroundColor,
                 bookBackgroundTint = bookBackgroundTint,
+                zoomMode = readerSettings.zoomMode,
                 imageColorFilter = readerImageColorFilter,
                 bitmapConfig = readerSettings.bitmapConfig,
                 isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
@@ -341,7 +346,7 @@ fun ComposeReaderScreenRoot(
             )
         }
     } else {
-        if (readerSettings.isExperimentalSceneReaderEnabled) {
+        if (readerSettings.isExperimentalSceneReaderEnabled && readerSettings.isExperimentalPagedSceneReaderEnabled) {
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
@@ -369,7 +374,11 @@ fun ComposeReaderScreenRoot(
                 onRetryError = onRetryError,
                 resolveErrorStringId = resolveErrorStringId,
                 isAnimationEnabled = isAnimationEnabled,
+                pageAnimation = if (isAnimationEnabled) pageAnimation else ReaderAnimation.NONE,
+                readerBackground = readerSettings.background,
                 readerBackgroundColor = readerBackgroundColor,
+                bookBackgroundTint = bookBackgroundTint,
+                zoomMode = readerSettings.zoomMode,
                 imageColorFilter = readerImageColorFilter,
                 bitmapConfig = readerSettings.bitmapConfig,
                 isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,

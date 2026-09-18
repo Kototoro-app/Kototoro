@@ -73,6 +73,7 @@ import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.arr.AdaptiveRefreshRateHelper
 import org.skepsun.kototoro.reader.render.compose.ComposeHorizontalSceneRenderer
+import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.render.compose.rememberComposeScenePrimaryScrollState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import kotlin.math.roundToInt
@@ -284,26 +285,7 @@ fun ComposeSceneHorizontalReader(
             adapter.updateResourceWindow(it)
         }
 
-        for (node in frame.visibleNodes) {
-            val asset = retainedAssets[node.pageId]
-            if (asset is ReaderImageAsset.Tiled && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
-                val scaleX = asset.grid.pageSize.width.toFloat() / node.sceneBounds.width
-                val scaleY = asset.grid.pageSize.height.toFloat() / node.sceneBounds.height
-
-                val visRelLeft = (node.visibleRegion.left - node.sceneBounds.left) * scaleX
-                val visRelTop = (node.visibleRegion.top - node.sceneBounds.top) * scaleY
-                val visRelRight = (node.visibleRegion.right - node.sceneBounds.left) * scaleX
-                val visRelBottom = (node.visibleRegion.bottom - node.sceneBounds.top) * scaleY
-
-                val visibleLogical = IntRect(
-                    left = visRelLeft.toInt().coerceIn(0, asset.grid.pageSize.width),
-                    top = visRelTop.toInt().coerceIn(0, asset.grid.pageSize.height),
-                    right = kotlin.math.ceil(visRelRight).toInt().coerceIn(0, asset.grid.pageSize.width),
-                    bottom = kotlin.math.ceil(visRelBottom).toInt().coerceIn(0, asset.grid.pageSize.height),
-                )
-                adapter.requestTiles(node.pageId, visibleLogical)
-            }
-        }
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
     }
 
     LaunchedEffect(pages, scene) {
@@ -509,24 +491,19 @@ fun ComposeSceneHorizontalReader(
     LaunchedEffect(canvasScale, canvasOffsetX, canvasOffsetY, scrollState.offset, activeScene) {
         if (activeScene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
             delay(150)
-            val centerX = viewportWidthPx / 2f
-            val centerY = viewportHeightPx / 2f
-            val leftRel = (centerX + (0f - canvasOffsetX - centerX) / canvasScale).coerceAtLeast(0f)
-            val rightRel = (centerX + (viewportWidthPx - canvasOffsetX - centerX) / canvasScale).coerceAtLeast(0f)
-            val left = (scrollState.offset + leftRel).coerceIn(0f, activeScene.totalSceneWidth)
-            val right = (scrollState.offset + rightRel).coerceIn(0f, activeScene.totalSceneWidth)
-
-            val top = (centerY + (0f - canvasOffsetY - centerY) / canvasScale).coerceIn(0f, activeScene.availableHeight.toFloat())
-            val bottom = (centerY + (viewportHeightPx - canvasOffsetY - centerY) / canvasScale).coerceIn(0f, activeScene.availableHeight.toFloat())
-
-            val visibleBounds = FloatRect(
-                left = left,
-                top = top,
-                right = right,
-                bottom = bottom,
+            val visibleBounds = SceneImagePresentationCoordinator.computeVisibleBounds(
+                viewportWidth = viewportWidthPx,
+                viewportHeight = viewportHeightPx,
+                scrollOffset = scrollState.offset,
+                isHorizontal = true,
+                canvasScale = canvasScale,
+                canvasOffsetX = canvasOffsetX,
+                canvasOffsetY = canvasOffsetY,
+                totalSceneExtent = activeScene.totalSceneWidth,
+                totalCrossExtent = activeScene.availableHeight.toFloat(),
             )
             adapter.onCameraSettled(
-                ReaderCameraSnapshot(scale = canvasScale, visibleBoundsInScene = visibleBounds),
+                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale, visibleBounds),
                 scene = activeScene,
             )
         }

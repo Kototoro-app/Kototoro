@@ -78,6 +78,7 @@ import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.arr.AdaptiveRefreshRateHelper
 import org.skepsun.kototoro.reader.render.compose.ComposeSceneRenderer
+import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.render.compose.rememberComposeSceneScrollState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import kotlin.math.roundToInt
@@ -288,26 +289,7 @@ fun ComposeSceneWebtoonReader(
         }
 
         // 3. For visible Tiled pages, request intersecting lattice tiles
-        for (node in frame.visibleNodes) {
-            val asset = retainedAssets[node.pageId]
-            if (asset is ReaderImageAsset.Tiled && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
-                val scaleX = asset.grid.pageSize.width.toFloat() / node.sceneBounds.width
-                val scaleY = asset.grid.pageSize.height.toFloat() / node.sceneBounds.height
-
-                val visRelLeft = (node.visibleRegion.left - node.sceneBounds.left) * scaleX
-                val visRelTop = (node.visibleRegion.top - node.sceneBounds.top) * scaleY
-                val visRelRight = (node.visibleRegion.right - node.sceneBounds.left) * scaleX
-                val visRelBottom = (node.visibleRegion.bottom - node.sceneBounds.top) * scaleY
-
-                val visibleLogical = IntRect(
-                    left = visRelLeft.toInt().coerceIn(0, asset.grid.pageSize.width),
-                    top = visRelTop.toInt().coerceIn(0, asset.grid.pageSize.height),
-                    right = kotlin.math.ceil(visRelRight).toInt().coerceIn(0, asset.grid.pageSize.width),
-                    bottom = kotlin.math.ceil(visRelBottom).toInt().coerceIn(0, asset.grid.pageSize.height),
-                )
-                adapter.requestTiles(node.pageId, visibleLogical)
-            }
-        }
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
     }
 
     // Preserve visual reading anchor and exact geometry hints across cross-chapter window expansions
@@ -644,23 +626,20 @@ fun ComposeSceneWebtoonReader(
         if (activeScene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
             delay(150)
             val layoutHeight = resolveWebtoonLayoutViewportHeight(viewportHeightPx.toInt(), canvasScale)
-            val centerX = viewportWidthPx / 2f
-            val centerY = layoutHeight / 2f
-            val left = (centerX + (0f - canvasOffsetX - centerX) / canvasScale).coerceIn(0f, viewportWidthPx)
-            val right = (centerX + (viewportWidthPx - canvasOffsetX - centerX) / canvasScale).coerceIn(0f, viewportWidthPx)
-            val topRel = (centerY + (0f - canvasOffsetY - centerY) / canvasScale).coerceAtLeast(0f)
-            val bottomRel = (centerY + (viewportHeightPx - canvasOffsetY - centerY) / canvasScale).coerceAtLeast(0f)
-            val top = (scrollState.scrollY + topRel).coerceIn(0f, activeScene.totalSceneHeight)
-            val bottom = (scrollState.scrollY + bottomRel).coerceIn(0f, activeScene.totalSceneHeight)
-
-            val visibleBounds = FloatRect(
-                left = left,
-                top = top,
-                right = right,
-                bottom = bottom,
+            val visibleBounds = SceneImagePresentationCoordinator.computeVisibleBounds(
+                viewportWidth = viewportWidthPx,
+                viewportHeight = viewportHeightPx,
+                scrollOffset = scrollState.scrollY,
+                isHorizontal = false,
+                canvasScale = canvasScale,
+                canvasOffsetX = canvasOffsetX,
+                canvasOffsetY = canvasOffsetY,
+                totalSceneExtent = activeScene.totalSceneHeight,
+                totalCrossExtent = viewportWidthPx,
+                effectiveViewportHeight = layoutHeight.toFloat(),
             )
             adapter.onCameraSettled(
-                ReaderCameraSnapshot(scale = canvasScale, visibleBoundsInScene = visibleBounds),
+                SceneImagePresentationCoordinator.createCameraSnapshot(canvasScale, visibleBounds),
                 scene = activeScene,
             )
         }

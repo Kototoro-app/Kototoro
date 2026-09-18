@@ -23,7 +23,8 @@
     - Phase 3B (分页影子模式校验器与等价性测试：PagedShadowValidator、PagedShadowParityTest 与运行时采样)：已完成（Completed）
     - Phase 3C (现代分页场景 Compose 宿主：ComposeScenePagedReader，单双页统一架构、弹性吸附、缩放与 Draw Phase 呈现)：已完成（Completed）
     - Phase 3D (生产路由接线、交互测试套件验证与 ADR 归档)：已完成（Completed）
-  - Scene Reader 功能集成：已全量覆盖 Webtoon 纵向瀑布流、横向连续流（LTR/RTL）、单页离散分页（LTR/RTL/Vertical）与双页并页模式，纯 Draw Phase 渲染与零跳动锚定全部落地
+    - Phase 3E (图像呈现 Parity 补齐与生产门控解耦：SceneImagePresentationCoordinator、可见切片请求、多 LOD 缩放、动图生命周期与独立安全门控)：已完成（Completed）
+  - Scene Reader 功能集成：已全量覆盖 Webtoon 纵向瀑布流、横向连续流（LTR/RTL）、单页离散分页（LTR/RTL/Vertical）与双页并页模式，纯 Draw Phase 渲染、可见切片多 LOD 驱动与零跳动锚定全部落地
 - 关联分支：`feat/webgpu-reader`（WebGPU 成果隔离保存与上游追踪）、`devel`（基线主干）
 - 核心准则：**ReaderCore owns semantics; ImagePipeline owns image policy; Renderer owns presentation.**（ReaderCore 掌管阅读语义；ImagePipeline 掌管图像策略；Renderer 掌管呈现）
 
@@ -464,6 +465,23 @@ reader/
   - 在开关关闭时，100% 无损回落至既有 `ComposeDoublePageReader` 与 `ComposePagedReader`；
 - **交互集成测试 (`ComposeScenePagedInteractionTest.kt`)**：
   - 覆盖离散插槽隔离、双页并页跨章阻断、RTL 日漫左右排布、吸附阈值、过渡求交与动态更新补偿。全套测试 100% 通过。
+
+**Phase 3E：图像呈现 Parity 补齐与生产门控解耦（已完成）**
+- **架构抽离与去重 (`SceneImagePresentationCoordinator`)**：
+  - 抽取统一呈现协调器，解决分页场景超大图（如 $6000 \times 9000$）因未请求可见切片而仅渲染 LOD0 Overview 导致发糊的核心 Blocker；
+  - 统一 Webtoon、Horizontal 与 Paged 三大场景宿主的 Frame 可见切片计算（`coordinateVisibleTiles`）与视口逆向变换数学（`computeVisibleBounds`），消除重复实现。
+- **分辨率感知多 LOD 缩放（Resolution-aware Multi-LOD）**：
+  - 接入 150ms Camera Settle 防抖与 `ReaderCameraSnapshot`，高倍放大（$2\times \sim 5\times$）时自动降级采样率并请求高清视口瓦片，缩放回归 1x 时自动释放过采样切片。
+- **绘制生命周期闭环 (`TileDrawBridge` & `AnimatedDrawBridge`)**：
+  - 挂载 `.tileDrawBridge(adapter.tileStore)`，后台解码切片就绪时直接触发局部 Draw-phase 重绘，跳过 Compose Recomposition；
+  - 挂载 `AnimatedDrawBridge` 并传入 `drawFrameNodes`，打通 GIF / Animated WebP 的逐帧回调、可见时启动、不可见时暂停的生命周期。
+- **设置与排版 Parity**：
+  - `PagedSpreadConfig` 与 `PagedSpreadResolver` 全面支持 `ZoomMode`（`FIT_CENTER`、`FIT_WIDTH`、`FIT_HEIGHT`、`KEEP_START`）；
+  - 支持 `ReaderAnimation`（`NONE` 时立即 snap，动画模式平滑过渡）；
+  - 支持 `readerBackground` 与 `bookBackgroundTint`。
+- **生产门控安全解耦**：
+  - 新增 `isExperimentalPagedSceneReaderEnabled`（默认 `false`），与成熟且已默认开启的 Webtoon / Horizontal 场景解耦；
+  - 保证未手动开启分页实验开关的用户 100% 继续使用稳定的 `Pager + Telephoto`，零生产回退风险。
 
 ---
 
