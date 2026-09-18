@@ -45,6 +45,22 @@ class VerticalReaderSceneTest {
     }
 
     @Test
+    fun `resolveViewportOriginForPage accurately restores viewport in vertical scene`() {
+        val scene = VerticalReaderScene(
+            availableWidth = 1000,
+            defaultViewportHeight = 2000,
+            initialPages = listOf(
+                PageId(10L) to PageGeometryHint.Exact(1000, 1000),
+                PageId(20L) to PageGeometryHint.Exact(1000, 2000),
+            ),
+        )
+
+        assertEquals(0f, scene.resolveViewportOriginForPage(PageId(10L), viewportExtent = 2000f, intraPageOffset = 0f))
+        assertEquals(1000f, scene.resolveViewportOriginForPage(PageId(20L), viewportExtent = 2000f, intraPageOffset = 0f))
+        assertEquals(1450f, scene.resolveViewportOriginForPage(PageId(20L), viewportExtent = 2000f, intraPageOffset = 450f))
+    }
+
+    @Test
     fun `resolve returns intersecting pages with fast binary search`() {
         val pages = (1..50).map { i ->
             PageId(i.toLong()) to PageGeometryHint.Exact(1000, 1000) // Each page 1000px high

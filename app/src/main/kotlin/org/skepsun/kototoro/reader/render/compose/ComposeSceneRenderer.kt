@@ -291,6 +291,7 @@ internal fun DrawScope.drawFrameNodes(
     viewportScrollX: Float = 0f,
     viewportScrollY: Float = 0f,
     horizontalOffset: Float = 0f,
+    verticalOffset: Float = 0f,
     seamPolicy: PageSeamPolicy = PageSeamPolicy.VerticalContinuous,
     placeholderColor: Color,
     pageLabelProvider: ((PageId) -> String)? = null,
@@ -307,7 +308,7 @@ internal fun DrawScope.drawFrameNodes(
     animatedBridge?.updateVisiblePages(visiblePageIds)
 
     for (node in frame.visibleNodes) {
-        val screenTop = node.sceneBounds.top - viewportScrollY
+        val screenTop = node.sceneBounds.top - viewportScrollY + verticalOffset
         val screenLeft = node.sceneBounds.left - viewportScrollX + horizontalOffset
         val nodeWidth = node.sceneBounds.width
         val nodeHeight = node.sceneBounds.height

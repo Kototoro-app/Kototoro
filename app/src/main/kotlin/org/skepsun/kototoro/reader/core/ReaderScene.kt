@@ -82,6 +82,20 @@ interface ReaderScene {
      * Resolves the coordinate of [pageId] along the primary reading axis in scene coordinates, or null if absent.
      */
     fun resolvePageScrollPosition(pageId: PageId): Float?
+
+    /**
+     * Resolves the primary-axis viewport coordinate required to align the viewport with [pageId]
+     * matching the given [intraPageOffset] and current [viewportExtent].
+     *
+     * - [SceneReadingDirection.TOP_TO_BOTTOM]: `page.top + intraPageOffset`
+     * - [SceneReadingDirection.LEFT_TO_RIGHT]: `page.left + intraPageOffset`
+     * - [SceneReadingDirection.RIGHT_TO_LEFT]: `page.right - viewportExtent - intraPageOffset`
+     */
+    fun resolveViewportOriginForPage(
+        pageId: PageId,
+        viewportExtent: Float,
+        intraPageOffset: Float = 0f,
+    ): Float?
 }
 
 /**

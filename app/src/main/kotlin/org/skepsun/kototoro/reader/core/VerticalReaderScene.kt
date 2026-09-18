@@ -156,6 +156,15 @@ class VerticalReaderScene(
         return entries[index].geometry.sceneBounds.top
     }
 
+    override fun resolveViewportOriginForPage(
+        pageId: PageId,
+        viewportExtent: Float,
+        intraPageOffset: Float,
+    ): Float? {
+        val top = resolvePageScrollPosition(pageId) ?: return null
+        return top + intraPageOffset
+    }
+
     /**
      * Computes the visible nodes and active reading semantic state for a given [viewport].
      */

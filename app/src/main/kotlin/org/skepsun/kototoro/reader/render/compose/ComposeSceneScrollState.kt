@@ -2,45 +2,56 @@ package org.skepsun.kototoro.reader.render.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 
 /**
- * State object holding high-frequency scroll position and gestures for [ComposeSceneRenderer].
+ * State object holding high-frequency vertical scroll position and gestures for [ComposeSceneRenderer].
+ *
+ * Backed by [ComposeScenePrimaryScrollState] to share scroll state mechanics across orientations.
  *
  * Implements ADR 0002 Constraint 3:
  * - High-frequency scroll offset is consumed in the Draw Phase bypassing Composition/Layout.
- * - Supports [snapBy] to execute zero-CLS [VerticalReaderScene.AnchorCompensation] when page
- *   geometry is updated from estimated to exact dimensions.
+ * - Supports [snapBy] to execute zero-CLS anchored layout compensation.
  */
 @Stable
 class ComposeSceneScrollState(
     initialScrollY: Float = 0f,
     maxScrollY: Float = Float.MAX_VALUE,
 ) {
-    var scrollY by mutableFloatStateOf(initialScrollY)
-        internal set
+    val primaryState = ComposeScenePrimaryScrollState(initialScrollY, maxScrollY)
 
-    var maxScrollY by mutableFloatStateOf(maxScrollY)
-        internal set
+    var scrollY: Float
+        get() = primaryState.offset
+        internal set(value) {
+            primaryState.offset = value
+        }
 
-    var isDragging by mutableStateOf(false)
-        internal set
+    var maxScrollY: Float
+        get() = primaryState.maxOffset
+        internal set(value) {
+            primaryState.maxOffset = value
+        }
 
-    var isFlinging by mutableStateOf(false)
-        internal set
+    var isDragging: Boolean
+        get() = primaryState.isDragging
+        internal set(value) {
+            primaryState.isDragging = value
+        }
 
-    val isScrollInProgress: Boolean get() = isDragging || isFlinging
+    var isFlinging: Boolean
+        get() = primaryState.isFlinging
+        internal set(value) {
+            primaryState.isFlinging = value
+        }
+
+    val isScrollInProgress: Boolean get() = primaryState.isScrollInProgress
 
     fun snapTo(value: Float) {
-        scrollY = value.coerceIn(0f, maxScrollY)
+        primaryState.snapTo(value)
     }
 
     fun snapBy(delta: Float) {
-        scrollY = (scrollY + delta).coerceIn(0f, maxScrollY)
+        primaryState.snapBy(delta)
     }
 }
 

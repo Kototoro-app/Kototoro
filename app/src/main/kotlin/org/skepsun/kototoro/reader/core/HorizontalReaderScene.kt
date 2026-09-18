@@ -193,6 +193,21 @@ class HorizontalReaderScene(
         }
     }
 
+    override fun resolveViewportOriginForPage(
+        pageId: PageId,
+        viewportExtent: Float,
+        intraPageOffset: Float,
+    ): Float? {
+        val index = indexOf(pageId)
+        if (index < 0) return null
+        val bounds = entries[index].geometry.sceneBounds
+        return when (readingDirection) {
+            SceneReadingDirection.LEFT_TO_RIGHT -> bounds.left + intraPageOffset
+            SceneReadingDirection.RIGHT_TO_LEFT -> bounds.right - viewportExtent - intraPageOffset
+            SceneReadingDirection.TOP_TO_BOTTOM -> bounds.top + intraPageOffset
+        }
+    }
+
     /**
      * Computes the visible nodes and active reading semantic state for a given [viewport].
      *

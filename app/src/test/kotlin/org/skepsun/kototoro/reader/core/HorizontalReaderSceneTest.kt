@@ -92,6 +92,43 @@ class HorizontalReaderSceneTest {
     }
 
     @Test
+    fun `resolveViewportOriginForPage accurately restores viewport for LTR and RTL`() {
+        val sceneLtr = HorizontalReaderScene(
+            availableHeight = 1000,
+            defaultViewportWidth = 1000,
+            initialPages = listOf(
+                PageId(10L) to PageGeometryHint.Exact(1000, 1000), // [0..1000]
+                PageId(20L) to PageGeometryHint.Exact(2000, 1000), // [1000..3000]
+            ),
+            readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+        )
+
+        // LTR Page 10 start -> 0f
+        assertEquals(0f, sceneLtr.resolveViewportOriginForPage(PageId(10L), viewportExtent = 1000f, intraPageOffset = 0f))
+        // LTR Page 20 start -> 1000f
+        assertEquals(1000f, sceneLtr.resolveViewportOriginForPage(PageId(20L), viewportExtent = 1000f, intraPageOffset = 0f))
+        // LTR Page 20 with 350px intra offset -> 1350f
+        assertEquals(1350f, sceneLtr.resolveViewportOriginForPage(PageId(20L), viewportExtent = 1000f, intraPageOffset = 350f))
+
+        val sceneRtl = HorizontalReaderScene(
+            availableHeight = 1000,
+            defaultViewportWidth = 1000,
+            initialPages = listOf(
+                PageId(10L) to PageGeometryHint.Exact(1000, 1000), // [2000..3000]
+                PageId(20L) to PageGeometryHint.Exact(2000, 1000), // [0..2000]
+            ),
+            readingDirection = SceneReadingDirection.RIGHT_TO_LEFT,
+        )
+
+        // RTL Page 10 start -> bounds.right(3000) - viewportExtent(1000) - 0 = 2000f
+        assertEquals(2000f, sceneRtl.resolveViewportOriginForPage(PageId(10L), viewportExtent = 1000f, intraPageOffset = 0f))
+        // RTL Page 20 start -> bounds.right(2000) - viewportExtent(1000) - 0 = 1000f
+        assertEquals(1000f, sceneRtl.resolveViewportOriginForPage(PageId(20L), viewportExtent = 1000f, intraPageOffset = 0f))
+        // RTL Page 20 with 350px intra offset -> bounds.right(2000) - viewportExtent(1000) - 350 = 650f
+        assertEquals(650f, sceneRtl.resolveViewportOriginForPage(PageId(20L), viewportExtent = 1000f, intraPageOffset = 350f))
+    }
+
+    @Test
     fun `resolve returns intersecting pages with fast binary search for LTR`() {
         val pages = (1..50).map { i ->
             PageId(i.toLong()) to PageGeometryHint.Exact(1000, 1000)
