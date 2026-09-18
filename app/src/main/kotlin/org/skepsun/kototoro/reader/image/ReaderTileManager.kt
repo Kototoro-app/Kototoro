@@ -1,5 +1,7 @@
 package org.skepsun.kototoro.reader.image
 
+import android.os.Build
+import android.os.Trace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -82,6 +84,8 @@ class ReaderTileManager(
     /** Snapshot of resident tiles. Follows the budget ledger; not gap-free under churn. */
     val tiles: StateFlow<Map<TileKey, ReaderTile>> = mutableTiles.asStateFlow()
 
+    /** Cumulative tile decode launches, reported as telemetry to expose churn. */
+    private val decodeRequests = java.util.concurrent.atomic.AtomicLong()
     override fun addListener(listener: Listener) {
         synchronized(listenersLock) { listeners.add(listener) }
     }
@@ -107,6 +111,12 @@ class ReaderTileManager(
         visibleRegion: IntRect,
         lookaheadRegion: IntRect? = null,
     ) {
+        // Residency telemetry: bounds the tile ledger's own claim about how much it holds, which is
+        // what a decode-path investigation needs to separate tile memory from everything else.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            Trace.setCounter("Reader.TileResidentBytes", budget.residentBytes)
+            Trace.setCounter("Reader.TileResidentCount", tiles.value.size.toLong())
+        }
         val visibleSpecs = grid.tilesIntersecting(visibleRegion)
         val visibleKeys = HashSet<TileKey>(visibleSpecs.size)
         visibleSpecs.forEach { visibleKeys.add(it.key) }
@@ -265,6 +275,9 @@ class ReaderTileManager(
 
     private fun launchDecode(spec: TileSpec, retention: TileRetention) {
         if (tileJobs.containsKey(spec.key)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            Trace.setCounter("Reader.TileDecodeRequests", decodeRequests.incrementAndGet())
+        }
         val job = scope.launch(start = CoroutineStart.LAZY) { decodeTile(spec, retention) }
         if (tileJobs.putIfAbsent(spec.key, job) != null) {
             return // An existing job already covers this spec.

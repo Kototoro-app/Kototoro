@@ -63,4 +63,41 @@ class ReaderZoomReacquirePolicyTest {
             ),
         )
     }
+
+    @Test
+    fun `repeating the same zoom request is not retried`() {
+        // A settle fires repeatedly while the reader pans or settles. Re-decoding the same target
+        // width every time churns tens of megabytes per attempt without ever improving the page, so
+        // an attempt at a given target is only made once.
+        val needed = 3200
+
+        assertTrue(
+            shouldAttemptZoomReacquire(
+                scale = 2.5f,
+                decodedWidthPx = 1500,
+                viewportWidthPx = viewportWidth,
+                lastAttemptWidthPx = null,
+            ),
+        )
+        assertFalse(
+            shouldAttemptZoomReacquire(
+                scale = 2.5f,
+                decodedWidthPx = 1500,
+                viewportWidthPx = viewportWidth,
+                lastAttemptWidthPx = needed,
+            ),
+        )
+    }
+
+    @Test
+    fun `a deeper zoom is a new request`() {
+        assertTrue(
+            shouldAttemptZoomReacquire(
+                scale = 4f,
+                decodedWidthPx = 1500,
+                viewportWidthPx = viewportWidth,
+                lastAttemptWidthPx = 3200,
+            ),
+        )
+    }
 }

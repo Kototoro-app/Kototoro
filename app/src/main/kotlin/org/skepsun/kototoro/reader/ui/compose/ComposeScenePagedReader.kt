@@ -524,12 +524,19 @@ fun ComposeScenePagedReader(
         }
         adapter.updateResourceWindow(ReaderResourceWindow(requests))
 
-        // 4. For visible Tiled pages, request intersecting lattice tiles
+        // 4. For visible Tiled pages, request intersecting lattice tiles.
+        // The screen viewport is the bound: a neighbour slot rendered at scale 1 would otherwise
+        // report its whole page as visible and pin a page of level-zero tiles.
         val contentNodes = currentScene.allSlots
             .filter { it.bounds.intersects(vp.bounds) }
             .flatMap { slot ->
                 val transform = resolveSlotTransform(slot.slotIndex)
-                slot.visibleContentNodes(transform.scale, transform.offsetX, transform.offsetY)
+                slot.screenVisibleContentNodes(
+                    screenViewportBounds = vp.bounds,
+                    scale = transform.scale,
+                    offsetX = transform.offsetX,
+                    offsetY = transform.offsetY,
+                )
             }
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
             frame.copy(visibleNodes = contentNodes), retainedAssets, adapter,
@@ -592,8 +599,16 @@ fun ComposeScenePagedReader(
                     scene = scene,
                 )
                 val frame = scene.resolve(ReaderViewport(slot.bounds))
+                // Bound the request by the camera's visible region, not by the slot's own viewport.
                 SceneImagePresentationCoordinator.coordinateVisibleTiles(
-                    frame.copy(visibleNodes = slot.visibleContentNodes(canvasScale, canvasOffsetX, canvasOffsetY)),
+                    frame.copy(
+                        visibleNodes = slot.screenVisibleContentNodes(
+                            screenViewportBounds = visibleBounds,
+                            scale = canvasScale,
+                            offsetX = canvasOffsetX,
+                            offsetY = canvasOffsetY,
+                        ),
+                    ),
                     retainedAssets, adapter,
                 )
             }
@@ -1199,7 +1214,14 @@ fun ComposeScenePagedReader(
                                 slotScreenX + viewportWidthPx / 2f,
                                 slotScreenY + viewportHeightPx / 2f,
                             )
-                            val slotNodes = slot.visibleContentNodes(slotScale, slotPanX, slotPanY)
+                            // Only what the screen shows: a neighbour slot at scale 1 would otherwise
+                            // draw (and texture) its entire page.
+                            val slotNodes = slot.screenVisibleContentNodes(
+                                screenViewportBounds = vp.bounds,
+                                scale = slotScale,
+                                offsetX = slotPanX,
+                                offsetY = slotPanY,
+                            )
                             val slotRect = Rect(
                                 left = slotScreenX,
                                 top = slotScreenY,

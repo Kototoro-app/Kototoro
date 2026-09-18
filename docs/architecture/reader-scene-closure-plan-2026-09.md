@@ -199,6 +199,25 @@ CS-5   experiment flag 删除 / 隐藏
   请求与修复前逐字一致），属于既有问题；legacy 宿主靠 Telephoto 的 SubSampling 不会这样。
   这是"场景阅读器真正成熟"的当前最大阻碍，优先级高于升格：需要在 4K 级放大下重新审视
   瓦片尺寸/LOD 策略（例如放大时用采样瓦片而不是 level-0 瓦片）与在飞解码的取消/回收。
+- **放大场景的定位进展（2026-09-19，同轮内多次迭代，全部有真机数据）**：
+  1. **先测量再修**：加了瓦片驻留遥测（`Reader.TileResidentBytes` / `TileResidentCount` /
+     `TileDecodeRequests` / `CachedAssetCount` / `RegionSourceCount`，由 `DecodeResidencyMetric` 读出）。
+     首测结果定性：**Java 堆 133MB 与 1× 完全相同，而 RssAnon 843MB** —— 增长全在 native（Android 8+
+     位图像素在 native 堆）；同时**瓦片账本自报 406MB / 83 块（≈4.9MB/块 = level-0 瓦片）、
+     累计 2104 次解码、4~5 个页面持有资产、4 个 region source**。可见区域实际只需约 11.5MB/页。
+  2. **已修**：`PagedSlot.visibleContentNodes` 回答的是"该 slot 自己的视口可见什么"，对**邻页**
+     （`resolveSlotTransform` 返回其保存的 scale，通常 1.0）就等于"整页" → 整页瓦片被当作 VISIBLE 钉住。
+     新增 `PagedSlot.screenVisibleContentNodes(screenViewportBounds, …)`，把结果与**屏幕视口**求交，
+     宿主两处（资源窗口与 draw phase）都改用它。
+     效果：瓦片驻留 **406MB → 283MB（−30%）**、RSS **843MB → 706MB（−137MB）**。
+  3. **另有两次尝试为负结果，已如实记录**：①给 LOD 策略加"绘制密度容差"（避免只是差 6% 就退回 level-0）
+     —— 对放大场景无影响（2.5× 实际相机 3.61×，此时 level-0 是合理的锐度选择）；②限制单页位图
+     不得占用整个工作集预算（`TilePolicy.maxSinglePageCostBytes` = 16MB）并把放大重解码改为
+     "同一目标宽度只尝试一次" —— 同样未改变放大场景的数字（两处改动本身仍有价值，保留）。
+  4. **仍未解决**：修复后仍有 **283MB 瓦片 / 53 块 / 1951 次解码 / CPU P99 429ms**，说明仍在按
+     level-0 请求远超可见范围的瓦片（预期约 6 块/页、24MB/页）。下一轮应从两处继续：
+     ①`onCameraSettled` 的 target 层与 base 层可能同时驻留（`requestTiles` 同时驱动两者）；
+     ②大量解码请求（1951）表明存在按页级粒度的重复请求，需要按 `TileKey` 粒度核对请求来源。
 
 ### CS-1B 分页场景转正（翻转默认开关）
 

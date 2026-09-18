@@ -59,6 +59,33 @@ class ReaderLodPolicyTest {
     }
 
     @Test
+    fun `drawing density tolerance avoids level zero just below a power of two`() {
+        // A 6000px page at 2.5x needs 3200px of decode, so the raw ratio is 1.875 and an exact
+        // power-of-two rule drops to sampleSize 1 - level-zero tiles, 4MB each - even though
+        // 6000/2 = 3000px already covers 94% of the demand. The tolerance buys that 4x.
+        val lod = policy.resolveLod(
+            sourceContentWidthPx = 6000,
+            baseDisplayWidthPx = 1280,
+            cameraScale = 2.5f,
+        )
+
+        assertEquals(2, lod.sampleSize)
+    }
+
+    @Test
+    fun `a shortfall beyond the tolerance keeps the sharper decode`() {
+        // 5000/2 = 2500px against a 3200px demand is a 22% shortfall, past the 15% tolerance, so
+        // the policy still pays for sampleSize 1 rather than undersampling visibly.
+        val lod = policy.resolveLod(
+            sourceContentWidthPx = 5000,
+            baseDisplayWidthPx = 1280,
+            cameraScale = 2.5f,
+        )
+
+        assertEquals(1, lod.sampleSize)
+    }
+
+    @Test
     fun `hysteresis prevents thrashing near threshold boundaries`() {
         val sourceWidth = 4000
         val displayWidth = 1000

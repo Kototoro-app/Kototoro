@@ -108,6 +108,10 @@ class KototoroImagePipelineAdapter(
     val tileStore: TileStore get() = actualTileManager
 
     fun requestTiles(pageId: PageId, visibleRegion: IntRect, lookaheadRegion: IntRect? = null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            Trace.setCounter("Reader.CachedAssetCount", cachedAssets.size.toLong())
+            Trace.setCounter("Reader.RegionSourceCount", regionSources.size.toLong())
+        }
         val asset = cachedAssets[pageId] as? ReaderImageAsset.Tiled ?: return
         actualTileManager.requestTiles(asset.base.grid, visibleRegion, lookaheadRegion)
         asset.target?.let { target ->
@@ -121,6 +125,9 @@ class KototoroImagePipelineAdapter(
     /** Camera scale of the last settle, fed into the decode plan so zoom resolves its own LOD. */
     @Volatile
     private var cameraScale: Float = 1f
+
+    /** Last zoom target width requested per page, so a repeated settle is not decoded again. */
+    private val zoomReacquireTargets = ConcurrentHashMap<PageId, Int>()
     private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
     override val assets = mutableAssets.asStateFlow()
     private val mutableLoadStates = MutableStateFlow<Map<PageId, ReaderImageLoadState>>(emptyMap())
@@ -572,6 +579,8 @@ class KototoroImagePipelineAdapter(
         inFlightSourceLoads.remove(pageId)?.cancel()
         actualTileManager.releasePage(pageId)
         regionSources.remove(pageId)
+        // A page that comes back later deserves its own zoom decision, not the stale one.
+        zoomReacquireTargets.remove(pageId)
         updateAssets { it - pageId }
         mutableLoadStates.update { it - pageId }
     }
@@ -683,6 +692,8 @@ class KototoroImagePipelineAdapter(
 
         // Sampled pages are not tiles: they were decoded for the fit scale, so a zoomed reader
         // would be shown an upscaled bitmap unless the page is decoded again for this camera.
+        // Each page is re-decoded once per target width; a repeated settle at the same zoom is not
+        // worth another multi-megabyte decode.
         val viewportWidth = viewportSizeProvider().width
         for ((pageId, asset) in cachedAssets) {
             val decodedWidth = when (asset) {
@@ -690,7 +701,9 @@ class KototoroImagePipelineAdapter(
                 is ReaderImageAsset.AndroidBitmap -> asset.bitmap.width
                 else -> continue
             }
-            if (shouldReacquireForZoom(scale, decodedWidth, viewportWidth)) {
+            val lastAttempt = zoomReacquireTargets[pageId]
+            if (shouldAttemptZoomReacquire(scale, decodedWidth, viewportWidth, lastAttempt)) {
+                zoomReacquireTargets[pageId] = (viewportWidth * scale).toInt()
                 scope.launch(ioDispatcher) { acquireAsset(pageId, force = true) }
             }
         }
@@ -734,4 +747,20 @@ internal fun shouldReacquireForZoom(
 ): Boolean {
     if (scale <= 1f || decodedWidthPx <= 0 || viewportWidthPx <= 0) return false
     return decodedWidthPx * threshold < viewportWidthPx * scale
+}
+
+/**
+ * Whether a zoom re-decode should be attempted at all, given the width already requested for that
+ * page. Settles repeat while panning, and retrying an identical target only churns decode memory.
+ */
+internal fun shouldAttemptZoomReacquire(
+    scale: Float,
+    decodedWidthPx: Int,
+    viewportWidthPx: Int,
+    lastAttemptWidthPx: Int?,
+): Boolean {
+    if (!shouldReacquireForZoom(scale, decodedWidthPx, viewportWidthPx)) return false
+    val targetWidthPx = viewportWidthPx * scale
+    val previous = lastAttemptWidthPx ?: return true
+    return targetWidthPx > previous * 1.1f
 }

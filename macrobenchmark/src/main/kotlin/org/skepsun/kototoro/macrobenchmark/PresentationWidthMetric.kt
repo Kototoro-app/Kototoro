@@ -32,3 +32,38 @@ class PresentationWidthMetric : TraceMetric() {
         )
     }
 }
+
+/**
+ * Where the decode path's memory actually goes, as counters rather than guesses.
+ *
+ * Java heap stays flat across the paged scenarios while resident anonymous memory does not, and
+ * bitmap pixels live on the native heap, so these make the difference attributable: tile ledger
+ * bytes, how many tiles are resident, how many decodes have been launched (churn), how many pages
+ * hold assets and how many region-decoder sessions are open.
+ */
+@OptIn(ExperimentalMetricApi::class)
+class DecodeResidencyMetric : TraceMetric() {
+    override fun getMeasurements(
+        captureInfo: CaptureInfo,
+        traceSession: TraceProcessor.Session,
+    ): List<Measurement> {
+        val names = listOf(
+            "Reader.TileResidentBytes",
+            "Reader.TileResidentCount",
+            "Reader.TileDecodeRequests",
+            "Reader.CachedAssetCount",
+            "Reader.RegionSourceCount",
+        )
+        return names.flatMap { name ->
+            val row = traceSession.query(
+                """
+                SELECT MAX(counter.value) AS max_val
+                FROM counter
+                JOIN track ON counter.track_id = track.id
+                WHERE track.name = '$name'
+                """.trimIndent(),
+            ).firstOrNull()
+            listOf(Measurement(name.substringAfterLast('.') + "_Max", row?.nullableDouble("max_val") ?: 0.0))
+        }
+    }
+}

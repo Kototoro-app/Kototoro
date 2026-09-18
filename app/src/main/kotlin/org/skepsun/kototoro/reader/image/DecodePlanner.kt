@@ -81,7 +81,10 @@ class DecodePlanner(
 
         // 3. Evaluate if downsampled or full single bitmap fits within hardware & memory limits
         val fitsInHardware = targetW <= maxDrawableW && targetH <= maxDrawableH
-        val fitsInMemory = estimatedSingleBytes <= tilePolicy.defaultWorkingSetCostBudgetBytes
+        // A single page may not spend the whole working set: at that size two visible pages double
+        // the budget and every zoom change re-decodes the bitmap in full, so such a page is tiled
+        // instead and stays inside the shared ledger.
+        val fitsInMemory = estimatedSingleBytes <= tilePolicy.maxSinglePageCostBytes
         val forcedTile = pixelUsage == PixelUsage.REGION_TILE
 
         if (fitsInHardware && fitsInMemory && !forcedTile) {

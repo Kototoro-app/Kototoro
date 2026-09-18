@@ -50,4 +50,27 @@ data class PagedSlot(
         }
     }
 
+    /**
+     * Content of this slot that the screen actually shows, bounded by [screenViewportBounds].
+     *
+     * [visibleContentNodes] answers a different question: what this slot's own viewport shows. For a
+     * neighbouring slot, which is rendered at its saved scale (often 1.0), that answer is the whole
+     * page - and asking the image pipeline for the whole page as *visible* pins a page's worth of
+     * level-zero tiles, hundreds of megabytes at high zoom. Intersecting with the screen viewport is
+     * the only honest bound.
+     */
+    fun screenVisibleContentNodes(
+        screenViewportBounds: FloatRect,
+        scale: Float,
+        offsetX: Float,
+        offsetY: Float,
+    ): List<VisibleNode> {
+        if (bounds.intersectionOrNull(screenViewportBounds) == null) return emptyList()
+        return visibleContentNodes(scale, offsetX, offsetY).mapNotNull { node ->
+            val clipped = node.visibleRegion.intersectionOrNull(screenViewportBounds)
+                ?: return@mapNotNull null
+            if (clipped.width <= 0f || clipped.height <= 0f) null else node.copy(visibleRegion = clipped)
+        }
+    }
+
 }

@@ -27,17 +27,27 @@ data class LodSpec(
  * Implements:
  * 1. Target-based decode sizing:
  *    `targetDecodeWidthPx = min(sourceWidth, ceil(displayWidth * cameraScale * qualityOverscan))`
- * 2. Downsampling: `sampleSize = powerOfTwo <= (sourceWidth / targetDecodeWidth)`
+ * 2. Downsampling: `sampleSize = largest power of two <= ratio * (1 + resolutionToleranceFraction)`,
+ *    so a decode may fall short of the demand by that fraction instead of doubling its pixels for
+ *    the last few percent - the difference between level-zero tiles and half-size ones at zoom.
  * 3. Hysteresis: applies a hysteresis band ([hysteresisFraction]) to prevent
  *    frequent LOD thrashing during pinch-zoom interactions.
  */
 class ReaderLodPolicy(
     val qualityOverscan: Float = DEFAULT_QUALITY_OVERSCAN,
     val hysteresisFraction: Float = DEFAULT_HYSTERESIS_FRACTION,
+    /**
+     * How far the decoded width may fall short of the demanded width before the policy pays for
+     * the next sharper sample size. Zero restores the strict "never undersample" behaviour.
+     */
+    val resolutionToleranceFraction: Float = DEFAULT_RESOLUTION_TOLERANCE_FRACTION,
 ) {
     init {
         require(qualityOverscan >= 1.0f) { "qualityOverscan must be >= 1.0: $qualityOverscan" }
         require(hysteresisFraction in 0.0f..0.5f) { "hysteresisFraction must be in 0.0..0.5: $hysteresisFraction" }
+        require(resolutionToleranceFraction in 0.0f..0.5f) {
+            "resolutionToleranceFraction must be in 0.0..0.5: $resolutionToleranceFraction"
+        }
     }
 
     /**
@@ -66,8 +76,8 @@ class ReaderLodPolicy(
 
         val rawSampleRatio = sourceContentWidthPx.toFloat() / targetDecodeWidthPx.toFloat()
 
-        // Calculate power-of-two sampleSize that guarantees at least targetDecodeWidthPx resolution
-        val idealSampleSize = calculatePowerOfTwoSampleSize(rawSampleRatio)
+        // Calculate power-of-two sampleSize that covers the target within the tolerance
+        val idealSampleSize = calculatePowerOfTwoSampleSize(rawSampleRatio, resolutionToleranceFraction)
 
         val finalSampleSize = if (currentLod != null && hysteresisFraction > 0f) {
             applyHysteresis(
@@ -89,9 +99,13 @@ class ReaderLodPolicy(
         )
     }
 
-    private fun calculatePowerOfTwoSampleSize(ratio: Float): Int {
-        if (ratio < 2.0f) return 1
-        val floored = ratio.toInt()
+    private fun calculatePowerOfTwoSampleSize(ratio: Float, tolerance: Float): Int {
+        // Decoded width is source/sampleSize and the demand is source/ratio, so a sampleSize is
+        // acceptable while sampleSize <= ratio * (1 + tolerance): the decode may fall short by up
+        // to the tolerance, but never by more than that.
+        val effectiveRatio = ratio * (1.0f + tolerance)
+        if (effectiveRatio < 2.0f) return 1
+        val floored = effectiveRatio.toInt()
         return Integer.highestOneBit(floored)
     }
 
@@ -118,6 +132,12 @@ class ReaderLodPolicy(
     companion object {
         const val DEFAULT_QUALITY_OVERSCAN = 1.0f
         const val DEFAULT_HYSTERESIS_FRACTION = 0.15f
+
+        /**
+         * Default drawing-density tolerance. 15% keeps the worst case a 1.15x upscale, which is
+         * imperceptible next to the 4x pixel cost of the next sharper sample size.
+         */
+        const val DEFAULT_RESOLUTION_TOLERANCE_FRACTION = 0.15f
 
         fun calculateLodLevel(sampleSize: Int): Int {
             // sampleSize 1 -> level 4, sampleSize 2 -> level 3, sampleSize 4 -> level 2, ...

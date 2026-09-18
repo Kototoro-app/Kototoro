@@ -224,6 +224,7 @@ class ReaderProductionBenchmark {
                 ),
                 ActivePresentationAssetsMetric(),
                 PresentationWidthMetric(),
+                DecodeResidencyMetric(),
             ),
             compilationMode = compilationMode,
             startupMode = null,
