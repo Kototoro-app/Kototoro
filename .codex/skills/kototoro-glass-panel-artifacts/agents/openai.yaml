@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kototoro Glass Panel Artifacts"
+  short_description: "Diagnose and fix Kototoro sheet, dialog and popup glass-panel artifacts."
+  default_prompt: "Use this skill to debug a Kototoro Compose Material3 sheet, dialog, popup or GlassSurface that shows extra light rectangles, pale plates, or bounds that change while dragging."

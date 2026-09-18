@@ -5,7 +5,7 @@ description: Kyant Backdrop glass effects for Compose, including drawBackdrop, l
 
 # Backdrop
 
-Use this skill for Kototoro's `io.github.kyant0:backdrop` integration. The app uses Backdrop for the iOS interface style and Haze for the other runtime glass path; do not substitute Haze APIs when the affected code imports `com.kyant.backdrop`.
+Use this skill for Kototoro's `io.github.kyant0:backdrop` integration — the project's only glass-effect library (`backdrop/` is a vendored `io.github.kyant0:backdrop:2.0.0`; see `backdrop/UPSTREAM.md`). Backdrop renders the glass of the iOS interface style; every other interface style resolves to a plain Material `Surface` inside `core/ui/glass/GlassSurface.kt`.
 
 ## Workflow
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Kototoro Haze Sheet Artifacts"
-  short_description: "Diagnose and fix Kototoro Haze sheet rectangle artifacts."
-  default_prompt: "Use this skill to debug a Kototoro Compose Material3 sheet, dialog, popup, or GlassSurface that shows extra light rectangles, white haze plates, or bounds that change while dragging."
