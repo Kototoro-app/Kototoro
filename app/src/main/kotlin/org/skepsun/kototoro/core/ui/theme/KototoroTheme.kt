@@ -341,7 +341,7 @@ private fun android.content.Context.resolveComposeColorScheme(
     )
     val common = baseCommon
 
-    val isArtworkBlur = backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBlur = backgroundStyle.usesArtworkBackdrop
     return if (darkTheme) {
         val onBackground = if (isArtworkBlur) Color.White else common.onBackground
         val onSurface = if (isArtworkBlur) Color.White else common.onSurface

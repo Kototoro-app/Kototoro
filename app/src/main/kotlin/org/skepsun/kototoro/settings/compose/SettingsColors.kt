@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.Modifier
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 
@@ -63,18 +62,3 @@ internal fun Modifier.settingsIconBackground(
     background(color = baseColor, shape = shape)
 }
 
-internal fun settingsGroupItemContainerColor(
-    interfaceStyle: InterfaceStyle,
-    backgroundStyle: BackgroundStyle,
-    surfaceContainerLow: Color,
-    surfaceContainer: Color,
-): Color = if (
-    interfaceStyle == InterfaceStyle.IOS &&
-    backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
-) {
-    surfaceContainerLow.copy(alpha = SETTINGS_IOS_CONTAINER_ALPHA)
-} else {
-    surfaceContainer
-}
-
-internal const val SETTINGS_IOS_CONTAINER_ALPHA = 0.74f

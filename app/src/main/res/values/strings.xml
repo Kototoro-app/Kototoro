@@ -321,6 +321,8 @@
     <string name="bg_style_default_summary">Use the standard background defined by the interface style</string>
     <string name="bg_style_artwork_blur">Blurred artwork</string>
     <string name="bg_style_artwork_blur_summary">Use a softened cover image as the app background</string>
+    <string name="bg_style_artwork_gallery">Artwork gallery</string>
+    <string name="bg_style_artwork_gallery_summary">Keep the artwork clearly visible behind layered translucent surfaces</string>
     <string name="background_artwork_source">Artwork source</string>
     <string name="background_artwork_source_summary">Choose which cover or image is used for the app background</string>
     <string name="bg_artwork_source_last_read">Recently read</string>

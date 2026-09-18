@@ -33,6 +33,8 @@ import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
+import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 
 internal enum class SettingsGroupItemPosition {
@@ -105,12 +107,14 @@ fun SettingsItemGroup(
     if (itemCount == 0) return
 
     val tokens = LocalInterfaceStyleTokens.current
-    val containerColor = settingsGroupItemContainerColor(
-        interfaceStyle = LocalInterfaceStyle.current,
-        backgroundStyle = LocalBackgroundStyle.current,
-        surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow,
-        surfaceContainer = MaterialTheme.colorScheme.surfaceContainer,
-    )
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val containerColor = if (isArtworkBackground) {
+        // Settings groups are content cards over artwork — join the shared layering
+        // for both interface styles instead of an iOS-only hardcoded alpha.
+        MaterialTheme.colorScheme.surfaceContainerLow.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
     if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
         Surface(
             modifier = modifier.fillMaxWidth(),
@@ -189,12 +193,12 @@ fun SettingsCollapsiblePreferenceGroup(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val horizontalPadding = if (expressive || isIosStyle) 16.dp else 20.dp
-    val containerColor = settingsGroupItemContainerColor(
-        interfaceStyle = LocalInterfaceStyle.current,
-        backgroundStyle = LocalBackgroundStyle.current,
-        surfaceContainerLow = MaterialTheme.colorScheme.surfaceContainerLow,
-        surfaceContainer = MaterialTheme.colorScheme.surfaceContainer,
-    )
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val containerColor = if (isArtworkBackground) {
+        MaterialTheme.colorScheme.surfaceContainerLow.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainer
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),

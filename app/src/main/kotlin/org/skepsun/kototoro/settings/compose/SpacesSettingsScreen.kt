@@ -57,7 +57,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
@@ -257,7 +256,7 @@ private fun SpaceDefinitionRow(
     modifier: Modifier = Modifier,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
 
     Row(
         modifier = modifier

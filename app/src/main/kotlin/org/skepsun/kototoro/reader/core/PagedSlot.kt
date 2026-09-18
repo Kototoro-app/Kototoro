@@ -29,4 +29,25 @@ data class PagedSlot(
     val pageIds: List<PageId> get() = placements.map { it.pageId }
 
     fun containsPage(pageId: PageId): Boolean = placements.any { it.pageId == pageId }
+    /** Inverse camera bounds may extend beyond the discrete slot when native content overflows. */
+    fun contentViewport(scale: Float, offsetX: Float, offsetY: Float): FloatRect {
+        val centerX = bounds.width / 2f
+        val centerY = bounds.height / 2f
+        return FloatRect.fromLtwh(
+            bounds.left + centerX + (-offsetX - centerX) / scale,
+            bounds.top + centerY + (-offsetY - centerY) / scale,
+            bounds.width / scale,
+            bounds.height / scale,
+        )
+    }
+
+    fun visibleContentNodes(scale: Float, offsetX: Float, offsetY: Float): List<VisibleNode> {
+        val viewport = contentViewport(scale, offsetX, offsetY)
+        return placements.mapNotNull { placement ->
+            val intersection = placement.sceneBounds.intersectionOrNull(viewport) ?: return@mapNotNull null
+            if (intersection.width <= 0f || intersection.height <= 0f) return@mapNotNull null
+            VisibleNode(placement.pageId, placement.sceneBounds, intersection)
+        }
+    }
+
 }

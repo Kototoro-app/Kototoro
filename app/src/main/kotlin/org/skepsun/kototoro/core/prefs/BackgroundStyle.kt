@@ -18,6 +18,10 @@ enum class BackgroundStyle(
         titleResId = R.string.bg_style_artwork_blur,
         summaryResId = R.string.bg_style_artwork_blur_summary,
     ),
+    DYNAMIC_ARTWORK_GALLERY(
+        titleResId = R.string.bg_style_artwork_gallery,
+        summaryResId = R.string.bg_style_artwork_gallery_summary,
+    ),
     // Legacy values are retained so existing serialized preferences remain readable.
     // Surface material now follows InterfaceStyle; these values normalize to DEFAULT.
     DYNAMIC_TONAL_GLASS(
@@ -36,6 +40,7 @@ enum class BackgroundStyle(
     fun normalized(): BackgroundStyle = when (this) {
         DEFAULT,
         DYNAMIC_ARTWORK_BLUR,
+        DYNAMIC_ARTWORK_GALLERY,
         -> this
         DYNAMIC_TONAL_GLASS,
         SYSTEM_DYNAMIC_TINT,
@@ -46,10 +51,15 @@ enum class BackgroundStyle(
     val usesLayeredNavigationSurface: Boolean
         get() = this == ELEVATED_CONTAINERS
 
+    /** True for any style that renders an artwork image as the app background. */
+    val usesArtworkBackdrop: Boolean
+        get() = this == DYNAMIC_ARTWORK_BLUR || this == DYNAMIC_ARTWORK_GALLERY
+
     companion object {
         val selectableEntries: List<BackgroundStyle> = listOf(
             DEFAULT,
             DYNAMIC_ARTWORK_BLUR,
+            DYNAMIC_ARTWORK_GALLERY,
         )
 
         fun safeValueOf(name: String): BackgroundStyle? {

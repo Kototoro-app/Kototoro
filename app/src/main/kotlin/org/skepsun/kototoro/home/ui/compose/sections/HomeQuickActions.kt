@@ -34,24 +34,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
+import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
+import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
-
-/**
- * Target container opacity for the Material tiles while the blurred artwork
- * image background is active. Color.copy(alpha) sets the absolute alpha, so a
- * uniform target is used here instead of multiplying — the artwork theme
- * already lowers the alpha of some containers (secondaryContainer 0.55/0.60,
- * surfaceContainerHighest 0.86/0.90), and merely multiplying would leave tiles
- * inconsistently transparent or even more opaque than before.
- */
-private const val QUICK_ACTION_ARTWORK_CONTAINER_ALPHA = 0.50f
 
 /** Target container opacity for the glass (iOS) tiles while the blurred artwork image background is active. */
 private const val QUICK_ACTION_ARTWORK_GLASS_ALPHA = 0.45f
@@ -127,7 +118,7 @@ private fun QuickAccessButton(
 ) {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
     val containerColor = when {
@@ -137,7 +128,7 @@ private fun QuickAccessButton(
         else -> MaterialTheme.colorScheme.surfaceContainerHighest
     }
     val effectiveContainerColor = if (isArtworkBackground) {
-        containerColor.copy(alpha = QUICK_ACTION_ARTWORK_CONTAINER_ALPHA)
+        containerColor.artworkAwareContainerColor(ArtworkSurfaceRole.Card)
     } else {
         containerColor
     }

@@ -57,6 +57,8 @@ import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalAmoledTheme
+import org.skepsun.kototoro.core.ui.theme.ArtworkSurfaceRole
+import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
 
@@ -312,13 +314,33 @@ fun GlassSurface(
     }
 
     val colors = MaterialTheme.colorScheme
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
+    // Map the glass component role onto the artwork layering so the Material fallback
+    // stops rendering opaque stickers over the image and instead joins the same
+    // hierarchy the iOS liquid path uses.
+    val artworkRole = when (componentRole) {
+        GlassComponentRole.TopBar, GlassComponentRole.BottomBar -> ArtworkSurfaceRole.Chrome
+        GlassComponentRole.PillControl, GlassComponentRole.Menu -> ArtworkSurfaceRole.PillControl
+        GlassComponentRole.ContentOverlay, GlassComponentRole.BottomPanel -> ArtworkSurfaceRole.Card
+        else -> ArtworkSurfaceRole.Surface
+    }
+    // Chrome roles (top bar, bottom bar, pill controls) use the same high-contrast
+    // tint on the Material fallback as the iOS liquid path — near-black in dark,
+    // near-white in light — so chrome reads as a distinct translucent surface over any
+    // backdrop instead of the flat surfaceContainer light slab. Content roles keep
+    // surfaceContainer. This is what the bottom nav already does; aligning the top bar
+    // chrome to it removes the "nested light capsule" artifact on non-white themes.
+    val isChromeRole = componentRole == GlassComponentRole.TopBar ||
+        componentRole == GlassComponentRole.BottomBar ||
+        componentRole == GlassComponentRole.PillControl
+    val isDark = colors.isDarkTheme()
     val fallbackColor = if (componentRole == GlassComponentRole.Menu && isArtworkBackground) {
         colors.popupMenuContainerColor()
     } else if (dialogSurface && isArtworkBackground) {
         colors.surfaceContainer.copy(alpha = 1f)
-    } else if (!isIosStyle && isArtworkBackground) {
-        colors.surfaceContainer.copy(alpha = 1f)
+    } else if (isArtworkBackground) {
+        val base = if (isChromeRole) chromeBackdropTint(isDark) else colors.surfaceContainer
+        base.artworkAwareContainerColor(artworkRole)
     } else if (isIosStyle) {
         colors.surfaceContainer.copy(alpha = if (dialogSurface) 0.98f else 0.94f)
     } else {
@@ -326,9 +348,12 @@ fun GlassSurface(
     }
     // Hairline is the standard edge cue for floating chrome — pill controls
     // and the floating bottom bar — while full-width top bars stay borderless;
-    // the fallback mirrors the liquid path.
+    // the fallback mirrors the liquid path. Over artwork every translucent surface
+    // gets the hairline so its edge stays defined against the image.
     val fallbackBorder = if (
-        !dialogSurface && componentRole != GlassComponentRole.TopBar && style.borderAlpha > 0f
+        !dialogSurface &&
+        (componentRole != GlassComponentRole.TopBar || isArtworkBackground) &&
+        style.borderAlpha > 0f
     ) {
         BorderStroke(1.dp, colors.outlineVariant.copy(alpha = style.borderAlpha))
     } else {

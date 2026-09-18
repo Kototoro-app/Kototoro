@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.notes.domain.BookNotesSummary
@@ -211,7 +210,7 @@ private fun BookNotesOverviewCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
 
     Card(
         shape = RoundedCornerShape(16.dp),

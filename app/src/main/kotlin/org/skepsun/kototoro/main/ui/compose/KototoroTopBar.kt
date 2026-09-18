@@ -40,6 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -75,7 +76,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import kotlinx.coroutines.delay
@@ -272,6 +272,13 @@ fun KototoroTopBar(
                         modifier = Modifier
                             .size(topBarControlHeight)
                             .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                        // The expressive theme gives plain IconButtons a default filled
+                        // container (the "light octagon"). Make it transparent so the icon
+                        // sits directly on the chrome capsule like the bottom nav does.
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
                     ) {
                         Icon(
                             Icons.Filled.Search,
@@ -369,6 +376,10 @@ fun KototoroTopBar(
                                         modifier = Modifier
                                             .size(topBarControlHeight)
                                             .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                            containerColor = Color.Transparent,
+                                            contentColor = MaterialTheme.colorScheme.onSurface,
+                                        ),
                                     ) {
                                         Box {
                                             Icon(
@@ -714,7 +725,7 @@ internal fun TopBarControlSurface(
     }
     val backdrop = LocalLiquidGlassBackdrop.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
     val useBackdrop = allowBackdrop &&
         isIosStyle &&
         backdrop != null

@@ -143,17 +143,26 @@ object PagedSpreadResolver {
         val zoomMode = config.zoomMode
         val isRtl = config.readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
 
+        if (zoomMode == ZoomMode.KEEP_START) {
+            // Native pixels are baseline geometry, not user camera zoom. Lay out the
+            // entire spread from its reading edge so oversized pages never overlap.
+            val spacing = config.pageSpacingPx.toFloat()
+            val containerWidth = (viewportWidth - spacing * (group.size - 1)).coerceAtLeast(0f) / group.size
+            var cursor = if (isRtl) viewportWidth else 0f
+            return group.map { spec ->
+                val size = fitPage(spec.geometryHint, containerWidth, viewportHeight, zoomMode)
+                val left = if (isRtl) cursor - size.width else cursor
+                val bounds = FloatRect.fromLtwh(left, 0f, size.width, size.height)
+                cursor = if (isRtl) left - spacing else bounds.right + spacing
+                PagedPagePlacement(spec.pageId, bounds, bounds.translate(slotBounds.left, slotBounds.top))
+            }
+        }
+
         if (group.size == 1) {
             val spec = group[0]
             val fitted = fitPage(spec.geometryHint, viewportWidth, viewportHeight, zoomMode)
-            val leftInSlot = when (zoomMode) {
-                ZoomMode.KEEP_START -> if (isRtl) (viewportWidth - fitted.width).coerceAtLeast(0f) else 0f
-                else -> (viewportWidth - fitted.width) / 2f
-            }
-            val topInSlot = when (zoomMode) {
-                ZoomMode.KEEP_START -> 0f
-                else -> (viewportHeight - fitted.height) / 2f
-            }
+            val leftInSlot = (viewportWidth - fitted.width) / 2f
+            val topInSlot = (viewportHeight - fitted.height) / 2f
             val boundsInSlot = FloatRect.fromLtwh(leftInSlot, topInSlot, fitted.width, fitted.height)
             val sceneBounds = boundsInSlot.translate(slotBounds.left, slotBounds.top)
             return listOf(PagedPagePlacement(spec.pageId, boundsInSlot, sceneBounds))
@@ -175,26 +184,14 @@ object PagedSpreadResolver {
         }
 
         val leftSlotLeft = 0f
-        val leftPageLeftInSlot = when (zoomMode) {
-            ZoomMode.KEEP_START -> if (isRtl) leftSlotLeft + (halfWidth - leftFitted.width).coerceAtLeast(0f) else leftSlotLeft
-            else -> leftSlotLeft + (halfWidth - leftFitted.width).coerceAtLeast(0f) / 2f
-        }
-        val leftPageTopInSlot = when (zoomMode) {
-            ZoomMode.KEEP_START -> 0f
-            else -> (viewportHeight - leftFitted.height).coerceAtLeast(0f) / 2f
-        }
+        val leftPageLeftInSlot = leftSlotLeft + (halfWidth - leftFitted.width).coerceAtLeast(0f) / 2f
+        val leftPageTopInSlot = (viewportHeight - leftFitted.height).coerceAtLeast(0f) / 2f
         val leftBoundsInSlot = FloatRect.fromLtwh(leftPageLeftInSlot, leftPageTopInSlot, leftFitted.width, leftFitted.height)
         val leftSceneBounds = leftBoundsInSlot.translate(slotBounds.left, slotBounds.top)
 
         val rightSlotLeft = halfWidth + config.pageSpacingPx.toFloat()
-        val rightPageLeftInSlot = when (zoomMode) {
-            ZoomMode.KEEP_START -> if (isRtl) rightSlotLeft + (halfWidth - rightFitted.width).coerceAtLeast(0f) else rightSlotLeft
-            else -> rightSlotLeft + (halfWidth - rightFitted.width).coerceAtLeast(0f) / 2f
-        }
-        val rightPageTopInSlot = when (zoomMode) {
-            ZoomMode.KEEP_START -> 0f
-            else -> (viewportHeight - rightFitted.height).coerceAtLeast(0f) / 2f
-        }
+        val rightPageLeftInSlot = rightSlotLeft + (halfWidth - rightFitted.width).coerceAtLeast(0f) / 2f
+        val rightPageTopInSlot = (viewportHeight - rightFitted.height).coerceAtLeast(0f) / 2f
         val rightBoundsInSlot = FloatRect.fromLtwh(rightPageLeftInSlot, rightPageTopInSlot, rightFitted.width, rightFitted.height)
         val rightSceneBounds = rightBoundsInSlot.translate(slotBounds.left, slotBounds.top)
 
@@ -217,6 +214,9 @@ object PagedSpreadResolver {
         zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
     ): PageSize {
         if (containerW <= 0f || containerH <= 0f) return PageSize(0f, 0f)
+        if (zoomMode == ZoomMode.KEEP_START && hint is PageGeometryHint.Exact) {
+            return PageSize(hint.width.toFloat(), hint.height.toFloat())
+        }
         val ratio = when (hint) {
             is PageGeometryHint.Exact -> if (hint.height > 0) hint.width.toFloat() / hint.height.toFloat() else 1f
             is PageGeometryHint.AspectRatio -> hint.ratio.coerceAtLeast(0.01f)

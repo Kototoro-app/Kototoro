@@ -276,7 +276,7 @@ class PagedSpreadResolverTest {
         assertEquals(0f, pLtr.boundsInSlot.left)
         assertEquals(0f, pLtr.boundsInSlot.top)
 
-        // RTL: start is right (viewportWidth - width = 1000 - 500 = 500f)
+        // RTL: the native-width page ends at the viewport right edge.
         val slotsRtl = PagedSpreadResolver.resolveSlots(
             specs = specs,
             viewportWidth = 1000,
@@ -288,7 +288,109 @@ class PagedSpreadResolverTest {
             ),
         )
         val pRtl = slotsRtl[0].placements[0]
-        assertEquals(500f, pRtl.boundsInSlot.left)
+        assertEquals(0f, pRtl.boundsInSlot.left)
         assertEquals(0f, pRtl.boundsInSlot.top)
     }
+    @Test
+    fun `keep start preserves native pixels for small and overflowing pages`() {
+        for ((width, height) in listOf(200 to 300, 1800 to 2600)) {
+            for (direction in SceneReadingDirection.entries) {
+                val slot = PagedSpreadResolver.resolveSlots(
+                    specs = listOf(PagedPageSpec(
+                        PageId(1L), PageGeometryHint.Exact(width, height),
+                        chapterId = 1L, chapterPageIndex = 0,
+                    )),
+                    viewportWidth = 1000,
+                    viewportHeight = 1500,
+                    config = PagedSpreadConfig(readingDirection = direction, zoomMode = ZoomMode.KEEP_START),
+                ).single()
+                val bounds = slot.placements.single().boundsInSlot
+                assertEquals(width.toFloat(), bounds.width)
+                assertEquals(height.toFloat(), bounds.height)
+                assertEquals(0f, bounds.top)
+                if (direction == SceneReadingDirection.RIGHT_TO_LEFT) {
+                    assertEquals(1000f, bounds.right)
+                } else {
+                    assertEquals(0f, bounds.left)
+                }
+                assertEquals(1000f, slot.bounds.width)
+                assertEquals(1500f, slot.bounds.height)
+            }
+        }
+    }
+
+    @Test
+    fun `native double pages remain adjacent without overlap in either direction`() {
+        for (direction in listOf(SceneReadingDirection.LEFT_TO_RIGHT, SceneReadingDirection.RIGHT_TO_LEFT)) {
+            val slot = PagedSpreadResolver.resolveSlots(
+                specs = listOf(
+                    PagedPageSpec(PageId(1L), PageGeometryHint.Exact(800, 1200), 1L, 0),
+                    PagedPageSpec(PageId(2L), PageGeometryHint.Exact(900, 1300), 1L, 1),
+                ),
+                viewportWidth = 1000,
+                viewportHeight = 1500,
+                config = PagedSpreadConfig(
+                    isDoublePage = true, readingDirection = direction,
+                    pageSpacingPx = 20, zoomMode = ZoomMode.KEEP_START,
+                ),
+            ).single()
+            val first = slot.placements[0].boundsInSlot
+            val second = slot.placements[1].boundsInSlot
+            assertEquals(800f, first.width)
+            assertEquals(1200f, first.height)
+            assertEquals(900f, second.width)
+            assertEquals(1300f, second.height)
+            if (direction == SceneReadingDirection.RIGHT_TO_LEFT) {
+                assertEquals(1000f, first.right)
+                assertEquals(first.left - 20f, second.right)
+            } else {
+                assertEquals(0f, first.left)
+                assertEquals(first.right + 20f, second.left)
+            }
+        }
+    }
+
+    @Test
+    fun `native camera exposes content beyond slot bounds without changing the progress anchor`() {
+        for (direction in listOf(SceneReadingDirection.LEFT_TO_RIGHT, SceneReadingDirection.RIGHT_TO_LEFT)) {
+            val slot = PagedSpreadResolver.resolveSlots(
+                specs = listOf(
+                    PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1800, 6000), 1L, 0),
+                    PagedPageSpec(PageId(2L), PageGeometryHint.Exact(1900, 6000), 1L, 1),
+                ),
+                viewportWidth = 1000, viewportHeight = 1500,
+                config = PagedSpreadConfig(
+                    isDoublePage = true, zoomMode = ZoomMode.KEEP_START, readingDirection = direction,
+                ),
+            ).single()
+            val rtl = direction == SceneReadingDirection.RIGHT_TO_LEFT
+            val offsetX = if (rtl) 1800f else -1800f
+            val node = slot.visibleContentNodes(scale = 1f, offsetX = offsetX, offsetY = -4000f).single()
+            assertEquals(PageId(2L), node.pageId)
+            assertEquals(FloatRect.fromLtwh(-offsetX, 4000f, 1000f, 1500f), node.visibleRegion)
+            assertEquals(PageId(1L), slot.progressAnchorPageId)
+        }
+    }
+
+    @Test
+    fun `native size waits for exact dimensions and preserves slot position when they arrive`() {
+        val pageId = PageId(2L)
+        val scene = PagedReaderScene(
+            viewportWidth = 1000, viewportHeight = 1500,
+            config = PagedSpreadConfig(zoomMode = ZoomMode.KEEP_START),
+            initialSpecs = listOf(
+                PagedPageSpec(PageId(1L), PageGeometryHint.Estimated(0.5f), 1L, 0),
+                PagedPageSpec(pageId, PageGeometryHint.AspectRatio(0.5f), 1L, 1),
+            ),
+        )
+        assertEquals(750f, scene.allSlots[1].placements.single().boundsInSlot.width)
+        val viewport = ReaderViewport(FloatRect.fromLtwh(1000f, 0f, 1000f, 1500f))
+        val compensation = scene.updatePageHint(pageId, PageGeometryHint.Exact(2000, 4000), viewport)
+        val actual = scene.allSlots[1].placements.single().boundsInSlot
+        assertEquals(2000f, actual.width)
+        assertEquals(4000f, actual.height)
+        assertEquals(0f, compensation!!.deltaX)
+        assertEquals(pageId, scene.resolve(compensation.compensatedViewport).progress.activePageId)
+    }
+
 }

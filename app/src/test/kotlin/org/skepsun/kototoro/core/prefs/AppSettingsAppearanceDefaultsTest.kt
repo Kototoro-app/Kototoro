@@ -157,6 +157,7 @@ class AppSettingsAppearanceDefaultsTest {
 		BackgroundStyle.SYSTEM_DYNAMIC_TINT.normalized() shouldBe BackgroundStyle.DEFAULT
 		BackgroundStyle.ELEVATED_CONTAINERS.normalized() shouldBe BackgroundStyle.DEFAULT
 		BackgroundStyle.DYNAMIC_ARTWORK_BLUR.normalized() shouldBe BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+		BackgroundStyle.DYNAMIC_ARTWORK_GALLERY.normalized() shouldBe BackgroundStyle.DYNAMIC_ARTWORK_GALLERY
 	}
 
 	@Test
@@ -164,6 +165,7 @@ class AppSettingsAppearanceDefaultsTest {
 		BackgroundStyle.selectableEntries shouldBe listOf(
 			BackgroundStyle.DEFAULT,
 			BackgroundStyle.DYNAMIC_ARTWORK_BLUR,
+			BackgroundStyle.DYNAMIC_ARTWORK_GALLERY,
 		)
 	}
 
@@ -172,5 +174,12 @@ class AppSettingsAppearanceDefaultsTest {
 		BackgroundStyle.ELEVATED_CONTAINERS.usesLayeredNavigationSurface shouldBe true
 		BackgroundStyle.DEFAULT.usesLayeredNavigationSurface shouldBe false
 		BackgroundStyle.DYNAMIC_ARTWORK_BLUR.usesLayeredNavigationSurface shouldBe false
+	}
+
+	@Test
+	fun `artwork backdrop styles are recognized across both presets`() {
+		BackgroundStyle.DYNAMIC_ARTWORK_BLUR.usesArtworkBackdrop shouldBe true
+		BackgroundStyle.DYNAMIC_ARTWORK_GALLERY.usesArtworkBackdrop shouldBe true
+		BackgroundStyle.DEFAULT.usesArtworkBackdrop shouldBe false
 	}
 }

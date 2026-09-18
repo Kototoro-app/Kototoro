@@ -67,7 +67,6 @@ import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.artworkAwareContainerColor
 import org.skepsun.kototoro.core.util.ext.toFileNameSafe
@@ -429,7 +428,7 @@ private fun BookDetailHeaderCard(
     onReadClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -565,7 +564,7 @@ internal fun BookNoteCard(
     manga: Content? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
 
     Card(
         shape = RoundedCornerShape(14.dp),

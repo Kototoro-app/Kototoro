@@ -25,7 +25,7 @@ fun ApplyDynamicArtworkBlurDialogStyle() {
     val backgroundStyle = LocalBackgroundStyle.current
     val view = LocalView.current
 
-    if (backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+    if (backgroundStyle.usesArtworkBackdrop) {
         SideEffect {
             val window = findDialogWindow(view)
             if (window != null) {

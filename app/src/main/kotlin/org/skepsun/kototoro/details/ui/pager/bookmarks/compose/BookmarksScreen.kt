@@ -48,7 +48,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.bookmarks.domain.Bookmark
 import org.skepsun.kototoro.bookmarks.domain.extractNovelBookmarkPreview
 import org.skepsun.kototoro.core.model.getContentType
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.details.ui.compose.state.DetailsPaneState
 import org.skepsun.kototoro.details.ui.compose.state.rememberDetailsPaneNestedScrollConnection
 import org.skepsun.kototoro.parsers.model.ContentType
@@ -68,7 +67,7 @@ private fun BookmarkCard(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
     val snapshotFile = remember(bookmark) {
         File(context.filesDir, "bookmarks/manga_${bookmark.manga.id}_chapter_${bookmark.chapterId}_page_${bookmark.page}.jpg")
     }

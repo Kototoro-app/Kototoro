@@ -91,7 +91,6 @@ import coil3.request.crossfade
 import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.jsonsource.SourceType
-import org.skepsun.kototoro.core.prefs.BackgroundStyle
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.ui.compose.ContentSourceIcon
@@ -145,7 +144,7 @@ private data class SearchOverlayStyle(
 private fun rememberSearchOverlayStyle(): SearchOverlayStyle {
     val expressive = LocalMaterialExpressiveComponentsEnabled.current
     val colorScheme = MaterialTheme.colorScheme
-    val isArtworkBackground = LocalBackgroundStyle.current == BackgroundStyle.DYNAMIC_ARTWORK_BLUR
+    val isArtworkBackground = LocalBackgroundStyle.current.usesArtworkBackdrop
     return if (expressive) {
         SearchOverlayStyle(
             collapsedCornerRadius = 28.dp,

@@ -401,7 +401,7 @@ fun AppearanceSettingsScreen(
                         onValueChange = onBackgroundStyleChange,
                     )
                 }
-                if (state.backgroundStyle == BackgroundStyle.DYNAMIC_ARTWORK_BLUR) {
+                if (state.backgroundStyle.usesArtworkBackdrop) {
                     item {
                         SettingsChoicePreference(
                             title = stringResource(R.string.background_artwork_source),
