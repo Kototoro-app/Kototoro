@@ -559,7 +559,10 @@ dependencies {
 	implementation libs.onnxruntime.android
 	implementation libs.opencv.android
 	implementation libs.djl.tokenizers
-	implementation files('libs/tokenizer-native-0.33.0.aar')
+	// Native-only AAR repackaged from DJL's official prebuilt libdjl_tokenizer.so
+	// (publish.djl.ai/tokenizers/0.21.0/jnilib/0.38.0) — 0.38.0 is the first release
+	// whose Android binaries align ELF segments to 16 KB pages.
+	implementation files('libs/tokenizer-native-0.38.0.aar')
 	implementation cloudstreamRuntimeJar
 	implementation files('libs/jlibtorrent-2.0.12.9.jar')
 	runtimeOnly files('libs/jlibtorrent-android-arm-2.0.12.9.jar')

@@ -43,7 +43,7 @@ The official Agent workflow consists of three related pieces:
 - **kotlinx.serialization** (json, protobuf, and json-okio) is unified at a single `1.11.0` version via the `serialization` key in `gradle/libs.versions.toml` — the old json/json-okio version divergence is gone.
 - **`decoroutinator` plugin is commented out** in root `build.gradle` and `app/build.gradle`. Do not uncomment unless you have a specific reason.
 - **CMake 3.22.1** builds native code from `app/src/main/cpp/CMakeLists.txt` for 4 ABIs. Native changes require CMake + NDK toolchain.
-- **DJL tokenizers** ship a local AAR (`libs/tokenizer-native-0.33.0.aar`) and exclude desktop native binaries in `packagingOptions`. `app/libs/` also holds the Cloudstream runtime jars, plus bundled `jlibtorrent` (torrent download, per-ABI runtime jars) and `fuzzywuzzy` helper jars.
+- **DJL tokenizers** ship a local AAR (`libs/tokenizer-native-0.38.0.aar`, repackaged from DJL's official prebuilt — first release whose Android binaries align ELF segments to 16 KB pages) and exclude desktop native binaries in `packagingOptions`. `app/libs/` also holds the Cloudstream runtime jars, plus bundled `jlibtorrent` (torrent download, per-ABI runtime jars) and `fuzzywuzzy` helper jars.
 - **`app/src/tvboxHost/`** holds a dormant `TVBoxHostApp.kt` entry that is **not** wired into `app/build.gradle` source sets — it is not part of any build variant. Do not assume it compiles or ships.
 - **`generateLocaleConfig = false`** is set — workaround for Google issuetracker 408030127. Do not enable without verifying the issue is resolved.
 
