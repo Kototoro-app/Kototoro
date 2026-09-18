@@ -230,6 +230,28 @@ CS-5   experiment flag 删除 / 隐藏
      下一轮应在两处调用点打印 `resolveSlotTransform(slotIndex)` 的结果（scale/offsetX/offsetY）、
      `zoomMode` 推导出的 `layoutScale` 与 `canvasOffsetX/Y`，确认是否出现"该 slot 的 scale 被当成 1"
      （即 `zoomedSlotIndex` 与当前可见 slot 不一致）导致整页高度进入请求。
+  7. **现场取证完成，根因确定（2026-09-19）**：在 `SceneImagePresentationCoordinator.coordinateVisibleTiles`
+     里对"逻辑区域 > 6M 像素"的节点打印几何后，一次运行拿到 24 条现场记录，形态统一为：
+     ```text
+     sceneBounds   = (996, 0, 2844, 2772)        // 页高 2772 = 视口高
+     visibleRegion = (996, 0, 1315.6, 2772)      // 全高，宽仅 319.6
+     sampleSize    = 1 → logical = (0, 0, 1038, 9000)
+     ```
+     即：该页**当前以 scale=1 绘制**（`resolveSlotTransform` 对它返回默认值——相机属于另一个 slot），
+     所以"整页高度都在屏内"成立；但它持有的**网格仍是放大期间按 camera≈3.6 建成的 level-0**。
+     密度差 3.6 倍 = 像素多约 13 倍，这才是 30 倍过度请求的真正来源：**网格的 LOD 没有跟随页面
+     当前的绘制密度**（页面转身后相机重置为 1×，网格却没有降级）。
+  8. **已实施的对称修复**：`KototoroImagePipelineAdapter.coarsenOverDetailedTiles(scale)` —— 每次相机沉降
+     时为每个 Tiled 页重算 plan，若 plan 的取样率至少粗一档（`coarsenedBaseSampleSize`，≥2×）就用
+     更粗的 grid 重建 base 并释放旧瓦片；瓦片尺寸与 overview 沿用（密度才是变量）。这与既有
+     "放大时加 target 层"完全对称。测试：`TileBaseCoarseningPolicyTest` 4 例。
+     效果：放大场景瓦片驻留 **283MB → 187MB**、RSS **706MB → 494MB**（相对最初 843MB 共降 349MB），
+     1× 对照不变。
+  9. **仍未解决且已改写判据**：修复后瓦片块数仍 54、解码请求仍 1973、**CPU P99 仍 431ms** —— 说明
+     主导成本已不是解码密度而是**解码/上传的绝对次数**（1973 次解码 + 306MB 纹理）。下一轮的判据：
+     ①统计"每帧实际绘制的瓦片数"（新增计数器）以区分"解码线程抢占"与"纹理上传/绘制抢占"；
+     ②核对为何请求量是期望值的 ~3 倍（期望约 6 块/页/次，实测 18 块）——即请求是否每帧重复下发；
+     ③若确认为上传/绘制瓶颈，考虑对 level-0 瓦片启用 `RGB_565` 或降低放大上限（产品级护栏）。
 
 ### CS-1B 分页场景转正（翻转默认开关）
 

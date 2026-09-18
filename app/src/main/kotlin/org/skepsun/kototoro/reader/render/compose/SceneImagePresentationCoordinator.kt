@@ -19,6 +19,9 @@ import org.skepsun.kototoro.reader.image.ReaderImageAsset
  */
 object SceneImagePresentationCoordinator {
 
+    /** Diagnostic counter for oversized node geometry; see the probe in [coordinateVisibleTiles]. */
+    private val tileGeometryProbes = java.util.concurrent.atomic.AtomicInteger()
+
     /**
      * Inspects visible nodes in [frame] and requests intersecting lattice tiles for any [ReaderImageAsset.Tiled] asset.
      */
@@ -36,6 +39,20 @@ object SceneImagePresentationCoordinator {
                     imageWidth = asset.grid.pageSize.width,
                     imageHeight = asset.grid.pageSize.height,
                 )
+                // Diagnostic: the node geometry behind an oversized request, so the caller that
+                // produces it is identified from values rather than inferred.
+                if (visibleLogical.width.toLong() * visibleLogical.height > 6_000_000L) {
+                    val probe = tileGeometryProbes.incrementAndGet()
+                    if (probe <= 8) {
+                        android.util.Log.w(
+                            "TileGeom",
+                            "oversized node probe=$probe page=${node.pageId.value} " +
+                                "sceneBounds=${node.sceneBounds} visibleRegion=${node.visibleRegion} " +
+                                "gridPageSize=${asset.grid.pageSize} sampleSize=${asset.grid.sampleSize} " +
+                                "logical=$visibleLogical",
+                        )
+                    }
+                }
                 pipeline.requestTiles(node.pageId, visibleLogical)
             }
         }

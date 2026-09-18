@@ -589,12 +589,68 @@ class KototoroImagePipelineAdapter(
      * Responds to camera / zoom settle by evaluating multi-LOD tile requests
      * for visible pages and releasing over-sampled tiles upon zoom-out.
      */
+    /**
+     * Rebuilds any tiled page whose base grid is finer than the current camera needs.
+     *
+     * Symmetric to the zoom-in target layer: magnifying adds a finer layer, so leaving a page at fit
+     * scale has to drop back down. Otherwise the level-zero grid acquired under magnification keeps
+     * being decoded and pinned as visible for a page now shown at a third of that density, which is
+     * where the zoom run's 283MB of tiles came from.
+     */
+    private fun coarsenOverDetailedTiles(scale: Float) {
+        val vpSize = viewportSizeProvider()
+        for ((pageId, asset) in cachedAssets) {
+            if (asset !is ReaderImageAsset.Tiled) continue
+            val source = regionSources[pageId] ?: continue
+            val page = pageLookup(pageId) ?: continue
+            val plan = decodePlanner.plan(
+                pageId = pageId,
+                metadata = source.metadata,
+                geometry = asset.grid.geometry,
+                viewportWidth = vpSize.width.coerceAtLeast(100),
+                viewportHeight = vpSize.height.coerceAtLeast(100),
+                cameraScale = scale,
+                currentLod = LodSpec(
+                    level = ReaderLodPolicy.calculateLodLevel(asset.base.sampleSize),
+                    sampleSize = asset.base.sampleSize,
+                    targetPixelScale = 1.0f / asset.base.sampleSize,
+                ),
+                format = if (bitmapConfig == Bitmap.Config.RGB_565) RasterFormat.RGB_565 else RasterFormat.ARGB_8888,
+            )
+            val coarserSampleSize = coarsenedBaseSampleSize(plan.plannedSampleSize(), asset.base.sampleSize)
+                ?: continue
+            val coarserGrid = TileGrid(
+                pageId = pageId,
+                geometry = asset.grid.geometry,
+                split = page.split.toTileSplit(),
+                // Keep the acquisition-time tile dimension and overview band: the density is what
+                // changes, and the overview payload is keyed independently of the lattice grid.
+                tileDimension = asset.grid.tileDimension,
+                sampleSize = coarserSampleSize,
+            )
+            actualTileManager.releaseTiles { it.pageId == pageId && it.sampleSize == asset.base.sampleSize }
+            val coarserLayer = ReaderImageAsset.TileLayer(
+                grid = coarserGrid,
+                overviewKey = asset.base.overviewKey,
+            )
+            val updated = ReaderImageAsset.Tiled(
+                pageId = pageId,
+                base = coarserLayer,
+                target = null,
+                tileStore = actualTileManager,
+            )
+            cachedAssets[pageId] = updated
+            updateAssets { it + (pageId to updated) }
+        }
+    }
+
     fun onCameraSettled(snapshot: ReaderCameraSnapshot, scene: ReaderScene? = null) {
         val scale = snapshot.scale
         val visibleBounds = snapshot.visibleBoundsInScene
         // The camera feeds the next decode plan, so a zoomed page asks for its own LOD instead of
         // reusing the fit-to-screen target resolved when the page was first acquired.
         cameraScale = scale
+        coarsenOverDetailedTiles(scale)
 
         if (scale <= 1.0f) {
             // Zoom-out: drop target layers and release over-sampled tiles
@@ -727,6 +783,27 @@ internal fun ReaderPageSplit.toTileSplit(): TileSplit = when (this) {
 internal fun DecodePlan?.requestedDecodeSize(): IntSize? = when (this) {
     is DecodePlan.SampledSingle -> targetSize
     else -> null
+}
+
+/**
+ * Sample size a tiled page's base grid should be rebuilt at, or `null` to leave it as it is.
+ *
+ * A grid acquired while the page was magnified stays at level zero after the camera leaves it, so a
+ * page shown at fit scale keeps reporting a whole page height of level-zero tiles as visible - the
+ * zoom run held 283MB of tiles that way. The base is only rebuilt when the plan is at least one
+ * power of two coarser, which keeps the decision out of the hysteresis band's way.
+ */
+internal fun coarsenedBaseSampleSize(plannedSampleSize: Int, baseSampleSize: Int): Int? {
+    if (plannedSampleSize < baseSampleSize * 2) return null
+    return plannedSampleSize
+}
+
+/** Sample size the current camera needs for [this] plan, whatever decode shape it resolved to. */
+internal fun DecodePlan.plannedSampleSize(): Int = when (this) {
+    is DecodePlan.Tiled -> lod.sampleSize
+    is DecodePlan.SampledSingle -> sampleSize
+    is DecodePlan.Single -> 1
+    is DecodePlan.AnimatedSingle -> 1
 }
 
 /** Shortfall below which a sampled page is left as it is rather than decoded again. */
