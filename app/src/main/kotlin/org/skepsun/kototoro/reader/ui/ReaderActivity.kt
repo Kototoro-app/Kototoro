@@ -896,7 +896,7 @@ class ReaderActivity :
         if (mode == null) {
             return
         }
-        if (mode == ReaderMode.WEBTOON) {
+        if (mode.isContinuous) {
             eInkRefreshPolicy.reset()
             composeReaderController.clearEInkRefresh()
         }
@@ -1317,7 +1317,7 @@ class ReaderActivity :
         }
         val shouldRefreshEInk = eInkRefreshPolicy.shouldRefresh(
             enabled = settings.isEInkModeEnabled && settings.isEInkRefreshEnabled,
-            isPagedMode = viewModel.readerMode.value?.let { it != ReaderMode.WEBTOON } == true,
+            isPagedMode = viewModel.readerMode.value?.isPaged == true,
             previous = previous?.let { EInkPageIdentity(it.chapter.id, it.currentPage) },
             current = EInkPageIdentity(uiState.chapter.id, uiState.currentPage),
             interval = settings.eInkRefreshEveryPages,

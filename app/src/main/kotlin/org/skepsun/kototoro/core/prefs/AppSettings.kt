@@ -2584,12 +2584,12 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         if (rawValue.isNullOrEmpty()) {
             return false
         }
-        val needle = if (mode == ReaderMode.WEBTOON) READER_CROP_WEBTOON else READER_CROP_PAGED
+        val needle = if (mode.isContinuous) READER_CROP_WEBTOON else READER_CROP_PAGED
         return needle.toString() in rawValue
     }
 
     fun setPagesCropEnabled(mode: ReaderMode, enabled: Boolean) {
-        val needle = if (mode == ReaderMode.WEBTOON) READER_CROP_WEBTOON else READER_CROP_PAGED
+        val needle = if (mode.isContinuous) READER_CROP_WEBTOON else READER_CROP_PAGED
         val values = prefs.getStringSet(KEY_READER_CROP, emptySet()).orEmpty().toMutableSet()
         if (enabled) {
             values += needle.toString()

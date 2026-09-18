@@ -1008,6 +1008,7 @@ private fun ReaderMode.label(): String = stringResource(
         ReaderMode.REVERSED -> R.string.right_to_left
         ReaderMode.VERTICAL -> R.string.vertical
         ReaderMode.WEBTOON -> R.string.webtoon
+        ReaderMode.CONTINUOUS_HORIZONTAL -> R.string.continuous_horizontal
     },
 )
 
@@ -1016,6 +1017,7 @@ private fun ReaderMode.iconResId(): Int = when (this) {
     ReaderMode.REVERSED -> R.drawable.ic_reader_rtl
     ReaderMode.VERTICAL -> R.drawable.ic_reader_vertical
     ReaderMode.WEBTOON -> R.drawable.ic_gesture_vertical
+    ReaderMode.CONTINUOUS_HORIZONTAL -> R.drawable.ic_move_horizontal
 }
 
 @Composable

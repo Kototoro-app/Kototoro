@@ -77,7 +77,7 @@ internal class ComposeReaderController(
 
     @Composable
     fun Content(showFloatingControlLabels: Boolean) {
-        val infoBarEmbedded = readerMode != ReaderMode.WEBTOON
+        val infoBarEmbedded = !readerMode.isContinuous
         val systemStatus = if (infoBarEmbedded) rememberReaderSystemStatus() else null
         ComposeReaderActivityScaffold(
                     state = chromeState,
@@ -219,7 +219,7 @@ internal class ComposeReaderController(
     }
 
     private fun applyReaderLayout(mode: ReaderMode, doublePage: Boolean) {
-        val nextDoublePage = doublePage && mode != ReaderMode.WEBTOON && mode != ReaderMode.VERTICAL
+        val nextDoublePage = doublePage && mode.isPaged && mode != ReaderMode.VERTICAL
         if (readerMode == mode && isDoublePage == nextDoublePage) return
         val anchorPosition = resolveCurrentPosition()
         val anchorState = getCurrentState()
@@ -229,7 +229,7 @@ internal class ComposeReaderController(
                 "anchorPosition=$anchorPosition anchorState=$anchorState currentKey=$currentPageKey " +
                 "requestedKey=$requestedPageKey contentState=${viewModel.getCurrentState()}",
         )
-        if (readerMode == ReaderMode.WEBTOON && mode != ReaderMode.WEBTOON) {
+        if (readerMode.isContinuous && mode.isPaged) {
             webtoonPageTurnRequest = null
             cumulativeWebtoonPageTurnDelta = 0L
         }
@@ -516,9 +516,9 @@ internal class ComposeReaderController(
         get() = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
 
     override fun switchPageBy(delta: Int) {
-        if (readerMode == ReaderMode.WEBTOON) {
-            // A webtoon page turn is a viewport-sized scroll; image boundaries are not
-            // meaningful page boundaries when source images have different heights.
+        if (readerMode.isContinuous) {
+            // A continuous page turn is a viewport-sized scroll; image boundaries are not
+            // meaningful page boundaries when source images have different sizes.
             cumulativeWebtoonPageTurnDelta += delta
             webtoonPageTurnRequest = ComposeWebtoonPageTurnRequest(
                 id = ++nextCommandId,
@@ -561,7 +561,7 @@ internal class ComposeReaderController(
     }
 
     override fun scrollBy(delta: Int, smooth: Boolean): Boolean {
-        if (readerMode != ReaderMode.WEBTOON) return false
+        if (!readerMode.isContinuous) return false
         cumulativeScrollDelta += delta
         scrollRequest = ComposeReaderScrollRequest(++nextCommandId, delta, cumulativeScrollDelta, smooth)
         return true
@@ -623,7 +623,7 @@ internal class ComposeReaderController(
     override fun onZoomOut() = issueZoomCommand(0.9f)
 
     private fun issueZoomCommand(factor: Float) {
-        if (readerMode == ReaderMode.WEBTOON) {
+        if (readerMode.isContinuous) {
             webtoonZoomCommand = ComposeWebtoonZoomCommand(++nextCommandId, factor)
             return
         }

@@ -129,6 +129,7 @@
     <string name="text_file_sizes">B|kB|MB|GB|TB</string>
     <string name="standard">Standard</string>
     <string name="webtoon">Webtoon</string>
+    <string name="continuous_horizontal">Continuous horizontal</string>
     <string name="read_mode">Read mode</string>
     <string name="ai">AI</string>
     <string name="reader_translation_long_press_hint">Long press Translation for language shortcuts</string>

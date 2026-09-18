@@ -9,7 +9,11 @@ enum class ReaderMode(val id: Int) {
     REVERSED(3),
     VERTICAL(4),
     WEBTOON(2),
+    CONTINUOUS_HORIZONTAL(5),
     ;
+
+    val isContinuous: Boolean get() = this == WEBTOON || this == CONTINUOUS_HORIZONTAL
+    val isPaged: Boolean get() = !isContinuous
 
     companion object {
 

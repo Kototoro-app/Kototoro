@@ -286,7 +286,7 @@ class ReaderViewModel @Inject constructor(
 
     val isZoomControlsEnabled = getObserveIsZoomControlEnabled().flatMapLatest { zoom ->
         if (zoom) {
-            combine(readerMode, isWebtoonZooEnabled) { mode, ze -> ze || mode != ReaderMode.WEBTOON }
+            combine(readerMode, isWebtoonZooEnabled) { mode, ze -> ze || mode?.isPaged == true }
         } else {
             flowOf(false)
         }
@@ -351,7 +351,7 @@ class ReaderViewModel @Inject constructor(
     private fun getSplitPagesSnapshot(
         currentChapterId: Long? = readingState.value?.chapterId,
     ): List<org.skepsun.kototoro.reader.ui.pager.ReaderPage> {
-        val originalPages = if (readerMode.value != ReaderMode.WEBTOON && currentChapterId != null) {
+        val originalPages = if (readerMode.value?.isPaged == true && currentChapterId != null) {
             chaptersLoader.snapshotReaderWindow(currentChapterId, BOUNDS_PAGE_OFFSET)
         } else {
             chaptersLoader.snapshot()
@@ -748,8 +748,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     @MainThread
-    fun onCurrentPageChanged(lowerPos: Int, upperPos: Int) {
-        onCurrentPageChanged(content.value.pages, lowerPos, upperPos, selectedPageKey = null)
+    fun onCurrentPageChanged(lowerPos: Int, upperPos: Int, activePageKey: Long? = null) {
+        onCurrentPageChanged(content.value.pages, lowerPos, upperPos, selectedPageKey = activePageKey)
     }
 
     @MainThread
@@ -766,7 +766,7 @@ class ReaderViewModel @Inject constructor(
             )
             return
         }
-        val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+        val continuousWebtoon = readerMode.value?.isContinuous == true && !isWebtoonPullGestureEnabled.value
         if (continuousWebtoon && suppressTransientCrossChapterUpdates.get()) {
             Log.d(
                 READER_WINDOW_LOG_TAG,
@@ -788,7 +788,7 @@ class ReaderViewModel @Inject constructor(
         targetPagePosition.value = null
         stateChangeJob = launchJob(Dispatchers.Default) {
             prevJob?.cancelAndJoin()
-            val continuousWebtoon = readerMode.value == ReaderMode.WEBTOON && !isWebtoonPullGestureEnabled.value
+            val continuousWebtoon = readerMode.value?.isContinuous == true && !isWebtoonPullGestureEnabled.value
             if (!continuousWebtoon) {
                 if (pages !== content.value.pages) {
                     Log.d(
@@ -856,7 +856,7 @@ class ReaderViewModel @Inject constructor(
             val promotedChapter = selectedPage?.chapterId?.takeIf { activeChapterId ->
                 currentState != null &&
                     activeChapterId != currentState.chapterId &&
-                    (continuousWebtoon || readerMode.value != ReaderMode.WEBTOON)
+                    (continuousWebtoon || readerMode.value?.isPaged == true)
             }
             selectedPage?.let { page ->
                 readingState.update { cs ->
@@ -895,7 +895,7 @@ class ReaderViewModel @Inject constructor(
                 return@launchJob
             }
             ensureActive()
-            val autoLoadAllowed = readerMode.value != ReaderMode.WEBTOON || !isWebtoonPullGestureEnabled.value
+            val autoLoadAllowed = readerMode.value?.isPaged == true || !isWebtoonPullGestureEnabled.value
             if (autoLoadAllowed) {
                 val currentChapterId = readingState.value?.chapterId
                 val chapterStart = pages.indexOfFirst { it.chapterId == currentChapterId }
@@ -1505,7 +1505,7 @@ class ReaderViewModel @Inject constructor(
         launchJob(Dispatchers.Default) {
             isWebtoonPullGestureEnabled.collect { isPullEnabled ->
                 val currentState = readingState.value ?: return@collect
-                if (readerMode.value != ReaderMode.WEBTOON) return@collect
+                if (readerMode.value?.isContinuous != true) return@collect
                 readerWindowGeneration++
                 if (isPullEnabled) {
                     chaptersLoader.keepOnlyChapter(currentState.chapterId)

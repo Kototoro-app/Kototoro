@@ -80,6 +80,7 @@
 		<item>@string/right_to_left</item>
 		<item>@string/vertical</item>
 		<item>@string/webtoon</item>
+		<item>@string/continuous_horizontal</item>
 	</string-array>
 	<string-array name="scrobbling_statuses" translatable="false">
 		<item>@string/status_planned</item>
