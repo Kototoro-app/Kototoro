@@ -353,6 +353,22 @@ fun ComposeScenePagedReader(
         return panX to panY
     }
 
+    /**
+     * Whether single-pointer dragging at the current transform is owned by the content canvas
+     * instead of page navigation — i.e. the content is enlarged and has room to pan.
+     *
+     * Mirrors the legacy reader where enlarged content pans with inertia on release: the canvas
+     * owns the drag whenever there is pan room in any direction — from user zoom (scale > 1) or
+     * from the layout itself overflowing the viewport at baseline scale (FIT_HEIGHT / FIT_WIDTH
+     * widen or heighten content past the screen, native-size KEEP_START surpasses it). Fitting
+     * pages resolve degenerate ranges and keep plain swipe-to-flip with no canvas inertia.
+     */
+    fun isSlotPannable(slotIndex: Int, scale: Float): Boolean {
+        if (scale > 1f) return true
+        val (panX, panY) = getSlotPanRanges(slotIndex, scale)
+        return panX.endInclusive > panX.start + 0.5f || panY.endInclusive > panY.start + 0.5f
+    }
+
     fun resolveSlotInitialOffsets(slotIndex: Int): Pair<Float, Float> {
         val bounds = getSlotContentBounds(slotIndex) ?: return 0f to 0f
         val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
@@ -931,7 +947,7 @@ fun ComposeScenePagedReader(
                                     canvasOffsetY = (canvasOffsetY + crossDelta).coerceIn(panY)
                                 }
                             }
-                            if (canvasScale > 1f) {
+                            if (isSlotPannable(initialSlot, canvasScale)) {
                                 saveSlotZoom(initialSlot, canvasScale, canvasOffsetX, canvasOffsetY)
                             }
 
@@ -956,7 +972,7 @@ fun ComposeScenePagedReader(
                                 } else if (desiredOffset > maxScroll) {
                                     handlePull(desiredOffset - maxScroll)
                                 }
-                            } else if (canvasScale > 1f) {
+                            } else if (isSlotPannable(initialSlot, canvasScale)) {
                                 canvasVelocityTracker.addPosition(change.uptimeMillis, change.position)
                             }
 
@@ -1025,7 +1041,7 @@ fun ComposeScenePagedReader(
                                     scrollState.isFlinging = false
                                 }
                             }
-                        } else if (canvasScale > 1f) {
+                        } else if (isSlotPannable(initialSlot, canvasScale)) {
                             val vel = canvasVelocityTracker.calculateVelocity()
                             if (maxOf(abs(vel.x), abs(vel.y)) >= 50f) {
                                 canvasFlingJob = coroutineScope.launch {
