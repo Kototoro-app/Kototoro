@@ -70,7 +70,9 @@ class SceneReaderRecoveryTest {
         val imageLoader = ImageLoader(context)
         try {
             ActivityScenario.launch<IdleProbeActivity>(
-                Intent(context, IdleProbeActivity::class.java).putExtra("scene_recovery", true),
+                Intent(context, IdleProbeActivity::class.java)
+                    .putExtra("scene_recovery", true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             ).use { scenario ->
                 scenario.onActivity { activity ->
                     activity.setContent {
@@ -84,8 +86,28 @@ class SceneReaderRecoveryTest {
                     }
                 }
                 val automation = instrumentation.uiAutomation
-                fun findRetry() = automation.rootInActiveWindow
-                    ?.findAccessibilityNodeInfosByText(context.getString(R.string.retry))?.firstOrNull()
+                fun findRetry(): AccessibilityNodeInfo? {
+                    val root = automation.rootInActiveWindow ?: return null
+                    val retryText = context.getString(R.string.retry)
+                    val tryAgainText = context.getString(R.string.try_again)
+                    fun search(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                        val text = node.text?.toString()
+                        if (text == retryText || text == tryAgainText || text.equals("Retry", ignoreCase = true) || text.equals("Try again", ignoreCase = true)) {
+                            var current: AccessibilityNodeInfo? = node
+                            while (current != null && !current.isClickable) {
+                                current = current.parent
+                            }
+                            return current ?: node
+                        }
+                        for (i in 0 until node.childCount) {
+                            val child = node.getChild(i) ?: continue
+                            val match = search(child)
+                            if (match != null) return match
+                        }
+                        return null
+                    }
+                    return search(root)
+                }
                 waitUntil { findRetry() != null }
                 assertTrue("The failed request must stay settled", attempts.get() == 1)
                 assertTrue("Retry must be actionable", findRetry()!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
@@ -114,10 +136,22 @@ class SceneReaderRecoveryTest {
 
     private fun waitUntil(predicate: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + 10_000
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
         while (SystemClock.uptimeMillis() < deadline) {
+            dismissSystemDialogs(instrumentation)
             if (predicate()) return
             SystemClock.sleep(100)
         }
         throw AssertionError("Scene reader did not reach the expected visible state")
+    }
+
+    private fun dismissSystemDialogs(instrumentation: android.app.Instrumentation) {
+        val root = instrumentation.uiAutomation?.rootInActiveWindow ?: return
+        val pkg = root.packageName?.toString()
+        if (pkg == "android" || pkg?.contains("systemui") == true) {
+            val button = root.findAccessibilityNodeInfosByViewId("android:id/button1")?.firstOrNull()
+                ?: root.findAccessibilityNodeInfosByViewId("android:id/button2")?.firstOrNull()
+            button?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
     }
 }

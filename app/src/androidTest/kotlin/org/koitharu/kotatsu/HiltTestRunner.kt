@@ -23,6 +23,15 @@ class HiltTestRunner : AndroidJUnitRunner() {
                 Configuration.Builder().build(),
             )
         }
+        runCatching {
+            val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+            automation.executeShellCommand("appops set ${targetContext.packageName} 10021 allow")
+            automation.executeShellCommand("appops set ${context.packageName} 10021 allow")
+            automation.executeShellCommand("appops set ${targetContext.packageName} SYSTEM_ALERT_WINDOW allow")
+            automation.executeShellCommand("appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
+            automation.executeShellCommand("input keyevent KEYCODE_WAKEUP")
+            automation.executeShellCommand("wm dismiss-keyguard")
+        }
         super.onStart()
     }
 }

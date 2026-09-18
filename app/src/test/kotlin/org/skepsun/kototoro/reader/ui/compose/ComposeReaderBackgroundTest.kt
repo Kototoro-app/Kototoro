@@ -9,6 +9,32 @@ import org.skepsun.kototoro.core.prefs.ReaderBackground
 class ComposeReaderBackgroundTest {
 
 	@Test
+	fun `scene fixed white background ignores book tint`() {
+		assertEquals(
+			Color.WHITE,
+			resolveScenePagedBackground(ReaderBackground.WHITE, Color.WHITE, null, BOOK_TINT),
+		)
+	}
+
+	@Test
+	fun `scene non automatic backgrounds preserve configured color`() {
+		for (background in ReaderBackground.entries.filter { it != ReaderBackground.AUTO }) {
+			assertEquals(
+				Color.WHITE,
+				resolveScenePagedBackground(background, Color.WHITE, GREEN, BOOK_TINT),
+			)
+		}
+	}
+
+	@Test
+	fun `scene automatic background tints white samples and white fallback only`() {
+		assertEquals(BOOK_TINT, resolveScenePagedBackground(ReaderBackground.AUTO, Color.BLACK, Color.WHITE, BOOK_TINT))
+		assertEquals(BOOK_TINT, resolveScenePagedBackground(ReaderBackground.AUTO, Color.WHITE, null, BOOK_TINT))
+		assertEquals(GREEN, resolveScenePagedBackground(ReaderBackground.AUTO, Color.WHITE, GREEN, BOOK_TINT))
+		assertEquals(Color.WHITE, resolveScenePagedBackground(ReaderBackground.AUTO, Color.WHITE, null, null))
+	}
+
+	@Test
 	fun `fixed background ignores sampled page colors`() {
 		assertEquals(
 			Color.BLACK,

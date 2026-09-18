@@ -62,7 +62,7 @@ import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PageSegment
 import org.skepsun.kototoro.reader.core.PagedPageSpec
 import org.skepsun.kototoro.reader.core.PagedReaderScene
-import org.skepsun.kototoro.reader.core.PagedSnapResolver
+import org.skepsun.kototoro.reader.core.PagedDragState
 import org.skepsun.kototoro.reader.core.PagedSpreadConfig
 import org.skepsun.kototoro.reader.core.PrefetchPriority
 import org.skepsun.kototoro.reader.core.PrefetchReadiness
@@ -123,7 +123,7 @@ internal fun createInitialPagedPageSpecs(
  * Unifies Single-Page (LTR, RTL Manga, Vertical Paged) and Double-Page Spreads:
  * - Mathematical slot resolution via [PagedReaderScene] with zero Compose layout overhead.
  * - Draw-phase rendering via [drawFrameNodes], bypassing Composition and Layout on drag & snap.
- * - [PagedSnapResolver] for predictable, velocity- and threshold-aware slot snapping.
+ * - [PagedDragState] for content-pan handoff and velocity- and threshold-aware slot snapping.
  * - Full resource windowing via [KototoroImagePipelineAdapter] (slot-scoped lookahead & eviction).
  * - High-precision pinch-to-zoom (1x..5x) and single-slot pan.
  * - Pull gestures for previous/next chapter boundaries.
@@ -282,12 +282,7 @@ fun ComposeScenePagedReader(
     }
 
     val resolvedBackgroundColor = remember(readerBackground, readerBackgroundColor, autoBackgroundColor, bookBackgroundTint) {
-        val baseColor = if (readerBackground == ReaderBackground.AUTO && autoBackgroundColor != null) {
-            autoBackgroundColor!!
-        } else {
-            readerBackgroundColor
-        }
-        applyAutomaticBookBackgroundTint(baseColor, bookBackgroundTint)
+        resolveScenePagedBackground(readerBackground, readerBackgroundColor, autoBackgroundColor, bookBackgroundTint)
     }
 
     var lastReportedPages by remember { mutableStateOf<Triple<Long, Long, Long>?>(null) }
@@ -689,14 +684,23 @@ fun ComposeScenePagedReader(
                     }
 
                     val velocityTracker = VelocityTracker()
-                    velocityTracker.addPosition(down.uptimeMillis, down.position)
+                    var velocityPosition = 0f
+                    val dragState = PagedDragState(readingDirection)
                     var isZoomGesture = false
-                    var dragAccumulator = 0f
 
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val pressedCount = event.changes.count { it.pressed }
                         if (isZoomEnabled && pressedCount >= 2) {
+                            if (!isZoomGesture) {
+                                dragState.cancel()
+                                velocityTracker.resetTracking()
+                                scrollState.isDragging = false
+                                scrollState.snapTo((initialSlot * pe).coerceIn(0f, scrollState.maxOffset))
+                                scene?.let { updateResourceWindow(it, scrollState.offset) }
+                                pullStartDistancePx = 0f
+                                pullEndDistancePx = 0f
+                            }
                             isZoomGesture = true
                             event.changes.forEach { it.consume() }
                             val pan = event.calculatePan()
@@ -710,10 +714,8 @@ fun ComposeScenePagedReader(
                             }
                         } else if (pressedCount == 1) {
                             val change = event.changes.first { it.pressed }
-                            velocityTracker.addPosition(change.uptimeMillis, change.position)
                             val pan = event.calculatePan()
                             val isVertical = readingDirection.isVertical
-                            val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
 
                             if (canvasScale > 1f) {
                                 if (pan.x.isFinite() && pan.y.isFinite() && (pan.x != 0f || pan.y != 0f)) {
@@ -723,67 +725,52 @@ fun ComposeScenePagedReader(
                                     canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
                                 }
                             } else if (!isZoomGesture) {
-                                var consumed = false
-                                val (currentPanX, currentPanY) = getSlotPanRanges(initialSlot, 1f)
-                                val curCanPanX = currentPanX.endInclusive > currentPanX.start
-                                val curCanPanY = currentPanY.endInclusive > currentPanY.start
-
+                                val (panX, panY) = getSlotPanRanges(initialSlot, 1f)
+                                val primaryDelta = if (isVertical) pan.y else pan.x
+                                val crossDelta = if (isVertical) pan.x else pan.y
+                                val movement = dragState.dragBy(
+                                    delta = primaryDelta,
+                                    contentOffset = if (isVertical) canvasOffsetY else canvasOffsetX,
+                                    range = if (isVertical) panY else panX,
+                                )
                                 if (isVertical) {
-                                    if (curCanPanX && pan.x.isFinite() && pan.x != 0f) {
-                                        canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(currentPanX)
-                                        consumed = true
-                                    }
-                                    if (curCanPanY && pan.y.isFinite() && pan.y != 0f) {
-                                        canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
-                                        consumed = true
-                                    } else if (!curCanPanY) {
-                                        val forwardDelta = -pan.y
-                                        if (forwardDelta != 0f) {
-                                            consumed = true
-                                            scrollState.isDragging = true
-                                            dragAccumulator += forwardDelta
-                                            val desiredOffset = startOffset + dragAccumulator
-                                            val maxScroll = scrollState.maxOffset
-                                            val newOffset = desiredOffset.coerceIn(0f, maxScroll)
-                                            scrollState.snapTo(newOffset)
-                                            scene?.let { updateResourceWindow(it, newOffset) }
-
-                                            if (desiredOffset < 0f) {
-                                                handlePull(desiredOffset)
-                                            } else if (desiredOffset > maxScroll) {
-                                                handlePull(desiredOffset - maxScroll)
-                                            }
-                                        }
+                                    canvasOffsetY = movement.contentOffset
+                                    if (crossDelta.isFinite()) {
+                                        canvasOffsetX = (canvasOffsetX + crossDelta).coerceIn(panX)
                                     }
                                 } else {
-                                    if (curCanPanY && pan.y.isFinite() && pan.y != 0f) {
-                                        canvasOffsetY = (canvasOffsetY + pan.y).coerceIn(currentPanY)
-                                        consumed = true
-                                    }
-                                    if (curCanPanX && pan.x.isFinite() && pan.x != 0f) {
-                                        canvasOffsetX = (canvasOffsetX + pan.x).coerceIn(currentPanX)
-                                        consumed = true
-                                    } else if (!curCanPanX) {
-                                        val forwardDelta = if (isRtl) pan.x else -pan.x
-                                        if (forwardDelta != 0f) {
-                                            consumed = true
-                                            scrollState.isDragging = true
-                                            dragAccumulator += forwardDelta
-                                            val desiredOffset = startOffset + dragAccumulator
-                                            val maxScroll = scrollState.maxOffset
-                                            val newOffset = desiredOffset.coerceIn(0f, maxScroll)
-                                            scrollState.snapTo(newOffset)
-                                            scene?.let { updateResourceWindow(it, newOffset) }
-
-                                            if (desiredOffset < 0f) {
-                                                handlePull(desiredOffset)
-                                            } else if (desiredOffset > maxScroll) {
-                                                handlePull(desiredOffset - maxScroll)
-                                            }
-                                        }
+                                    canvasOffsetX = movement.contentOffset
+                                    if (crossDelta.isFinite()) {
+                                        canvasOffsetY = (canvasOffsetY + crossDelta).coerceIn(panY)
                                     }
                                 }
-                                if (consumed) {
+
+                                if (movement.resetVelocity) {
+                                    velocityTracker.resetTracking()
+                                    velocityPosition = 0f
+                                } else {
+                                    velocityPosition += movement.pageDelta
+                                }
+                                // Track only page movement; a handoff starts a fresh velocity history.
+                                velocityTracker.addPosition(change.uptimeMillis, Offset(velocityPosition, 0f))
+                                if (movement.pageDelta != 0f) {
+                                    scrollState.isDragging = true
+                                    val desiredOffset = startOffset + dragState.pageOffset
+                                    val maxScroll = scrollState.maxOffset
+                                    val newOffset = desiredOffset.coerceIn(0f, maxScroll)
+                                    scrollState.snapTo(newOffset)
+                                    scene?.let { updateResourceWindow(it, newOffset) }
+                                    pullStartDistancePx = 0f
+                                    pullEndDistancePx = 0f
+                                    if (desiredOffset < 0f) {
+                                        handlePull(desiredOffset)
+                                    } else if (desiredOffset > maxScroll) {
+                                        handlePull(desiredOffset - maxScroll)
+                                    }
+                                }
+                                if ((primaryDelta.isFinite() && primaryDelta != 0f) ||
+                                    (crossDelta.isFinite() && crossDelta != 0f)
+                                ) {
                                     event.changes.forEach { it.consume() }
                                 }
                             }
@@ -797,17 +784,10 @@ fun ComposeScenePagedReader(
                     handleReleasePull()
 
                     if (!isZoomGesture && canvasScale <= 1f && scene != null && scene.slotCount > 0) {
-                        val velocity = velocityTracker.calculateVelocity()
-                        val isVertical = readingDirection.isVertical
-                        val isRtl = readingDirection == SceneReadingDirection.RIGHT_TO_LEFT
-                        val forwardVelocity = if (isVertical) -velocity.y else if (isRtl) velocity.x else -velocity.x
-                        val normalizedVelocity = forwardVelocity / (pe * 0.5f)
-                        val offsetFraction = (dragAccumulator / pe).coerceIn(-1f, 1f)
-
-                        val targetSlot = PagedSnapResolver.resolveTargetSlot(
+                        val targetSlot = dragState.resolveTargetSlot(
                             currentSlot = initialSlot,
-                            offsetFraction = offsetFraction,
-                            normalizedVelocity = normalizedVelocity,
+                            pageExtent = pe,
+                            forwardVelocity = velocityTracker.calculateVelocity().x,
                             totalSlots = scene.slotCount,
                         )
                         val targetOffset = (targetSlot * pe).coerceIn(0f, scrollState.maxOffset)

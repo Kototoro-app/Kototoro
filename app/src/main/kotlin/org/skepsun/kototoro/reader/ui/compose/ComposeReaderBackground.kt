@@ -37,6 +37,20 @@ internal fun applyAutomaticBookBackgroundTint(
 ): Int = if (resolvedColor == Color.WHITE) bookBackgroundTint ?: resolvedColor else resolvedColor
 
 @ColorInt
+internal fun resolveScenePagedBackground(
+    background: ReaderBackground,
+    @ColorInt configuredColor: Int,
+    @ColorInt autoColor: Int?,
+    @ColorInt bookBackgroundTint: Int?,
+): Int {
+    return if (background == ReaderBackground.AUTO) {
+        applyAutomaticBookBackgroundTint(autoColor ?: configuredColor, bookBackgroundTint)
+    } else {
+        configuredColor
+    }
+}
+
+@ColorInt
 internal fun resolveDoublePageBackground(
     background: ReaderBackground,
     @ColorInt configuredColor: Int,

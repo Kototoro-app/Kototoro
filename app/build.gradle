@@ -204,7 +204,6 @@ android {
 		unitTests.all {
 			useJUnitPlatform()
 		}
-		execution 'ANDROIDX_TEST_ORCHESTRATOR'
 		animationsDisabled = true
 	}
 	// AGP 9 removed the legacy applicationVariants API; nightly version overrides use the
