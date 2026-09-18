@@ -82,9 +82,18 @@ CS-5   experiment flag 删除 / 隐藏
 
 - **证据**：ADR 0002 `:486`（Phase 3F 功能已实现、真机基准待验收）、`:503`（4 组验收矩阵**待执行**，
   Paged 实验开关保持默认关闭）。【已验证】
-- **DoD**：执行 ADR `:504-508` 的 4 组矩阵（普通单页 1x / 6000×9000 大图 1x / 2.5x–5x 放大切片 /
-  双页跨章往复），每组的 `frameDurationCpuMs`、`frameOverrunMs`、`RssAnon`、`ActivePresentationAssets`
-  记入 ADR，并满足 ADR `:264-266` 的 Go 判据。
+- **前置缺口（2026-09-19 已补）**：原 `macrobenchmark` 夹具**只有 webtoon 后端**，
+  分页矩阵没有可跑的 harness。现已扩展：
+  - `ReaderProductionBenchmarkActivity` 新增 `legacy_paged` / `scene_paged` 两个后端与
+    `animation` / `double_page` / `zoom_mode` 三个 intent extra，并新增两份夹具：
+    `paged`（24 页 800×1200 纵向漫画页）与 `paged_large`（8 页 6000×9000 超大页）；
+  - `ReaderProductionBenchmark` 新增 9 个分页旅程，覆盖 4 组验收场景：
+    单页 1x（scene/legacy × Partial/Full）、超大页 1x（scene/legacy）、超高倍放大
+    （`fit_height` = 原生像素级溢出平移）、双页跨章往复（scene/legacy）；指标沿用既有
+    `FrameTimingMetric` + `MemoryUsageMetric(Max/Last)` + `ActivePresentationAssetsMetric`；
+  - 夹具就绪超时从 30s 放宽到 180s（超大页首次生成较慢），就绪门控本身不变。
+- **DoD**：执行 4 组矩阵，每组的 `frameDurationCpuMs`、`frameOverrunMs`、`RssAnon`、
+  `ActivePresentationAssets` 记入 ADR，并满足 ADR `:264-266` 的 Go 判据。
 - **注意**：本项只产出"性能与稳定性可接受"的结论，**不包含翻转默认值** —— 那是 CS-1B。
 - **规模**：M（成本主要在真机时间，不在代码）
 
@@ -141,6 +150,15 @@ CS-5   experiment flag 删除 / 隐藏
     `reader/ui/compose/ComposeReaderPageAnimation.kt` 下移到 render 层 —— 当前 `render/compose` 反向
     import 了 `ui/compose` 的三个纯函数（`calculatePageCurlGeometry` / `resolvePageCurlFromStart` /
     `resolvePageCurlStartFraction`），属本次新增的分层债，需在 CS-4 清账时一并了结。
+  - **真机验证（2026-09-19，Redmi Note 12 Turbo / warsaw，Android 17，120Hz）**：本机没有可用视觉模型，
+    因此改用像素度量而非肉眼判断（见 §5「真机验证方法」）。四种动画在同一拖拽位置各抓一帧后两两比对：
+    - `NONE` vs `DEFAULT`：仅 **0.05%** 像素不同 → 两者共用 SLIDE 渲染路径，与设计一致；
+    - `DEFAULT` vs `ADVANCED`：**9.8%** 不同；`DEFAULT` vs `SIMULATION`：**15.8%** 不同；
+      `ADVANCED` vs `SIMULATION`：**21.7%** 不同 → 三种样式在真机上确实渲染不同。
+      （CS-2 之前四者会完全一致，这正是被修掉的静默塌缩。）
+    - 差异区域的内边界（逐行最左侧变化像素）区分平移与折页：SLIDE `x∈[1090,1114]`（std 8.0）、
+      COVER 恰好垂直（std **0.0**，新页在静止页下方滑入）、CURL `x∈[900,1114]`（std **93.6**，
+      随行漂移的折痕边界，平移不可能产生）。
 
 ### CS-3 CONTINUOUS_HORIZONTAL 的方向与门控一致性
 
@@ -389,6 +407,27 @@ CS-5   experiment flag 删除 / 隐藏
 （`frameDurationCpuMs` P50/P99、`frameOverrunMs` P99、`RssAnon` Max/Last、`ActivePresentationAssets` Max/Last），
 并同时跑 Primary（`CompilationMode.Partial`）与 Diagnostic（`CompilationMode.Full`）两种模式，
 沿用 ADR Phase 0B/1D 的表格格式，便于跨阶段对比。阈值判定归属 CS-7。
+
+### 真机验证方法（2026-09-19 建立）
+
+本机环境**没有可用的视觉模型**（候选模型均不声明图像输入），因此"看一眼动画对不对"不可用，
+视觉类结论一律改由像素度量给出。三个必须记住的操作要点：
+
+1. **MIUI/HyperOS 必须先解封输入注入**：否则 `input swipe/tap/motionevent` 静默无效，
+   而截图完全正常 —— 极易误判成"功能没生效"。root 下执行
+   `adb shell su -c "setprop persist.security.adbinput 1"` 即可；随后一次 swipe 应能改变
+   >90% 的像素（本机实测 `moved_share(>12)=0.953`）。
+2. **截图必须走 raw + cmd 重定向**：PowerShell 的 `>` 会破坏二进制（PNG 头都不对）。
+   用 `cmd /c "adb exec-out screencap > shot.raw"`，得到 16 字节头（w/h/fmt/colorspace）+ RGBA8888，
+   本机为 1280×2772 → 14,192,656 字节。
+3. **过渡样式的判据是"差异区域的内边界"**：同一拖拽位置抓帧后，比较"拖拽帧 vs 静止帧"的逐行差异，
+   取每行最左侧发生变化的 x。纯滑动内边界固定（实测 std 8.0），cover 恰好垂直（std 0.0），
+   curl 随行漂移（std 93.6，x 从 900 漂到 1114）—— 平移不可能产生随行变化的边界，故该指标可直接
+   区分折页与滑动。
+
+像素度量脚本 `transition_probe.py`（zlib + numpy 解 PNG，或直读 raw；提供 `stats` / `diff` / `seam` /
+`extent` 四个命令）当前位于工作区外的 `E:\kototoro_demo\device-evidence\`。它在同一台设备上可复用，
+**待稳定后应移入仓库**（可仿照 `artwork_probe.py` 随 skill 分发），以免下次又从零写一遍。
 
 ---
 

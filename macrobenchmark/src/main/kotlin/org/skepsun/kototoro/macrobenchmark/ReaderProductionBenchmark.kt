@@ -111,6 +111,137 @@ class ReaderProductionBenchmark {
     @Test
     fun energyScene() = measureEnergy(BACKEND_SCENE_WEBTOON)
 
+    // --- 4. Paged (discrete) Suite: the promotion matrix for ComposeScenePagedReader ---
+    // Scenario 1: ordinary single page at 1x.
+    // Scenario 2: oversized 6000x9000 page at 1x (LOD0 overview + tiles).
+    // Scenario 3: oversized page at high zoom (see ReaderPagedZoomBenchmark).
+    // Scenario 4: double-page turning back and forth.
+
+    @Test
+    fun pagedSingleSceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+    )
+
+    @Test
+    fun pagedSingleLegacyFull() = measurePaged(
+        backend = BACKEND_LEGACY_PAGED,
+        compilationMode = CompilationMode.Full(),
+    )
+
+    @Test
+    fun pagedSingleScenePartial() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.UseIfAvailable),
+    )
+
+    @Test
+    fun pagedSingleLegacyPartial() = measurePaged(
+        backend = BACKEND_LEGACY_PAGED,
+        compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.UseIfAvailable),
+    )
+
+    @Test
+    fun pagedLargeSceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+    )
+
+    @Test
+    fun pagedLargeLegacyFull() = measurePaged(
+        backend = BACKEND_LEGACY_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+    )
+
+    @Test
+    fun pagedDoublePageSceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        isDoublePage = true,
+    )
+
+    @Test
+    fun pagedDoublePageLegacyFull() = measurePaged(
+        backend = BACKEND_LEGACY_PAGED,
+        compilationMode = CompilationMode.Full(),
+        isDoublePage = true,
+    )
+
+    /** Scenario 3: an oversized page held at high zoom, where visible tiles must follow the camera. */
+    @Test
+    fun pagedLargeZoomSceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+        zoomMode = ZOOM_MODE_FIT_HEIGHT,
+    )
+
+    private fun measurePaged(
+        backend: String,
+        compilationMode: CompilationMode,
+        fixtureMode: String = FIXTURE_MODE_PAGED,
+        isDoublePage: Boolean = false,
+        zoomMode: String = ZOOM_MODE_FIT_CENTER,
+        animation: String = ANIMATION_DEFAULT,
+        iterations: Int = 5,
+    ) {
+        benchmarkRule.measureRepeated(
+            packageName = TARGET_PACKAGE,
+            metrics = listOf(
+                FrameTimingMetric(),
+                MemoryUsageMetric(
+                    mode = MemoryUsageMetric.Mode.Max,
+                    subMetrics = listOf(
+                        MemoryUsageMetric.SubMetric.HeapSize,
+                        MemoryUsageMetric.SubMetric.RssAnon,
+                        MemoryUsageMetric.SubMetric.RssShmem,
+                        MemoryUsageMetric.SubMetric.Gpu,
+                    ),
+                    metricNameSuffix = "Max",
+                ),
+                MemoryUsageMetric(
+                    mode = MemoryUsageMetric.Mode.Last,
+                    subMetrics = listOf(
+                        MemoryUsageMetric.SubMetric.HeapSize,
+                        MemoryUsageMetric.SubMetric.RssAnon,
+                        MemoryUsageMetric.SubMetric.RssShmem,
+                        MemoryUsageMetric.SubMetric.Gpu,
+                    ),
+                    metricNameSuffix = "Last",
+                ),
+                ActivePresentationAssetsMetric(),
+            ),
+            compilationMode = compilationMode,
+            startupMode = null,
+            iterations = iterations,
+            setupBlock = {
+                setupIteration(
+                    backend = backend,
+                    fixtureMode = fixtureMode,
+                    isDoublePage = isDoublePage,
+                    zoomMode = zoomMode,
+                    animation = animation,
+                )
+            },
+        ) {
+            pagedTurns(cycles = 2)
+        }
+    }
+
+    private fun MacrobenchmarkScope.pagedTurns(cycles: Int) {
+        val midY = device.displayHeight / 2
+        val leftX = device.displayWidth / 8
+        val rightX = device.displayWidth * 7 / 8
+        repeat(cycles) {
+            // Discrete page turns in both directions, matching a reader flipping through a chapter.
+            repeat(10) { device.swipe(rightX, midY, leftX, midY, 12) }
+            repeat(10) { device.swipe(leftX, midY, rightX, midY, 12) }
+        }
+        device.waitForIdle()
+    }
+
     private fun measureBurst(
         backend: String,
         compilationMode: CompilationMode,
@@ -201,6 +332,9 @@ class ReaderProductionBenchmark {
     private fun MacrobenchmarkScope.setupIteration(
         backend: String,
         fixtureMode: String = FIXTURE_MODE_STANDARD,
+        isDoublePage: Boolean = false,
+        zoomMode: String = ZOOM_MODE_FIT_CENTER,
+        animation: String = ANIMATION_DEFAULT,
     ) {
         killProcess()
         pressHome()
@@ -221,10 +355,18 @@ class ReaderProductionBenchmark {
 
         try {
             android.util.Log.e("ReaderBenchmark", "setupIteration startBenchmarkActivity for backend=$backend, fixtureMode=$fixtureMode")
-            startBenchmarkActivity(backend, fixtureMode)
-            val ready = latch.await(30, TimeUnit.SECONDS)
+            startBenchmarkActivity(
+                backend = backend,
+                fixtureMode = fixtureMode,
+                isDoublePage = isDoublePage,
+                zoomMode = zoomMode,
+                animation = animation,
+            )
+            // The oversized fixtures are rendered on first use, which can exceed the original
+            // 30s window; readiness still gates the measurement either way.
+            val ready = latch.await(FIXTURE_READY_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             android.util.Log.e("ReaderBenchmark", "setupIteration latch await returned ready=$ready for backend=$backend, fixtureMode=$fixtureMode")
-            check(ready) { "benchmark_ready broadcast was not received within 30s for backend=$backend, fixtureMode=$fixtureMode" }
+            check(ready) { "benchmark_ready broadcast was not received within ${FIXTURE_READY_TIMEOUT_SECONDS}s for backend=$backend, fixtureMode=$fixtureMode" }
         } finally {
             try {
                 targetContext.unregisterReceiver(receiver)
@@ -265,11 +407,17 @@ class ReaderProductionBenchmark {
     private fun MacrobenchmarkScope.startBenchmarkActivity(
         backend: String,
         fixtureMode: String = FIXTURE_MODE_STANDARD,
+        isDoublePage: Boolean = false,
+        zoomMode: String = ZOOM_MODE_FIT_CENTER,
+        animation: String = ANIMATION_DEFAULT,
     ) {
         val intent = Intent().apply {
             component = ComponentName(TARGET_PACKAGE, TARGET_ACTIVITY)
             putExtra(EXTRA_BACKEND, backend)
             putExtra(EXTRA_FIXTURE_MODE, fixtureMode)
+            putExtra(EXTRA_ANIMATION, animation)
+            putExtra(EXTRA_DOUBLE_PAGE, isDoublePage)
+            putExtra(EXTRA_ZOOM_MODE, zoomMode)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
         startActivityAndWait(intent)
@@ -282,10 +430,24 @@ class ReaderProductionBenchmark {
             "org.skepsun.kototoro.reader.benchmark.ReaderProductionBenchmarkActivity"
         const val EXTRA_BACKEND = "backend"
         const val EXTRA_FIXTURE_MODE = "fixture_mode"
+        const val EXTRA_ANIMATION = "animation"
+        const val EXTRA_DOUBLE_PAGE = "double_page"
+        const val EXTRA_ZOOM_MODE = "zoom_mode"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
+        const val BACKEND_LEGACY_PAGED = "legacy_paged"
+        const val BACKEND_SCENE_PAGED = "scene_paged"
 
         const val FIXTURE_MODE_STANDARD = "standard"
         const val FIXTURE_MODE_ULTRA_LONG = "ultra_long"
+        const val FIXTURE_MODE_PAGED = "paged"
+        const val FIXTURE_MODE_PAGED_LARGE = "paged_large"
+
+        const val ZOOM_MODE_FIT_CENTER = "fit_center"
+        const val ZOOM_MODE_FIT_HEIGHT = "fit_height"
+        const val ANIMATION_DEFAULT = "default"
+
+        /** Oversized fixtures are written on first use, which is slower than the original 30s window. */
+        private const val FIXTURE_READY_TIMEOUT_SECONDS = 180L
     }
 }

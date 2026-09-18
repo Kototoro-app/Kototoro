@@ -33,10 +33,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.core.prefs.ReaderAnimation
+import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentType
+import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.ui.compose.ComposePagedReader
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
+import org.skepsun.kototoro.reader.ui.compose.ComposeScenePagedReader
 import org.skepsun.kototoro.reader.ui.compose.ComposeSceneWebtoonReader
 import org.skepsun.kototoro.reader.ui.compose.ComposeWebtoonReader
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -65,7 +71,14 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
 
         val backend = intent.getStringExtra(EXTRA_BACKEND) ?: BACKEND_SCENE_WEBTOON
         val fixtureMode = intent.getStringExtra(EXTRA_FIXTURE_MODE) ?: FIXTURE_MODE_STANDARD
-        android.util.Log.e("BenchmarkActivity", "onCreate starting for backend=$backend, fixtureMode=$fixtureMode")
+        val animation = resolveBenchmarkAnimation(intent.getStringExtra(EXTRA_ANIMATION))
+        val isDoublePage = intent.getBooleanExtra(EXTRA_DOUBLE_PAGE, false)
+        val zoomMode = resolveBenchmarkZoomMode(intent.getStringExtra(EXTRA_ZOOM_MODE))
+        android.util.Log.e(
+            "BenchmarkActivity",
+            "onCreate starting for backend=$backend, fixtureMode=$fixtureMode, animation=$animation, " +
+                "doublePage=$isDoublePage, zoomMode=$zoomMode",
+        )
 
         // 1. Prepare deterministic fixture
         pages = getOrCreateFixture(this, fixtureMode)
@@ -105,6 +118,9 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                         pages = pages,
                         imageLoader = imageLoader,
                         pipeline = pipeline,
+                        animation = animation,
+                        isDoublePage = isDoublePage,
+                        zoomMode = zoomMode,
                     )
                 }
             }
@@ -166,6 +182,9 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         pages: List<ReaderPage>,
         imageLoader: ImageLoader,
         pipeline: BenchmarkProductionImagePipeline,
+        animation: ReaderAnimation,
+        isDoublePage: Boolean,
+        zoomMode: ZoomMode,
     ) {
         val onVisiblePagesChanged: (Long, Long, Long) -> Unit = androidx.compose.runtime.remember(pages) {
             { lowerKey, upperKey, _ ->
@@ -194,6 +213,37 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 onInternalScrollChanged = { _, _ -> },
                 isAnimationEnabled = false,
                 bitmapConfig = Bitmap.Config.ARGB_8888,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(BENCHMARK_SURFACE_TAG),
+            )
+        } else if (backend == BACKEND_LEGACY_PAGED) {
+            ComposePagedReader(
+                pages = pages,
+                initialPage = 0,
+                mode = ReaderMode.STANDARD,
+                imageLoader = imageLoader,
+                imagePipeline = pipeline,
+                onPageChanged = { page -> onVisiblePagesChanged(page.readerKey, page.readerKey, page.readerKey) },
+                isAnimationEnabled = animation != ReaderAnimation.NONE,
+                pageAnimation = animation,
+                zoomMode = zoomMode,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(BENCHMARK_SURFACE_TAG),
+            )
+        } else if (backend == BACKEND_SCENE_PAGED) {
+            ComposeScenePagedReader(
+                pages = pages,
+                initialPage = 0,
+                isDoublePage = isDoublePage,
+                readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+                imageLoader = imageLoader,
+                imagePipeline = pipeline,
+                onPagesChanged = onVisiblePagesChanged,
+                isAnimationEnabled = animation != ReaderAnimation.NONE,
+                pageAnimation = animation,
+                zoomMode = zoomMode,
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(BENCHMARK_SURFACE_TAG),
@@ -255,12 +305,40 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         const val ACTION_BENCHMARK_READY = "org.skepsun.kototoro.BENCHMARK_READY"
         const val EXTRA_BACKEND = "backend"
         const val EXTRA_FIXTURE_MODE = "fixture_mode"
+        const val EXTRA_ANIMATION = "animation"
+        const val EXTRA_DOUBLE_PAGE = "double_page"
+        const val EXTRA_ZOOM_MODE = "zoom_mode"
         const val BACKEND_LEGACY_WEBTOON = "legacy_webtoon"
         const val BACKEND_SCENE_WEBTOON = "scene_webtoon"
+        const val BACKEND_LEGACY_PAGED = "legacy_paged"
+        const val BACKEND_SCENE_PAGED = "scene_paged"
         const val BENCHMARK_SURFACE_TAG = "reader_benchmark_surface"
 
         const val FIXTURE_MODE_STANDARD = "standard"
         const val FIXTURE_MODE_ULTRA_LONG = "ultra_long"
+
+        /** Portrait manga pages, sized for the discrete paged matrix. */
+        const val FIXTURE_MODE_PAGED = "paged"
+
+        /** Oversized single pages (6000x9000) for the large-image paged scenario. */
+        const val FIXTURE_MODE_PAGED_LARGE = "paged_large"
+
+        /** Maps the benchmark's animation extra onto the persisted reader preference values. */
+        fun resolveBenchmarkAnimation(value: String?): ReaderAnimation = when (value?.lowercase()) {
+            null, "", "default" -> ReaderAnimation.DEFAULT
+            "none" -> ReaderAnimation.NONE
+            "advanced" -> ReaderAnimation.ADVANCED
+            "simulation" -> ReaderAnimation.SIMULATION
+            else -> ReaderAnimation.valueOf(value.uppercase())
+        }
+
+        private fun resolveBenchmarkZoomMode(value: String?): ZoomMode = when (value?.lowercase()) {
+            null, "", "fit_center" -> ZoomMode.FIT_CENTER
+            "fit_width" -> ZoomMode.FIT_WIDTH
+            "fit_height" -> ZoomMode.FIT_HEIGHT
+            "keep_start", "original" -> ZoomMode.KEEP_START
+            else -> ZoomMode.valueOf(value.uppercase())
+        }
 
         private const val FIXTURE_VERSION_STANDARD = "v1"
         private const val FIXTURE_VERSION_ULTRA_LONG = "v1_ultra_long"
@@ -282,14 +360,45 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         )
         private const val DIMENSION_WIDTH_ULTRA_LONG = 1080
 
+        private val DIMENSION_HEIGHTS_PAGED = intArrayOf(1200, 1800, 1200, 1500)
+        private val DIMENSION_WIDTHS_PAGED = intArrayOf(800)
+
+        private val DIMENSION_HEIGHTS_PAGED_LARGE = intArrayOf(9000)
+        private val DIMENSION_WIDTHS_PAGED_LARGE = intArrayOf(6000)
+
+        private const val FIXTURE_VERSION_PAGED = "v1_paged"
+        private const val FIXTURE_VERSION_PAGED_LARGE = "v1_paged_large"
+        private const val PAGE_COUNT_PAGED = 24
+        private const val PAGE_COUNT_PAGED_LARGE = 8
+
         fun getOrCreateFixture(
             context: Context,
             mode: String = FIXTURE_MODE_STANDARD,
         ): List<ReaderPage> {
-            val isUltra = mode == FIXTURE_MODE_ULTRA_LONG
-            val version = if (isUltra) FIXTURE_VERSION_ULTRA_LONG else FIXTURE_VERSION_STANDARD
-            val pageCount = if (isUltra) PAGE_COUNT_ULTRA_LONG else PAGE_COUNT_STANDARD
-            val heights = if (isUltra) DIMENSION_HEIGHTS_ULTRA_LONG else DIMENSION_HEIGHTS_STANDARD
+            val version = when (mode) {
+                FIXTURE_MODE_ULTRA_LONG -> FIXTURE_VERSION_ULTRA_LONG
+                FIXTURE_MODE_PAGED -> FIXTURE_VERSION_PAGED
+                FIXTURE_MODE_PAGED_LARGE -> FIXTURE_VERSION_PAGED_LARGE
+                else -> FIXTURE_VERSION_STANDARD
+            }
+            val pageCount = when (mode) {
+                FIXTURE_MODE_ULTRA_LONG -> PAGE_COUNT_ULTRA_LONG
+                FIXTURE_MODE_PAGED -> PAGE_COUNT_PAGED
+                FIXTURE_MODE_PAGED_LARGE -> PAGE_COUNT_PAGED_LARGE
+                else -> PAGE_COUNT_STANDARD
+            }
+            val heights = when (mode) {
+                FIXTURE_MODE_ULTRA_LONG -> DIMENSION_HEIGHTS_ULTRA_LONG
+                FIXTURE_MODE_PAGED -> DIMENSION_HEIGHTS_PAGED
+                FIXTURE_MODE_PAGED_LARGE -> DIMENSION_HEIGHTS_PAGED_LARGE
+                else -> DIMENSION_HEIGHTS_STANDARD
+            }
+            val widths = when (mode) {
+                FIXTURE_MODE_ULTRA_LONG -> intArrayOf(DIMENSION_WIDTH_ULTRA_LONG)
+                FIXTURE_MODE_PAGED -> DIMENSION_WIDTHS_PAGED
+                FIXTURE_MODE_PAGED_LARGE -> DIMENSION_WIDTHS_PAGED_LARGE
+                else -> DIMENSION_WIDTHS_STANDARD
+            }
             val fixtureDir = File(context.filesDir, "reader-benchmark/$version")
             if (!fixtureDir.exists()) {
                 fixtureDir.mkdirs()
@@ -301,7 +410,7 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
             for (index in 0 until pageCount) {
                 val file = File(fixtureDir, "page_%03d.jpg".format(index))
                 if (!file.exists() || file.length() == 0L) {
-                    val width = if (isUltra) DIMENSION_WIDTH_ULTRA_LONG else DIMENSION_WIDTHS_STANDARD[index % DIMENSION_WIDTHS_STANDARD.size]
+                    val width = widths[index % widths.size]
                     val height = heights[index % heights.size]
 
                     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
