@@ -96,6 +96,33 @@ CS-5   experiment flag 删除 / 隐藏
   `ActivePresentationAssets` 记入 ADR，并满足 ADR `:264-266` 的 Go 判据。
 - **注意**：本项只产出"性能与稳定性可接受"的结论，**不包含翻转默认值** —— 那是 CS-1B。
 - **规模**：M（成本主要在真机时间，不在代码）
+- **场景 1 首次实测（2026-09-19，warsaw，Android 17，120Hz，`CompilationMode.Full`，5 轮取中位）**：
+
+  | 指标（中位） | Scene（`ComposeScenePagedReader`） | Legacy（`ComposePagedReader`） | 结论 |
+  | :--- | ---: | ---: | :--- |
+  | `frameDurationCpuMs` P50 | 2.574 | 2.788 | −7.7% |
+  | `frameDurationCpuMs` P90 / P95 | 4.286 / 4.714 | 4.035 / 4.243 | +6.2% / +11.1% |
+  | `frameDurationCpuMs` **P99** | **7.709** | **5.200** | **+48.3%（回归）** |
+  | `frameOverrunMs` P99 | −4.743 | −7.323 | 余量变小 |
+  | `RssAnon` Max | **234,440 KB** | 270,560 KB | **−13.4%** |
+  | `RssAnon` Last | **175,448 KB** | 270,560 KB | **−35.2%** |
+  | `Gpu` Max | **86,776 KB** | 98,712 KB | −12.1% |
+  | `HeapSize` Max | 132,194 KB | 132,376 KB | 持平 |
+  | `ActivePresentationAssets` Max/Last | 2.0 / 1.0 | 0.0 / 0.0 | 见下方注 |
+
+  **判读（不粉饰）**：
+  - **内存是明确收益**：稳态 RSS Anon −35%、峰值 −13%、GPU −12%。
+  - **CPU 尾部是明确回归**：P99 CPU 7.71ms vs 5.20ms。两者都仍在 120Hz 预算（8.33ms）内、没有丢帧，
+    但按 ADR `:264-266` 的 Go 判据（"至少一项显著改善 **且其他关键指标不存在明显回归**"），
+    **场景 1 单独不满足 Go**，P99 回归必须先定位。
+  - Legacy 的 `ActivePresentationAssets` 恒为 0 是**仪表差异**而非收益：该指标读的是场景管线自身的
+    presentation 状态机，legacy 路径不走它。
+  - **测量条件警告**：设备当时内存紧张（15.4G 中 ZRAM 已用约 8G），两组同条件背靠背跑，但绝对数值
+    应在清理设备后复测确认。
+- **下一步（阻塞 Go/No-Go）**：把 P99 回归归因清楚。第一嫌疑是场景分页宿主 draw phase 的每帧分配/
+  排序（CS-2 接线新增了逐帧 `map` + `sortedBy`、每 slot 一个 `Rect`、以及逐 slot 的过渡解析），
+  第二嫌疑是宿主本身的逐 slot 裁剪与 `drawFrameNodes` 调用结构。归因手段：在 CS-2 之前的提交
+  （`4130fc75b`）上叠加本 harness，做同场景的 A/B，再决定是优化还是接受。
 
 ### CS-1B 分页场景转正（翻转默认开关）
 
