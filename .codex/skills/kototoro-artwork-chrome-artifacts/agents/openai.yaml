@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kototoro Artwork Chrome Artifacts"
+  short_description: "Fix Kototoro chrome artifacts that only appear over an artwork background"
+  default_prompt: "Use $kototoro-artwork-chrome-artifacts to diagnose a Kototoro top-bar pill, search button or bottom-nav artifact that only shows up with an artwork background, and to locate which drawing layer causes it without rebuilding."
