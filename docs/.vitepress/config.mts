@@ -8,7 +8,15 @@ export default defineConfig({
   description: "Documentation for Kototoro: manga, novels, video, OCR translation, and source integrations.",
   lang: "en-US",
   base,
-  ignoreDeadLinks: [/app\/src\//, /\/build\.gradle/],
+  // Citation links that point outside this docs site can never resolve as pages: local workstation
+  // absolute paths and sibling-repository checkouts (see the komikku / mihon research notes). They
+  // carry source evidence, not navigation, so they are whitelisted instead of being unlinked.
+  ignoreDeadLinks: [
+    /app\/src\//,
+    /\/build\.gradle/,
+    /^\/Users\//,
+    /(\.\.\/)+komikku\//,
+  ],
   lastUpdated: true,
   cleanUrls: true,
   head: [
