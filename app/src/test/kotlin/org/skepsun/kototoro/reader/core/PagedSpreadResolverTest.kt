@@ -165,6 +165,51 @@ class PagedSpreadResolverTest {
     }
 
     @Test
+    fun `preserves odd chapter tail pairing in a truncated adjacent window`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(4L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 3),
+            PagedPageSpec(PageId(5L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 4),
+            PagedPageSpec(PageId(6L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 0),
+            PagedPageSpec(PageId(7L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 1),
+        )
+
+        val slots = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 1600,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(isDoublePage = true, isCoverOffset = false),
+        )
+
+        assertEquals(3, slots.size)
+        assertEquals(listOf(PageId(4L)), slots[0].pageIds)
+        assertEquals(listOf(PageId(5L)), slots[1].pageIds)
+        assertEquals(listOf(PageId(6L), PageId(7L)), slots[2].pageIds)
+        assertEquals(PageId(5L), slots[1].progressAnchorPageId)
+    }
+
+    @Test
+    fun `preserves cover page phase in a truncated adjacent window`() {
+        val specs = listOf(
+            PagedPageSpec(PageId(5L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 4),
+            PagedPageSpec(PageId(6L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 5),
+            PagedPageSpec(PageId(7L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 0),
+        )
+
+        val slots = PagedSpreadResolver.resolveSlots(
+            specs = specs,
+            viewportWidth = 1600,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(isDoublePage = true, isCoverOffset = true),
+        )
+
+        assertEquals(3, slots.size)
+        assertEquals(listOf(PageId(5L)), slots[0].pageIds)
+        assertEquals(listOf(PageId(6L)), slots[1].pageIds)
+        assertEquals(listOf(PageId(7L)), slots[2].pageIds)
+        assertEquals(PageId(6L), slots[1].progressAnchorPageId)
+    }
+
+    @Test
     fun `fit mode FIT_WIDTH scales page to full viewport width`() {
         val specs = listOf(
             PagedPageSpec(PageId(1L), PageGeometryHint.Exact(1000, 2000), chapterId = 1L, chapterPageIndex = 0),

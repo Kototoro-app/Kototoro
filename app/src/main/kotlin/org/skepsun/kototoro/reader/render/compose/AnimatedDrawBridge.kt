@@ -20,7 +20,9 @@ import org.skepsun.kototoro.reader.core.PageId
  * - Coordinates [Animatable.start] and [Animatable.stop] based on visible viewport state to
  *   prevent CPU/battery drain from off-screen animations.
  */
-class AnimatedDrawBridge {
+class AnimatedDrawBridge(
+    var autoUpdateVisiblePages: Boolean = true,
+) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var drawNode: DrawModifierNode? = null
     private val registeredDrawables = HashMap<PageId, Drawable>()

@@ -142,18 +142,23 @@ fun ComposeReaderScreenRoot(
                     val stateBefore = viewModel.getCurrentState()
                     Log.d(
                         "ReaderDebug",
-                        "doublePagesChanged lower=$lower upper=$upper stateBefore=$stateBefore " +
+                        "doublePagesChanged lower=$lower upper=$upper activeKey=$activeKey stateBefore=$stateBefore " +
                             "requested=$requestedPage contentPages=${content.pages.size}",
                     )
-                    viewModel.onCurrentPageChanged(lower, upper)
+                    viewModel.onCurrentPageChanged(lower, upper, activeKey)
                     val currentState = viewModel.getCurrentState()
-                    val selectedPosition = resolveVisiblePageSelection(
-                        pages = content.pages,
-                        lowerPos = lower,
-                        upperPos = upper,
-                        currentChapterId = currentState?.chapterId,
-                        boundsPageOffset = 1,
-                    )
+                    val activePos = content.pages.indexOfFirst { it.readerKey == activeKey }
+                    val selectedPosition = if (activePos >= 0) {
+                        activePos
+                    } else {
+                        resolveVisiblePageSelection(
+                            pages = content.pages,
+                            lowerPos = lower,
+                            upperPos = upper,
+                            currentChapterId = currentState?.chapterId,
+                            boundsPageOffset = 1,
+                        )
+                    }
                     Log.d(
                         "ReaderDebug",
                         "doublePagesChanged selected=$selectedPosition",
@@ -163,6 +168,7 @@ fun ComposeReaderScreenRoot(
                 requestedPage = requestedPage,
                 requestedPageSmooth = requestedPageSmooth,
                 zoomCommand = zoomCommand,
+                isZoomEnabled = true,
                 onShowErrorDetails = onShowErrorDetails,
                 onRetryError = onRetryError,
                 resolveErrorStringId = resolveErrorStringId,
@@ -345,6 +351,51 @@ fun ComposeReaderScreenRoot(
                 modifier = readerModifier,
             )
         }
+    } else if (mode == ReaderMode.CONTINUOUS_HORIZONTAL) {
+        ComposeSceneHorizontalReader(
+            pages = content.pages,
+            initialPage = initialPosition,
+            initialScroll = restoredState?.scroll ?: 0,
+            imageLoader = imageLoader,
+            imagePipeline = imagePipeline,
+            readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+            onPagesChanged = { lowerPageKey, upperPageKey, activePageKey ->
+                val selectedPosition = content.pages.indexOfFirst { it.readerKey == activePageKey }
+                if (selectedPosition >= 0) {
+                    viewModel.onWebtoonPageChanged(lowerPageKey, upperPageKey, activePageKey)
+                }
+                if (selectedPosition >= 0 && shouldAcceptReaderPageKey(activePageKey)) {
+                    onReaderPageKeyChanged(activePageKey, 0)
+                } else if (selectedPosition >= 0) {
+                    Log.d("ReaderDebug", "Ignore transitional horizontal controller key=$activePageKey")
+                }
+            },
+            onInternalScrollChanged = { page, scroll ->
+                onReaderInternalScrollChanged(page.readerKey, scroll)
+            },
+            requestedPage = requestedPage,
+            requestedPageSmooth = requestedPageSmooth,
+            horizontalScrollRequest = webtoonScrollRequest,
+            zoomCommand = zoomCommand,
+            isZoomEnabled = isWebtoonZoomEnabled,
+            defaultScale = 1f - defaultWebtoonZoomOut,
+            isGapsEnabled = isWebtoonGapsEnabled,
+            isPullGestureEnabled = isWebtoonPullGestureEnabled,
+            canGoPreviousChapter = readerUiState?.hasPreviousChapter() != false,
+            canGoNextChapter = readerUiState?.hasNextChapter() != false,
+            onPullChapter = viewModel::switchChapterBy,
+            onShowErrorDetails = onShowErrorDetails,
+            onRetryError = onRetryError,
+            resolveErrorStringId = resolveErrorStringId,
+            isAnimationEnabled = isAnimationEnabled,
+            readerBackgroundColor = readerBackgroundColor,
+            imageColorFilter = readerImageColorFilter,
+            bitmapConfig = readerSettings.bitmapConfig,
+            isReaderOptimizationEnabled = readerSettings.isReaderOptimizationEnabled,
+            isPreloadReductionEnabled = readerSettings.isReaderPreloadReductionEnabled,
+            isCropEnabled = readerSettings.isPagesCropEnabledWebtoon,
+            modifier = readerModifier,
+        )
     } else {
         if (readerSettings.isExperimentalSceneReaderEnabled && readerSettings.isExperimentalPagedSceneReaderEnabled) {
             ComposeScenePagedReader(
@@ -370,6 +421,7 @@ fun ComposeReaderScreenRoot(
                 requestedPage = requestedPage,
                 requestedPageSmooth = requestedPageSmooth,
                 zoomCommand = zoomCommand,
+                isZoomEnabled = true,
                 onShowErrorDetails = onShowErrorDetails,
                 onRetryError = onRetryError,
                 resolveErrorStringId = resolveErrorStringId,

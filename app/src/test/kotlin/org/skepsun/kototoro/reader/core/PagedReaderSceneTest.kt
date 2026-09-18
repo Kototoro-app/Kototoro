@@ -114,6 +114,44 @@ class PagedReaderSceneTest {
     }
 
     @Test
+    fun `updatePagedPages preserves active page anchor with zero-CLS compensation when chapters prepended`() {
+        val ch2Specs = listOf(
+            PagedPageSpec(PageId(10L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 0),
+            PagedPageSpec(PageId(11L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 1),
+            PagedPageSpec(PageId(12L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 2),
+            PagedPageSpec(PageId(13L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 3),
+        )
+
+        val scene = PagedReaderScene(
+            viewportWidth = 1600,
+            viewportHeight = 1200,
+            config = PagedSpreadConfig(isDoublePage = true),
+            initialSpecs = ch2Specs,
+        )
+
+        // Viewing Page 12 (in Slot 1, offset 1600)
+        val vp = ReaderViewport(FloatRect.fromLtwh(1600f, 0f, 1600f, 1200f))
+        assertEquals(PageId(12L), scene.resolveActivePageId(vp))
+
+        // Prepend Chapter 1 (Pages 1..4)
+        val ch1Specs = listOf(
+            PagedPageSpec(PageId(1L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 0),
+            PagedPageSpec(PageId(2L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 1),
+            PagedPageSpec(PageId(3L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 2),
+            PagedPageSpec(PageId(4L), PageGeometryHint.Exact(800, 1200), chapterId = 1L, chapterPageIndex = 3),
+        )
+        val allSpecs = ch1Specs + ch2Specs
+
+        val comp = scene.updatePagedPages(allSpecs, vp)
+        assertNotNull(comp)
+        // Chapter 1 adds 2 slots (2 * 1600 = 3200px).
+        // Page 12 moves from old origin (Slot 1 = 1600px) to new origin (Slot 3 = 4800px).
+        // deltaX must be 3200px!
+        assertEquals(3200f, comp!!.deltaX)
+        assertEquals(4800f, comp.compensatedViewport.bounds.left)
+    }
+
+    @Test
     fun `PagedSnapResolver determines target slot by distance fraction and velocity`() {
         val totalSlots = 5
 

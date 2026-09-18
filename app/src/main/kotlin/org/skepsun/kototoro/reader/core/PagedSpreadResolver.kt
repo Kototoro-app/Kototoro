@@ -91,7 +91,13 @@ object PagedSpreadResolver {
         var i = 0
         while (i < specs.size) {
             val first = specs[i]
-            if (isSoloPage(first, config)) {
+            val isChapterStartInSpecs = i == 0 || specs[i - 1].chapterId != first.chapterId
+            val coverOffset = if (config.isCoverOffset) 1 else 0
+            val isSecondPageOfPairInChapter = isChapterStartInSpecs &&
+                first.chapterPageIndex != 0 &&
+                (first.chapterPageIndex + coverOffset) % 2 != 0
+
+            if (isSecondPageOfPairInChapter || isSoloPage(first, config)) {
                 result.add(listOf(first))
                 i++
                 continue

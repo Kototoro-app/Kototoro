@@ -306,7 +306,9 @@ internal fun DrawScope.drawFrameNodes(
     for (node in frame.visibleNodes) {
         visiblePageIds.add(node.pageId)
     }
-    animatedBridge?.updateVisiblePages(visiblePageIds)
+    if (animatedBridge?.autoUpdateVisiblePages != false) {
+        animatedBridge?.updateVisiblePages(visiblePageIds)
+    }
 
     for (node in frame.visibleNodes) {
         val customPos = screenPositionProvider?.invoke(node)

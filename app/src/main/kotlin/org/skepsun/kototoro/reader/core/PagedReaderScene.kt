@@ -140,6 +140,30 @@ class PagedReaderScene(
         )
     }
 
+    fun updatePagedPages(
+        newSpecs: List<PagedPageSpec>,
+        currentViewport: ReaderViewport?,
+    ): AnchorCompensation? {
+        val activeAnchor = currentViewport?.let { resolveActivePageId(it) }
+        val oldOrigin = activeAnchor?.let { resolvePageScrollPosition(it) }
+
+        setPagedPages(newSpecs)
+
+        if (currentViewport == null || activeAnchor == null || oldOrigin == null) return null
+        val newOrigin = resolvePageScrollPosition(activeAnchor) ?: return null
+
+        val delta = newOrigin - oldOrigin
+        val deltaX = if (readingDirection.isHorizontal) delta else 0f
+        val deltaY = if (readingDirection.isVertical) delta else 0f
+
+        val newBounds = currentViewport.bounds.translate(deltaX, deltaY)
+        return AnchorCompensation(
+            deltaX = deltaX,
+            deltaY = deltaY,
+            compensatedViewport = currentViewport.copy(bounds = newBounds),
+        )
+    }
+
     override fun updatePageHint(
         pageId: PageId,
         newHint: PageGeometryHint,
