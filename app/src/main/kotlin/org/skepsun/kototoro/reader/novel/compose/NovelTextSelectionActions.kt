@@ -421,7 +421,7 @@ private fun NovelThoughtCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "我的想法",
+                        text = stringResource(R.string.novel_selection_my_thought),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = accentColor,
                     )
@@ -447,7 +447,7 @@ private fun NovelThoughtCard(
                 )
                 if (note.length > 50 || note.lines().size > 2) {
                     Text(
-                        text = "展开完整想法",
+                        text = stringResource(R.string.novel_selection_expand_thought),
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                         color = accentColor,
                         modifier = Modifier
@@ -460,7 +460,7 @@ private fun NovelThoughtCard(
                         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(updatedAt))
                     }
                     Text(
-                        text = "更新于 $dateString",
+                        text = stringResource(R.string.novel_selection_updated_at, dateString),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = contentColor.copy(alpha = 0.58f),
                         modifier = Modifier.padding(top = 2.dp),
@@ -511,7 +511,7 @@ private fun actionLabel(
     NovelTextSelectionAction.SHARE -> stringResource(R.string.share)
     NovelTextSelectionAction.DICTIONARY -> stringResource(R.string.novel_selection_dictionary)
     NovelTextSelectionAction.HIGHLIGHT -> if (isMarking) {
-        "已划线"
+        stringResource(R.string.novel_selection_highlighted)
     } else {
         stringResource(R.string.novel_selection_highlight)
     }

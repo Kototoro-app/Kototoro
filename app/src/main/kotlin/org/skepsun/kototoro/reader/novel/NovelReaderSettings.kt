@@ -3,8 +3,10 @@ package org.skepsun.kototoro.reader.novel
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
+import androidx.annotation.StringRes
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.getSafeFloat
 import kotlin.math.roundToInt
@@ -242,14 +244,14 @@ enum class NovelPageTurnAnimation {
     SIMULATION,
 }
 
-enum class NovelReaderFont(val displayName: String) {
-    SOURCE_HAN_SERIF("思源宋体"),
-    LXGW_WENKAI("霞鹜文楷"),
-    NOTO_SANS("思源黑体"),
-    SYSTEM_SERIF("系统衬线"),
-    SYSTEM_SANS("系统无衬线"),
-    SYSTEM_CURSIVE("系统手写"),
-    SYSTEM_MONOSPACE("系统等宽"),
+enum class NovelReaderFont(@StringRes val displayNameRes: Int) {
+    SOURCE_HAN_SERIF(R.string.novel_reader_font_source_han_serif),
+    LXGW_WENKAI(R.string.novel_reader_font_lxgw_wenkai),
+    NOTO_SANS(R.string.novel_reader_font_noto_sans),
+    SYSTEM_SERIF(R.string.novel_reader_font_system_serif),
+    SYSTEM_SANS(R.string.novel_reader_font_system_sans),
+    SYSTEM_CURSIVE(R.string.novel_reader_font_system_cursive),
+    SYSTEM_MONOSPACE(R.string.novel_reader_font_system_monospace),
 }
 
 data class NovelReaderPalette(

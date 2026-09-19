@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -53,9 +54,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.theme.OnlineFontLoader
 import org.skepsun.kototoro.reader.novel.NovelReaderFont
 import java.text.SimpleDateFormat
@@ -63,13 +66,13 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.pow
 
-enum class NovelExcerptTemplate(val displayName: String) {
-    CALENDAR("日历"),
-    CLASSIC("经典"),
-    INK_WHITE("墨白"),
-    SHADOW("静影"),
-    MANUSCRIPT("手札"),
-    JINSHU("锦书"),
+enum class NovelExcerptTemplate(@StringRes val displayNameRes: Int) {
+    CALENDAR(R.string.novel_excerpt_template_calendar),
+    CLASSIC(R.string.novel_excerpt_template_classic),
+    INK_WHITE(R.string.novel_excerpt_template_ink_white),
+    SHADOW(R.string.novel_excerpt_template_shadow),
+    MANUSCRIPT(R.string.novel_excerpt_template_manuscript),
+    JINSHU(R.string.novel_excerpt_template_jinshu),
 }
 
 private data class NovelExcerptTemplateStyle(
@@ -117,14 +120,14 @@ private val NovelExcerptTemplate.style: NovelExcerptTemplateStyle
         )
     }
 
-enum class NovelExcerptBackground(val displayName: String, val color: Color?) {
-    AUTO("默认", null),
-    WHITE("纯白", Color(0xFFFFFFFF)),
-    PAPER("纸张", Color(0xFFF5EFE4)),
-    MIST("雾灰", Color(0xFFE8E9E6)),
-    TEA("茶棕", Color(0xFFE7D2B5)),
-    INK("墨黑", Color(0xFF202124)),
-    DUSK("暮蓝", Color(0xFF29384B)),
+enum class NovelExcerptBackground(@StringRes val displayNameRes: Int, val color: Color?) {
+    AUTO(R.string.novel_excerpt_background_auto, null),
+    WHITE(R.string.novel_excerpt_background_white, Color(0xFFFFFFFF)),
+    PAPER(R.string.novel_excerpt_background_paper, Color(0xFFF5EFE4)),
+    MIST(R.string.novel_excerpt_background_mist, Color(0xFFE8E9E6)),
+    TEA(R.string.novel_excerpt_background_tea, Color(0xFFE7D2B5)),
+    INK(R.string.novel_excerpt_background_ink, Color(0xFF202124)),
+    DUSK(R.string.novel_excerpt_background_dusk, Color(0xFF29384B)),
 }
 
 data class NovelExcerptConfiguration(
@@ -139,7 +142,8 @@ data class NovelExcerptData(
     val bookTitle: String,
     val chapterTitle: String,
     val author: String = "",
-    val userNickname: String = "书友",
+    // Blank means "use the localized default reader name" (R.string.novel_excerpt_default_nickname)
+    val userNickname: String = "",
     val note: String? = null,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val imageUri: String? = null,
@@ -156,6 +160,7 @@ fun NovelExcerptSheet(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val defaultNickname = stringResource(R.string.novel_excerpt_default_nickname)
     var configuration by remember { mutableStateOf(NovelExcerptConfiguration()) }
     var userNickname by remember(data.userNickname) { mutableStateOf(data.userNickname) }
     var currentPageIndex by remember { mutableIntStateOf(0) }
@@ -174,9 +179,9 @@ fun NovelExcerptSheet(
         }
     }
 
-    val activeData = remember(data, userNickname, loadedBitmap) {
+    val activeData = remember(data, userNickname, defaultNickname, loadedBitmap) {
         data.copy(
-            userNickname = userNickname.ifBlank { "书友" },
+            userNickname = userNickname.ifBlank { defaultNickname },
             imageBitmap = loadedBitmap ?: data.imageBitmap,
         )
     }
@@ -207,7 +212,7 @@ fun NovelExcerptSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "书摘",
+                    text = stringResource(R.string.novel_excerpt_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 if (pageCount > 1) {
@@ -219,7 +224,7 @@ fun NovelExcerptSheet(
                             onClick = { currentPageIndex = (currentPageIndex - 1).coerceAtLeast(0) },
                             enabled = currentPageIndex > 0,
                         ) {
-                            Text("上一页")
+                            Text(stringResource(R.string.prev_page))
                         }
                         Text(
                             text = "${currentPageIndex + 1} / $pageCount",
@@ -229,7 +234,7 @@ fun NovelExcerptSheet(
                             onClick = { currentPageIndex = (currentPageIndex + 1).coerceAtMost(pageCount - 1) },
                             enabled = currentPageIndex < pageCount - 1,
                         ) {
-                            Text("下一页")
+                            Text(stringResource(R.string.next_page))
                         }
                     }
                 }
@@ -249,7 +254,15 @@ fun NovelExcerptSheet(
                     onClick = { optionsExpanded = !optionsExpanded },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(if (optionsExpanded) "收起设置" else "更换样式")
+                    Text(
+                        stringResource(
+                            if (optionsExpanded) {
+                                R.string.novel_excerpt_hide_options
+                            } else {
+                                R.string.novel_excerpt_toggle_options
+                            },
+                        ),
+                    )
                 }
                 Button(
                     onClick = {
@@ -263,7 +276,7 @@ fun NovelExcerptSheet(
                     },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("保存到相册")
+                    Text(stringResource(R.string.novel_excerpt_save_to_gallery))
                 }
                 TextButton(
                     onClick = {
@@ -276,7 +289,7 @@ fun NovelExcerptSheet(
                         }
                     },
                 ) {
-                    Text("分享")
+                    Text(stringResource(R.string.share))
                 }
             }
             if (optionsExpanded) {
@@ -306,11 +319,13 @@ private fun NovelExcerptOptions(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("读者署名", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.novel_excerpt_user_nickname), style = MaterialTheme.typography.labelLarge)
             OutlinedTextField(
                 value = userNickname,
                 onValueChange = onUserNicknameChanged,
-                placeholder = { Text("书友", fontSize = 12.sp) },
+                placeholder = {
+                    Text(stringResource(R.string.novel_excerpt_default_nickname), fontSize = 12.sp)
+                },
                 singleLine = true,
                 modifier = Modifier.width(160.dp),
                 shape = RoundedCornerShape(8.dp),
@@ -318,10 +333,10 @@ private fun NovelExcerptOptions(
             )
         }
         NovelExcerptOptionRow(
-            title = "模板",
+            title = stringResource(R.string.novel_excerpt_template_label),
             values = NovelExcerptTemplate.entries,
             selected = configuration.template,
-            label = { it.displayName },
+            labelRes = { it.displayNameRes },
             onSelected = { onConfigurationChanged(configuration.copy(template = it)) },
         )
         NovelReaderFontOptionRow(
@@ -329,10 +344,10 @@ private fun NovelExcerptOptions(
             onSelected = { onConfigurationChanged(configuration.copy(font = it)) },
         )
         NovelExcerptOptionRow(
-            title = "背景色",
+            title = stringResource(R.string.novel_excerpt_background_label),
             values = NovelExcerptBackground.entries,
             selected = configuration.background,
-            label = { it.displayName },
+            labelRes = { it.displayNameRes },
             onSelected = { onConfigurationChanged(configuration.copy(background = it)) },
         )
     }
@@ -343,7 +358,7 @@ private fun <T> NovelExcerptOptionRow(
     title: String,
     values: List<T>,
     selected: T,
-    label: (T) -> String,
+    @StringRes labelRes: (T) -> Int,
     onSelected: (T) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -370,7 +385,7 @@ private fun <T> NovelExcerptOptionRow(
                     },
                 ) {
                     Text(
-                        text = label(value),
+                        text = stringResource(labelRes(value)),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                         style = MaterialTheme.typography.labelMedium,
                     )
@@ -425,6 +440,8 @@ internal data class ExcerptCardLayout(
     val dateMonthYear: String,
     val weekday: String,
     val dateFullSlash: String,
+    val dateLine: String,
+    val verticalUserLine: String,
     val dateChinese: String,
     val solarTerm: String,
     val quoteStart: String,
@@ -624,7 +641,8 @@ internal object NovelExcerptCardRenderer {
                 typeface = tf
                 textSize = 30f
             }
-            wrapLines("想法：" + data.note, notePaint, contentWidth).take(4)
+            val noteText = context?.getString(R.string.novel_excerpt_note_with_idea, data.note) ?: data.note
+            wrapLines(noteText, notePaint, contentWidth).take(4)
         } else emptyList()
 
         val lineHeight = if (configuration.template == NovelExcerptTemplate.CALENDAR) 76f else 74f
@@ -685,6 +703,15 @@ internal object NovelExcerptCardRenderer {
             calendar.get(java.util.Calendar.MONTH),
             calendar.get(java.util.Calendar.DAY_OF_MONTH),
         )
+        val userNickname = data.userNickname.ifBlank {
+            context?.getString(R.string.novel_excerpt_default_nickname).orEmpty()
+        }
+        val dateLine = context?.getString(R.string.novel_excerpt_label_excerpted_on, dateFullSlash)
+            ?: dateFullSlash
+        val verticalUserLine = context?.getString(
+            R.string.novel_excerpt_label_excerpted_on_vertical,
+            userNickname,
+        ) ?: userNickname
 
         return ExcerptCardLayout(
             width = width,
@@ -701,6 +728,8 @@ internal object NovelExcerptCardRenderer {
             dateMonthYear = dateMonthYear,
             weekday = weekday,
             dateFullSlash = dateFullSlash,
+            dateLine = dateLine,
+            verticalUserLine = verticalUserLine,
             dateChinese = dateChinese,
             solarTerm = solarTerm,
             quoteStart = templateStyle.quoteStart,
@@ -710,7 +739,7 @@ internal object NovelExcerptCardRenderer {
             bookTitle = data.bookTitle,
             chapterTitle = data.chapterTitle,
             author = data.author,
-            userNickname = data.userNickname,
+            userNickname = userNickname,
             pageIndex = safePageIndex,
             pageCount = totalPages,
             quoteStartY = quoteStartY,
@@ -869,7 +898,7 @@ internal object NovelExcerptCardRenderer {
         paint.color = android.graphics.Color.rgb(180, 110, 70)
         paint.textSize = radius * 0.95f
         paint.typeface = Typeface.DEFAULT_BOLD
-        val initial = nickname.trim().firstOrNull()?.toString() ?: "读"
+        val initial = nickname.trim().firstOrNull()?.toString() ?: ""
         val tw = paint.measureText(initial)
         canvas.drawText(initial, cx - tw / 2f, cy + radius * 0.35f, paint)
     }
@@ -979,13 +1008,13 @@ internal object NovelExcerptCardRenderer {
                 paint.textSize = 30f
                 paint.typeface = layout.boldTypeface
                 paint.color = layout.foregroundColor
-                canvas.drawText(layout.userNickname.ifEmpty { "书友" }, margin + 104f, 114f, paint)
+                canvas.drawText(layout.userNickname, margin + 104f, 114f, paint)
 
-                // Date line: 摘录于 2026/9/7
+                // Date line
                 paint.textSize = 24f
                 paint.typeface = layout.typeface
                 paint.color = android.graphics.Color.rgb(153, 153, 153)
-                canvas.drawText("摘录于 ${layout.dateFullSlash}", margin + 104f, 154f, paint)
+                canvas.drawText(layout.dateLine, margin + 104f, 154f, paint)
             }
             NovelExcerptTemplate.INK_WHITE -> {
                 // Top dark bar
@@ -1034,8 +1063,7 @@ internal object NovelExcerptCardRenderer {
                     typeface = layout.typeface
                 }
                 drawVerticalColumn(canvas, layout.dateChinese, boxRight - 44f, boxTop + 24f, boxTextPaint, 4f)
-                val userStr = "${layout.userNickname.ifEmpty { "书友" }} · 摘录于"
-                drawVerticalColumn(canvas, userStr, boxRight - 98f, boxTop + 24f, boxTextPaint, 4f)
+                drawVerticalColumn(canvas, layout.verticalUserLine, boxRight - 98f, boxTop + 24f, boxTextPaint, 4f)
 
                 // Separator line below vertical header
                 paint.color = android.graphics.Color.rgb(226, 221, 210)
@@ -1090,13 +1118,13 @@ internal object NovelExcerptCardRenderer {
                 paint.textSize = 30f
                 paint.typeface = layout.boldTypeface
                 paint.color = layout.foregroundColor
-                canvas.drawText(layout.userNickname.ifEmpty { "书友" }, margin + 104f, 124f, paint)
+                canvas.drawText(layout.userNickname, margin + 104f, 124f, paint)
 
-                // Date line: 摘录于 2026/9/7
+                // Date line
                 paint.textSize = 24f
                 paint.typeface = layout.typeface
                 paint.color = android.graphics.Color.rgb(153, 153, 153)
-                canvas.drawText("摘录于 ${layout.dateFullSlash}", margin + 104f, 164f, paint)
+                canvas.drawText(layout.dateLine, margin + 104f, 164f, paint)
             }
             NovelExcerptTemplate.JINSHU -> {
                 // Vertical typography directly on card

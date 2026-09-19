@@ -140,11 +140,12 @@ internal fun ComposeNovelReplaceRulesSheet(
     }
 }
 
+@Composable
 private fun ruleSummary(rule: ReplaceRule): String {
     val target = when {
-        rule.scopeTitle && rule.scopeContent -> "标题/正文"
-        rule.scopeTitle -> "标题"
-        else -> "正文"
+        rule.scopeTitle && rule.scopeContent -> stringResource(R.string.novel_reader_replace_scope_title_content)
+        rule.scopeTitle -> stringResource(R.string.novel_reader_replace_scope_title)
+        else -> stringResource(R.string.novel_reader_replace_scope_content)
     }
     val replacement = rule.replacement.ifBlank { "∅" }
     return "$target · ${rule.pattern} → $replacement"

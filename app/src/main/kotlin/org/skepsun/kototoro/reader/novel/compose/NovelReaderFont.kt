@@ -101,7 +101,7 @@ internal fun NovelReaderFontOptionRow(
                     },
                 ) {
                     Text(
-                        text = font.displayName,
+                        text = stringResource(font.displayNameRes),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                         style = MaterialTheme.typography.labelMedium.copy(fontFamily = font.fallbackFamily),
                     )

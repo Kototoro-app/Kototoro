@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader.novel.compose
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -63,11 +64,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-internal enum class NovelMarkingsTab(val label: String) {
-    ALL("全部"),
-    HIGHLIGHTS("划线"),
-    ANNOTATIONS("批注"),
-    BOOKMARKS("书签"),
+internal enum class NovelMarkingsTab(@StringRes val labelRes: Int) {
+    ALL(R.string.novel_marking_tab_all),
+    HIGHLIGHTS(R.string.novel_marking_tab_highlights),
+    ANNOTATIONS(R.string.novel_marking_tab_annotations),
+    BOOKMARKS(R.string.novel_marking_tab_bookmarks),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -245,25 +246,27 @@ internal fun ComposeNovelNotesContent(
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.ALL,
                 onClick = { selectedTab = NovelMarkingsTab.ALL },
-                label = { Text("${NovelMarkingsTab.ALL.label} (${highlightCount + bookmarkCount})") },
+                label = {
+                    Text("${stringResource(NovelMarkingsTab.ALL.labelRes)} (${highlightCount + bookmarkCount})")
+                },
                 shape = RoundedCornerShape(10.dp),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.HIGHLIGHTS,
                 onClick = { selectedTab = NovelMarkingsTab.HIGHLIGHTS },
-                label = { Text("${NovelMarkingsTab.HIGHLIGHTS.label} ($highlightCount)") },
+                label = { Text("${stringResource(NovelMarkingsTab.HIGHLIGHTS.labelRes)} ($highlightCount)") },
                 shape = RoundedCornerShape(10.dp),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.ANNOTATIONS,
                 onClick = { selectedTab = NovelMarkingsTab.ANNOTATIONS },
-                label = { Text("${NovelMarkingsTab.ANNOTATIONS.label} ($annotationCount)") },
+                label = { Text("${stringResource(NovelMarkingsTab.ANNOTATIONS.labelRes)} ($annotationCount)") },
                 shape = RoundedCornerShape(10.dp),
             )
             FilterChip(
                 selected = selectedTab == NovelMarkingsTab.BOOKMARKS,
                 onClick = { selectedTab = NovelMarkingsTab.BOOKMARKS },
-                label = { Text("${NovelMarkingsTab.BOOKMARKS.label} ($bookmarkCount)") },
+                label = { Text("${stringResource(NovelMarkingsTab.BOOKMARKS.labelRes)} ($bookmarkCount)") },
                 shape = RoundedCornerShape(10.dp),
             )
         }
@@ -716,7 +719,7 @@ internal fun NovelNoteDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "想法详情",
+                    text = stringResource(R.string.novel_marking_detail_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                 )
                 IconButton(onClick = onDismiss) {
@@ -761,7 +764,11 @@ internal fun NovelNoteDetailSheet(
                 SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(marking.updatedAt))
             }
             Text(
-                text = "第 ${marking.chapterIndex + 1} 章 · 更新于 $dateStr",
+                text = stringResource(
+                    R.string.novel_marking_detail_subtitle,
+                    marking.chapterIndex + 1,
+                    dateStr,
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             )
@@ -780,7 +787,7 @@ internal fun NovelNoteDetailSheet(
                     },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("定位原文")
+                    Text(stringResource(R.string.novel_marking_locate_original))
                 }
                 OutlinedButton(
                     onClick = {
@@ -789,7 +796,7 @@ internal fun NovelNoteDetailSheet(
                     },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("做成书摘")
+                    Text(stringResource(R.string.novel_marking_create_excerpt))
                 }
                 OutlinedButton(
                     onClick = {
@@ -798,7 +805,7 @@ internal fun NovelNoteDetailSheet(
                     },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("编辑")
+                    Text(stringResource(R.string.edit))
                 }
             }
 

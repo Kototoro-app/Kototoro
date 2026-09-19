@@ -1170,7 +1170,7 @@ class NovelReaderActivity :
         val content = getCurrentChapterContent()
         android.util.Log.d("NovelReaderActivity", "startTranslation: content length=${content?.length ?: 0}")
         if (content.isNullOrBlank()) {
-            showReaderMessage("暂无章节内容可翻译", 2000L)
+            showReaderMessage(getString(R.string.novel_reader_translation_no_content), 2000L)
             return
         }
 
@@ -1182,7 +1182,7 @@ class NovelReaderActivity :
         android.util.Log.d("NovelReaderActivity", "Translation config: mode=$mode, onnxModelId='$onnxModelId', hasOnnx=$hasOnnx, hasApi=$hasApi")
         if (!hasOnnx && !hasApi && mode.name != "LOCAL_ONLY") {
             showReaderMessage(
-                "请先在「设置 → AI翻译」中配置翻译引擎（API 或 ONNX 本地模型）",
+                getString(R.string.novel_reader_translation_not_configured),
                 3000L,
             )
             return
@@ -1219,7 +1219,7 @@ class NovelReaderActivity :
                     if (translation.isComplete) {
                         if (translatedCount == 0) {
                             showReaderMessage(
-                                "未获得译文，请检查「设置 → AI翻译」中的引擎配置",
+                                getString(R.string.novel_reader_translation_no_result),
                                 3000L,
                             )
                         } else {
@@ -1244,7 +1244,10 @@ class NovelReaderActivity :
                 throw e  // 重新抛出 CancellationException 以正确传播取消信号
             } catch (e: Exception) {
                 android.util.Log.e("NovelReaderActivity", "Translation failed", e)
-                showReaderMessage("翻译失败: ${e.message}", 2000L)
+                showReaderMessage(
+                    getString(R.string.novel_reader_translation_failed, e.message ?: ""),
+                    2000L,
+                )
             }
         }
     }
@@ -1588,7 +1591,7 @@ class NovelReaderActivity :
             bookTitle = manga.title,
             chapterTitle = chapters.getOrNull(chapterIndex)?.title.orEmpty(),
             author = manga.authors.joinToString(", "),
-            userNickname = "书友",
+            userNickname = getString(R.string.novel_excerpt_default_nickname),
             note = note,
         )
     }
@@ -1708,7 +1711,7 @@ class NovelReaderActivity :
     private fun startTtsFromOffset(text: String, chapterId: Long, startOffset: Int) {
         val service = ttsService
         if (service == null) {
-            showReaderMessage("TTS 尚未准备好", 1800L)
+            showReaderMessage(getString(R.string.novel_reader_tts_not_ready), 1800L)
             return
         }
         val composeState = composeReaderViewModel.uiState.value
@@ -1732,7 +1735,7 @@ class NovelReaderActivity :
             service.startTts(tokens, startIndex)
         }.onFailure {
             android.util.Log.e("NovelReaderActivity", "Failed to start selected text TTS", it)
-            showReaderMessage("TTS 启动失败: ${it.message}", 2000L)
+            showReaderMessage(getString(R.string.novel_reader_tts_start_failed, it.message ?: ""), 2000L)
         }
     }
 
@@ -1949,7 +1952,7 @@ class NovelReaderActivity :
                                         onDismiss = ::dismissTtsVoiceDialog,
                                     ).withCleanup { localTts?.shutdown() }
                             } else {
-                                showReaderMessage("未检测到可用的系统音色", 2000L)
+                                showReaderMessage(getString(R.string.novel_reader_tts_no_system_voice), 2000L)
                                 localTts?.shutdown()
                             }
                         }
@@ -1988,7 +1991,7 @@ class NovelReaderActivity :
                     },
                 )
             } else {
-                showReaderMessage("尚未导入任何网络音源配置，请前往设置导入", 2500L)
+                showReaderMessage(getString(R.string.novel_reader_tts_no_http_config), 2500L)
             }
         }
     }
@@ -2018,7 +2021,7 @@ class NovelReaderActivity :
 
     private fun onClearTranslationCacheClick() {
         translationProcessor.clearCache()
-        showReaderMessage("翻译缓存已清除", 1500L)
+        showReaderMessage(getString(R.string.novel_reader_translation_cache_cleared), 1500L)
     }
 
     private fun startTtsFromCurrentPage() {
@@ -2058,7 +2061,7 @@ class NovelReaderActivity :
             // On Android 12+, ForegroundServiceStartNotAllowedException can be thrown.
             // Also catches SecurityException and IllegalStateException.
             android.util.Log.e("NovelReaderActivity", "Failed to start TTS foreground service", e)
-            showReaderMessage("TTS启动失败: ${e.message}", 2000L)
+            showReaderMessage(getString(R.string.novel_reader_tts_start_failed, e.message ?: ""), 2000L)
         }
     }
 
@@ -3331,7 +3334,7 @@ class NovelReaderActivity :
     private fun showChaptersSheet() {
         android.util.Log.d("NovelReaderActivity", "showChaptersSheet: chapters.size=${chapters.size}, currentChapterIndex=$currentChapterIndex")
         if (chapters.isEmpty()) {
-            showReaderMessage("暂无章节", 1500L)
+            showReaderMessage(getString(R.string.novel_reader_no_chapters), 1500L)
             return
         }
 
@@ -3784,7 +3787,7 @@ class NovelReaderActivity :
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("NovelReaderActivity", "Failed to update settings", e)
-                    showError("更新设置失败: ${e.message}")
+                    showError(getString(R.string.novel_reader_update_settings_failed, e.message ?: ""))
                 }
             }
         } catch (e: Exception) {

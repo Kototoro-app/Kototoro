@@ -167,7 +167,7 @@ class TtsService : LifecycleService() {
 
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setContentTitle("Kototoro ")
-        .setContentText("朗读中...")
+        .setContentText(getString(R.string.novel_reader_tts_notification_reading))
         .setSmallIcon(R.mipmap.ic_launcher)
         .setOngoing(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
