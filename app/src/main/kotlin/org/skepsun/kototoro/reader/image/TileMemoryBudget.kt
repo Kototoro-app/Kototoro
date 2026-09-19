@@ -33,7 +33,7 @@ enum class TileRetention {
  * The clock is injectable for deterministic tests.
  */
 class TileMemoryBudget(
-    val maxBytes: Long = TilePolicy.DEFAULT_WORKING_SET_COST_BUDGET_BYTES,
+    val maxBytes: Long = DEFAULT_MAX_BYTES,
     private val clock: () -> Long = { System.nanoTime() },
 ) {
     init {
@@ -156,5 +156,20 @@ class TileMemoryBudget(
             evicted.add(key)
         }
         return evicted
+    }
+
+    companion object {
+        /**
+         * Residency cap, sized to the working set a zoomed paged view actually pins.
+         *
+         * Not the planner's single-bitmap budget ([TilePolicy.DEFAULT_WORKING_SET_COST_BUDGET_BYTES],
+         * 64MB): VISIBLE tiles are pinned regardless of the cap, so a cap below the working set only
+         * makes the ledger trim halo tiles that the next frame asks for again. Measured at 2x when the
+         * per-tile payload shrank by a third (seam padding 128 -> 8): evictions 50 -> 140 and decode
+         * launches 239 -> 624 per run, with the pinned working set steady at ~207MB and the frame
+         * overrun P99 going from -0.8ms to +95ms. Sizing the cap above that working set removes the
+         * churn; the visible set still bounds residency in practice.
+         */
+        const val DEFAULT_MAX_BYTES = 256L * 1024L * 1024L
     }
 }

@@ -24,6 +24,7 @@ class ComposeSceneRendererTiledTest {
             tileDimension = CoreIntSize(800, 1000),
             sampleSize = 1,
             outputGutterPx = 16,
+            seamPaddingPx = 16,
         )
 
         // Tile row 1: logicalRect is y in [1000, 2000]
@@ -69,6 +70,7 @@ class ComposeSceneRendererTiledTest {
             tileDimension = CoreIntSize(800, 1000),
             sampleSize = 2,
             outputGutterPx = 16,
+            seamPaddingPx = 16,
         )
 
         val spec = grid.tileAt(0, 1)!!
@@ -104,6 +106,8 @@ class ComposeSceneRendererTiledTest {
             tileDimension = CoreIntSize(800, 1000),
             sampleSize = 1,
             outputGutterPx = 0,
+            // This case is about split translation, so the bitmap carries no padding.
+            seamPaddingPx = 0,
         )
 
         assertEquals(800, grid.pageSize.width)

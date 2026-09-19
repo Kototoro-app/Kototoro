@@ -43,9 +43,10 @@ data class TileKey(
  *   Destination rectangles tile the page without overlap; the renderer must
  *   crop gutter pixels away so adjacent tiles seam perfectly.
  * - [decodeRegion] is [logicalRect] mapped through crop/split/orientation into
- *   raw encoded space, then expanded by `outputGutterPx * sampleSize` source
- *   pixels and clamped to the encoded bounds. The gutter margin absorbs
- *   independent per-tile down-sampling phases so no black seams appear.
+ *   raw encoded space, then expanded by `seamPaddingPx * sampleSize` source
+ *   pixels and clamped to the encoded bounds. The margin absorbs independent
+ *   per-tile down-sampling phases so no black seams appear; it is measured in
+ *   **decoded** pixels, so a coarse tile does not carry a level-zero margin.
  */
 data class TileSpec(
     val key: TileKey,
@@ -82,9 +83,11 @@ data class TileSpec(
  * @param tileDimension Tile cell size in **page-logical** pixels (callers derive
  *   it from [TilePolicy] / [DecodePlan.Tiled], adjusting for split halves).
  * @param sampleSize Power-of-two sample size applied to this grid's LOD.
- * @param outputGutterPx Screen-space gutter used both to expand tile queries
- *   (prefetch halo around the viewport) and — multiplied by [sampleSize] — to
- *   pad each tile's [TileSpec.decodeRegion] against sampling seams.
+ * @param outputGutterPx Screen-space gutter that expands tile *queries*, so the
+ *   tile next to the viewport stays warm. Measured in page-logical pixels.
+ * @param seamPaddingPx Padding added to each tile's [TileSpec.decodeRegion]
+ *   against sampling seams, measured in **decoded** pixels per side (multiplied
+ *   by [sampleSize] to convert into encoded pixels).
  */
 class TileGrid(
     val pageId: PageId,
@@ -93,12 +96,14 @@ class TileGrid(
     val tileDimension: IntSize,
     val sampleSize: Int = 1,
     val outputGutterPx: Int = DEFAULT_OUTPUT_GUTTER_PX,
+    val seamPaddingPx: Int = DEFAULT_SEAM_PADDING_PX,
 ) {
     init {
         require(sampleSize >= 1 && (sampleSize and (sampleSize - 1)) == 0) {
             "sampleSize must be a positive power of 2: $sampleSize"
         }
         require(outputGutterPx >= 0) { "outputGutterPx must be >= 0: $outputGutterPx" }
+        require(seamPaddingPx >= 0) { "seamPaddingPx must be >= 0: $seamPaddingPx" }
         require(tileDimension.width > 0) { "tileDimension.width must be > 0" }
         require(tileDimension.height > 0) { "tileDimension.height must be > 0" }
     }
@@ -198,7 +203,7 @@ class TileGrid(
     ): TileSpec {
         val contentLogical = logicalRect.translate(splitOriginX, 0)
         val encoded = geometry.mapLogicalToEncodedRegion(contentLogical)
-        val sourceGutter = outputGutterPx * specSampleSize
+        val sourceGutter = seamPaddingPx * specSampleSize
         val clamped = encoded
             .expand(sourceGutter)
             .intersectionOrNull(IntRect.fromLtwh(0, 0, geometry.encodedSize.width, geometry.encodedSize.height))
@@ -226,9 +231,19 @@ class TileGrid(
 
     companion object {
         /**
-         * Default screen-space gutter: expands viewport queries and pads source
-         * decode regions (x sampleSize) to suppress down-sampling seam artifacts.
+         * Default query halo: expands the visible region before it selects tiles, so the
+         * tile just outside the viewport is decoded before it is needed.
          */
         const val DEFAULT_OUTPUT_GUTTER_PX = 128
+
+        /**
+         * Default seam padding per tile side, in **decoded** pixels.
+         *
+         * Independent of the level by construction (`seamPaddingPx * sampleSize` encoded pixels,
+         * divided back by `sampleSize` when decoding). Sized by measurement: sharing the 128 px query
+         * halo here made a level-2 tile 75% padding and a level-0 tile 56%, i.e. every level paid for
+         * a level-zero margin.
+         */
+        const val DEFAULT_SEAM_PADDING_PX = 8
     }
 }

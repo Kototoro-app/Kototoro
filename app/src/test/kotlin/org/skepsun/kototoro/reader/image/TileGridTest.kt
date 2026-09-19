@@ -28,15 +28,57 @@ class TileGridTest {
 
         val first = grid.tileAt(0, 0)!!
         assertEquals(IntRect(0, 0, 800, 2048), first.logicalRect)
-        // Gutter 128 expands and clamps at top/left edges of the encoded image.
-        assertEquals(IntRect(0, 0, 800, 2176), first.decodeRegion)
+        // Seam padding 8 expands and clamps at top/left edges of the encoded image.
+        assertEquals(IntRect(0, 0, 800, 2056), first.decodeRegion)
 
         val last = grid.tileAt(0, 7)!!
         assertEquals(IntRect(0, 14336, 800, 16000), last.logicalRect)
-        assertEquals(IntRect(0, 14208, 800, 16000), last.decodeRegion)
+        assertEquals(IntRect(0, 14328, 800, 16000), last.decodeRegion)
 
         assertNull(grid.tileAt(0, 8))
         assertNull(grid.tileAt(1, 0))
+    }
+
+    @Test
+    fun `decode padding is the seam padding in decoded pixels, not the query halo`() {
+        // The query halo and the seam padding are different concerns that used to share one value:
+        // 128 screen px of prefetch halo multiplied by sampleSize became 128 *decoded* px of padding
+        // per side at every level, so a level-2 tile carried 256 px of content inside a 512 px bitmap
+        // (75% padding) and a level-0 tile carried 1024 px inside 1280 (56%). A few decoded pixels are
+        // all that is needed to hide the resampling seam.
+        val grid = TileGrid(
+            pageId = pageId,
+            geometry = ImageSourceGeometry(IntSize(3000, 3000)),
+            tileDimension = IntSize(1024, 1024),
+            sampleSize = 4,
+            outputGutterPx = 128,
+            seamPaddingPx = 8,
+        )
+
+        val tile = grid.tileAt(1, 1)!!
+        assertEquals(IntRect(1024, 1024, 2048, 2048), tile.logicalRect)
+        // Encoded padding is 8 * 4 = 32 px per side, i.e. 8 decoded px per side at sampleSize 4.
+        assertEquals(IntRect(992, 992, 2080, 2080), tile.decodeRegion)
+        assertEquals(272, tile.decodedSize.width)
+        assertEquals(272, tile.decodedSize.height)
+    }
+
+    @Test
+    fun `query halo still reaches into the neighbouring tile`() {
+        // The halo is what keeps the next tile warm, and it stays measured in page-logical pixels:
+        // splitting it from the decode padding must not change which tiles a query selects.
+        val grid = TileGrid(
+            pageId = pageId,
+            geometry = ImageSourceGeometry(IntSize(3000, 3000)),
+            tileDimension = IntSize(1024, 1024),
+            outputGutterPx = 128,
+            seamPaddingPx = 8,
+        )
+
+        assertEquals(4, grid.tilesIntersecting(IntRect(0, 0, 1024, 1024)).size)
+        assertTrue(
+            grid.tilesIntersecting(IntRect(0, 0, 2048 + 64, 1024)).any { it.logicalRect.left == 2048 },
+        )
     }
 
     @Test
@@ -67,8 +109,8 @@ class TileGridTest {
         assertEquals(IntSize(600, 5800), grid.pageSize)
         val tile = grid.tileAt(0, 0)!!
         assertEquals(IntRect(0, 0, 600, 2048), tile.logicalRect)
-        // [100,200,700,2248] expanded by 128 then clamped to [0,0,800,6200]
-        assertEquals(IntRect(0, 72, 800, 2376), tile.decodeRegion)
+        // [100,200,700,2248] expanded by the 8 px seam padding, clamped to [0,0,800,6200]
+        assertEquals(IntRect(92, 192, 708, 2256), tile.decodeRegion)
     }
 
     @Test
@@ -82,8 +124,8 @@ class TileGridTest {
 
         assertEquals(IntSize(400, 16000), grid.pageSize)
         val tile = grid.tileAt(0, 0)!!
-        // Logical [0,0,400,2048] -> content [400,0,800,2048] -> encoded + gutter, clamped.
-        assertEquals(IntRect(272, 0, 800, 2176), tile.decodeRegion)
+        // Logical [0,0,400,2048] -> content [400,0,800,2048] -> encoded + seam padding, clamped.
+        assertEquals(IntRect(392, 0, 800, 2056), tile.decodeRegion)
     }
 
     @Test
@@ -97,8 +139,8 @@ class TileGridTest {
 
         val tile = grid.tileAt(0, 0)!!
         assertEquals(IntRect(0, 0, 400, 2048), tile.logicalRect)
-        // Same as unsplit left half: gutter clamps at the encoded left edge.
-        assertEquals(IntRect(0, 0, 528, 2176), tile.decodeRegion)
+        // Same as unsplit left half: seam padding clamps at the encoded left edge.
+        assertEquals(IntRect(0, 0, 408, 2056), tile.decodeRegion)
     }
 
     @Test
@@ -116,27 +158,33 @@ class TileGridTest {
         assertEquals(IntSize(800, 1000), grid.pageSize)
         val tile = grid.tileAt(0, 0)!!
         assertEquals(IntRect(0, 0, 400, 500), tile.logicalRect)
-        // Logical [0,0,400,500] --90deg--> [0,400,500,800], + gutter 128 clamped to [0,0,1000,800].
-        assertEquals(IntRect(0, 272, 628, 800), tile.decodeRegion)
+        // Logical [0,0,400,500] --90deg--> [0,400,500,800], + seam padding clamped to [0,0,1000,800].
+        assertEquals(IntRect(0, 392, 508, 800), tile.decodeRegion)
     }
 
     @Test
-    fun `gutter scales with sampleSize to suppress seams`() {
-        val grid = TileGrid(
-            pageId = pageId,
-            geometry = ImageSourceGeometry(
-                encodedSize = IntSize(800, 6200),
-                contentRect = IntRect.fromLtwh(100, 200, 600, 5800),
-            ),
-            tileDimension = IntSize(600, 2048),
-            sampleSize = 4,
+    fun `seam padding scales with sampleSize so its decoded width stays constant`() {
+        // Encoded padding = seamPaddingPx * sampleSize, so once the decoder divides by sampleSize the
+        // margin is the same 8 decoded px at every level. That is what keeps a coarse tile cheap: with
+        // the 128 px query halo shared as padding, a level-2 tile was 75% padding.
+        val geometry = ImageSourceGeometry(
+            encodedSize = IntSize(800, 6200),
+            contentRect = IntRect.fromLtwh(100, 200, 600, 5800),
         )
+        val fullGrid = TileGrid(pageId, geometry, tileDimension = IntSize(600, 2048), sampleSize = 1)
+        val coarseGrid = TileGrid(pageId, geometry, tileDimension = IntSize(600, 2048), sampleSize = 4)
 
-        val tile = grid.tileAt(0, 0)!!
-        // Source gutter = 128 * 4 = 512: [100,200,700,2248] -> [-412,-312,1212,2760] -> clamped.
-        assertEquals(IntRect(0, 0, 800, 2760), tile.decodeRegion)
-        assertEquals(IntSize(200, 690), tile.decodedSize)
-        assertEquals(200L * 690L * 4L, tile.estimatedBytes)
+        val fullTile = fullGrid.tileAt(0, 0)!!
+        val coarseTile = coarseGrid.tileAt(0, 0)!!
+        assertEquals(IntRect(92, 192, 708, 2256), fullTile.decodeRegion)
+        assertEquals(IntRect(68, 168, 732, 2280), coarseTile.decodeRegion)
+
+        // Encoded padding on the left: 8 px at level zero, 32 px (== 8 decoded px) at sampleSize 4.
+        assertEquals(8, 100 - fullTile.decodeRegion.left)
+        assertEquals(32, 100 - coarseTile.decodeRegion.left)
+
+        assertEquals(IntSize(166, 528), coarseTile.decodedSize)
+        assertEquals(166L * 528L * 4L, coarseTile.estimatedBytes)
     }
 
     @Test
