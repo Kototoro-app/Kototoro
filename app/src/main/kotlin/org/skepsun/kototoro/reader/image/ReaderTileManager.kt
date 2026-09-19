@@ -164,7 +164,7 @@ class ReaderTileManager(
             }
         }
 
-        demoteAbsentLatticeTiles(grid.pageId, desired)
+        demoteAbsentLatticeTiles(grid.pageId, grid.sampleSize, desired)
 
         for (spec in visibleSpecs) launchDecode(spec, TileRetention.VISIBLE)
         for (spec in nearbySpecs) launchDecode(spec, TileRetention.NEARBY)
@@ -267,13 +267,26 @@ class ReaderTileManager(
     // Internals
     // ---------------------------------------------------------------------
 
-    private fun demoteAbsentLatticeTiles(pageId: PageId, desired: Map<TileKey, TileSpec>) {
+    /**
+     * Steps down tiles of [pageId] **at the requested layer** that this request did not ask for.
+     *
+     * Scoped by `sampleSize` because one page is painted from several levels at once (the fit-level
+     * base and the camera-level target), and the adapter requests them one after the other for the
+     * same visible band. Demoting by page alone made each request cancel the other layer's in-flight
+     * decodes and step its resident tiles down: the ladder A/B measured 10,304 decode launches
+     * against 282 for the single-layer build, with residency stuck at 16 tiles.
+     */
+    private fun demoteAbsentLatticeTiles(pageId: PageId, sampleSize: Int, desired: Map<TileKey, TileSpec>) {
         val trackedKeys = HashSet<TileKey>()
         for (key in mutableTiles.value.keys) {
-            if (key.pageId == pageId && key.kind == TileKind.LATTICE) trackedKeys.add(key)
+            if (key.pageId == pageId && key.kind == TileKind.LATTICE && key.sampleSize == sampleSize) {
+                trackedKeys.add(key)
+            }
         }
         for (key in tileJobs.keys) {
-            if (key.pageId == pageId && key.kind == TileKind.LATTICE) trackedKeys.add(key)
+            if (key.pageId == pageId && key.kind == TileKind.LATTICE && key.sampleSize == sampleSize) {
+                trackedKeys.add(key)
+            }
         }
 
         for (key in trackedKeys) {
@@ -295,6 +308,11 @@ class ReaderTileManager(
 
     private fun launchDecode(spec: TileSpec, retention: TileRetention) {
         if (tileJobs.containsKey(spec.key)) return
+        // Resident already: the in-flight guard above only covers a decode that has not finished yet, so
+        // without this check every request decoded the tile again. On device that showed up as decode
+        // launches scaling with how *fast* tiles decode (2.5x: 238 -> 596 per run when the payload
+        // shrank), i.e. redundant work on the decode threads and a frame overrun tail of +113ms.
+        if (budget.contains(spec.key)) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
             Trace.setCounter("Reader.TileDecodeRequests", decodeRequests.incrementAndGet())
         }

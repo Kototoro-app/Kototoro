@@ -183,6 +183,56 @@ class ReaderTileManagerTest {
     }
 
     @Test
+    fun `requesting one layer does not demote the other layer's tiles`() = runTest {
+        // A tiled page is painted from two levels at once - the fit-level base and the camera-level
+        // target - and the adapter requests both for the same visible band, one after the other.
+        // Demoting by page alone made the second request step the first layer's resident tiles down
+        // the ladder and cancel its in-flight decodes: the ladder A/B measured 10,304 decode launches
+        // against 282 for the single-layer build, with residency stuck at 16 tiles.
+        val source = source()
+        val (manager, _, _) = makeManager(source)
+        val baseGrid = stripGrid(sampleSize = 4, gutter = 0, tileHeight = 1024)
+        val targetGrid = stripGrid(sampleSize = 1, gutter = 0, tileHeight = 1024)
+
+        manager.requestTiles(baseGrid, visibleRegion = IntRect(0, 0, 800, 1024))
+        advanceUntilIdle()
+        val baseKey = manager.tiles.value.keys.single { it.sampleSize == 4 }
+
+        // The other layer replaces its own window, far from the base tile.
+        manager.requestTiles(targetGrid, visibleRegion = IntRect(0, 6000, 800, 7024))
+        advanceUntilIdle()
+
+        assertEquals(TileRetention.VISIBLE, manager.budget.retentionOf(baseKey))
+        assertTrue(manager.tiles.value.containsKey(baseKey))
+        assertTrue(manager.tiles.value.keys.any { it.sampleSize == 1 })
+    }
+
+    @Test
+    fun `a resident tile is not decoded again by a repeated request`() = runTest {
+        // launchDecode only guarded against a job already in flight, so once a decode finished and left
+        // tileJobs, the next request decoded the same tile again - resident or not. Smaller tiles made
+        // this visible on device: at 2.5x, halving the seam padding doubled the decodes (238 -> 596 per
+        // run) and pushed the frame overrun P99 from +5ms to +114ms, for the same visible window.
+        val session = FakeTileDecodeSession(IntSize(800, 16000))
+        val source = FakeRegionDecodeSource(
+            metadata = ImageSourceMetadata(IntSize(800, 16000)),
+            session = session,
+        )
+        val (manager, _, _) = makeManager(source)
+        val grid = stripGrid(gutter = 0, tileHeight = 1024)
+
+        manager.requestTiles(grid, visibleRegion = IntRect(0, 0, 800, 2048))
+        advanceUntilIdle()
+        assertEquals(2, session.decoded.size)
+
+        manager.requestTiles(grid, visibleRegion = IntRect(0, 0, 800, 2048))
+        advanceUntilIdle()
+
+        assertEquals(2, session.decoded.size)
+        assertEquals(2, manager.tiles.value.size)
+    }
+
+    @Test
     fun `pressure evicts CACHE before STANDBY and never VISIBLE`() = runTest {
         val source = source()
         // Budget: exactly two tiles.
@@ -266,8 +316,10 @@ class ReaderTileManagerTest {
         advanceUntilIdle()
 
         // The far row decodes (gate was single-shot consumed by the cancelled call).
+        // Compared against the grid's own spec: this test is about cancellation, not about padding.
+        val farTile = grid.tileAt(0, 14)!!
         assertEquals(1, fakeSession.decoded.size)
-        assertEquals(14336, fakeSession.decoded.single().first.top)
+        assertEquals(farTile.decodeRegion.top, fakeSession.decoded.single().first.top)
         assertNull(manager.tiles.value.keys.firstOrNull { it.row == 0 })
 
         // Releasing the gate must not resurrect the cancelled row-0 job.
