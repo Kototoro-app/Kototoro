@@ -10,7 +10,13 @@ data class TilePolicy(
     /** Preferred nominal edge length for square tiles or strip segment heights. */
     val preferredTileEdgePx: Int = DEFAULT_PREFERRED_TILE_EDGE_PX,
 
-    /** Maximum allowed decoded pixels per single tile (e.g. 1024x1024 = 1 Mpixels ~4MB in ARGB_8888). */
+    /**
+     * Maximum allowed decoded pixels per single tile (e.g. 1024x1024 = 1 Mpixels ~4MB in ARGB_8888).
+     *
+     * Sized by measurement, not by arithmetic: a per-frame texture-upload spike grows with the unit,
+     * so the 6000x9000 fixture at 2x cost 12.1ms CPU P99 with 4MB tiles and 29.8ms once level-zero
+     * tiles were enlarged to 17MB (4x fewer tiles, same bytes per frame). Keep tiles small.
+     */
     val maxDecodedTilePixels: Int = DEFAULT_MAX_DECODED_TILE_PIXELS,
 
     /**

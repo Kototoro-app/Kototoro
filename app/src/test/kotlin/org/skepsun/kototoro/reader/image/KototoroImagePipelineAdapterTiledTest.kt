@@ -27,12 +27,14 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
+import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.IntSize
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.PrefetchPriority
 import org.skepsun.kototoro.reader.core.PrefetchReadiness
 import org.skepsun.kototoro.reader.core.PrefetchRequest
+import org.skepsun.kototoro.reader.core.ReaderCameraSnapshot
 import org.skepsun.kototoro.reader.core.ReaderResourceWindow
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImageState
@@ -300,6 +302,66 @@ class KototoroImagePipelineAdapterTiledTest {
 
         verify { mockTileManager.releasePage(pageId) }
         assertNull(adapter.assets.value[pageId])
+    }
+
+    @Test
+    fun `a page acquired under magnification keeps a fit-level base`() = runTest(testDispatcher) {
+        // A page is usually acquired while the camera is already magnified (a turn during a zoom), and
+        // sizing its base from that camera is what painted a page at fit scale from level zero: 43
+        // tiles / 172MB per layer, CPU P99 12.1ms at 2x against 8ms for the same page as a bitmap.
+        // The base is the *fit* level here and the camera's level lives in the target layer.
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///storage/oversized.jpg"
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val regionFactory = FakeRegionDecoderFactory(
+            FakeRegionDecodeSource(
+                metadata = ImageSourceMetadata(size = IntSize(6000, 9000), mimeType = "image/jpeg"),
+                geometry = ImageSourceGeometry(encodedSize = IntSize(6000, 9000)),
+            ),
+        )
+        val mockTileManager = mockk<ReaderTileManager>(relaxed = true)
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            regionDecoderFactory = regionFactory,
+            decodePlanner = DecodePlanner(),
+            tileManager = mockTileManager,
+            viewportSizeProvider = { IntSize(1280, 2772) },
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+
+        adapter.onCameraSettled(
+            ReaderCameraSnapshot(
+                scale = 4f,
+                visibleBoundsInScene = FloatRect(0f, 0f, 1280f, 2772f),
+            ),
+        )
+
+        val pageId = PageId(page1.readerKey)
+        val asset = adapter.acquireAsset(pageId) as ReaderImageAsset.Tiled
+
+        assertEquals(4, asset.base.sampleSize, "base must be the fit level, not the camera's")
+        assertEquals(1, asset.target?.sampleSize, "the camera's own level belongs in the target")
+        assertEquals(IntSize(6000, 9000), asset.target?.grid?.pageSize)
+        // The lattice stays small even at the camera's level: enlarging tiles to about a viewport each
+        // cut the painted count 4x but raised CPU P99 from 12.1ms to 29.8ms on the same fixture.
+        assertEquals(1024, asset.target?.grid?.tileDimension?.width)
+
+        // Back at fit the target is withdrawn; the base was already right.
+        adapter.onCameraSettled(
+            ReaderCameraSnapshot(
+                scale = 1f,
+                visibleBoundsInScene = FloatRect(0f, 0f, 1280f, 2772f),
+            ),
+        )
+        val settled = adapter.assets.value[pageId] as ReaderImageAsset.Tiled
+        assertEquals(4, settled.base.sampleSize)
+        assertNull(settled.target)
     }
 
     @Test

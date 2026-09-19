@@ -118,7 +118,13 @@ class DecodePlanner(
         // 4. Fallback to Tiled plan: calculate overview LOD and tile specs
         val overviewLod = resolveOverviewLod(logicalSize, limits)
         val tileDimension = resolveTileDimension(logicalSize)
-        val singleTileBytes = tileDimension.width.toLong() * tileDimension.height.toLong() * bytesPerPixel
+        // Tiles decode at this level, so the ledger has to charge the decoded size rather than the
+        // logical coverage: a coarse strip tile covers 800x2000 of page but decodes to 800x500.
+        val decodedTileSize = IntSize(
+            maxOf(1, tileDimension.width / sampleSize),
+            maxOf(1, tileDimension.height / sampleSize),
+        )
+        val singleTileBytes = decodedTileSize.width.toLong() * decodedTileSize.height.toLong() * bytesPerPixel
         // Estimated working set: 4-6 tiles covering the viewport plus 1 lookahead
         val estimatedWorkingSet = minOf(
             tilePolicy.defaultWorkingSetCostBudgetBytes,
@@ -151,6 +157,18 @@ class DecodePlanner(
         )
     }
 
+    /**
+     * Lattice for the tiled path.
+     *
+     * Telephoto sizes a tile to `imageSize * sampleSize / baseSampleSize` so every tile decodes to
+     * about one viewport; that was tried here (2026-09-19) and **measured worse**: on the 6000x9000
+     * fixture a level-zero level tile grew from 1024x1024 (4MB) to 1500x2250 (17MB), which did cut
+     * the painted tile count fourfold (43 -> 12 per layer, decode requests 282 -> 191) but pushed
+     * every other number the wrong way - the frame's texture-upload spike grows with the unit, so
+     * CPU P99 went 12.1ms -> 29.8ms, resident tiles 293MB -> 424MB and GPU 385MB -> 554MB at 2x.
+     * Textures want to be *small* here; what actually costs frames at 2x+ is the area a frame covers
+     * (a transient frame reports a whole-page band), not the lattice that covers it.
+     */
     private fun resolveTileDimension(logicalSize: IntSize): IntSize {
         val preferredEdge = tilePolicy.preferredTileEdgePx
         val maxPixels = tilePolicy.maxDecodedTilePixels

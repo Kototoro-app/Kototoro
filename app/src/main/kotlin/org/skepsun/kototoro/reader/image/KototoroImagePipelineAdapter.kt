@@ -340,20 +340,40 @@ class KototoroImagePipelineAdapter(
                                 if (plan is DecodePlan.Tiled) {
                                     regionSources[pageId] = initialSource
                                     val split = page.split.toTileSplit()
+                                    // Both rungs are built once, here: the base is the level this page
+                                    // needs at fit scale (what a neighbour shows) and the target the
+                                    // level the camera already demands. Nothing rebuilds them later
+                                    // except a genuine level change - see updateTileLadders.
+                                    val ladder = resolveTileLadder(
+                                        sourceContentWidthPx = geometry.logicalSize.width,
+                                        viewportWidthPx = vpSize.width.coerceAtLeast(100),
+                                        cameraScale = cameraScale,
+                                    )
                                     val grid = TileGrid(
                                         pageId = pageId,
                                         geometry = geometry,
                                         split = split,
                                         tileDimension = plan.tileDimension,
-                                        sampleSize = plan.lod.sampleSize,
+                                        sampleSize = ladder.baseSampleSize,
                                     )
+                                    val targetLayer = ladder.targetSampleSize?.let { targetSampleSize ->
+                                        ReaderImageAsset.TileLayer(
+                                            grid = TileGrid(
+                                                pageId = pageId,
+                                                geometry = geometry,
+                                                split = split,
+                                                tileDimension = plan.tileDimension,
+                                                sampleSize = targetSampleSize,
+                                            ),
+                                        )
+                                    }
                                     actualTileManager.requestOverview(grid, plan.overviewLod.sampleSize)
                                     val overviewKey = grid.overviewTile(plan.overviewLod.sampleSize).key
                                     val asset = ReaderImageAsset.Tiled(
                                         pageId = pageId,
-                                        grid = grid,
+                                        base = ReaderImageAsset.TileLayer(grid = grid, overviewKey = overviewKey),
+                                        target = targetLayer,
                                         tileStore = actualTileManager,
-                                        overviewKey = overviewKey,
                                     )
                                     val retained = storeAsset(pageId, asset)
                                     composePipeline.onImageDecoded(page, grid.pageSize.width, grid.pageSize.height)
@@ -605,164 +625,78 @@ class KototoroImagePipelineAdapter(
      * for visible pages and releasing over-sampled tiles upon zoom-out.
      */
     /**
-     * Rebuilds any tiled page whose base grid is finer than the current camera needs.
+     * Brings every tiled page's ladder in line with the camera.
      *
-     * Symmetric to the zoom-in target layer: magnifying adds a finer layer, so leaving a page at fit
-     * scale has to drop back down. Otherwise the level-zero grid acquired under magnification keeps
-     * being decoded and pinned as visible for a page now shown at a third of that density, which is
-     * where the zoom run's 283MB of tiles came from.
+     * Replaces the old per-settle re-plan (which asked [DecodePlanner] for each cached page on every
+     * settle and rebuilt the base grid whenever the answer stepped a level): the level is now a pure
+     * function of the page size, the viewport and the camera, so a layer is only built, replaced or
+     * dropped when that level actually changes. Same intent, without rebuilding grids under a moving
+     * camera - the experiment that did rebuild per frame launched 26k decodes for zero frame gain.
      */
-    private fun coarsenOverDetailedTiles(scale: Float) {
-        val vpSize = viewportSizeProvider()
+    private fun updateTileLadders(scale: Float) {
+        val vpWidth = viewportSizeProvider().width.coerceAtLeast(100)
         for ((pageId, asset) in cachedAssets) {
             if (asset !is ReaderImageAsset.Tiled) continue
-            val source = regionSources[pageId] ?: continue
-            val page = pageLookup(pageId) ?: continue
-            val plan = decodePlanner.plan(
-                pageId = pageId,
-                metadata = source.metadata,
-                geometry = asset.grid.geometry,
-                viewportWidth = vpSize.width.coerceAtLeast(100),
-                viewportHeight = vpSize.height.coerceAtLeast(100),
+            val currentSampleSize = (asset.target ?: asset.base).sampleSize
+            val ladder = resolveTileLadder(
+                sourceContentWidthPx = asset.grid.pageSize.width,
+                viewportWidthPx = vpWidth,
                 cameraScale = scale,
-                capabilities = rendererCapabilities,
-                currentLod = LodSpec(
-                    level = ReaderLodPolicy.calculateLodLevel(asset.base.sampleSize),
-                    sampleSize = asset.base.sampleSize,
-                    targetPixelScale = 1.0f / asset.base.sampleSize,
-                ),
-                format = if (bitmapConfig == Bitmap.Config.RGB_565) RasterFormat.RGB_565 else RasterFormat.ARGB_8888,
+                currentSampleSize = currentSampleSize,
             )
-            val coarserSampleSize = coarsenedBaseSampleSize(plan.plannedSampleSize(), asset.base.sampleSize)
-                ?: continue
-            val coarserGrid = TileGrid(
-                pageId = pageId,
-                geometry = asset.grid.geometry,
-                split = page.split.toTileSplit(),
-                // Keep the acquisition-time tile dimension and overview band: the density is what
-                // changes, and the overview payload is keyed independently of the lattice grid.
-                tileDimension = asset.grid.tileDimension,
-                sampleSize = coarserSampleSize,
-            )
-            actualTileManager.releaseTiles { it.pageId == pageId && it.sampleSize == asset.base.sampleSize }
-            val coarserLayer = ReaderImageAsset.TileLayer(
-                grid = coarserGrid,
-                overviewKey = asset.base.overviewKey,
-            )
-            val updated = ReaderImageAsset.Tiled(
-                pageId = pageId,
-                base = coarserLayer,
-                target = null,
-                tileStore = actualTileManager,
-            )
-            cachedAssets[pageId] = updated
-            updateAssets { it + (pageId to updated) }
+            var updated = asset
+
+            if (asset.base.sampleSize != ladder.baseSampleSize) {
+                actualTileManager.releaseTiles { it.pageId == pageId && it.sampleSize == asset.base.sampleSize }
+                updated = updated.copy(
+                    base = ReaderImageAsset.TileLayer(
+                        grid = asset.grid.withSampleSize(ladder.baseSampleSize),
+                        overviewKey = asset.base.overviewKey,
+                    ),
+                )
+            }
+
+            if (updated.target?.sampleSize != ladder.targetSampleSize) {
+                updated.target?.let { stale ->
+                    actualTileManager.releaseTiles { it.pageId == pageId && it.sampleSize == stale.sampleSize }
+                }
+                updated = updated.copy(
+                    target = ladder.targetSampleSize?.let { targetSampleSize ->
+                        ReaderImageAsset.TileLayer(
+                            grid = asset.grid.withSampleSize(targetSampleSize),
+                        )
+                    },
+                )
+            }
+
+            if (updated !== asset) {
+                cachedAssets[pageId] = updated
+                updateAssets { it + (pageId to updated) }
+            }
         }
     }
 
     fun onCameraSettled(snapshot: ReaderCameraSnapshot, scene: ReaderScene? = null) {
         val scale = snapshot.scale
         val visibleBounds = snapshot.visibleBoundsInScene
-        // The camera feeds the next decode plan, so a zoomed page asks for its own LOD instead of
-        // reusing the fit-to-screen target resolved when the page was first acquired.
+        // The camera feeds the next decode plan (sampled pages re-acquire at their own LOD) and the
+        // tile ladder, so a zoomed page is painted from its own level instead of the fit one.
         cameraScale = scale
-        // Keeps a page whose grid was built under magnification from staying level-zero once the
-        // camera leaves it. An A/B with this call disabled drew 226MB of tiles per frame at 2.5x
-        // against 98MB with it, so it stays enabled.
-        coarsenOverDetailedTiles(scale)
+        updateTileLadders(scale)
 
-        if (scale <= 1.0f) {
-            // Zoom-out: drop target layers and release over-sampled tiles
-            for ((pageId, asset) in cachedAssets) {
-                if (asset !is ReaderImageAsset.Tiled) continue
-                if (asset.target != null) {
-                    val targetSampleSize = asset.target.sampleSize
-                    actualTileManager.releaseTiles { it.pageId == pageId && it.sampleSize == targetSampleSize }
-                    val downgraded = ReaderImageAsset.Tiled(
-                        pageId = pageId,
-                        base = asset.base,
-                        target = null,
-                        tileStore = actualTileManager,
-                    )
-                    cachedAssets[pageId] = downgraded
-                    updateAssets { it + (pageId to downgraded) }
-                }
-            }
-            return
+        // Sharp tiles for the magnified band start decoding at settle instead of waiting for the next
+        // debounced visible-frame tick. Both layers are requested for every visible frame anyway
+        // (KototoroImagePipelineAdapter.requestTiles), so this only shortens the first sharp frame.
+        val targetLayers = cachedAssets.mapNotNull { (pageId, asset) ->
+            (asset as? ReaderImageAsset.Tiled)?.target?.let { pageId to it }
         }
-
-        // Zoom-in: find visible tiled pages that intersect visible bounds
-        val visibleFloatRect = snapshot.visibleBoundsInScene
-
-        for ((pageId, asset) in cachedAssets) {
-            if (asset !is ReaderImageAsset.Tiled) continue
-            val source = regionSources[pageId] ?: continue
-            val page = pageLookup(pageId) ?: continue
-
-            var pageSceneBounds: FloatRect? = null
-            if (scene != null) {
-                val pageGeom = scene.pageGeometries.firstOrNull { it.pageId == pageId }
-                if (pageGeom != null) {
-                    if (!pageGeom.sceneBounds.intersects(visibleFloatRect)) {
-                        continue
-                    }
-                    pageSceneBounds = pageGeom.sceneBounds
-                }
-            }
-
-            val vpSize = viewportSizeProvider()
-            val plan = decodePlanner.plan(
-                pageId = pageId,
-                metadata = source.metadata,
-                geometry = asset.grid.geometry,
-                viewportWidth = vpSize.width.coerceAtLeast(100),
-                viewportHeight = vpSize.height.coerceAtLeast(100),
-                cameraScale = scale,
-                capabilities = rendererCapabilities,
-                currentLod = LodSpec(
-                    level = ReaderLodPolicy.calculateLodLevel(asset.base.sampleSize),
-                    sampleSize = asset.base.sampleSize,
-                    targetPixelScale = 1.0f / asset.base.sampleSize,
-                ),
-                format = if (bitmapConfig == Bitmap.Config.RGB_565) RasterFormat.RGB_565 else RasterFormat.ARGB_8888,
-            )
-
-            if (plan is DecodePlan.Tiled && plan.lod.sampleSize < asset.base.sampleSize) {
-                val targetSampleSize = plan.lod.sampleSize
-                if (asset.target?.sampleSize != targetSampleSize) {
-                    val targetGrid = TileGrid(
-                        pageId = pageId,
-                        geometry = asset.grid.geometry,
-                        split = page.split.toTileSplit(),
-                        tileDimension = plan.tileDimension,
-                        sampleSize = targetSampleSize,
-                    )
-                    val targetLayer = ReaderImageAsset.TileLayer(grid = targetGrid, sampleSize = targetSampleSize)
-                    val updated = ReaderImageAsset.Tiled(
-                        pageId = pageId,
-                        base = asset.base,
-                        target = targetLayer,
-                        tileStore = actualTileManager,
-                    )
-                    cachedAssets[pageId] = updated
-                    updateAssets { it + (pageId to updated) }
-
-                    // Request high-LOD target tiles
-                    if (pageSceneBounds != null && pageSceneBounds.width > 0f && pageSceneBounds.height > 0f) {
-                        val intersection = pageSceneBounds.intersectionOrNull(visibleFloatRect)
-                        if (intersection != null) {
-                            val scaleX = targetGrid.pageSize.width.toFloat() / pageSceneBounds.width
-                            val scaleY = targetGrid.pageSize.height.toFloat() / pageSceneBounds.height
-                            val pageLogical = IntRect(
-                                left = ((intersection.left - pageSceneBounds.left) * scaleX).toInt().coerceIn(0, targetGrid.pageSize.width),
-                                top = ((intersection.top - pageSceneBounds.top) * scaleY).toInt().coerceIn(0, targetGrid.pageSize.height),
-                                right = kotlin.math.ceil((intersection.right - pageSceneBounds.left) * scaleX).toInt().coerceIn(0, targetGrid.pageSize.width),
-                                bottom = kotlin.math.ceil((intersection.bottom - pageSceneBounds.top) * scaleY).toInt().coerceIn(0, targetGrid.pageSize.height),
-                            )
-                            actualTileManager.requestTiles(targetGrid, pageLogical)
-                        }
-                    }
-                }
+        if (targetLayers.isNotEmpty() && scene != null) {
+            for ((pageId, target) in targetLayers) {
+                val pageSceneBounds = scene.pageGeometries.firstOrNull { it.pageId == pageId }?.sceneBounds
+                    ?: continue
+                if (pageSceneBounds.width <= 0f || pageSceneBounds.height <= 0f) continue
+                val intersection = pageSceneBounds.intersectionOrNull(visibleBounds) ?: continue
+                actualTileManager.requestTiles(target.grid, intersection.toPageLogical(pageSceneBounds, target.grid))
             }
         }
 
@@ -786,6 +720,29 @@ class KototoroImagePipelineAdapter(
     }
 }
 
+/** Same grid at another level: the lattice, geometry and gutters describe the page, not the LOD. */
+private fun TileGrid.withSampleSize(sampleSize: Int): TileGrid = TileGrid(
+    pageId = pageId,
+    geometry = geometry,
+    split = split,
+    tileDimension = tileDimension,
+    sampleSize = sampleSize,
+    outputGutterPx = outputGutterPx,
+    seamPaddingPx = seamPaddingPx,
+)
+
+/** Maps a scene-space rectangle into page-logical pixels of [grid]. */
+private fun FloatRect.toPageLogical(sceneBounds: FloatRect, grid: TileGrid): IntRect {
+    val scaleX = grid.pageSize.width.toFloat() / sceneBounds.width
+    val scaleY = grid.pageSize.height.toFloat() / sceneBounds.height
+    return IntRect(
+        left = ((left - sceneBounds.left) * scaleX).toInt().coerceIn(0, grid.pageSize.width),
+        top = ((top - sceneBounds.top) * scaleY).toInt().coerceIn(0, grid.pageSize.height),
+        right = kotlin.math.ceil((right - sceneBounds.left) * scaleX).toInt().coerceIn(0, grid.pageSize.width),
+        bottom = kotlin.math.ceil((bottom - sceneBounds.top) * scaleY).toInt().coerceIn(0, grid.pageSize.height),
+    )
+}
+
 internal fun ReaderPageSplit.toTileSplit(): TileSplit = when (this) {
     ReaderPageSplit.NONE -> TileSplit.NONE
     ReaderPageSplit.LEFT -> TileSplit.LEFT
@@ -803,27 +760,6 @@ internal fun ReaderPageSplit.toTileSplit(): TileSplit = when (this) {
 internal fun DecodePlan?.requestedDecodeSize(): IntSize? = when (this) {
     is DecodePlan.SampledSingle -> targetSize
     else -> null
-}
-
-/**
- * Sample size a tiled page's base grid should be rebuilt at, or `null` to leave it as it is.
- *
- * A grid acquired while the page was magnified stays at level zero after the camera leaves it, so a
- * page shown at fit scale keeps reporting a whole page height of level-zero tiles as visible - the
- * zoom run held 283MB of tiles that way. The base is only rebuilt when the plan is at least one
- * power of two coarser, which keeps the decision out of the hysteresis band's way.
- */
-internal fun coarsenedBaseSampleSize(plannedSampleSize: Int, baseSampleSize: Int): Int? {
-    if (plannedSampleSize < baseSampleSize * 2) return null
-    return plannedSampleSize
-}
-
-/** Sample size the current camera needs for [this] plan, whatever decode shape it resolved to. */
-internal fun DecodePlan.plannedSampleSize(): Int = when (this) {
-    is DecodePlan.Tiled -> lod.sampleSize
-    is DecodePlan.SampledSingle -> sampleSize
-    is DecodePlan.Single -> 1
-    is DecodePlan.AnimatedSingle -> 1
 }
 
 /** Shortfall below which a sampled page is left as it is rather than decoded again. */

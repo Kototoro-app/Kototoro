@@ -171,6 +171,47 @@ class DecodePlannerTest {
     }
 
     @Test
+    fun `tiled lattice stays at the preferred tile edge for a 2D page`() {
+        // Telephoto-sized tiles (imageSize * sampleSize / baseSampleSize) were implemented and
+        // measured on device, and lost: level-zero tiles of 1500x2250 cut the painted tile count
+        // 43 -> 12 per layer and decode requests 282 -> 191 at 2x, but CPU P99 rose 12.1 -> 29.8ms,
+        // resident tiles 293 -> 424MB and GPU 385 -> 554MB, because a frame's texture-upload spike
+        // grows with the unit. Textures stay small; the lattice stays fixed.
+        val plan = DecodePlanner().plan(
+            pageId = PageId(9L),
+            metadata = ImageSourceMetadata(size = IntSize(6000, 9000)),
+            viewportWidth = 1280,
+            viewportHeight = 2772,
+            cameraScale = 4f,
+        )
+
+        assertTrue(plan is DecodePlan.Tiled, "expected tiling, got $plan")
+        val tiled = plan as DecodePlan.Tiled
+        assertEquals(1, tiled.lod.sampleSize, "level zero is the 1:1 level")
+        assertEquals(IntSize(1024, 1024), tiled.tileDimension)
+    }
+
+    @Test
+    fun `tile cost is the decoded size, not the logical coverage`() {
+        // A strip tile at a coarse level covers 2048x512 of page but decodes to 1024x256: charging
+        // the logical rectangle tells the residency ledger a 1MB bitmap costs 4MB, and the working
+        // set estimate then overstates what the tiled path holds.
+        val plan = DecodePlanner().plan(
+            pageId = PageId(10L),
+            metadata = ImageSourceMetadata(size = IntSize(2048, 20000)),
+            viewportWidth = 800,
+            viewportHeight = 1600,
+            cameraScale = 1f,
+        )
+
+        assertTrue(plan is DecodePlan.Tiled, "expected tiling, got $plan")
+        val tiled = plan as DecodePlan.Tiled
+        assertEquals(2, tiled.lod.sampleSize)
+        assertEquals(IntSize(2048, 512), tiled.tileDimension)
+        assertEquals(1024L * 256L * 4L, tiled.estimatedTileBytes)
+    }
+
+    @Test
     fun `split double page evaluates logical half correctly`() {
         val pageId = PageId(6L)
         // 2000x1500 split into left half (1000x1500)
