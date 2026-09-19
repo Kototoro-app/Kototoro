@@ -338,6 +338,230 @@ planner 用真实值参与 `effectiveLimits` 的夹取（策略上限仍为硬�
 （overrun 抖动，属该档已知的瓦片路径抖动）。
 **遗留**：webtoon 与横向宿主也应同样回报能力（当前只有 paged 宿主做了），已列入清单。
 
+### Telephoto 瓦片几何实验：负结果与回滚（2026-09-19）
+
+按上文对照清单第 1 条实现了 Telephoto 的瓦片尺寸规则
+（`tileDimension = imageSize × sampleSize / baseSampleSize`，地板取"图像折半至两边 ≤ 视口"，
+落在 `DecodePlanner.resolveTileDimension`），JVM 单测（TDD，先红后绿）与真机单点验证都符合预期：
+
+- 真机证据（warsaw / 6000×9000 夹具 / vp=1280×2772 / 采集瞬间相机 scale=3.609）：
+  重规划得到 `tile=1500×2250 grid=4×4 sample=1`；同一可视带 `IntRect(1727,2700,3390,6300)`（1663×3601）
+  的请求由 **15 specs 降到 4 specs**（旧 1024 格为 3 列 × 5 行）。
+
+但**整轮真机基准证明这个方向是错的**（同夹具、同旅程、`CompilationMode.Full`、5 次迭代）：
+
+| 旅程 | 指标 | 基线（1024 格） | Telephoto 格（1500×2250） | 判读 |
+| :--- | :--- | ---: | ---: | :--- |
+| 2.0× | 绘制瓦片/层（最坏帧） | 36–43 | **12** | 少 3.4× |
+| 2.0× | 解码请求 | 270–402 | **190–239** | 少 1.5× |
+| 2.0× | 绘制位图/层 | 102–127 MB | **201 MB** | 变差 |
+| 2.0× | 常驻瓦片 | 37–45 块 / 279–293 MB | 19–21 块 / **391–424 MB** | 变差 |
+| 2.0× | memoryGpu | 385–418 MB | **554–584 MB** | 变差 |
+| 2.0× | CPU P99 / overrun P99 | **12.1 ms** / +26.7 ms | 29.8 ms / +30.2 ms | 变差 |
+| 2.5× | 绘制瓦片/层 | 39–45 | **8–12** | 少 4× |
+| 2.5× | 绘制位图/层 | 94–149 MB | 137–201 MB | 变差 |
+| 2.5× | CPU P99 / overrun P99 | 9.77 ms / +52.9 ms | 31.2 ms / +39.5 ms | 变差 |
+| 1×、1.5× | 全部瓦片指标 | 0 | 0 | 不变（走单张采样位图） |
+
+**机制**：帧线程的纹理上传尖峰随**单块位图大小**增长，而不是随块数增长。1024² 时一块 4MB，
+1500×2250（外加缝合 gutter 约 1700×2450）一块约 16.8MB；块数少了 3–4 倍，但一帧要连续上传十几块
+16.8MB 的纹理，P99 因此翻倍，常驻与 GPU 随之上浮。**在这个场景里纹理要"小"，不是"少"。**
+
+另一个更重要的读数：两种格子的**绘制总面积几乎相同**（基线 43 块 × 1M px ≈ 45M px；
+实验 12 块 × 3.4M px ≈ 41M px）。屏幕只有 1280×2772 = 3.55M px，而 45M px 恰好等于
+`3.55M ÷ 0.31²`——**0.31 px/图像 px 正是"页面按 fit 高度显示"时的绘制密度**。
+也就是说最坏那一帧是「页面以 fit 比例显示（0.31），却仍从 level 0（1 px/图像 px）取瓦片」：
+线性过采样 3.2×、面积过采样 10×。同一算术也解释了对照读数：手动验证时相机在 3.609×
+（页面对屏幕 1.11 px/图像 px），同样 3.55M px 的屏幕只需 `3.55M ÷ 1.11² ≈ 2.9M px` 的 level-0 数据
+≈ 4 块（实测 `specs=4 drawn=4` ✓）。**所以瓶颈是"层级"，既不是格子形状，也不是屏外裁剪**：
+按正确层级（sampleSize 4，整页 1500×2250 ≈ 3.4M px ≈ 一屏）画一帧只需 1 块 13.5MB，
+比最坏帧的 160–200MB 少 12–15 倍。
+
+**结论与动作**：
+
+1. 该改动**已回滚**：`resolveTileDimension` 恢复"固定 1024 方形格 / 全宽条带"两种几何，
+   `coarsenOverDetailedTiles` 恢复沿用采集期 lattice。回滚后在设备上行为与基线一致。
+2. 唯一保留的修正：`estimatedTileBytes` 改为按**解码尺寸**（`tileDimension / sampleSize`）计费，
+   而不是逻辑覆盖面积——粗层条带瓦片覆盖 2048×512 却只解码 1024×256，旧算法会把它记成 4 倍。
+   它只喂给 `estimatedResidentCostBytes`，而该字段全仓无消费者，属纯记账修正、零行为影响。
+3. 回归守卫：`DecodePlannerTest` 用两个用例钉住"2D 页格子保持固定边长"与"按解码尺寸计费"，
+   注释里写明本次实测数字，避免以后有人再按算术把格子放大。
+4. **下一步落点改为 Telephoto 对照清单第 1、2 条（瓦片阶梯）**：预生成"fit 层 + 相机层"两个 grid，
+   绘制与请求都按**该页当前的绘制密度**（`绘制屏幕宽 / 页逻辑宽`）选层，而不是按全局相机 scale。
+   预期把"页面按 fit 显示"的那些帧从 160–200MB 压到 ~13.5MB（12–15×），这正是 2×/2.5× 档
+   残余 overrun 的来源。**不要再走"改格子几何"或"缩格子"这两条路**：前者的实测结论已如上，
+   后者在面积不变时只会把同样的上传量切得更碎。
+
+**过程教训**：第一次跑基准得到的结论是"毫无变化"，原因是
+`:macrobenchmark:connectedDebugAndroidTest` 安装的 `app-arm64-v8a-benchmark.apk`
+（`applicationId` 无 `.debug` 后缀、宿主 Activity 在 `app/src/benchmark` 源集）**是上一轮的旧包**，
+整轮 18 分钟测的是改动前的代码。判定方法已写入 §5。
+
+### 瓦片阶梯：base = fit 层、target = 相机层（2026-09-19）
+
+上文的读数（最坏帧 43 块 ≈ 45M px ≈ 屏幕 3.55M px ÷ 0.31²）指向的不是格子几何而是**层级**：
+那一帧的页面按 fit 比例显示（0.31 px/图像 px），却仍然从 level 0 取图。修复就是 Telephoto 对照清单
+第 1、2 条，且**不做每帧重建**：
+
+- **规则**（新纯函数 `reader/image/TileLadder.kt`）：`fit = resolveLod(页宽, 视口宽, cameraScale = 1)`，
+  `camera = resolveLod(..., cameraScale)`，然后 `base = max(fit, camera)`、`target = camera`（仅当 `camera < fit`）。
+  即 **base 是"这一页按 fit 显示时需要的层级"**（翻页过程中/旁边的页看的就是它），**target 才是相机那一层**。
+  迟滞只在"仍处于放大区"时生效：一开始把迟滞套在整条阶梯上，回到 fit 后 target 会粘住不放，
+  `SceneParityRegressionTest` 当场抓到（`assertNull(zoomOutAsset.target)` 失败）；改成"不放大就用无迟滞的需求值"。
+- **一次建好，之后只做建/换/弃**：`acquireAsset` 里同时建好 base 与 target 两个 grid；
+  `onCameraSettled` 变成 `updateTileLadders(scale)`，只在层级真的变化时换 grid 并释放该层瓦片。
+  旧的 `coarsenOverDetailedTiles`（每次沉降逐页重跑 `DecodePlanner`、重建 base grid）与
+  `coarsenedBaseSampleSize` 一并删除——那条"每帧重规划"的路径正是上文第 11 条实验里 26k 次解码的来源。
+- **请求与绘制侧不用改**：`requestTiles` 本来就同时请求 base 与 target 的可见带（base 补缝、target 清晰），
+  `drawTiledPage` 本来就"先 base、再按 target 已驻留区域跳过 base"。
+- **测试**：`TileLadderTest` 8 例（fit 无 target／放大加对应层／base 不随相机／缩到 fit 以下 base 变粗／
+  边界迟滞／回到 fit 立即撤 target／webtoon 单层）；`KototoroImagePipelineAdapterTiledTest` 新增 1 例
+  （放大状态下采集 → `base=4`、`target=1`；回到 fit → target 撤除）；删除 `TileBaseCoarseningPolicyTest`
+  （其意图被阶梯规则覆盖）。全量 JVM 2751 例 0 失败。
+
+真机（warsaw，6000×9000 夹具，vp=1280×2772，`CompilationMode.Full`，5 迭代，设备侧已核对 APK 含本次代码）：
+
+| 旅程 | 指标 | 基线（单层 level-0 + 每次沉降重建） | 阶梯（base=fit / target=相机） |
+| :--- | :--- | ---: | ---: |
+| 2.0× | 绘制瓦片/层（最坏帧） | 36–43 | 16–37 |
+| 2.0× | **绘制位图/层** | 102–172 MB | **98.3 MB（5 次迭代完全一致）** |
+| 2.0× | 常驻瓦片 | 37–45 块 / 279–293 MB | 43–47 块 / **215–234 MB** |
+| 2.0× | **解码请求** | 270–402 | **243–611**（首迭代 602 为冷启动，其后 242–297） |
+| 2.0× | 驱逐次数 | 56–98 | 53–160 |
+| 2.0× | memoryGpu | 385–418 MB | **372–387 MB** |
+| 2.0× | RssAnon Max | 540–656 MB | 580–629 MB |
+| 2.5× | 绘制瓦片/层 | 39–45 | **15–17** |
+| 2.5× | 绘制位图/层 | 94–149 MB | **98.3 MB** |
+| 2.5× | 常驻瓦片 | 41–46 块 / 250–334 MB | 36–41 块 / **204–216 MB** |
+| 2.5× | 解码请求 | 284–465 | **230–256** |
+| 2.5× | memoryGpu | 379–419 MB | **376–389 MB** |
+| 1×、1.5×、fit 大页 | 全部瓦片指标 | 0 | 0（不变，仍走单张采样位图） |
+
+**读法**：最坏帧的绘制量由「页面按 fit 显示却取 level 0」的那些帧（≈172MB）**转移到了真正放大的那些帧**
+（target 层 15 块 × 6.55MB = 98.3MB）；而 fit 显示的帧从 172MB 降到 base 层的 ~15 块 × 1MB ≈ 15MB（约 11×）。
+常驻字节、GPU、解码请求三项同时下降或持平，说明这次不是"把成本搬了个地方"，而是净减。
+`TileDecodeRequests` **同时包含两层的请求**，因此与单层基线同量级即代表没有抖动（见下）。
+
+**过程中的一次真回归与其修复**：首次接入阶梯后解码请求从基线 282 暴涨到 **10,304**（常驻卡在 16 块）。
+根因不在阶梯本身，而在 `ReaderTileManager.demoteAbsentLatticeTiles`：它只按 `pageId` 过滤 LATTICE
+瓦片与在飞任务，不看 `sampleSize`，于是"先请求 base 再请求 target"时，每次请求都会把另一层刚请求的瓦片
+降级（VISIBLE→STANDBY→CACHE）并 cancel 其在飞解码，下一帧再重建 —— 永久抖动。
+修复：把降级作用域按 `grid.sampleSize` 收窄；回归守卫 `ReaderTileManagerTest`
+`requesting one layer does not demote the other layer's tiles`（先红后绿）。修复后解码请求回到 243–611。
+
+**帧时序口径（同日补齐）**：上表之外的 `FrameTimingMetric` 一度整批缺失，根因是设备侧
+`/data/misc/perfetto-traces/trace_output.pb` 属主为 `root:root 0600`，而 Gradle 驱动的 instrumentation
+以 app 身份 `stat` 不到它（报 `Cannot check size of ...`，内层 `NumberFormatException: For input string: ""`），
+于是**所有 trace 派生指标静默消失、内存类指标照常上报**（webtoon 旅程同样缺失，确认与分页路径无关）。
+以 root 直接跑 instrumentation 后指标恢复，四档全部补齐：
+
+| 旅程 | 基线 CPU P99 / overrun P99 | 阶梯 CPU P99 / overrun P99 | 判读 |
+| :--- | ---: | ---: | :--- |
+| fit 大页 1× | 8.0 ms / 负 | **7.9 ms / −4.6 ms** | 持平 |
+| 1.5× | 7.96 ms / 负 | **7.9 ms / −4.5 ms** | 持平 |
+| 2.0× | 12.1 ms / **+26.7 ms** | **8.2 ms / −0.8 ms** | **不再错过 120Hz 截止期** |
+| 2.5× | 9.77 ms / **+52.9 ms** | 9.3 ms / **+8.1 ms** | 残余仅剩 +8.1ms（改善 6.5×） |
+
+同时刻的计数中位数与 Gradle 驱动轮次一致（解码请求中位数 241–252、常驻 209–246MB），
+说明两种驱动方式测得的是同一件事。**结论：2.0× 及以下的 overrun 已转为负余量，2.5× 从 +52.9ms 收到 +8.1ms**，
+即"1×/1.5× 达标、2× 达标、2.5× 可用"。
+
+### 缝合 padding 与查询光环分离 + 按工作集设驻留上限（2026-09-19）
+
+阶梯之后剩下的成本在"每块位图有多大"。`TileGrid` 原本让 `outputGutterPx`（128 屏幕 px 的**查询光环**）
+兼任**解码 padding**（`128 × sampleSize` 编码像素），于是每块都按 level 0 的余量解码：
+level 0 一块 1024 内容解成 1280（56% 是 padding），level 2 一块 256 内容解成 512（**75% 是 padding**）。
+缝合只需要几个解码像素，两者是不同的事，拆开：
+
+- `outputGutterPx` 只用于 `tilesIntersecting`（拉相邻瓦片保持温热）；
+- 新增 `seamPaddingPx = 8`（**解码**像素/边），`decodeRegion` 用它 × `sampleSize` 展开 ⇒ **任何层级的解码余量都是常数 8 像素**。
+
+拆分后暴露出第二个问题：小瓦片让**按字节设上限**的驻留账本"削得更碎"——上限是 planner 的单图预算
+（64MB），而钉住的可见工作集有 207MB，于是账本不断把光环瓦片驱逐、下一帧又重建：实测 2.0× 下
+**驱逐 50 → 140、解码请求 239 → 624**。把 `TileMemoryBudget` 的默认上限改为**按工作集定的 256MB**
+（与 planner 的 64MB 单图预算解耦）后驱逐直接归零。
+
+真机（warsaw，6000×9000，`CompilationMode.Full`，5 迭代，**干净设备**，详见下一条）：
+
+| 2.0× | 基线（单层 level-0） | 阶梯（padding 128 / cap 64MB） | 拆分 + cap 256MB |
+| :--- | ---: | ---: | ---: |
+| CPU P99 | 12.1 ms | 8.2 ms | **7.5 ms** |
+| overrun P99 | +26.7 ms | −0.8 ms | +4.6 ms |
+| 绘制位图/层 | 102–172 MB | 98.3 MB | **64.9 MB** |
+| 解码请求 | 270–402 | 239 | **239** |
+| 驱逐次数 | 56–98 | 50 | **0** |
+| memoryGpu | 385–418 MB | 372–387 MB | **325 MB** |
+| RssAnon Last | 540–656 MB | 580–629 MB | **402 MB** |
+| 2.5× CPU P99 / overrun | 9.77 ms / +52.9 ms | 9.3 ms / +8.1 ms | **7.8 ms / +13.6 ms** |
+| 2.5× memoryGpu / RssAnon | 379–419 / 612–684 MB | 376–389 / 511–608 MB | **317 / 403 MB** |
+
+**判读**：绘制字节 −34%、GPU −14%、RSS −32%、驱逐归零、CPU P99 为三档最好（7.5/7.8ms）；
+overrun 尾部在两次测量间有 ±5–13ms 的漂移（基线为 +26.7/+52.9），需要同状态背靠背复测才能归因，
+已列入待办。**保留该改动**：内存与解码工作量的收益是单向的、且 overrun 仍显著优于基线。
+
+### 同状态 A/B/A 归因：真正的尾部元凶是"已驻留瓦片被重复解码"（2026-09-19）
+
+为了在同一设备状态下比较 padding 128 与 8，加了一个**临时运行时开关**（instrumentation 参数
+`-e seamPadding N` → intent extra → `TileGrid` 覆盖值），同一构建内交错跑 A8 → B128 → A8 → B128：
+
+| 2.5×（未修 re-decode 前） | pad=8 | pad=128 | pad=8 | pad=128 |
+| :--- | ---: | ---: | ---: | ---: |
+| overrun P99 | +114.2 ms | +5.4 ms | +113.4 ms | +5.3 ms |
+| 解码请求 | 596 | 238 | 582 | 239 |
+
+可复现且方向明确：**小 padding 反而差 100ms**。定位到 `ReaderTileManager.launchDecode` 只在
+`tileJobs` 里查"是否已在飞"，**不查"是否已驻留"** —— 而任务完成后会从 `tileJobs` 移除，于是下一帧
+同一块瓦片被重新解码一次。解码越快（padding 越小）这个守卫失效得越快，冗余解码就越多，
+尾部因此被拖长。这与上一节"驱逐 50 → 140"是两件不同的事：即使驱逐为 0，重复解码依然存在。
+
+修复：`launchDecode` 增加 `if (budget.contains(spec.key)) return`；回归守卫
+`ReaderTileManagerTest` 「a resident tile is not decoded again by a repeated request」（先红后绿）。
+修完后同一套交错序列（**同一会话同一构建**）：
+
+| 2.5×（修复后） | pad=8 | pad=128 | pad=8 |
+| :--- | ---: | ---: | ---: |
+| CPU P99 | 8.8 ms | 9.9 ms | **8.6 ms** |
+| overrun P99 | **+6.5 ms** | +15.1 ms | **+7.8 ms** |
+| 绘制位图/层 | **64.9 MB** | 98.3 MB | **64.9 MB** |
+| 解码请求 | 392 | 401 | 405 |
+
+即：守卫修好后 padding 8 **两项都更好**，尾部差异不再是 padding 造成的；`seamPaddingPx = 8` 保留。
+
+### 最终构建的四档实测（2026-09-19，干净设备，root 直跑，5 迭代）
+
+| 旅程 | CPU P99 | overrun P99 | 绘制位图/层 | 解码请求 | 驱逐 | memoryGpu | RssAnon Last |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| fit 大页 1× | 8.1 ms | −4.4 ms | 0 | 0 | 0 | 109 MB | 262 MB |
+| 1.5× | 8.4 ms | −3.5 ms | 0 | 0 | 0 | 202 MB | 404 MB |
+| **2.0×** | **9.4 ms** | **+9.6 ms** | **64.9 MB** | 392 | **0** | **312 MB** | **447 MB** |
+| **2.5×** | **8.6 ms** | **+8.1 ms** | **64.9 MB** | 401 | **0** | **312 MB** | **446 MB** |
+
+对照基线（本轮工作开始前）：2.0× CPU P99 12.1ms / overrun +26.7ms / 绘制 102–172MB / GPU 385–418MB / RSS 540–656MB；
+2.5× 9.77ms / +52.9ms / 94–149MB / 379–419MB / 612–684MB。⇒ **CPU P99 −22%/−12%、overrun −64%/−85%、
+绘制字节 −37%…−62%、GPU −19%/−17%、RSS −17%…−35%**，1×/1.5× 保持零瓦片与负余量不变。
+
+**遗留**：2.0×/2.5× 的 overrun 仍为正（+8…+10ms，即偶尔错过 120Hz 截止期），本机同一配置的
+run-to-run 漂移为几毫秒且跨设备状态不可比；继续压这一档需要新的假设（可见集合驻留、或按绘制密度选层的进一步细化），
+不在本轮范围。
+
+### 整体回归（2026-09-19，本轮瓦片工作收口）
+
+| 层次 | 命令 | 结果 |
+| :--- | :--- | :--- |
+| JVM 单测 | `./gradlew :app:testDebugUnitTest` | **2755 例 0 失败** |
+| 设备 instrumented | `./gradlew :app:connectedDebugAndroidTest` | 221 例 / **12 失败**，逐条核对后**全部与阅读器无关**：`MangaDatabaseTest`(4，Room 迁移)、`AppShortcutManagerTest`(1)、`AppBackupAgentTest`(1)、`DirectoryConsistencyPropertyTest`(1)、3 个集成用例与 2 个 novel 用例的 `initializationError`（JUnit runner 初始化） |
+| 设备 instrumented（阅读器） | 同上 | `ScenePagedGestureTest` 11 例中 10 例通过；唯一失败 `originalSizeCanPanVerticallyWithoutUserZoom` 已证**基线同样失败**（见下） |
+| 真机冒烟：webtoon 连续滚动 | `sustainedSceneFull` | OK；CPU P99 4.5ms、overrun P99 −8.1ms、RSS 236MB（条带瓦片路径无回归） |
+| 真机冒烟：双页 | `pagedDoublePageSceneFull` | OK；CPU P99 8.4ms、overrun P99 −4.3ms、0 瓦片、RSS 235MB（split 路径无回归） |
+| 真机四档分页 | 见上两节表格 | 见上 |
+
+**`originalSizeCanPanVerticallyWithoutUserZoom` 是既有失败（有对照证据）**：把本轮全部改动
+`git stash push -u` 后在**基线树**上跑同一条用例，结果同样 FAILED，断言一致
+（`Native image must fill exactly 240 physical pixels expected:<RED> but was:<BLACK>`，
+即 240×6000 夹具在 `KEEP_START` 1:1 下第 240 列不是图像内容）。因此它不是本轮引入的回归；
+它同时说明"高图在 ORIGINAL/KEEP_START 下的 1:1 几何"存在既有缺陷（另开任务跟踪，不混进瓦片工作）。
+注意该用例的夹具走**单张位图**路径（240×6000 在预算与纹理上限内），与瓦片管线无关。
+
 ### CS-1B 分页场景转正（翻转默认开关）
 
 - **前置**：CS-1A + CS-2 + CS-3 全部完成。
@@ -665,6 +889,47 @@ planner 用真实值参与 `effectiveLimits` 的夹取（策略上限仍为硬�
    取每行最左侧发生变化的 x。纯滑动内边界固定（实测 std 8.0），cover 恰好垂直（std 0.0），
    curl 随行漂移（std 93.6，x 从 900 漂到 1114）—— 平移不可能产生随行变化的边界，故该指标可直接
    区分折页与滑动。
+4. **跑基准前必须确认"设备上装的就是这一版"**：macrobenchmark 模块是 `self-instrumenting`
+   （`macrobenchmark/build.gradle`），`targetProjectPath = ':app'` 只提供**构建**目标，跑
+   `:macrobenchmark:connectedDebugAndroidTest` **不会重新安装 target app** —— 它启动的是设备上
+   已经装好的 `org.skepsun.kototoro`。实测代价：两轮各 19 分钟的基准测的都是遗留的旧包，
+   而且第二次的指标与上一轮**逐字节相同**（`DrawnTileBytesPerLayer_Max = 200,830,080`）才暴露出来。
+   规程（缺一不可）：
+   1. `./gradlew :app:assembleBenchmark` 显式构建 benchmark 变体
+      （产物 `app/build/outputs/apk/benchmark/app-arm64-v8a-benchmark.apk`，`applicationId` 无 `.debug` 后缀、
+      `ReaderProductionBenchmarkActivity` 在 `app/src/benchmark` 源集里）；
+   2. `adb install -r` 该 APK；
+   3. **从设备拉回已安装的包再验**：`pm path org.skepsun.kototoro` → `su -c cp` 到 `/data/local/tmp` → `adb pull` →
+      在所有 `classes*.dex` 里搜本次新增的标识字符串（注意是**多 dex**，只查 `classes.dex` 会误判为 0）；
+   4. 才跑基准。手动快验（比整轮基准快一个数量级）：`am force-stop org.skepsun.kototoro` →
+      `am start -n org.skepsun.kototoro/.reader.benchmark.ReaderProductionBenchmarkActivity --es backend scene_paged
+      --es fixture_mode paged_large --es zoom_mode fit_height --ef default_scale 2.5` → 读 logcat。
+      注意：**静态页不会重绘**，必须 swipe 触发一次或等瓦片到达，否则只看到第一帧。
+   5. 也可以直接 `./gradlew :app:installBenchmark`（AGP 会同时装 `.dm` 基线剖面，比裸 `adb install -r` 更完整）。
+5. **trace 文件属主会让"帧时序指标"整批静默消失，用 root 跑 instrument 即可绕过**：若
+   `/data/misc/perfetto-traces/trace_output.pb` 是 `root:root 0600`，而以 app 身份运行的 instrumentation
+   `stat` 不到它，harness 直接报 `IllegalStateException: Cannot check size of ...`
+   （内层 `NumberFormatException: For input string: ""`），于是 `frameDurationCpuMs` / `frameOverrunMs`
+   **在所有旅程上一起消失**，而内存类与自定义计数指标照常上报 —— 极易被误读成"这版变快了/没变化"。
+   判据：基准 JSON 的 metric 名单里有没有 `frameDurationCpuMs`。
+   已试无效：`chown shell:shell` + `chmod 666`、设备重启、`:app:installBenchmark` 重装。
+   **有效做法（root 设备）**：直接以 root 跑 instrumentation，使 harness 与 perfetto 同 uid：
+   ```bash
+   ./gradlew :app:assembleBenchmark :app:installBenchmark        # 目标 app（必须显式装，见第 4 条）
+   adb install -r macrobenchmark/build/outputs/apk/debug/macrobenchmark-debug.apk
+   adb shell su -c "am instrument -w -e class \
+     org.skepsun.kototoro.macrobenchmark.ReaderProductionBenchmark#pagedLargeZoom2_0SceneFull \
+     org.skepsun.kototoro.macrobenchmark/androidx.test.runner.AndroidJUnitRunner"
+   ```
+   输出里即含各指标与 `P50/P90/P95/P99`；单条旅程约 2 分钟，比 Gradle 轮次快得多。
+   实测计数中位数与 Gradle 轮次一致（同一份帧数据来源是该 app 自身的 FrameTimeline），两种方式可互相印证。
+6. **跑基准前先确认设备是"干净的"，否则会凭空造出 +100ms 尾延迟甚至超时**：本轮实测一次
+   "padding 变小后 overrun 从 −0.8ms 涨到 +95/+106ms、2.5× 旅程 600s 超时"的假回归，
+   真因是设备当时 `free` 只剩 300–690MB（15.1GB 中 14.4GB 被占）且残留了一个 **root 的 perfetto 进程**
+   （`ps -A | grep perfetto`）—— 重启并确认残留进程消失后，同一构建测出 CPU P99 7.5/7.8ms、overrun +4.6/+13.6ms。
+   规程：跑前 `adb shell free -m` 与 `adb shell "ps -A | grep -E 'perfetto|kototoro'"`，
+   有残留就 `su -c kill -9`、必要时重启；**跨状态比较的 P99/overrun 不可信**，
+   改动前后若要归因尾部，必须在同一设备状态下背靠背各测一次。
 
 像素度量脚本 `transition_probe.py`（zlib + numpy 解 PNG，或直读 raw；提供 `stats` / `diff` / `seam` /
 `extent` 四个命令）当前位于工作区外的 `E:\kototoro_demo\device-evidence\`。它在同一台设备上可复用，
