@@ -13,7 +13,15 @@ data class TilePolicy(
     /** Maximum allowed decoded pixels per single tile (e.g. 1024x1024 = 1 Mpixels ~4MB in ARGB_8888). */
     val maxDecodedTilePixels: Int = DEFAULT_MAX_DECODED_TILE_PIXELS,
 
-    /** Conservative safety ceiling for dimensions before forced tiling/downsampling. */
+    /**
+     * Ceiling on a single decoded dimension before the planner forces tiling or downsampling.
+     *
+     * Sized to what Android GPUs actually accept (8K textures are universal on API 26+; ADR 0002
+     * Phase 1D observed the hard ceiling at 16384px), not to the most conservative value: at 4096 a
+     * 6000x9000 page could only be a single bitmap at the fit LOD, so every mid-zoom view
+     * (sampleSize 2, i.e. 3000x4500) was pushed into the tiled path, and tiled pages paint many
+     * textures per frame - 452ms CPU P99 on device against 7ms for the same page as one bitmap.
+     */
     val safetyDimensionLimitPx: Int = DEFAULT_SAFETY_DIMENSION_LIMIT_PX,
 
     /** Default working set resident cost budget in bytes (e.g., 64MB). */
@@ -29,7 +37,7 @@ data class TilePolicy(
     companion object {
         const val DEFAULT_PREFERRED_TILE_EDGE_PX = 1024
         const val DEFAULT_MAX_DECODED_TILE_PIXELS = 1024 * 1024 // 1,048,576 pixels
-        const val DEFAULT_SAFETY_DIMENSION_LIMIT_PX = 4096
+        const val DEFAULT_SAFETY_DIMENSION_LIMIT_PX = 8192
         const val DEFAULT_WORKING_SET_COST_BUDGET_BYTES = 64L * 1024L * 1024L // 64 MB
     }
 }

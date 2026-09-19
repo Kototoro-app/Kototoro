@@ -38,7 +38,13 @@ class DecodePlanner(
         require(cameraScale > 0f) { "cameraScale must be > 0: $cameraScale" }
 
         val logicalSize = geometry.logicalSize
-        val limits = capabilities.effectiveLimits(tilePolicy.safetyDimensionLimitPx)
+        // The policy is the single source of truth for the ceiling: while the renderer has not
+        // reported its limits yet, the planner has to assume the same value it would enforce anyway,
+        // or an unresolved capability silently forces tiling for mid-zoom pages.
+        val limits = capabilities.effectiveLimits(
+            safetyLimitPx = tilePolicy.safetyDimensionLimitPx,
+            fallbackDefaultPx = tilePolicy.safetyDimensionLimitPx,
+        )
         val maxDrawableW = limits.width
         val maxDrawableH = limits.height
         val bytesPerPixel = format.estimatedBytesPerPixel.toLong()

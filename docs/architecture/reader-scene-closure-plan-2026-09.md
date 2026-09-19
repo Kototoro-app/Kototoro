@@ -295,6 +295,41 @@ legacy 分页宿主在同样的 6000×9000 页面上不会出现纹理爆炸，�
 5. **可直接复用现成资产**：我们的 `SubSamplingImageSource` 系实现已经封好了 `ImageRegionDecoder`
    的三种取流方式，场景管线可以复用它们，而不是各自维护 `AndroidRegionDecoderFactory`。
 
+### 放大病理的根因与修复（2026-09-19，提交见下）
+
+对照 Telephoto 后回看我们的 plan 决策，发现真正的触发点既不是缓存也不是缩放，而是一个**过保守的
+单张位图上限**：
+
+- `TilePolicy.safetyDimensionLimitPx` 默认 **4096**，且 `RendererCapabilities` 在生产代码里**从未被解析**
+  （只有测试构造过 `Resolved`），所以 `Unknown` 分支还用了**另一个** 4096 常量作为 `fallbackDefaultPx`。
+- 后果：6000×9000 页只有在 fit LOD（sampleSize 4 → 1500×2250）时才能是单张位图；**任何中等缩放**
+  （1.5× 需要 sampleSize 2 → 3000×4500，高度 4500 > 4096）都被强制推入瓦片路径，而瓦片路径每帧要画
+  几十张纹理 → 单帧 85–139MB 上传。这与 Telephoto"让每张解码位图不超过约一个视口"的做法正好相反。
+
+修复（两处，单一真相源）：
+1. `TilePolicy.DEFAULT_SAFETY_DIMENSION_LIMIT_PX` 4096 → **8192**（API 26+ 设备 8K 纹理是普遍能力；
+   ADR Phase 1D 实测硬上限为 16384）；
+2. `DecodePlanner` 把 `tilePolicy.safetyDimensionLimitPx` **同时**作为 `safetyLimitPx` 与 `fallbackDefaultPx`
+   传入 `effectiveLimits`，避免"未解析能力"静默使用另一个更保守的值。
+
+真机实测（同夹具、逐次 force-stop + drop_caches）：
+
+| 旅程 | CPU P99 修复前 | CPU P99 修复后 | 绘制瓦片 | 解码请求 | RssAnon Max |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| fit_height 1× | 394 ms | **8.0 ms** | 0 | 0 | 434 MB |
+| 1.5× | 452 ms | **7.96 ms** | 0 | 0 | 448 MB |
+| 2.0× | 359 ms | **12.1 ms** | 43 | 282 | 649 MB |
+| 2.5× | 453 ms | **9.77 ms** | 41 | 273 | 632 MB |
+| 1× 普通页（对照） | 7.75 ms | 7.75 ms | 0 | 0 | 248 MB |
+
+**判读**：
+- **1× 与 1.5× 已彻底修复**：完全回到单张采样位图（零瓦片、零解码请求），P99 ≈ 8ms、overrun 为负。
+- **2.0×/2.5× 好了一个数量级但仍未完美**：P99 9.8–12.1ms，且 overrun 仍为正（+26.7ms / +52.9ms），
+  即偶发错过 120Hz 截止期。这两档仍走瓦片路径（level 0 = 216MB 超出 64MB 预算，分块本身是正确的），
+  剩下的优化空间正是上面第 1 条（Telephoto 式瓦片几何）与第 3 条（可见集合驻留）。
+- 因此**放大场景不再是"不可用"**：常用倍率（≤1.5×）已达标，2× 以上为可用但有偶发掉帧，
+  按 Telephoto 对照清单继续收敛即可。
+
 ### CS-1B 分页场景转正（翻转默认开关）
 
 - **前置**：CS-1A + CS-2 + CS-3 全部完成。

@@ -137,6 +137,40 @@ class DecodePlannerTest {
     }
 
     @Test
+    fun `a mid-zoom oversized page stays one sampled bitmap instead of tiling`() {
+        // The fit-height cliff: a 6000x9000 page at a 1.44x camera resolves to sampleSize 2, i.e. a
+        // 3000x4500 decode. With a 4096 safety ceiling that decode was rejected as too big and the
+        // page fell into the tiled path, which paints many textures every frame (452ms CPU P99 on
+        // device). It fits memory at 54MB, so the ceiling is what decided it.
+        val plan = DecodePlanner().plan(
+            pageId = PageId(7L),
+            metadata = ImageSourceMetadata(size = IntSize(6000, 9000)),
+            viewportWidth = 1280,
+            viewportHeight = 2772,
+            cameraScale = 1.444f,
+        )
+
+        assertTrue(plan is DecodePlan.SampledSingle, "expected a sampled decode, got $plan")
+        assertEquals(2, (plan as DecodePlan.SampledSingle).sampleSize)
+    }
+
+    @Test
+    fun `genuinely too-large decodes still tile`() {
+        // At 4x the plan needs level zero: 6000x9000 is 216MB, past the 64MB working set, so tiling
+        // stays correct there. (At 2.5x the drawing-density tolerance resolves sampleSize 2, which
+        // fits as one bitmap - that is the case the ceiling change deliberately enables.)
+        val plan = DecodePlanner().plan(
+            pageId = PageId(8L),
+            metadata = ImageSourceMetadata(size = IntSize(6000, 9000)),
+            viewportWidth = 1280,
+            viewportHeight = 2772,
+            cameraScale = 4f,
+        )
+
+        assertTrue(plan is DecodePlan.Tiled, "expected tiling, got $plan")
+    }
+
+    @Test
     fun `split double page evaluates logical half correctly`() {
         val pageId = PageId(6L)
         // 2000x1500 split into left half (1000x1500)
