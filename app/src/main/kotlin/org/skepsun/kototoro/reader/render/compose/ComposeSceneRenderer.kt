@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.reader.render.compose
 
 import android.graphics.Bitmap
+import android.os.Build
+import android.os.Trace
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.splineBasedDecay
@@ -486,10 +488,14 @@ private fun DrawScope.drawTileLayer(
         val toScreenX = nodeWidth / grid.pageSize.width.toFloat()
         val toScreenY = nodeHeight / grid.pageSize.height.toFloat()
 
+        var drawnTiles = 0
+        var drawnTileBytes = 0L
         for (spec in intersectingSpecs) {
             val resident = tileStore.tile(spec.key) ?: continue
             val tileBitmap = (resident.payload as? Bitmap)?.asImageBitmap() ?: continue
             hasRenderedAnyContent = true
+            drawnTiles++
+            drawnTileBytes += (resident.payload as? Bitmap)?.allocationByteCount?.toLong() ?: 0L
 
             val params = TiledPageDrawMath.computeTileDrawParams(
                 grid = grid,
@@ -512,6 +518,12 @@ private fun DrawScope.drawTileLayer(
                 orientationDegrees = orientation,
                 colorFilter = imageColorFilter,
             )
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            // What one layer costs the frame thread: bitmaps drawn here are the ones the GPU has to
+            // have as textures, so this separates upload pressure from decode-thread pressure.
+            Trace.setCounter("Reader.DrawnTilesPerLayer", drawnTiles.toLong())
+            Trace.setCounter("Reader.DrawnTileBytesPerLayer", drawnTileBytes)
         }
     }
 

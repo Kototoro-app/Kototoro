@@ -89,6 +89,9 @@ class ReaderTileManager(
 
     /** Anomaly probe counter; only the first few oversized requests carry a stack trace. */
     private val probeLogged = java.util.concurrent.atomic.AtomicLong()
+
+    /** Cumulative evictions, reported as telemetry: churn means re-decode and re-upload. */
+    private val evictionCount = java.util.concurrent.atomic.AtomicLong()
     override fun addListener(listener: Listener) {
         synchronized(listenersLock) { listeners.add(listener) }
     }
@@ -335,6 +338,9 @@ class ReaderTileManager(
         }
 
         val evictedSet = evicted.toHashSet()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            Trace.setCounter("Reader.TileEvictions", evictionCount.addAndGet(evictedSet.size.toLong()))
+        }
         val releasedPayloads = ArrayList<Any>()
         mutableTiles.update { map ->
             for (key in evictedSet) {

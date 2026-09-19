@@ -51,8 +51,11 @@ class DecodeResidencyMetric : TraceMetric() {
             "Reader.TileResidentBytes",
             "Reader.TileResidentCount",
             "Reader.TileDecodeRequests",
+            "Reader.TileEvictions",
             "Reader.CachedAssetCount",
             "Reader.RegionSourceCount",
+            "Reader.DrawnTilesPerLayer",
+            "Reader.DrawnTileBytesPerLayer",
         )
         return names.flatMap { name ->
             val row = traceSession.query(
