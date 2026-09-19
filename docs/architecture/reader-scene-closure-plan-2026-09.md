@@ -268,6 +268,33 @@ CS-5   experiment flag 删除 / 隐藏
       先画 target 层，再只为"target 尚未驻留"的区域补画 base 层。该改动只减少绘制量、
       不触发任何重建，是纯收益；预期把每帧 139MB 的纹理上传压到约一半以内。
 
+### Telephoto 对照研究（2026-09-19，`me.saket.telephoto 0.19.0`）
+
+legacy 分页宿主在同样的 6000×9000 页面上不会出现纹理爆炸，因为它用的就是 Telephoto 的瓦片降采样器
+（仓库自己实现了三种 `SubSamplingImageSource` / `ImageRegionDecoder`：`NativeSubSamplingImageSource`、
+`ZipSubSamplingImageSource`、`RegionSubSamplingImageSource`，宿主侧用 `SubSamplingImage` +
+`rememberZoomableImageState`）。读上游源码后，它的做法与我们的场景瓦片路径有 5 处本质差异
+（源码：`sub-sampling-image/src/**`：`internal/tileGridGenerator.kt`、`internal/ImageCache.kt`、
+`RealSubSamplingImageState.kt`）：
+
+| # | Telephoto 的做法 | 我们当前的做法 | 造成的后果 |
+| :--- | :--- | :--- | :--- |
+| 1 | **一次预生成整个 LOD 阶梯**：`foreground[sampleSize]` 对所有可能的 sampleSize 预先算好（注释直言"避免缩放手势期间的分配"） | 每次沉降/重规划重建 grid（`coarsenOverDetailedTiles`、acquire 时按当时相机） | 网格标识随缩放变化 → 释放再解码，churn（实测 1.9k–26k 次解码） |
+| 2 | **层由当前缩放逐帧决定**：`currentSampleSize = calculateFor(scale).coerceAtMost(base)`，再无状态需要调和 | 层的 sampleSize 烘焙进 grid，之后只能靠重建去改 | 同上；且"该用哪一层"与"网格是什么"耦合 |
+| 3 | **驻留 = 可见集合**：`ImageCache` 只在视口变化时加载缺失瓦片、**卸载不在可见列表里的一切**并取消在飞任务，另有 `throttleLatest(100ms)` 防止缩放动画狂发解码；没有预算、没有 LRU、没有"可见永不驱逐"的逃生口 | `TileMemoryBudget` 四级保留 + VISIBLE 钉住 + 64MB 预算，且重建时批量释放 | 常驻 53 块/182–406MB，且预算被"可见豁免"绕过 |
+| 4 | **瓦片几何由层与视口推导**：`tileSize = imageSize × (sampleSize / baseSampleSize)`，并按"不超过视口一半"取整 → **每块瓦片解码后≈视口大小**，层越深块数越少（首层 2×2） | 固定 1024 逻辑像素瓦片 | level-0 时一块 = 1024²=4MB，6000×9000 页要 54 块，可见区就要 18–45 块 → 单帧 85–139MB 纹理 |
+| 5 | **base 层只作补缝**：`canDrawBaseTile = hasNoForeground \|\| hasGapsInForeground()`，前景层补齐后 base 不再绘制 | base 与 target 都画（第 12 条） | 多余上传 |
+
+**结论（对场景阅读器的启示，按收益排序）**：
+1. **瓦片几何改为"每块≈视口大小"**（第 4 条）：可见区从 18–45 块降到约 4–6 块、单帧纹理从 85–139MB
+   降到约 25–30MB。这是**单项收益最大**的改动，且是纯几何策略改动（`DecodePlanner.resolveTileDimension`
+   需要拿到视口尺寸与层）。
+2. **层由缩放逐帧推导 + 预生成阶梯**（第 1、2 条）：彻底消除重建/churn（本轮两次重建类实验的失败根因）。
+3. **驻留改为"可见集合"语义**（第 3 条）：去掉"VISIBLE 永不驱逐"的逃生口，让内存有界且可预测。
+4. **base 只作补缝**（第 5 条）。
+5. **可直接复用现成资产**：我们的 `SubSamplingImageSource` 系实现已经封好了 `ImageRegionDecoder`
+   的三种取流方式，场景管线可以复用它们，而不是各自维护 `AndroidRegionDecoderFactory`。
+
 ### CS-1B 分页场景转正（翻转默认开关）
 
 - **前置**：CS-1A + CS-2 + CS-3 全部完成。

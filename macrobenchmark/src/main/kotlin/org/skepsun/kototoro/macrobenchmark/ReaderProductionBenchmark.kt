@@ -188,6 +188,25 @@ class ReaderProductionBenchmark {
         defaultScale = 2.5f,
     )
 
+    /// Where the zoom cost cliff sits: 1.5x and 2x bracket the 2.5x case that blocks promotion.
+    @Test
+    fun pagedLargeZoom1_5SceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+        zoomMode = ZOOM_MODE_FIT_HEIGHT,
+        defaultScale = 1.5f,
+    )
+
+    @Test
+    fun pagedLargeZoom2_0SceneFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+        zoomMode = ZOOM_MODE_FIT_HEIGHT,
+        defaultScale = 2.0f,
+    )
+
     private fun measurePaged(
         backend: String,
         compilationMode: CompilationMode,

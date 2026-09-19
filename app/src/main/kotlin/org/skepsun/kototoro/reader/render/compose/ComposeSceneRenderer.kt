@@ -424,6 +424,38 @@ internal fun DrawScope.drawFrameNodes(
 )
 
 /**
+ * Logical page areas this layer can already paint for [node] right now.
+ *
+ * Used to keep the base layer from uploading tiles that a resident target tile paints over. The
+ * comparison is by logical rectangle rather than tile key, because the two layers carry different
+ * sample sizes in their keys while covering the same page area.
+ */
+private fun residentLatticeRects(
+    layer: ReaderImageAsset.TileLayer,
+    node: VisibleNode,
+    tileStore: TileStore,
+): Set<IntRect> {
+    val grid = layer.grid
+    if (grid.pageSize.width <= 0 || grid.pageSize.height <= 0) return emptySet()
+    if (node.sceneBounds.width <= 0f || node.sceneBounds.height <= 0f) return emptySet()
+    val scaleX = grid.pageSize.width.toFloat() / node.sceneBounds.width
+    val scaleY = grid.pageSize.height.toFloat() / node.sceneBounds.height
+    val visibleLogical = IntRect(
+        left = ((node.visibleRegion.left - node.sceneBounds.left) * scaleX).toInt()
+            .coerceIn(0, grid.pageSize.width),
+        top = ((node.visibleRegion.top - node.sceneBounds.top) * scaleY).toInt()
+            .coerceIn(0, grid.pageSize.height),
+        right = ceil((node.visibleRegion.right - node.sceneBounds.left) * scaleX).toInt()
+            .coerceIn(0, grid.pageSize.width),
+        bottom = ceil((node.visibleRegion.bottom - node.sceneBounds.top) * scaleY).toInt()
+            .coerceIn(0, grid.pageSize.height),
+    )
+    return grid.tilesIntersecting(visibleLogical)
+        .filter { tileStore.tile(it.key) != null }
+        .mapTo(HashSet()) { it.logicalRect }
+}
+
+/**
  * Draws a tiled page consisting of a base layer and an optional progressive target LOD layer.
  */
 private fun DrawScope.drawTileLayer(
@@ -440,6 +472,12 @@ private fun DrawScope.drawTileLayer(
     imageColorFilter: ColorFilter?,
     tileStore: TileStore,
     drawOverview: Boolean,
+    /**
+     * Lattice areas another layer already covers at a higher density. The base layer skips them: a
+     * resident target tile paints over the same area, so uploading the base tile underneath it is
+     * pure texture traffic (a magnified page measured 42 tiles, about 98MB, per frame).
+     */
+    skipLogicalRects: Set<IntRect> = emptySet(),
 ): Boolean {
     val grid = layer.grid
     val orientation = grid.geometry.orientationDegrees
@@ -491,6 +529,7 @@ private fun DrawScope.drawTileLayer(
         var drawnTiles = 0
         var drawnTileBytes = 0L
         for (spec in intersectingSpecs) {
+            if (spec.logicalRect in skipLogicalRects) continue
             val resident = tileStore.tile(spec.key) ?: continue
             val tileBitmap = (resident.payload as? Bitmap)?.asImageBitmap() ?: continue
             hasRenderedAnyContent = true
@@ -560,6 +599,11 @@ private fun DrawScope.drawTiledPage(
         imageColorFilter = imageColorFilter,
         tileStore = asset.tileStore,
         drawOverview = true,
+        // Computed before drawing: the base layer is painted first (its overview has to sit under
+        // everything), so what the target will cover has to be known up front.
+        skipLogicalRects = asset.target
+            ?.let { residentLatticeRects(it, node, asset.tileStore) }
+            ?: emptySet(),
     )
 
     val renderedTarget = asset.target?.let { target ->
