@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -102,6 +103,7 @@ import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
 import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
+import org.skepsun.kototoro.reader.image.RendererCapabilities
 import org.skepsun.kototoro.reader.render.compose.AnimatedDrawBridge
 import org.skepsun.kototoro.reader.render.compose.PageSeamPolicy
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
@@ -286,6 +288,9 @@ fun ComposeScenePagedReader(
 
     val transitionStyle = remember(pageAnimation) { resolveScenePageTransition(pageAnimation) }
     val pageCurlState = rememberComposeReaderPageCurlState()
+    // The renderer reports the limits it will actually draw within, once, from the canvas it draws
+    // into: the decode planner's policy ceiling is an upper bound, not a per-device measurement.
+    var rendererCapabilitiesReported by remember { mutableStateOf(false) }
     // Slot the in-flight page transition is anchored on: the slot the current drag started from,
     // or the nearest slot while idle. Cover keeps this page in place; curl folds it away.
     var transitionAnchorSlot by remember { mutableIntStateOf(initialPosition) }
@@ -1139,6 +1144,20 @@ fun ComposeScenePagedReader(
                 .drawWithContent {
                     // Header/decode geometry can change after the asset snapshot was published.
                     sceneRevision
+                    if (!rendererCapabilitiesReported) {
+                        val nativeCanvas = drawContext.canvas.nativeCanvas
+                        val maxWidth = nativeCanvas.maximumBitmapWidth
+                        val maxHeight = nativeCanvas.maximumBitmapHeight
+                        if (maxWidth > 0 && maxHeight > 0) {
+                            rendererCapabilitiesReported = true
+                            adapter.setRendererCapabilities(
+                                RendererCapabilities.Resolved(
+                                    maxDrawableWidthPx = maxWidth,
+                                    maxDrawableHeightPx = maxHeight,
+                                ),
+                            )
+                        }
+                    }
                     if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
                         val currentOffset = scrollState.offset
                         val vp = if (readingDirection.isHorizontal) {

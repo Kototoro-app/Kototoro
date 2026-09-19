@@ -126,6 +126,20 @@ class KototoroImagePipelineAdapter(
     @Volatile
     private var cameraScale: Float = 1f
 
+    /**
+     * Limits reported by the renderer that will draw these bitmaps.
+     *
+     * The policy ceiling is only an upper bound: without this the planner assumes it on every device,
+     * which is optimistic on hardware whose texture limit is lower. The host reports the real value
+     * from the canvas it draws into.
+     */
+    @Volatile
+    private var rendererCapabilities: RendererCapabilities = RendererCapabilities.Unknown
+
+    fun setRendererCapabilities(capabilities: RendererCapabilities) {
+        rendererCapabilities = capabilities
+    }
+
     /** Last zoom target width requested per page, so a repeated settle is not decoded again. */
     private val zoomReacquireTargets = ConcurrentHashMap<PageId, Int>()
     private val mutableAssets = MutableStateFlow<Map<PageId, ReaderImageAsset>>(emptyMap())
@@ -320,6 +334,7 @@ class KototoroImagePipelineAdapter(
                                     viewportWidth = vpSize.width.coerceAtLeast(100),
                                     viewportHeight = vpSize.height.coerceAtLeast(100),
                                     cameraScale = cameraScale,
+                                    capabilities = rendererCapabilities,
                                     format = if (bitmapConfig == Bitmap.Config.RGB_565) RasterFormat.RGB_565 else RasterFormat.ARGB_8888,
                                 )
                                 if (plan is DecodePlan.Tiled) {
@@ -610,6 +625,7 @@ class KototoroImagePipelineAdapter(
                 viewportWidth = vpSize.width.coerceAtLeast(100),
                 viewportHeight = vpSize.height.coerceAtLeast(100),
                 cameraScale = scale,
+                capabilities = rendererCapabilities,
                 currentLod = LodSpec(
                     level = ReaderLodPolicy.calculateLodLevel(asset.base.sampleSize),
                     sampleSize = asset.base.sampleSize,
@@ -702,6 +718,7 @@ class KototoroImagePipelineAdapter(
                 viewportWidth = vpSize.width.coerceAtLeast(100),
                 viewportHeight = vpSize.height.coerceAtLeast(100),
                 cameraScale = scale,
+                capabilities = rendererCapabilities,
                 currentLod = LodSpec(
                     level = ReaderLodPolicy.calculateLodLevel(asset.base.sampleSize),
                     sampleSize = asset.base.sampleSize,
