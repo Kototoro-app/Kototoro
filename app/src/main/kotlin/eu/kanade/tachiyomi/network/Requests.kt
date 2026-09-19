@@ -86,11 +86,28 @@ fun DELETE(
         .build()
 }
 
-// ---- OkHttpClient suspend extension functions (Aniyomi extensions-lib compat) ----
+// ---- OkHttpClient suspend extension functions (Aniyomi extensions-lib 16 compat) ----
 // These build the request AND execute it, returning a Response.
+//
+// Aniyomi's Requests.kt declares the executor twice: once for a String url and once for
+// an HttpUrl. Extensions link by JVM descriptor, so both must exist — an extension that
+// calls `get(url.toHttpUrl())` resolves RequestsKt.get$default(OkHttpClient, HttpUrl, …)
+// and dies with NoSuchMethodError when only the String overload is shipped (issue #538).
+//
+// Upstream executes through Call.awaitSuccess() while these use Call.await(): callers see
+// non-2xx responses as a Response instead of an HttpException. That divergence predates
+// this overload and is kept here so the shared Mihon/Aniyomi surface stays non-throwing.
 
 suspend fun OkHttpClient.get(
     url: String,
+    headers: Headers = DEFAULT_HEADERS,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Response {
+    return newCall(GET(url, headers, cache)).await()
+}
+
+suspend fun OkHttpClient.get(
+    url: HttpUrl,
     headers: Headers = DEFAULT_HEADERS,
     cache: CacheControl = DEFAULT_CACHE_CONTROL,
 ): Response {
