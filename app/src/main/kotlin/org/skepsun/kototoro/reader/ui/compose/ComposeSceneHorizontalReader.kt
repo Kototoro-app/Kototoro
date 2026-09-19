@@ -600,12 +600,13 @@ fun ComposeSceneHorizontalReader(
                 },
         ) {
             if (activeScene != null) {
+                val pageLabelFormat = stringResource(R.string.reader_page_label)
                 ComposeHorizontalSceneRenderer(
                     scene = activeScene,
                     scrollState = scrollState,
                     placeholderColor = Color.DarkGray,
                     pageLabelProvider = { pageId ->
-                        pageLookup(pageId)?.index?.let { "第 ${it + 1} 页" } ?: ""
+                        pageLookup(pageId)?.index?.let { pageLabelFormat.format(it + 1) } ?: ""
                     },
                     imageColorFilter = imageColorFilter,
                     readerAssetProvider = { id ->

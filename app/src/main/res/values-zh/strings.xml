@@ -1695,6 +1695,7 @@
     <string name="reader_translation_tools">翻译工具</string>
     <string name="reader_translation_status_compact">翻译%1$d/%2$d</string>
     <string name="reader_page_turning_mode">翻页模式</string>
+    <string name="reader_page_label">第 %1$d 页</string>
     <string name="reader_more_tab_reading">阅读</string>
     <string name="reader_more_tab_display">显示</string>
     <string name="reader_more_tab_page">页面</string>
