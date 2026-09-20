@@ -195,6 +195,39 @@ internal class ScenePagedTransitionHarness(
 
     fun swipeBackward() = gesture(listOf(0.2f, 0.8f))
 
+    /**
+     * Injects the turn and, if the reader state did not move, injects again — returning how many
+     * attempts it took. Retrying keeps a cell about the style's landing behaviour instead of about
+     * injection luck; the attempt count is logged so reliability stays measurable separately.
+     */
+    fun swipeForwardCommitting(maxAttempts: Int = 3): Int =
+        swipeCommitting("forward", maxAttempts) { swipeForward() }
+
+    fun swipeBackwardCommitting(maxAttempts: Int = 3): Int =
+        swipeCommitting("backward", maxAttempts) { swipeBackward() }
+
+    private fun swipeCommitting(direction: String, maxAttempts: Int, swipe: () -> Unit): Int {
+        val start = activePageIndex()
+        repeat(maxAttempts) { attempt ->
+            swipe()
+            val deadline = SystemClock.uptimeMillis() + 4_000
+            while (SystemClock.uptimeMillis() < deadline) {
+                if (activePageIndex() != start && activePageIndex() >= 0) {
+                    if (attempt > 0) {
+                        android.util.Log.w(
+                            "SceneMatrix",
+                            "injection needed ${attempt + 1} attempts to commit a $direction turn",
+                        )
+                    }
+                    return attempt + 1
+                }
+                SystemClock.sleep(50)
+            }
+            android.util.Log.w("SceneMatrix", "$direction swipe attempt ${attempt + 1} did not commit")
+        }
+        return maxAttempts
+    }
+
     /** Past the turn threshold, back to the origin, released without a fling. */
     fun cancelledDrag() = gesture(listOf(0.8f, 0.45f, 0.79f, 0.8f, 0.8f), stepsPerSegment = 6, stepMs = 25)
 

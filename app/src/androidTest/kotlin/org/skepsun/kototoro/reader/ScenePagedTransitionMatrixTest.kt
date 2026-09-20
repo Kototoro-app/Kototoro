@@ -100,7 +100,7 @@ class ScenePagedTransitionMatrixTest {
         ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
             host.launch()
             host.awaitActivePage(0, "$style initial state")
-            host.swipeForward()
+            host.swipeForwardCommitting()
             host.awaitActivePage(1, "$style forward turn")
             assertEquals("$style forward turn", 1, host.activePageIndex())
         }
@@ -111,7 +111,7 @@ class ScenePagedTransitionMatrixTest {
         ScenePagedTransitionHarness(pageAnimation = animation, initialPage = 1).use { host ->
             host.launch()
             host.awaitActivePage(1, "$style initial state")
-            host.swipeBackward()
+            host.swipeBackwardCommitting()
             host.awaitActivePage(0, "$style backward turn")
             assertEquals("$style backward turn", 0, host.activePageIndex())
         }
