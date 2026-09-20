@@ -27,7 +27,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.skepsun.kototoro.core.dev.IdleProbeActivity
 import org.skepsun.kototoro.core.model.LocalMangaSource
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
 import org.skepsun.kototoro.reader.ui.compose.ComposeReaderImagePipeline

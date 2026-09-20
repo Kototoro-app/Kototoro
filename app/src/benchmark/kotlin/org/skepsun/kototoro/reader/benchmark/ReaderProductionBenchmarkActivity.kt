@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.parsers.model.ContentSource

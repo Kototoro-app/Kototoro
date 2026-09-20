@@ -72,6 +72,7 @@ import org.skepsun.kototoro.reader.core.ReaderCameraSnapshot
 import org.skepsun.kototoro.reader.core.ReaderPrediction
 import org.skepsun.kototoro.reader.core.ReaderPredictionConfig
 import org.skepsun.kototoro.reader.core.ReaderViewport
+import org.skepsun.kototoro.reader.core.SceneResourceWindowRequest
 import org.skepsun.kototoro.reader.core.VerticalReaderScene
 import org.skepsun.kototoro.reader.core.ViewportMotion
 import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
@@ -172,7 +173,7 @@ fun ComposeSceneWebtoonReader(
         )
     }
 
-    val predictor = remember(isPreloadReductionEnabled) {
+    val resourceWindowPlanner = remember(isPreloadReductionEnabled) {
         val config = if (isPreloadReductionEnabled) {
             ReaderPredictionConfig(
                 staticAheadFraction = 1.0f,
@@ -286,7 +287,9 @@ fun ComposeSceneWebtoonReader(
         }
 
         // 2. Pixel-level scroll updates do not resubmit an unchanged resource window.
-        predictor.predictWindowIfChanged(currentScene, frame, motion)?.let {
+        resourceWindowPlanner.plan(
+            SceneResourceWindowRequest(scene = currentScene, frame = frame, motion = motion),
+        )?.let {
             adapter.updateResourceWindow(it)
         }
 
@@ -479,16 +482,21 @@ fun ComposeSceneWebtoonReader(
         }
     }
 
-    LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, hasAppliedInitialPosition) {
-        if (!hasAppliedInitialPosition || activeScene == null) return@LaunchedEffect
-        val position = requestedPage?.takeIf { it in pages.indices } ?: return@LaunchedEffect
+    /**
+     * The single programmatic page navigation entry: scrolls (or animates) to [position]'s
+     * page origin. Shared by the `requestedPage` prop effect and the viewport's accessibility
+     * actions (improvement plan §5.2: reuse the existing navigation entry).
+     */
+    fun navigateToPagePosition(position: Int, smooth: Boolean) {
+        val scene = activeScene ?: return
+        if (position !in pages.indices) return
         val page = pages[position]
-        val targetY = activeScene.resolvePageScrollPosition(PageId(page.readerKey)) ?: return@LaunchedEffect
+        val targetY = scene.resolvePageScrollPosition(PageId(page.readerKey)) ?: return
         webtoonNavigationJob?.cancel()
         webtoonNavigationJob = webtoonNavigationScope.launch {
-            val maxScroll = (activeScene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
+            val maxScroll = (scene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
             val clampedTargetY = targetY.coerceIn(0f, maxScroll)
-            if (requestedPageSmooth && isAnimationEnabled) {
+            if (smooth && isAnimationEnabled) {
                 var previousValue = scrollState.scrollY
                 animate(
                     initialValue = scrollState.scrollY,
@@ -499,9 +507,15 @@ fun ComposeSceneWebtoonReader(
                 }
             } else {
                 scrollState.snapTo(clampedTargetY)
-                updateResourceWindow(activeScene, clampedTargetY, ViewportMotion.Idle)
+                updateResourceWindow(scene, clampedTargetY, ViewportMotion.Idle)
             }
         }
+    }
+
+    LaunchedEffect(requestedPage, requestedPageSmooth, isAnimationEnabled, hasAppliedInitialPosition) {
+        if (!hasAppliedInitialPosition || activeScene == null) return@LaunchedEffect
+        val position = requestedPage?.takeIf { it in pages.indices } ?: return@LaunchedEffect
+        navigateToPagePosition(position, smooth = requestedPageSmooth)
     }
 
     var previousWebtoonPageTurnRequest by remember {
@@ -661,9 +675,52 @@ fun ComposeSceneWebtoonReader(
         }
     }
 
+    // Stable viewport semantics (improvement plan §5.2): the node describes the settled page
+    // window — never the per-frame scroll offset — and offers previous/next page (plus
+    // chapter, where supported) custom actions reusing [navigateToPagePosition] and
+    // [onPullChapter]. The first/last page simply does not offer the impossible action.
+    val settledPages = remember(lastReportedPages) {
+        lastReportedPages?.let { (lowerKey, upperKey, _) ->
+            val lowerIndex = pages.indexOfFirst { it.readerKey == lowerKey }
+            val upperIndex = pages.indexOfFirst { it.readerKey == upperKey }
+            if (lowerIndex >= 0 && upperIndex >= 0) SceneSettledPages(lowerIndex, upperIndex) else null
+        }
+    }
+
+    fun settledLowerIndex(): Int = lastReportedPages?.first?.let { key ->
+        pages.indexOfFirst { it.readerKey == key }
+    } ?: -1
+
+    fun settledUpperIndex(): Int = lastReportedPages?.second?.let { key ->
+        pages.indexOfFirst { it.readerKey == key }
+    } ?: -1
+
+    val viewportActions = SceneReaderViewportActions(
+        canPreviousPage = settledLowerIndex() > 0,
+        canNextPage = settledUpperIndex() in 0 until pages.lastIndex,
+        onPreviousPage = {
+            val lower = settledLowerIndex()
+            if (lower > 0) navigateToPagePosition(lower - 1, smooth = true)
+        },
+        onNextPage = {
+            val upper = settledUpperIndex()
+            if (upper in 0 until pages.lastIndex) navigateToPagePosition(upper + 1, smooth = true)
+        },
+        canPreviousChapter = canGoPreviousChapter,
+        canNextChapter = canGoNextChapter,
+        onPreviousChapter = { onPullChapter(-1) },
+        onNextChapter = { onPullChapter(1) },
+    )
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .sceneReaderViewportSemantics(
+                testTag = SceneReaderViewportSemantics.WEBTOON_VIEWPORT_TEST_TAG,
+                totalPages = pages.size,
+                settled = settledPages,
+                actions = viewportActions,
+            )
             .background(Color(readerBackgroundColor))
             .onSizeChanged { size ->
                 viewportWidthPx = size.width.toFloat()

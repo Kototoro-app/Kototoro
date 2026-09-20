@@ -65,7 +65,7 @@ import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderOcrMode
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.ui.config.ImageServerOptions
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderColorCorrectionControls
 import org.skepsun.kototoro.reader.ui.colorfilter.ReaderImageComparisonPreview

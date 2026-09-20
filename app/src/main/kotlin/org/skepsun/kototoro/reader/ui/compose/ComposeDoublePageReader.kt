@@ -59,7 +59,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 
 @OptIn(ExperimentalFoundationApi::class)

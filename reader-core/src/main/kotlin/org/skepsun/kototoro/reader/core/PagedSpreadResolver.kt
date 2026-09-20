@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.reader.core
 
 import kotlin.math.min
-import org.skepsun.kototoro.core.model.ZoomMode
 
 /**
  * Configuration governing page spread layout and pairing.

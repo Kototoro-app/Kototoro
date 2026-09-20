@@ -28,7 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import org.skepsun.kototoro.R
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.EInkRefreshColor
 import org.skepsun.kototoro.core.prefs.ReaderAnimation

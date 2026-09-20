@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import org.skepsun.kototoro.reader.core.PagedPanBoundsResolver
+import org.skepsun.kototoro.reader.core.PagedSceneResourceWindowStrategy
 import org.skepsun.kototoro.reader.core.PagedSlot
 import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import kotlinx.coroutines.Dispatchers
@@ -77,7 +78,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.SceneResourceWindowRequest
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderAnimation
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.core.FloatRect
@@ -91,10 +93,6 @@ import org.skepsun.kototoro.reader.core.PagedDragState
 import org.skepsun.kototoro.reader.core.PagedMotionSnapshot
 import org.skepsun.kototoro.reader.core.PagedSpreadConfig
 import org.skepsun.kototoro.reader.core.PagedTransitionResolver
-import org.skepsun.kototoro.reader.core.PrefetchPriority
-import org.skepsun.kototoro.reader.core.PrefetchReadiness
-import org.skepsun.kototoro.reader.core.PrefetchRequest
-import org.skepsun.kototoro.reader.core.ReaderResourceWindow
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
 import org.skepsun.kototoro.reader.core.SpreadBehavior
@@ -285,6 +283,13 @@ fun ComposeScenePagedReader(
     var hasAppliedInitialPosition by remember { mutableStateOf(false) }
     var sceneRevision by remember { mutableLongStateOf(0L) }
     val retainedAssets by adapter.assets.collectAsStateWithLifecycle()
+
+    // Resource needs flow through the planner seam (improvement plan §8.1): the host no
+    // longer hand-rolls the prefetch request list. Lookahead narrows when the user enabled
+    // preload reduction (battery/data saver).
+    val resourceWindowPlanner = remember(isPreloadReductionEnabled) {
+        PagedSceneResourceWindowStrategy(lookaheadSlots = if (isPreloadReductionEnabled) 1 else 2)
+    }
 
     val transitionStyle = remember(pageAnimation) { resolveScenePageTransition(pageAnimation) }
     val pageCurlState = rememberComposeReaderPageCurlState()
@@ -494,11 +499,7 @@ fun ComposeScenePagedReader(
         if (activeId != null) {
             statusPageId = activeId
         }
-        val lowerId = progress.lowerPageId
-        val upperId = progress.upperPageId
 
-        val activeSlotIndex = (currentOffset / pe).roundToInt().coerceIn(0, (currentScene.slotCount - 1).coerceAtLeast(0))
-        val requests = mutableListOf<PrefetchRequest>()
         val transitionMotion = resolveSceneTransitionMotion(
             currentOffset = currentOffset,
             primaryExtentPx = pe,
@@ -507,45 +508,21 @@ fun ComposeScenePagedReader(
         )
         val coverPinnedSlot = resolveActiveSceneCoverPinnedSlot(transitionStyle, transitionMotion)
 
-        // 1. Current slot pages: IMMEDIATE presentation
-        val activeSlot = currentScene.allSlots.getOrNull(activeSlotIndex)
-        activeSlot?.pageIds?.forEach { id ->
-            requests.add(PrefetchRequest(id, PrefetchPriority.IMMEDIATE, PrefetchReadiness.PRESENTATION_READY))
-        }
-        coverPinnedSlot?.let { currentScene.allSlots.getOrNull(it) }?.pageIds?.forEach { id ->
-            if (requests.none { it.pageId == id }) {
-                requests.add(PrefetchRequest(id, PrefetchPriority.IMMEDIATE, PrefetchReadiness.PRESENTATION_READY))
-            }
-        }
-
-        // 2. Additional visible nodes in frame: HIGH presentation
-        frame.visibleNodes.forEach { node ->
-            if (requests.none { it.pageId == node.pageId }) {
-                requests.add(PrefetchRequest(node.pageId, PrefetchPriority.HIGH, PrefetchReadiness.PRESENTATION_READY))
-            }
-        }
-
-        // 3. Lookahead slots: SOURCE_READY prefetch
-        val lookaheadSlots = if (isPreloadReductionEnabled) 1 else 2
-        for (step in 1..lookaheadSlots) {
-            currentScene.allSlots.getOrNull(activeSlotIndex - step)?.pageIds?.forEach { id ->
-                if (requests.none { it.pageId == id }) {
-                    requests.add(PrefetchRequest(id, PrefetchPriority.MEDIUM, PrefetchReadiness.SOURCE_READY))
-                }
-            }
-            currentScene.allSlots.getOrNull(activeSlotIndex + step)?.pageIds?.forEach { id ->
-                if (requests.none { it.pageId == id }) {
-                    requests.add(PrefetchRequest(id, PrefetchPriority.HIGH, PrefetchReadiness.SOURCE_READY))
-                }
-            }
-        }
-        adapter.updateResourceWindow(ReaderResourceWindow(requests))
+        // Resource needs come from the planner seam (improvement plan §8.1): active slot +
+        // transition-pinned slot are IMMEDIATE, remaining visible pages HIGH, slot lookahead
+        // prefetched. The strategy never returns null, so every call submits a window.
+        resourceWindowPlanner.plan(
+            SceneResourceWindowRequest(
+                scene = currentScene,
+                frame = frame,
+                pinnedSlotIndex = coverPinnedSlot,
+            ),
+        )?.let { adapter.updateResourceWindow(it) }
 
         // 4. For visible Tiled pages, request intersecting lattice tiles.
         // The screen viewport is the bound: a neighbour slot rendered at scale 1 would otherwise
         // report its whole page as visible and pin a page of level-zero tiles.
-        val contentNodes = currentScene.allSlots
-            .filter { it.bounds.intersects(vp.bounds) }
+        val contentNodes = currentScene.slotsIntersecting(vp.bounds)
             .flatMap { slot ->
                 val transform = resolveSlotTransform(slot.slotIndex)
                 slot.screenVisibleContentNodes(
@@ -729,6 +706,57 @@ fun ComposeScenePagedReader(
         }
     }
 
+    /**
+     * The single programmatic navigation entry: snaps (or animates) to [targetSlot] and
+     * restores the target slot's saved zoom on arrival. Shared by the `requestedPage` prop
+     * effect and the viewport's accessibility actions (improvement plan §5.2: reuse the
+     * existing navigation entry, no parallel accessibility-only page-turn logic).
+     */
+    fun navigateToSlot(targetSlot: Int, smooth: Boolean) {
+        val currentScene = scene ?: return
+        if (primaryExtent <= 0f || targetSlot < 0 || targetSlot >= currentScene.slotCount) return
+        val targetOffset = (targetSlot * primaryExtent).coerceIn(0f, scrollState.maxOffset)
+        saveSlotZoom(zoomedSlotIndex, canvasScale, canvasOffsetX, canvasOffsetY)
+        val updateToTargetSlot = {
+            val saved = getSlotZoom(targetSlot)
+            if (saved != null) {
+                val (panX, panY) = getSlotPanRanges(targetSlot, saved.scale)
+                canvasScale = saved.scale
+                canvasOffsetX = saved.offsetX.coerceIn(panX)
+                canvasOffsetY = saved.offsetY.coerceIn(panY)
+            } else {
+                val (initX, initY) = resolveSlotInitialOffsets(targetSlot)
+                canvasScale = 1f
+                canvasOffsetX = initX
+                canvasOffsetY = initY
+            }
+            zoomedSlotIndex = targetSlot
+        }
+        if (smooth && shouldAnimate) {
+            snapAnimationJob?.cancel()
+            snapAnimationJob = coroutineScope.launch {
+                scrollState.isFlinging = true
+                try {
+                    animate(
+                        initialValue = scrollState.offset,
+                        targetValue = targetOffset,
+                        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+                    ) { value, _ ->
+                        scrollState.snapTo(value)
+                        updateResourceWindow(currentScene, value)
+                    }
+                    updateToTargetSlot()
+                } finally {
+                    scrollState.isFlinging = false
+                }
+            }
+        } else {
+            scrollState.snapTo(targetOffset)
+            updateResourceWindow(currentScene, targetOffset)
+            updateToTargetSlot()
+        }
+    }
+
     // Programmatic page request
     var previousRequestedPage by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(requestedPage, scene) {
@@ -738,46 +766,7 @@ fun ComposeScenePagedReader(
             if (targetPage != null) {
                 val targetSlot = scene.slotIndexOf(PageId(targetPage.readerKey))
                 if (targetSlot >= 0) {
-                    val targetOffset = (targetSlot * primaryExtent).coerceIn(0f, scrollState.maxOffset)
-                    saveSlotZoom(zoomedSlotIndex, canvasScale, canvasOffsetX, canvasOffsetY)
-                    val updateToTargetSlot = {
-                        val saved = getSlotZoom(targetSlot)
-                        if (saved != null) {
-                            val (panX, panY) = getSlotPanRanges(targetSlot, saved.scale)
-                            canvasScale = saved.scale
-                            canvasOffsetX = saved.offsetX.coerceIn(panX)
-                            canvasOffsetY = saved.offsetY.coerceIn(panY)
-                        } else {
-                            val (initX, initY) = resolveSlotInitialOffsets(targetSlot)
-                            canvasScale = 1f
-                            canvasOffsetX = initX
-                            canvasOffsetY = initY
-                        }
-                        zoomedSlotIndex = targetSlot
-                    }
-                    if (requestedPageSmooth && shouldAnimate) {
-                        snapAnimationJob?.cancel()
-                        snapAnimationJob = coroutineScope.launch {
-                            scrollState.isFlinging = true
-                            try {
-                                animate(
-                                    initialValue = scrollState.offset,
-                                    targetValue = targetOffset,
-                                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-                                ) { value, _ ->
-                                    scrollState.snapTo(value)
-                                    updateResourceWindow(scene, value)
-                                }
-                                updateToTargetSlot()
-                            } finally {
-                                scrollState.isFlinging = false
-                            }
-                        }
-                    } else {
-                        scrollState.snapTo(targetOffset)
-                        updateResourceWindow(scene, targetOffset)
-                        updateToTargetSlot()
-                    }
+                    navigateToSlot(targetSlot, smooth = requestedPageSmooth)
                 }
             }
         }
@@ -1148,9 +1137,48 @@ fun ComposeScenePagedReader(
                 }
             },
     ) {
+        // Stable viewport semantics (improvement plan §5.2): the node describes the settled
+        // page window — never the per-frame offset — and offers previous/next page (plus
+        // chapter, where supported) custom actions reusing [navigateToSlot] and
+        // [onPullChapter]. First/last pages simply do not offer the impossible action.
+        val settledPages = remember(lastReportedPages) {
+            lastReportedPages?.let { (lowerKey, upperKey, _) ->
+                val lowerIndex = pages.indexOfFirst { it.readerKey == lowerKey }
+                val upperIndex = pages.indexOfFirst { it.readerKey == upperKey }
+                if (lowerIndex >= 0 && upperIndex >= 0) SceneSettledPages(lowerIndex, upperIndex) else null
+            }
+        }
+
+        fun settledActiveSlot(): Int = lastReportedPages?.third?.let { key ->
+            scene?.slotIndexOf(PageId(key))
+        } ?: -1
+
+        val viewportActions = SceneReaderViewportActions(
+            canPreviousPage = settledActiveSlot() > 0,
+            canNextPage = scene != null && settledActiveSlot() in 0 until (scene.slotCount - 1),
+            onPreviousPage = {
+                val slot = settledActiveSlot()
+                if (slot > 0) navigateToSlot(slot - 1, smooth = true)
+            },
+            onNextPage = {
+                val slot = settledActiveSlot()
+                if (slot in 0 until ((scene?.slotCount ?: 0) - 1)) navigateToSlot(slot + 1, smooth = true)
+            },
+            canPreviousChapter = canGoPreviousChapter,
+            canNextChapter = canGoNextChapter,
+            onPreviousChapter = { onPullChapter(-1) },
+            onNextChapter = { onPullChapter(1) },
+        )
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .sceneReaderViewportSemantics(
+                    testTag = SceneReaderViewportSemantics.PAGED_VIEWPORT_TEST_TAG,
+                    totalPages = pages.size,
+                    settled = settledPages,
+                    actions = viewportActions,
+                )
                 .graphicsLayer {
                     alpha = if (hasAppliedInitialPosition) 1f else 0f
                 }
@@ -1206,13 +1234,11 @@ fun ComposeScenePagedReader(
 
                         // Slots are drawn back to front so the cover and curl layering reads correctly.
                         // The slide style resolves zIndex 0 everywhere, which keeps plain slot order.
+                        // The candidate set comes from the scene's O(1) range location on the fixed
+                        // slot stride, so long chapters no longer pay a full linear scan per frame.
                         val coverPinnedSlot = resolveActiveSceneCoverPinnedSlot(transitionStyle, motion)
                         val coverInFlight = coverPinnedSlot != null
-                        val drawableSlots = scene.allSlots
-                            .filter { slot ->
-                                val intersect = slot.bounds.intersectionOrNull(vp.bounds)
-                                intersect != null && intersect.width > 0f && intersect.height > 0f
-                            }
+                        val drawableSlots = scene.slotsIntersecting(vp.bounds)
                             .map { slot ->
                                 slot to resolveSceneSlotTransition(
                                     slotIndex = slot.slotIndex,
@@ -1434,69 +1460,68 @@ fun ComposeScenePagedReader(
                     ReaderViewport(FloatRect.fromLtwh(0f, currentOffset, viewportWidthPx, viewportHeightPx))
                 }
                 val items = mutableListOf<Triple<PageId, Float, Float>>()
-                for (slot in scene.allSlots) {
-                    val slotIntersect = slot.bounds.intersectionOrNull(vp.bounds)
-                    if (slotIntersect != null && slotIntersect.width > 0f && slotIntersect.height > 0f) {
-                        val slotIndex = slot.slotIndex
-                        val (baseScreenX, baseScreenY) = when (readingDirection) {
-                            SceneReadingDirection.LEFT_TO_RIGHT -> (slotIndex * viewportWidthPx - currentOffset) to 0f
-                            SceneReadingDirection.RIGHT_TO_LEFT -> (currentOffset - slotIndex * viewportWidthPx) to 0f
-                            SceneReadingDirection.TOP_TO_BOTTOM -> 0f to (slotIndex * viewportHeightPx - currentOffset)
+                // The scene's range query bounds the loop to the visible window: long chapters
+                // previously re-scanned every slot on each tracked offset change.
+                for (slot in scene.slotsIntersecting(vp.bounds)) {
+                    val slotIndex = slot.slotIndex
+                    val (baseScreenX, baseScreenY) = when (readingDirection) {
+                        SceneReadingDirection.LEFT_TO_RIGHT -> (slotIndex * viewportWidthPx - currentOffset) to 0f
+                        SceneReadingDirection.RIGHT_TO_LEFT -> (currentOffset - slotIndex * viewportWidthPx) to 0f
+                        SceneReadingDirection.TOP_TO_BOTTOM -> 0f to (slotIndex * viewportHeightPx - currentOffset)
+                    }
+                    // Loading and error overlays follow the page while a cover or curl transition
+                    // moves it, so a slow page does not report progress from the wrong position.
+                    // The shift rule mirrors the draw-phase slot loop so the overlays stay glued
+                    // to the same edge as the page content.
+                    val loadingMotion = resolveSceneTransitionMotion(
+                        currentOffset = currentOffset,
+                        primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
+                        anchorSlot = transitionAnchorSlot,
+                        isScrollInProgress = scrollState.isScrollInProgress,
+                    )
+                    val loadingTransition = resolveSceneSlotTransition(
+                        slotIndex = slotIndex,
+                        motion = loadingMotion,
+                        style = transitionStyle,
+                        readingDirection = readingDirection,
+                    )
+                    val loadingTravel = loadingMotion.currentSlot - loadingMotion.settledSlot + loadingMotion.offsetFraction
+                    val loadingCoverInFlight = when (transitionStyle) {
+                        ScenePageTransition.COVER -> {
+                            loadingMotion.isScrollInProgress ||
+                                abs(loadingTravel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
                         }
-                        // Loading and error overlays follow the page while a cover or curl transition
-                        // moves it, so a slow page does not report progress from the wrong position.
-                        // The shift rule mirrors the draw-phase slot loop so the overlays stay glued
-                        // to the same edge as the page content.
-                        val loadingMotion = resolveSceneTransitionMotion(
-                            currentOffset = currentOffset,
-                            primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
-                            anchorSlot = transitionAnchorSlot,
-                            isScrollInProgress = scrollState.isScrollInProgress,
-                        )
-                        val loadingTransition = resolveSceneSlotTransition(
+                        else -> false
+                    }
+                    val loadingShiftPx = when (transitionStyle) {
+                        ScenePageTransition.SLIDE -> 0f
+                        ScenePageTransition.CURL -> loadingTransition.translationFactor *
+                            (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
+                        ScenePageTransition.COVER -> ScenePageTransitionRenderer.resolveSceneCoverPinShift(
                             slotIndex = slotIndex,
-                            motion = loadingMotion,
-                            style = transitionStyle,
-                            readingDirection = readingDirection,
+                            settledSlot = loadingMotion.settledSlot,
+                            travelFraction = loadingTravel,
+                            baseScreenOffset = if (readingDirection.isVertical) baseScreenY else baseScreenX,
+                            inFlight = loadingCoverInFlight,
                         )
-                        val loadingTravel = loadingMotion.currentSlot - loadingMotion.settledSlot + loadingMotion.offsetFraction
-                        val loadingCoverInFlight = when (transitionStyle) {
-                            ScenePageTransition.COVER -> {
-                                loadingMotion.isScrollInProgress ||
-                                    abs(loadingTravel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
-                            }
-                            else -> false
-                        }
-                        val loadingShiftPx = when (transitionStyle) {
-                            ScenePageTransition.SLIDE -> 0f
-                            ScenePageTransition.CURL -> loadingTransition.translationFactor *
-                                (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
-                            ScenePageTransition.COVER -> ScenePageTransitionRenderer.resolveSceneCoverPinShift(
-                                slotIndex = slotIndex,
-                                settledSlot = loadingMotion.settledSlot,
-                                travelFraction = loadingTravel,
-                                baseScreenOffset = if (readingDirection.isVertical) baseScreenY else baseScreenX,
-                                inFlight = loadingCoverInFlight,
-                            )
-                        }
-                        val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else loadingShiftPx
-                        val slotScreenY = baseScreenY + if (readingDirection.isVertical) loadingShiftPx else 0f
-                        val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
-                        val slotCenter = Offset(
-                            slotScreenX + viewportWidthPx / 2f,
-                            slotScreenY + viewportHeightPx / 2f,
-                        )
-                        for (placement in slot.placements) {
-                            if (retainedAssets[placement.pageId] == null) {
-                                val unscaledCenterX = slotScreenX + placement.boundsInSlot.left + placement.boundsInSlot.width / 2f
-                                val unscaledCenterY = slotScreenY + placement.boundsInSlot.top + placement.boundsInSlot.height / 2f
-                                val pageCenterX = slotCenter.x + (unscaledCenterX - slotCenter.x) * slotScale + slotPanX
-                                val pageCenterY = slotCenter.y + (unscaledCenterY - slotCenter.y) * slotScale + slotPanY
-                                if (pageCenterX in -viewportWidthPx..(viewportWidthPx * 2f) &&
-                                    pageCenterY in -viewportHeightPx..(viewportHeightPx * 2f)
-                                ) {
-                                    items.add(Triple(placement.pageId, pageCenterX, pageCenterY))
-                                }
+                    }
+                    val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else loadingShiftPx
+                    val slotScreenY = baseScreenY + if (readingDirection.isVertical) loadingShiftPx else 0f
+                    val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
+                    val slotCenter = Offset(
+                        slotScreenX + viewportWidthPx / 2f,
+                        slotScreenY + viewportHeightPx / 2f,
+                    )
+                    for (placement in slot.placements) {
+                        if (retainedAssets[placement.pageId] == null) {
+                            val unscaledCenterX = slotScreenX + placement.boundsInSlot.left + placement.boundsInSlot.width / 2f
+                            val unscaledCenterY = slotScreenY + placement.boundsInSlot.top + placement.boundsInSlot.height / 2f
+                            val pageCenterX = slotCenter.x + (unscaledCenterX - slotCenter.x) * slotScale + slotPanX
+                            val pageCenterY = slotCenter.y + (unscaledCenterY - slotCenter.y) * slotScale + slotPanY
+                            if (pageCenterX in -viewportWidthPx..(viewportWidthPx * 2f) &&
+                                pageCenterY in -viewportHeightPx..(viewportHeightPx * 2f)
+                            ) {
+                                items.add(Triple(placement.pageId, pageCenterX, pageCenterY))
                             }
                         }
                     }

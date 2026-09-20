@@ -22,12 +22,19 @@ data class ReaderPredictionConfig(
  *
  * Conforms to ADR 0002 Principle:
  * "ReaderCore owns semantics and prediction; ImagePipeline owns execution and resource scheduling."
+ *
+ * Doubles as the continuous-mode [SceneResourceWindowPlanner] strategy (improvement plan
+ * 2026-09 §8.1): [plan] delegates to [predictWindowIfChanged] including its
+ * suppress-unchanged-snapshot semantics.
  */
 class ReaderPrediction(
     private val config: ReaderPredictionConfig = ReaderPredictionConfig(),
-) {
+) : SceneResourceWindowPlanner {
 
     private var lastWindowKey: ResourceWindowKey? = null
+
+    override fun plan(request: SceneResourceWindowRequest): ReaderResourceWindow? =
+        predictWindowIfChanged(request.scene, request.frame, request.motion)
 
     /**
      * Returns a new resource window only when its page range, geometry revision, viewport size, or

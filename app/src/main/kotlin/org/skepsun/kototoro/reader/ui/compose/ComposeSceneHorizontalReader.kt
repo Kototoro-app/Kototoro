@@ -68,6 +68,7 @@ import org.skepsun.kototoro.reader.core.ReaderPrediction
 import org.skepsun.kototoro.reader.core.ReaderPredictionConfig
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.core.SceneResourceWindowRequest
 import org.skepsun.kototoro.reader.core.ViewportMotion
 import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
@@ -172,7 +173,7 @@ fun ComposeSceneHorizontalReader(
         )
     }
 
-    val predictor = remember(isPreloadReductionEnabled) {
+    val resourceWindowPlanner = remember(isPreloadReductionEnabled) {
         val config = if (isPreloadReductionEnabled) {
             ReaderPredictionConfig(
                 staticAheadFraction = 1.0f,
@@ -283,7 +284,9 @@ fun ComposeSceneHorizontalReader(
             }
         }
 
-        predictor.predictWindowIfChanged(currentScene, frame, motion)?.let {
+        resourceWindowPlanner.plan(
+            SceneResourceWindowRequest(scene = currentScene, frame = frame, motion = motion),
+        )?.let {
             adapter.updateResourceWindow(it)
         }
 
@@ -397,6 +400,41 @@ fun ComposeSceneHorizontalReader(
         }
     }
 
+    /**
+     * The single programmatic page navigation entry: scrolls (or animates) to [position]'s
+     * page origin. Shared by the `requestedPage` prop effect and the viewport's accessibility
+     * actions (improvement plan §5.2: reuse the existing navigation entry).
+     */
+    fun navigateToPagePosition(position: Int, smooth: Boolean) {
+        val scene = activeScene ?: return
+        if (viewportWidthPx <= 0f || position !in pages.indices) return
+        val targetPage = pages[position]
+        val targetOrigin = scene.resolveViewportOriginForPage(
+            pageId = PageId(targetPage.readerKey),
+            viewportExtent = viewportWidthPx,
+        ) ?: 0f
+        val clampedTarget = targetOrigin.coerceIn(0f, scrollState.maxOffset)
+        zoomAnimationJob?.cancel()
+        zoomAnimationJob = zoomAnimationScope.launch {
+            if (smooth && isAnimationEnabled) {
+                var previousValue = scrollState.offset
+                animate(
+                    initialValue = scrollState.offset,
+                    targetValue = clampedTarget,
+                ) { value, _ ->
+                    val delta = value - previousValue
+                    scrollState.snapTo(value)
+                    previousValue = value
+                    updateResourceWindow(scene, value, ViewportMotion(velocityX = delta * 60f, velocityY = 0f))
+                }
+                updateResourceWindow(scene, clampedTarget, ViewportMotion.Idle)
+            } else {
+                scrollState.snapTo(clampedTarget)
+                updateResourceWindow(scene, clampedTarget, ViewportMotion.Idle)
+            }
+        }
+    }
+
     // Programmatic page navigation
     var previousRequestedPage by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(requestedPage, activeScene) {
@@ -404,27 +442,7 @@ fun ComposeSceneHorizontalReader(
             previousRequestedPage = requestedPage
             val targetPage = pages.getOrNull(requestedPage)
             if (targetPage != null) {
-                val targetOrigin = activeScene.resolveViewportOriginForPage(
-                    pageId = PageId(targetPage.readerKey),
-                    viewportExtent = viewportWidthPx,
-                ) ?: 0f
-                val clampedTarget = targetOrigin.coerceIn(0f, scrollState.maxOffset)
-                if (requestedPageSmooth && isAnimationEnabled) {
-                    var previousValue = scrollState.offset
-                    animate(
-                        initialValue = scrollState.offset,
-                        targetValue = clampedTarget,
-                    ) { value, _ ->
-                        val delta = value - previousValue
-                        scrollState.snapTo(value)
-                        previousValue = value
-                        updateResourceWindow(activeScene, value, ViewportMotion(velocityX = delta * 60f, velocityY = 0f))
-                    }
-                    updateResourceWindow(activeScene, clampedTarget, ViewportMotion.Idle)
-                } else {
-                    scrollState.snapTo(clampedTarget)
-                    updateResourceWindow(activeScene, clampedTarget, ViewportMotion.Idle)
-                }
+                navigateToPagePosition(requestedPage!!, smooth = requestedPageSmooth)
             }
         }
     }
@@ -525,9 +543,52 @@ fun ComposeSceneHorizontalReader(
         }
     }
 
+    // Stable viewport semantics (improvement plan §5.2): the node describes the settled page
+    // window — never the per-frame scroll offset — and offers previous/next page (plus
+    // chapter, where supported) custom actions reusing [navigateToPagePosition] and
+    // [onPullChapter]. The first/last page simply does not offer the impossible action.
+    val settledPages = remember(lastReportedPages) {
+        lastReportedPages?.let { (lowerKey, upperKey, _) ->
+            val lowerIndex = pages.indexOfFirst { it.readerKey == lowerKey }
+            val upperIndex = pages.indexOfFirst { it.readerKey == upperKey }
+            if (lowerIndex >= 0 && upperIndex >= 0) SceneSettledPages(lowerIndex, upperIndex) else null
+        }
+    }
+
+    fun settledLowerIndex(): Int = lastReportedPages?.first?.let { key ->
+        pages.indexOfFirst { it.readerKey == key }
+    } ?: -1
+
+    fun settledUpperIndex(): Int = lastReportedPages?.second?.let { key ->
+        pages.indexOfFirst { it.readerKey == key }
+    } ?: -1
+
+    val viewportActions = SceneReaderViewportActions(
+        canPreviousPage = settledLowerIndex() > 0,
+        canNextPage = settledUpperIndex() in 0 until pages.lastIndex,
+        onPreviousPage = {
+            val lower = settledLowerIndex()
+            if (lower > 0) navigateToPagePosition(lower - 1, smooth = true)
+        },
+        onNextPage = {
+            val upper = settledUpperIndex()
+            if (upper in 0 until pages.lastIndex) navigateToPagePosition(upper + 1, smooth = true)
+        },
+        canPreviousChapter = canGoPreviousChapter,
+        canNextChapter = canGoNextChapter,
+        onPreviousChapter = { onPullChapter(-1) },
+        onNextChapter = { onPullChapter(1) },
+    )
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .sceneReaderViewportSemantics(
+                testTag = SceneReaderViewportSemantics.HORIZONTAL_VIEWPORT_TEST_TAG,
+                totalPages = pages.size,
+                settled = settledPages,
+                actions = viewportActions,
+            )
             .background(Color(readerBackgroundColor))
             .onSizeChanged { size ->
                 viewportWidthPx = size.width.toFloat()

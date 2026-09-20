@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.reader.core
 
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /**
  * High-performance pure-Kotlin Reader Scene for paged reading modes (Single Page, Double Page, RTL Manga).
@@ -13,6 +15,9 @@ import kotlin.math.abs
  * - Chapter isolation & wide page solo constraints.
  * - Direction-aware page placement (LTR, RTL, Vertical).
  * - Zero-CLS anchor compensation on geometry changes.
+ * - O(1) range location + O(k) candidate enumeration for viewport queries, built on the
+ *   fixed slot primary extent; exact intersection semantics are preserved (improvement
+ *   plan 2026-09 §6.1).
  */
 class PagedReaderScene(
     val viewportWidth: Int,
@@ -23,6 +28,20 @@ class PagedReaderScene(
 
     private val specs = ArrayList<PagedPageSpec>()
     private val slots = ArrayList<PagedSlot>()
+
+    /** PageId -> index in [specs]; first occurrence wins, matching the linear scan. */
+    private val pageIndexById = HashMap<PageId, Int>()
+
+    /** PageId -> slot index; first occurrence wins, matching the linear scan. */
+    private val slotIndexByPageId = HashMap<PageId, Int>()
+
+    /**
+     * True when every slot's primary-axis window starts at `index * primaryStride`.
+     * [PagedSpreadResolver] always lays slots out on the fixed viewport stride; the flag is
+     * re-verified on every rebuild so a future layout change degrades the range queries to
+     * a full linear scan instead of silently missing slots.
+     */
+    private var slotsOnUniformStride = true
 
     override val readingDirection: SceneReadingDirection get() = config.readingDirection
 
@@ -48,6 +67,10 @@ class PagedReaderScene(
         get() = slots.flatMap { slot ->
             slot.placements.map { PageGeometry(it.pageId, it.sceneBounds) }
         }
+
+    /** Primary-axis extent occupied by each slot: the fixed viewport stride. */
+    private val primaryStride: Float
+        get() = if (readingDirection.isHorizontal) viewportWidth.toFloat() else viewportHeight.toFloat()
 
     init {
         if (initialSpecs.isNotEmpty()) {
@@ -84,21 +107,42 @@ class PagedReaderScene(
                 config = config,
             ),
         )
+        slotsOnUniformStride = verifyUniformStride()
+        rebuildPageIndices()
     }
 
-    override fun indexOf(pageId: PageId): Int {
-        for (i in specs.indices) {
-            if (specs[i].pageId == pageId) return i
-        }
-        return -1
-    }
-
-    fun slotIndexOf(pageId: PageId): Int {
+    /**
+     * Verifies the layout invariant the O(1) range queries rely on: slot i's primary window
+     * starts at `i * primaryStride`. The tolerance only absorbs float accumulation drift in
+     * pathologically long scenes; real layouts are exact.
+     */
+    private fun verifyUniformStride(): Boolean {
+        if (slots.isEmpty()) return true
+        val stride = primaryStride
+        if (stride <= 0f) return false
+        val isHorizontal = readingDirection.isHorizontal
+        val tolerance = minOf(0.5f, stride * 0.05f)
         for (i in slots.indices) {
-            if (slots[i].containsPage(pageId)) return i
+            val start = if (isHorizontal) slots[i].bounds.left else slots[i].bounds.top
+            if (abs(start - i * stride) > tolerance) return false
         }
-        return -1
+        return true
     }
+
+    private fun rebuildPageIndices() {
+        pageIndexById.clear()
+        specs.forEachIndexed { index, spec -> pageIndexById.putIfAbsent(spec.pageId, index) }
+        slotIndexByPageId.clear()
+        for (slotIndex in slots.indices) {
+            for (placement in slots[slotIndex].placements) {
+                slotIndexByPageId.putIfAbsent(placement.pageId, slotIndex)
+            }
+        }
+    }
+
+    override fun indexOf(pageId: PageId): Int = pageIndexById[pageId] ?: -1
+
+    fun slotIndexOf(pageId: PageId): Int = slotIndexByPageId[pageId] ?: -1
 
     override fun resolvePageScrollPosition(pageId: PageId): Float? {
         val slotIndex = slotIndexOf(pageId)
@@ -195,6 +239,52 @@ class PagedReaderScene(
         )
     }
 
+    /**
+     * Base candidate range computation shared by draw, transition-fixed pages and resource
+     * prefetch (improvement plan §6.1): O(1) index arithmetic on the fixed slot primary
+     * extent. The returned range is a conservative superset — every slot whose bounds
+     * positively intersect [bounds] in both axes lies inside it — and consumers keep their
+     * own exact intersection judgment.
+     *
+     * If the layout ever stops being uniformly strided, the range degrades to the full slot
+     * span (a linear scan, i.e. the pre-optimization behaviour) rather than missing slots.
+     */
+    fun slotIndexRangeFor(bounds: FloatRect): IntRange {
+        val count = slots.size
+        if (count == 0) return IntRange.EMPTY
+        if (!slotsOnUniformStride) return 0 until count
+        val stride = primaryStride
+        if (stride <= 0f) return IntRange.EMPTY
+        val isHorizontal = readingDirection.isHorizontal
+        val viewportMin = if (isHorizontal) bounds.left else bounds.top
+        val viewportMax = if (isHorizontal) bounds.right else bounds.bottom
+        // One stride of low margin absorbs the verified layout tolerance; the high end needs
+        // none because slot extents are exactly the stride.
+        val first = floor(viewportMin / stride).toInt() - 1
+        val last = ceil(viewportMax / stride).toInt()
+        val low = first.coerceIn(0, count - 1)
+        val high = last.coerceIn(0, count - 1)
+        return if (low <= high) low..high else IntRange.EMPTY
+    }
+
+    /**
+     * Slots whose bounds positively intersect [bounds] (both axes, non-degenerate area),
+     * in slot order — the draw-phase visible set. O(k) in the number of intersecting slots;
+     * the exact geometric judgment is kept rather than assuming a two-page window.
+     */
+    fun slotsIntersecting(bounds: FloatRect): List<PagedSlot> {
+        if (slots.isEmpty()) return emptyList()
+        val result = ArrayList<PagedSlot>(2)
+        for (i in slotIndexRangeFor(bounds)) {
+            val slot = slots[i]
+            val intersect = slot.bounds.intersectionOrNull(bounds)
+            if (intersect != null && intersect.width > 0f && intersect.height > 0f) {
+                result.add(slot)
+            }
+        }
+        return result
+    }
+
     override fun resolveActivePageId(viewport: ReaderViewport): PageId? {
         val activeSlot = resolveActiveSlot(viewport) ?: return null
         return activeSlot.progressAnchorPageId
@@ -209,10 +299,40 @@ class PagedReaderScene(
             viewport.bounds.top + viewport.bounds.height / 2f
         }
 
+        if (!slotsOnUniformStride) {
+            var closestSlot: PagedSlot? = null
+            var minDistance = Float.MAX_VALUE
+
+            for (slot in slots) {
+                val slotCenter = if (isHorizontal) {
+                    slot.bounds.left + slot.bounds.width / 2f
+                } else {
+                    slot.bounds.top + slot.bounds.height / 2f
+                }
+                val distance = abs(vpCenter - slotCenter)
+                if (distance < minDistance) {
+                    minDistance = distance
+                    closestSlot = slot
+                }
+            }
+            return closestSlot
+        }
+
+        // Nearest-center semantics with O(1) index arithmetic: the distance to slot centers
+        // is V-shaped in the slot index, so the minimizer is one of the two slots bracketing
+        // vpCenter / stride - 0.5. Distances are still measured from the actual slot bounds,
+        // and ascending iteration with a strict less-than keeps the tie rule (lower slot
+        // wins) identical to the linear scan.
+        val stride = primaryStride
+        val lower = floor(vpCenter / stride - 0.5f).toInt()
+
         var closestSlot: PagedSlot? = null
         var minDistance = Float.MAX_VALUE
-
-        for (slot in slots) {
+        var bestIndex = -1
+        for (rawIndex in lower..lower + 1) {
+            val index = rawIndex.coerceIn(0, slots.size - 1)
+            if (index == bestIndex) continue
+            val slot = slots[index]
             val slotCenter = if (isHorizontal) {
                 slot.bounds.left + slot.bounds.width / 2f
             } else {
@@ -222,6 +342,7 @@ class PagedReaderScene(
             if (distance < minDistance) {
                 minDistance = distance
                 closestSlot = slot
+                bestIndex = index
             }
         }
         return closestSlot
@@ -247,7 +368,8 @@ class PagedReaderScene(
 
         val isHorizontal = readingDirection.isHorizontal
 
-        for (slot in slots) {
+        for (i in slotIndexRangeFor(viewport.bounds)) {
+            val slot = slots[i]
             val slotIntersect = slot.bounds.intersectionOrNull(viewport.bounds)
             if (slotIntersect != null && slotIntersect.width > 0f && slotIntersect.height > 0f) {
                 val area = slotIntersect.width * slotIntersect.height

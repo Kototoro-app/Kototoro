@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.prefs.ReaderBackground
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator

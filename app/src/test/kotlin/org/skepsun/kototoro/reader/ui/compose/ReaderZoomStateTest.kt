@@ -4,7 +4,7 @@ import androidx.compose.ui.geometry.Size
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 
 class ReaderZoomStateTest {
 

@@ -13,16 +13,16 @@ import org.skepsun.kototoro.reader.image.TileStore
 class TileDrawModifierNodeTest {
 
     private class FakeTileStore : TileStore {
-        val listeners = mutableSetOf<ReaderTileManager.Listener>()
+        val listeners = mutableSetOf<TileStore.Listener>()
         val tiles = mutableMapOf<TileKey, ReaderTile>()
 
         override fun tile(key: TileKey): ReaderTile? = tiles[key]
 
-        override fun addListener(listener: ReaderTileManager.Listener) {
+        override fun addListener(listener: TileStore.Listener) {
             listeners.add(listener)
         }
 
-        override fun removeListener(listener: ReaderTileManager.Listener) {
+        override fun removeListener(listener: TileStore.Listener) {
             listeners.remove(listener)
         }
     }

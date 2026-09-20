@@ -1,7 +1,7 @@
 package org.skepsun.kototoro.reader.ui.compose
 
 import androidx.compose.runtime.saveable.listSaver
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import kotlin.math.abs
 import kotlin.math.min
 

@@ -21,7 +21,7 @@ import org.skepsun.kototoro.reader.image.TileStore
  */
 class TileDrawModifierNode(
     var tileStore: TileStore?,
-) : Modifier.Node(), DrawModifierNode, ReaderTileManager.Listener {
+) : Modifier.Node(), DrawModifierNode, TileStore.Listener {
 
     override fun onAttach() {
         tileStore?.addListener(this)

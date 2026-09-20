@@ -59,7 +59,7 @@ class ReaderTileManagerTest {
         }
     }
 
-    private class RecordingListener : ReaderTileManager.Listener {
+    private class RecordingListener : TileStore.Listener {
         val ready = mutableListOf<ReaderTile>()
         val dropped = mutableListOf<TileKey>()
         val sessionFailures = mutableListOf<Pair<PageId, Throwable>>()

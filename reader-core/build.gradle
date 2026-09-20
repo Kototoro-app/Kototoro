@@ -1,0 +1,47 @@
+// Pure Kotlin/JVM module extracted from the app per improvement plan 2026-09 §8.2 / ADR 0002 I1.
+//
+// Contents: reader geometry, scenes, camera/progress snapshots, drag state, pure transition
+// semantics and the resource-window planner contract. The module intentionally has ZERO
+// Android/Compose/renderer/application-layer dependencies — the compile-time classpath IS
+// the I1 boundary (the text-level ReaderCoreIsolationGuardTest keeps a second line of
+// defense on top of it, improvement plan §6.2).
+//
+// JVM 模块化不等于 KMP commonMain 兼容（improvement plan §8.2）：不添加 multiplatform
+// 结构，也不为模块化创建空壳接口或转发层。
+plugins {
+	id 'org.jetbrains.kotlin.jvm'
+}
+
+kotlin {
+	compilerOptions {
+		jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+		freeCompilerArgs.addAll(
+			'-opt-in=kotlin.ExperimentalStdlibApi',
+			'-opt-in=kotlin.contracts.ExperimentalContracts',
+			'-Xjspecify-annotations=strict',
+			'-Xannotation-default-target=first-only',
+		)
+	}
+}
+
+// Keep compileJava/compileKotlin on the same JVM target (KGP consistency check); the module
+// has no Java sources — this only silences the target pair. Java 11 bytecode matches :app.
+java {
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
+}
+
+dependencies {
+	implementation libs.kotlin.stdlib
+
+	// kotest-runner-junit5 provides the JUnit 5 platform + jupiter api but NOT the jupiter
+	// engine (the app gets it transitively from other test deps). Declare it explicitly so
+	// the platform can discover the module's Jupiter tests; 5.8.2 aligns with kotest's
+	// junit-platform 1.8.2 / jupiter-api 5.8.2 pair.
+	testImplementation libs.kotest.runner.junit5
+	testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
+}
+
+tasks.withType(Test).configureEach {
+	useJUnitPlatform()
+}

@@ -34,7 +34,7 @@ import me.saket.telephoto.zoomable.EnabledZoomGestures
 import me.saket.telephoto.zoomable.rememberZoomableState
 import me.saket.telephoto.zoomable.zoomable
 import kotlinx.coroutines.flow.distinctUntilChanged
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.util.ext.isContentZipUri
 import org.skepsun.kototoro.core.util.ext.isZipUri
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit

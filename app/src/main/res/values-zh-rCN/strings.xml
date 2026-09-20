@@ -186,6 +186,12 @@
     <string name="reader_translation_status_compact">翻译%1$d/%2$d</string>
     <string name="reader_page_turning_mode">翻页模式</string>
     <string name="reader_page_label">第 %1$d 页</string>
+    <string name="reader_a11y_page_position">第 %1$d 页，共 %2$d 页</string>
+    <string name="reader_a11y_page_position_spread">第 %1$d–%2$d 页，共 %3$d 页</string>
+    <string name="reader_a11y_previous_page">上一页</string>
+    <string name="reader_a11y_next_page">下一页</string>
+    <string name="reader_a11y_previous_chapter">上一章</string>
+    <string name="reader_a11y_next_chapter">下一章</string>
     <string name="reader_more_tab_reading">阅读</string>
     <string name="reader_more_tab_display">显示</string>
     <string name="reader_more_tab_page">页面</string>

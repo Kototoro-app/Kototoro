@@ -27,7 +27,7 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.extensions.DEFAULT_JAR_PRIORITY_ORDER_VALUE
 import org.skepsun.kototoro.core.github.AppUpdateSource
 import org.skepsun.kototoro.core.model.SourceNsfwOverrides
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.network.DoHProvider
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMaxPercent
 import org.skepsun.kototoro.core.ui.compose.PanoramaAnimationSpeedMinPercent

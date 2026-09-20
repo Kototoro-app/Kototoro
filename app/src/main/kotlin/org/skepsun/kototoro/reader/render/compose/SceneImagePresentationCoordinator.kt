@@ -6,8 +6,8 @@ import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderCameraSnapshot
 import org.skepsun.kototoro.reader.core.ReaderFrame
-import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
 import org.skepsun.kototoro.reader.image.ReaderImageAsset
+import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 
 /**
  * Unified presentation coordinator responsible for translating [ReaderFrame] and camera viewport
@@ -28,7 +28,7 @@ object SceneImagePresentationCoordinator {
     fun coordinateVisibleTiles(
         frame: ReaderFrame,
         retainedAssets: Map<PageId, ReaderImageAsset>,
-        pipeline: KototoroImagePipelineAdapter,
+        pipeline: ReaderImagePipeline,
     ) {
         for (node in frame.visibleNodes) {
             val asset = retainedAssets[node.pageId]

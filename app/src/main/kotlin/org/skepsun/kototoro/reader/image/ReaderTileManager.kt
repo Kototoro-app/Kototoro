@@ -57,21 +57,7 @@ class ReaderTileManager(
     private val costOf: (payload: Any) -> Long,
     private val payloadReleaser: (payload: Any) -> Unit = {},
 ) : TileStore {
-    interface Listener {
-        /** A tile finished decoding and is now resident. */
-        fun onTileReady(tile: ReaderTile) {}
-
-        /** A resident tile left the working set (evicted or released); its payload was released. */
-        fun onTileDropped(key: TileKey) {}
-
-        /** Opening the region decode session for a page failed (reported once per failure). */
-        fun onSessionFailed(pageId: PageId, error: Throwable) {}
-
-        /** Decoding one tile failed; other tiles of the page may still succeed. */
-        fun onTileFailed(pageId: PageId, key: TileKey, error: Throwable) {}
-    }
-
-    private val listeners = ArrayList<Listener>()
+    private val listeners = ArrayList<TileStore.Listener>()
     private val listenersLock = Any()
 
     private val sessions = ConcurrentHashMap<PageId, Deferred<Result<TileDecodeSession>>>()
@@ -92,11 +78,11 @@ class ReaderTileManager(
 
     /** Cumulative evictions, reported as telemetry: churn means re-decode and re-upload. */
     private val evictionCount = java.util.concurrent.atomic.AtomicLong()
-    override fun addListener(listener: Listener) {
+    override fun addListener(listener: TileStore.Listener) {
         synchronized(listenersLock) { listeners.add(listener) }
     }
 
-    override fun removeListener(listener: Listener) {
+    override fun removeListener(listener: TileStore.Listener) {
         synchronized(listenersLock) { listeners.remove(listener) }
     }
 

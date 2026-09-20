@@ -107,7 +107,7 @@ class KototoroImagePipelineAdapter(
 
     val tileStore: TileStore get() = actualTileManager
 
-    fun requestTiles(pageId: PageId, visibleRegion: IntRect, lookaheadRegion: IntRect? = null) {
+    override fun requestTiles(pageId: PageId, visibleRegion: IntRect, lookaheadRegion: IntRect?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
             Trace.setCounter("Reader.CachedAssetCount", cachedAssets.size.toLong())
             Trace.setCounter("Reader.RegionSourceCount", regionSources.size.toLong())

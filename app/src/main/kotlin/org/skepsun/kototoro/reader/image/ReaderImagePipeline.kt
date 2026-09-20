@@ -2,6 +2,7 @@ package org.skepsun.kototoro.reader.image
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import org.skepsun.kototoro.reader.core.IntRect
 import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ReaderResourceWindow
 
@@ -48,6 +49,13 @@ interface ReaderImagePipeline {
     /** Retries a failed request explicitly, bypassing the source's failed/cached result. */
     suspend fun retryAsset(pageId: PageId): ReaderImageAsset?
 
+    /**
+     * Requests decode residency for the lattice tiles intersecting [visibleRegion] (image-space
+     * logical pixels). This is the tile path of the resource contract (improvement plan §8.1:
+     * the contract names the required region); implementations without tiled assets make it a
+     * no-op rather than dropping the method, so callers never branch on the pipeline kind.
+     */
+    fun requestTiles(pageId: PageId, visibleRegion: IntRect, lookaheadRegion: IntRect? = null)
 }
 
 sealed interface ReaderImageLoadState {

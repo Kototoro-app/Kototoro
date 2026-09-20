@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
-import org.skepsun.kototoro.core.model.ZoomMode
+import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.prefs.ReaderBackground
 import org.skepsun.kototoro.reader.core.FloatRect
 import org.skepsun.kototoro.reader.core.PageGeometryHint
