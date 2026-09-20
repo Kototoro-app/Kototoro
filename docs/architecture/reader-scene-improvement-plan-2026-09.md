@@ -788,6 +788,62 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   判定器对它们返回证据不足；④ 长章节组夹具仍缺（§4.2 余项）。
 - 关联：CS-7、§4.2.1（阈值与本次修订）、§4.3（样本验证与证据不足规则）、交付 12（归档基线）。
 
+#### 交付 14 — 阶段 B 余项（第一批）：翻页样式/生命周期矩阵定性 + 3 个新发现
+
+- 目的：§5.1 矩阵中「翻页样式（SLIDE/COVER/CURL）」与「生命周期（旋转/重建）」此前**零自动化证据**
+  （既有设备测试只覆盖缩放/平移归属、失败重试、viewport semantics）。
+- 本轮建立并验证了探针方法：真机探针宿主（`IdleProbeActivity`，需补 `configChanges` 与
+  `ReaderActivity` 一致，否则旋转会重建 Activity 并丢内容）+ 单手势 waypoint 事件注入 +
+  **状态通道（`onPagesChanged`）与播报通道（contentDescription）分开观察**。样式映射经实现核实：
+  `DEFAULT/NONE→SLIDE`、`ADVANCED→COVER`、`SIMULATION→CURL`。
+- 逐格结论（真机 ecd4369c；以 reader 自身状态为真相）：
+  | 维度 | 格 | 结论 |
+  | --- | --- | --- |
+  | 翻页样式 | 前进 | SLIDE 通过、COVER 通过、**CURL 不稳定（发现 3）** |
+  | 翻页样式 | 后退 | SLIDE / COVER / CURL 通过 |
+  | 翻页样式 | 拖动取消（越过阈值后回到起点释放） | 3 样式通过 |
+  | 翻页样式 | 动画被新输入打断 | 3 样式通过（落在合法页，无卡死） |
+  | 生命周期 | Activity 重建后按页身份恢复 | 通过 |
+  | 生命周期 | 旋转后仍可读、页合法 | 通过（内容仍绘制、状态合法） |
+  | 生命周期 | 旋转保持当前页 | **待修（发现 2）** |
+  | §5.2 | 播报跟随状态 | **待修（发现 1）** |
+- **发现 1（可复现，待修）**：手势翻页后 host 已通过 `onPagesChanged` 上报新的 settled 窗口
+  （诊断 `reportedLowerUpperActive=[1,1,1]`，即第 2 页），但 viewport 的 `contentDescription`
+  仍播报第 1 页 —— 三种样式都复现（手势后 1.5s 未更新）；且不稳定（某轮 SLIDE 在 15s 内追上、
+  CURL 15s 未追上）。违反 §5.2「状态更新跟随阅读语义变化」，TalkBack 用户会听到旧页码。
+  复现：探针宿主接 `onPagesChanged` 记录三元组 + 轮询 `contentDescription`，见 `SceneMatrix` 诊断日志；
+  ESR `tsk_8ea8dffe`。
+- **发现 2（待归因）**：viewport resize（旋转，探针补 `configChanges` 后走 resize 路径）把 reader
+  重置到第 1 页（诊断 `reportedLowerUpperActive=[0,0,0]`，页面仍在绘制、无空白）。探针未接
+  `requestedPage`（真实宿主用它在 resize 后重新锚定当前位置），因此需在真实 reader 入口确认
+  生产环境是否也丢页；ESR `tsk_8d1cbe98`。
+- **发现 3（待查）**：CURL 前进翻页在同一注入手势下 3 次运行仅 1 次翻页成功，而 SLIDE/COVER
+  从未失败 —— 需先区分「注入手势形状不适合 CURL」与「CURL 丢翻页」。ESR `tsk_8ea8dffe` 的相邻项
+  （另见交付记录末尾的未立任务说明）。
+- **测试基建教训**（本轮代价最大、后续必读）：
+  1. `Instrumentation.waitForIdleSync()` 在阅读器持续重绘时会**永久阻塞**（探针文件本就注记为
+     never-settling idle redraws）；手势后应固定 sleep + 轮询可观察状态。
+  2. 轮询循环里做无障碍根查询（`rootInActiveWindow`）同样会挂住整轮；`ActivityScenario.close()`
+     需有界（本轮改为独立线程 + 5s join）。
+  3. MIUI 会在测试期间 freeze instrumentation app（logcat `GreezeManager: freezeUid ...
+     INSTRUMENTATION_APP`），是长尾挂起的候选之一。
+  4. 结论：**这 3 个测试类本轮未入库** —— 断言逻辑已多次跑通，但设备侧 harness 仍会
+     单轮挂起/末位失败，入库会把不稳定测试带进仓库；先按上面三条稳定化，再随发现 1/2/3 一起交付。
+- 其余矩阵行定性（本轮未新增覆盖）：
+  | 行 | 现状 |
+  | --- | --- |
+  | 方向与排布（LTR/RTL/TTB、单双页、封面偏移、宽页独占、跨章阻断） | 分层已覆盖：设备侧 `ScenePagedGestureTest` 三方向 overflow→翻页交接；JVM `PagedSpreadResolverTest` / `PagedReaderSceneTest` / `HorizontalReaderSceneTest` / `VerticalReaderSceneTest` |
+  | 缩放归属（边界残余位移翻页、切页保留、回翻恢复、切模式取消旧手势） | 设备侧 `ScenePagedGestureTest` 11 用例（10 通过；1 个既有设备缺陷） |
+  | 分屏尺寸变化 | 未自动化：需 `wm size` 或真实分屏，`wm size` 在测试中断时会残留被改的显示配置，风险高于收益 |
+  | 后台进程死亡后恢复 | 域层已覆盖（`ProgressRestorationIntegrationTest`）；宿主级进程重建未自动化（同一 instrumentation 进程内无法真正杀进程） |
+  | 异步内容（冷加载 / tile 迟到 / 动图） | 失败重试已覆盖（`SceneReaderRecoveryTest`）；tile 迟到与动图仅 JVM 层（`ReaderTileManagerTest` 等） |
+  | 输入：触摸 / TalkBack 动作 | 已覆盖（`ScenePagedGestureTest` + `SceneReaderViewportSemanticsTest`） |
+  | 输入：DPAD / 音量键 | 未覆盖：键处理在 `ComposeReaderActivityScaffold` 及以上（音量键→翻页/滚动分数、TV 呈现的 `focusRequester`），探针宿主不含该层，需真实 reader 入口的集成测试 |
+  | 连续模式（webtoon/横向方向与章节边界） | JVM 层（`VerticalReaderSceneTest` / `HorizontalReaderSceneTest`）+ benchmark 生产旅程；宿主级设备测试未覆盖 |
+- 关联：§5.1、§5.2、CS-8。已知限制：本轮产出是**矩阵定性与 3 个发现**，不含新入库测试；
+  发现 1 已定位到宿主语义通道（`lastReportedPages` 是 Compose state，但 Box 上的
+  `sceneReaderViewportSemantics` 是否随重组重建、a11y 节点是否被跳过更新仍待查）。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— 计划中唯一完全未启动的阶段。

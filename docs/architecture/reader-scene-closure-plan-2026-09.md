@@ -754,7 +754,6 @@ run-to-run 漂移为几毫秒且跨设备状态不可比；继续压这一档需
     清洁与温度、`persist.security.adbinput`、trace 属主陷阱）。
 
 ### CS-8 语义矩阵与可测性
-
 - **证据（已有覆盖）**：设备侧已覆盖 LTR/RTL/TTB 溢出平移→翻页交接、`FIT_HEIGHT` / `KEEP_START` 切换后的
   手势归属重置、`ORIGINAL` 尺寸原生像素平移、双击缩放、翻页后 zoom 保留与回翻恢复
   （`app/src/androidTest/.../ScenePagedGestureTest.kt:49,52,55,58,64,70,73,76,181,264,392`）；
@@ -776,6 +775,16 @@ run-to-run 漂移为几毫秒且跨设备状态不可比；继续压这一档需
   同时补页面级 `testTag` 与阅读器级 `semantics`（页码/章节/自定义动作 上一页·下一页），
   并加一条经 Tag 驱动的 instrumentation 用例。
 - **规模**：M（矩阵偏验证成本）+ S（semantics/testTag）
+- **状态：部分完成（2026-09-20，改进计划交付 14）**【已验证】
+  - 已能逐格定性（矩阵表见改进计划 §10.1 交付 14）：翻页样式前进/后退/拖动取消/打断四类中，
+    除 CURL 前进不稳定外均通过；Activity 重建后按页身份恢复、旋转后仍可读且页合法通过。
+  - 新发现 2 个缺陷并已在设备上复现：① 手势翻页后 host 已上报新页，但 viewport 的
+    `contentDescription` 仍播报旧页（三种样式，违反「状态更新跟随阅读语义变化」）；
+    ② viewport resize（旋转）后 reader 重置到第 1 页（归因需真实 reader 入口的 `requestedPage` 接线）。
+    外加 1 个待查项：CURL 前进翻页在同一注入手势下不稳定。
+  - 设备侧 harness 仍会单轮挂起（`waitForIdleSync` 与轮询内无障碍根查询、MIUI freeze
+    instrumentation app），已记录稳定化要求；**本轮新增的 3 个测试类未入库**，
+    待稳定化后随上述缺陷一起交付。
 
 ### CS-9 资源窗口 / 预取策略统一
 
