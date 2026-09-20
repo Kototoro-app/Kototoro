@@ -204,6 +204,22 @@ internal class ScenePagedTransitionHarness(
         swipeBackward()
     }
 
+    /** A press/release that turns nothing; used to force one more frame. */
+    fun tapCenter() {
+        val width = if (widthPx.get() > 0) widthPx.get().toFloat() else 1080f
+        val y = (if (heightPx.get() > 0) heightPx.get() else 1920) / 2f
+        val x = width / 2f
+        val down = SystemClock.uptimeMillis()
+        val first = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0)
+        instrumentation.sendPointerSync(first)
+        first.recycle()
+        SystemClock.sleep(40)
+        val up = MotionEvent.obtain(down, down + 40, MotionEvent.ACTION_UP, x, y, 0)
+        instrumentation.sendPointerSync(up)
+        up.recycle()
+        SystemClock.sleep(120)
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------------------------
