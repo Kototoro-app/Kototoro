@@ -298,76 +298,62 @@ class ScenePageTransitionRendererTest {
     }
 
     @Test
-    fun `cover displacement is zero at rest`() {
-        // No travel, no finger on the page: the cover must not nudge any slot.
-        for (extent in listOf(0f, 1000f)) {
-            assertEquals(0f, ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = 0f, primaryExtentPx = extent), TOLERANCE)
-        }
+    fun `cover incoming slot follows the reading direction of the travel`() {
+        val settled = 3
+        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, 0.4f))
+        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, 0f))
+        assertEquals(2, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, -0.4f))
     }
 
     @Test
-    fun `cover pins the settled page during the hold phase`() {
-        // Within COVER_HOLD_FRACTION of travel the displacement cancels the scroll motion (the
-        // settled page's base is -travel * extent), so the page being left stays glued at the
-        // viewport (legacy cover "stays in place" trait) instead of sliding with the finger.
-        val extent = 1000f
-        for (travel in listOf(0.05f, 0.2f, 0.34f)) {
-            val displacement = ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = travel, primaryExtentPx = extent)
-            // screen = base(-travel * extent) + displacement == 0  =>  displacement == travel * extent
-            assertEquals(travel * extent, displacement, TOLERANCE, "pin at travel=$travel")
-        }
-    }
-
-    @Test
-    fun `cover displacement converges back onto the scroll position at full travel`() {
-        // Once the travel is complete the displacement must vanish so the cover joins the plain
-        // scroll layout without a jump, in both reading directions.
-        val extent = 1000f
-        for (travel in listOf(1f, 1.5f, -1f, -2f)) {
-            val displacement = ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = travel, primaryExtentPx = extent)
-            assertEquals(0f, displacement, TOLERANCE, "converged at travel=$travel")
-        }
-    }
-
-    @Test
-    fun `cover peels the settled page monotonically after the hold phase`() {
-        // After the hold the page starts moving in the reading direction of the travel, and the
-        // peel grows monotonically until it rejoins the scroll position at full travel.
-        val extent = 1000f
-        val travels = listOf(0.4f, 0.55f, 0.7f, 0.85f, 0.95f, 1f)
-        val screens = travels.map { travel ->
-            val displacement = ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = travel, primaryExtentPx = extent)
-            // Settled slot base is -travel * extent in the forward direction (LTR).
-            displacement - travel * extent
-        }
-        assertTrue(
-            screens.zipWithNext().all { (a, b) -> b < a },
-            "peel should move strictly monotonically, got $screens",
+    fun `cover pin is inactive when nothing is in flight`() {
+        val settled = 2
+        val pin = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 3,
+            settledSlot = settled,
+            travelFraction = 0.4f,
+            baseScreenOffset = -400f,
+            inFlight = false,
         )
-        // The first travel past the hold has barely started peeling.
-        assertTrue(screens.first() > -0.02f * extent, "peel should begin gently, got ${screens.first()}")
-        // The very end lands exactly on the scroll position (page fully off the viewport left).
-        assertEquals(-extent, screens.last(), TOLERANCE)
+        assertEquals(0f, pin, TOLERANCE)
     }
 
     @Test
-    fun `cover displacement is anti-symmetric across reading directions`() {
-        val extent = 1000f
-        for (travel in listOf(0.3f, 0.5f, 0.7f, 0.9f)) {
-            val forward = ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = travel, primaryExtentPx = extent)
-            val backward = ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = -travel, primaryExtentPx = extent)
-            assertEquals(forward, -backward, TOLERANCE, "travel=$travel")
-        }
+    fun `cover pins the incoming page at the viewport while in flight`() {
+        // The incoming page's screen base is its scroll position; pinning cancels it so the page
+        // stays glued at the viewport beneath the departing page. Forward (positive travel) and
+        // backward (negative travel) both cancel their own base - the base already carries the
+        // reading direction's screen sign.
+        val settled = 2
+        val forwardPin = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 3, settledSlot = settled, travelFraction = 0.4f,
+            baseScreenOffset = -400f, inFlight = true,
+        )
+        assertEquals(400f, forwardPin, TOLERANCE, "forward base -400 -> pin +400 (screen 0)")
+
+        val backwardPin = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 1, settledSlot = settled, travelFraction = -0.4f,
+            baseScreenOffset = 400f, inFlight = true,
+        )
+        assertEquals(-400f, backwardPin, TOLERANCE, "backward base +400 -> pin -400 (screen 0)")
     }
 
     @Test
-    fun `cover displacement clamps overscroll and ignores empty extents`() {
-        val extent = 1000f
-        // Overscroll past one full page behaves exactly like the fully peeled case: no shift.
-        assertEquals(0f, ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = 3f, primaryExtentPx = extent), TOLERANCE)
-        // A degenerate (zero) extent cannot pin anything.
-        assertEquals(0f, ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = 0.5f, primaryExtentPx = 0f), TOLERANCE)
-        assertEquals(0f, ScenePageTransitionRenderer.resolveCoverDisplacement(travelFraction = -0.5f, primaryExtentPx = -1f), TOLERANCE)
+    fun `cover pin ignores slots that are not the incoming page and the departed page itself`() {
+        val settled = 2
+        // The outgoing (settled) page tracks the finger: its shift stays zero.
+        val outgoing = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 2, settledSlot = settled, travelFraction = 0.4f,
+            baseScreenOffset = -400f, inFlight = true,
+        )
+        assertEquals(0f, outgoing, TOLERANCE, "settled page is not pinned")
+
+        // Slots beyond the incoming neighbour are untouched too.
+        val far = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 4, settledSlot = settled, travelFraction = 0.4f,
+            baseScreenOffset = -400f, inFlight = true,
+        )
+        assertEquals(0f, far, TOLERANCE, "far slot is not pinned")
     }
 
     @Test

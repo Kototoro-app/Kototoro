@@ -1193,52 +1193,55 @@ fun ComposeScenePagedReader(
 
                         // Slots are drawn back to front so the cover and curl layering reads correctly.
                         // The slide style resolves zIndex 0 everywhere, which keeps plain slot order.
+                        val coverInFlight = when (transitionStyle) {
+                            ScenePageTransition.COVER -> {
+                                val travel = motion.currentSlot - motion.settledSlot + motion.offsetFraction
+                                motion.isScrollInProgress || abs(travel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
+                            }
+                            else -> false
+                        }
+                        val coverIncomingSlot = if (coverInFlight) {
+                            val travel = motion.currentSlot - motion.settledSlot + motion.offsetFraction
+                            ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(
+                                settledSlot = motion.settledSlot,
+                                travelFraction = travel,
+                            )
+                        } else {
+                            Int.MIN_VALUE
+                        }
                         val drawableSlots = scene.allSlots
                             .filter { slot ->
                                 val intersect = slot.bounds.intersectionOrNull(vp.bounds)
                                 intersect != null && intersect.width > 0f && intersect.height > 0f
                             }
                             .map { slot ->
-                                slot to resolveSceneSlotTransition(
+                                val transform = resolveSceneSlotTransition(
                                     slotIndex = slot.slotIndex,
                                     motion = motion,
                                     style = transitionStyle,
                                     readingDirection = readingDirection,
                                     isCurlUnfolding = isCurlUnfolding,
                                 )
+                                if (transitionStyle == ScenePageTransition.COVER) {
+                                    // In the scene model the page being left tracks the finger on
+                                    // top, so the outgoing slot always layers above the pinned
+                                    // incoming one, whatever the physical direction.
+                                    slot to transform.copy(
+                                        zIndex = when (slot.slotIndex) {
+                                            motion.settledSlot -> 1f
+                                            coverIncomingSlot -> 0f
+                                            else -> transform.zIndex
+                                        },
+                                    )
+                                } else {
+                                    slot to transform
+                                }
                             }
                             .sortedBy { (_, transition) -> transition.zIndex }
 
                         for ((slot, transition) in drawableSlots) {
                             val slotIndex = slot.slotIndex
                             val slotColor = resolveSlotBackgroundColor(slot)
-                            // Screen shift of the slot during a transition, in pixels. The scene
-                            // host already moves every slot with the paging offset, so the shift is
-                            // a correction on top of that scroll motion rather than an absolute
-                            // translation: CURL's translation cancels the scroll to keep the
-                            // folding page pinned at the viewport (classic stationary fold), while
-                            // COVER pins the page being left and then peels it off (see
-                            // resolveCoverDisplacement). SLIDE resolves zero like the renderer.
-                            val travelFraction = motion.currentSlot - motion.settledSlot + motion.offsetFraction
-                            // The settled page's scroll base moves negatively on screen as travel
-                            // advances in LTR and TOP_TO_BOTTOM, but positively in RIGHT_TO_LEFT
-                            // (the reader's one-shot horizontal mirror), so the cover displacement
-                            // keeps the page pinned/peeled only when its sign follows the base.
-                            val directionSign = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) -1f else 1f
-                            val slotShiftPx = when (transitionStyle) {
-                                ScenePageTransition.SLIDE -> 0f
-                                ScenePageTransition.CURL -> transition.translationFactor * primaryExtentPx
-                                ScenePageTransition.COVER -> {
-                                    if (slotIndex == motion.settledSlot) {
-                                        directionSign * ScenePageTransitionRenderer.resolveCoverDisplacement(
-                                            travelFraction = travelFraction,
-                                            primaryExtentPx = primaryExtentPx,
-                                        )
-                                    } else {
-                                        0f
-                                    }
-                                }
-                            }
                             val (baseScreenX, baseScreenY) = when (readingDirection) {
                                 SceneReadingDirection.LEFT_TO_RIGHT -> {
                                     (slotIndex * viewportWidthPx - currentOffset) to 0f
@@ -1249,6 +1252,26 @@ fun ComposeScenePagedReader(
                                 SceneReadingDirection.TOP_TO_BOTTOM -> {
                                     0f to (slotIndex * viewportHeightPx - currentOffset)
                                 }
+                            }
+                            // Screen shift of the slot during a transition, in pixels. The scene
+                            // host already moves every slot with the paging offset, so the shift is
+                            // a correction on top of that scroll motion rather than an absolute
+                            // translation: CURL's translation cancels the scroll to keep the
+                            // folding page pinned at the viewport (classic stationary fold), while
+                            // COVER pins the incoming page at the viewport so the page being left
+                            // tracks the finger over it and reveals it beneath. SLIDE resolves zero
+                            // like the renderer.
+                            val travelFraction = motion.currentSlot - motion.settledSlot + motion.offsetFraction
+                            val slotShiftPx = when (transitionStyle) {
+                                ScenePageTransition.SLIDE -> 0f
+                                ScenePageTransition.CURL -> transition.translationFactor * primaryExtentPx
+                                ScenePageTransition.COVER -> ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+                                    slotIndex = slotIndex,
+                                    settledSlot = motion.settledSlot,
+                                    travelFraction = travelFraction,
+                                    baseScreenOffset = if (isVerticalAxis) baseScreenY else baseScreenX,
+                                    inFlight = coverInFlight,
+                                )
                             }
                             val slotScreenX = baseScreenX + if (isVerticalAxis) 0f else slotShiftPx
                             val slotScreenY = baseScreenY + if (isVerticalAxis) slotShiftPx else 0f
@@ -1450,21 +1473,24 @@ fun ComposeScenePagedReader(
                             readingDirection = readingDirection,
                         )
                         val loadingTravel = loadingMotion.currentSlot - loadingMotion.settledSlot + loadingMotion.offsetFraction
-                        val loadingDirectionSign = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) -1f else 1f
+                        val loadingCoverInFlight = when (transitionStyle) {
+                            ScenePageTransition.COVER -> {
+                                loadingMotion.isScrollInProgress ||
+                                    abs(loadingTravel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
+                            }
+                            else -> false
+                        }
                         val loadingShiftPx = when (transitionStyle) {
                             ScenePageTransition.SLIDE -> 0f
                             ScenePageTransition.CURL -> loadingTransition.translationFactor *
                                 (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
-                            ScenePageTransition.COVER -> {
-                                if (slotIndex == loadingMotion.settledSlot) {
-                                    loadingDirectionSign * ScenePageTransitionRenderer.resolveCoverDisplacement(
-                                        travelFraction = loadingTravel,
-                                        primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
-                                    )
-                                } else {
-                                    0f
-                                }
-                            }
+                            ScenePageTransition.COVER -> ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+                                slotIndex = slotIndex,
+                                settledSlot = loadingMotion.settledSlot,
+                                travelFraction = loadingTravel,
+                                baseScreenOffset = if (readingDirection.isVertical) baseScreenY else baseScreenX,
+                                inFlight = loadingCoverInFlight,
+                            )
                         }
                         val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else loadingShiftPx
                         val slotScreenY = baseScreenY + if (readingDirection.isVertical) loadingShiftPx else 0f
