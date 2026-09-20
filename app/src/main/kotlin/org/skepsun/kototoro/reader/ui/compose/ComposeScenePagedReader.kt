@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -569,6 +570,12 @@ fun ComposeScenePagedReader(
             .collect { (lowerKey, upperKey, activeKey) ->
                 lastReportedPages = Triple(lowerKey, upperKey, activeKey)
                 onPagesChanged(lowerKey, upperKey, activeKey)
+                // The settled window also drives the viewport's accessibility description, and that
+                // write only reaches the accessibility tree on a later frame. A settled reader is
+                // idle and produces none, so the announcement kept the previous page until unrelated
+                // input arrived (defect verified on device, finding 1 / ESR tsk_8ea8dffe). Waiting for
+                // one frame publishes it without rebuilding or re-measuring anything.
+                withFrameNanos { }
             }
     }
 

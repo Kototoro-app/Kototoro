@@ -63,13 +63,9 @@ class ScenePagedTransitionMatrixTest {
     fun curlInterruptedTurnSettlesOnALegalPage() = verifyInterruptedTurn(ReaderAnimation.SIMULATION, "CURL")
 
     /**
-     * Known defect (2026-09-20, ESR tsk_8ea8dffe): after a gesture turn the host reports the new
-     * settled window through `onPagesChanged` (measured `(page2, page2, page2)`), yet the viewport
-     * keeps announcing the previous page. The description stayed on page 1 for 1.5s in every style,
-     * never caught up within 15s in one run and did catch up in another, so the announcement lags
-     * or stalls. Removing @Ignore reproduces it.
+     * The announcement must follow the reader state on its own: no extra input, no extra frame
+     * requested by the test. This was the red half of the fix pair for ESR tsk_8ea8dffe.
      */
-    @Ignore("known defect: the announced page does not follow the reader state after a gesture turn")
     @Test
     fun announcedPageFollowsTheReaderState() {
         hiltRule.inject()
