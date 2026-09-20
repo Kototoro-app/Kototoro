@@ -1164,6 +1164,40 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
 (a) CS-2 真机视觉像素度量重跑；(b) CS-3 RTL 真机布局确认；(c) 翻转默认值并过一个 nightly 周期。
 (a)(b) 可在设备上执行，(c) 属发布动作、需要人工决定。
 
+#### 交付 22 — promotion 阻塞项 (a) 闭环：CS-2 过渡样式真机像素度量重跑
+
+- 背景：CLOSURE 计划把「CS-2 真机视觉确认」列为未完成项，交付 21 把它记为 promotion 阻塞项 (a)。
+  上一轮该证据停在 2026-09-19，根因之一是**度量脚本在仓库外**（`device-evidence/transition_probe.py`），
+  CLOSURE 计划 §真机验证方法末尾已写明「待稳定后应移入仓库，以免下次又从零写一遍」。
+- 工具入库（本轮）：`scripts/transition_probe.py`（原样搬入）、
+  `scripts/capture_transition_styles.ps1`（采集驱动，把该计划里三条最容易踩错的操作要点写成代码：
+  ① MIUI/HyperOS 必须先 `setprop persist.security.adbinput 1`，否则注入静默无效；
+  ② 截图必须走 `cmd /c adb exec-out screencap >`，PowerShell 的 `>` 会破坏二进制；
+  ③ 抓帧必须在**手指仍按下**的拖拽中段，否则过渡已经 settle、四种样式看起来一样）、
+  `scripts/judge_transition_styles.py`（样式两两像素差 + 变化区前缘几何）、
+  `scripts/characterize_transition_edge.py`（前缘逐行分布与逐行比对）。
+- 采集：真机 M332BF - 17 / `ecd4369c`，benchmark 变体，`scene_paged` + `paged` 夹具，
+  四种样式各抓「静止帧 + 同位置拖拽帧」，raw 均为 14,192,656 字节（1280×2772 RGBA8888），
+  归档 `E:\kototoro_demo\reader-bench\cs2-visual-20260921\`。
+- **结论一（本条要的证据）：三种样式在真机上确实渲染不同，「静默塌缩」未回归。**
+  | 对比 | 变化像素占比 | 判定 |
+  | --- | --- | --- |
+  | NONE vs DEFAULT | **0.0001** | 共用 SLIDE 渲染路径（与设计一致） |
+  | DEFAULT vs ADVANCED | **0.0400** | 渲染不同 |
+  | DEFAULT vs SIMULATION | **0.5152** | 渲染不同 |
+  | ADVANCED vs SIMULATION | **0.4867** | 渲染不同 |
+- **结论二（几何）：滑动样式的变化区前缘是竖直线，折叠样式的前缘随行漂移。**
+  | 样式 | 前缘 x 跨度 | 逐行 x std | 读法 |
+  | --- | --- | --- | --- |
+  | NONE / DEFAULT | **24** | 7.7（x∈[800,824]，88% 行落在 x=800） | 竖直边界＝平移 |
+  | ADVANCED / SIMULATION | **456** | 227.0 / 224.8（x∈[800,1256]） | 前缘随行移动＝倾斜/弯曲，平移不可能产生 |
+- **限制（如实记录，不作为结论）**：在该拖拽位置上，前缘几何**无法区分 COVER 与 CURL** ——
+  两者逐行前缘 95.6% 相同（1980/2071 行），mean_abs_diff 18.7px。
+  即：像素差（结论一）证明两者渲染不同，但本采集点的前缘指标对两者不敏感。
+  要把两者几何分开需要**多个拖拽相位**或直接比较折叠区域形状，属下一轮的可选加强，不影响结论一。
+- 关联：CLOSURE CS-2、§9 检查表 ③、交付 21（阻塞项 a）。已知限制：单拖拽位置采样；
+  下一轮若需区分 COVER/CURL 几何，应扫多个 drag 相位。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
@@ -1181,8 +1215,9 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
 - §9 promotion 检查表 —— **第一轮判定已交付（交付 21）**：① 候选身份可追溯通过；
   ② 参考场景（regular 组）11 项门禁全过；③④ 部分通过、缺口具名；⑤⑥ 未开始。
-  剩余阻塞项收敛为三条：(a) CS-2 真机视觉像素度量重跑、(b) CS-3 RTL 真机布局确认、
-  (c) 翻转 `isExperimentalPagedSceneReaderEnabled` 默认值并过一个 nightly 周期（发布动作，需人工决定）。
+  剩余阻塞项收敛为三条：(a) CS-2 真机视觉像素度量重跑 —— **已由交付 22 闭环**；
+  (b) CS-3 RTL 真机布局确认、(c) 翻转 `isExperimentalPagedSceneReaderEnabled` 默认值并过一个
+  nightly 周期（发布动作，需人工决定）。
 
 （已交付项对应的清单项在此移除：`§8.2 :reader-core` 抽取见交付 6，阶段 A 基线固定与结果记录
 见交付 8/9/12，SLO 制定见 §4.2.1，CS-7 门禁见交付 13。）
