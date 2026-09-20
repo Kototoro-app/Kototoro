@@ -1111,6 +1111,59 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   「经 semantics 定位并执行翻页的 instrumentation 测试」+ TalkBack 真机记录，前者已有
   `SceneReaderViewportSemanticsTest`，后者需要人工操作设备，属唯一剩余的阶段 B 项）。
 
+#### 交付 21 — §9 promotion 检查表逐项判定（第一轮：可判定项已判定，阻塞项已具名）
+
+判定基线（本轮冻结）：commit **`5ea4db9e4`**（工作树干净）、benchmark APK
+`app/build/outputs/apk/benchmark/app-arm64-v8a-benchmark.apk`，
+sha256 **`393521bd21054ac2340a9407f1a958ba342e6f4993f1d6fd1f3ccb5bff6b662b`**
+（与 gate 归档 `run-summary.txt` 记录逐字符一致）、设备 M332BF - 17 / `ecd4369c`、
+refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记录）。
+归档：`E:\kototoro_demo\reader-bench\promotion-20260921\`。
+
+- **① 候选 APK 与 commit 可追溯 —— ✅ 通过。** commit、工作树状态、benchmark APK sha256
+  （gate 回读复核）、设备序列、refresh 前置与前后电池温度全部记录且可复核；
+  gate 的 `refresh_precondition_hz` 与实测 `dumpsys display` 相互印证。
+- **② CS-1A 性能验收 —— 部分判定（参考场景通过，其余场景沿用交付 12 归档）。**
+  本轮用 `pagedSingleSceneFull`（regular 组参考场景）跑完整 journey 并按 §4.2.1 门禁判定，
+  **11 项全部 ok → pass**：
+  帧 3050 / 超时 0（0.000%，限 0.500%）/ 最长连续 0（限 1）/ overrun P95 −7.945ms、P99 −5.174ms
+  （限 ≤0）/ 最差单帧 −0.073ms（限 20）/ 主线程最大帧 7.659ms（限 50）/
+  RssAnon Max 226MB（限 400）/ Gpu Max 85MB（限 150）/ 活跃呈现资源 Max 2、Last 1（限 6）/
+  RssAnon 增长 8MB（限 60）。**大图组与高倍率组本轮未重跑**，其判定沿用交付 12 的归档与
+  §4.2.1 数值门槛；本轮新增的 COVER/CURL/长章节三条 journey 不在 §4.2.1 的场景表内，
+  按计划「无 SLO 即证据不足」处理（见交付 16/18），**不计入门禁通过**。
+- **③ CS-2/CS-3 与阶段 B 语义矩阵 —— 基本通过，含两处具名缺口。**
+  - 阶段 B 语义：§5.2 验收要求「经 semantics 定位并执行翻页的 instrumentation 测试」——
+    paged（`SceneReaderViewportSemanticsTest`）与本轮新增的 webtoon／horizontal
+    （`SceneContinuousViewportSemanticsTest`，各 3 连跑通过）均已满足；三个宿主**同源契约**
+    由共享的 `SceneReaderViewportSemantics` 保证。
+  - 翻页样式矩阵：`ScenePagedTransitionMatrixTest` 12 例按方法分跑全绿（交付 14／15）。
+  - **缺口 A（CS-2）**：真机「各样式确实渲染不同」的像素度量证据停在 2026-09-19；
+    本轮只补了「样式落页正确」的**行为**证据，**未重跑视觉像素度量**。CLOSURE 计划把
+    「真机视觉确认」列为 CS-2 未完成项 —— 该项**仍开放**。
+  - **缺口 B（CS-3）**：`isContinuousHorizontalReversed` 的 RTL 真机布局确认仍未做
+    （JVM 侧 `SceneReadingDirectionResolverTest` 等已覆盖纯逻辑）。
+- **④ 无资源泄漏／持续内存增长／错误进度／可复现空白闪烁 —— 部分判定。**
+  内存无增长：本条参考场景 RssAnon 峰值−首值 **8MB**（限 60）通过；长章节组 50→5000 页
+  RssAnon 227.6→227.1MB 持平（交付 18）；活跃呈现资源恒为 1–2，无累积。
+  错误进度：命中/语义/生命周期/连续宿主各格按方法分跑通过，未见错误进度。
+  「可复现空白/闪烁」：**未做**系统性空白帧检测（属缺口 A 的同一类视觉证据）。
+- **⑤ nightly 观察与回退路径 —— ❌ 未开始（这是 CS-1B 的前置，不是本轮遗漏）。**
+  回退路径现成且有证据：`isExperimentalPagedSceneReaderEnabled`（`ReaderSettings.kt:35`）
+  默认 `false`、且 `ComposeReaderScreenRoot` 两处（`:120`、`:404`）以
+  `isExperimentalSceneReaderEnabled && isExperimentalPagedSceneReaderEnabled` 双开关门控，
+  legacy 宿主仍完整在位 —— 即**当前默认关闭，回退路径已验证可用**。
+  但「翻转默认值 → 一个 nightly 周期无回归」这一步**尚未执行**，因为它会改变用户可见默认值，
+  属需要人工决定的发布动作。
+- **⑥ 默认开启后的证据与 legacy 清退 —— ❌ 前置未满足**（依赖 ⑤）。
+  清退顺序按 CLOSURE 计划是「Paged 默认开启 → legacy 路由降级为 developer fallback →
+  删除 runtime legacy 宿主与 View 对照组 → 保留纯函数 oracle」；本轮不动 legacy。
+
+**判定**：检查表 ① 通过、② 参考场景通过、③④ 部分通过且缺口具名、⑤⑥ 未开始。
+因此**当前不具备「分页默认开启」的完整证据**，promotion 决策的阻塞项收敛为三条：
+(a) CS-2 真机视觉像素度量重跑；(b) CS-3 RTL 真机布局确认；(c) 翻转默认值并过一个 nightly 周期。
+(a)(b) 可在设备上执行，(c) 属发布动作、需要人工决定。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
@@ -1126,7 +1179,10 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
-- §9 promotion 检查表 —— 按计划要求在具备独立证据后另行交付。
+- §9 promotion 检查表 —— **第一轮判定已交付（交付 21）**：① 候选身份可追溯通过；
+  ② 参考场景（regular 组）11 项门禁全过；③④ 部分通过、缺口具名；⑤⑥ 未开始。
+  剩余阻塞项收敛为三条：(a) CS-2 真机视觉像素度量重跑、(b) CS-3 RTL 真机布局确认、
+  (c) 翻转 `isExperimentalPagedSceneReaderEnabled` 默认值并过一个 nightly 周期（发布动作，需人工决定）。
 
 （已交付项对应的清单项在此移除：`§8.2 :reader-core` 抽取见交付 6，阶段 A 基线固定与结果记录
 见交付 8/9/12，SLO 制定见 §4.2.1，CS-7 门禁见交付 13。）
