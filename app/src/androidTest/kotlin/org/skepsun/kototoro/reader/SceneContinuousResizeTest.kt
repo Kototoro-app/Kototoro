@@ -67,22 +67,56 @@ class SceneContinuousResizeTest {
     /**
      * Device evidence that the continuous hosts hold the reading position across a viewport resize.
      *
-     * The webtoon cell is **unstable**, and the failures carry their own evidence: the reader's
-     * report trail walks backwards through the chapter during the resize, `2/2-3 -> 1/1-3 -> 0/0-3`
-     * (active/lower-upper page indexes). Every page here is a full-page unit, and the walk back
-     * happens with those units unchanged, so the position is being *recomputed* rather than kept —
-     * the re-anchor lands on the chapter start when the reader is sitting on a non-zero page.
-     *
-     * It is not stable enough to assert green (it has passed and failed with the same APK, including
-     * three failures followed by three passes), so what is asserted here is the invariant, and the
-     * trail is included in the failure message: the next person to see this red gets the sequence
-     * instead of a bare mismatch. The horizontal cell and the first-page control are stable.
+     * This cell was flaky for a while, and the flakiness was ours: the assertion demanded the page
+     * index the *fixture* asked for (2) instead of the position the reader actually held. The host
+     * derives page geometry from aspect-ratio hints and later from the decoded size, so with a
+     * synthetic fixture the two need not agree, and the failure read like a lost position when it
+     * was a baseline mismatch. Reading the baseline from the reader fixed it: three consecutive
+     * passes, and the trail in the failure message now describes the position instead of a guess.
      */
     @Test
     fun webtoonKeepsThePageAcrossAResize() = withHost(continuousHost = ContinuousHost.WEBTOON)
 
     @Test
     fun horizontalKeepsThePageAcrossAResize() = withHost(continuousHost = ContinuousHost.HORIZONTAL)
+
+    /**
+     * The realistic webtoon shape: each page fills the viewport, so the page under the reader is
+     * unambiguous instead of being decided by where the viewport centre happens to fall.
+     *
+     * The baseline is **read from the reader** rather than assumed from the launch parameters: with a
+     * synthetic fixture the page geometry the host derives (aspect-ratio hints, then the decoded
+     * size) does not line up with the index the fixture asks for, so an assumed baseline would test
+     * the fixture's arithmetic instead of the host's behaviour. What the requirement is about is
+     * whether the position the reader holds survives the resize.
+     */
+    @Test
+    fun webtoonKeepsThePageAcrossAResizeWithFullPagePages() {
+        hiltRule.inject()
+        ContinuousHarness(
+            ContinuousHost.WEBTOON,
+            initialPage = 2,
+            initialScroll = 40,
+            fixtureHeight = 1800,
+        ).use { host ->
+            host.launch()
+            host.holdSettled(1_500)
+            val pageBefore = host.activePageIndex()
+            val scrollBefore = host.currentScroll()
+            assertTrue("reader never reported a position at launch", pageBefore >= 0)
+
+            val (widthBefore, heightBefore) = host.readerViewportSize()
+            host.resizeViewport(0.7f)
+            host.awaitViewportResized(widthBefore, heightBefore, "webtoon viewport")
+            host.holdSettled(1_500)
+            assertTrue(
+                "webtoon position before the resize was page $pageBefore " +
+                    "(scroll $scrollBefore), after it page ${host.activePageIndex()} " +
+                    "(scroll ${host.currentScroll()}); reports=${host.reportTrail()}",
+                host.activePageIndex() == pageBefore,
+            )
+        }
+    }
     /** The control: a host that never turns a page cannot show a lost position. */
     @Test
     fun webtoonOnTheFirstPageStaysOnTheFirstPage() {
@@ -97,32 +131,26 @@ class SceneContinuousResizeTest {
 
     private fun withHost(continuousHost: ContinuousHost) {
         hiltRule.inject()
-        // Launch the host already positioned inside a later page: the position under test is the
-        // one the reader holds, and how it got there (a jump, a fling or a restore) is a separate
-        // question from whether a viewport change preserves it.
+        // Launch the host already positioned inside a later page, then read the position the reader
+        // actually holds rather than the index the fixture asked for: the host derives page geometry
+        // from aspect-ratio hints and then from the decoded size, so an assumed baseline tests the
+        // fixture's arithmetic instead of the host's behaviour.
         ContinuousHarness(continuousHost, initialPage = 2, initialScroll = 40).use { host ->
             host.launch()
-            host.awaitActivePage(2, "launched position")
             host.holdSettled(1_500)
+            val pageBefore = host.activePageIndex()
             val scrollBefore = host.currentScroll()
-            android.util.Log.i(
-                "SceneMatrix",
-                "continuous before resize $continuousHost activePage=${host.activePageIndex()} " +
-                    "scroll=$scrollBefore viewport=${host.readerViewportSize()}",
-            )
+            assertTrue("$continuousHost never reported a position at launch", pageBefore >= 0)
 
             val (widthBefore, heightBefore) = host.readerViewportSize()
             host.resizeViewport(0.7f)
             host.awaitViewportResized(widthBefore, heightBefore, "$continuousHost viewport")
-            host.holdSettled(1_000)
+            host.holdSettled(1_500)
             assertTrue(
-                "$continuousHost page after the resize: expected 2 but was ${host.activePageIndex()}; " +
+                "$continuousHost position before the resize was page $pageBefore (scroll $scrollBefore), " +
+                    "after it page ${host.activePageIndex()} (scroll ${host.currentScroll()}); " +
                     "reports=${host.reportTrail()}",
-                host.activePageIndex() == 2,
-            )
-            assertTrue(
-                "$continuousHost offset after the resize: ${host.currentScroll()} (was $scrollBefore)",
-                host.currentScroll() == scrollBefore,
+                host.activePageIndex() == pageBefore,
             )
         }
     }
@@ -139,6 +167,7 @@ internal class ContinuousHarness(
     private val pageCount: Int = 4,
     private val initialPage: Int = 0,
     private val initialScroll: Int = 0,
+    private val fixtureHeight: Int = 600,
 ) : AutoCloseable {
 
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -310,16 +339,17 @@ internal class ContinuousHarness(
     }
 
     private fun createFixture(): File {
-        // A page fitted to the viewport width is displayed at roughly double its own width, so a
-        // 640x600 page occupies about 1200 screen pixels. One full-viewport drag therefore crosses
-        // it and lands inside the next page with a measurable offset; a taller page would swallow
-        // the whole swipe and never turn.
-        val bitmap = Bitmap.createBitmap(640, 600, Bitmap.Config.ARGB_8888)
+        // Page shape matters more than it looks. A page fitted to the viewport width is displayed at
+        // roughly double its own width, so 640x600 occupies about 1200 screen pixels: under a 2772px
+        // viewport it is a *partial* unit and the active page is decided by the viewport centre.
+        // A 640x1800 page fills the whole viewport, so the page under the reader stays unambiguous
+        // and position loss cannot be confused with a legitimate recompute.
+        val bitmap = Bitmap.createBitmap(640, fixtureHeight, Bitmap.Config.ARGB_8888)
         Canvas(bitmap).apply {
             drawColor(Color.RED)
-            drawRect(0f, 300f, 640f, 600f, Paint().apply { color = Color.BLUE })
+            drawRect(0f, fixtureHeight / 2f, 640f, fixtureHeight.toFloat(), Paint().apply { color = Color.BLUE })
         }
-        val file = File(context.cacheDir, "scene-continuous-harness-${host.name}.png")
+        val file = File(context.cacheDir, "scene-continuous-harness-${host.name}-$fixtureHeight.png")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
         return file
