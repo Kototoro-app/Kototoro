@@ -64,12 +64,22 @@ class SceneContinuousResizeTest {
     @get:Rule
     val hiltRule = HiltAndroidRule(this)
 
+    /**
+     * Device evidence that the continuous hosts hold the reading position across a viewport resize.
+     *
+     * The webtoon cell is **unstable**: with this same APK and this same assertion it has passed and
+     * failed repeatedly, and it once failed three runs in a row and then passed three runs in a row.
+     * The failures all read `WEBTOON page after the resize expected:<2> but was:<0>`, i.e. the
+     * position is on page 2 before the resize and on the chapter's first page after it — but a
+     * flaky cell is not evidence of a defect until the flakiness itself is attributed, so this is
+     * recorded as an open question rather than asserted green. The horizontal cell and the
+     * first-page control are stable (6/6 and 5/5 runs).
+     */
     @Test
     fun webtoonKeepsThePageAcrossAResize() = withHost(continuousHost = ContinuousHost.WEBTOON)
 
     @Test
     fun horizontalKeepsThePageAcrossAResize() = withHost(continuousHost = ContinuousHost.HORIZONTAL)
-
     /** The control: a host that never turns a page cannot show a lost position. */
     @Test
     fun webtoonOnTheFirstPageStaysOnTheFirstPage() {
