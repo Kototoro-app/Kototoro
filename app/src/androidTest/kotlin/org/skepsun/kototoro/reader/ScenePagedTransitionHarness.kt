@@ -164,6 +164,7 @@ internal class ScenePagedTransitionHarness(
     // ---------------------------------------------------------------------------------------------
 
     private fun gesture(waypoints: List<Float>, stepsPerSegment: Int = 6, stepMs: Long = 20) {
+        awaitStateQuiet()
         val width = if (widthPx.get() > 0) widthPx.get().toFloat() else 1080f
         val y = (if (heightPx.get() > 0) heightPx.get() else 1920) / 2f
         val path = mutableListOf<Float>()
@@ -223,6 +224,27 @@ internal class ScenePagedTransitionHarness(
     // ---------------------------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------------------------
+
+    /**
+     * A gesture must not land while the reader is still reporting state (initial settle, a running
+     * animation): an injected drag during that window can be absorbed, which made whole cells look
+     * like "this style dropped the turn" instead of an unreliable injection.
+     */
+    private fun awaitStateQuiet(quietMs: Long = 300, timeoutMs: Long = 5_000) {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        var lastCount = reportCount.get()
+        var lastChange = SystemClock.uptimeMillis()
+        while (SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(50)
+            val current = reportCount.get()
+            if (current != lastCount) {
+                lastCount = current
+                lastChange = SystemClock.uptimeMillis()
+            } else if (SystemClock.uptimeMillis() - lastChange >= quietMs) {
+                return
+            }
+        }
+    }
 
     private fun awaitTrue(message: String, timeoutMs: Long, predicate: () -> Boolean) {
         val deadline = SystemClock.uptimeMillis() + timeoutMs
