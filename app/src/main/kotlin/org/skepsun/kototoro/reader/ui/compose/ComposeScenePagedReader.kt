@@ -281,7 +281,25 @@ fun ComposeScenePagedReader(
         // Scale modes rebuild placements, but do not change slot navigation coordinates.
         key = remember(viewportWidthPx, viewportHeightPx, isDoublePage, coverPage, readingDirection) { Any() },
     )
-    var hasAppliedInitialPosition by remember { mutableStateOf(false) }
+    /**
+     * Viewport rectangle the scroll position was last anchored to, i.e. the size the anchored slot
+     * was computed against. The scene and the scroll state are both rebuilt from the viewport size,
+     * so a resize leaves a fresh scene at offset zero: this records the geometry the anchor belongs
+     * to and lets the resize path re-anchor instead of falling back to page one. A zero extent means
+     * "never anchored yet" and keeps the launch behaviour.
+     */
+    var anchoredViewportWidthPx by remember { mutableFloatStateOf(0f) }
+    var anchoredViewportHeightPx by remember { mutableFloatStateOf(0f) }
+
+    /** Slot the reading position is anchored to; -1 until the reader has anchored once. */
+    var lastAnchoredSlot by remember { mutableIntStateOf(-1) }
+
+    /**
+     * Bumped when the fit changes under an unchanged viewport, so the anchoring effect re-derives
+     * the anchored slot against the new geometry. It is deliberately not `sceneRevision`: that value
+     * is a draw dependency and over-bumping it would invalidate drawing for no reason.
+     */
+    var anchorTrigger by remember { mutableIntStateOf(0) }
     var sceneRevision by remember { mutableLongStateOf(0L) }
     val retainedAssets by adapter.assets.collectAsStateWithLifecycle()
 
@@ -455,6 +473,9 @@ fun ComposeScenePagedReader(
         scrollState.isFlinging = false
         pullStartDistancePx = 0f
         pullEndDistancePx = 0f
+        // The fit changed under an unchanged viewport, so re-run the anchoring effect: it re-derives
+        // the same slot against the new geometry instead of trusting the offsets from the old one.
+        anchorTrigger++
         appliedZoomMode = zoomMode
     }
 
@@ -546,8 +567,9 @@ fun ComposeScenePagedReader(
     }
 
     // Settle-only page reporting: prevents mid-gesture chapter reload collisions
-    LaunchedEffect(hasAppliedInitialPosition, scene) {
-        if (!hasAppliedInitialPosition || scene == null) return@LaunchedEffect
+    LaunchedEffect(lastAnchoredSlot, scene) {
+        val currentScene = scene ?: return@LaunchedEffect
+        if (lastAnchoredSlot < 0) return@LaunchedEffect
         snapshotFlow {
             val isIdle = !scrollState.isDragging && !scrollState.isFlinging
             if (isIdle) Pair(scrollState.offset, sceneRevision) else null
@@ -560,7 +582,7 @@ fun ComposeScenePagedReader(
                 } else {
                     ReaderViewport(FloatRect.fromLtwh(0f, offset, viewportWidthPx, viewportHeightPx))
                 }
-                val progress = scene.resolve(vp).progress
+                val progress = currentScene.resolve(vp).progress
                 val lowerId = progress.lowerPageId ?: return@mapNotNull null
                 val upperId = progress.upperPageId ?: return@mapNotNull null
                 val activeId = progress.activePageId ?: return@mapNotNull null
@@ -658,32 +680,72 @@ fun ComposeScenePagedReader(
         }
     }
 
-    // Initial positioning
-    LaunchedEffect(scene, viewportWidthPx, viewportHeightPx) {
-        if (scene != null && viewportWidthPx > 0f && viewportHeightPx > 0f && !hasAppliedInitialPosition) {
+    // Initial positioning and re-anchoring after a viewport change. Keyed on the scroll offset so
+    // the recorded anchor follows turns, drags, flings and programmatic jumps, not only the two
+    // moments that happen to rebuild the scene.
+    LaunchedEffect(scene, sceneRevision, anchorTrigger, scrollState.offset, viewportWidthPx, viewportHeightPx) {
+        val currentScene = scene
+        if (currentScene != null && viewportWidthPx > 0f && viewportHeightPx > 0f) {
             val pe = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
-            val initialPos = initialPage.coerceIn(pages.indices)
-            val targetPage = pages.getOrNull(initialPos)
-            val initialSlot = if (targetPage != null) {
-                scene.slotIndexOf(PageId(targetPage.readerKey)).coerceAtLeast(0)
-            } else 0
-            val maxScroll = ((scene.slotCount - 1) * pe).coerceAtLeast(0f)
-            scrollState.maxOffset = maxScroll
-            val targetScroll = (initialSlot * pe).coerceIn(0f, maxScroll)
-            scrollState.snapTo(targetScroll)
-            val (initX, initY) = resolveSlotInitialOffsets(initialSlot)
-            canvasOffsetX = initX
-            canvasOffsetY = initY
-            zoomedSlotIndex = initialSlot
-            sceneRevision = scene.revision
-            hasAppliedInitialPosition = true
-            updateResourceWindow(scene, targetScroll)
+            if (pe <= 0f) return@LaunchedEffect
+            val geometryChanged = anchoredViewportWidthPx != viewportWidthPx ||
+                anchoredViewportHeightPx != viewportHeightPx
+            val isFirstAnchor = anchoredViewportWidthPx <= 0f || anchoredViewportHeightPx <= 0f
+            if (!geometryChanged && !isFirstAnchor) {
+                // Not a resize: the reader has to keep following the reading position, whether it
+                // moved by a turn, a drag, a fling or a programmatic jump. The scroll state carries
+                // the committed slot whether or not it is currently animating.
+                val travelledSlot = (scrollState.offset / pe).roundToInt()
+                if (lastAnchoredSlot != travelledSlot) {
+                    lastAnchoredSlot = travelledSlot
+                }
+                return@LaunchedEffect
+            }
+            // A resize keeps the anchored slot and only re-resolves its geometry against the new
+            // viewport. The first anchor has no slot yet and comes from the launch page.
+            val targetSlot = if (isFirstAnchor) {
+                val targetPage = pages.getOrNull(initialPage.coerceIn(pages.indices))
+                if (targetPage != null) {
+                    currentScene.slotIndexOf(PageId(targetPage.readerKey)).coerceAtLeast(0)
+                } else {
+                    0
+                }
+            } else {
+                lastAnchoredSlot.coerceIn(0, (currentScene.slotCount - 1).coerceAtLeast(0))
+            }
+            scrollState.maxOffset = ((currentScene.slotCount - 1) * pe).coerceAtLeast(0f)
+            scrollState.snapTo((targetSlot * pe).coerceIn(0f, scrollState.maxOffset))
+            val savedZoom = getSlotZoom(targetSlot)
+            if (savedZoom != null) {
+                val (panX, panY) = getSlotPanRanges(targetSlot, savedZoom.scale)
+                canvasScale = savedZoom.scale
+                canvasOffsetX = savedZoom.offsetX.coerceIn(panX)
+                canvasOffsetY = savedZoom.offsetY.coerceIn(panY)
+            } else {
+                val (initX, initY) = resolveSlotInitialOffsets(targetSlot)
+                canvasScale = 1f
+                canvasOffsetX = initX
+                canvasOffsetY = initY
+            }
+            zoomedSlotIndex = targetSlot
+            transitionAnchorSlot = targetSlot
+            sceneRevision = currentScene.revision
+            lastAnchoredSlot = targetSlot
+            anchoredViewportWidthPx = viewportWidthPx
+            anchoredViewportHeightPx = viewportHeightPx
+            updateResourceWindow(currentScene, scrollState.offset)
         }
     }
 
     // Page updates
     LaunchedEffect(pages, scene) {
-        if (scene != null && hasAppliedInitialPosition) {
+        val currentScene = scene
+        // The update window is measured against the scene the anchor belongs to; after a resize the
+        // anchoring effect above runs first and this must not snap back to the launch page.
+        val isAnchored = lastAnchoredSlot >= 0 &&
+            anchoredViewportWidthPx == viewportWidthPx &&
+            anchoredViewportHeightPx == viewportHeightPx
+        if (currentScene != null && isAnchored) {
             val pe = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
             val currentVp = if (readingDirection.isHorizontal) {
                 ReaderViewport(FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx))
@@ -691,10 +753,10 @@ fun ComposeScenePagedReader(
                 ReaderViewport(FloatRect.fromLtwh(0f, scrollState.offset, viewportWidthPx, viewportHeightPx))
             }
             val newSpecs = createInitialPagedPageSpecs(pages, adapter)
-            val compensation = scene.updatePagedPages(newSpecs, currentVp)
-            sceneRevision = scene.revision
+            val compensation = currentScene.updatePagedPages(newSpecs, currentVp)
+            sceneRevision = currentScene.revision
             if (pe > 0f) {
-                scrollState.maxOffset = ((scene.slotCount - 1) * pe).coerceAtLeast(0f)
+                scrollState.maxOffset = ((currentScene.slotCount - 1) * pe).coerceAtLeast(0f)
             }
             if (compensation != null) {
                 val delta = if (readingDirection.isHorizontal) compensation.deltaX else compensation.deltaY
@@ -703,13 +765,13 @@ fun ComposeScenePagedReader(
                 }
             } else if (initialPosition in pages.indices) {
                 val targetPage = pages[initialPosition]
-                val targetSlot = scene.slotIndexOf(PageId(targetPage.readerKey))
+                val targetSlot = currentScene.slotIndexOf(PageId(targetPage.readerKey))
                 if (targetSlot >= 0 && pe > 0f) {
                     val targetOffset = (targetSlot * pe).coerceIn(0f, scrollState.maxOffset)
                     scrollState.snapTo(targetOffset)
                 }
             }
-            updateResourceWindow(scene, scrollState.offset)
+            updateResourceWindow(currentScene, scrollState.offset)
         }
     }
 
@@ -1187,7 +1249,7 @@ fun ComposeScenePagedReader(
                     actions = viewportActions,
                 )
                 .graphicsLayer {
-                    alpha = if (hasAppliedInitialPosition) 1f else 0f
+                    alpha = if (lastAnchoredSlot >= 0) 1f else 0f
                 }
                 .drawWithContent {
                     // Header/decode geometry can change after the asset snapshot was published.
