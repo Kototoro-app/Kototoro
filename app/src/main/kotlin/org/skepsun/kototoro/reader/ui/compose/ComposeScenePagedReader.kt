@@ -499,11 +499,23 @@ fun ComposeScenePagedReader(
 
         val activeSlotIndex = (currentOffset / pe).roundToInt().coerceIn(0, (currentScene.slotCount - 1).coerceAtLeast(0))
         val requests = mutableListOf<PrefetchRequest>()
+        val transitionMotion = resolveSceneTransitionMotion(
+            currentOffset = currentOffset,
+            primaryExtentPx = pe,
+            anchorSlot = transitionAnchorSlot,
+            isScrollInProgress = scrollState.isScrollInProgress,
+        )
+        val coverPinnedSlot = resolveActiveSceneCoverPinnedSlot(transitionStyle, transitionMotion)
 
         // 1. Current slot pages: IMMEDIATE presentation
         val activeSlot = currentScene.allSlots.getOrNull(activeSlotIndex)
         activeSlot?.pageIds?.forEach { id ->
             requests.add(PrefetchRequest(id, PrefetchPriority.IMMEDIATE, PrefetchReadiness.PRESENTATION_READY))
+        }
+        coverPinnedSlot?.let { currentScene.allSlots.getOrNull(it) }?.pageIds?.forEach { id ->
+            if (requests.none { it.pageId == id }) {
+                requests.add(PrefetchRequest(id, PrefetchPriority.IMMEDIATE, PrefetchReadiness.PRESENTATION_READY))
+            }
         }
 
         // 2. Additional visible nodes in frame: HIGH presentation
@@ -541,6 +553,7 @@ fun ComposeScenePagedReader(
                     scale = transform.scale,
                     offsetX = transform.offsetX,
                     offsetY = transform.offsetY,
+                    isPinnedToViewport = slot.slotIndex == coverPinnedSlot,
                 )
             }
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
@@ -1193,13 +1206,8 @@ fun ComposeScenePagedReader(
 
                         // Slots are drawn back to front so the cover and curl layering reads correctly.
                         // The slide style resolves zIndex 0 everywhere, which keeps plain slot order.
-                        val coverInFlight = when (transitionStyle) {
-                            ScenePageTransition.COVER -> {
-                                val travel = motion.currentSlot - motion.settledSlot + motion.offsetFraction
-                                motion.isScrollInProgress || abs(travel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
-                            }
-                            else -> false
-                        }
+                        val coverPinnedSlot = resolveActiveSceneCoverPinnedSlot(transitionStyle, motion)
+                        val coverInFlight = coverPinnedSlot != null
                         val drawableSlots = scene.allSlots
                             .filter { slot ->
                                 val intersect = slot.bounds.intersectionOrNull(vp.bounds)
@@ -1265,6 +1273,7 @@ fun ComposeScenePagedReader(
                                 scale = slotScale,
                                 offsetX = slotPanX,
                                 offsetY = slotPanY,
+                                isPinnedToViewport = slotIndex == coverPinnedSlot,
                             )
                             val slotRect = Rect(
                                 left = slotScreenX,
@@ -1589,6 +1598,22 @@ private fun resolveSceneTransitionMotion(
     )
 }
 
+/** Slot visually fixed to the viewport by an active Cover transition, if any. */
+private fun resolveActiveSceneCoverPinnedSlot(
+    style: ScenePageTransition,
+    motion: PagedMotionSnapshot,
+): Int? {
+    if (style != ScenePageTransition.COVER) return null
+    val travel = motion.currentSlot - motion.settledSlot + motion.offsetFraction
+    val inFlight = motion.isScrollInProgress ||
+        abs(travel) > ScenePageTransitionRenderer.COVER_PROGRESS_EPSILON
+    if (!inFlight) return null
+    return ScenePageTransitionRenderer.resolveSceneCoverPinnedSlot(
+        settledSlot = motion.settledSlot,
+        travelFraction = travel,
+    )
+}
+
 /** Resolves one slot's transition transform from scene state. */
 private fun resolveSceneSlotTransition(
     slotIndex: Int,
@@ -1637,5 +1662,3 @@ private fun CenteredOverlay(
         }
     }
 }
-
-

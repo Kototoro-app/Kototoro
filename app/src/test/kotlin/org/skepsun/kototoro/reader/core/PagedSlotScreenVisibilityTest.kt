@@ -62,6 +62,27 @@ class PagedSlotScreenVisibilityTest {
     }
 
     @Test
+    fun `a cover-pinned neighbour reports the whole visually exposed viewport`() {
+        val neighbour = slot(slotIndex = 1, left = 1280f, contentWidth = 1280f)
+        val sceneViewportDuringTurn = FloatRect.fromLtwh(128f, 0f, 1280f, 2772f)
+
+        // At 10% forward travel the scene viewport only intersects 128 px of the next slot, but
+        // Cover cancels that slot's screen offset and exposes it across the whole viewport. Tile
+        // visibility must therefore use the pinned slot viewport, not the untransformed scene
+        // viewport; otherwise only a strip is resident and the slot background flashes through.
+        val nodes = neighbour.screenVisibleContentNodes(
+            screenViewportBounds = sceneViewportDuringTurn,
+            scale = 1f,
+            offsetX = 0f,
+            offsetY = 0f,
+            isPinnedToViewport = true,
+        )
+
+        assertEquals(1, nodes.size)
+        assertEquals(neighbour.bounds, nodes.single().visibleRegion)
+    }
+
+    @Test
     fun `a zoomed slot reports only the magnified region`() {
         val current = slot(slotIndex = 0, left = 0f)
 

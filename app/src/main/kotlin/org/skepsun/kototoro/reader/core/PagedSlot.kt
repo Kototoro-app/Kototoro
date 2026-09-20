@@ -64,7 +64,13 @@ data class PagedSlot(
         scale: Float,
         offsetX: Float,
         offsetY: Float,
+        isPinnedToViewport: Boolean = false,
     ): List<VisibleNode> {
+        // A transition may visually pin this slot to the viewport even though its untransformed
+        // scene bounds only touch a narrow screen strip. In that case the slot viewport is the
+        // honest visibility bound; clipping against the scene viewport would starve the tiled
+        // renderer of most of the page that Cover currently exposes.
+        if (isPinnedToViewport) return visibleContentNodes(scale, offsetX, offsetY)
         if (bounds.intersectionOrNull(screenViewportBounds) == null) return emptyList()
         return visibleContentNodes(scale, offsetX, offsetY).mapNotNull { node ->
             val clipped = node.visibleRegion.intersectionOrNull(screenViewportBounds)
