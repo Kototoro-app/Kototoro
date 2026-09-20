@@ -298,11 +298,13 @@ class ScenePageTransitionRendererTest {
     }
 
     @Test
-    fun `cover incoming slot follows the reading direction of the travel`() {
+    fun `cover pinned slot is asymmetric across directions`() {
         val settled = 3
-        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, 0.4f))
-        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, 0f))
-        assertEquals(2, ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(settled, -0.4f))
+        // Forward: the entering page is the static page revealed beneath the departing one.
+        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverPinnedSlot(settled, 0.4f))
+        assertEquals(4, ScenePageTransitionRenderer.resolveSceneCoverPinnedSlot(settled, 0f))
+        // Backward: the page being left is the static page; the previous page slides over it.
+        assertEquals(3, ScenePageTransitionRenderer.resolveSceneCoverPinnedSlot(settled, -0.4f))
     }
 
     @Test
@@ -319,11 +321,11 @@ class ScenePageTransitionRendererTest {
     }
 
     @Test
-    fun `cover pins the incoming page at the viewport while in flight`() {
-        // The incoming page's screen base is its scroll position; pinning cancels it so the page
-        // stays glued at the viewport beneath the departing page. Forward (positive travel) and
-        // backward (negative travel) both cancel their own base - the base already carries the
-        // reading direction's screen sign.
+    fun `cover pins the static page at the viewport while in flight`() {
+        // The static page's screen base is its scroll position; pinning cancels it so the page
+        // stays glued at the viewport while the active page on top tracks the finger. Forward the
+        // static page is the entering one (base -400 here); backward it is the page being left
+        // (its base is positive as the current page sits right of the dragged one).
         val settled = 2
         val forwardPin = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
             slotIndex = 3, settledSlot = settled, travelFraction = 0.4f,
@@ -332,23 +334,29 @@ class ScenePageTransitionRendererTest {
         assertEquals(400f, forwardPin, TOLERANCE, "forward base -400 -> pin +400 (screen 0)")
 
         val backwardPin = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
-            slotIndex = 1, settledSlot = settled, travelFraction = -0.4f,
+            slotIndex = 2, settledSlot = settled, travelFraction = -0.4f,
             baseScreenOffset = 400f, inFlight = true,
         )
         assertEquals(-400f, backwardPin, TOLERANCE, "backward base +400 -> pin -400 (screen 0)")
     }
 
     @Test
-    fun `cover pin ignores slots that are not the incoming page and the departed page itself`() {
+    fun `cover pin ignores slots that are not the static page`() {
         val settled = 2
-        // The outgoing (settled) page tracks the finger: its shift stays zero.
-        val outgoing = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+        // The active (top) page tracks the finger: its shift stays zero - the entering page in
+        // forward, the previous page in backward.
+        val activeForward = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
             slotIndex = 2, settledSlot = settled, travelFraction = 0.4f,
             baseScreenOffset = -400f, inFlight = true,
         )
-        assertEquals(0f, outgoing, TOLERANCE, "settled page is not pinned")
+        assertEquals(0f, activeForward, TOLERANCE, "departing page is not pinned forward")
+        val activeBackward = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
+            slotIndex = 1, settledSlot = settled, travelFraction = -0.4f,
+            baseScreenOffset = -400f, inFlight = true,
+        )
+        assertEquals(0f, activeBackward, TOLERANCE, "previous page is not pinned backward")
 
-        // Slots beyond the incoming neighbour are untouched too.
+        // Slots beyond the cover pair are untouched too.
         val far = ScenePageTransitionRenderer.resolveSceneCoverPinShift(
             slotIndex = 4, settledSlot = settled, travelFraction = 0.4f,
             baseScreenOffset = -400f, inFlight = true,

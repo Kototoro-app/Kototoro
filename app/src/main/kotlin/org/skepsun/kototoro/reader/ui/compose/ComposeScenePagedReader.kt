@@ -1200,42 +1200,19 @@ fun ComposeScenePagedReader(
                             }
                             else -> false
                         }
-                        val coverIncomingSlot = if (coverInFlight) {
-                            val travel = motion.currentSlot - motion.settledSlot + motion.offsetFraction
-                            ScenePageTransitionRenderer.resolveSceneCoverIncomingSlot(
-                                settledSlot = motion.settledSlot,
-                                travelFraction = travel,
-                            )
-                        } else {
-                            Int.MIN_VALUE
-                        }
                         val drawableSlots = scene.allSlots
                             .filter { slot ->
                                 val intersect = slot.bounds.intersectionOrNull(vp.bounds)
                                 intersect != null && intersect.width > 0f && intersect.height > 0f
                             }
                             .map { slot ->
-                                val transform = resolveSceneSlotTransition(
+                                slot to resolveSceneSlotTransition(
                                     slotIndex = slot.slotIndex,
                                     motion = motion,
                                     style = transitionStyle,
                                     readingDirection = readingDirection,
                                     isCurlUnfolding = isCurlUnfolding,
                                 )
-                                if (transitionStyle == ScenePageTransition.COVER) {
-                                    // In the scene model the page being left tracks the finger on
-                                    // top, so the outgoing slot always layers above the pinned
-                                    // incoming one, whatever the physical direction.
-                                    slot to transform.copy(
-                                        zIndex = when (slot.slotIndex) {
-                                            motion.settledSlot -> 1f
-                                            coverIncomingSlot -> 0f
-                                            else -> transform.zIndex
-                                        },
-                                    )
-                                } else {
-                                    slot to transform
-                                }
                             }
                             .sortedBy { (_, transition) -> transition.zIndex }
 
@@ -1258,9 +1235,10 @@ fun ComposeScenePagedReader(
                             // a correction on top of that scroll motion rather than an absolute
                             // translation: CURL's translation cancels the scroll to keep the
                             // folding page pinned at the viewport (classic stationary fold), while
-                            // COVER pins the incoming page at the viewport so the page being left
-                            // tracks the finger over it and reveals it beneath. SLIDE resolves zero
-                            // like the renderer.
+                            // COVER pins the static page at the viewport so the active page on top
+                            // tracks the finger over it - forward reveals the entering page beneath
+                            // the departing one, backward slides the entering page over the page
+                            // being left. SLIDE resolves zero like the renderer.
                             val travelFraction = motion.currentSlot - motion.settledSlot + motion.offsetFraction
                             val slotShiftPx = when (transitionStyle) {
                                 ScenePageTransition.SLIDE -> 0f

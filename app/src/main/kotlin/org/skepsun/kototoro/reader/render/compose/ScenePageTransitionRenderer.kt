@@ -71,30 +71,36 @@ internal object ScenePageTransitionRenderer {
     const val COVER_PROGRESS_EPSILON = 0.001f
 
     /**
-     * Reading-order slot the cover enters from for the current travel: the settled slot's
-     * neighbour in the direction of the travel, positive meaning forward.
+     * Reading-order slot the cover keeps static at the viewport for the current travel.
+     *
+     * The cover is asymmetric by design (matching the legacy transform's layering): a forward turn
+     * keeps the page being left on top as the active page and reveals the entering page beneath it,
+     * so the entering page is the pinned one; a backward turn layers the entering (previous) page
+     * over the page being left, so the page being left is the pinned one and the previous page
+     * slides over it.
      */
-    fun resolveSceneCoverIncomingSlot(
+    fun resolveSceneCoverPinnedSlot(
         settledSlot: Int,
         travelFraction: Float,
-    ): Int = settledSlot + if (travelFraction >= 0f) 1 else -1
+    ): Int = if (travelFraction >= 0f) settledSlot + 1 else settledSlot
 
     /**
-     * Scene-coherent screen displacement for the cover style's incoming page.
+     * Scene-coherent screen displacement for the cover style's static page.
      *
      * In the legacy pager the page-turn translation fully owned a page's motion (the pager did not
      * scroll while dragging), so the transform translation could carry an absolute page of travel.
      * In the paged scene host the scroll offset is the single source of slot motion and already
      * moves every slot during a drag, so re-applying that legacy translation as an additional
-     * screen offset made the incoming page travel twice as far as the finger while the page being
-     * left stayed pinned beneath - a drag the reader could not "feel".
+     * screen offset made the active page travel twice as far as the finger - a drag the reader
+     * could not "feel".
      *
-     * This expresses the cover the other way round, and makes the touch the driver: the page being
-     * left tracks the finger at its scroll position, while the incoming page is pinned at the
-     * viewport (its displacement cancels its scroll base) and is revealed beneath the departing
-     * page as it slides away. The pin only engages while a cover is in flight, and it starts and
-     * ends with the incoming page on its plain scroll position, so the reveal converges back onto
-     * the settled layout without a jump.
+     * This expresses the cover with the touch as the driver: the active page on top tracks the
+     * finger at its scroll position (displacement zero), while the static page underneath is
+     * pinned at the viewport (its displacement cancels its scroll base) - the entering page is
+     * revealed as the departing page slides off it (forward), or the departing page is covered as
+     * the entering page slides over it (backward). The pin only engages while a cover is in
+     * flight, and it starts and ends with the static page on its plain scroll position, so the
+     * cover hands back to the settled layout without a jump.
      */
     fun resolveSceneCoverPinShift(
         slotIndex: Int,
@@ -104,7 +110,7 @@ internal object ScenePageTransitionRenderer {
         inFlight: Boolean,
     ): Float {
         if (!inFlight) return 0f
-        if (slotIndex != resolveSceneCoverIncomingSlot(settledSlot, travelFraction)) return 0f
+        if (slotIndex != resolveSceneCoverPinnedSlot(settledSlot, travelFraction)) return 0f
         return -baseScreenOffset
     }
 
