@@ -176,6 +176,34 @@ class ReaderProductionBenchmark {
         animation = ANIMATION_ADVANCED,
     )
 
+    // --- Long chapter group (improvement plan section 4.2): does anything scale with page count? ---
+
+    /**
+     * 50 / 500 / 5000 pages in one chapter, same images, same input, same window. The claim under
+     * test is that the visible-window queries and the per-frame allocation do not grow with the
+     * total page count, so frame cost and memory should be flat across the three.
+     */
+    @Test
+    fun pagedLongChapter50Full() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_LONG_CHAPTER_50,
+    )
+
+    @Test
+    fun pagedLongChapter500Full() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_LONG_CHAPTER_500,
+    )
+
+    @Test
+    fun pagedLongChapter5000Full() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_LONG_CHAPTER_5000,
+    )
+
     @Test
     fun pagedLargeSceneFull() = measurePaged(
         backend = BACKEND_SCENE_PAGED,
@@ -515,6 +543,9 @@ class ReaderProductionBenchmark {
         const val FIXTURE_MODE_ULTRA_LONG = "ultra_long"
         const val FIXTURE_MODE_PAGED = "paged"
         const val FIXTURE_MODE_PAGED_LARGE = "paged_large"
+        const val FIXTURE_MODE_LONG_CHAPTER_50 = "long_chapter_50"
+        const val FIXTURE_MODE_LONG_CHAPTER_500 = "long_chapter_500"
+        const val FIXTURE_MODE_LONG_CHAPTER_5000 = "long_chapter_5000"
 
         const val ZOOM_MODE_FIT_CENTER = "fit_center"
         const val ZOOM_MODE_FIT_HEIGHT = "fit_height"

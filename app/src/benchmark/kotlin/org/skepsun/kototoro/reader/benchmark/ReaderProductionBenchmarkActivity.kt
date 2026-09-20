@@ -328,6 +328,23 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
         /** Oversized single pages (6000x9000) for the large-image paged scenario. */
         const val FIXTURE_MODE_PAGED_LARGE = "paged_large"
 
+        /**
+         * Long chapters (improvement plan section 4.2): the same portrait pages as [FIXTURE_MODE_PAGED]
+         * but with 50 / 500 / 5000 entries in the chapter, so total page count is the only variable.
+         * The files themselves come from a bounded pool, because what scales with chapter length is
+         * the metadata and the window queries over it, not the number of distinct images on disk.
+         */
+        const val FIXTURE_MODE_LONG_CHAPTER_50 = "long_chapter_50"
+        const val FIXTURE_MODE_LONG_CHAPTER_500 = "long_chapter_500"
+        const val FIXTURE_MODE_LONG_CHAPTER_5000 = "long_chapter_5000"
+
+        fun resolveLongChapterPageCount(mode: String): Int? = when (mode) {
+            FIXTURE_MODE_LONG_CHAPTER_50 -> 50
+            FIXTURE_MODE_LONG_CHAPTER_500 -> 500
+            FIXTURE_MODE_LONG_CHAPTER_5000 -> 5000
+            else -> null
+        }
+
         /** Maps the benchmark's animation extra onto the persisted reader preference values. */
         fun resolveBenchmarkAnimation(value: String?): ReaderAnimation = when (value?.lowercase()) {
             null, "", "default" -> ReaderAnimation.DEFAULT
@@ -404,9 +421,13 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                 FIXTURE_MODE_PAGED_LARGE -> DIMENSION_WIDTHS_PAGED_LARGE
                 else -> DIMENSION_WIDTHS_STANDARD
             }
+            val longChapterCount = resolveLongChapterPageCount(mode)
             val fixtureDir = File(context.filesDir, "reader-benchmark/$version")
             if (!fixtureDir.exists()) {
                 fixtureDir.mkdirs()
+            }
+            if (longChapterCount != null) {
+                return createLongChapterPages(context, longChapterCount)
             }
 
             val pages = ArrayList<ReaderPage>(pageCount)
@@ -452,6 +473,35 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
                     ReaderPage(
                         id = index.toLong(),
                         url = Uri.fromFile(file).toString(),
+                        preview = null,
+                        headers = null,
+                        chapterId = 1L,
+                        index = index,
+                        source = BenchmarkContentSource,
+                    ),
+                )
+            }
+            return pages
+        }
+
+        /**
+         * A chapter of [pageCount] pages drawn from a bounded pool of real fixture files.
+         *
+         * Total page count is the variable under test, so the images must not be: 5000 distinct JPEGs
+         * would cost minutes of fixture generation and gigabytes of storage while measuring the same
+         * thing. Page identity still differs per entry (index and id), which is what the window
+         * queries and the asset cache key on, so the pool stays an implementation detail of the
+         * fixture rather than a change to what is measured.
+         */
+        private fun createLongChapterPages(context: Context, pageCount: Int): List<ReaderPage> {
+            val pool = getOrCreateFixture(context, FIXTURE_MODE_PAGED)
+            val pages = ArrayList<ReaderPage>(pageCount)
+            for (index in 0 until pageCount) {
+                val pooled = pool[index % pool.size]
+                pages.add(
+                    ReaderPage(
+                        id = index.toLong(),
+                        url = pooled.url,
                         preview = null,
                         headers = null,
                         chapterId = 1L,
