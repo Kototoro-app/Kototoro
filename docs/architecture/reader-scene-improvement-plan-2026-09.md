@@ -1055,7 +1055,10 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   三条 journey，真机实测页数扩大 100 倍而帧耗时/内存/资源全部持平。
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
 - §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
-  其中「生命周期」行的 resize 一半已由交付 15 闭环；旋转/Activity 重建路径与连续宿主 resize 用例仍缺。
+  其中「生命周期」行已闭环：resize（同实例）与重建/程序化锚定由交付 15 + 本轮
+  `aRebuiltReaderOpensOnTheRestoredPage` / `aProgrammaticRequestLandsOnTheRequestedPage` /
+  `aProgrammaticRequestSurvivesAResize` 覆盖（全 8 格按方法分跑通过）；
+  连续宿主 resize 设备用例、TalkBack 真机记录与 DPAD/键盘焦点仍缺。
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
