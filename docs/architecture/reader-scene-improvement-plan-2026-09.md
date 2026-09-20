@@ -1248,6 +1248,29 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
 - 关联：§9 检查表 ④、交付 14（翻页闪烁修复）。已知限制：只覆盖分页宿主与本地夹具；
   连续宿主的同类采样未做；阈值 60 与 64px 网格是工程折中，不做亚像素闪烁判定。
 
+#### 交付 25 — CS-1A 全场景门禁复跑（进行中）+ 阻塞项 (c) 改动面清点
+
+- **CS-1A 全场景门禁**：交付 21 只判定了 regular 组的参考场景，本轮按 `--group all` 重跑
+  §4.2.1 覆盖的 **7 个场景**（`pagedSingleSceneFull`、`pagedDoublePageSceneFull`、
+  `pagedLargeSceneFull`、`pagedLargeZoom1_5SceneFull`、`pagedLargeZoom2_0SceneFull`、
+  `pagedLargeZoomSceneFull`、`pagedLargeZoomedSceneFull`），逐场景跑 journey + 归档 trace +
+  按组 SLO 判定。归档 `E:\kototoro_demo\reader-bench\promotion-full-20260921\`。
+  单场景约 20 分钟（含按 §4.2.1 要求的电池温度冷却回落到阈值以下），整轮预计 1–2 小时；
+  本轮进行中，已完成的场景 `gradle_exit=0`。**未完成前不推进 ② 的判定**。
+- **阻塞项 (c) 改动面清点**（为人工决策准备，本轮**未改动任何源码**）：
+  `isExperimentalPagedSceneReaderEnabled` 的默认值出现在**三处**，翻转时必须同步，否则设置页
+  会显示一个与实际行为相反的开关状态：
+  1. `core/prefs/AppSettings.kt:1055` —— `prefs.getBoolean(KEY_…, false)`；
+  2. `reader/ui/config/ReaderSettings.kt:35` —— 数据类默认值 `= false`；
+  3. `settings/compose/ReaderSettingsScreen.kt:1067` —— 设置页开关读同一个 key，默认值也硬编码 `false`。
+  迁移性质（重要）：`getBoolean(key, default)` **只在 key 不存在时使用默认值**，因此
+  「从未碰过该开关」的用户会拿到新默认值，而**显式关掉过它的用户会保留 false**
+  —— 即默认值翻转本身不是迁移，但「回退」时要么发一个版本改回默认值，要么让受影响的用户手动打开。
+  另：该开关与 `isExperimentalSceneReaderEnabled`（默认 `true`）在 `ComposeReaderScreenRoot.kt:120/404`
+  以 `&&` 门控；翻转 paged 那一个即让分页走场景宿主，同时保留整引擎的 kill switch。
+- 关联：§9 检查表 ② 与 ⑤/⑥、交付 21（阻塞项清单）。已知限制：全场景判定未完成前，
+  ② 仍按「参考场景通过、其余沿用交付 12 归档」记录。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
