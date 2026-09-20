@@ -141,6 +141,41 @@ class ReaderProductionBenchmark {
         compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.UseIfAvailable),
     )
 
+    // --- Phase D probe: the transition styles the retained-GraphicsLayer experiment targets ---
+
+    /**
+     * SLIDE is the default and is already covered by [pagedSingleSceneFull]; COVER and CURL are the
+     * styles the improvement plan's section 7 scopes for a first retained-layer round. They turn the
+     * same fixture with the same input as [pagedSingleSceneFull], so the three are directly
+     * comparable and the transition style is the only variable.
+     */
+    @Test
+    fun pagedSingleSceneCoverFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        animation = ANIMATION_ADVANCED,
+    )
+
+    @Test
+    fun pagedSingleSceneCurlFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        animation = ANIMATION_SIMULATION,
+    )
+
+    /**
+     * COVER on the oversized fixture: the standard fixture is small enough that its draw cost could
+     * be dismissed as unrepresentative, while 6000x9000 pages are the case where re-issuing page
+     * content every frame would actually show up.
+     */
+    @Test
+    fun pagedLargeSceneCoverFull() = measurePaged(
+        backend = BACKEND_SCENE_PAGED,
+        compilationMode = CompilationMode.Full(),
+        fixtureMode = FIXTURE_MODE_PAGED_LARGE,
+        animation = ANIMATION_ADVANCED,
+    )
+
     @Test
     fun pagedLargeSceneFull() = measurePaged(
         backend = BACKEND_SCENE_PAGED,
@@ -484,6 +519,8 @@ class ReaderProductionBenchmark {
         const val ZOOM_MODE_FIT_CENTER = "fit_center"
         const val ZOOM_MODE_FIT_HEIGHT = "fit_height"
         const val ANIMATION_DEFAULT = "default"
+        const val ANIMATION_ADVANCED = "advanced"
+        const val ANIMATION_SIMULATION = "simulation"
 
         /** Oversized fixtures are written on first use, which is slower than the original 30s window. */
         private const val FIXTURE_READY_TIMEOUT_SECONDS = 180L

@@ -2,7 +2,7 @@
 
 - 日期：2026-09-20。
 - 代码审阅基线：`48083e0b4`（`fix(reader): prevent cover transition page flicker`）。
-- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线、2.5× 超时帧 trace 提取（交付 10）、zoom 长卡顿根因修复——session 关闭移出主线程（交付 11，700ms 停顿消除）、7 场景超时帧证据归档与 §4.2.1 分组 SLO 制定（交付 12，高倍率组由「待验收」转为有数值门禁）、CS-7 基准门禁脚本化与阈值判定（交付 13，`--selftest` 55/55，7/7 归档场景通过）、阶段 B 余项第一批——翻页样式/生命周期矩阵定性与 3 个新发现（交付 14）、阶段 B 余项第二批——分页宿主 viewport resize 丢页根因修复与生命周期 resize 用例（交付 15，5/5 通过）；长章节组 fixture、B 回归矩阵其余项、残差 tile 到达调度优化、§8.3 后续模块轮次与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
+- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线、2.5× 超时帧 trace 提取（交付 10）、zoom 长卡顿根因修复——session 关闭移出主线程（交付 11，700ms 停顿消除）、7 场景超时帧证据归档与 §4.2.1 分组 SLO 制定（交付 12，高倍率组由「待验收」转为有数值门禁）、CS-7 基准门禁脚本化与阈值判定（交付 13，`--selftest` 55/55，7/7 归档场景通过）、阶段 B 余项第一批——翻页样式/生命周期矩阵定性与 3 个新发现（交付 14）、阶段 B 余项第二批——分页宿主 viewport resize 丢页根因修复与生命周期 resize 用例（交付 15，5/5 通过）、阶段 D 可行性探针——immediate 过渡帧无 retained 收益，**负结果**收尾（交付 16）；长章节组 fixture、B 回归矩阵其余项、残差 tile 到达调度优化与 §8.3 后续模块轮次未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
 - 范围：漫画 Scene Reader；不包含小说阅读器、视频播放器或依赖升级。
 - 关联：[Scene Reader 收尾计划](reader-scene-closure-plan-2026-09.md)、[ADR 0002](../adr/0002-reader-scene-decoupling.md)。
 
@@ -922,9 +922,62 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   （两者 `rememberComposeScenePrimaryScrollState(key = scene)` 共享同一 scene 实例，resize 时状态保留、
   max 值由 `pages/scene` effect 更新），但**尚无 resize 设备用例**，属下一批。
 
+#### 交付 16 — 阶段 D 可行性探针：immediate 路径的过渡帧没有需要 retained 层去省的开销（**负结果**）
+
+- 目的：阶段 D 是本文唯一完全未启动的阶段，而其立项前提是「过渡帧重复下发静态内容值得用
+  retained GraphicsLayer 省掉」。本交付只回答这个前提，不实现图层。
+- 测量对象：`ReaderProductionBenchmark.measurePaged()` 已用**离散翻页 swipe** 输入
+  （`pagedTurns`：左右各 10 次 × 2 轮），且 `animation` 是显式参数，因此三种过渡样式
+  除样式外条件完全一致，可直接比较。新增三条 journey：
+  `pagedSingleSceneCoverFull`（COVER）、`pagedSingleSceneCurlFull`（CURL）、
+  `pagedLargeSceneCoverFull`（COVER + 6000×9000 大图夹具，标准夹具 800×1200~1800 偏小）。
+  SLIDE 基线 = 既有 `pagedSingleSceneFull`（DEFAULT）。
+- 工具（本轮入库，两者都是阶段 D 后续轮次的脚手架）：
+  `scripts/probe_reader_transition_frames.py`（跑 journey → **归档** trace + benchmarkData.json →
+    调分析器；Gradle 的 `connected_android_test_additional_output` 会被下一次运行覆盖，
+    不归档就不是证据；失败也会把 gradle 日志与失败行留在归档目录里）与
+    `scripts/summarize_reader_transition_probe.py`（跨场景汇总帧相位表）。
+  注意 `trace_processor` 在本机是 `C:\Users\chuxi\.local\share\perfetto\prebuilts\trace_processor_shell-*.exe`；
+  `~/.local/bin/trace_processor.py` 是下载器包装，`analyze_reader_frames.py --version` 直接调用它会
+  以 `WinError 193`（非 Win32 程序）失败，必须传真正的 shell 二进制。
+- 结果（真机 M332BF - 17 / `ecd4369c`，Full 编译，120Hz，平台预算 13.6666 ms；原始证据
+  `E:\kototoro_demo\reader-bench\stageD-probe-20260920\`）：
+
+  | 场景 | 帧数 | 超时比例 | 最长连续 | 最差单帧 | ui p50 | ui p95 | ui max | cpu p95 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | SLIDE（`pagedSingleSceneFull`） | 3037 | 0.000% | 0 | -1.52 | 1.55 | 3.16 | 9.82 | 4.72 |
+  | COVER（标准夹具） | 3037 | 0.000% | 0 | -1.52 | 1.55 | 3.16 | 9.82 | 4.72 |
+  | COVER（大图夹具） | 2999 | 0.033% | 1 | +0.34 | 1.59 | 3.08 | 12.03 | 4.68 |
+  | CURL | 3088 | 0.162% | 3 | +29.72 | 1.63 | 3.24 | 34.85 | 4.93 |
+
+  （单位 ms；超时比例/最长连续按 §4.3 口径；SLIDE 与 COVER 逐项几乎相同，说明样式本身不是变量。）
+- **关键否定证据（trace 切片分解，`iter000`）**：
+  - `Record View#draw()`：标准夹具 850 帧共 147.2ms（**avg 0.173ms**，max 1.61）；
+    大图夹具 718 帧共 142.0ms（**avg 0.198ms**，max 1.74）。占 UI 线程时间约 11%，占帧预算 **约 2%**。
+  - 大图夹具上 `ImageDecoder#decodeBitmap` 单页 avg **49.4ms**（max 59.1ms）——
+    即真正的成本在**解码与上传**，不在绘制录制；UI 线程 p95 仅 3.08ms。
+  - CURL 的 +29.7ms 离群帧：trace 里**没有任何 curl/fold 切片**，同期是
+    `ImageDecoder#decodeBitmap` 10.7ms avg（max 15.9）+ `Bitmap#prepareToDraw`/`uploadTexDataOptimal`
+    数毫秒，且 5 次超时集中在早期迭代（iter0 4 次、iter1 1 次、iter2-4 各 0 次）＝冷启动
+    解码/上传与动画同帧争用，**不是折叠路径的开销**。
+- 判定（按 §7.3 退出条件）：首轮目标的 SLIDE/COVER 在两种夹具尺寸上都**零超时或 0.033% 超时**、
+  P99 余量约 5ms；绘制录制只占帧预算约 2%。retained 图层能省的正是这约 2%，即**收益落在噪声内**；
+  而 §7.2 要求的内存/首帧代价（常驻图层、资源固定计入预算）是实打实的。按计划原文
+  「若收益落在噪声内…应调整或放弃，记录负结果」——**本轮结论为负结果，不实现 retained 图层**，
+  也不为保留方案扩大缓存预算或放宽门槛。
+- 因此阶段 D 的后续（若仍要做）应换靶子：成本在解码/上传与冷启动争用（与交付 12 的
+  「残差 tail latency」归因一致），而按 §7.1 retained 图层**不改变资源所有权**，
+  对该成本无作用。真正可能有效的是「tile 到达/上传调度」方向（§10.1 未启动项之一），
+  或把 CURL 的冷启动争用单独立项。
+- 关联：§7.1/§7.2/§7.3、§4.2.1（SLO 与预算）、交付 12（残差归因）。已知限制：
+  本轮只测**翻页 journey**（连续滑动/缩放不在此列）；CURL 大图夹具变体未跑；
+  大图 COVER 首跑因环境性失败重跑一次才成功（失败原因记录在该场景 gradle 日志，非 SLO 判定）。
+
 #### 未启动
 
-- 阶段 D（retained GraphicsLayer PoC）—— 计划中唯一完全未启动的阶段。
+- 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
+  首轮目标 SLIDE/COVER 的翻页帧零超时、绘制录制仅占帧预算约 2%，retained 能省的收益落在噪声内，
+  按 §7.3 不实现。若仍要继续，靶子应换成解码/上传调度或 CURL 冷启动争用（见交付 16 末段）。
 - §4.2 长章节组夹具与测量方法（需新增 FIXTURE_MODE 与 benchmark 方法）。
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
 - §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
