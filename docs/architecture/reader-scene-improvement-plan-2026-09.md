@@ -806,20 +806,29 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   | 生命周期 | Activity 重建后按页身份恢复 | 通过 |
   | 生命周期 | 旋转后仍可读、页合法 | 通过（内容仍绘制、状态合法） |
   | 生命周期 | 旋转保持当前页 | **待修（发现 2）** |
-  | §5.2 | 播报跟随状态 | **待修（发现 1）** |
-- **发现 1（可复现，待修）**：手势翻页后 host 已通过 `onPagesChanged` 上报新的 settled 窗口
+  | §5.2 | 播报跟随状态 | **已修（发现 1，commit `b04ac16d1`）**：翻页后播报自动跟随，红→绿见下 |
+- **发现 1（已修复）**：手势翻页后 host 已通过 `onPagesChanged` 上报新的 settled 窗口
   （诊断 `reportedLowerUpperActive=[1,1,1]`，即第 2 页），但 viewport 的 `contentDescription`
   仍播报第 1 页 —— 三种样式都复现（手势后 1.5s 未更新）；且不稳定（某轮 SLIDE 在 15s 内追上、
-  CURL 15s 未追上）。违反 §5.2「状态更新跟随阅读语义变化」，TalkBack 用户会听到旧页码。
-  复现：探针宿主接 `onPagesChanged` 记录三元组 + 轮询 `contentDescription`，见 `SceneMatrix` 诊断日志；
-  ESR `tsk_8ea8dffe`。
+  CURL 15s 未追上）。违反 §5.2「状态更新跟随阅读语义变化」。
+  **根因**：settled 窗口的写入发生在翻页动画结束时，之后 reader 进入 idle 不再产生帧，而无障碍树
+  要等**再一帧**才提交 —— 所以播报停在旧页，直到任意后续输入才追上。
+  **修复**（`ComposeScenePagedReader` 写 `lastReportedPages` 的 collect 内消费一次
+  `withFrameNanos {}`，无重建/无重新测量）：红→绿证据 —— 修复前
+  `announcedPageFollowsTheReaderState`（翻页后静置、无额外输入）失败；修复后该用例去掉 `@Ignore`
+  实跑 BUILD SUCCESSFUL，边界用例 `announcedPageCatchesUpAfterOneMoreFrame`（翻页后制造一帧）保持绿，
+  回归 `SceneReaderViewportSemanticsTest` + 2 个翻页样式格一次运行全绿（3 用例 18s）。
+  提交链 `a18c30a09` → `c55c8652b` → `25dd60418` → **`b04ac16d1`（修复）**。
 - **发现 2（待归因）**：viewport resize（旋转，探针补 `configChanges` 后走 resize 路径）把 reader
   重置到第 1 页（诊断 `reportedLowerUpperActive=[0,0,0]`，页面仍在绘制、无空白）。探针未接
   `requestedPage`（真实宿主用它在 resize 后重新锚定当前位置），因此需在真实 reader 入口确认
   生产环境是否也丢页；ESR `tsk_8d1cbe98`。
-- **发现 3（待查）**：CURL 前进翻页在同一注入手势下 3 次运行仅 1 次翻页成功，而 SLIDE/COVER
-  从未失败 —— 需先区分「注入手势形状不适合 CURL」与「CURL 丢翻页」。ESR `tsk_8ea8dffe` 的相邻项
-  （另见交付记录末尾的未立任务说明）。
+- **发现 3（已撤销）**：原记录「CURL 前进翻页在同一注入手势下 3 次运行仅 1 次成功」被判为 CURL 缺陷，
+  经复现修正为**harness 注入时序问题**：滑动若落在初始 settle 窗口内会被吸收（SLIDE 同样出现过未提交，
+  实验日志 `before-turn activeIndex=0 announced=1` 后滑动未提交）。harness 加
+  `awaitStateQuiet()`（等 reader 停止上报状态再注入）+ `swipeForwardCommitting()`（不提交则重试并记录
+  次数）后，**11/11 有效格全部首次注入即提交**。结论：不是 CURL 缺陷，不要再按此方向改产品代码；
+  逐格表与运行方式见下条。
 - **测试基建教训**（本轮代价最大、后续必读）：
   1. `Instrumentation.waitForIdleSync()` 在阅读器持续重绘时会**永久阻塞**（探针文件本就注记为
      never-settling idle redraws）；手势后应固定 sleep + 轮询可观察状态。
