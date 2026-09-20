@@ -1084,6 +1084,33 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
 - 关联：§5.1 生命周期/连续模式行、ADR 0002。已知限制：webtoon 抖动已归因为测试基线错配并转绿；
   「后台进程死亡后恢复」仍只有域层证据；TalkBack/DPAD 未开始。
 
+#### 交付 20 — 阶段 B「输入」行：DPAD/键盘/音量键映射入库 + 连续宿主 resize 归因撤销
+
+- **输入行（DPAD/键盘/音量键）**：§5.1 要求「触摸、TalkBack 动作、DPAD、音量键；边界动作不产生错误进度」。
+  实际链路是：`ReaderActivity.dispatchKeyEvent` → `ReaderControlDelegate.onKeyDown` →（分页）
+  `ComposeReaderController.switchPageBy` → `requestPage` → 场景宿主的 `requestedPage`；
+  （连续）`switchPageBy` → `ComposeWebtoonPageTurnRequest`（视口比例滚动，
+  `resolveWebtoonPageTurnDistance` 已有 JVM 用例）。**缺的正是映射本身**：
+  `ReaderControlDelegate.onKeyDown` 此前**无任何测试** —— 映射错在这里，外部看起来与阅读器缺陷无异。
+- 入库：`app/src/test/kotlin/.../reader/ui/ReaderControlDelegateKeyTest.kt`，11 例 JVM，全部通过：
+  翻页键（NAVIGATE_NEXT/SPACE/PAGE_DOWN/R、NAVIGATE_PREVIOUS/PAGE_UP/L）方向；
+  左右 DPAD 在 `isReaderNavigationInverted` 两态下的方向；上下键**先滚动、滚动被拒才翻页**
+  （即边界动作不产生错误进度）；音量键默认关闭且**关闭时不被消费**（`onKeyDown` 返回 false）；
+  音量键在反向下语义；回车类键**仅 TV 呈现**下生效；DPAD_CENTER 切换控件；
+  **TV 控件可见时导航键交给控件**、阅读器不产生任何进度；无法识别的键不被消费且零副作用；
+  音量键抬起仅在启用时消费。
+- **连续宿主 resize 缺陷撤销（交付 19 续）**：交付 19 登记的「webtoon 宿主 resize 后重锚定落到
+  本章第 1 页」经查**不成立**。抖动来自断言基线错配：断言要求「夹具请求的页序号」，
+  而宿主按宽高比 hint、随后按解码尺寸推导页几何，合成夹具下两者不必一致。
+  改为**从阅读器读取基线**后：`webtoonKeepsThePageAcrossAResize` 连续 3 次通过；
+  新增确定性格 `webtoonKeepsThePageAcrossAResizeWithFullPagePages`（每页 1280×3600 > 视口，
+  页身份无歧义）**连续 8 次通过**；同批 horizontal 与首页对照格各连续 3 次通过。
+  临时生产日志另证：webtoon 的 `pages/scene` effect 在 resize 时只运行一次（`scene` 未变），
+  resize 路径本身不重算位置。ESR `tsk_95ada157` 按归因错误关闭。
+- 关联：§5.1 输入行与连续模式行。已知限制：**TalkBack 真机记录仍缺**（§5.2 验收要求
+  「经 semantics 定位并执行翻页的 instrumentation 测试」+ TalkBack 真机记录，前者已有
+  `SceneReaderViewportSemanticsTest`，后者需要人工操作设备，属唯一剩余的阶段 B 项）。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
@@ -1092,10 +1119,10 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
 - §4.2 长章节组夹具与测量方法 —— **已交付（交付 18）**：50/500/5000 页三种夹具模式 +
   三条 journey，真机实测页数扩大 100 倍而帧耗时/内存/资源全部持平。
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
-- §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
-  其中「生命周期」行已闭环：resize（同实例）+ 重建/程序化锚定由交付 15 与本轮三格覆盖（全 8 格
-  按方法分跑通过）；「连续模式」行已由交付 19 转为宿主级设备覆盖（4 格各 3 连跑通过，
-  webtoon 抖动归因为测试基线错配、结论撤销）；TalkBack 真机记录与 DPAD/键盘焦点仍缺。
+- §5.1 回归矩阵其余项、TalkBack 真机记录（阶段 B 余项）。
+  「生命周期」行已闭环（交付 15 + 交付 19 三格）；「连续模式」行已转宿主级设备覆盖（4 格各 3 连跑）；
+  「输入」行的 DPAD/键盘/音量键映射已由交付 20 的 11 例 JVM 覆盖；
+  **仅剩 TalkBack 真机记录**（需人工在设备上开启 TalkBack 操作，无法自动化）。
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
