@@ -1046,6 +1046,37 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   不含跨章跳转与跳页（`requestedPage` 路径）；5000 页夹具的图片是池化复用，
   因此不度量「5000 张不同图片的解码缓存压力」，那属于内存预算而非本组判据。
 
+#### 交付 19 — 阶段 B 余项（第四批）：重建路径与连续宿主 resize 证据
+
+- 目的：补齐 §5.1「生命周期」行的另一半（重建/程序化锚定）与「连续模式」行的宿主级设备证据。
+- **重建路径**（`ScenePagedViewportResizeTest`，新增 3 例）：生产宿主在重建后不是靠 `initialPage`，
+  而是把恢复出的位置**当作新的启动页**、并在布局变化时通过 `requestedPage` **程序化重新锚定**。
+  harness 因此新增 `requestPage(index)`（只写 `requestedPage` prop，与生产同路径）。三格：
+  `aRebuiltReaderOpensOnTheRestoredPage`（重建后停在恢复位置）、
+  `aProgrammaticRequestLandsOnTheRequestedPage`、`aProgrammaticRequestSurvivesAResize`。
+  全 8 格（5 resize + 3 重建）按方法分跑通过。
+- **连续宿主**（`SceneContinuousResizeTest`，新增 3 例）：webtoon 与 horizontal 此前只有**代码审查**
+  结论（「scrollState 以 scene 为 key，位置自然保留」）。本仓已两次因「关于生命周期路径的信念」出错，
+  故补设备证据：以 `initialPage=2, initialScroll=40` 启动 → 记录视口尺寸 → resize → **先等阅读器
+  在新尺寸下完成布局**（`awaitViewportResized`，因为该宿主并非每帧上报，直接断言会读到 resize 前的值）
+  → 断言页身份与页内偏移都不变。
+  - `horizontalKeepsThePageAcrossAResize`：**稳定通过（6/6 轮）**。
+  - `webtoonOnTheFirstPageStaysOnTheFirstPage`：对照格，稳定通过（5/5 轮）。
+  - `webtoonKeepsThePageAcrossAResize`：**不稳定**。同一 APK、同一断言既通过也失败，并出现过
+    「连续 3 次失败后连续 3 次通过」；失败语恒为
+    `WEBTOON page after the resize expected:<2> but was:<0>`（resize 前在第 2 页、之后回到本章第 1 页）。
+    曾两次试图归因（首次冷启动 / 应用数据被清空），**均被后续实验证伪**（全新安装后首跑通过）。
+    结论：在把「抖动本身」归因清楚之前，**不得**据此宣布 webtoon 宿主丢页；该格以不稳定状态入库并
+    在注释中写明，另立 ESR 任务（见下）。「连续模式宿主级设备测试」因此**只算部分覆盖**。
+- 测试基建教训（本轮新增，两次导致错误结论）：
+  1. `connectedDebugAndroidTest` 的 `TEST-*.xml` 会被**每次运行覆盖**，且编译失败时不会重写 ——
+     读错run 的结果文件会把编译失败当断言失败、或把上一个用例的结果当本次结果。本轮为此新增
+     `scripts/print_last_androidtest_failure.py`（显式打印最新一次运行的用例名与失败首行）。
+  2. 「先编译再跑」不可省：`connectedDebugAndroidTest` 在 `compileDebugAndroidTestKotlin` 失败时
+     仍可能只报 `BUILD FAILED`，把编译错误误读成测试失败会浪费整轮排查。
+- 关联：§5.1 生命周期/连续模式行、ADR 0002。已知限制：webtoon 抖动未归因；
+  「后台进程死亡后恢复」仍只有域层证据；TalkBack/DPAD 未开始。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
@@ -1055,10 +1086,9 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   三条 journey，真机实测页数扩大 100 倍而帧耗时/内存/资源全部持平。
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
 - §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
-  其中「生命周期」行已闭环：resize（同实例）与重建/程序化锚定由交付 15 + 本轮
-  `aRebuiltReaderOpensOnTheRestoredPage` / `aProgrammaticRequestLandsOnTheRequestedPage` /
-  `aProgrammaticRequestSurvivesAResize` 覆盖（全 8 格按方法分跑通过）；
-  连续宿主 resize 设备用例、TalkBack 真机记录与 DPAD/键盘焦点仍缺。
+  其中「生命周期」行已闭环：resize（同实例）+ 重建/程序化锚定由交付 15 与本轮三格覆盖（全 8 格
+  按方法分跑通过）；「连续模式」行部分覆盖（horizontal 稳定、webtoon 抖动未归因，见交付 19）；
+  TalkBack 真机记录与 DPAD/键盘焦点仍缺。
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
