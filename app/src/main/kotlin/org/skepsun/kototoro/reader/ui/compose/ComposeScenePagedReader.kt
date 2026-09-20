@@ -1212,9 +1212,33 @@ fun ComposeScenePagedReader(
                         for ((slot, transition) in drawableSlots) {
                             val slotIndex = slot.slotIndex
                             val slotColor = resolveSlotBackgroundColor(slot)
-                            // Translation is a fraction of the slot's own size, exactly as in the legacy
-                            // pager; the slide style resolves 0 here because the offset already moves.
-                            val translationPx = transition.translationFactor * primaryExtentPx
+                            // Screen shift of the slot during a transition, in pixels. The scene
+                            // host already moves every slot with the paging offset, so the shift is
+                            // a correction on top of that scroll motion rather than an absolute
+                            // translation: CURL's translation cancels the scroll to keep the
+                            // folding page pinned at the viewport (classic stationary fold), while
+                            // COVER pins the page being left and then peels it off (see
+                            // resolveCoverDisplacement). SLIDE resolves zero like the renderer.
+                            val travelFraction = motion.currentSlot - motion.settledSlot + motion.offsetFraction
+                            // The settled page's scroll base moves negatively on screen as travel
+                            // advances in LTR and TOP_TO_BOTTOM, but positively in RIGHT_TO_LEFT
+                            // (the reader's one-shot horizontal mirror), so the cover displacement
+                            // keeps the page pinned/peeled only when its sign follows the base.
+                            val directionSign = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) -1f else 1f
+                            val slotShiftPx = when (transitionStyle) {
+                                ScenePageTransition.SLIDE -> 0f
+                                ScenePageTransition.CURL -> transition.translationFactor * primaryExtentPx
+                                ScenePageTransition.COVER -> {
+                                    if (slotIndex == motion.settledSlot) {
+                                        directionSign * ScenePageTransitionRenderer.resolveCoverDisplacement(
+                                            travelFraction = travelFraction,
+                                            primaryExtentPx = primaryExtentPx,
+                                        )
+                                    } else {
+                                        0f
+                                    }
+                                }
+                            }
                             val (baseScreenX, baseScreenY) = when (readingDirection) {
                                 SceneReadingDirection.LEFT_TO_RIGHT -> {
                                     (slotIndex * viewportWidthPx - currentOffset) to 0f
@@ -1226,8 +1250,8 @@ fun ComposeScenePagedReader(
                                     0f to (slotIndex * viewportHeightPx - currentOffset)
                                 }
                             }
-                            val slotScreenX = baseScreenX + if (isVerticalAxis) 0f else translationPx
-                            val slotScreenY = baseScreenY + if (isVerticalAxis) translationPx else 0f
+                            val slotScreenX = baseScreenX + if (isVerticalAxis) 0f else slotShiftPx
+                            val slotScreenY = baseScreenY + if (isVerticalAxis) slotShiftPx else 0f
                             val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
                             val slotCenter = Offset(
                                 slotScreenX + viewportWidthPx / 2f,
@@ -1263,8 +1287,13 @@ fun ComposeScenePagedReader(
                                     size = Size(viewportWidthPx, viewportHeightPx),
                                 )
                                 if (slotNodes.isNotEmpty()) {
+                                    // The transition shift is included here so the image content
+                                    // moves together with the slot edge (background, clip and fold
+                                    // origin); before this the fold/cover edge travelled while the
+                                    // bitmap stayed on its scene coordinates, so only the edges
+                                    // appeared to animate.
                                     withTransform({
-                                        translate(slotPanX, slotPanY)
+                                        translate(slotPanX + if (isVerticalAxis) 0f else slotShiftPx, slotPanY + if (isVerticalAxis) slotShiftPx else 0f)
                                         scale(slotScale, slotScale, pivot = slotCenter)
                                     }) {
                                         drawFrameNodes(
@@ -1406,21 +1435,39 @@ fun ComposeScenePagedReader(
                         }
                         // Loading and error overlays follow the page while a cover or curl transition
                         // moves it, so a slow page does not report progress from the wrong position.
+                        // The shift rule mirrors the draw-phase slot loop so the overlays stay glued
+                        // to the same edge as the page content.
+                        val loadingMotion = resolveSceneTransitionMotion(
+                            currentOffset = currentOffset,
+                            primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
+                            anchorSlot = transitionAnchorSlot,
+                            isScrollInProgress = scrollState.isScrollInProgress,
+                        )
                         val loadingTransition = resolveSceneSlotTransition(
                             slotIndex = slotIndex,
-                            motion = resolveSceneTransitionMotion(
-                                currentOffset = currentOffset,
-                                primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
-                                anchorSlot = transitionAnchorSlot,
-                                isScrollInProgress = scrollState.isScrollInProgress,
-                            ),
+                            motion = loadingMotion,
                             style = transitionStyle,
                             readingDirection = readingDirection,
                         )
-                        val translationPx = loadingTransition.translationFactor *
-                            (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
-                        val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else translationPx
-                        val slotScreenY = baseScreenY + if (readingDirection.isVertical) translationPx else 0f
+                        val loadingTravel = loadingMotion.currentSlot - loadingMotion.settledSlot + loadingMotion.offsetFraction
+                        val loadingDirectionSign = if (readingDirection == SceneReadingDirection.RIGHT_TO_LEFT) -1f else 1f
+                        val loadingShiftPx = when (transitionStyle) {
+                            ScenePageTransition.SLIDE -> 0f
+                            ScenePageTransition.CURL -> loadingTransition.translationFactor *
+                                (if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx)
+                            ScenePageTransition.COVER -> {
+                                if (slotIndex == loadingMotion.settledSlot) {
+                                    loadingDirectionSign * ScenePageTransitionRenderer.resolveCoverDisplacement(
+                                        travelFraction = loadingTravel,
+                                        primaryExtentPx = if (readingDirection.isVertical) viewportHeightPx else viewportWidthPx,
+                                    )
+                                } else {
+                                    0f
+                                }
+                            }
+                        }
+                        val slotScreenX = baseScreenX + if (readingDirection.isVertical) 0f else loadingShiftPx
+                        val slotScreenY = baseScreenY + if (readingDirection.isVertical) loadingShiftPx else 0f
                         val (slotScale, slotPanX, slotPanY) = resolveSlotTransform(slotIndex)
                         val slotCenter = Offset(
                             slotScreenX + viewportWidthPx / 2f,

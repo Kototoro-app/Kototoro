@@ -20,6 +20,15 @@ private const val FADE_START_PROGRESS = 0.92f
 private const val FADE_SPAN = 0.08f
 
 /**
+ * Share of the page travel before the covered page starts peeling away from the viewport.
+ *
+ * Keeping the page being left pinned for the first part of a cover that is driven by the scroll
+ * offset reproduces the legacy cover's "current page stays put, next page slides over it" feel
+ * without re-introducing the legacy double motion (see [resolveCoverDisplacement]).
+ */
+const val COVER_HOLD_FRACTION = 0.35f
+
+/**
  * Visual page-transition style of the paged scene host.
  *
  * Scene geometry and transition visuals are deliberately separate concerns (ADR 0002 I3):
@@ -69,6 +78,42 @@ internal object ScenePageTransitionRenderer {
 
     /** Below this magnitude a cover navigation counts as settled rather than in flight. */
     const val COVER_PROGRESS_EPSILON = 0.001f
+
+    /**
+     * Scene-coherent screen displacement for the cover style's settled page.
+     *
+     * In the legacy pager the page-turn translation fully owned a page's motion (the pager did not
+     * scroll while dragging), so the transform translation could carry an absolute page of travel.
+     * In the paged scene host the scroll offset is the single source of slot motion and already
+     * moves every slot during a drag, so re-applying that legacy translation as an additional
+     * screen offset makes the incoming page travel twice as far as the finger and paints a gap of
+     * background next to it (the "superimposed pan" the scene cut-over called out).
+     *
+     * This replaces the absolute translation with a displacement relative to the slot's own scroll
+     * position: it cancels the scroll motion — pinning the page being left at the viewport — until
+     * [COVER_HOLD_FRACTION] of the travel, then peels the page off in the reading direction so the
+     * incoming page, which rides the scroll untouched, is revealed underneath. The displacement
+     * starts and ends at zero (a smoothstep makes the peel accelerate and land with zero velocity),
+     * so the cover converges back onto the plain scroll positions without a jump when the
+     * transition settles or is remapped to a new anchor slot.
+     *
+     * The returned sign is expressed against the LTR / TOP_TO_BOTTOM screen convention, where the
+     * settled slot's scroll base moves negatively while travel advances. RIGHT_TO_LEFT mirrors the
+     * horizontal axis, so consumers negate the result for that direction.
+     */
+    fun resolveCoverDisplacement(
+        travelFraction: Float,
+        primaryExtentPx: Float,
+        holdFraction: Float = COVER_HOLD_FRACTION,
+    ): Float {
+        val travel = travelFraction.coerceIn(-1f, 1f)
+        if (travel == 0f || primaryExtentPx <= 0f) return 0f
+        val magnitude = abs(travel)
+        val peelProgress = ((magnitude - holdFraction) / (1f - holdFraction)).coerceIn(0f, 1f)
+        // Smoothstep: the peel starts and lands with zero velocity.
+        val eased = peelProgress * peelProgress * (3f - 2f * peelProgress)
+        return travel * primaryExtentPx * (1f - eased)
+    }
 
     fun transformFor(
         transition: ScenePageTransition,
