@@ -93,6 +93,26 @@ class ScenePagedTransitionMatrixTest {
     @Test
     fun curlForwardTurnLandsOnTheNextPage() = verifyForwardTurn(ReaderAnimation.SIMULATION, "CURL")
 
+    /**
+     * Finding 1 disposition (ESR tsk_8ea8dffe): does one more frame, produced without changing the
+     * page, make the announcement catch up? The turn is asserted to have committed first, so this
+     * cannot pass by measuring a swipe that never landed.
+     */
+    @Test
+    fun announcedPageCatchesUpAfterOneMoreFrame() {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(pageAnimation = ReaderAnimation.DEFAULT).use { host ->
+            host.launch()
+            host.awaitActivePage(0, "initial state")
+            host.swipeForwardCommitting()
+            host.awaitActivePage(1, "page turn")
+            host.holdSettled(1_500)
+            host.tapCenter()
+            host.holdSettled(1_000)
+            assertEquals("announced page after one more frame", 2, host.announcedPageNumber())
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
 
     private fun verifyForwardTurn(animation: ReaderAnimation, style: String) {
