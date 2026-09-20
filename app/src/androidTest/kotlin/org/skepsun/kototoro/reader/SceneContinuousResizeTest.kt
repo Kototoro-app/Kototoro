@@ -67,13 +67,16 @@ class SceneContinuousResizeTest {
     /**
      * Device evidence that the continuous hosts hold the reading position across a viewport resize.
      *
-     * The webtoon cell is **unstable**: with this same APK and this same assertion it has passed and
-     * failed repeatedly, and it once failed three runs in a row and then passed three runs in a row.
-     * The failures all read `WEBTOON page after the resize expected:<2> but was:<0>`, i.e. the
-     * position is on page 2 before the resize and on the chapter's first page after it — but a
-     * flaky cell is not evidence of a defect until the flakiness itself is attributed, so this is
-     * recorded as an open question rather than asserted green. The horizontal cell and the
-     * first-page control are stable (6/6 and 5/5 runs).
+     * The webtoon cell is **unstable**, and the failures carry their own evidence: the reader's
+     * report trail walks backwards through the chapter during the resize, `2/2-3 -> 1/1-3 -> 0/0-3`
+     * (active/lower-upper page indexes). Every page here is a full-page unit, and the walk back
+     * happens with those units unchanged, so the position is being *recomputed* rather than kept —
+     * the re-anchor lands on the chapter start when the reader is sitting on a non-zero page.
+     *
+     * It is not stable enough to assert green (it has passed and failed with the same APK, including
+     * three failures followed by three passes), so what is asserted here is the invariant, and the
+     * trail is included in the failure message: the next person to see this red gets the sequence
+     * instead of a bare mismatch. The horizontal cell and the first-page control are stable.
      */
     @Test
     fun webtoonKeepsThePageAcrossAResize() = withHost(continuousHost = ContinuousHost.WEBTOON)
@@ -112,10 +115,10 @@ class SceneContinuousResizeTest {
             host.resizeViewport(0.7f)
             host.awaitViewportResized(widthBefore, heightBefore, "$continuousHost viewport")
             host.holdSettled(1_000)
-            assertEquals(
-                "$continuousHost page after the resize",
-                2,
-                host.activePageIndex(),
+            assertTrue(
+                "$continuousHost page after the resize: expected 2 but was ${host.activePageIndex()}; " +
+                    "reports=${host.reportTrail()}",
+                host.activePageIndex() == 2,
             )
             assertTrue(
                 "$continuousHost offset after the resize: ${host.currentScroll()} (was $scrollBefore)",
@@ -144,6 +147,7 @@ internal class ContinuousHarness(
     private val reportCount = AtomicInteger(0)
     private val scrollValue = AtomicInteger(0)
     private val scrollPage = AtomicLong(Long.MIN_VALUE)
+    private val reportLog = java.util.Collections.synchronizedList(mutableListOf<String>())
     private val windowWidthPx = AtomicInteger(0)
     private val windowHeightPx = AtomicInteger(0)
     private val readerViewportWidthPx = AtomicInteger(0)
@@ -201,9 +205,16 @@ internal class ContinuousHarness(
                         android.util.Log.i("SceneMatrix", "continuous box size=$size scale=$scale")
                     },
             ) {
-                val onPagesChanged: (Long, Long, Long) -> Unit = { _, _, active ->
+                val onPagesChanged: (Long, Long, Long) -> Unit = { lower, upper, active ->
                     activePage.set(active)
                     reportCount.incrementAndGet()
+                    if (reportLog.size < 64) {
+                        reportLog.add(
+                            "${pages.indexOfFirst { it.readerKey == active }}/" +
+                                "${pages.indexOfFirst { it.readerKey == lower }}-" +
+                                "${pages.indexOfFirst { it.readerKey == upper }}",
+                        )
+                    }
                 }
                 val onInternalScroll: (ReaderPage, Int) -> Unit = { page, scroll ->
                     scrollPage.set(page.readerKey)
@@ -254,6 +265,9 @@ internal class ContinuousHarness(
     }
 
     fun activePageIndex(): Int = pages.indexOfFirst { it.readerKey == activePage.get() }
+
+    /** The reading position the reader reported, in the order it reported it. */
+    fun reportTrail(): String = reportLog.joinToString(" -> ")
 
     /** The reader's own reported offset inside the current page, in page pixels. */
     fun currentScroll(): Int = scrollValue.get()
