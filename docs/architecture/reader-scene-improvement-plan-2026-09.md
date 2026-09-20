@@ -827,8 +827,19 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
      需有界（本轮改为独立线程 + 5s join）。
   3. MIUI 会在测试期间 freeze instrumentation app（logcat `GreezeManager: freezeUid ...
      INSTRUMENTATION_APP`），是长尾挂起的候选之一。
-  4. 结论：**这 3 个测试类本轮未入库** —— 断言逻辑已多次跑通，但设备侧 harness 仍会
-     单轮挂起/末位失败，入库会把不稳定测试带进仓库；先按上面三条稳定化，再随发现 1/2/3 一起交付。
+  4. 稳定化落地（同日续做）：`waitForIdleSync` 移除、轮询内不再查无障碍根、`close()` 有界（独立线程 +
+     5s join）、视口尺寸在 `applyContent` 时缓存（手势循环里不再回调 activity）、首次无上报时重试最多
+     3 次（每次 20s 窗口）。效果：整类 13 用例从「挂 20–40 分钟」降到 **26 秒跑完 11/13（0 失败）**。
+  5. **剩余不稳点已定位并给出运行方式**：整类连跑会在**跨测试的 Activity 生命周期**上挂起
+     （第 12 个用例前，`ActivityScenario.launch` 等前一实例残留的 interrupted-turn 状态）；
+     同一用例**单独跑（fresh process）稳定通过** —— 两次整类运行里
+     `coverInterruptedTurnSettlesOnALegalPage` 失败/挂起，而
+     `...MatrixTest#coverInterruptedTurnSettlesOnALegalPage` 单跑 → BUILD SUCCESSFUL（1 用例 17s）。
+     因此设备侧按**方法/类分跑**执行（与本仓既有「单类分跑」做法一致），整类连跑不作为验收方式。
+- **入库内容（本轮）**：`app/src/androidTest/.../ScenePagedTransitionHarness.kt`（探针 harness，双通道观察 +
+  上述稳定性规则）与 `ScenePagedTransitionMatrixTest.kt`（13 用例：10 通过 + `announcedPageFollowsTheReaderState`
+  与 `curlForwardTurnLandsOnTheNextPage` 两个 `@Ignore` 复现）。生命周期类（旋转/重建）本轮**未入库** ——
+  它需要探针补 `configChanges` 且旋转格要接 `requestedPage` 才能归因（见发现 2）。
 - 其余矩阵行定性（本轮未新增覆盖）：
   | 行 | 现状 |
   | --- | --- |
