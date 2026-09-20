@@ -2,7 +2,7 @@
 
 - 日期：2026-09-20。
 - 代码审阅基线：`48083e0b4`（`fix(reader): prevent cover transition page flicker`）。
-- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线、2.5× 超时帧 trace 提取（交付 10）、zoom 长卡顿根因修复——session 关闭移出主线程（交付 11，700ms 停顿消除）、7 场景超时帧证据归档与 §4.2.1 分组 SLO 制定（交付 12，高倍率组由「待验收」转为有数值门禁）、CS-7 基准门禁脚本化与阈值判定（交付 13，`--selftest` 55/55，7/7 归档场景通过）；长章节组 fixture、B 回归矩阵其余项、残差 tile 到达调度优化、§8.3 后续模块轮次与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
+- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线、2.5× 超时帧 trace 提取（交付 10）、zoom 长卡顿根因修复——session 关闭移出主线程（交付 11，700ms 停顿消除）、7 场景超时帧证据归档与 §4.2.1 分组 SLO 制定（交付 12，高倍率组由「待验收」转为有数值门禁）、CS-7 基准门禁脚本化与阈值判定（交付 13，`--selftest` 55/55，7/7 归档场景通过）、阶段 B 余项第一批——翻页样式/生命周期矩阵定性与 3 个新发现（交付 14）、阶段 B 余项第二批——分页宿主 viewport resize 丢页根因修复与生命周期 resize 用例（交付 15，5/5 通过）；长章节组 fixture、B 回归矩阵其余项、残差 tile 到达调度优化、§8.3 后续模块轮次与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
 - 范围：漫画 Scene Reader；不包含小说阅读器、视频播放器或依赖升级。
 - 关联：[Scene Reader 收尾计划](reader-scene-closure-plan-2026-09.md)、[ADR 0002](../adr/0002-reader-scene-decoupling.md)。
 
@@ -864,12 +864,71 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   发现 1 已定位到宿主语义通道（`lastReportedPages` 是 Compose state，但 Box 上的
   `sceneReaderViewportSemantics` 是否随重组重建、a11y 节点是否被跳过更新仍待查）。
 
+#### 交付 15 — 阶段 B 余项（第二批）：分页宿主 viewport resize 丢页根因修复 + resize 用例
+
+- 目的：交付 14 的发现 2（viewport resize 后回到第 1 页）当时只在探针宿主上观察到，
+  且无法区分「探针没接 `requestedPage`」与「宿主自身丢页」。本轮把探针换成**真实无头宿主调用方式**
+  （`ComposeScenePagedReader` 直接挂在 activity 上、composition 与 activity 全程存活），
+  并在同一 composition 内改变阅读器自身视口，得到可自动断言的结论。
+- **先修正交付 14 的一处事实错误**：本仓 `ReaderActivity`（`AndroidManifest.xml:159-161`）
+  **没有声明 `android:configChanges`**，`IdleProbeActivity` 也没有 —— 因此真实旋转走 Activity 重建
+  （`onCreate` + 状态恢复），而「resize 而不重建」对应的是分屏/折叠形态变化（此时
+  `ReaderActivity.onConfigurationChanged` 只重跑 `applyDoubleModeAuto()`，不重新锚定）。
+  交付 14 中「探针需补 `configChanges` 与 `ReaderActivity` 一致」的说法不成立，以本条为准。
+  「旋转保持当前页」应作为**重建路径**验收，「resize 保持当前页」作为**同实例路径**验收，两者证据分开。
+- **根因（`ComposeScenePagedReader`）**：`scene` 与 `scrollState` 都以视口尺寸为 `remember` key 重建，
+  但 `hasAppliedInitialPosition` 是裸 `remember`，不随几何失效 —— resize 后初始定位 effect 不再执行，
+  新 `scrollState` 停在 `offset=0`，即本章第 1 页；同时按下式折算的 `zoomedSlotIndex` 归零，
+  缩放归属随之错位：
+  - 证据（真机诊断，修复前）：`scene box size=1280 x 9009 -> 1280 x 6306`，
+    `reports=1 window=(0,0,0)`，`activePage 1 -> 0`；修复后同一路径 `activePage 1 -> 1`、`window=(1,1,1)`。
+- **修复**：把「是否已定位」的布尔量换成**带几何的锚点**（`lastAnchoredSlot` +
+  `anchoredViewportWidthPx/HeightPx` 记录锚点所属视口），锚定 effect 在几何变化时以
+  **锚定 slot**重新解析几何（而不是回落到 `initialPage`）；page-update effect 在新的视口尺寸下
+  不再抢跑回第 1 页；`zoomMode` 变化经独立 `anchorTrigger`（**不**复用 `sceneRevision`，避免无谓的
+  绘制失效）走同一条重锚定路径。恢复判据是 **slot/页身份**，不是旋转前后的绝对像素（§5.1 要求）。
+- **入库用例**（`app/src/androidTest/.../ScenePagedViewportResizeTest.kt`，5 例）：
+  首页 resize（对照格，前后都在第 1 页）、翻到第 2 页后 resize、KEEP_START 缩放模式下的 resize、
+  连续两次 resize（0.8 → 0.6）、resize 后播报页仍为第 2 页。
+  harness 增加 `resizeViewport(scale)`（只写尺寸 state，不重建 composition）、`readerViewportSize()`、
+  `reportedWindow()`；**resize 只有在阅读器自己测量到的像素尺寸变化后才算证据**（见下条教训）。
+- 红→绿（真机 M332BF - 17 / `ecd4369c`，debug，单类分跑）：
+  修复前 `Starting 5 tests` → 4 失败（`resizeOnTheFirstPageStaysOnTheFirstPage` 通过，符合设计），
+  诊断逐例显示 `activePage 1 -> 0 window=(0,0,0)`；修复后 `Finished 5 tests` → **5/5 通过**，
+  诊断逐例 `activePage 1 -> 1 window=(1,1,1)`。
+- 回归（同设备，按方法/类分跑）：
+  `SceneReaderViewportSemanticsTest` 6 例含 resize 类一次连跑 → 仅
+  `viewportSemanticsExposePagePositionAndExecutePageTurns` 失败，**单跑通过**（交付 14 记录的
+  「整类连跑会跨测试挂起/互相干扰、设备侧按方法分跑」再次复现）；
+  `ScenePagedTransitionMatrixTest` 12 例分 3 批全绿；
+  `ScenePagedGestureTest` 11 例 → 10 通过 + 1 个**既有**设备缺陷
+  （`originalSizeCanPanVerticallyWithoutUserZoom`，断言红像素处取到黑，属 ESR `tsk_b9a19061`，
+  非本轮回归）；`ScenePagedViewportResizeTest` 5/5。
+  JVM：`:reader-core:test` + `:app:testDebugUnitTest` BUILD SUCCESSFUL。
+- **测试基建教训（新增，后续必读）**：
+  1. `Modifier.height()` 在这种无头宿主里**不会真正改变阅读器视口** —— 它先被父约束夹住，
+     实测 Box 尺寸保持 `1280x2772` 不变、`reports=0`，用例会「假绿」（本轮第一次跑通即此坑）。
+     必须用 `requiredHeight()`，并且断言前用 `readerViewportSize()` 确认尺寸真的变了。
+  2. 「resize 后页没变」在尺寸没变时也会通过 —— 所以对照格（首页 resize）与尺寸断言缺一不可。
+  3. instrumented 测试类必须**文件基名与类名一致**：本轮两次踩坑（`ScenePagedResizeTest.kt` 里声明
+     `ScenePagedViewportResizeTest`、`ScenePagedViewportResizeCaseTest.kt` 里声明
+     `ScenePagedViewportResizeTest`），症状都是 `ClassNotFoundException: Failed loading specified test class`，
+     且 `compileDebugAndroidTestKotlin` 与 `assembleDebugAndroidTest` 都**不会**报错 —— 只有设备侧运行才暴露。
+  4. 改了 `androidTest` 源码后若 `assembleDebugAndroidTest` 恰好 UP-TO-DATE，`connectedDebugAndroidTest`
+     可能装上旧测试 APK：先 `assembleDebugAndroidTest` 确认 APK 时间戳/含目标类，再跑设备用例。
+- 关联：§5.1「生命周期」行（resize 一半）、ESR `tsk_8d1cbe98`（本轮闭环）、交付 14（发现 2 归因）。
+- 已知限制/下一步：**未入库**旋转/Activity 重建路径（真实旋转走重建，需在真实 reader 入口验证状态恢复）；
+  进程死亡后恢复仍只有域层覆盖；连续宿主（webtoon/horizontal）经代码审查**无同类缺陷**
+  （两者 `rememberComposeScenePrimaryScrollState(key = scene)` 共享同一 scene 实例，resize 时状态保留、
+  max 值由 `pages/scene` effect 更新），但**尚无 resize 设备用例**，属下一批。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— 计划中唯一完全未启动的阶段。
 - §4.2 长章节组夹具与测量方法（需新增 FIXTURE_MODE 与 benchmark 方法）。
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
 - §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
+  其中「生命周期」行的 resize 一半已由交付 15 闭环；旋转/Activity 重建路径与连续宿主 resize 用例仍缺。
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
