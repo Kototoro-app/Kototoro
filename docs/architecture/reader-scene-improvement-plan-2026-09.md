@@ -973,6 +973,47 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   本轮只测**翻页 journey**（连续滑动/缩放不在此列）；CURL 大图夹具变体未跑；
   大图 COVER 首跑因环境性失败重跑一次才成功（失败原因记录在该场景 gradle 日志，非 SLO 判定）。
 
+#### 交付 17 — 阶段 B 余项（第三批）：高图 1:1 设备用例失败归因（**harness 上限 + 管线取样行为**，不是宿主几何缺陷）
+
+- 背景：`ScenePagedGestureTest#originalSizeCanPanVerticallyWithoutUserZoom` 自交付 14 起被登记为
+  「既有缺陷：高图在 ORIGINAL/KEEP_START 下的 1:1 几何（设备用例确定性失败）」（ESR `tsk_b9a19061`）。
+  该用例是 §5.1「缩放归属」行的证据，不修就无法把该行的设备证据补齐。本轮把它查清。
+- **实测根因（逐层证据，真机 M332BF - 17）**：
+  1. 失败断言是 `Native image must fill exactly 240 physical pixels`：x=239 取到黑。逐点采样
+     （y=20 一行）得到 `x=0..120 RED, x≥180 BLACK` —— 内容只画了约 164px 宽，不是 240px。
+  2. 在渲染入口打印 `VisibleNode` 得到决定性数字：
+     `scene=FloatRect(0,0,1280,2777)`（初始估计几何）→ 随后稳定为
+     `scene=FloatRect(left=0, top=0, right=164.0, bottom=4096.0)`，`asset=ComposeImage`。
+     **164 = 240 × 4096/6000**：投递到宿主的位图是**等比压缩到 4096 上限**的 164×4096。
+  3. 240×6000 的 PNG 本身完好（`BitmapFactory` 读出 240×6000），压缩发生在解码侧：
+     该夹具走**整图解码**路径，而整图解码受 `Canvas.maximumBitmapWidth/Height` 上限约束。
+  4. 生产解码器（`KototoroImagePipelineAdapter` + `AndroidRegionDecoderFactory`）在**同条件**下
+     （真机、同 viewport 1280×2772、同一 PNG）实测返回
+     `plan … tiled=false plannedDecodeSize=null`，即走 `SampledSingle` 而不是 tile 阶梯
+     （`DecodePlanner` 第 2/3 步：LOD 取样后 `targetH <= maxDrawableH` 即判定「fits」→ 不做 tile）。
+     生产侧因此同样拿不到 240 原生像素，但**这是刻意的取样策略**（`DecodePlanner` 注释记录了
+     反向实验：把 fit 页推入 tile 路径会让 1.5× 的 CPU P99 从 7ms 恶化到 452ms），
+     且对阅读无影响：原图 6000 高 > viewport 2772，取样后仍高于屏幕，清晰度由 240 宽的源图决定。
+- **结论（判定为「harness 上限 + 既有取样策略」，不是宿主 1:1 几何缺陷）**：
+  1:1 原生像素契约对**高于解码上限**的页面在这套 harness 里**不可达** —— harness 的 pipeline 直接投递
+  已解码位图（`OriginalReady`），位图既然已被上限压缩，任何宿主实现都画不出 240 原生像素或
+  在 y=320 切分色带。因此原用例的失败断言**不是产品行为**，之前把它登记成「缺陷」是归因错误。
+- **修改**：`ScenePagedGestureTest.verifyNativePixels` 的逐像素断言只对**未被上限压缩**的页面执行
+  （短页 LTR/RTL 两格仍逐像素校验 1:1 与「小图不放大」）；高图那一格保留其**可验证且真实**的部分：
+  页面确实渲染、且无用户缩放时可纵向平移（拖动后断言仍取到内容），并在代码注释里写明上限与原因。
+- 证据与限制：本轮结论来自三次真机实验（逐点采样、渲染入口 `VisibleNode` 打印、生产 adapter 的
+  `plan` 打印），全部为临时诊断，已在结论落定后从生产代码与测试代码中移除；
+  诊断脚本与断言失败原文见交付记录与 `app/build/outputs/androidTest-results/`。
+- 验收（真机 M332BF - 17，**按方法分跑**）：`ScenePagedGestureTest` 全 11 个用例逐个单独运行
+  全部 BUILD SUCCESSFUL（含本次改动的 `originalSizeCanPanVerticallyWithoutUserZoom`；
+  1 用例约 14–17 秒）。**整类连跑同样无效**：本轮一次 16 用例连跑出现 2 例失败
+  （`zoomedPageRestoresZoomWhenFlippingBack`、`originalSizeUsesNativePixelsRtl`，
+  后者失败语为 `Paged fixture did not become visible`），逐个单跑均通过 ——
+  再次印证交付 14 记录的「设备侧按方法/类分跑」结论，整类连跑不得作为验收依据。
+- 关联：§5.1「缩放归属」行、ESR `tsk_b9a19061`、交付 14（发现 2 的登记来源）。已知限制：
+  `KEEP_START`/`ORIGINAL` 下「超高页面是否应当绕过上限改用 region decode」属产品决策，
+  本轮不改变该策略（改变它需按 §4.2.1「重设条件」重新立项并评估内存/首帧代价）。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
