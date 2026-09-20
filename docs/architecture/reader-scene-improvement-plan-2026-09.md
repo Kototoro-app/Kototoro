@@ -2,7 +2,7 @@
 
 - 日期：2026-09-20。
 - 代码审阅基线：`48083e0b4`（`fix(reader): prevent cover transition page flicker`）。
-- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1（普通单页）A/B 交错基线；阶段 A 其余场景、B 回归矩阵其余项与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
+- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线（zoom 2.0×/2.5× overrun 转正记为待验收）；长章节组 fixture、超时帧比例提取、B 回归矩阵其余项与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
 - 范围：漫画 Scene Reader；不包含小说阅读器、视频播放器或依赖升级。
 - 关联：[Scene Reader 收尾计划](reader-scene-closure-plan-2026-09.md)、[ADR 0002](../adr/0002-reader-scene-decoupling.md)。
 
@@ -513,6 +513,51 @@ scene-aware OCR/SR。只有在独立需求明确且能简化实现或改善实�
 3. 工作树切换用 `git stash push -u`；发现并清除了一处残留：reader-core/src/test 里
    `WebtoonViewportPolicyParityTest` 的杂散副本（依赖 app 代码，无法在纯 JVM 模块编译；
    canonical 副本在 app/src/test）。
+
+#### 交付 9 — 阶段 A：场景 2/3/4 基线（§4.2 分页矩阵补全）
+
+条件：commit `7db11a1d5`（benchmark 变体 APK sha `332d461f…`，安装核对）；同设备同显示配置；
+CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8→38.6°C 逐场景爬升（zoom
+阶梯最热，记录在案）；每场景 5 份迭代 trace 仅末场景（zoomed 2.5×）留存并已归档。
+
+各场景中位数（CPU/overrun 为 P50/P90/P95/P99；内存为 RssAnon KB）：
+
+| 场景 | 后端 | CPU P99 (ms) | overrun P99 (ms) | RssAnon Max | tile 解码/驻留 | 判定 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 大图 1× (6000×9000) | scene | 7.9 | **-4.9** | 248,192 | 0 / 0 | 通过（常规门禁） |
+| 2 大图 1× | legacy | 5.1 | -7.5 | 447,628 | – | scene 内存仅 legacy 55% |
+| 4 双页往返 | scene | 7.8 | **-4.8** | 232,924 | 0 / 0 | 通过 |
+| 4 双页往返 | legacy | 4.9 | -7.8 | 269,900 | – | legacy CPU 尾更低但内存 +37MB |
+| 3 zoom 1.5× | scene | 7.7 | **-4.7** | 446,968 | 0 / 0 | 通过（常用倍率组） |
+| 3 zoom 2.0× | scene | 8.6 | **+9.1** | 571,876 | 392 / 90 | 待验收（见下） |
+| 3 zoom 2.5×(fit-height,开1×) | scene | 6.5 | -5.7 | 433,608 | 0 / 0 | 通过 |
+| 3 zoom 2.5×(开即2.5×) | scene | 7.7 | **+13.1** | 577,372 | 392 / 80 | 待验收（见下） |
+
+发现与判读：
+
+1. **zoom 成本悬崖实测定位**：1.5×（无 tile 活动，-4.7ms）→ 2.0×（tile 激活：392 次解码
+   请求、90 驻留，+9.1ms）之间。P99 CPU 时长本身只有 8.6ms（<16.7ms deadline），overrun
+   转正来自 CPU 之外的部分（候选：tile 解码后纹理上传/栅格化排队），与 §4.2 大图组
+   「独立检查尾延迟、纹理上传」的关注点吻合。打开即 2.5× 的 +13.1 是当前最差帧。
+   悬崖是结构性的（2.5× held 场景在更热时刻仍 -5.7，排除纯温度解释）。
+2. **高倍率组无 SLO（§4.2 明确约束）**：+9.1/+13.1 记为待验收数据，不宣布通过也不豁免。
+   制定 SLO 需要超时帧比例与最大连续超时（trace 提取，见下）。
+3. **内存证据**：zoom 场景 RssAnon Max 545-577MB、Last 383-427MB —— 稳态比峰值低
+   150-195MB，tile 预算驱逐在工作（Max→Last 回落）；TileEvictions 全场景为 0 记录值
+   （驱逐指标口径待查：可能未覆盖跨迭代清零）。
+4. **scene vs legacy 旅程不完全等帧**（双页 1045 vs 505 帧、大图 606 vs 522 帧）：
+   CPU 分位直接横比有偏，内存与门禁判定不受影响；已按各自原始数字记录。
+5. **场景 2 内存优势**：scene 大图 1× 用 248MB vs legacy 448MB —— LOD/概览路径的
+   实测收益（-45%）。
+
+后续（阶段 A 收尾清单）：
+- 超时帧比例 + 最大连续超时：从留存的 5 份 zoomed 2.5× trace 提取（需 trace_processor，
+  本机未装；trace 已归档至会话本地 `/tmp/reader-bench/scenarios/zoomed2_5-traces/`）；
+  其余场景 trace 每轮覆盖未留存，需要时按 §4.1 流程重跑并预先归档。
+- §4.2 长章节组（50/500/5000 页元数据，固定窗口查询耗时/分配）**无现成 fixture 与
+  benchmark 方法**（现有 FIXTURE_MODE：standard/ultra_long/paged/paged_large）——
+  需新增夹具与测量方法，独立一轮设计。
+- webtoon burst/sustained 套件重跑（可选，历史数据在 closure plan）。
 
 #### 未启动
 
