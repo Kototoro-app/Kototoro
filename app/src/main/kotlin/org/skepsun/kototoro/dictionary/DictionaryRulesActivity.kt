@@ -39,12 +39,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.dictionary.DictionaryRule
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
@@ -116,18 +118,18 @@ private fun DictionaryRulesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("词典规则") },
+                title = { Text(stringResource(R.string.dictionary_rules)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onImport) {
-                        Icon(Icons.Outlined.FileUpload, contentDescription = "导入")
+                        Icon(Icons.Outlined.FileUpload, contentDescription = stringResource(R.string.import_button))
                     }
                     IconButton(onClick = onExport) {
-                        Icon(Icons.Outlined.FileDownload, contentDescription = "导出")
+                        Icon(Icons.Outlined.FileDownload, contentDescription = stringResource(R.string.export))
                     }
                 },
             )
@@ -137,7 +139,7 @@ private fun DictionaryRulesScreen(
                 editingRule = null
                 showEditor = true
             }) {
-                Icon(Icons.Outlined.Add, contentDescription = "添加")
+                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.add))
             }
         },
     ) { paddingValues ->
@@ -149,7 +151,7 @@ private fun DictionaryRulesScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text("暂无词典规则", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.dictionary_rules_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             LazyColumn(
@@ -188,7 +190,7 @@ private fun DictionaryRulesScreen(
                                 onCheckedChange = { onToggle(rule, it) },
                             )
                             IconButton(onClick = { onDelete(rule) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "删除")
+                                Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.delete))
                             }
                         }
                     }
@@ -233,16 +235,39 @@ private fun DictionaryRuleEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialRule == null) "添加词典规则" else "编辑词典规则") },
+        title = {
+            Text(
+                if (initialRule == null) {
+                    stringResource(R.string.dictionary_rule_add_title)
+                } else {
+                    stringResource(R.string.dictionary_rule_edit_title)
+                },
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true)
-                OutlinedTextField(urlRule, { urlRule = it }, label = { Text("URL 规则") }, minLines = 2)
-                OutlinedTextField(showRule, { showRule = it }, label = { Text("显示规则（可选）") }, minLines = 2)
-                OutlinedTextField(sortNumber, { sortNumber = it }, label = { Text("排序") }, singleLine = true)
+                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.name)) }, singleLine = true)
+                OutlinedTextField(
+                    urlRule,
+                    { urlRule = it },
+                    label = { Text(stringResource(R.string.dictionary_rule_url_label)) },
+                    minLines = 2,
+                )
+                OutlinedTextField(
+                    showRule,
+                    { showRule = it },
+                    label = { Text(stringResource(R.string.dictionary_rule_show_label)) },
+                    minLines = 2,
+                )
+                OutlinedTextField(
+                    sortNumber,
+                    { sortNumber = it },
+                    label = { Text(stringResource(R.string.sort)) },
+                    singleLine = true,
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = enabled, onCheckedChange = { enabled = it })
-                    Text("启用")
+                    Text(stringResource(R.string.enable))
                 }
             }
         },
@@ -260,12 +285,12 @@ private fun DictionaryRuleEditorDialog(
                     )
                 },
                 enabled = name.isNotBlank() && urlRule.isNotBlank(),
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.save)) }
         },
         dismissButton = {
             Row {
-                if (onDelete != null) TextButton(onClick = onDelete) { Text("删除") }
-                TextButton(onClick = onDismiss) { Text("取消") }
+                if (onDelete != null) TextButton(onClick = onDelete) { Text(stringResource(R.string.delete)) }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         },
     )

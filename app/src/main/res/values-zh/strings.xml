@@ -3335,4 +3335,38 @@ SHA-256 指纹:
     <string name="mirror_probe_timeout">超时</string>
     <string name="mirror_probe_select_fastest">选择最快</string>
     <string name="mirror_probe_fastest_badge">最快</string>
+    <string name="export">导出</string>
+    <string name="sort">排序</string>
+    <!-- 词典界面 -->
+    <string name="dictionary_title">查词</string>
+    <string name="dictionary_manage_rules">管理词典</string>
+    <string name="dictionary_query_label">查询内容</string>
+    <string name="dictionary_query_action">查询</string>
+    <string name="dictionary_empty_query">请输入要查询的词</string>
+    <string name="dictionary_no_enabled_rules">没有启用的词典规则</string>
+    <string name="dictionary_rules">词典规则</string>
+    <string name="dictionary_rules_summary">管理用于文本选择查词的在线词典</string>
+    <string name="dictionary_rules_empty">暂无词典规则</string>
+    <string name="dictionary_rule_add_title">添加词典规则</string>
+    <string name="dictionary_rule_edit_title">编辑词典规则</string>
+    <string name="dictionary_rule_url_label">URL 规则</string>
+    <string name="dictionary_rule_show_label">显示规则（可选）</string>
+    <!-- 源设置：Legado 项与兼容性提示 -->
+    <string name="settings_source_legado_variables_title">Legado 变量</string>
+    <string name="settings_source_legado_login_title">登录（Legado）</string>
+    <string name="settings_source_legado_runtime_title">运行时（Legado）</string>
+    <string name="settings_source_compat_title">兼容性提示</string>
+    <string name="settings_source_compat_summary">该扩展包含暂未 Compose 化的自定义设置项，当前仅显示可安全映射的常规项。</string>
+    <string name="settings_source_variables_title">源变量</string>
+    <string name="settings_source_variables_summary">用于控制书籍列表加载数量（脚本通常读取末尾数字）。留空表示不设置。</string>
+    <string name="settings_source_book_variables_title">书籍变量（custom）默认值</string>
+    <string name="settings_source_book_variables_summary">用于限制章节加载上限（聚合源常用）。-1 表示不限制；留空表示不设置。</string>
+    <string name="settings_source_integer_required">请输入整数（可为空）</string>
+    <string name="settings_source_check_login_title">检测登录状态</string>
+    <string name="settings_source_action_failed">执行失败</string>
+    <string name="settings_source_clear_login_title">清理登录信息</string>
+    <string name="settings_source_clear_login_summary">清空该源的 sourceVariable/loginInfo/登录表单缓存</string>
+    <string name="settings_source_cleared">已清理</string>
+    <string name="settings_source_runtime_dir_title">使用 runtime 目录解析</string>
+    <string name="settings_source_runtime_dir_summary">切换 Legado 目录/详情链路的 standalone runtime 调试开关。</string>
 </resources>

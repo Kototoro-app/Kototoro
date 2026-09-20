@@ -4142,4 +4142,36 @@
     <string name="sort_by_title">Title</string>
     <string name="sort_by_last_read">Last read</string>
     <string name="sort_by_rating">Rating</string>
+    <string name="export">Export</string>
+    <string name="sort">Sort</string>
+    <!-- Dictionary screens -->
+    <string name="dictionary_title">Dictionary</string>
+    <string name="dictionary_manage_rules">Manage dictionaries</string>
+    <string name="dictionary_query_label">Word or text</string>
+    <string name="dictionary_query_action">Look up</string>
+    <string name="dictionary_empty_query">Enter a word to look up</string>
+    <string name="dictionary_no_enabled_rules">No dictionary rules are enabled</string>
+    <string name="dictionary_rules_empty">No dictionary rules yet</string>
+    <string name="dictionary_rule_add_title">Add dictionary rule</string>
+    <string name="dictionary_rule_edit_title">Edit dictionary rule</string>
+    <string name="dictionary_rule_url_label">URL rule</string>
+    <string name="dictionary_rule_show_label">Display rule (optional)</string>
+    <!-- Source settings: Legado entries and the compatibility notice -->
+    <string name="settings_source_legado_variables_title">Legado variables</string>
+    <string name="settings_source_legado_login_title">Login (Legado)</string>
+    <string name="settings_source_legado_runtime_title">Runtime (Legado)</string>
+    <string name="settings_source_compat_title">Compatibility notice</string>
+    <string name="settings_source_compat_summary">This extension has custom settings that are not ported to Compose yet, so only the entries that map safely are shown.</string>
+    <string name="settings_source_variables_title">Source variables</string>
+    <string name="settings_source_variables_summary">Controls how many books the list loads (scripts usually read the trailing number). Leave blank to leave it unset.</string>
+    <string name="settings_source_book_variables_title">Book variable (custom) default</string>
+    <string name="settings_source_book_variables_summary">Caps how many chapters are loaded, which aggregate sources commonly need. -1 means unlimited; leave blank to leave it unset.</string>
+    <string name="settings_source_integer_required">Enter a whole number (may be blank)</string>
+    <string name="settings_source_check_login_title">Check login state</string>
+    <string name="settings_source_action_failed">Failed</string>
+    <string name="settings_source_clear_login_title">Clear login information</string>
+    <string name="settings_source_clear_login_summary">Clears this source\'s sourceVariable, loginInfo and login form cache</string>
+    <string name="settings_source_cleared">Cleared</string>
+    <string name="settings_source_runtime_dir_title">Resolve through the runtime directory</string>
+    <string name="settings_source_runtime_dir_summary">Toggles the standalone runtime debug path used for the Legado catalogue and detail flow.</string>
 </resources>

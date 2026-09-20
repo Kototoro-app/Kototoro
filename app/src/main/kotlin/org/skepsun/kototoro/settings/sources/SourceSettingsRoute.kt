@@ -280,7 +280,7 @@ private class SourceSettingsRouteController(
         buildLegadoVariableRows(repository).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(
                 id = "legado_variables",
-                title = "Legado 变量",
+                title = context.getString(R.string.settings_source_legado_variables_title),
                 rows = rows,
             )
         }
@@ -288,7 +288,7 @@ private class SourceSettingsRouteController(
         buildLegadoAuthRows(repository).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(
                 id = "legado_auth",
-                title = "登录（Legado）",
+                title = context.getString(R.string.settings_source_legado_login_title),
                 rows = rows,
             )
         }
@@ -296,7 +296,7 @@ private class SourceSettingsRouteController(
         buildLegadoRuntimeRows(repository).takeIf { it.isNotEmpty() }?.let { rows ->
             sections += SourceSettingsSectionUiState(
                 id = "legado_runtime",
-                title = "运行时（Legado）",
+                title = context.getString(R.string.settings_source_legado_runtime_title),
                 rows = rows,
             )
         }
@@ -378,8 +378,8 @@ private class SourceSettingsRouteController(
             rows = listOf(
                 SourceSettingsInfoRowUiState(
                     id = "external_preference_compat_info",
-                    title = "兼容性提示",
-                    summary = "该扩展包含暂未 Compose 化的自定义设置项，当前仅显示可安全映射的常规项。",
+                    title = context.getString(R.string.settings_source_compat_title),
+                    summary = context.getString(R.string.settings_source_compat_summary),
                 ),
             ),
         )
@@ -970,14 +970,14 @@ private class SourceSettingsRouteController(
         return listOf(
             SourceSettingsTextRowUiState(
                 id = KEY_LEGADO_SOURCE_VARIABLE,
-                title = "源变量",
+                title = context.getString(R.string.settings_source_variables_title),
                 value = legadoSourcePrefs.getString(sourceVariableKey(sourceKey), "").orEmpty(),
-                summary = "用于控制书籍列表加载数量（脚本通常读取末尾数字）。留空表示不设置。",
+                summary = context.getString(R.string.settings_source_variables_summary),
                 placeholder = "",
                 onValueChange = onValueChange@{ value ->
                     val trimmed = value.trim()
                     if (!isSignedIntOrBlank(trimmed)) {
-                        Toast.makeText(context, "请输入整数（可为空）", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, R.string.settings_source_integer_required, Toast.LENGTH_SHORT).show()
                         return@onValueChange
                     }
                     legadoSourcePrefs.edit {
@@ -992,14 +992,14 @@ private class SourceSettingsRouteController(
             ),
             SourceSettingsTextRowUiState(
                 id = KEY_LEGADO_BOOK_DEFAULT_CUSTOM,
-                title = "书籍变量（custom）默认值",
+                title = context.getString(R.string.settings_source_book_variables_title),
                 value = legadoBookPrefs.getString(bookDefaultKey(sourceKey, "custom"), "").orEmpty(),
-                summary = "用于限制章节加载上限（聚合源常用）。-1 表示不限制；留空表示不设置。",
+                summary = context.getString(R.string.settings_source_book_variables_summary),
                 placeholder = "-1",
                 onValueChange = onValueChange@{ value ->
                     val trimmed = value.trim()
                     if (!isSignedIntOrBlank(trimmed)) {
-                        Toast.makeText(context, "请输入整数（可为空）", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, R.string.settings_source_integer_required, Toast.LENGTH_SHORT).show()
                         return@onValueChange
                     }
                     legadoBookPrefs.edit {
@@ -1058,7 +1058,7 @@ private class SourceSettingsRouteController(
                                             ?.toString()
                                             ?.take(200)
                                             .orEmpty()
-                                            .ifBlank { "执行完成" }
+                                            .ifBlank { context.getString(R.string.done) }
                                     }
                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                 }
@@ -1073,7 +1073,7 @@ private class SourceSettingsRouteController(
         if (checkJs.isNotBlank()) {
             rows += SourceSettingsActionRowUiState(
                 id = KEY_LEGADO_LOGIN_CHECK,
-                title = "检测登录状态",
+                title = context.getString(R.string.settings_source_check_login_title),
                 showChevron = false,
                 onClick = {
                     coroutineScope.launch {
@@ -1082,7 +1082,7 @@ private class SourceSettingsRouteController(
                                 .getOrNull()
                                 ?.toString()
                                 ?.take(200)
-                                ?: "执行失败"
+                                ?: context.getString(R.string.settings_source_action_failed)
                         }
                         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     }
@@ -1092,8 +1092,8 @@ private class SourceSettingsRouteController(
 
         rows += SourceSettingsActionRowUiState(
             id = KEY_LEGADO_LOGIN_CLEAR,
-            title = "清理登录信息",
-            summary = "清空该源的 sourceVariable/loginInfo/登录表单缓存",
+            title = context.getString(R.string.settings_source_clear_login_title),
+            summary = context.getString(R.string.settings_source_clear_login_summary),
             showChevron = false,
             onClick = {
                 legadoSourcePrefs.edit {
@@ -1105,7 +1105,7 @@ private class SourceSettingsRouteController(
                         .forEach(::remove)
                 }
                 repo.invalidateCache()
-                Toast.makeText(context, "已清理", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, R.string.settings_source_cleared, Toast.LENGTH_SHORT).show()
             },
         )
 
@@ -1119,8 +1119,8 @@ private class SourceSettingsRouteController(
         return listOf(
             SourceSettingsSwitchRowUiState(
                 id = KEY_LEGADO_STANDALONE_RUNTIME,
-                title = "使用 runtime 目录解析",
-                summary = "切换 Legado 目录/详情链路的 standalone runtime 调试开关。",
+                title = context.getString(R.string.settings_source_runtime_dir_title),
+                summary = context.getString(R.string.settings_source_runtime_dir_summary),
                 checked = legadoSourcePrefs.getBoolean(KEY_LEGADO_STANDALONE_RUNTIME, false),
                 onCheckedChange = { checked ->
                     legadoSourcePrefs.edit { putBoolean(KEY_LEGADO_STANDALONE_RUNTIME, checked) }

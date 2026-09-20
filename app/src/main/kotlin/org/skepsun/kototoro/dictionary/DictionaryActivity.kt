@@ -43,10 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 
@@ -97,15 +99,15 @@ private fun DictionaryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("查词") },
+                title = { Text(stringResource(R.string.dictionary_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onManageRules) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "管理词典")
+                        Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.dictionary_manage_rules))
                     }
                 },
             )
@@ -128,21 +130,25 @@ private fun DictionaryScreen(
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("查询内容") },
+                    label = { Text(stringResource(R.string.dictionary_query_label)) },
                 )
                 Button(
                     onClick = { viewModel.search(query) },
                     enabled = query.isNotBlank() && !state.isSearching,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("查询")
+                    Text(stringResource(R.string.dictionary_query_action))
                 }
             }
 
             if (state.pages.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        text = if (state.word.isBlank()) "请输入要查询的词" else "没有启用的词典规则",
+                        text = if (state.word.isBlank()) {
+                            stringResource(R.string.dictionary_empty_query)
+                        } else {
+                            stringResource(R.string.dictionary_no_enabled_rules)
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -208,7 +214,7 @@ private fun DictionaryPage(
                     textAlign = TextAlign.Center,
                 )
                 OutlinedButton(onClick = onRetry) {
-                    Text("重试")
+                    Text(stringResource(R.string.retry))
                 }
             }
         }
@@ -221,7 +227,7 @@ private fun DictionaryPage(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                 ) {
                     Icon(Icons.Outlined.OpenInBrowser, contentDescription = null)
-                    Text("在浏览器打开", modifier = Modifier.padding(start = 8.dp))
+                    Text(stringResource(R.string.open_in_browser), modifier = Modifier.padding(start = 8.dp))
                 }
                 DictionaryWebView(
                     html = result.html,
