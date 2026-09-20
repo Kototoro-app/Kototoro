@@ -1,7 +1,10 @@
 package org.skepsun.kototoro.reader.image
 
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -456,5 +459,66 @@ class ReaderTileManagerTest {
 
     companion object {
         private const val TILE_COST = 1024L
+    }
+
+    /**
+     * Zoom trace analysis 2026-09-20: session close must hop off the caller (host main)
+     * thread onto [ReaderTileManager]'s decode dispatcher — the fair write lock inside
+     * TileDecodeSession.close() waits for in-flight readers to drain, which took 0.7s+
+     * of main-thread sleep during decode storms.
+     */
+    @Test
+    fun `releasePage closes the session on the decode dispatcher not the caller thread`() = runTest {
+        val closeThreads = CopyOnWriteArrayList<String>()
+        val session = object : TileDecodeSession {
+            override val encodedSize = IntSize(800, 16000)
+            override suspend fun decodeRegion(region: IntRect, sampleSize: Int): Any = "payload"
+            override fun close() {
+                closeThreads += Thread.currentThread().name
+            }
+        }
+        val source = FakeRegionDecodeSource(
+            metadata = ImageSourceMetadata(size = IntSize(800, 16000), mimeType = "image/jpeg"),
+            session = session,
+        )
+        val executor = Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "close-dispatcher").apply { isDaemon = true }
+        }
+        try {
+            val listener = RecordingListener()
+            val manager = ReaderTileManager(
+                scope = this,
+                decodeDispatcher = executor.asCoroutineDispatcher(),
+                budget = TileMemoryBudget(maxBytes = 1_000_000L),
+                sourceFactory = { if (it == pageId) source else null },
+                costOf = { TILE_COST },
+                payloadReleaser = {},
+            )
+            manager.addListener(listener)
+
+            manager.requestTiles(stripGrid(), visibleRegion = IntRect(0, 0, 800, 2048))
+            awaitUntil("session decoded") { listener.ready.isNotEmpty() }
+
+            val callerThread = Thread.currentThread().name
+            manager.releasePage(pageId)
+            awaitUntil("session closed") { closeThreads.isNotEmpty() }
+
+            // Thread.currentThread().name carries a coroutine suffix; match the base name.
+            assertEquals(1, closeThreads.size)
+            assertTrue(closeThreads[0].startsWith("close-dispatcher"), "closed on: ${closeThreads[0]}")
+            assertTrue(!callerThread.startsWith("close-dispatcher"), "test must run on a different thread")
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    /** Polls [condition] with the test scheduler pumped, failing after 5s. */
+    private fun TestScope.awaitUntil(what: String, condition: () -> Boolean) {
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (!condition()) {
+            advanceUntilIdle()
+            check(System.nanoTime() < deadline) { "timed out waiting for: $what" }
+            Thread.sleep(10)
+        }
     }
 }

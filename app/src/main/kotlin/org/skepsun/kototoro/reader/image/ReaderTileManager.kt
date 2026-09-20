@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -416,13 +417,24 @@ class ReaderTileManager(
 
     private fun closeSession(pageId: PageId) {
         val deferred = sessions.remove(pageId) ?: return
-        scope.launch {
+        // Improvement plan 2026-09 zoom trace analysis: closing must hop off the caller
+        // (host main) thread — TileDecodeSession.close() takes a fair write lock that
+        // waits for in-flight readers to drain, which took 0.7s+ of main-thread sleep
+        // during decode storms. NonCancellable guards the close itself once started:
+        // a decoder leaking its native instance is worse than a late close.
+        scope.launch(decodeDispatcher) {
+            val traceClose = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()
+            if (traceClose) Trace.beginSection("Reader.TileSessionClose")
             try {
-                deferred.await().getOrNull()?.close()
+                withContext(NonCancellable) {
+                    deferred.await().getOrNull()?.close()
+                }
             } catch (cancellation: CancellationException) {
                 deferred.cancel()
             } catch (_: Throwable) {
                 // Closing a failed session is best-effort.
+            } finally {
+                if (traceClose) Trace.endSection()
             }
         }
     }

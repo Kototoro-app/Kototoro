@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
+import android.os.Trace
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
@@ -180,10 +181,19 @@ class AndroidRegionDecoderFactory(
             }
 
         override fun close() {
-            lock.write {
-                if (!decoder.isRecycled) {
-                    decoder.recycle()
+            // Improvement plan 2026-09 zoom trace analysis: the write-lock wait is the
+            // close-path's dominant cost (in-flight readers draining the platform
+            // decoder monitor). Named section so traces can attribute it directly.
+            val traceClose = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()
+            if (traceClose) Trace.beginSection("Reader.SessionCloseWriteLock")
+            try {
+                lock.write {
+                    if (!decoder.isRecycled) {
+                        decoder.recycle()
+                    }
                 }
+            } finally {
+                if (traceClose) Trace.endSection()
             }
         }
     }

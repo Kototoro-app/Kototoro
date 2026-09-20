@@ -2,7 +2,7 @@
 
 - 日期：2026-09-20。
 - 代码审阅基线：`48083e0b4`（`fix(reader): prevent cover transition page flicker`）。
-- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线（zoom 2.0×/2.5× overrun 转正记为待验收）；长章节组 fixture、超时帧比例提取、B 回归矩阵其余项与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
+- 状态：部分执行（2026-09-20 已交付：§4.3 口径修正、§5.2 semantics、§6.1 范围查询、§6.2 I1 护栏、§8.1 资源窗口 planner 契约、§8.2 `:reader-core` 模块抽取、§8.3 两处依赖反转与路线图记录、§4.1 场景 1 A/B 基线、§4.2 场景 2/3/4 分页矩阵基线、2.5× 超时帧 trace 提取（交付 10）、zoom 长卡顿根因修复——session 关闭移出主线程（交付 11，700ms 停顿消除，残差仍待验收）；长章节组 fixture、其余场景超时帧证据、B 回归矩阵其余项与阶段 D 未启动，见 §10.1 交付记录）。本文其余未执行部分仍为设计提案。
 - 范围：漫画 Scene Reader；不包含小说阅读器、视频播放器或依赖升级。
 - 关联：[Scene Reader 收尾计划](reader-scene-closure-plan-2026-09.md)、[ADR 0002](../adr/0002-reader-scene-decoupling.md)。
 
@@ -520,7 +520,8 @@ scene-aware OCR/SR。只有在独立需求明确且能简化实现或改善实�
 CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8→38.6°C 逐场景爬升（zoom
 阶梯最热，记录在案）；每场景 5 份迭代 trace 仅末场景（zoomed 2.5×）留存并已归档。
 
-各场景中位数（CPU/overrun 为 P50/P90/P95/P99；内存为 RssAnon KB）：
+各场景汇总（CPU/overrun 为五轮合并样本的分位数，非各轮 P99 中位数；
+内存及计数为各轮结果的中位数，RssAnon 单位 KB；交付 10 已核对 2.5× 原始 JSON）：
 
 | 场景 | 后端 | CPU P99 (ms) | overrun P99 (ms) | RssAnon Max | tile 解码/驻留 | 判定 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -536,28 +537,81 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
 发现与判读：
 
 1. **zoom 成本悬崖实测定位**：1.5×（无 tile 活动，-4.7ms）→ 2.0×（tile 激活：392 次解码
-   请求、90 驻留，+9.1ms）之间。P99 CPU 时长本身只有 8.6ms（<16.7ms deadline），overrun
-   转正来自 CPU 之外的部分（候选：tile 解码后纹理上传/栅格化排队），与 §4.2 大图组
-   「独立检查尾延迟、纹理上传」的关注点吻合。打开即 2.5× 的 +13.1 是当前最差帧。
-   悬崖是结构性的（2.5× held 场景在更热时刻仍 -5.7，排除纯温度解释）。
+   请求、90 驻留，+9.1ms）之间。打开即 2.5× 的 +13.1 是本矩阵最高 **P99**，不是最差单帧。
+   原先根据低 CPU P99 推断「CPU 之外的上传／栅格化主导」证据不足：交付 10 发现
+   2.5× 实际最大 overrun +752.860ms，主线程睡眠等待主导长尾，详见后文。
+   更热的 held 场景未激活 tile，支持路径相关的嫌疑，但并非隔离温度变量的对照实验。
 2. **高倍率组无 SLO（§4.2 明确约束）**：+9.1/+13.1 记为待验收数据，不宣布通过也不豁免。
    制定 SLO 需要超时帧比例与最大连续超时（trace 提取，见下）。
-3. **内存证据**：zoom 场景 RssAnon Max 545-577MB、Last 383-427MB —— 稳态比峰值低
-   150-195MB，tile 预算驱逐在工作（Max→Last 回落）；TileEvictions 全场景为 0 记录值
-   （驱逐指标口径待查：可能未覆盖跨迭代清零）。
+3. **内存证据**：zoom 场景 RssAnon Max 545-577MB、Last 383-427MB —— 结束值比峰值低
+   150-195MB；Max→Last 回落支持资源释放，不能单独证明 tile 预算驱逐。
+   TileEvictions 全场景为 0，需区分预算驱逐和 `releasePage` 等释放路径。
 4. **scene vs legacy 旅程不完全等帧**（双页 1045 vs 505 帧、大图 606 vs 522 帧）：
    CPU 分位直接横比有偏，内存与门禁判定不受影响；已按各自原始数字记录。
 5. **场景 2 内存优势**：scene 大图 1× 用 248MB vs legacy 448MB —— LOD/概览路径的
    实测收益（-45%）。
 
 后续（阶段 A 收尾清单）：
-- 超时帧比例 + 最大连续超时：从留存的 5 份 zoomed 2.5× trace 提取（需 trace_processor，
-  本机未装；trace 已归档至会话本地 `/tmp/reader-bench/scenarios/zoomed2_5-traces/`）；
-  其余场景 trace 每轮覆盖未留存，需要时按 §4.1 流程重跑并预先归档。
+- 超时帧比例 + 最大连续超时：**2.5× 已完成，见交付 10**；trace 位于
+  `/tmp/reader-bench/scenarios/zoomed2_5-traces/`。其余场景 trace 每轮覆盖未留存，
+  需要时按 §4.1 流程重跑并预先归档。
 - §4.2 长章节组（50/500/5000 页元数据，固定窗口查询耗时/分配）**无现成 fixture 与
   benchmark 方法**（现有 FIXTURE_MODE：standard/ultra_long/paged/paged_large）——
   需新增夹具与测量方法，独立一轮设计。
 - webtoon burst/sustained 套件重跑（可选，历史数据在 closure plan）。
+
+#### 交付 10 — 阶段 A：2.5× 超时帧证据（§4.3）
+
+安装用户级 Perfetto `trace_processor` v58.2，并以 AndroidX Macrobenchmark 1.5.0 的取帧规则
+复核留存的 5 份 trace。帧数及全部 CPU/overrun 样本与同次 benchmark JSON 完全一致。
+复现脚本：`scripts/analyze_reader_frames.py`；完整逐轮表、最差帧定位、哈希与命令见
+[2.5× trace 分析报告](reader-scene-zoom-trace-analysis-2026-09.md)。
+
+- 合并 **3,163 帧，41 帧超时（1.296%）**；各轮比例 **1.133%–1.575%**。
+- 每轮最大连续超时 **2 帧**；合并 P99 **+13.060ms**，真正最大 overrun **+752.860ms**。
+- 每轮 3 个、共 15 个 UI 长帧，主线程 `doFrame` **127.198–764.516ms**。
+  最差帧主线程睡眠 **724–753ms**，实际 running **10.6–14.5ms**，RT 仅 **7.5–9.2ms**。
+  连续 2 帧不能解释为仅卡顿约 33ms；低 CPU P99 也不能排除稀疏主线程长阻塞。
+- 首要候选：`closeSession()` 沿用宿主主线程 scope，同步 `close()` 写锁等待后台 region decode
+  读者排空。trace 可见后台 `BitmapRegionDecoder` monitor 竞争，但无主线程等待调用栈；
+  **候选因果需定点 trace／单变量 A/B 验证**，本轮不修改渲染或资源实现。
+- iter 1、4 各有一次 packet-loss 标记；iter 0、2、3 同样复现长等待且无该标记。
+  全部超时位于 measureBlock 内；工具成功复核不等于采集无缺失或场景通过 SLO。
+
+结论：本轮补全该压力场景的超时帧证据；优先验证主线程关闭 decoder 的阻塞候选。
+高倍率维持待验收；其余场景 trace、长章节组和阶段 D 仍需独立证据。
+
+#### 交付 11 — zoom 长卡顿根因修复：session 关闭移出主线程
+
+来源：交付 10 的 trace 证据链 + [zoom trace 分析](reader-scene-zoom-trace-analysis-2026-09.md)
+首选候选（主线程 `closeSession` 等待读者排空写锁）经单变量 A/B 验证成立。
+
+改动：
+- `ReaderTileManager.closeSession()`：关闭协程改跑 `decodeDispatcher`（不再落在宿主
+  Main 线程），`withContext(NonCancellable)` 包裹 `await()+close()` —— scope 中途死亡时
+  关闭仍完成（优于现状：同场景下现状直接泄漏 decoder）。
+- 窄 trace section：`Reader.TileSessionClose`（关闭协程整段）与
+  `Reader.SessionCloseWriteLock`（写锁获取 = 读者排空等待）。
+- TDD：`ReaderTileManagerTest` 新增先红后绿的调度测试 —— `releasePage` 的 session
+  close 必须发生在 decode dispatcher 线程（红：`Test worker @coroutine#45`，
+  绿：`close-dispatcher`）。
+
+验证（A/B 交错，zoomed 2.5× 两轮 + 2.0× 与普通页各一轮，各侧独立 APK、
+安装核对、每轮归档 trace+JSON 并用交付 10 脚本核实）：
+
+| 指标（zoomed 2.5× 合并） | A 基线 `332d461f` | B 修复 `a9221207` |
+| --- | ---: | ---: |
+| 最大单帧 overrun | +729.254ms（各轮 710–729ms） | **+50.518ms（-93%）** |
+| overrun P99 | +11.577ms | +3.116ms |
+| 超时帧比例 | 1.257% | 1.628% |
+| 总帧数 | 3,183 | 3,931（+23%） |
+| 普通单页对照 overrun P99 | -5.1ms | -5.0ms（无回归） |
+
+判读：700ms 级主线程长帧消失，关闭路径因果成立。超时比例 1.26%→1.63% 伴随帧数
++23%：被长停顿吞掉的 vsync 恢复，剩余超时为 tile 到达的普通尾延迟（P99 +3.1ms、
+最大 50ms），不再由关闭路径主导。`:app:testDebugUnitTest` 全绿。
+
+高倍率组仍**待验收**：残差尾延迟的 SLO 制定与可能的 tile 到达调度优化留待后续轮次。
 
 #### 未启动
 
