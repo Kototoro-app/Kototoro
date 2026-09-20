@@ -83,7 +83,7 @@ def match_frames(rows):
         frames.append({
             "frame_id": rt["frame_id"], "ui_id": ui["id"], "rt_id": rt["id"],
             "actual_id": actual["id"], "expected_id": expected["id"], "utid": ui["utid"],
-            "ts": ui["ts"], "ui_end": ui["end"], "actual_end": actual["end"],
+            "ts": ui["ts"], "ui_end": ui["end"], "rt_end": rt["end"], "actual_end": actual["end"],
             "expected_ts": expected["ts"], "deadline": expected["end"],
             "cpu_ms": (rt["end"] - ui["ts"]) / 1e6,
             "overrun_ms": (max(actual["end"], rt["end"]) - expected["end"]) / 1e6,
@@ -134,7 +134,7 @@ def probe_query(frames):
     # Bound every thread-state duration to the UI slice; report wall time and
     # actual running separately. Nested texture-upload slices are not summed twice.
     values = ",".join(
-        f"({f['frame_id']},{f['ui_id']},{f['rt_id']},{f['utid']},{f['ts']},{f['ui_end']})"
+        f"({f['frame_id']},{f['ui_id']},{f['rt_id']},{f['utid']},{f['ts']},{f['ui_end']},{f['rt_end']})"
         for f in frames
     )
     states = []
@@ -145,12 +145,26 @@ def probe_query(frames):
         states.append(f"""(SELECT {aggregate}(min(st.ts+st.dur,f.finish)-max(st.ts,f.ts))/1e6
             FROM thread_state st WHERE st.utid=f.utid AND st.dur>0
             AND st.ts<f.finish AND st.ts+st.dur>f.ts AND {condition}) AS {name}""")
+    # Texture uploads sit on the render thread as top-level slices, not as descendants of the
+    # frame's render slice: measured on a real trace, `descendant_slice(rt_id)` finds 0 of them
+    # while a plain thread + time-window search finds all 10. The old descendant form therefore
+    # reported NULL for every frame, which silently removed the one measurement that tells
+    # "waiting for the render thread" apart from "waiting for a texture upload".
     return f"""
-        WITH frames(fid,ui_id,rt_id,utid,ts,finish) AS (VALUES {values})
+        WITH frames(fid,ui_id,rt_id,utid,ts,finish,rt_finish) AS (VALUES {values})
         SELECT fid, {','.join(states)},
           (SELECT max(dur)/1e6 FROM descendant_slice(f.ui_id) WHERE name='animation') animation_ms,
           (SELECT max(dur)/1e6 FROM descendant_slice(f.ui_id) WHERE name='Record View#draw()') record_ms,
-          (SELECT sum(dur)/1e6 FROM descendant_slice(f.rt_id) WHERE name GLOB 'Texture upload*') rt_upload_ms,
+          (SELECT sum(dur)/1e6 FROM slice s
+             JOIN thread_track tr ON s.track_id = tr.id
+             JOIN thread t USING (utid)
+             WHERE t.name GLOB '*RenderThread*' AND s.name GLOB 'Texture upload*'
+               AND s.ts < f.rt_finish AND s.ts + s.dur > f.ts) rt_upload_ms,
+          (SELECT sum(dur)/1e6 FROM slice s
+             JOIN thread_track tr ON s.track_id = tr.id
+             JOIN thread t USING (utid)
+             WHERE t.name GLOB '*RenderThread*' AND s.name GLOB 'uploadTexDataOptimal*'
+               AND s.ts < f.rt_finish AND s.ts + s.dur > f.ts) rt_upload_texdata_ms,
           (SELECT max(dur)/1e6 FROM descendant_slice(f.ui_id) WHERE name='postAndWait') post_wait_ms
         FROM frames f;
     """
