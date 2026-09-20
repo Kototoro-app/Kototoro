@@ -722,6 +722,36 @@ run-to-run 漂移为几毫秒且跨设备状态不可比；继续压这一档需
   `ActivePresentationAssets` 必须有界（不超过保留窗口）。**不要只检查均值** —— 均值会掩盖尾部尖峰。
   同时更新 README 说明生产基准与判定口径。
 - **规模**：M
+- **状态：2026-09-20 已完成（DoD 全部满足）**【已验证】
+  - 阈值来源：改进计划 §4.2.1 的三组 SLO（regular 常规阅读 / large 大图常用倍率 /
+    high_zoom 高倍率压力），依据 `67a243fc6` 上 7 场景 × 5 迭代的归档基线（交付 12）固定。
+  - journey 脚本化：`scripts/run_reader_benchmark_gate.py` —— 构建 benchmark 变体 → 安装并
+    **证明身份**（`lastUpdateTime` 变化 + 拉回已安装 `base.apk` 与构建产物逐字节比对）→
+    逐场景预热刷新率前置、冷却到 ≤35.0°C → 跑 `connectedDebugAndroidTest` → 归档全部 trace
+    与 JSON → 调 `analyze_reader_frames.py` 提取 → 调判定脚本。
+  - 阈值判定：`scripts/check_reader_benchmark.py`，退出码 0 通过 / 1 违反 SLO / 2 证据不足。
+    覆盖 DoD 三项：`frameOverrunMs` P95/P99、超时帧比例、最大连续超时、最大单帧、最大主线程帧、
+    `RssAnon` Max 与其**跨轮增长**（峰值 − 首轮 ≤ max(60MB, 15%)）、`ActivePresentationAssets`
+    Max/Last 有界（≤6，基线最大 3）；外加硬性失败类（主线程帧或单帧 overrun ≥100ms，
+    来自交付 10/11 的 723–753ms 证据）。**不检查均值**。
+  - 证据完整性（§4.3「缺必需字段判为证据不足」）：判定前重新哈希归档 trace 与 benchmark JSON、
+    由逐帧 CSV 重算合并分位数并与 `verified/report.json` 及 harness 自身 `sampledMetrics` 双向核对；
+    `sampledMetrics` 缺 `frameDurationCpuMs`/`frameOverrunMs`（trace 属主失败的静默模式）、
+    JSON 事后被改、CSV 与报告不一致、trace 字节变化、迭代不足 5 轮、运行记录为失败、显示 <119Hz、
+    场景无 SLO —— 一律判证据不足而非通过。
+  - 脚本自验（§4.3「先用通过/失败样本验证判断」）：`--selftest` **55/55 通过** —— 44 条阈值用例
+    （每组边界：等于上限通过、超一点失败；负 P99 不能豁免掉帧尾部；缺字段判证据不足）+
+    11 条证据链用例（完整归档接受、篡改 JSON/CSV/ trace 字节、清理 trace、60Hz、失败运行、
+    迭代不足、无 SLO 场景全部拒绝）。历史真实样本回放：交付 9 的 2.0× P99 +9.1 与交付 10/11 的
+    +752.860 / +729.254ms 长帧均判违反；交付 11 已修复构建的 +50.518ms 单帧判通过
+    —— 该回放暴露原 50ms 上界会误杀已知良好构建，故高倍率组的单帧/主线程帧上界定为 80ms
+    （改进计划 §4.2.1 已同步，基线 21.9/28.6ms，硬性失败类仍为 ≥100ms）。
+  - 无 CI 接线（有意）：仓库 7 个 workflow 均为构建/发布/文档，不含任何真机步骤；
+    门禁需要在有设备的机器上显式运行，README 与改进计划已把命令、退出码与设备协议写清。
+  - 文档债已清：`macrobenchmark/README.md` 重写 —— 区分 renderer 对照（确实排除真实章节）
+    与 `ReaderProductionBenchmark` 的生产旅程（已覆盖真实章节/大图/双页/持续滑动），
+    并补充运行方式、门禁命令、退出码与设备协议（显式安装与身份核对、刷新率前置、
+    清洁与温度、`persist.security.adbinput`、trace 属主陷阱）。
 
 ### CS-8 语义矩阵与可测性
 
