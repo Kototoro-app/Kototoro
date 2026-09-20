@@ -1062,19 +1062,26 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
   → 断言页身份与页内偏移都不变。
   - `horizontalKeepsThePageAcrossAResize`：**稳定通过（6/6 轮）**。
   - `webtoonOnTheFirstPageStaysOnTheFirstPage`：对照格，稳定通过（5/5 轮）。
-  - `webtoonKeepsThePageAcrossAResize`：**不稳定**。同一 APK、同一断言既通过也失败，并出现过
-    「连续 3 次失败后连续 3 次通过」；失败语恒为
-    `WEBTOON page after the resize expected:<2> but was:<0>`（resize 前在第 2 页、之后回到本章第 1 页）。
-    曾两次试图归因（首次冷启动 / 应用数据被清空），**均被后续实验证伪**（全新安装后首跑通过）。
-    结论：在把「抖动本身」归因清楚之前，**不得**据此宣布 webtoon 宿主丢页；该格以不稳定状态入库并
-    在注释中写明，另立 ESR 任务（见下）。「连续模式宿主级设备测试」因此**只算部分覆盖**。
+  - `webtoonKeepsThePageAcrossAResize`：曾不稳定（同一断言时通时不通，出现过 3 连失败后 3 连通过）。
+    **交付 19 续做已归因：抖动是断言本身的基线错配** —— 断言要求「夹具请求的页序号 2」，
+    而宿主按宽高比 hint、随后按解码尺寸推导自己的页几何，合成夹具下两者不必一致。
+    改为**从阅读器读取基线**（`holdSettled` 后取 `activePageIndex()`，不与夹具参数比较）后
+    **连续 3 次通过**；另加确定性格 `webtoonKeepsThePageAcrossAResizeWithFullPagePages`
+    （640×1800 夹具 → 每页 1280×3600，页高大于视口、页身份无歧义）**连续 8 次通过**。
+    临时生产日志另证明：webtoon 的 `pages/scene` effect 在 resize 时只运行一次（`scene` 未变），
+    即 resize 路径本身不重算位置；先前的 2→1「后退」是基线错配而非丢页。
+    **故先前的「webtoon 宿主丢页」结论撤销**，「连续模式」行由此转为**宿主级设备覆盖**
+    （4 格，各 3 连跑通过）。两次被证伪的中间猜测（首次冷启动 / 应用数据被清空）留档以免重走。
 - 测试基建教训（本轮新增，两次导致错误结论）：
   1. `connectedDebugAndroidTest` 的 `TEST-*.xml` 会被**每次运行覆盖**，且编译失败时不会重写 ——
      读错run 的结果文件会把编译失败当断言失败、或把上一个用例的结果当本次结果。本轮为此新增
      `scripts/print_last_androidtest_failure.py`（显式打印最新一次运行的用例名与失败首行）。
   2. 「先编译再跑」不可省：`connectedDebugAndroidTest` 在 `compileDebugAndroidTestKotlin` 失败时
      仍可能只报 `BUILD FAILED`，把编译错误误读成测试失败会浪费整轮排查。
-- 关联：§5.1 生命周期/连续模式行、ADR 0002。已知限制：webtoon 抖动未归因；
+  3. **断言基线必须取自被测对象，不能取自夹具**：合成夹具的页几何与宿主推导出的几何不一致时，
+     「夹具请求的页序号」不是有效的期望值，据此失败会把测试自身的假设当成产品缺陷（本轮为此
+     误判出一整个「webtoon 丢页」缺陷）。凡「位置是否保持」类断言，都应先读被测对象当前状态再比较。
+- 关联：§5.1 生命周期/连续模式行、ADR 0002。已知限制：webtoon 抖动已归因为测试基线错配并转绿；
   「后台进程死亡后恢复」仍只有域层证据；TalkBack/DPAD 未开始。
 
 #### 未启动
@@ -1087,8 +1094,8 @@ CompilationMode.Full × 5 迭代/场景；场景按序运行，电池温度 36.8
 - 高倍率残差归因的进一步实验：tile 到达/上传调度优化（用 §4.2.1 容忍度做 A/B）。
 - §5.1 回归矩阵其余项、TalkBack 真机记录与 DPAD/键盘焦点（阶段 B 余项）。
   其中「生命周期」行已闭环：resize（同实例）+ 重建/程序化锚定由交付 15 与本轮三格覆盖（全 8 格
-  按方法分跑通过）；「连续模式」行部分覆盖（horizontal 稳定、webtoon 抖动未归因，见交付 19）；
-  TalkBack 真机记录与 DPAD/键盘焦点仍缺。
+  按方法分跑通过）；「连续模式」行已由交付 19 转为宿主级设备覆盖（4 格各 3 连跑通过，
+  webtoon 抖动归因为测试基线错配、结论撤销）；TalkBack 真机记录与 DPAD/键盘焦点仍缺。
 - §8.3 后续模块轮次（scene-image → scene-compose → kototoro-reader-adapter）与 Phase C 宿主 API 重构。
 - （可选）把基准门禁接到自托管真机 runner：仓库现有 7 个 workflow 都是构建/发布/文档，
   托管 CI 没有设备，CS-7 交付的门禁目前只能显式在设备机上运行。
