@@ -11,7 +11,17 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import coil3.ImageLoader
@@ -57,9 +67,21 @@ internal class ScenePagedTransitionHarness(
     private val instrumentation: Instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context = instrumentation.targetContext
     private val activePage = AtomicLong(Long.MIN_VALUE)
+    private val reportedLower = AtomicLong(Long.MIN_VALUE)
+    private val reportedUpper = AtomicLong(Long.MIN_VALUE)
     private val reportCount = AtomicInteger(0)
-    private val widthPx = AtomicInteger(0)
-    private val heightPx = AtomicInteger(0)
+    private val viewportWidthPx = AtomicInteger(0)
+    private val viewportHeightPx = AtomicInteger(0)
+
+    /**
+     * What the reader itself last measured, fed from the same `onSizeChanged` the host uses. The
+     * layout rectangle the harness asks for and the rectangle the reader gets are not the same
+     * thing (window insets, the shell's own chrome), so the resize assertions read this, not the
+     * harness's intent.
+     */
+    private val readerViewportWidthPx = AtomicInteger(0)
+    private val readerViewportHeightPx = AtomicInteger(0)
+    private var viewportScale by mutableFloatStateOf(1f)
     private lateinit var scenario: ActivityScenario<IdleProbeActivity>
     private lateinit var imageLoader: ImageLoader
     private lateinit var fixture: File
@@ -97,28 +119,72 @@ internal class ScenePagedTransitionHarness(
 
     private fun applyContent(page: Int) {
         scenario.onActivity { activity ->
-            widthPx.set(activity.window.decorView.width)
-            heightPx.set(activity.window.decorView.height)
+            viewportWidthPx.set(activity.window.decorView.width)
+            viewportHeightPx.set(activity.window.decorView.height)
             activity.setContent {
                 MaterialTheme {
-                    ComposeScenePagedReader(
-                        pages = pages,
-                        initialPage = page,
-                        readingDirection = readingDirection,
-                        imageLoader = imageLoader,
-                        imagePipeline = pipeline,
-                        onPagesChanged = { _, _, active ->
-                            activePage.set(active)
-                            reportCount.incrementAndGet()
-                        },
-                        zoomMode = zoomMode,
-                        isAnimationEnabled = isAnimationEnabled,
-                        pageAnimation = pageAnimation,
-                        readerBackground = ReaderBackground.BLACK,
-                    )
+                    SceneReader(page, viewportScale)
                 }
             }
         }
+    }
+
+    @Composable
+    private fun SceneReader(page: Int, scale: Float) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .requiredHeight((viewportHeightPx.get() * scale).dp)
+                .onSizeChanged { size ->
+                    readerViewportWidthPx.set(size.width)
+                    readerViewportHeightPx.set(size.height)
+                    android.util.Log.i("SceneMatrix", "scene box size=$size scale=$scale")
+                },
+        ) {
+            ComposeScenePagedReader(
+                pages = pages,
+                initialPage = page,
+                readingDirection = readingDirection,
+                imageLoader = imageLoader,
+                imagePipeline = pipeline,
+                onPagesChanged = { lower, upper, active ->
+                    reportedLower.set(lower)
+                    reportedUpper.set(upper)
+                    activePage.set(active)
+                    reportCount.incrementAndGet()
+                },
+                zoomMode = zoomMode,
+                isAnimationEnabled = isAnimationEnabled,
+                pageAnimation = pageAnimation,
+                readerBackground = ReaderBackground.BLACK,
+            )
+        }
+    }
+
+    /**
+     * Changes the reader's viewport without recreating the activity or the composition, i.e. the
+     * pure resize path (rotation with `configChanges`, split-screen, foldable posture change). Only
+     * the size state is written, so the reader keeps its own state exactly as it does in the app;
+     * `initialPage` stays at its launch value and must not be what carries the position.
+     *
+     * Returns how many state reports the reader produced while shrinking; a resize is only
+     * meaningful evidence once the reader has re-reported at the new size.
+     */
+    fun resizeViewport(scale: Float): Int {
+        awaitStateQuiet()
+        val before = activePageIndex()
+        val sizeBefore = readerViewportSize()
+        val reportsBefore = reportCount.get()
+        viewportScale = scale
+        SystemClock.sleep(800)
+        val reports = reportCount.get() - reportsBefore
+        if (reports > 0) awaitStateQuiet()
+        android.util.Log.i(
+            "SceneMatrix",
+            "resize scale=$scale viewport $sizeBefore -> ${readerViewportSize()} " +
+                "activePage $before -> ${activePageIndex()} reports=$reports window=${reportedWindow()}",
+        )
+        return reports
     }
 
     private fun awaitReport(timeoutMs: Long): Boolean {
@@ -156,6 +222,22 @@ internal class ScenePagedTransitionHarness(
         return null
     }
 
+    /**
+     * The reader's own viewport size in pixels, as the host measured it last. This is the same
+     * `onSizeChanged` the reader uses, so a resize is only evidence once this value has moved.
+     */
+    fun readerViewportSize(): Pair<Int, Int> = readerViewportWidthPx.get() to readerViewportHeightPx.get()
+
+    /** The whole settled window the host last reported, as page indexes. */
+    fun reportedWindow(): Triple<Int, Int, Int> = Triple(
+        pages.indexOfFirst { it.readerKey == reportedLower.get() },
+        pages.indexOfFirst { it.readerKey == reportedUpper.get() },
+        activePageIndex(),
+    )
+
+    /** True while a page identity has never been reported, so assertions cannot read a sentinel. */
+    fun hasReported(): Boolean = reportCount.get() > 0
+
     /** Lets any late animation finish so an assertion cannot pass on a stale frame. */
     fun holdSettled(millis: Long) = SystemClock.sleep(millis)
 
@@ -163,10 +245,17 @@ internal class ScenePagedTransitionHarness(
     // Input (one gesture through screen-width fractions; no activity calls in the loop)
     // ---------------------------------------------------------------------------------------------
 
+    /** Centre of the reader's current (possibly resized) viewport. */
+    private fun viewportCenter(): Pair<Float, Float> {
+        val width = if (viewportWidthPx.get() > 0) viewportWidthPx.get().toFloat() else 1080f
+        val windowHeight = if (viewportHeightPx.get() > 0) viewportHeightPx.get().toFloat() else 1920f
+        return width / 2f to windowHeight * viewportScale / 2f
+    }
+
     private fun gesture(waypoints: List<Float>, stepsPerSegment: Int = 6, stepMs: Long = 20) {
         awaitStateQuiet()
-        val width = if (widthPx.get() > 0) widthPx.get().toFloat() else 1080f
-        val y = (if (heightPx.get() > 0) heightPx.get() else 1920) / 2f
+        val width = if (viewportWidthPx.get() > 0) viewportWidthPx.get().toFloat() else 1080f
+        val y = viewportCenter().second
         val path = mutableListOf<Float>()
         for (index in 0 until waypoints.size - 1) {
             val from = width * waypoints[index]
@@ -240,9 +329,7 @@ internal class ScenePagedTransitionHarness(
 
     /** A press/release that turns nothing; used to force one more frame. */
     fun tapCenter() {
-        val width = if (widthPx.get() > 0) widthPx.get().toFloat() else 1080f
-        val y = (if (heightPx.get() > 0) heightPx.get() else 1920) / 2f
-        val x = width / 2f
+        val (x, y) = viewportCenter()
         val down = SystemClock.uptimeMillis()
         val first = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0)
         instrumentation.sendPointerSync(first)
