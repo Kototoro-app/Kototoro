@@ -120,4 +120,45 @@ class ScenePagedViewportResizeTest {
             assertEquals("announced page after the resize", 2, host.announcedPageNumber())
         }
     }
+
+    // --- Rebuild path (section 5.1 "lifecycle"): what the host does when it re-creates the reader --
+    //
+    // Rotation in this app is an Activity recreation, and the host re-creates the reader rather than
+    // resizing it: it passes the restored position down as the current launch page and, on a layout
+    // change, as a programmatic page request. Both are exercised here, because a lifecycle case that
+    // only ever relies on the initial launch page does not test the path the app actually takes.
+
+    @Test
+    fun aRebuiltReaderOpensOnTheRestoredPage() {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(initialPage = 2).use { host ->
+            host.launch()
+            host.awaitActivePage(2, "rebuilt reader restored the position")
+        }
+    }
+
+    @Test
+    fun aProgrammaticRequestLandsOnTheRequestedPage() {
+        hiltRule.inject()
+        ScenePagedTransitionHarness().use { host ->
+            host.launch()
+            host.awaitActivePage(0, "initial state")
+            host.requestPage(2)
+            host.awaitActivePage(2, "programmatic page request")
+        }
+    }
+
+    @Test
+    fun aProgrammaticRequestSurvivesAResize() {
+        hiltRule.inject()
+        ScenePagedTransitionHarness().use { host ->
+            host.launch()
+            host.awaitActivePage(0, "initial state")
+            host.requestPage(2)
+            host.awaitActivePage(2, "programmatic page request")
+            host.resizeViewport(0.7f)
+            host.holdSettled(1_000)
+            assertEquals("settled window after requesting a page and resizing", 2 to 2, settledWindow(host))
+        }
+    }
 }

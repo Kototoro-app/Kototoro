@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
@@ -82,6 +83,13 @@ internal class ScenePagedTransitionHarness(
     private val readerViewportWidthPx = AtomicInteger(0)
     private val readerViewportHeightPx = AtomicInteger(0)
     private var viewportScale by mutableFloatStateOf(1f)
+
+    /**
+     * The programmatic page request the host passes down. The real host uses it to re-anchor after a
+     * layout rebuild (rotation, mode or double-page change) instead of relying on `initialPage`,
+     * so a lifecycle case that never sets it is not exercising the path the app takes.
+     */
+    private var requestedPage by mutableStateOf<Int?>(null)
     private lateinit var scenario: ActivityScenario<IdleProbeActivity>
     private lateinit var imageLoader: ImageLoader
     private lateinit var fixture: File
@@ -153,12 +161,23 @@ internal class ScenePagedTransitionHarness(
                     activePage.set(active)
                     reportCount.incrementAndGet()
                 },
+                requestedPage = requestedPage,
                 zoomMode = zoomMode,
                 isAnimationEnabled = isAnimationEnabled,
                 pageAnimation = pageAnimation,
                 readerBackground = ReaderBackground.BLACK,
             )
         }
+    }
+
+    /**
+     * Requests a page the way the host does on a layout rebuild: through the `requestedPage` prop,
+     * not by recomposing with a different launch page.
+     */
+    fun requestPage(index: Int) {
+        awaitStateQuiet()
+        requestedPage = index
+        SystemClock.sleep(600)
     }
 
     /**
