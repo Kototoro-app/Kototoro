@@ -61,6 +61,33 @@ import java.util.LinkedHashSet
  * :
  * L--- Page x.png
  */
+/**
+ * The page files that belong to a chapter inside [rootPath].
+ *
+ * [pattern] is what the content index recorded for the chapter, and it only ever describes the
+ * downloader's file names (`%08d_%04d%04d`): the local scan writes that pattern for whatever it
+ * finds on disk, while imported or hand-copied folders keep their own names (`01.jpg`, `page_1.png`).
+ * A pattern that matches nothing therefore has to fall back to the chapter's own directory instead of
+ * resolving to zero pages - the symptom of getting this wrong is a reader that opens blank and whose
+ * percentage never leaves -1.
+ */
+internal fun selectChapterEntries(
+    entries: Sequence<Path>,
+    rootPath: Path,
+    pattern: Regex?,
+    isImage: (Path) -> Boolean,
+): List<Path> {
+    val all = entries.toList()
+    val matched = pattern?.let { regex -> all.filter { it.name.substringBefore('.').matches(regex) } }.orEmpty()
+    if (matched.isNotEmpty()) {
+        return matched
+    }
+    return all.filter { path ->
+        path.parent == rootPath &&
+            (isImage(path) || path.name.endsWith(".html", true) || path.name.endsWith(".xhtml", true))
+    }
+}
+
 class LocalContentParser {
 
     private val uri: Uri?
@@ -425,15 +452,12 @@ class LocalContentParser {
                 val index = ContentIndex.read(fileSystem, rootPath / ENTRY_NAME_INDEX)
                 val entries = fileSystem.listRecursively(rootPath)
                     .filter { fileSystem.isRegularFile(it) }
-                if (index != null) {
-                    val pattern = index.getChapterNamesPattern(chapter)
-                    entries.filter { x -> x.name.substringBefore('.').matches(pattern) }
-                } else {
-                    entries.filter { x ->
-                        (x.isImage() || x.name.endsWith(".html", true) || x.name.endsWith(".xhtml", true)) &&
-                            x.parent == rootPath
-                    }
-                }.toListSorted(compareBy(AlphanumComparator()) { x -> x.toString() })
+                // A chapter that the index cannot map is not an empty chapter: the index only knows
+                // the downloader's file names, so anything imported or copied in keeps its own names
+                // and has to be resolved from the directory itself.
+                val pattern = index?.let { runCatching { it.getChapterNamesPattern(chapter) }.getOrNull() }
+                selectChapterEntries(entries, rootPath, pattern) { it.isImage() }
+                    .sortedWith(compareBy(AlphanumComparator()) { x -> x.toString() })
                     .map { x ->
                         val entryUri = chapterUri.child(x, resolve = true).toString()
                         ContentPage(
