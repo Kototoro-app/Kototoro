@@ -490,6 +490,13 @@ reader/
 - **生产门控安全解耦**：
   - 新增 `isExperimentalPagedSceneReaderEnabled`（默认 `false`），与成熟且已默认开启的 Webtoon / Horizontal 场景解耦；
   - 保证未手动开启分页实验开关的用户 100% 继续使用稳定的 `Pager + Telephoto`，零生产回退风险。
+  - **2026-09-21 更新（交付 45）**：门控收敛为按系列独立的两个开关，宿主选择由唯一纯函数
+    `resolveSceneReaderEnabled(mode, isDoublePage, webtoonSceneReader, pagedSceneReader)`
+    （`reader/ui/config/SceneReaderGate.kt`）决定 —— 双页与单页/上下取分页开关，`WEBTOON` 取条漫开关；
+    此前写成 `isExperimentalSceneReaderEnabled && isExperimentalPagedSceneReaderEnabled`，使条漫开关
+    成为分页宿主的隐藏总闸（关掉条漫渲染器会连带关掉分页场景）。两个开关同时暴露在阅读器更多面板的
+    「阅读」页（`ComposeReaderOptionsSheet`），与设置页共用同一份 pref，默认值不变。
+    `CONTINUOUS_HORIZONTAL` 无 legacy 渲染器，属 scene-only，不参与该路由（详见 `SceneReaderGate` KDoc）。
 
 **Phase 3F：交互溢出、自适应背景与物理基准对齐（功能已实现，真机基准待验收）**
 - **基线溢出平移数学解算器 (`PagedPanBoundsResolver`)**：

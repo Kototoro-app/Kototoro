@@ -386,6 +386,14 @@ class ReaderActivity :
                         settings.isContinuousHorizontalReversed = reversed
                         composeReaderController.updateOptions { copy(continuousHorizontalReversed = reversed) }
                     },
+                    onWebtoonSceneReaderChanged = { enabled ->
+                        settings.isExperimentalSceneReaderEnabled = enabled
+                        composeReaderController.updateOptions { copy(webtoonSceneReader = enabled) }
+                    },
+                    onPagedSceneReaderChanged = { enabled ->
+                        settings.isExperimentalPagedSceneReaderEnabled = enabled
+                        composeReaderController.updateOptions { copy(pagedSceneReader = enabled) }
+                    },
                     onZoomModeChanged = { zoomMode ->
                         settings.zoomMode = zoomMode
                         composeReaderController.updateOptions { copy(zoomMode = zoomMode) }
@@ -1150,6 +1158,8 @@ class ReaderActivity :
             ComposeReaderOptionsState(
                 mode = composeReaderController.readerMode,
                 continuousHorizontalReversed = settings.isContinuousHorizontalReversed,
+                webtoonSceneReader = settings.isExperimentalSceneReaderEnabled,
+                pagedSceneReader = settings.isExperimentalPagedSceneReaderEnabled,
                 animation = settings.readerAnimation,
                 zoomMode = settings.zoomMode,
                 doublePage = settings.isReaderDoubleOnLandscape,

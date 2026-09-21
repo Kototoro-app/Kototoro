@@ -157,11 +157,17 @@ RssAnon Max ≤ 基线 ×1.10；GPU Max ≤ 基线 ×1.10。
 
 > **2026-09-21 门控保真度声明（候选路径 ≠ 当前默认路径）**：本节场景与 SLO 判定的对象是
 > **分页场景宿主**，而该宿主在 release 默认配置下**并不启用**：
-> - 门控是**双开关**：`isExperimentalSceneReaderEnabled`（`ReaderSettings.kt:34`，默认 `true`，
->   作用于 Webtoon/Horizontal 场景宿主）与 `isExperimentalPagedSceneReaderEnabled`
->   （`ReaderSettings.kt:35`，默认 **`false`**），两者同时为真才走 `ComposeScenePagedReader`
->   （`ComposeReaderScreenRoot.kt:120` 双页、`:404` 单页）。默认配置下**单页/双页由 legacy
->   `ComposePagedReader` 承担**，场景分页宿主只有实验开关打开者（测试人员 / 主动开启的用户）会遇到。
+> - 门控是**两个按系列独立的开关**（2026-09-21 交付 45 起，此前是 `A && B` 的合取）：
+>   `isExperimentalSceneReaderEnabled`（`ReaderSettings.kt:34`，默认 `true`）= **条漫系列**
+>   （`WEBTOON`）的渲染器开关；`isExperimentalPagedSceneReaderEnabled`（`ReaderSettings.kt:35`，
+>   默认 **`false`**）= **分页系列**（单页/双页/上下）的渲染器开关。归属由
+>   `resolveSceneReaderEnabled(mode, isDoublePage, webtoon, paged)`（
+>   `reader/ui/config/SceneReaderGate.kt`）唯一决定，`ComposeReaderScreenRoot` 三处宿主分支都走它。
+>   默认配置下**单页/双页由 legacy `ComposePagedReader` 承担**，场景分页宿主只有打开该开关的
+>   用户（设置页或阅读器更多面板的「阅读」页）会遇到。`CONTINUOUS_HORIZONTAL` 是唯一的
+>   **scene-only** 模式（没有 legacy 渲染器可回退），因此不受条漫开关影响。
+>   *历史注记*：交付 42/43 的真实入口测量是在**旧合取门控**下做的（当时两个开关都为真，分页场景
+>   宿主处于启用状态），独立化不改变那两轮的配置，也不影响其结论。
 > - benchmark **绕过该门控**：`ReaderProductionBenchmarkActivity.kt:227` 直接定 `ReaderMode.STANDARD`、
 >   `:239` 直接构造 `ComposeScenePagedReader(...)`；`app/src/benchmark/` 全目录对 `isExperimental*`
 >   与 `AppSettings` 的匹配数为 **0**（实测）。因此该设计对 promotion 判定是**正确的** —— 门禁要测的
@@ -1186,8 +1192,9 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   冷启动实测首个有内容采样在 155ms，已写成 2000ms 预算以防「干脆不画」的静默退化。
 - **⑤ nightly 观察与回退路径 —— ❌ 未开始（这是 CS-1B 的前置，不是本轮遗漏）。**
   回退路径现成且有证据：`isExperimentalPagedSceneReaderEnabled`（`ReaderSettings.kt:35`）
-  默认 `false`、且 `ComposeReaderScreenRoot` 两处（`:120`、`:404`）以
-  `isExperimentalSceneReaderEnabled && isExperimentalPagedSceneReaderEnabled` 双开关门控，
+  默认 `false`、且 `ComposeReaderScreenRoot` 三处宿主分支（双页、条漫、单页）都经
+  `resolveSceneReaderEnabled` 按系列取开关（交付 45 起两个开关独立；此前是
+  `isExperimentalSceneReaderEnabled && isExperimentalPagedSceneReaderEnabled` 合取），
   legacy 宿主仍完整在位 —— 即**当前默认关闭，回退路径已验证可用**。
   但「翻转默认值 → 一个 nightly 周期无回归」这一步**尚未执行**，因为它会改变用户可见默认值，
   属需要人工决定的发布动作。
@@ -1293,11 +1300,14 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   单场景约 20 分钟（含按 §4.2.1 要求的电池温度冷却回落到阈值以下），整轮预计 1–2 小时；
   本轮进行中，已完成的场景 `gradle_exit=0`。**未完成前不推进 ② 的判定**。
 - **阻塞项 (c) 改动面清点**（为人工决策准备，本轮**未改动任何源码**）：
-  `isExperimentalPagedSceneReaderEnabled` 的默认值出现在**三处**，翻转时必须同步，否则设置页
-  会显示一个与实际行为相反的开关状态：
+  `isExperimentalPagedSceneReaderEnabled` 的默认值出现在**四处**，翻转时必须同步，否则设置页
+  与阅读器面板会显示与实际行为相反的开关状态：
   1. `core/prefs/AppSettings.kt:1055` —— `prefs.getBoolean(KEY_…, false)`；
   2. `reader/ui/config/ReaderSettings.kt:35` —— 数据类默认值 `= false`；
-  3. `settings/compose/ReaderSettingsScreen.kt:1067` —— 设置页开关读同一个 key，默认值也硬编码 `false`。
+  3. `settings/compose/ReaderSettingsScreen.kt:1067` —— 设置页开关读同一个 key，默认值也硬编码 `false`；
+  4. `reader/ui/compose/ComposeReaderOptionsSheet.kt` —— 阅读器更多面板「阅读」页的两个开关
+     （`webtoonSceneReader` / `pagedSceneReader`，交付 45）只读这两个 key，但其数据类默认值同样
+     镜像了 `true` / `false`，翻转默认值时需一并核对。
   迁移性质（重要）：`getBoolean(key, default)` **只在 key 不存在时使用默认值**，因此
   「从未碰过该开关」的用户会拿到新默认值，而**显式关掉过它的用户会保留 false**
   —— 即默认值翻转本身不是迁移，但「回退」时要么发一个版本改回默认值，要么让受影响的用户手动打开。
@@ -2054,6 +2064,34 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   因此设备验证用的是**导入器产出的同一布局**（原始文件名、按 `copyInto` 语义放置），
   而不是真的走一次系统选择器；「导入保留文件名」是代码级证据（①）。
 - 提交 `1363e1ddf`。证据：`app/build/test-results/testDebugUnitTest/TEST-…ChapterEntriesSelectionTest.xml`。
+
+#### 交付 45 — 阅读器更多面板「阅读」页：两个按系列独立的场景渲染器开关
+
+- **需求**：在阅读器更多面板的「阅读」页分别提供 webtoon 与 pager 的 scene reader 开关，
+  默认值保持现状（**webtoon 开、pager 关**）。
+- **做法**：面板新增两行开关（`reader_scene_renderer_webtoon` / `reader_scene_renderer_paged`，
+  中英文各一条），直接读写既有的两个偏好 `isExperimentalSceneReaderEnabled` /
+  `isExperimentalPagedSceneReaderEnabled` —— 与设置页**共用同一份 pref**，不新增存储；
+  面板 state 的默认值（`true` / `false`）与 pref 默认一致，因此默认行为不变。
+- **门控顺带解耦（重要）**：宿主选择不再写成 `A && B`，而是收敛到**唯一纯函数**
+  `resolveSceneReaderEnabled(mode, isDoublePage, webtoon, paged)`
+  （`reader/ui/config/SceneReaderGate.kt`）：双页与单页/上下取 pager 开关，条漫取 webtoon 开关。
+  此前「关掉条漫渲染器」会连带关掉分页场景宿主，而设置页把它们呈现为两个功能 —— 独立化让代码与
+  界面一致，也让 promotion 的回退路径（只关 pager 开关）真正可用。
+- **明确边界**：`CONTINUOUS_HORIZONTAL` 是**唯一的 scene-only 模式**
+  （`ComposeReaderScreenRoot` 直接组合 `ComposeSceneHorizontalReader`，没有 legacy 可回退），
+  因此不受条漫开关影响；把开关作用到它只会让该模式变成空白页。此边界写在 `SceneReaderGate` 的
+  KDoc 与单测里，不靠注释口口相传。
+- **验证**：① JVM `SceneReaderGateTest` 5 例（条漫只随条漫开关、分页只随分页开关、双页归分页、
+  两开关互不影响、家族映射）`tests="5" failures="0" errors="0"`；
+  ② 真机（M332BF，含本次改动的 benchmark 构建）打开阅读器 → 长按中央开面板 →
+  `uiautomator` 层级中出现两行开关（`条漫场景渲染器` / `分页场景渲染器`），
+  且 `checkable` 节点的 `checked` 与当前 pref 一致；
+  ③ 逐行点击后回读 pref：分页行 `reader_experimental_paged_scene_engine` 随点击 `true→false→true`，
+  条漫行 `reader_experimental_scene_engine` 随点击 `(缺省)→false→true`，**互不影响**；
+  ④ 在面板里切换后阅读器仍正常渲染（关闭时落盘的读取位置 `page=0 percent=0.125`，即 8 页）。
+- 关联：交付 42/43（真实入口测量的门控条件，那两轮在旧合取下测得，结论不受影响）、
+  §4.2.1 门控保真度声明（已按本条更新）、§9 阻塞项 (c)（默认值清单由三处更新为四处）。
 
 #### 未启动
 

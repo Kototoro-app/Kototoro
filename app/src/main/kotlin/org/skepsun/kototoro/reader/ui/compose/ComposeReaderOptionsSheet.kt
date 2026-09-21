@@ -81,6 +81,10 @@ internal data class ComposeReaderOptionsState(
     val visible: Boolean = false,
     val mode: ReaderMode = ReaderMode.STANDARD,
     val continuousHorizontalReversed: Boolean = false,
+    /** Scene renderer for the webtoon mode; on by default, matching the released behaviour. */
+    val webtoonSceneReader: Boolean = true,
+    /** Scene renderer for single/double page; off by default, matching the released behaviour. */
+    val pagedSceneReader: Boolean = false,
     val animation: ReaderAnimation = ReaderAnimation.DEFAULT,
     val zoomMode: ZoomMode = ZoomMode.FIT_CENTER,
     val doublePage: Boolean = false,
@@ -112,6 +116,8 @@ internal data class ComposeReaderOptionsCallbacks(
     val onDismiss: () -> Unit = {},
     val onModeChanged: (ReaderMode) -> Unit = {},
     val onContinuousHorizontalReversedChanged: (Boolean) -> Unit = {},
+    val onWebtoonSceneReaderChanged: (Boolean) -> Unit = {},
+    val onPagedSceneReaderChanged: (Boolean) -> Unit = {},
     val onAnimationChanged: (ReaderAnimation) -> Unit = {},
     val onZoomModeChanged: (ZoomMode) -> Unit = {},
     val onDoublePageChanged: (Boolean) -> Unit = {},
@@ -299,6 +305,25 @@ private fun ReaderReadingOptionsPage(
                         onCheckedChange = callbacks.onContinuousHorizontalReversedChanged,
                     )
                 }
+            }
+        }
+        item {
+            // One switch per renderer family, so the experimental paged engine can be tried without
+            // the webtoon renderer having to be turned off (they used to be a conjunction). The
+            // labels name the family, and both stay editable whichever mode is on screen: these are
+            // engine preferences, not properties of the current page layout.
+            ReaderOptionGroup {
+                ReaderOptionSwitchRow(
+                    label = stringResource(R.string.reader_scene_renderer_webtoon),
+                    checked = state.webtoonSceneReader,
+                    onCheckedChange = callbacks.onWebtoonSceneReaderChanged,
+                )
+                ReaderOptionDivider()
+                ReaderOptionSwitchRow(
+                    label = stringResource(R.string.reader_scene_renderer_paged),
+                    checked = state.pagedSceneReader,
+                    onCheckedChange = callbacks.onPagedSceneReaderChanged,
+                )
             }
         }
         item {

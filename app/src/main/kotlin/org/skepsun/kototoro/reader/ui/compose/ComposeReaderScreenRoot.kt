@@ -24,6 +24,7 @@ import org.skepsun.kototoro.reader.ui.resolveReaderInitialPagePosition
 import org.skepsun.kototoro.reader.ui.resolveReaderRestoredState
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.ui.config.resolveSceneReaderEnabled
 import org.skepsun.kototoro.reader.ui.config.resolveSceneReadingDirection
 
 /**
@@ -117,7 +118,16 @@ fun ComposeReaderScreenRoot(
 
     key(mode, isDoublePage, layoutGeneration) {
     if (isDoublePage) {
-        if (readerSettings.isExperimentalSceneReaderEnabled && readerSettings.isExperimentalPagedSceneReaderEnabled) {
+        // The two renderer switches are per family: which one owns this layout is decided in
+        // resolveSceneReaderEnabled, not by an inline conjunction of the two preferences.
+        if (
+            resolveSceneReaderEnabled(
+                mode = mode ?: ReaderMode.STANDARD,
+                isDoublePage = true,
+                webtoonSceneReader = readerSettings.isExperimentalSceneReaderEnabled,
+                pagedSceneReader = readerSettings.isExperimentalPagedSceneReaderEnabled,
+            )
+        ) {
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
@@ -255,7 +265,14 @@ fun ComposeReaderScreenRoot(
             )
         }
     } else if (mode == ReaderMode.WEBTOON) {
-        if (readerSettings.isExperimentalSceneReaderEnabled) {
+        if (
+            resolveSceneReaderEnabled(
+                mode = ReaderMode.WEBTOON,
+                isDoublePage = false,
+                webtoonSceneReader = readerSettings.isExperimentalSceneReaderEnabled,
+                pagedSceneReader = readerSettings.isExperimentalPagedSceneReaderEnabled,
+            )
+        ) {
             ComposeSceneWebtoonReader(
                 pages = content.pages,
                 initialPage = initialPosition,
@@ -401,7 +418,14 @@ fun ComposeReaderScreenRoot(
             modifier = readerModifier,
         )
     } else {
-        if (readerSettings.isExperimentalSceneReaderEnabled && readerSettings.isExperimentalPagedSceneReaderEnabled) {
+        if (
+            resolveSceneReaderEnabled(
+                mode = mode ?: ReaderMode.STANDARD,
+                isDoublePage = false,
+                webtoonSceneReader = readerSettings.isExperimentalSceneReaderEnabled,
+                pagedSceneReader = readerSettings.isExperimentalPagedSceneReaderEnabled,
+            )
+        ) {
             ComposeScenePagedReader(
                 pages = content.pages,
                 initialPage = initialPosition,
