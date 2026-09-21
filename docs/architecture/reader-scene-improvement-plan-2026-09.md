@@ -2017,7 +2017,8 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
      **得到有效证据支持**（交付 42 想要的那个结论，现在站得住了）。
   2. promotion 阻塞项 (c) 的**用户可感知风险**由本条排除；**门禁数值违规仍然成立**，仍需归因或
      按「重设条件」重新立项，**不得**据此放宽门限。
-  3. 附带发现一条独立疑点（本地目录导入疑似空白阅读器）已单独立项（夹具命名机制的用户可达性）。
+  3. 附带发现一条独立疑点（本地目录导入疑似空白阅读器）已单独立项（夹具命名机制的用户可达性），
+     并**已由交付 44 定位与修复**（`selectChapterEntries` 回退；真机前后对比如该条）。
 - **工具**：`scripts/real_entry_fixture.ps1`（setup/verify/teardown/reset/position）、
   `scripts/real_entry_db_row.py`、`scripts/real_entry_reader_run.sh`（screen/journey/warmup）、
   `scripts/interleave_ab_real_entry.ps1`、`scripts/compare_real_entry_runs.py`（新增 `--window-ms`）、
@@ -2026,6 +2027,33 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
 - 关联：交付 42（作废声明与根因）、§4.2.1 门控保真度声明、§9 检查表 ② 与阻塞项 (c)、交付 41。
   已知限制：**n=2 轮/侧**；温度 41.9–42.0°C 高于门禁协议（比较形状可用，绝对数值不可用）；
   真实入口未复刻 benchmark 的 1.5× 缩放；本地离线夹具；翻页为注入拖拽（4/4 提交已由位置证据确认）。
+
+#### 交付 44（独立缺陷，非 scene 主线）— 本地目录导入的空白阅读器：已定位并修复
+
+- **症状**：一叠松散图片被放进本地库（导入或拷贝）后打开，阅读器空白、翻页无效、百分比停在 −1。
+- **根因（代码链，逐环可查）**：① `SingleContentImporter.copyInto` 复制时**保留原始文件名**
+  （`SingleContentImporter.kt:171-180`，`01.jpg` 仍是 `01.jpg`）；② 应用扫描目录写 `index.json` 时，
+  `ContentIndex.addChapter` 把 `entries` 固定为**下载命名正则** `%08d_%04d\d{4}`
+  （`ContentIndex.kt:173`，该命名只由 `LocalMangaDirOutput.kt:397` / `LocalMangaZipOutput.kt:136` /
+  `DownloadWorker.kt:2921` 产生）；③ `LocalMangaParser.getPages` 在 index 存在时只按该正则过滤
+  （旧 `LocalMangaParser.kt:428-430`）→ **命中 0 个文件** → 章节 0 页。
+- **复现（真实布局 + 真实代码路径）**：本地库根放入 `importtest/01.jpg…04.jpg`（夹具页副本），
+  交给应用自己索引；实测其 `index.json` 的章节记录为 `"entries":"00000000_0001\d{4}", "file":""`，
+  与文件名不可能匹配。修复前打开该漫画：**无读取位置记录**（未建立有效阅读状态 = 0 页）。
+- **修复**：新增 `selectChapterEntries()`（`LocalMangaParser.kt`）作为**唯一选页决策点** ——
+  index 映射命中则照旧使用；**命中为空则回退到「章节目录自身的图片（或 html/xhtml）」**，
+  与「无 index」时的行为一致；index 不认识该章节也不再抛异常（`runCatching` → 回退）。
+  纯局部回退，下载命名内容的行为不变。
+- **验证**：① JVM `ChapterEntriesSelectionTest` 5 例（下载映射、命中为空的回退、无 index、
+  嵌套目录不越界、空章节）：`tests="5" skipped="0" failures="0" errors="0"`；
+  ② 真机**同内容前后对比**：修复前无读取位置 → 修复后 `page=0 percent=0.25`（4 页），
+  再点击翻页 `page=1 percent=0.5`；③ 回归：下载命名的 8 页夹具仍为 `percent=0.125`（未受影响）。
+- **未覆盖 / 诚实边界**：SAF 那条腿**没有**在设备上跑通 —— `adb` 无法投递
+  `ExternalStorageProvider` 的 tree URI 授权（实测 `am start --grant-read-uri-permission` 后
+  仍报 `SecurityException: requires that you obtain access using ACTION_OPEN_DOCUMENT`），
+  因此设备验证用的是**导入器产出的同一布局**（原始文件名、按 `copyInto` 语义放置），
+  而不是真的走一次系统选择器；「导入保留文件名」是代码级证据（①）。
+- 提交 `1363e1ddf`。证据：`app/build/test-results/testDebugUnitTest/TEST-…ChapterEntriesSelectionTest.xml`。
 
 #### 未启动
 
