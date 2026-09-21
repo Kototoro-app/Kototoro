@@ -361,6 +361,12 @@ private fun ReaderReadingOptionsPage(
                     enabled = state.doublePage,
                     onCheckedChange = callbacks.onDoublePageCoverChanged,
                 )
+                if (state.doublePage) {
+                    // The drag sensitivity belongs with the landscape double-page switch that enables
+                    // it (it only has an effect then), not in the page/zoom tab where it used to live.
+                    ReaderOptionDivider()
+                    ReaderDoublePageSensitivity(state, callbacks)
+                }
                 ReaderOptionDivider()
                 ReaderOptionSwitchRow(
                     label = stringResource(R.string.fullscreen_mode),
@@ -571,10 +577,8 @@ private fun ReaderPageOptionsPage(
                     checked = state.splitPages,
                     onCheckedChange = callbacks.onSplitPagesChanged,
                 )
-                if (state.doublePage) {
-                    ReaderOptionDivider()
-                    ReaderDoublePageSensitivity(state, callbacks)
-                }
+                // The double-page drag sensitivity sits in the reading tab with the landscape
+                // double-page switch; it is only shown while that switch is on.
             }
         }
         item {
