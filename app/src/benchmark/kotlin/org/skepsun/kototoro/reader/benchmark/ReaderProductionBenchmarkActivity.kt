@@ -515,6 +515,24 @@ class ReaderProductionBenchmarkActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Supplies decoded pages directly, so a journey measures the scene host and the renderer without the
+ * production decode strategy in the path.
+ *
+ * **What a journey with this pipeline does and does not measure** (improvement plan 2026-09 §4.2.1
+ * and §10.1 delivery 35): it covers the scene host, the Compose renderer, layout and input. It does
+ * **not** cover the production image pipeline: the reader is constructed with this pipeline, which
+ * replaces `KototoroImagePipelineAdapter` entirely, so `DecodePlanner`'s LOD decisions, the tile
+ * ladder and the hardware-bitmap policy never run. Tile and decode counters in the harness JSON
+ * therefore read zero by construction, and decode- or LOD-shaped conclusions cannot be drawn from a
+ * journey's frame timings.
+ *
+ * That was learned the expensive way: a claim that the reader had regressed to half-resolution
+ * decoding was built on decoder timing from a journey that never constructs the adapter. If a
+ * measurement needs the production decode path, it must be taken through the real reader entry
+ * (`ReaderActivity`), not here. Routing journeys through the real adapter instead would change the
+ * evaluation conditions and so would have to re-baseline every scenario per §4.2.1's re-set rule.
+ */
 class BenchmarkProductionImagePipeline(
     pages: List<ReaderPage>,
 ) : ComposeReaderImagePipeline {

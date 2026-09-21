@@ -143,6 +143,18 @@ RssAnon Max ≤ 基线 ×1.10；GPU Max ≤ 基线 ×1.10。
 出现设备温度 >38°C、残留 root perfetto 进程、可用内存异常等状态偏差时（真机验证方法第 6 条），
 不得跨状态比较 P99/overrun，须在同一状态下重测。
 
+> **2026-09-21 适用范围声明（交付 35）**：本节全部场景与 SLO 判定的**测量路径是
+> benchmark 活动**（`ReaderProductionBenchmarkActivity`），它使用自实现的
+> `BenchmarkProductionImagePipeline`，**因此不经过生产图像管线**
+> （`KototoroImagePipelineAdapter` / `DecodePlanner` 的 LOD、tile 阶梯、硬件位图策略均不在路径上；
+> 该文件中构造该适配器的次数为 0，实测）。由此：
+> - 上表与 §10.1 中的所有结论**只适用于「场景宿主 + Compose 渲染器 + 布局/输入」**；
+> - harness JSON 里的 **tile/解码类计数按构造即为 0**，不能据此判断「页面是否走 tile」；
+> - **任何关于解码策略、LOD、位图驻留或画质分辨率的因果结论，都不得由 benchmark 帧时序得出**；
+>   这类测量必须走真实阅读入口（`ReaderActivity`）。
+> 要让 journey 改走真实适配器，属于「评估条件变化」，须按上面的**重设条件**重新立项并重设全部基线；
+> 本文不做该改动，只声明边界。来源代码 `ReaderProductionBenchmarkActivity.kt:518` 的 KDoc 已同步。
+
 > **2026-09-20 修订（CS-7，交付 13）**：把本表落成可执行门禁时，用真实历史样本回放判定器，
 > 发现高倍率组原来的 50ms 单帧/主线程帧上界会把交付 11 已修复的构建判失败
 > （该构建实测过 +50.518ms 单帧）。这两项上界据此放宽到 **80ms**（基线最大 21.9ms / 28.6ms，
