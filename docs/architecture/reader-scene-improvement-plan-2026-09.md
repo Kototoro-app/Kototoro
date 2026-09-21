@@ -155,6 +155,28 @@ RssAnon Max ≤ 基线 ×1.10；GPU Max ≤ 基线 ×1.10。
 > 要让 journey 改走真实适配器，属于「评估条件变化」，须按上面的**重设条件**重新立项并重设全部基线；
 > 本文不做该改动，只声明边界。来源代码 `ReaderProductionBenchmarkActivity.kt:518` 的 KDoc 已同步。
 
+> **2026-09-21 门控保真度声明（候选路径 ≠ 当前默认路径）**：本节场景与 SLO 判定的对象是
+> **分页场景宿主**，而该宿主在 release 默认配置下**并不启用**：
+> - 门控是**双开关**：`isExperimentalSceneReaderEnabled`（`ReaderSettings.kt:34`，默认 `true`，
+>   作用于 Webtoon/Horizontal 场景宿主）与 `isExperimentalPagedSceneReaderEnabled`
+>   （`ReaderSettings.kt:35`，默认 **`false`**），两者同时为真才走 `ComposeScenePagedReader`
+>   （`ComposeReaderScreenRoot.kt:120` 双页、`:404` 单页）。默认配置下**单页/双页由 legacy
+>   `ComposePagedReader` 承担**，场景分页宿主只有实验开关打开者（测试人员 / 主动开启的用户）会遇到。
+> - benchmark **绕过该门控**：`ReaderProductionBenchmarkActivity.kt:227` 直接定 `ReaderMode.STANDARD`、
+>   `:239` 直接构造 `ComposeScenePagedReader(...)`；`app/src/benchmark/` 全目录对 `isExperimental*`
+>   与 `AppSettings` 的匹配数为 **0**（实测）。因此该设计对 promotion 判定是**正确的** —— 门禁要测的
+>   正是「若把候选路径变成默认，用户会付出什么代价」；但**任何把本节数字读作「当前用户体验」的表述
+>   都是错的**，用户拨动设置页里的开关也**不会**改变本节任何测量结果，历史归档与 SLO 数字不因此作废。
+> - **覆盖面与暴露面是反的**：CS-7 门禁的 7 个场景**全部是 `paged*SceneFull`**
+>   （`scripts/check_reader_benchmark.py:86-92`），即门禁**只覆盖默认关闭的那条路径**；
+>   而默认启用的 Webtoon/Horizontal 场景宿主**没有任何帧时序门禁**。
+> - 由此产生的口径要求：①「1.5× 违规」描述的是**候选路径的代价**，不是现有 release 用户的卡顿；
+>   ② 若要回答「真实用户是否遇到」，测量必须走真实阅读入口（`ReaderActivity`），且两侧都必须把
+>   `isExperimentalPagedSceneReaderEnabled` 当作**受控实验条件**固定并记录 —— benchmark 变体没有
+>   `applicationIdSuffix`，与 release 同为 `org.skepsun.kototoro`、还直接吃 `src/release/` 源码
+>   （`app/build.gradle:106/162-163`），因此两者**共享数据目录与 prefs**，开关状态不一致时两侧的
+>   「真实入口」根本不是同一个渲染器（比后台 worker 更隐蔽的一类污染，见交付 41）。
+
 > **2026-09-20 修订（CS-7，交付 13）**：把本表落成可执行门禁时，用真实历史样本回放判定器，
 > 发现高倍率组原来的 50ms 单帧/主线程帧上界会把交付 11 已修复的构建判失败
 > （该构建实测过 +50.518ms 单帧）。这两项上界据此放宽到 **80ms**（基线最大 21.9ms / 28.6ms，
@@ -1879,6 +1901,60 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   已知限制：**停顿的具体代码路径未定位**（trace 无该区间的主线程打点）；
   「25–32 帧」这一位置来自 4 次运行，尚未与代码路径对齐。
 
+#### 交付 42 — 真实入口冷启动 A/B：首屏停顿在真实入口**不复现**（门控保真度的实测答案）
+
+- **动机**：§4.2.1 的门控保真度声明指出 CS-7 门禁**绕过**分页场景宿主门控，所以
+  「1.5× 违规 ＝ 用户会遇到的首屏卡顿」在此之前只是一个**未验证的推论**。本轮把测量搬到真实入口。
+- **测量链路（新增，可复用）**：把 CS-7 夹具 `v1_paged_large`（8 张 6000×9000 JPEG）放进应用自己的
+  本地库根 `files/manga/bench_large_paged`，由 `LocalIndexUpdateWorker`（`MainActivity.kt:800`）建索引
+  （`manga_id=-722638835630210246`，`source=LOCAL`）；由于应用**从不给纯本地漫画写 `chapters` 行**
+  （本地章节平时经 `ParcelableContent` 传给阅读器），需注入一行 `chapters`，其 `chapter_id` 取应用
+  自己写的 `index.json` 键 `"#<目录 uri>".longHashCode() = 4897191628874209651`（已用同算法复算校验，
+  未自行发明 id）。随后以
+  `am start -W -a org.skepsun.kototoro.action.READ_MANGA -d https://kototoro.app/manga/<id>`
+  冷启动 `ReaderActivity`，用**与归档 trace 逐字相同的 Perfetto 配置**采集首屏（配置直接取自归档
+  trace 的 `metadata.trace_config_pbtxt`，含帧匹配所需的 `android.surfaceflinger.frametimeline`）。
+- **内容保真度（实测，非假设）**：4/4 trace 都含 3 条
+  `ID#w=6000;h=9000;dw=2731;dh=4096;src=FileSource{file=…/bench_large_paged/page_000.jpg}`，
+  即两侧渲染的是与 benchmark 场景**完全相同的夹具页**；解码（`Decoding 2731x4096 bitmap` ≈334ms）
+  发生在 worker 线程，不在主线程。
+- **模式保真度**：`DetectReaderModeUseCase` 的 webtoon 判据是 `width * 1.8 < height`，6000×9000 不满足
+  → `ReaderMode.STANDARD`（分页）；叠加已开启的 `isExperimentalPagedSceneReaderEnabled=true`，
+  实际走的正是 `ComposeScenePagedReader` —— 即含那两处候选改动的代码路径。
+- **协议**：交错 A/B（同轮内先基线后现状，两侧同设备同内容），每侧依次安装 → `cmd package compile
+  -m speed -f`（Full）→ force-stop + 停 job → 丢弃一次预热 → 采集。2 轮 × 2 侧，逐轮温度
+  37.0 / 37.0 / 38.0 / 38.0 °C、刷新率 120.00001Hz（记录于 `runs.txt`）。
+  *与门禁协议的偏差*：本轮测的是**形状比较**而非绝对 SLO 数值，未强制 ≤35.0°C、未做 5 迭代；
+  设备为图案锁，降温不能熄屏（熄屏即重新锁屏，会让窗口不可见并把 trace 变成 1 帧）。
+  **该偏差不适用于任何绝对门禁判定**，只适用于同轮交错的两侧比较。
+- **结果（首 40 帧窗口）**：
+  | trace | 帧数 | 超时帧 | ui p50 | ui p99 | ui max | 窗口内 ui max | 窗口内超时 | 窗口最差 overrun |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 基线 r1 | 148 | 2 | 0.73 | 4.44 | 7.41 | 7.41 | 2 | +38.87ms |
+  | 现状 r1 | 147 | 2 | 0.83 | 4.17 | 5.38 | 5.38 | 2 | +34.46ms |
+  | 基线 r2 | 148 | 2 | 0.76 | 4.50 | 4.74 | 4.74 | 2 | +34.11ms |
+  | 现状 r2 | 148 | 2 | 0.68 | 4.45 | 8.39 | 8.39 | 2 | +38.97ms |
+  - 两侧**无法区分**：各 2 个超时帧，且都是窗口出现的第 0/1 帧（首帧 overrun 是首帧时间线的常数项，
+    两侧同现，与代码无关）；**整条 trace 的主线程帧上界 4.7–8.4ms**，远在 20ms 门限内，更远低于
+    benchmark 现状帧的 22–31ms。
+  - **窗口对齐方式不影响结论**：真实入口在该区段没有任何 ≥10ms 的主线程帧，无论按帧序号（25–32）
+    还是按墙钟（230–350ms）对齐都看不到 benchmark 的停顿形状。
+- **判定**：**benchmark 首屏停顿在真实入口不复现**（4/4 运行一致）。由此：
+  1. 「1.5× 违规」是**候选路径在 benchmark 旅程下的代价**，不是 release 用户打开阅读器会遇到的卡顿 ——
+     §4.2.1 门控保真度声明的口径要求由此取得**实测支持**（此前只是声明）。
+  2. promotion 阻塞项 (c) 的**用户可感知风险**由这条测量排除；但**门禁数值违规本身仍然成立**，
+     仍需归因或按「重设条件」重新立项，**不得**因本条结论直接放宽门限。
+  3. **未覆盖**：真实入口的**稳态翻页旅程**（本轮只有冷启动首屏，无翻页、无 1.5× 缩放）。若要把
+     「旅程代价」也搬到真实入口，需要能驱动真实手势的 journey（下一轮候选）。
+  4. 未覆盖：本夹具是**本地漫画**（离线、单章 8 页）；网络源的加载时序不在本轮范围内。
+- **工具**：`scripts/interleave_ab_real_entry.ps1`（含「设备已解锁且窗口可见」双向断言，
+  防止在锁屏/息屏下测出不可见窗口）、`scripts/real_entry_reader_run.sh`、
+  `scripts/perfetto_reader_real_entry.cfg`、`scripts/print_frame_window.py`、
+  `scripts/compare_real_entry_runs.py`；证据归档 `E:\kototoro_demo\reader-bench\realentry-20260921\ab\`。
+- 关联：§4.2.1（门控保真度声明）、§9 检查表 ② 与阻塞项 (c)、交付 41（benchmark 侧的停顿形状）、
+  交付 37（两侧解码相同）。已知限制：**n=2 轮/侧**（但 4/4 一致且余量 2.4×）；温度高于门禁协议；
+  仅冷启动首屏；本地夹具；未测真实入口的翻页旅程。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
@@ -1903,6 +1979,9 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   「宿主接线＝一行直传」，并记录该缺口在 full-bleed 布局下真机证据不可得的原因）；
   (c) 翻转 `isExperimentalPagedSceneReaderEnabled` 默认值并过一个 nightly 周期
   —— **唯一剩余阻塞项，属发布动作，需人工决定**。
+  补充（交付 42）：该阻塞项的**用户可感知风险**已被真实入口冷启动 A/B 排除（首屏停顿不复现，
+  4/4 一致），但它所依赖的**门禁数值违规仍然成立**，故阻塞项**未解除**，仍需归因或按
+  「重设条件」重新立项。
 
 （已交付项对应的清单项在此移除：`§8.2 :reader-core` 抽取见交付 6，阶段 A 基线固定与结果记录
 见交付 8/9/12，SLO 制定见 §4.2.1，CS-7 门禁见交付 13。）
