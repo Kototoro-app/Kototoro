@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
@@ -61,6 +62,62 @@ class ScenePagedTransitionMatrixTest {
 
     @Test
     fun curlInterruptedTurnSettlesOnALegalPage() = verifyInterruptedTurn(ReaderAnimation.SIMULATION, "CURL")
+
+    /**
+     * A gesture that never becomes a drag must not cancel the running turn: the turn has to land.
+     * Before the fix every touch-down cancelled the snap animation and left the page between slots.
+     */
+    @Test
+    fun tapDuringATurnLetsTheTurnLand() = verifyTapDuringTurn(ReaderAnimation.DEFAULT, "SLIDE")
+
+    @Test
+    fun tapDuringACurlTurnLetsTheTurnLand() = verifyTapDuringTurn(ReaderAnimation.SIMULATION, "CURL")
+
+    private fun verifyTapDuringTurn(animation: ReaderAnimation, style: String) {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
+            host.launch()
+            host.awaitActivePage(0, "$style initial state")
+            host.swipeForward()
+            // The turn animation runs 220ms; tap while it is still on screen.
+            host.tapCenter()
+            host.awaitActivePageWithin(setOf(0, 1), "$style page after the tap")
+            assertEquals("$style: the turn must land on the next page", 1, host.activePageIndex())
+        }
+    }
+
+    /**
+     * A double tap mid-turn zooms the page that is actually there: it owns the view, so the turn is
+     * settled onto its nearest slot first. Either way the reader must settle and keep working - the
+     * defect was that the animation simply froze and the reader stopped reporting pages at all.
+     */
+    @Test
+    fun doubleTapDuringATurnSettlesAndKeepsTurning() = verifyDoubleTapDuringTurn(ReaderAnimation.SIMULATION, "CURL")
+
+    private fun verifyDoubleTapDuringTurn(animation: ReaderAnimation, style: String) {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
+            host.launch()
+            host.awaitActivePage(0, "$style initial state")
+            val reportsBefore = host.settledReportCount()
+            host.swipeForward()
+            host.doubleTap()
+            assertTrue("$style: an interrupted turn must still settle and report a page", host.awaitNewReport(reportsBefore))
+            host.holdSettled(600)
+            val settled = host.activePageIndex()
+            assertTrue("$style: must land on a page, not between slots", settled in 0..1)
+            // Zoom back to fit first: at 2.5x a drag pans the page instead of turning it, so the
+            // follow-up turn only proves the pager is alive once the zoom is undone.
+            host.doubleTap()
+            host.holdSettled(600)
+            host.swipeForwardCommitting()
+            host.holdSettled(400)
+            assertTrue(
+                "$style: the reader must turn pages again after the interruption (was $settled, now ${host.activePageIndex()})",
+                host.activePageIndex() >= 0 && host.activePageIndex() != settled,
+            )
+        }
+    }
 
     /**
      * The announcement must follow the reader state on its own: no extra input, no extra frame

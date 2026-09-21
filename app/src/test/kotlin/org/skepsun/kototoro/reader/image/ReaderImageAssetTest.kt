@@ -17,9 +17,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.test.resetMain
@@ -106,11 +109,15 @@ class ReaderImageAssetTest {
         var lastForce = false
         var observeCount = 0
 
+        /** When set, [observe] waits for it before emitting, standing in for a slow decode. */
+        var gate: CompletableDeferred<Unit>? = null
+
         override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateToReturn
 
         override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = flow {
             observeCount++
             lastForce = force
+            gate?.await()
             stateToReturn?.let { emit(it) }
         }
     }
@@ -605,5 +612,88 @@ class ReaderImageAssetTest {
         // 4. Assert full-res presentation asset is now loaded
         val presentationAsset = adapter.assets.value[pageId]
         assertTrue(presentationAsset is ReaderImageAsset.ComposeImage, "Authoritative presentation asset should be loaded")
+    }
+
+    @Test
+    fun `a decode that finishes quickly never publishes a loading state`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { page1 },
+        )
+        val pageId = PageId(page1.readerKey)
+        val seen = mutableListOf<ReaderImageLoadState?>()
+        val collector = launch(testDispatcher) { adapter.loadStates.collect { seen += it[pageId] } }
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+        collector.cancel()
+
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.ComposeImage)
+        assertTrue(
+            seen.none { it is ReaderImageLoadState.Loading },
+            "a page that is already cached must not report loading, otherwise every warm page turn flashes a spinner: $seen",
+        )
+    }
+
+    @Test
+    fun `a decode that takes longer than the delay does publish a loading state`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val gate = CompletableDeferred<Unit>()
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+            this.gate = gate
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { page1 },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceTimeBy(500)
+        runCurrent()
+
+        assertTrue(
+            adapter.loadStates.value[pageId] is ReaderImageLoadState.Loading,
+            "a genuinely slow page still has to report that it is loading",
+        )
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(ReaderImageLoadState.Ready, adapter.loadStates.value[pageId])
     }
 }

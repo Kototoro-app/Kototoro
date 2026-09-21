@@ -96,6 +96,7 @@ import org.skepsun.kototoro.reader.core.PagedSpreadConfig
 import org.skepsun.kototoro.reader.core.PagedTransitionResolver
 import org.skepsun.kototoro.reader.core.ReaderViewport
 import org.skepsun.kototoro.reader.core.SceneReadingDirection
+import org.skepsun.kototoro.reader.core.resolveSettledTurnOffset
 import org.skepsun.kototoro.reader.core.SpreadBehavior
 import org.skepsun.kototoro.reader.core.VisibleNode
 import org.skepsun.kototoro.reader.image.KototoroImagePipelineAdapter
@@ -920,12 +921,17 @@ fun ComposeScenePagedReader(
                 var lastTapPosition: Offset? = null
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    snapAnimationJob?.cancel()
+                    // An in-flight page turn is deliberately NOT cancelled on touch-down. Cancelling it
+                    // here abandoned the animation wherever it happened to be, which left the page
+                    // frozen between two slots whenever the new gesture did not become a drag (a tap,
+                    // a double tap that zooms, a long press) - a Compose pager lets a tap interrupt
+                    // nothing and finishes the settle. The turn is cancelled only by the gestures that
+                    // really take the view over: a drag, a pinch, or a double-tap zoom.
                     canvasFlingJob?.cancel()
                     pullStartDistancePx = 0f
                     pullEndDistancePx = 0f
                     val pe = primaryExtent.coerceAtLeast(1f)
-                    val startOffset = scrollState.offset
+                    var startOffset = scrollState.offset
                     val currentSlot = (startOffset / pe).roundToInt().coerceIn(0, (scene?.slotCount ?: 1) - 1)
                     if (currentSlot != zoomedSlotIndex) {
                         saveSlotZoom(zoomedSlotIndex, canvasScale, canvasOffsetX, canvasOffsetY)
@@ -959,6 +965,23 @@ fun ComposeScenePagedReader(
                         down.consume()
                         lastTapPosition = null
                         lastTapUpAt = 0L
+                        // A double tap zooms the page that is actually on screen, so the turn it
+                        // interrupted is settled onto its nearest slot first - otherwise the zoom
+                        // animated over a page frozen half way through the turn.
+                        val interruptedTurn = snapAnimationJob?.isActive == true
+                        snapAnimationJob?.cancel()
+                        if (interruptedTurn) {
+                            resolveSettledTurnOffset(
+                                offset = scrollState.offset,
+                                primaryExtent = pe,
+                                slotCount = scene?.slotCount ?: 1,
+                                maxOffset = scrollState.maxOffset,
+                            )?.let { settled ->
+                                scrollState.snapTo(settled)
+                                scene?.let { current -> updateResourceWindow(current, settled) }
+                            }
+                        }
+                        transitionAnchorSlot = initialSlot
                         zoomedSlotIndex = initialSlot
                         val targetScale = if (canvasScale > 1f) 1f else 2.5f
                         val startScale = canvasScale
@@ -1022,6 +1045,17 @@ fun ComposeScenePagedReader(
                         if (isZoomEnabled && pressedCount >= 2) {
                             moved = true
                             if (!isZoomGesture) {
+                                // A pinch owns the view: stop the turn and settle on the slot it started on.
+                                snapAnimationJob?.cancel()
+                                resolveSettledTurnOffset(
+                                    offset = scrollState.offset,
+                                    primaryExtent = pe,
+                                    slotCount = scene?.slotCount ?: 1,
+                                    maxOffset = scrollState.maxOffset,
+                                )?.let { settled ->
+                                    scrollState.snapTo(settled)
+                                    scene?.let { current -> updateResourceWindow(current, settled) }
+                                }
                                 dragState.cancel()
                                 pageVelocityTracker.resetTracking()
                                 canvasVelocityTracker.resetTracking()
@@ -1050,6 +1084,13 @@ fun ComposeScenePagedReader(
                             val isVertical = readingDirection.isVertical
 
                             if (hypot(change.position.x - down.position.x, change.position.y - down.position.y) > viewConfiguration.touchSlop) {
+                                if (!moved) {
+                                    // The drag takes the view over: stop the turn where it got to and
+                                    // continue from there, so grabbing a turning page does not snap it
+                                    // back to the offset the finger landed on.
+                                    snapAnimationJob?.cancel()
+                                    startOffset = scrollState.offset
+                                }
                                 moved = true
                             }
 
@@ -1606,7 +1647,7 @@ fun ComposeScenePagedReader(
                     centerX = centerX,
                     centerY = centerY,
                 ) {
-                    PagedSceneReaderLoadStatus(
+                    SceneReaderPageLoadOverlay(
                         pipeline = adapter,
                         pageId = pageId,
                         page = pageLookup(pageId),
@@ -1636,37 +1677,6 @@ fun ComposeScenePagedReader(
         )
 
         pageOverlay()
-    }
-}
-
-@Composable
-private fun PagedSceneReaderLoadStatus(
-    pipeline: ReaderImagePipeline,
-    pageId: PageId,
-    page: ReaderPage?,
-    onRetryError: (Throwable, retry: () -> Unit) -> Unit,
-    onShowErrorDetails: (Throwable, String?) -> Unit,
-    resolveErrorStringId: (Throwable) -> Int,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val states by pipeline.loadStates.collectAsStateWithLifecycle()
-    when (val state = states[pageId]) {
-        ReaderImageLoadState.Ready -> Unit
-        is ReaderImageLoadState.Failed -> Surface(
-            modifier = modifier.padding(24.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            ReaderPageError(
-                cause = state.cause,
-                onRetry = { onRetryError(state.cause, onRetry) },
-                onShowDetails = { onShowErrorDetails(state.cause, page?.url) },
-                resolveStringId = resolveErrorStringId(state.cause),
-            )
-        }
-        else -> Box(modifier) {
-            ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)
-        }
     }
 }
 

@@ -933,7 +933,7 @@ fun ComposeSceneWebtoonReader(
                             centerX = centerX,
                             centerY = centerY,
                         ) {
-                            SceneReaderLoadStatus(
+                            SceneReaderPageLoadOverlay(
                                 pipeline = adapter,
                                 pageId = pageId,
                                 page = pageLookup(pageId),
@@ -957,38 +957,6 @@ fun ComposeSceneWebtoonReader(
             text = stringResource(if (canGoNextChapter) R.string.pull_to_next_chapter else R.string.pull_bottom_no_next),
             modifier = Modifier.align(Alignment.BottomCenter),
         )
-    }
-}
-
-/** Only the active page's low-frequency resource state participates in this overlay's composition. */
-@Composable
-private fun SceneReaderLoadStatus(
-    pipeline: ReaderImagePipeline,
-    pageId: PageId,
-    page: ReaderPage?,
-    onRetryError: (Throwable, retry: () -> Unit) -> Unit,
-    onShowErrorDetails: (Throwable, String?) -> Unit,
-    resolveErrorStringId: (Throwable) -> Int,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val states by pipeline.loadStates.collectAsStateWithLifecycle()
-    when (val state = states[pageId]) {
-        ReaderImageLoadState.Ready -> Unit
-        is ReaderImageLoadState.Failed -> Surface(
-            modifier = modifier.padding(24.dp),
-            shape = MaterialTheme.shapes.medium,
-        ) {
-            ReaderPageError(
-                cause = state.cause,
-                onRetry = { onRetryError(state.cause, onRetry) },
-                onShowDetails = { onShowErrorDetails(state.cause, page?.url) },
-                resolveStringId = resolveErrorStringId(state.cause),
-            )
-        }
-        else -> Box(modifier) {
-            ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)
-        }
     }
 }
 

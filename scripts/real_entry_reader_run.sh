@@ -34,6 +34,7 @@ POST_SLEEP="${POST_SLEEP:-4}"
 JOURNEY_SETTLE_S="${JOURNEY_SETTLE_S:-5}"
 JOURNEY_TURNS="${JOURNEY_TURNS:-4}"
 TURN_STYLE="${TURN_STYLE:-swipe}"
+TURN_DIRECTION="${TURN_DIRECTION:-forward}"
 TURN_MS="${TURN_MS:-200}"
 TURN_SPACING_S="${TURN_SPACING_S:-1.2}"
 SCREEN_W="${SCREEN_W:-1280}"
@@ -53,11 +54,20 @@ turn_pages() {
     #     no turn happened even when the pages turned (hence the BACK press after the trace stops).
     Y=$((SCREEN_H / 2))
     X=$((SCREEN_W * 78 / 100))
+    # A backward journey is what tests the *warm* case: those pages have been decoded before, so a
+    # turn to them must not report loading again.
+    if [ "$TURN_DIRECTION" = "backward" ]; then
+        FROM=$((SCREEN_W * 22 / 100))
+        TO=$X
+    else
+        FROM=$X
+        TO=$((SCREEN_W * 22 / 100))
+    fi
     sleep "$JOURNEY_SETTLE_S"
     i=1
     while [ "$i" -le "$JOURNEY_TURNS" ]; do
         if [ "$TURN_STYLE" = "swipe" ]; then
-            input swipe "$X" "$Y" "$((SCREEN_W * 22 / 100))" "$Y" "$TURN_MS"
+            input swipe "$FROM" "$Y" "$TO" "$Y" "$TURN_MS"
         else
             input tap "$X" "$Y"
         fi

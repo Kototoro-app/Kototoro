@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
@@ -155,7 +156,13 @@ class KototoroImagePipelineAdapter(
     }
 
     private fun setLoadState(pageId: PageId, state: ReaderImageLoadState) {
-        mutableLoadStates.update { it + (pageId to state) }
+        val updated = mutableLoadStates.updateAndGet { it + (pageId to state) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()) {
+            // How many pages the pipeline is telling the reader to show a spinner for. A turn over an
+            // already-decoded page must not move this counter; it exists because that regression was
+            // invisible in frame timings and could only be seen in the UI.
+            Trace.setCounter("Reader.LoadingPages", updated.values.count { it is ReaderImageLoadState.Loading }.toLong())
+        }
     }
 
     private fun publishPreview(pageId: PageId, previewUrl: String) {
@@ -273,8 +280,23 @@ class KototoroImagePipelineAdapter(
             }
             val page = pageLookup(pageId) ?: return null
             scope.async(ioDispatcher, start = CoroutineStart.LAZY) {
+                // A decode that hits the memory cache finishes in a few milliseconds, so publishing a
+                // loading state up front made every warm page turn flash the "加载中…" overlay over a
+                // page that was already decoded (the paged window only prefetches neighbours as
+                // SOURCE_READY, so the decode starts exactly at the turn). The state is therefore
+                // published only once the wait becomes perceptible; a genuinely slow page still gets
+                // its indicator, just not before it is worth showing.
+                val loadingPublish = scope.launch {
+                    delay(LOADING_STATE_DELAY_MS)
+                    // Only announce loading while the page is still unresolved, and atomically: the
+                    // acquisition can resolve (or fail) on another thread at any moment, and that
+                    // outcome has to win. A read-then-write here lost that race and turned a failed
+                    // page back into a loading one.
+                    mutableLoadStates.update { states ->
+                        if (states.containsKey(pageId)) states else states + (pageId to ReaderImageLoadState.Loading())
+                    }
+                }
                 try {
-                    setLoadState(pageId, ReaderImageLoadState.Loading())
                     val readyState = composePipeline.observe(page, force).onEach {
                         if (it is ComposeReaderImageState.Downloading) {
                             setLoadState(pageId, ReaderImageLoadState.Loading(it.progress))
@@ -459,6 +481,10 @@ class KototoroImagePipelineAdapter(
                 } catch (error: Exception) {
                     setLoadState(pageId, ReaderImageLoadState.Failed(error))
                     null
+                } finally {
+                    // A pending "loading" must never land after the page resolved, failed, or was
+                    // cancelled - including the early returns above.
+                    loadingPublish.cancel()
                 }
             }.also { task ->
                 inFlightLoads[pageId] = task
@@ -764,6 +790,15 @@ internal fun DecodePlan?.requestedDecodeSize(): IntSize? = when (this) {
 
 /** Shortfall below which a sampled page is left as it is rather than decoded again. */
 private const val ZOOM_REACQUIRE_THRESHOLD = 1.25f
+
+/**
+ * How long an acquisition may run before it reports itself as loading.
+ *
+ * Warm decodes (memory-cache hits) finish well inside this window, so they never flash a loading
+ * overlay over a page that is already there; slow pages still get their indicator, just not before
+ * the wait is worth showing.
+ */
+private const val LOADING_STATE_DELAY_MS = 120L
 
 /**
  * Whether a sampled page must be decoded again for the current camera.

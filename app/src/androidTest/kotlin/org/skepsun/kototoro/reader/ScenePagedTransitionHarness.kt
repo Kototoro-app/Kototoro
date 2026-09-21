@@ -346,6 +346,43 @@ internal class ScenePagedTransitionHarness(
         swipeBackward()
     }
 
+    /**
+     * Two taps inside the double-tap window, at the viewport centre.
+     *
+     * The timing is the point: both downs have to fall inside
+     * [android.view.ViewConfiguration.getDoubleTapTimeout] and after
+     * [android.view.ViewConfiguration.getDoubleTapMinTime], which is what makes the reader treat them
+     * as one zoom gesture instead of two taps.
+     */
+    fun doubleTap() {
+        val (x, y) = viewportCenter()
+        repeat(2) { index ->
+            val down = SystemClock.uptimeMillis()
+            val first = MotionEvent.obtain(down, down, MotionEvent.ACTION_DOWN, x, y, 0)
+            instrumentation.sendPointerSync(first)
+            first.recycle()
+            SystemClock.sleep(30)
+            val up = MotionEvent.obtain(down, down + 30, MotionEvent.ACTION_UP, x, y, 0)
+            instrumentation.sendPointerSync(up)
+            up.recycle()
+            if (index == 0) SystemClock.sleep(60)
+        }
+        SystemClock.sleep(120)
+    }
+
+    /** How many settled-page reports the reader has emitted; a turn left frozen emits none. */
+    fun settledReportCount(): Int = reportCount.get()
+
+    /** Waits for the reader to settle and report a page again after [reportsBefore]. */
+    fun awaitNewReport(reportsBefore: Int, timeoutMs: Long = 3_000): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMs
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (reportCount.get() > reportsBefore) return true
+            SystemClock.sleep(50)
+        }
+        return false
+    }
+
     /** A press/release that turns nothing; used to force one more frame. */
     fun tapCenter() {
         val (x, y) = viewportCenter()

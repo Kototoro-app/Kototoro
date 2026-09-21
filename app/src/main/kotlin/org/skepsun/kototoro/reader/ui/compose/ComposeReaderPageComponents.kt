@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import coil3.DrawableImage
 import coil3.request.SuccessResult
@@ -73,10 +75,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.prefs.ReaderBackground
+import org.skepsun.kototoro.reader.core.PageId
 import org.skepsun.kototoro.reader.core.ZoomMode
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.ui.compose.KototoroLoadingIndicator
+import org.skepsun.kototoro.reader.image.ReaderImageLoadState
+import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
 import org.skepsun.kototoro.reader.ui.pager.ReaderAutoBackground
 import org.skepsun.kototoro.reader.ui.pager.ReaderPageSplit
@@ -314,6 +319,78 @@ internal fun ReaderPageError(
             Text(stringResource(R.string.error_details))
         }
     }
+}
+
+/**
+ * What a scene host draws over one page while the image pipeline has nothing to show for it.
+ */
+internal enum class SceneReaderPageOverlay {
+	NONE,
+	LOADING,
+	ERROR,
+}
+
+/**
+ * The overlay decision for one page of a scene host.
+ *
+ * Only an explicit [ReaderImageLoadState.Loading] asks for a spinner, and never while an asset is
+ * already in hand. A state that is *unknown* must not be treated as loading either: the pipeline
+ * drops the load state of pages that leave its resource window, and the scene hosts compose this
+ * overlay for every visible page that has no asset yet - so "unknown" is the normal transient state
+ * of a page that is about to be drawn. Reading it as loading made every page turn flash "加载中…"
+ * at the start of the turn, even for pages whose bitmap was already decoded in the memory cache.
+ */
+internal fun resolveSceneReaderPageOverlay(
+	state: ReaderImageLoadState?,
+	hasRenderableAsset: Boolean,
+): SceneReaderPageOverlay = when {
+	state is ReaderImageLoadState.Failed -> SceneReaderPageOverlay.ERROR
+	state is ReaderImageLoadState.Loading && !hasRenderableAsset -> SceneReaderPageOverlay.LOADING
+	else -> SceneReaderPageOverlay.NONE
+}
+
+/**
+ * Per-page loading and error overlay shared by the scene hosts (paged, webtoon, horizontal).
+ *
+ * The asset check is what keeps a warm page turn free of a spinner: the pipeline keeps a page's
+ * presentation asset while it is in the window, and a page that can already be drawn must not be
+ * covered by a loading indicator.
+ */
+@Composable
+internal fun SceneReaderPageLoadOverlay(
+	pipeline: ReaderImagePipeline,
+	pageId: PageId,
+	page: ReaderPage?,
+	onRetryError: (Throwable, retry: () -> Unit) -> Unit,
+	onShowErrorDetails: (Throwable, String?) -> Unit,
+	resolveErrorStringId: (Throwable) -> Int,
+	onRetry: () -> Unit,
+	modifier: Modifier = Modifier,
+) {
+	val states by pipeline.loadStates.collectAsStateWithLifecycle()
+	val assets by pipeline.assets.collectAsStateWithLifecycle()
+	val state = states[pageId]
+	when (resolveSceneReaderPageOverlay(state, assets.containsKey(pageId))) {
+		SceneReaderPageOverlay.NONE -> Unit
+		SceneReaderPageOverlay.LOADING -> Box(modifier) {
+			ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)
+		}
+		SceneReaderPageOverlay.ERROR -> {
+			// Guarded by resolveSceneReaderPageOverlay above.
+			val failure = state as ReaderImageLoadState.Failed
+			Surface(
+				modifier = modifier.padding(24.dp),
+				shape = MaterialTheme.shapes.medium,
+			) {
+				ReaderPageError(
+					cause = failure.cause,
+					onRetry = { onRetryError(failure.cause, onRetry) },
+					onShowDetails = { onShowErrorDetails(failure.cause, page?.url) },
+					resolveStringId = resolveErrorStringId(failure.cause),
+				)
+			}
+		}
+	}
 }
 
 @Composable

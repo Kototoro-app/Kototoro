@@ -2107,6 +2107,73 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   验证后已把该键从 pref 文件移除、恢复为缺省（false）。
 - 关联：交付 45（同一面板）、§9 阻塞项 (c)。
 
+#### 交付 47 — 场景宿主翻页时闪「加载中」：把「正在加载」限制为真的在等
+
+- **症状（用户报告）**：开启场景渲染器后，分页 + 仿真动画下**每次翻页的开始都会闪一下「加载中」**，
+  即使该页早已缓存；legacy 渲染器没有这个问题。
+- **根因（两处，互相放大）**：
+  1. `PagedSceneResourceWindowStrategy` 只把**当前槽位**设为 `PRESENTATION_READY`，前后槽位都是
+     `SOURCE_READY`（`PagedSceneResourceWindowStrategy.kt:63-75`）→ 下一页的解码**正好在翻页那一刻**开始；
+     而 `KototoroImagePipelineAdapter.acquireAsset` 在开始加载时**无条件**先发布
+     `ReaderImageLoadState.Loading`（旧 `:277`）→ 于是每次翻页都先进入「加载中」状态。
+  2. 三个场景宿主的叠加层把**除 Ready 以外的一切**都当作加载中（`else -> ReaderPageLoading(...)`），
+     而 `downgradeToSource` 会把离开资源窗口的页面的 loadState **整条删掉**
+     （`:563`）→ 「未知状态」也被渲染成转圈 + 「加载中…」。
+- **修复**：
+  1. **叠加层唯一判定点**：`resolveSceneReaderPageOverlay(state, hasRenderableAsset)` +
+     共享的 `SceneReaderPageLoadOverlay(...)`（`ComposeReaderPageComponents.kt`）：只有**显式 Loading
+     且手上还没有可绘制资源**才显示转圈；未知状态不显示；已有资源时不遮盖画面；失败仍然显示错误与重试。
+     三个宿主（paged / webtoon / horizontal）原先各自复制一份同样的 `when`，现在共用这一个。
+  2. **加载状态延迟发布**：`acquireAsset` 不再一进门就发布 Loading，而是等 `LOADING_STATE_DELAY_MS = 120ms`
+     仍未完成才发布（`finally` 里取消，保证不会在 Ready/Failed 之后补一发假的 Loading）。命中内存缓存的
+     解码远快于 120ms，因此**不再有转圈**；真正慢的页仍然会得到指示。
+- **实测（真机 M332BF，8 页夹具，真机 Perfetto + 新增 trace 计数器 `Reader.LoadingPages`）**：
+   | 运行 | 翻页 | 每页解码耗时 | 发布过 Loading 的翻页数 |
+   | --- | --- | --- | --- |
+   | B：**回翻已看过的 4 页**（暖） | 4/4 提交（page 4 → 0） | 51.0 / 52.7ms（另 2 页直接命中保留资源，无需解码） | **0 / 4** |
+   | A：前进 4 页（含首次解码） | 4/4 提交（page 0 → 4） | 首次 196.8ms，其余 47–52ms | 1 / 4（就是那次 196.8ms 的慢解码） |
+   即：**≤120ms 的翻页一律不再出现「加载中」**；唯一仍显示指示的是那次真正花了 ~197ms 的首次解码，
+   且只显示其超出 120ms 的部分（该次总计约 217ms）。
+   **旧代码的对照**（同一机制、可从同一条 trace 的耗时推出）：Loading 在解码开始前发布、到 Ready 才清除，
+   因此转圈时长 ≈ 解码时长 —— 暖翻页 51ms、冷翻页 197ms，正是用户报告的「每次翻动开始都闪一下」。
+- **可观测性**：新增 `Reader.LoadingPages` trace 计数器（与既有 `Reader.ActivePresentationAssets` 同规格，
+  仅 `Trace.isEnabled()` 时写入）：这类回归在帧时序里看不见，只有状态计数能看见。
+- **验证**：`SceneReaderPageOverlayTest` 5 例（Ready/未知/Loading 无资源/Loading 有资源/Failed）、
+  `ReaderImageAssetTest` 新增 2 例（快解码不发布 Loading、慢解码在延迟后发布并在完成后变 Ready），
+  全量单测 475 套件 2683 例 0 失败；真机前后对照见上表，阅读器位置证据（4/4 与 4/4 提交）与
+  夹具清理（`files/manga` 空、无残留 DB 行）均确认。
+- 关联：交付 42/43（同一场景宿主与真实入口测量链路）、交付 45/46（同一面板）。已知边界：
+  120ms 是一个命名常量、按「暖解码远快于此」选定，未做多机型标定；网络页的 `Downloading` 进度
+  仍然即时发布（那是真实进度反馈）。
+
+#### 交付 48 — 翻页动画被新手势打断后停在半路（双击 / 轻触 / 长按都会）：已修复
+
+- **症状（用户报告）**：分页模式下翻页动画运行期间，新手势（例如双击）会中断动画 —— 动画直接停在
+  中途，页面卡在两个槽位之间；legacy 渲染器没有这个问题。
+- **根因**：手势处理在**触摸按下**时就取消了翻页动画（`ComposeScenePagedReader` 的 `awaitEachGesture`
+  开头 `snapAnimationJob?.cancel()`），而只有「变成拖拽」的手势会在抬手时重新吸附到目标槽位
+  （`dragState.pageOffset != 0f` 分支）。于是**任何不成为拖拽的手势** —— 轻触、双击缩放、长按菜单、
+  被取消的手势 —— 都把翻页动画停在半路：动画进程没了，也没有吸附补上。
+  关键点：「卡住」是**视觉**状态；阅读器上报的当前页仍按 `round(offset / extent)` 取最近槽位，
+  所以状态通道看起来一切正常 —— 这既是它此前没被发现的原因，也是它没被现有打断矩阵覆盖的原因。
+- **修复**（三处，按「谁能接管视图」划分）：
+  1. **触摸按下不再取消翻页动画**：轻触/长按让动画照常落地，与 Compose pager 的行为一致。
+  2. **拖拽真正接管时才取消**（越过 `touchSlop` 的那一帧），并把 `startOffset` 重新基准到当前偏移，
+     避免「抓住正在翻的页面」时被弹回手指落点。
+  3. **捏合与双击缩放**：取消动画后用新增纯函数
+     `resolveSettledTurnOffset(offset, primaryExtent, slotCount, maxOffset)`（`reader-core`）把偏移
+     **吸附到最近槽位**再缩放 —— 于是「双击缩放的页面」就是屏幕上真实的那一页。
+- **验证**：① `reader-core` 新增 `SettledTurnOffsetTest` 4 例（已在边界则不吸附、半路吸附到最近槽位、
+  夹在可滚范围内、退化几何不吸附）0 失败，`reader-core` 的 I1 隔离守卫仍绿；
+  ② 真机新增 3 个用例（`ScenePagedTransitionMatrixTest`）：`tapDuringATurnLetsTheTurnLand`、
+   `tapDuringACurlTurnLetsTheTurnLand`、`doubleTapDuringATurnSettlesAndKeepsTurning` 全部通过
+  （harness 补了 `doubleTap()` / `settledReportCount()` / `awaitNewReport()`）。
+- **测试覆盖的边界（诚实披露）**：上述用例断言的是**状态契约** —— 轻触不再阻止翻页落地（动画必须
+  到达目标页）、双击后阅读器必须重新吸附并上报、之后仍能翻页；而**「不再停在半路」本身是视觉状态**，
+  基于上报页的 harness 看不到（上报页按最近槽位取整），因此该点由用户在真机上手测确认，
+  **不由测试证明**。这也解释了为什么「tests 全绿」不能作为这条修复的唯一证据。
+- 关联：交付 42/43（同一宿主）、交付 47（同一轮用户反馈）。
+
 #### 未启动
 
 - 阶段 D（retained GraphicsLayer PoC）—— **可行性探针已交付并给出负结果（交付 16）**：
