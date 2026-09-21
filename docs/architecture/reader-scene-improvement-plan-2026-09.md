@@ -1896,7 +1896,10 @@ refresh 前置 **120.00001 Hz**、电池温度 35.9 → 37.0 ℃（前后各记�
   → 下一步必须**给候选代码路径打 atrace 标记**才能命名停顿（而不是继续从聚合数字里猜）。
 - 工具：`scripts/interleave_ab_clean_scenario.ps1`（每轮跑前 force-stop + 停 App job 再测）、
   `scripts/list_late_frames.py`（打印每个超时帧的位置/时刻/相位形状）、
-  `queries/main_thread_work.sql`、`queries/thread_names.sql`。
+  `queries/main_thread_work.sql`、`queries/thread_names.sql`、
+  `scripts/audit_worker_activity.py`（逐 trace 检查后台 Worker 是否真的占用过时间 —— 那次
+  `GoogleDriveSyncWorker` 干扰的廉价守门）、`scripts/find_slice_owner.py`（按名字找切片并打印其
+  process/thread 归属，用来判断某条切片是否属于被测应用）。
 - 关联：§9 检查表 ②、交付 39/40（其「纹理上传」与「冷启动窗口」结论撤回）、交付 37（两侧解码相同，仍成立）。
   已知限制：**停顿的具体代码路径未定位**（trace 无该区间的主线程打点）；
   「25–32 帧」这一位置来自 4 次运行，尚未与代码路径对齐。
