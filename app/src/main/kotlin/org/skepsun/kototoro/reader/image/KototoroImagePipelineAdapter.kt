@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
@@ -286,8 +287,14 @@ class KototoroImagePipelineAdapter(
                 // SOURCE_READY, so the decode starts exactly at the turn). The state is therefore
                 // published only once the wait becomes perceptible; a genuinely slow page still gets
                 // its indicator, just not before it is worth showing.
+                // Progress reports go through the same gate as the initial publish. `observe` emits
+                // Downloading for every page whose source is not in its state cache yet - the normal
+                // case while turning page after page - and publishing those immediately put the
+                // "加载中…" overlay back on screen for the few frames a cached page needs to decode.
+                val loadingAnnounced = AtomicBoolean(false)
                 val loadingPublish = scope.launch {
                     delay(LOADING_STATE_DELAY_MS)
+                    loadingAnnounced.set(true)
                     // Only announce loading while the page is still unresolved, and atomically: the
                     // acquisition can resolve (or fail) on another thread at any moment, and that
                     // outcome has to win. A read-then-write here lost that race and turned a failed
@@ -298,7 +305,7 @@ class KototoroImagePipelineAdapter(
                 }
                 try {
                     val readyState = composePipeline.observe(page, force).onEach {
-                        if (it is ComposeReaderImageState.Downloading) {
+                        if (it is ComposeReaderImageState.Downloading && loadingAnnounced.get()) {
                             setLoadState(pageId, ReaderImageLoadState.Loading(it.progress))
                         }
                         if (it is ComposeReaderImageState.PreviewReady) {

@@ -112,11 +112,17 @@ class ReaderImageAssetTest {
         /** When set, [observe] waits for it before emitting, standing in for a slow decode. */
         var gate: CompletableDeferred<Unit>? = null
 
+        /** When set, [observe] reports download progress before the ready state. */
+        var progress: Float? = null
+
         override fun cachedState(pageKey: Long): ComposeReaderImageState? = stateToReturn
 
         override fun observe(page: ReaderPage, force: Boolean): Flow<ComposeReaderImageState> = flow {
             observeCount++
             lastForce = force
+            // Progress arrives before the source resolves, like the real pipeline (which reports
+            // Downloading for every page whose source is not in its state cache yet).
+            progress?.let { emit(ComposeReaderImageState.Downloading(it)) }
             gate?.await()
             stateToReturn?.let { emit(it) }
         }
@@ -690,6 +696,51 @@ class ReaderImageAssetTest {
         assertTrue(
             adapter.loadStates.value[pageId] is ReaderImageLoadState.Loading,
             "a genuinely slow page still has to report that it is loading",
+        )
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(ReaderImageLoadState.Ready, adapter.loadStates.value[pageId])
+    }
+
+    @Test
+    fun `download progress does not announce loading while the page is still loading`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val gate = CompletableDeferred<Unit>()
+        val pipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+            progress = 0.5f
+            this.gate = gate
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = pipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { page1 },
+        )
+        val pageId = PageId(page1.readerKey)
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        runCurrent()
+
+        val stateWhileLoading = adapter.loadStates.value[pageId]
+        assertTrue(
+            stateWhileLoading !is ReaderImageLoadState.Loading,
+            "progress reported by a page that is still loading must not announce a spinner before the " +
+                "delay, otherwise every page of a continuous turn run flashes 加载中 (state=$stateWhileLoading)",
         )
 
         gate.complete(Unit)
