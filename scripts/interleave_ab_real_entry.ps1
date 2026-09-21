@@ -27,6 +27,8 @@ param(
     [int]$Rounds = 4,
     [string]$Serial = "ecd4369c",
     [string]$MangaId = "-722638835630210246",
+    [ValidateSet("screen", "journey")][string]$Mode = "screen",
+    [int]$JourneyTurns = 4,
     [int]$ThermalLimitC = 350,
     [int]$CooldownCapSeconds = 480,
     [switch]$SkipBuild,
@@ -153,6 +155,9 @@ function Prepare-Side([string]$repo) {
     $compile = Enable-FullCompilation
     Clear-Background
     Start-Sleep -Seconds 3
+    # The reader resumes the saved position, so every measured run has to start from the same one.
+    & (Join-Path $PSScriptRoot "real_entry_fixture.ps1") -Action reset -Serial $Serial | Out-Null
+    Clear-Background
     AdbRoot "sh /data/local/tmp/real_entry_reader_run.sh - warmup $MangaId" | Out-Null
     return [pscustomobject]@{ Digest = $digest; Compile = $compile }
 }
@@ -160,13 +165,16 @@ function Prepare-Side([string]$repo) {
 function Measure-Side([string]$label, [int]$round) {
     $temp = Wait-Thermal
     $hz = Wait-RefreshRate
-    $trace = Join-Path $OutDir "round$round-$label.pb"
+    $trace = Join-Path $OutDir "round$round-$label-$Mode.pb"
     AdbRoot "rm -f /data/misc/perfetto-traces/real_entry.pb" | Out-Null
-    $launch = AdbRoot "sh /data/local/tmp/real_entry_reader_run.sh /data/misc/perfetto-traces/real_entry.pb measure $MangaId"
-    $launch | Set-Content -Path (Join-Path $OutDir "round$round-$label.launch.txt") -Encoding UTF8
+    $launch = AdbRoot "JOURNEY_TURNS=$JourneyTurns sh /data/local/tmp/real_entry_reader_run.sh /data/misc/perfetto-traces/real_entry.pb $Mode $MangaId"
+    $launch | Set-Content -Path (Join-Path $OutDir "round$round-$label-$Mode.launch.txt") -Encoding UTF8
     Assert-ReaderVisible "$label r$round"
     Adb @("pull", "/data/misc/perfetto-traces/real_entry.pb", "`"$trace`"") | Out-Null
-    $meta = "round=$round side=$label temp=$temp hz=$hz trace=$(Test-Path $trace)"
+    # Reading position after the run is the validity check for the journey: it is the only cheap
+    # evidence that the injected turns actually committed (page advances, percent leaves -1).
+    $position = ((& (Join-Path $PSScriptRoot "real_entry_fixture.ps1") -Action position -Serial $Serial) -join " ") -replace "\s+", " "
+    $meta = "round=$round side=$label mode=$Mode turns=$JourneyTurns temp=$temp hz=$hz trace=$(Test-Path $trace) position=[$($position.Trim())]"
     $meta | Add-Content -Path (Join-Path $OutDir "runs.txt")
     Write-Output "    [$label r$round] $meta"
 }
@@ -178,7 +186,7 @@ Adb @("push", "`"$(Join-Path $repoRoot 'scripts\real_entry_reader_run.sh')`"", "
 AdbRoot "mkdir -p /data/misc/perfetto-configs; cp /data/local/tmp/real_entry.cfg /data/misc/perfetto-configs/real_entry.cfg; chmod 644 /data/misc/perfetto-configs/real_entry.cfg" | Out-Null
 
 "# real-entry A/B run log" | Set-Content -Path (Join-Path $OutDir "runs.txt") -Encoding UTF8
-Add-Content -Path (Join-Path $OutDir "runs.txt") -Value "baseline_repo=$(git -C $BaselineRepo log -1 --format='%h') current_repo=$(git -C $CurrentRepo log -1 --format='%h') manga_id=$MangaId"
+Add-Content -Path (Join-Path $OutDir "runs.txt") -Value "baseline_repo=$(git -C $BaselineRepo log -1 --format='%h') current_repo=$(git -C $CurrentRepo log -1 --format='%h') manga_id=$MangaId mode=$Mode turns=$JourneyTurns"
 Adb @("shell", "svc", "power", "stayon", "true") | Out-Null
 Assert-DeviceReady "before round 1"
 

@@ -29,6 +29,12 @@ def main() -> int:
     parser.add_argument("--trace-processor", default="trace_processor")
     parser.add_argument("--package", default="org.skepsun.kototoro")
     parser.add_argument("--window", type=int, default=40, help="frames counted as the opening window")
+    parser.add_argument(
+        "--window-ms",
+        default=None,
+        help="also report a wall-clock window, e.g. 5000,11000 - used for the page-turn stretch "
+        "of a journey run, where frame indices are not comparable between runs",
+    )
     args = parser.parse_args()
 
     traces = sorted(
@@ -80,6 +86,33 @@ def main() -> int:
             f"  {row['name']:<22} worst ui frame in window: #{row['win_ui_max_at']} "
             f"at {row['win_ui_max_ms']:.1f}ms ui={row['win_ui_max']:.2f}ms"
         )
+
+    if args.window_ms:
+        low, high = (float(part) for part in args.window_ms.split(","))
+        header_ms = (
+            f"{'trace':<22} {'frames':>7} {'late':>5} {'ui p50':>7} {'ui p99':>7} {'ui max':>7} "
+            f"{'rt max':>7} {'worst overrun':>14}"
+        )
+        print()
+        print(f"wall-clock window {low:.0f}..{high:.0f}ms after the first frame")
+        print(header_ms)
+        print("-" * len(header_ms))
+        for trace in traces:
+            frames, _ = match_frames(query(args.trace_processor, trace, frame_query(args.package)))
+            base = frames[0]["ts"]
+            selected = [f for f in frames if low <= (f["ts"] - base) / 1e6 <= high]
+            if not selected:
+                print(f"{trace.name:<22} {'-':>7} (no frames in window)")
+                continue
+            late = [f for f in selected if f["overrun_ms"] > 0]
+            print(
+                f"{trace.name:<22} {len(selected):>7} {len(late):>5} "
+                f"{percentile([f['ui_ms'] for f in selected], 50):>7.2f} "
+                f"{percentile([f['ui_ms'] for f in selected], 99):>7.2f} "
+                f"{max(f['ui_ms'] for f in selected):>7.2f} "
+                f"{max(f['rt_ms'] for f in selected):>7.2f} "
+                f"{max(f['overrun_ms'] for f in selected):>+14.2f}"
+            )
     return 0
 
 
