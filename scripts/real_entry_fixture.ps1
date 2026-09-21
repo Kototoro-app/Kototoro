@@ -43,7 +43,7 @@ function Pull-Database([string]$suffix = "") {
     # The staging copies on the device have to go too: when the app has no -wal (the state a push
     # leaves behind), `cp` fails and the *previous* /sdcard/Download/refix-wal would be pulled back
     # and replayed by SQLite, which resurrects rows that were just deleted.
-    AdbRoot "rm -f /sdcard/Download/refix /sdcard/Download/refix-wal /sdcard/Download/refix-shm"
+    AdbRoot "rm -f /sdcard/Download/refix /sdcard/Download/refix-wal /sdcard/Download/refix-shm" | Out-Null
     foreach ($part in @("", "-wal", "-shm")) {
         Adb @("shell", "su", "-c", "`"cp /data/data/$Package/databases/kototoro-db$part /sdcard/Download/refix$part`"") | Out-Null
         Adb @("shell", "su", "-c", "`"chmod 666 /sdcard/Download/refix$part`"") | Out-Null
@@ -57,11 +57,18 @@ function Push-Database([string]$localPath) {
     # checkpoint, and SQLite's close-time checkpoint is not guaranteed, so pushing only the main file
     # silently drops the change (which is how a "cleared" reading position kept coming back). The
     # -shm is deliberately left behind: SQLite rebuilds it from the WAL.
-    Adb @("push", "`"$localPath`"", "/sdcard/Download/refix-push") | Out-Null
+    #
+    # The staging files are removed first and every push is checked: a stale /sdcard/Download/refix-push
+    # left over from an earlier run would otherwise be copied back as if it were the new database,
+    # silently restoring the state that was just edited.
+    AdbRoot "rm -f /sdcard/Download/refix-push /sdcard/Download/refix-push-wal"
+    $pushed = Adb @("push", "`"$localPath`"", "/sdcard/Download/refix-push")
+    if ($pushed -notmatch "1 file pushed") { throw "push failed for $localPath`n$pushed" }
     AdbRoot "rm -f /data/data/$Package/databases/kototoro-db-wal /data/data/$Package/databases/kototoro-db-shm"
     AdbRoot "cp /sdcard/Download/refix-push /data/data/$Package/databases/kototoro-db"
     if (Test-Path "$localPath-wal") {
-        Adb @("push", "`"$localPath-wal`"", "/sdcard/Download/refix-push-wal") | Out-Null
+        $pushedWal = Adb @("push", "`"$localPath-wal`"", "/sdcard/Download/refix-push-wal")
+        if ($pushedWal -notmatch "1 file pushed") { throw "push failed for $localPath-wal`n$pushedWal" }
         AdbRoot "cp /sdcard/Download/refix-push-wal /data/data/$Package/databases/kototoro-db-wal"
     }
     AdbRoot "chown u0_a363:u0_a363 /data/data/$Package/databases/kototoro-db"
