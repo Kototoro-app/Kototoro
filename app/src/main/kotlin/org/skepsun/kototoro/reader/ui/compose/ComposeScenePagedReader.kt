@@ -307,11 +307,16 @@ fun ComposeScenePagedReader(
     // Resource needs flow through the planner seam (improvement plan §8.1): the host no
     // longer hand-rolls the prefetch request list. Lookahead narrows when the user enabled
     // preload reduction (battery/data saver).
-    val resourceWindowPlanner = remember(isPreloadReductionEnabled) {
-        PagedSceneResourceWindowStrategy(lookaheadSlots = if (isPreloadReductionEnabled) 1 else 2)
-    }
-
     val transitionStyle = remember(pageAnimation) { resolveScenePageTransition(pageAnimation) }
+    val resourceWindowPlanner = remember(isPreloadReductionEnabled, transitionStyle) {
+        PagedSceneResourceWindowStrategy(
+            lookaheadSlots = if (isPreloadReductionEnabled) 1 else 2,
+            prepareAdjacentSlots = transitionStyle == ScenePageTransition.COVER,
+        )
+    }
+    // Gesture and decode callbacks outlive recomposition when the animation preference changes.
+    val currentResourceWindowPlanner = rememberUpdatedState(resourceWindowPlanner)
+
     val pageCurlState = rememberComposeReaderPageCurlState()
     // The renderer reports the limits it will actually draw within, once, from the canvas it draws
     // into: the decode planner's policy ceiling is an upper bound, not a per-device measurement.
@@ -380,6 +385,10 @@ fun ComposeScenePagedReader(
     var snapAnimationJob by remember { mutableStateOf<Job?>(null) }
     var zoomAnimationJob by remember { mutableStateOf<Job?>(null) }
     var canvasFlingJob by remember { mutableStateOf<Job?>(null) }
+    // Pointer input is a long-lived coroutine. Keep the jobs behind updated state holders so a
+    // gesture that starts after recomposition sees the current animation, not a stale captured job.
+    val currentSnapAnimationJob = rememberUpdatedState(snapAnimationJob)
+    val currentZoomAnimationJob = rememberUpdatedState(zoomAnimationJob)
     val flingDecay = remember { FloatExponentialDecaySpec() }
 
     fun getSlotContentBounds(slotIndex: Int): FloatRect? {
@@ -534,7 +543,7 @@ fun ComposeScenePagedReader(
         // Resource needs come from the planner seam (improvement plan §8.1): active slot +
         // transition-pinned slot are IMMEDIATE, remaining visible pages HIGH, slot lookahead
         // prefetched. The strategy never returns null, so every call submits a window.
-        resourceWindowPlanner.plan(
+        currentResourceWindowPlanner.value.plan(
             SceneResourceWindowRequest(
                 scene = currentScene,
                 frame = frame,
@@ -561,7 +570,7 @@ fun ComposeScenePagedReader(
         )
     }
 
-    LaunchedEffect(scrollState.offset, scene, retainedAssets) {
+    LaunchedEffect(scrollState.offset, scene, retainedAssets, resourceWindowPlanner) {
         if (scene != null) {
             updateResourceWindow(scene, scrollState.offset)
         }
@@ -916,42 +925,56 @@ fun ComposeScenePagedReader(
                 viewportWidthPx = size.width.toFloat()
                 viewportHeightPx = size.height.toFloat()
             }
-            .pointerInput(isZoomEnabled, readingDirection, scene) {
+            .pointerInput(isZoomEnabled, readingDirection, scene, shouldAnimate) {
                 var lastTapUpAt = 0L
                 var lastTapPosition: Offset? = null
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    // An in-flight page turn is deliberately NOT cancelled on touch-down. Cancelling it
-                    // here abandoned the animation wherever it happened to be, which left the page
-                    // frozen between two slots whenever the new gesture did not become a drag (a tap,
-                    // a double tap that zooms, a long press) - a Compose pager lets a tap interrupt
-                    // nothing and finishes the settle. The turn is cancelled only by the gestures that
-                    // really take the view over: a drag, a pinch, or a double-tap zoom.
+                    // A zoom settle still owns the pointer stream. A page-turn settle is different:
+                    // keep taps and pinches blocked, but let a single-pointer drag take over once it
+                    // crosses touch slop. This preserves the legacy reader's no-delayed-tap rule
+                    // while allowing a deliberate opposite swipe to interrupt a running turn.
+                    val turnAnimationInFlight = currentSnapAnimationJob.value?.isActive == true
+                    val zoomAnimationInFlight = currentZoomAnimationJob.value?.isActive == true
+                    if (zoomAnimationInFlight && !turnAnimationInFlight) {
+                        down.consume()
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        } while (event.changes.any { it.pressed })
+                        return@awaitEachGesture
+                    }
                     canvasFlingJob?.cancel()
                     pullStartDistancePx = 0f
                     pullEndDistancePx = 0f
                     val pe = primaryExtent.coerceAtLeast(1f)
                     var startOffset = scrollState.offset
                     val currentSlot = (startOffset / pe).roundToInt().coerceIn(0, (scene?.slotCount ?: 1) - 1)
-                    if (currentSlot != zoomedSlotIndex) {
+                    fun syncSlotTransform(slotIndex: Int) {
+                        if (slotIndex == zoomedSlotIndex) return
                         saveSlotZoom(zoomedSlotIndex, canvasScale, canvasOffsetX, canvasOffsetY)
-                        val saved = getSlotZoom(currentSlot)
+                        val saved = getSlotZoom(slotIndex)
                         if (saved != null) {
-                            val (panX, panY) = getSlotPanRanges(currentSlot, saved.scale)
+                            val (panX, panY) = getSlotPanRanges(slotIndex, saved.scale)
                             canvasScale = saved.scale
                             canvasOffsetX = saved.offsetX.coerceIn(panX)
                             canvasOffsetY = saved.offsetY.coerceIn(panY)
                         } else {
                             canvasScale = 1f
-                            val (newInitX, newInitY) = resolveSlotInitialOffsets(currentSlot)
+                            val (newInitX, newInitY) = resolveSlotInitialOffsets(slotIndex)
                             canvasOffsetX = newInitX
                             canvasOffsetY = newInitY
                         }
-                        zoomedSlotIndex = currentSlot
+                        zoomedSlotIndex = slotIndex
                     }
-                    val initialSlot = currentSlot
+                    if (!turnAnimationInFlight) {
+                        syncSlotTransform(currentSlot)
+                    }
+                    var initialSlot = currentSlot
+                    var waitingForTurnInterrupt = turnAnimationInFlight
+                    var ignoreGesture = false
 
-                    val isDoubleTap = isZoomEnabled && isTapGridDoubleTapCandidate(
+                    val isDoubleTap = !turnAnimationInFlight && isZoomEnabled && isTapGridDoubleTapCandidate(
                         previousPosition = lastTapPosition,
                         previousTapAt = lastTapUpAt,
                         position = down.position,
@@ -1001,7 +1024,8 @@ fun ComposeScenePagedReader(
                             (startPanY * factor + focusedTranslation.y).coerceIn(targetPanRangeY)
                         }
 
-                        coroutineScope.launch {
+                        zoomAnimationJob?.cancel()
+                        zoomAnimationJob = coroutineScope.launch {
                             if (shouldAnimate) {
                                 animate(
                                     initialValue = 0f,
@@ -1042,6 +1066,42 @@ fun ComposeScenePagedReader(
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
                         val pressedCount = event.changes.count { it.pressed }
+                        if (waitingForTurnInterrupt) {
+                            val activeChange = event.changes.firstOrNull { it.pressed }
+                            val primaryDistance = activeChange?.let { change ->
+                                if (readingDirection.isVertical) {
+                                    abs(change.position.y - down.position.y)
+                                } else {
+                                    abs(change.position.x - down.position.x)
+                                }
+                            } ?: 0f
+                            val crossedTouchSlop = activeChange != null &&
+                                primaryDistance > viewConfiguration.touchSlop
+                            if (pressedCount >= 2) {
+                                // A pinch that starts during a turn remains blocked and is consumed
+                                // until all pointers are released; only a page drag may take over.
+                                ignoreGesture = true
+                                event.changes.forEach { it.consume() }
+                                continue
+                            }
+                            if (!crossedTouchSlop) {
+                                event.changes.forEach { it.consume() }
+                                continue
+                            }
+                            waitingForTurnInterrupt = false
+                            snapAnimationJob?.cancel()
+                            startOffset = scrollState.offset
+                            initialSlot = (startOffset / pe).roundToInt().coerceIn(0, (scene?.slotCount ?: 1) - 1)
+                            syncSlotTransform(initialSlot)
+                            // The down began during an animation, so it must never become a tap or
+                            // the first half of a delayed double tap after the turn settles.
+                            lastTapPosition = null
+                            lastTapUpAt = 0L
+                        }
+                        if (ignoreGesture) {
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
                         if (isZoomEnabled && pressedCount >= 2) {
                             moved = true
                             if (!isZoomGesture) {
@@ -1162,7 +1222,13 @@ fun ComposeScenePagedReader(
                     } while (event.changes.any { it.pressed })
 
                     val heldTooLong = eventTime - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis
-                    if (!moved && !heldTooLong && !isZoomGesture && dragState.pageOffset == 0f) {
+                    if (!turnAnimationInFlight &&
+                        !ignoreGesture &&
+                        !moved &&
+                        !heldTooLong &&
+                        !isZoomGesture &&
+                        dragState.pageOffset == 0f
+                    ) {
                         lastTapPosition = down.position
                         lastTapUpAt = eventTime
                     } else {

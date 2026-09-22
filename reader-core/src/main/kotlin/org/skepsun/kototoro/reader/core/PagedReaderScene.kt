@@ -220,6 +220,15 @@ class PagedReaderScene(
         val oldOrigin = activeAnchor?.let { resolvePageScrollPosition(it) }
 
         val oldSpec = specs[index]
+        if (oldSpec.geometryHint == newHint) {
+            return currentViewport?.let {
+                AnchorCompensation(
+                    deltaX = 0f,
+                    deltaY = 0f,
+                    compensatedViewport = it,
+                )
+            }
+        }
         specs[index] = oldSpec.copy(geometryHint = newHint)
         rebuildSlots()
         revision++

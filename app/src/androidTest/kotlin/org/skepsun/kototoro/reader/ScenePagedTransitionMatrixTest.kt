@@ -1,5 +1,6 @@
 package org.skepsun.kototoro.reader
 
+import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -63,10 +64,13 @@ class ScenePagedTransitionMatrixTest {
     @Test
     fun curlInterruptedTurnSettlesOnALegalPage() = verifyInterruptedTurn(ReaderAnimation.SIMULATION, "CURL")
 
-    /**
-     * A gesture that never becomes a drag must not cancel the running turn: the turn has to land.
-     * Before the fix every touch-down cancelled the snap animation and left the page between slots.
-     */
+    @Test
+    fun slideDragDuringATurnCanTakeOverTheAnimation() = verifyDragInterruptsTurn(ReaderAnimation.DEFAULT, "SLIDE")
+
+    @Test
+    fun coverDragDuringATurnCanTakeOverTheAnimation() = verifyDragInterruptsTurn(ReaderAnimation.ADVANCED, "COVER")
+
+    /** A tap that starts during a turn is consumed and must not be replayed after the turn lands. */
     @Test
     fun tapDuringATurnLetsTheTurnLand() = verifyTapDuringTurn(ReaderAnimation.DEFAULT, "SLIDE")
 
@@ -86,11 +90,7 @@ class ScenePagedTransitionMatrixTest {
         }
     }
 
-    /**
-     * A double tap mid-turn zooms the page that is actually there: it owns the view, so the turn is
-     * settled onto its nearest slot first. Either way the reader must settle and keep working - the
-     * defect was that the animation simply froze and the reader stopped reporting pages at all.
-     */
+    /** A double tap that starts during a turn is discarded; a later double tap still works normally. */
     @Test
     fun doubleTapDuringATurnSettlesAndKeepsTurning() = verifyDoubleTapDuringTurn(ReaderAnimation.SIMULATION, "CURL")
 
@@ -99,13 +99,12 @@ class ScenePagedTransitionMatrixTest {
         ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
             host.launch()
             host.awaitActivePage(0, "$style initial state")
-            val reportsBefore = host.settledReportCount()
             host.swipeForward()
             host.doubleTap()
-            assertTrue("$style: an interrupted turn must still settle and report a page", host.awaitNewReport(reportsBefore))
+            host.awaitActivePage(1, "$style turn after blocked double tap")
             host.holdSettled(600)
             val settled = host.activePageIndex()
-            assertTrue("$style: must land on a page, not between slots", settled in 0..1)
+            assertEquals("$style: the turn must land on the next page", 1, settled)
             // Zoom back to fit first: at 2.5x a drag pans the page instead of turning it, so the
             // follow-up turn only proves the pager is alive once the zoom is undone.
             host.doubleTap()
@@ -116,6 +115,30 @@ class ScenePagedTransitionMatrixTest {
                 "$style: the reader must turn pages again after the interruption (was $settled, now ${host.activePageIndex()})",
                 host.activePageIndex() >= 0 && host.activePageIndex() != settled,
             )
+        }
+    }
+
+    @Test
+    fun gestureStartedDuringATurnIsNotReplayedAfterItSettles() = verifyGestureDiscardedDuringTurn(
+        ReaderAnimation.DEFAULT,
+        "SLIDE",
+    )
+
+    private fun verifyGestureDiscardedDuringTurn(animation: ReaderAnimation, style: String) {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
+            host.launch()
+            host.awaitActivePage(0, "$style initial state")
+            host.swipeForward()
+            // This tap starts inside the 220ms settle window. A second tap after the turn must still
+            // be a single tap; if the first one leaked into lastTapPosition it would become a double
+            // tap and zoom the page, causing the following swipe to pan instead of turn.
+            host.tapCenter()
+            host.awaitActivePage(1, "$style page after the turn")
+            host.tapCenter()
+            host.swipeForwardCommitting()
+            host.awaitActivePage(2, "$style page after a post-turn swipe")
+            assertEquals("$style: a gesture from the animation must not be replayed", 2, host.activePageIndex())
         }
     }
 
@@ -208,6 +231,20 @@ class ScenePagedTransitionMatrixTest {
             host.awaitActivePage(0, "$style initial state")
             host.interruptedTurn()
             host.awaitActivePageWithin(setOf(0, 1), "$style interrupted turn")
+        }
+    }
+
+    private fun verifyDragInterruptsTurn(animation: ReaderAnimation, style: String) {
+        hiltRule.inject()
+        ScenePagedTransitionHarness(pageAnimation = animation).use { host ->
+            host.launch()
+            host.awaitActivePage(0, "$style initial state")
+            host.startForwardTurn()
+            SystemClock.sleep(90)
+            // The first swipe is still settling when this opposite drag begins. It must take over
+            // after touch slop and return to page 0 instead of being discarded.
+            host.swipeBackwardDuringTurn()
+            host.awaitActivePage(0, "$style interrupted by reverse drag")
         }
     }
 }

@@ -271,8 +271,14 @@ internal class ScenePagedTransitionHarness(
         return width / 2f to windowHeight * viewportScale / 2f
     }
 
-    private fun gesture(waypoints: List<Float>, stepsPerSegment: Int = 6, stepMs: Long = 20) {
-        awaitStateQuiet()
+    private fun gesture(
+        waypoints: List<Float>,
+        stepsPerSegment: Int = 6,
+        stepMs: Long = 20,
+        waitForQuiet: Boolean = true,
+        settleAfterMs: Long = 120,
+    ) {
+        if (waitForQuiet) awaitStateQuiet()
         val width = if (viewportWidthPx.get() > 0) viewportWidthPx.get().toFloat() else 1080f
         val y = viewportCenter().second
         val path = mutableListOf<Float>()
@@ -296,12 +302,18 @@ internal class ScenePagedTransitionHarness(
             instrumentation.sendPointerSync(event)
             event.recycle()
         }
-        SystemClock.sleep(120)
+        SystemClock.sleep(settleAfterMs)
     }
 
     fun swipeForward() = gesture(listOf(0.8f, 0.2f))
 
     fun swipeBackward() = gesture(listOf(0.2f, 0.8f))
+
+    /** Sends the first swipe and returns as soon as its settle animation starts. */
+    fun startForwardTurn() = gesture(listOf(0.8f, 0.2f), settleAfterMs = 0)
+
+    /** Starts immediately, so the gesture exercises takeover of an in-flight turn animation. */
+    fun swipeBackwardDuringTurn() = gesture(listOf(0.2f, 0.8f), waitForQuiet = false)
 
     /**
      * Injects the turn and, if the reader state did not move, injects again — returning how many
@@ -341,9 +353,9 @@ internal class ScenePagedTransitionHarness(
 
     /** Starts the opposite turn while the first one is still animating. */
     fun interruptedTurn() {
-        swipeForward()
+        startForwardTurn()
         SystemClock.sleep(90)
-        swipeBackward()
+        swipeBackwardDuringTurn()
     }
 
     /**

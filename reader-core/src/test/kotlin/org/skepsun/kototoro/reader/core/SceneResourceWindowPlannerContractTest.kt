@@ -146,6 +146,67 @@ class SceneResourceWindowPlannerContractTest {
     }
 
     @Test
+    fun `prepared neighbours are drawable before a turn while farther slots stay source only`() {
+        for (direction in SceneReadingDirection.entries) {
+            for (doublePage in listOf(false, true)) {
+                for (lookahead in 1..2) {
+                    val scene = PagedReaderScene(
+                        viewportWidth = 1000,
+                        viewportHeight = 1000,
+                        config = PagedSpreadConfig(isDoublePage = doublePage, readingDirection = direction),
+                        initialSpecs = pagedSpecs(12),
+                    )
+                    val planner = PagedSceneResourceWindowStrategy(
+                        lookaheadSlots = lookahead,
+                        prepareAdjacentSlots = true,
+                    )
+                    val request = SceneResourceWindowRequest(scene, pagedFrame(scene, 2000f, direction))
+                    val window = planner.plan(request)
+                    assertOutputContract(request, window)
+                    val byPage = window.requests.associateBy { it.pageId }
+                    for (slot in scene.allSlots) {
+                        val distance = kotlin.math.abs(slot.slotIndex - 2)
+                        for (id in slot.pageIds) {
+                            if (distance > lookahead) {
+                                assertNull(byPage[id], "lookahead must remain bounded")
+                            } else {
+                                assertEquals(
+                                    if (distance <= 1) PrefetchReadiness.PRESENTATION_READY
+                                    else PrefetchReadiness.SOURCE_READY,
+                                    byPage[id]?.readiness,
+                                    "direction=$direction double=$doublePage slot=${slot.slotIndex}",
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `prepared turn participants are never downgraded across a turn cancellation or reversal`() {
+        for (direction in SceneReadingDirection.entries) {
+            val scene = pagedScene(direction)
+            val planner = PagedSceneResourceWindowStrategy(lookaheadSlots = 1, prepareAdjacentSlots = true)
+            // Start on slot 1, cancel an attempted forward turn, complete it, then return.
+            val offsets = listOf(1000f, 1100f, 1499f, 1600f, 1100f, 1000f, 1500f, 2000f, 1500f, 1000f)
+            for (offset in offsets) {
+                val request = SceneResourceWindowRequest(scene, pagedFrame(scene, offset, direction))
+                val window = planner.plan(request)
+                assertOutputContract(request, window)
+                for (id in listOf(PageId(2L), PageId(3L))) {
+                    assertEquals(
+                        PrefetchReadiness.PRESENTATION_READY,
+                        window.requests.single { it.pageId == id }.readiness,
+                        "a cached turn participant must remain drawable at offset=$offset direction=$direction",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `paged strategy bounds lookahead to configured slot count`() {
         val scene = pagedScene()
 

@@ -304,6 +304,47 @@ class ReaderImageAssetTest {
     }
 
     @Test
+    fun `decoded dimensions are handed off before renderer publication`() = runTest(testDispatcher) {
+        val uri = mockk<Uri>()
+        every { uri.toString() } returns "file:///downloaded/page1.jpg"
+        val fakePipeline = FakeComposeReaderImagePipeline().apply {
+            stateToReturn = ComposeReaderImageState.OriginalReady(uri)
+        }
+        val adapter = KototoroImagePipelineAdapter(
+            context = context,
+            composePipeline = fakePipeline,
+            imageLoader = imageLoader,
+            scope = this,
+            ioDispatcher = testDispatcher,
+            pageLookup = { if (it.value == page1.readerKey) page1 else null },
+        )
+        val pageId = PageId(page1.readerKey)
+        var rendererAssetsAtGeometryCallback: Map<PageId, ReaderImageAsset> = emptyMap()
+        adapter.onAssetLoaded = { _, _ ->
+            rendererAssetsAtGeometryCallback = adapter.assets.value
+        }
+
+        adapter.updateResourceWindow(
+            ReaderResourceWindow(
+                listOf(
+                    PrefetchRequest(
+                        pageId = pageId,
+                        priority = PrefetchPriority.IMMEDIATE,
+                        readiness = PrefetchReadiness.PRESENTATION_READY,
+                    ),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(
+            rendererAssetsAtGeometryCallback[pageId],
+            "the renderer must not observe an asset with stale scene geometry",
+        )
+        assertTrue(adapter.assets.value[pageId] is ReaderImageAsset.ComposeImage)
+    }
+
+    @Test
     fun `evicted in-flight decode cannot republish an asset`() = runTest(testDispatcher) {
         val uri = mockk<Uri>()
         every { uri.toString() } returns "file:///downloaded/page1.jpg"

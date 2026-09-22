@@ -114,6 +114,26 @@ class PagedReaderSceneTest {
     }
 
     @Test
+    fun `repeating the same exact page dimensions does not rebuild the scene`() {
+        val exact = PageGeometryHint.Exact(800, 1200)
+        val scene = PagedReaderScene(
+            viewportWidth = 800,
+            viewportHeight = 1200,
+            initialSpecs = listOf(
+                PagedPageSpec(PageId(1L), exact, chapterId = 1L, chapterPageIndex = 0),
+            ),
+        )
+        val before = scene.revision
+        val viewport = ReaderViewport(FloatRect.fromLtwh(0f, 0f, 800f, 1200f))
+
+        val compensation = scene.updatePageHint(PageId(1L), exact, viewport)
+
+        assertEquals(before, scene.revision)
+        assertEquals(0f, compensation?.deltaX)
+        assertEquals(0f, compensation?.deltaY)
+    }
+
+    @Test
     fun `updatePagedPages preserves active page anchor with zero-CLS compensation when chapters prepended`() {
         val ch2Specs = listOf(
             PagedPageSpec(PageId(10L), PageGeometryHint.Exact(800, 1200), chapterId = 2L, chapterPageIndex = 0),

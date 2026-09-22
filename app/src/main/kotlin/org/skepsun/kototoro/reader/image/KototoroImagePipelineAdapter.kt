@@ -192,7 +192,16 @@ class KototoroImagePipelineAdapter(
         }
     }
 
-    private fun storeAsset(pageId: PageId, asset: ReaderImageAsset): Boolean {
+    /**
+     * Stores an asset in the pipeline cache. Presentation assets can be staged without publishing
+     * them to the renderer; the scene host uses that to apply the decoded dimensions first and
+     * publish the bitmap only after the scene geometry is coherent.
+     */
+    private fun storeAsset(
+        pageId: PageId,
+        asset: ReaderImageAsset,
+        publishPresentation: Boolean = true,
+    ): Boolean {
         val readinessMap = desiredReadiness
         if (readinessMap != null) {
             val targetReadiness = readinessMap[pageId] ?: return false
@@ -205,13 +214,17 @@ class KototoroImagePipelineAdapter(
             return false
         }
         cachedAssets[pageId] = asset
-        if (asset !is ReaderImageAsset.Encoded) {
-            updateAssets { it + (pageId to asset) }
-            if (asset.isAuthoritativePresentation) {
-                setLoadState(pageId, ReaderImageLoadState.Ready)
-            }
+        if (asset !is ReaderImageAsset.Encoded && publishPresentation) {
+            publishStoredPresentation(pageId, asset)
         }
         return true
+    }
+
+    /** Publishes a staged presentation asset if the resource window still owns it. */
+    private fun publishStoredPresentation(pageId: PageId, asset: ReaderImageAsset) {
+        if (!asset.isAuthoritativePresentation || cachedAssets[pageId] !== asset) return
+        updateAssets { it + (pageId to asset) }
+        setLoadState(pageId, ReaderImageLoadState.Ready)
     }
 
     var onAssetLoaded: ((PageId, ReaderImageAsset) -> Unit)? = null
@@ -404,11 +417,12 @@ class KototoroImagePipelineAdapter(
                                         target = targetLayer,
                                         tileStore = actualTileManager,
                                     )
-                                    val retained = storeAsset(pageId, asset)
+                                    val retained = storeAsset(pageId, asset, publishPresentation = false)
                                     composePipeline.onImageDecoded(page, grid.pageSize.width, grid.pageSize.height)
                                     if (retained) {
                                         withContext(Dispatchers.Main) {
                                             onAssetLoaded?.invoke(pageId, asset)
+                                            publishStoredPresentation(pageId, asset)
                                         }
                                     }
                                     asset
@@ -461,7 +475,7 @@ class KototoroImagePipelineAdapter(
                             ReaderImageAsset.ComposeImage(pageId, bmp.asImageBitmap())
                         }
 
-                        val retained = storeAsset(pageId, presentationAsset)
+                        val retained = storeAsset(pageId, presentationAsset, publishPresentation = false)
                         val width = when (presentationAsset) {
                             is ReaderImageAsset.Animated -> presentationAsset.width
                             is ReaderImageAsset.ComposeImage -> presentationAsset.imageBitmap.width
@@ -476,6 +490,7 @@ class KototoroImagePipelineAdapter(
                         if (retained) {
                             withContext(Dispatchers.Main) {
                                 onAssetLoaded?.invoke(pageId, presentationAsset)
+                                publishStoredPresentation(pageId, presentationAsset)
                             }
                         }
                         presentationAsset
