@@ -26,9 +26,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +59,7 @@ import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
@@ -68,6 +72,7 @@ import org.skepsun.kototoro.core.ui.compose.contentCoverSharedKey
 import org.skepsun.kototoro.core.ui.compose.rememberRailAnimationFactor
 import org.skepsun.kototoro.core.ui.compose.rememberHorizontalRailScrollIntensity
 import org.skepsun.kototoro.core.ui.compose.rememberDeferredContentCoverBounds
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.list.ui.compose.contentListSharedElementKey
 import org.skepsun.kototoro.list.domain.ReadingProgress
 import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
@@ -117,12 +122,39 @@ internal fun HomeContentRowSection(
     onMoreClick: () -> Unit,
     addTopSpacing: Boolean,
     onConfigureClick: (() -> Unit)? = null,
+    /**
+     * Inset applied when this rail is hosted inside a rounded section surface.
+     * A hosted rail must keep its viewport inside that surface instead of
+     * extending to the page edge like the standalone home rail does.
+     */
+    contentHorizontalPadding: Dp = 0.dp,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
     val listMode = railStyle.listMode
     val posterStyle = railStyle.posterStyle
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val isHostedSection = contentHorizontalPadding > 0.dp
+    val headerControlSize = if (isHostedSection && !isTvPresentation && LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        40.dp
+    } else {
+        48.dp
+    }
+    // Scale the section settings icon with its touch target so the compact
+    // iOS header (40dp) still shows a comfortably tappable gear instead of a
+    // 14dp dot; MD3/TV headers get the half-size 24dp icon.
+    val headerIconSize = headerControlSize / 2f
+    val headerRailSpacing = if (isHostedSection) 0.dp else 8.dp
+    val railViewportExtension = if (contentHorizontalPadding == 0.dp) {
+        CompactTopBarHorizontalPadding
+    } else {
+        0.dp
+    }
+    val railContentStartPadding = if (contentHorizontalPadding == 0.dp) {
+        CompactTopBarHorizontalPadding
+    } else {
+        0.dp
+    }
     val rowState = rememberLazyListState()
     val scrollIntensity = rememberHorizontalRailScrollIntensity(rowState)
     val railPages = remember(items, listMode, railStyle.railRowsPerPage) {
@@ -137,65 +169,72 @@ internal fun HomeContentRowSection(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = contentHorizontalPadding)
             .padding(top = if (addTopSpacing) 6.dp else 0.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        // The header row already reserves the control target; the section
+        // surface supplies the remaining visual grouping without another gap.
+        verticalArrangement = Arrangement.spacedBy(headerRailSpacing),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides headerControlSize) {
             Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = title,
-                    style = if (isTvPresentation) {
-                        MaterialTheme.typography.titleMedium
-                    } else {
-                        MaterialTheme.typography.titleSmall
-                    },
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = count.toHeroCountLabel(),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (onConfigureClick != null) {
-                IconButton(
-                    onClick = onConfigureClick,
+                TextButton(
+                    onClick = onMoreClick,
                     modifier = Modifier
-                        .size(48.dp)
+                        .weight(1f, fill = false)
                         .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_settings),
-                        contentDescription = stringResource(R.string.list_options),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(if (isTvPresentation) 24.dp else 14.dp),
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = title,
+                            style = if (isTvPresentation) {
+                                MaterialTheme.typography.titleMedium
+                            } else {
+                                MaterialTheme.typography.titleSmall
+                            },
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = count.toHeroCountLabel(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_forward),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(if (isTvPresentation) 20.dp else 16.dp),
+                        )
+                    }
                 }
-            }
-            TextButton(
-                onClick = onMoreClick,
-                modifier = Modifier.tvFocusable(shape = CircleShape, addFocusTarget = false),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.more),
-                    style = if (isTvPresentation) {
-                        MaterialTheme.typography.labelLarge
-                    } else {
-                        MaterialTheme.typography.labelMedium
-                    },
-                )
+                if (onConfigureClick != null) {
+                    IconButton(
+                        onClick = onConfigureClick,
+                        modifier = Modifier
+                            .size(headerControlSize)
+                            .tvFocusable(shape = CircleShape, addFocusTarget = false),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings),
+                            contentDescription = stringResource(R.string.list_options),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(headerIconSize),
+                        )
+                    }
+                }
             }
         }
 
@@ -203,43 +242,55 @@ internal fun HomeContentRowSection(
         when (listMode) {
             ListMode.GRID,
             ListMode.COMPACT_GRID -> {
-                LazyRow(
-                    state = rowState,
-                    flingBehavior = rememberSnapFlingBehavior(rowState),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier)
-                        .extendHorizontalViewport(CompactTopBarHorizontalPadding),
-                    horizontalArrangement = Arrangement.spacedBy(if (isTvPresentation) 12.dp else 3.dp),
-                    contentPadding = PaddingValues(
-                        // Keep the first item aligned with the section title while
-                        // the viewport itself extends to the screen edge.
-                        start = CompactTopBarHorizontalPadding,
-                        end = 0.dp,
-                    ),
-                ) {
-                    itemsIndexed(
-                        items = items,
-                        key = { _, item -> "${item.sectionKey}:${item.stableKey}" },
-                        contentType = { _, _ -> "home_content_card" },
-                    ) { index, item ->
-                        HorizontalRailAnimatedVisibility(
-                            animationKey = "home_row_${title}_${item.stableKey}",
-                            index = index,
-                            listState = rowState,
-                            scrollIntensity = scrollIntensity,
-                            animationFactor = railAnimationFactor,
-                            enableScrollLinkedAnimation = false,
-                        ) { animatedModifier ->
-                            HomeCoverRowItem(
-                                item = item,
-                                posterStyle = posterStyle,
-                                listMode = listMode,
-                                onClick = { coverBounds, sharedElementKey ->
-                                    onItemClick(item.content, coverBounds, sharedElementKey)
-                                },
-                                modifier = animatedModifier,
-                            )
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val gridSpacing = if (isTvPresentation) 12.dp else 3.dp
+                    val gridPosterStyle = remember(maxWidth, posterStyle, isHostedSection) {
+                        fitHostedGridPosterStyle(
+                            style = posterStyle,
+                            availableWidth = maxWidth,
+                            startPadding = railContentStartPadding,
+                            itemSpacing = gridSpacing,
+                            enabled = isHostedSection,
+                        )
+                    }
+                    LazyRow(
+                        state = rowState,
+                        flingBehavior = rememberSnapFlingBehavior(rowState),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier)
+                            .extendHorizontalViewport(railViewportExtension),
+                        horizontalArrangement = Arrangement.spacedBy(gridSpacing),
+                        contentPadding = PaddingValues(
+                            // Keep the first item aligned with the section title;
+                            // standalone rails add the screen-edge extension below.
+                            start = railContentStartPadding,
+                            end = 0.dp,
+                        ),
+                    ) {
+                        itemsIndexed(
+                            items = items,
+                            key = { _, item -> "${item.sectionKey}:${item.stableKey}" },
+                            contentType = { _, _ -> "home_content_card" },
+                        ) { index, item ->
+                            HorizontalRailAnimatedVisibility(
+                                animationKey = "home_row_${title}_${item.stableKey}",
+                                index = index,
+                                listState = rowState,
+                                scrollIntensity = scrollIntensity,
+                                animationFactor = railAnimationFactor,
+                                enableScrollLinkedAnimation = false,
+                            ) { animatedModifier ->
+                                HomeCoverRowItem(
+                                    item = item,
+                                    posterStyle = gridPosterStyle,
+                                    listMode = listMode,
+                                    onClick = { coverBounds, sharedElementKey ->
+                                        onItemClick(item.content, coverBounds, sharedElementKey)
+                                    },
+                                    modifier = animatedModifier,
+                                )
+                            }
                         }
                     }
                 }
@@ -248,6 +299,9 @@ internal fun HomeContentRowSection(
             ListMode.LIST,
             ListMode.DETAILED_LIST -> {
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    // The page is narrower than the viewport in both hosted and
+                    // standalone rails, so the next page's covers peek in from
+                    // the right edge and hint at more content.
                     val pageWidth = remember(maxWidth, listMode) {
                         calculateHomeListRailPageWidth(maxWidth, listMode)
                     }
@@ -255,7 +309,7 @@ internal fun HomeContentRowSection(
                     val horizontalPadding = PaddingValues(
                         // Keep the snap anchor on the section content line. The end
                         // stays open so the final page can reach the screen edge.
-                        start = CompactTopBarHorizontalPadding,
+                        start = railContentStartPadding,
                         end = 0.dp,
                     )
                     LazyRow(
@@ -267,7 +321,7 @@ internal fun HomeContentRowSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(if (isTvPresentation) Modifier.focusRestorer().focusGroup() else Modifier)
-                            .extendHorizontalViewport(CompactTopBarHorizontalPadding),
+                            .extendHorizontalViewport(railViewportExtension),
                         horizontalArrangement = Arrangement.spacedBy(rowSpacing),
                         contentPadding = horizontalPadding,
                     ) {
@@ -321,6 +375,29 @@ private fun Modifier.extendHorizontalViewport(extension: Dp): Modifier = layout 
     layout(viewportWidth ?: placeable.width, placeable.height) {
         placeable.placeRelative(if (viewportWidth != null) -extensionPx else 0, 0)
     }
+}
+
+private fun fitHostedGridPosterStyle(
+    style: org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle,
+    availableWidth: Dp,
+    startPadding: Dp,
+    itemSpacing: Dp,
+    enabled: Boolean,
+): org.skepsun.kototoro.core.ui.compose.CompactPosterCardStyle {
+    // The default home rail size is just large enough to leave a fourth card
+    // clipped inside a rounded surface. Fit that default band to four columns;
+    // an explicitly enlarged grid remains enlarged so the per-rail setting is
+    // still authoritative.
+    if (!enabled || style.itemWidth > 96.dp) return style
+    val fourColumnWidth = (
+        (availableWidth - startPadding - itemSpacing * 3) / 4f
+        ).coerceAtLeast(48.dp)
+    if (style.itemWidth <= fourColumnWidth) return style
+    val scale = fourColumnWidth.value / style.itemWidth.value
+    return style.copy(
+        itemWidth = fourColumnWidth,
+        posterHeight = (style.posterHeight.value * scale).dp,
+    )
 }
 
 @Composable

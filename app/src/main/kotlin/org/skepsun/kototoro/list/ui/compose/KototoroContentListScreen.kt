@@ -6,6 +6,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import org.skepsun.kototoro.core.ui.theme.popupMenuContainerColor
+import androidx.compose.material3.Surface
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -90,6 +92,7 @@ import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.util.ext.getCauseUrl
 import org.skepsun.kototoro.core.ui.glass.GlassDefaults
 import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.list.ui.model.ContentCompactListModel
 import org.skepsun.kototoro.list.ui.model.ContentDetailedListModel
@@ -770,7 +773,7 @@ private fun SupplementaryListItem(
     onSecondaryAction: (Throwable) -> Unit,
 ) {
     when (item) {
-        is ListHeader -> ListHeaderItem(item)
+        is ListHeader -> ListHeaderItem(item, modifier = Modifier.horizontalBleed(horizontalBleed))
         is QuickFilter -> if (showQuickFilterInline) {
             QuickFilterSection(
                 quickFilter = item,
@@ -787,23 +790,47 @@ private fun SupplementaryListItem(
 }
 
 @Composable
-private fun ListHeaderItem(item: ListHeader) {
+private fun ListHeaderItem(
+    item: ListHeader,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val title = item.getText(context)?.toString().orEmpty()
     if (title.isBlank()) return
 
+    // Group headers (history dates, favourites/updates section labels) sit
+    // directly on the page canvas. Over the artwork backdrop they get a
+    // lightweight pill so the text stays readable on any image; on plain
+    // backgrounds the plain text hierarchy is kept.
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
+
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = AppLayoutTokens.sectionHorizontalPadding, vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (usesArtworkBackdrop) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)),
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (item.buttonTextRes != 0) {
             TextButton(onClick = {}) {
                 Text(stringResource(item.buttonTextRes))
@@ -822,6 +849,7 @@ fun QuickFilterSection(
     val context = LocalContext.current
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
     val listState = rememberLazyListState()
     val entryPoint = remember(context.applicationContext) {
         runCatching {
@@ -879,35 +907,47 @@ fun QuickFilterSection(
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             val chipShape = RoundedCornerShape(999.dp)
+            // MD3 keeps its filter chips as plain text on plain backgrounds;
+            // over the artwork backdrop they need a light pill so the label
+            // stays readable on any image without changing the MD3 chip
+            // language (no border, tonal container only).
+            val chipBackgroundModifier = when {
+                isIosStyle -> Modifier
+                    .background(
+                        color = if (chip.isChecked) {
+                            MaterialTheme.colorScheme.inverseSurface
+                        } else {
+                            Color.Transparent
+                        },
+                        shape = chipShape,
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = if (chip.isChecked) {
+                            MaterialTheme.colorScheme.inverseSurface
+                        } else {
+                            MaterialTheme.colorScheme.outlineVariant
+                        },
+                        shape = chipShape,
+                    )
+
+                usesArtworkBackdrop -> Modifier.background(
+                    color = if (chip.isChecked) {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+                    } else {
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                    },
+                    shape = chipShape,
+                )
+
+                else -> Modifier
+            }
             CompositionLocalProvider(LocalContentColor provides contentColor) {
                 Row(
                     modifier = Modifier
+                        .then(chipBackgroundModifier)
                         .then(
-                            if (isIosStyle) {
-                                Modifier
-                                    .background(
-                                        color = if (chip.isChecked) {
-                                            MaterialTheme.colorScheme.inverseSurface
-                                        } else {
-                                            Color.Transparent
-                                        },
-                                        shape = chipShape,
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (chip.isChecked) {
-                                            MaterialTheme.colorScheme.inverseSurface
-                                        } else {
-                                            MaterialTheme.colorScheme.outlineVariant
-                                        },
-                                        shape = chipShape,
-                                    )
-                            } else {
-                                Modifier
-                            },
-                        )
-                    .then(
-                        if (option != null) {
+                            if (option != null) {
                                 Modifier
                                     .tvFocusable(shape = chipShape, addFocusTarget = false)
                                     .clickable { onQuickFilterOptionClick(option) }
@@ -948,6 +988,7 @@ private fun QuickFilterGroupChip(
 ) {
     var expanded by remember(group.key) { mutableStateOf(false) }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
     val selectedItems = group.items.filter(ChipModel::isChecked)
     val isSelected = selectedItems.isNotEmpty()
     val contentColor = when {
@@ -956,34 +997,45 @@ private fun QuickFilterGroupChip(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val chipShape = RoundedCornerShape(999.dp)
+    // Same pill rule as the plain filter chips: MD3 keeps text-only chips on
+    // plain backgrounds and gains a light container only over the artwork
+    // backdrop, while iOS always draws its outline/tonal container.
+    val chipBackgroundModifier = when {
+        isIosStyle -> Modifier
+            .background(
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.inverseSurface
+                } else {
+                    Color.Transparent
+                },
+                shape = chipShape,
+            )
+            .border(
+                width = 1.dp,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.inverseSurface
+                } else {
+                    MaterialTheme.colorScheme.outlineVariant
+                },
+                shape = chipShape,
+            )
+
+        usesArtworkBackdrop -> Modifier.background(
+            color = if (isSelected) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)
+            } else {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+            },
+            shape = chipShape,
+        )
+
+        else -> Modifier
+    }
     Box {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             Row(
                 modifier = Modifier
-                    .then(
-                        if (isIosStyle) {
-                            Modifier
-                                .background(
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.inverseSurface
-                                    } else {
-                                        Color.Transparent
-                                    },
-                                    shape = chipShape,
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.inverseSurface
-                                    } else {
-                                        MaterialTheme.colorScheme.outlineVariant
-                                    },
-                                    shape = chipShape,
-                                )
-                        } else {
-                            Modifier
-                        },
-                    )
+                    .then(chipBackgroundModifier)
                     .tvFocusable(shape = chipShape, enabled = true, addFocusTarget = false)
                     .clickable { expanded = true }
                     .height(QuickFilterChipHeight)

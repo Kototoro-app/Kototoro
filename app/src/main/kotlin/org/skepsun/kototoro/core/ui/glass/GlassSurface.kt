@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -307,12 +308,13 @@ fun GlassSurface(
     highlightOnIdle: Boolean = true,
     lensEnabled: Boolean = true,
     pressFeedbackEnabled: Boolean = true,
+    backdropOverride: Backdrop? = null,
     exportedBackdrop: LayerBackdrop? = null,
     @Suppress("UNUSED_PARAMETER") debugLabel: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
-    val backdrop = LocalLiquidGlassBackdrop.current
+    val backdrop = backdropOverride ?: LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
     val amoledCanvas = LocalAmoledTheme.current
     val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()
@@ -325,6 +327,7 @@ fun GlassSurface(
             highlightOnIdle = highlightOnIdle,
             lensEnabled = lensEnabled,
             pressFeedbackEnabled = pressFeedbackEnabled,
+            backdropOverride = backdrop,
             exportedBackdrop = exportedBackdrop,
             content = content,
         )
@@ -409,10 +412,11 @@ fun LiquidGlassSurface(
     highlightOnIdle: Boolean = true,
     lensEnabled: Boolean = true,
     pressFeedbackEnabled: Boolean = true,
+    backdropOverride: Backdrop? = null,
     exportedBackdrop: LayerBackdrop? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val backdrop = LocalLiquidGlassBackdrop.current
+    val backdrop = backdropOverride ?: LocalLiquidGlassBackdrop.current
     val glassEnabled = rememberGlassPrefsOrFallback().isGlassEffectEnabled
     val amoledCanvas = LocalAmoledTheme.current
     val allowsBackdrop = !amoledCanvas || componentRole.allowsAmoledBackdrop()

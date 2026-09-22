@@ -17,6 +17,8 @@ import org.skepsun.kototoro.core.exceptions.resolve.SnackbarErrorObserver
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.ui.BaseComposeActivity
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
+import org.skepsun.kototoro.core.ui.compose.LocalArtworkBackdrop
+import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
 import org.skepsun.kototoro.core.ui.util.ReversibleActionObserver
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -119,7 +121,14 @@ internal fun HomeRoute(
         }
     }
 
-    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides animatedVisibilityScope) {
+    val artworkBackdrop = LocalArtworkBackdrop.current
+    CompositionLocalProvider(
+        LocalNavAnimatedVisibilityScope provides animatedVisibilityScope,
+        // Home content material samples the artwork layer. The route-level
+        // backdrop remains reserved for chrome, where it contains the complete
+        // page composite and therefore tracks scrolling content.
+        LocalLiquidGlassBackdrop provides artworkBackdrop,
+    ) {
         val onHomeContentClick = remember(navigateToDetailsWithContent) {
             { content: Content, _: Rect?, sharedElementKey: String? ->
                 navigateToDetailsWithContent(content, sharedElementKey)

@@ -11,6 +11,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.rememberCombinedBackdrop
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
@@ -48,6 +50,16 @@ internal class LiquidGlassBackdropHost {
 
 internal val LocalLiquidGlassBackdropHost = staticCompositionLocalOf<LiquidGlassBackdropHost?> { null }
 
+/**
+ * Backdrop captured from the artwork layer before route content is drawn.
+ *
+ * Content material may consume this source, while persistent chrome continues
+ * to consume the route composite supplied by [LocalLiquidGlassBackdrop].
+ * Keeping the two sources separate prevents a content surface from sampling
+ * itself through the route-level capture.
+ */
+val LocalArtworkBackdrop = staticCompositionLocalOf<Backdrop?> { null }
+
 @Composable
 internal fun RouteLiquidGlassBackdrop(
     ownerKey: Any,
@@ -60,11 +72,17 @@ internal fun RouteLiquidGlassBackdrop(
     }
     val host = LocalLiquidGlassBackdropHost.current
     val backgroundColor = MaterialTheme.colorScheme.background
+    val artworkBackdrop = LocalArtworkBackdrop.current
     val backdrop = key(ownerKey) {
         rememberLayerBackdrop {
             drawRect(backgroundColor)
             drawContent()
         }
+    }
+    val compositeBackdrop = if (artworkBackdrop != null) {
+        rememberCombinedBackdrop(artworkBackdrop, backdrop)
+    } else {
+        backdrop
     }
 
     SideEffect {
@@ -77,7 +95,10 @@ internal fun RouteLiquidGlassBackdrop(
     }
 
     CompositionLocalProvider(
-        LocalLiquidGlassBackdrop provides backdrop,
+        // Chrome consumes the artwork source followed by the route composite.
+        // The route layer itself remains the only recorded layer, so this
+        // combination cannot feed a surface back into its own capture.
+        LocalLiquidGlassBackdrop provides compositeBackdrop,
         LocalLiquidGlassLayerBackdrop provides backdrop,
     ) {
         content(backdrop)

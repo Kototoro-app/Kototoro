@@ -70,6 +70,7 @@ import org.skepsun.kototoro.core.ui.compose.HeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.LocalHeroTransitionPhase
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.prefs.HomeHeroBackground
 import org.skepsun.kototoro.core.prefs.HomeHeroContentLayout
 import org.skepsun.kototoro.core.prefs.HomeHeroMode
@@ -306,12 +307,15 @@ private fun HomeHeroCard(
     }
     val isTvPresentation = LocalUiPresentationConfig.current.isTv
     var isFocused by remember { mutableStateOf(false) }
+    // The hero card shares the home section trays' restrained corner radius so
+    // the top of the page reads as one family with the trays below it.
+    val heroCardShape = RoundedCornerShape(LocalInterfaceStyleTokens.current.sectionCornerRadius)
 
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .height(cardHeight)
-            .clip(MaterialTheme.shapes.large)
+            .clip(heroCardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
                 if (isTvPresentation && focusRequester != null) {
@@ -323,7 +327,7 @@ private fun HomeHeroCard(
             .onFocusChanged { isFocused = it.isFocused }
             .then(
                 if (isTvPresentation && isFocused) {
-                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, MaterialTheme.shapes.large)
+                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, heroCardShape)
                 } else {
                     Modifier
                 },

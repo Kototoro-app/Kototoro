@@ -1,6 +1,7 @@
 package org.skepsun.kototoro.home.ui.compose.sections
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.glass.GlassComponentRole
+import org.skepsun.kototoro.core.ui.glass.GlassDefaults
+import org.skepsun.kototoro.core.ui.glass.GlassSurface
+import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.home.ui.HomeRecentItem
 import org.skepsun.kototoro.home.ui.HomeRecommendationItem
@@ -60,8 +68,20 @@ internal fun HomeHighlightsSections(
     onRecentSearchClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Highlight sections render as plain content in both interface styles; the legacy
-    // per-style Surface container was unreachable after InterfaceStyle normalization.
+    // Keep each rail's list/grid mode and sizing independent; the wrapper only
+    // supplies the shared artwork grouping surface and its inner content inset.
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val usesSectionContainer = usesArtworkBackdrop || LocalInterfaceStyle.current != InterfaceStyle.IOS
+    val sectionContentPadding = if (usesSectionContainer) {
+        AppLayoutTokens.sectionHorizontalPadding
+    } else {
+        0.dp
+    }
+    val sectionContentModifier = if (usesSectionContainer) {
+        Modifier
+    } else {
+        Modifier.padding(vertical = 2.dp)
+    }
     val newChaptersLabel = stringResource(R.string.new_chapters)
     val historyDisplayItems = remember(historyItems) {
         historyItems.take(HOME_CONTENT_RAIL_PREVIEW_LIMIT).map {
@@ -121,7 +141,8 @@ internal fun HomeHighlightsSections(
                     onMoreClick = onViewAllRecentClick,
                     onConfigureClick = onConfigureHistoryClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 2.dp),
+                    contentHorizontalPadding = sectionContentPadding,
+                    modifier = sectionContentModifier,
                 )
             }
         }
@@ -137,7 +158,8 @@ internal fun HomeHighlightsSections(
                     onMoreClick = onViewAllUpdatesClick,
                     onConfigureClick = onConfigureUpdatesClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 2.dp),
+                    contentHorizontalPadding = sectionContentPadding,
+                    modifier = sectionContentModifier,
                 )
             }
         }
@@ -153,7 +175,8 @@ internal fun HomeHighlightsSections(
                     onMoreClick = onViewAllRecommendationsClick,
                     onConfigureClick = onConfigureRecommendationsClick,
                     addTopSpacing = false,
-                    modifier = Modifier.padding(vertical = 2.dp),
+                    contentHorizontalPadding = sectionContentPadding,
+                    modifier = sectionContentModifier,
                 )
             }
         }
@@ -170,10 +193,53 @@ internal fun HomeHighlightsSections(
 private fun HomeHighlightSectionContainer(
     content: @Composable () -> Unit,
 ) {
-    // Seam for a future shared highlight-section component. Both interface styles currently
-    // render section content directly; the legacy per-style Surface wrapper was dead code
-    // after InterfaceStyle normalization (see material3-expressive spec: hierarchy first).
-    content()
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
+    val sectionShape = RoundedCornerShape(LocalInterfaceStyleTokens.current.sectionCornerRadius)
+    if (!usesArtworkBackdrop) {
+        if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+            // iOS keeps the plain home hierarchy when there is no artwork to
+            // sample; the glass surface has no visual source in this state.
+            Box(modifier = Modifier.fillMaxWidth()) {
+                content()
+            }
+        } else {
+            // Material 3 keeps an opaque tonal container on a plain background
+            // so the section remains distinguishable from the page canvas.
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = sectionShape,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 0.dp,
+                content = content,
+            )
+        }
+        return
+    }
+
+    if (LocalInterfaceStyle.current == InterfaceStyle.IOS) {
+        GlassSurface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = sectionShape,
+            style = GlassDefaults.subtleStyle(),
+            componentRole = GlassComponentRole.ContentOverlay,
+            highlightOnIdle = false,
+            lensEnabled = false,
+            pressFeedbackEnabled = false,
+            content = { content() },
+        )
+    } else {
+        // MD3 keeps a conventional tonal container and never reaches the
+        // vendor backdrop effects. The surface is deliberately translucent
+        // (0.3) so the artwork stays visible through the tray; the Material 3
+        // tonal family still separates the section from the page canvas.
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = sectionShape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.3f),
+            tonalElevation = 0.dp,
+            content = content,
+        )
+    }
 }
 
 @Composable
@@ -193,6 +259,10 @@ private fun HomeRecentSearchSection(
         labelColor = MaterialTheme.colorScheme.onSurface,
         trailingIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    // The section title sits directly on the page canvas (outside the trays);
+    // over the artwork backdrop it gets the same lightweight pill as the
+    // group headers so it stays readable on any image.
+    val usesArtworkBackdrop = LocalBackgroundStyle.current.usesArtworkBackdrop
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -204,12 +274,31 @@ private fun HomeRecentSearchSection(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                text = stringResource(R.string.home_recent_searches),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            if (usesArtworkBackdrop) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f),
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_recent_searches),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+            } else {
+                Text(
+                    text = stringResource(R.string.home_recent_searches),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             HomeBadge(
                 text = queries.size.toHeroCountLabel(),
                 iconRes = R.drawable.ic_history,

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
@@ -26,6 +27,8 @@ import org.skepsun.kototoro.core.ui.theme.LocalBackgroundStyle
 import org.skepsun.kototoro.core.ui.theme.isDarkTheme
 import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.parsers.model.Content
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 internal val DynamicArtworkRequestSize = Size(width = 1280, height = 1280)
 
@@ -81,34 +84,59 @@ fun DynamicArtworkBackdrop(
         )
     }
 
+    // Capture only the artwork layer. Route chrome is captured separately by
+    // MainShellScene, so content material can read this source without creating
+    // a feedback loop through the route-level capture.
+    val artworkBackgroundColor = MaterialTheme.colorScheme.background
+    val artworkBackdrop = rememberLayerBackdrop {
+        drawRect(artworkBackgroundColor)
+        drawContent()
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(if (isArtworkBackground) MaterialTheme.colorScheme.background else Color.Transparent),
     ) {
-        if (isArtworkBackground && !cover.isNullOrEmpty()) {
-            Image(
-                painter = rememberAsyncImagePainter(
-                    model = imageRequest,
-                ),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                colorFilter = backdropColorFilter,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = imageOpacity.coerceIn(0f, 1f)
-                        renderEffect = blurRadius.coerceAtLeast(0f).takeIf { it > 0f }?.let {
-                            BlurEffect(it, it)
-                        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (isArtworkBackground) {
+                        Modifier.layerBackdrop(artworkBackdrop)
+                    } else {
+                        Modifier
                     },
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(overlayBrush),
-            )
+                ),
+        ) {
+            if (isArtworkBackground && !cover.isNullOrEmpty()) {
+                Image(
+                    painter = rememberAsyncImagePainter(
+                        model = imageRequest,
+                    ),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    colorFilter = backdropColorFilter,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = imageOpacity.coerceIn(0f, 1f)
+                            renderEffect = blurRadius.coerceAtLeast(0f).takeIf { it > 0f }?.let {
+                                BlurEffect(it, it)
+                            }
+                        },
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(overlayBrush),
+                )
+            }
         }
-        children()
+        CompositionLocalProvider(
+            LocalArtworkBackdrop provides artworkBackdrop.takeIf { isArtworkBackground },
+        ) {
+            children()
+        }
     }
 }

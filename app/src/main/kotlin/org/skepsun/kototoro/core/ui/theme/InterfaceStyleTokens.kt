@@ -10,6 +10,10 @@ data class InterfaceStyleTokens(
     val screenHorizontalPadding: Dp,
     val sectionVerticalSpacing: Dp,
     val groupCornerRadius: Dp,
+    /** Corner radius for the home highlight section trays; deliberately more
+     *  restrained than [groupCornerRadius] so the trays read as quiet grouping
+     *  surfaces instead of competing with cards and dialogs. */
+    val sectionCornerRadius: Dp,
     val settingsGroupOuterCornerRadius: Dp,
     val settingsGroupInnerCornerRadius: Dp,
     val settingsItemGap: Dp,
@@ -42,6 +46,7 @@ val InterfaceStyleTokens.Companion.Ios: InterfaceStyleTokens
         screenHorizontalPadding = 16.dp,
         sectionVerticalSpacing = 20.dp,
         groupCornerRadius = 18.dp,
+        sectionCornerRadius = 12.dp,
         settingsGroupOuterCornerRadius = 16.dp,
         settingsGroupInnerCornerRadius = 4.dp,
         settingsItemGap = 0.dp,
@@ -70,6 +75,7 @@ val InterfaceStyleTokens.Companion.Material3Expressive: InterfaceStyleTokens
         screenHorizontalPadding = 20.dp,
         sectionVerticalSpacing = 20.dp,
         groupCornerRadius = 28.dp,
+        sectionCornerRadius = 12.dp,
         settingsGroupOuterCornerRadius = 24.dp,
         settingsGroupInnerCornerRadius = 4.dp,
         settingsItemGap = 2.dp,
