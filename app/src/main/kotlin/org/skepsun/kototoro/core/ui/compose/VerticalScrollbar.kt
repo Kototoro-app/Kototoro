@@ -66,7 +66,11 @@ import kotlin.math.roundToInt
 
 private const val SCROLLBAR_HIDE_DELAY_MS = 1000L
 
-private val FastScrollTouchWidth = 36.dp
+/**
+ * Width of the scrollbar's drag strip, which owns every touch landing inside it. Trailing-edge
+ * controls on scrollable content have to stay clear of this strip or their taps become drags.
+ */
+internal val FastScrollTouchWidth = 36.dp
 private val FastScrollInsetEnd = 2.dp
 
 /**

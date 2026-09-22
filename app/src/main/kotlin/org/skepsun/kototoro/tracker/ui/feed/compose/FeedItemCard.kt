@@ -51,6 +51,7 @@ import coil3.request.crossfade
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.ui.compose.AppLayoutTokens
+import org.skepsun.kototoro.core.ui.compose.FastScrollTouchWidth
 import org.skepsun.kototoro.core.ui.compose.HeroCoverSnapshotStore
 import org.skepsun.kototoro.core.ui.compose.LocalSharedTransitionScope
 import org.skepsun.kototoro.core.ui.compose.LocalNavAnimatedVisibilityScope
@@ -149,7 +150,7 @@ fun FeedItemCard(
                 )
                 .padding(
                     start = AppLayoutTokens.screenHorizontalPadding,
-                    end = 16.dp,
+                    end = FEED_CARD_END_PADDING,
                     top = 6.dp,
                     bottom = 6.dp,
                 ),
@@ -272,7 +273,12 @@ fun FeedItemCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         FilledTonalIconButton(
                             onClick = onContinueReading,
-                            modifier = Modifier.size(34.dp),
+                            modifier = Modifier
+                                // The feed scrollbar owns a [FastScrollTouchWidth]-wide drag strip on
+                                // the trailing edge and turns taps inside it into drags, so keep the
+                                // button fully outside it.
+                                .padding(end = FastScrollTouchWidth - FEED_CARD_END_PADDING)
+                                .size(34.dp),
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_read),
@@ -369,6 +375,7 @@ internal fun FeedTimelineRail(
 
 private val FEED_COVER_WIDTH = 48.dp
 private val FEED_COVER_HEIGHT = 60.dp
+private val FEED_CARD_END_PADDING = 16.dp
 private val FEED_COVER_SHAPE = RoundedCornerShape(14.dp)
 internal val FEED_TIMELINE_RAIL_WIDTH = 28.dp
 private val FEED_TIMELINE_NODE_SIZE = 10.dp
