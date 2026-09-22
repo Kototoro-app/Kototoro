@@ -27,6 +27,7 @@ import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.FavouriteCategory
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.core.parser.ProjectionIdentityResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.ui.util.ReversibleHandle
 import org.skepsun.kototoro.core.util.ext.mapItems
@@ -75,6 +76,7 @@ class FavouritesRepository @Inject constructor(
     private val workAggregateRepository: WorkAggregateRepository,
     private val settings: AppSettings,
     private val sourceTrackerEvents: SourceTrackerEventEmitter,
+    private val projectionIdentityResolver: ProjectionIdentityResolver,
 ) {
 
     private data class WorkFavouriteNormalizationKey(
@@ -443,10 +445,13 @@ class FavouritesRepository @Inject constructor(
         db.withTransaction {
             val currentTime = System.currentTimeMillis()
             for (manga in anchorContents) {
-                val tags = manga.tags.toEntities()
+                // Feed cards are display stubs without urls; favouriting one must not erase the
+                // remote identity already stored for the row.
+                val stored = projectionIdentityResolver.preserveStoredRemoteIdentity(manga)
+                val tags = stored.tags.toEntities()
                 db.getTagsDao().upsert(tags)
-                db.getMangaDao().upsert(manga.toEntity(), tags)
-                entityIdsByMangaId[manga.id]?.let { entityId ->
+                db.getMangaDao().upsert(stored.toEntity(), tags)
+                entityIdsByMangaId[stored.id]?.let { entityId ->
                     db.getWorkFavouritesDao().upsert(
                         WorkFavouriteEntity(
                             entityId = entityId,

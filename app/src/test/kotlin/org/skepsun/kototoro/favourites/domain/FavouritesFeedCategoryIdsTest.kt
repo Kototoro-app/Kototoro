@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.dao.MangaDao
 import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.parser.ProjectionIdentityResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
@@ -34,6 +35,7 @@ class FavouritesFeedCategoryIdsTest {
         workAggregateRepository = mockk<WorkAggregateRepository>(relaxed = true),
         settings = mockk<AppSettings>(relaxed = true),
         sourceTrackerEvents = mockk<SourceTrackerEventEmitter>(relaxed = true),
+        projectionIdentityResolver = mockk<ProjectionIdentityResolver>(relaxed = true),
     )
 
     @Test

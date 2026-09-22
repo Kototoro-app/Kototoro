@@ -543,10 +543,19 @@ class ContentDataRepository @Inject constructor(
     }
 
     private fun Content.hasSameRemoteIdentity(other: Content): Boolean {
+        if (source.name != other.source.name) {
+            return false
+        }
+        if (other.url.isBlank() && other.publicUrl.isBlank()) {
+            // Display stubs (feed / favourites / history cards, reader snapshots) are built without
+            // urls on purpose, so there is no remote identity to compare. They must not shadow the
+            // stored projection: the source resolves details through the stored url, and an empty one
+            // makes parsers such as Komiic query with an empty comic id.
+            return true
+        }
         val hasSameUrl = url.isNotBlank() && url == other.url
         val hasSamePublicUrl = publicUrl.isNotBlank() && publicUrl == other.publicUrl
-        return source.name == other.source.name &&
-            (hasSameUrl || hasSamePublicUrl)
+        return hasSameUrl || hasSamePublicUrl
     }
 
     suspend fun storeContent(manga: Content, replaceExisting: Boolean) {
@@ -555,7 +564,11 @@ class ContentDataRepository @Inject constructor(
 
     suspend fun storeContentAndReturn(manga: Content, replaceExisting: Boolean): Content {
         return db.withTransaction {
-            val stored = projectionIdentityResolver.resolveStoredProjection(manga)
+            // Progress saves hand over whatever the reader was opened with; keep the stored remote
+            // identity so a url-less stub cannot erase it.
+            val stored = projectionIdentityResolver.resolveStoredProjection(
+                projectionIdentityResolver.preserveStoredRemoteIdentity(manga),
+            )
             if (!replaceExisting && db.getMangaDao().find(stored.id) != null) {
                 return@withTransaction stored
             }
@@ -597,15 +610,16 @@ class ContentDataRepository @Inject constructor(
     }
 
     private suspend fun upsertProjectionSnapshot(stored: Content): Content {
-        val tags = stored.tags.toEntities()
+        val manga = projectionIdentityResolver.preserveStoredRemoteIdentity(stored)
+        val tags = manga.tags.toEntities()
         db.getTagsDao().upsert(tags)
-        db.getMangaDao().upsert(stored.toEntity(), tags)
-        if (!stored.isLocal) {
-            stored.chapters?.let { chapters ->
-                db.getChaptersDao().replaceAll(stored.id, chapters.withIndex().toEntities(stored.id))
+        db.getMangaDao().upsert(manga.toEntity(), tags)
+        if (!manga.isLocal) {
+            manga.chapters?.let { chapters ->
+                db.getChaptersDao().replaceAll(manga.id, chapters.withIndex().toEntities(manga.id))
             }
         }
-        return stored
+        return manga
     }
 
     suspend fun gcChaptersCache() {

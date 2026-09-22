@@ -65,6 +65,71 @@ class ProjectionIdentityResolverTest {
 		coVerify(exactly = 0) { mangaDao.find(7L) }
 	}
 
+	@Test
+	fun `preserveStoredRemoteIdentity restores the saved parser id for a url-less card`() = runTest {
+		coEvery { mangaDao.find(42L) } returns mangaWithTags(
+			id = 42L,
+			source = "KOMIIC",
+			url = "12345",
+			publicUrl = "https://komiic.cc/comic/12345",
+		)
+
+		val preserved = resolver.preserveStoredRemoteIdentity(
+			content(id = 42L, url = "", publicUrl = ""),
+		)
+
+		assertEquals("12345", preserved.url)
+		assertEquals("https://komiic.cc/comic/12345", preserved.publicUrl)
+	}
+
+	@Test
+	fun `preserveStoredRemoteIdentity keeps whitespace urls from erasing the saved identity`() = runTest {
+		coEvery { mangaDao.find(42L) } returns mangaWithTags(
+			id = 42L,
+			source = "KOMIIC",
+			url = "12345",
+			publicUrl = "https://komiic.cc/comic/12345",
+		)
+
+		val preserved = resolver.preserveStoredRemoteIdentity(
+			content(id = 42L, url = "  ", publicUrl = "\t"),
+		)
+
+		assertEquals("12345", preserved.url)
+		assertEquals("https://komiic.cc/comic/12345", preserved.publicUrl)
+	}
+
+	@Test
+	fun `preserveStoredRemoteIdentity leaves a real remote identity untouched`() = runTest {
+		val incoming = content(id = 42L, url = "67890", publicUrl = "https://komiic.cc/comic/67890")
+
+		assertEquals(incoming, resolver.preserveStoredRemoteIdentity(incoming))
+		coVerify(exactly = 0) { mangaDao.find(any()) }
+	}
+
+	@Test
+	fun `preserveStoredRemoteIdentity cannot restore an already damaged row`() = runTest {
+		coEvery { mangaDao.find(42L) } returns mangaWithTags(
+			id = 42L,
+			source = "KOMIIC",
+			url = "",
+			publicUrl = "",
+		)
+
+		val damaged = content(id = 42L, url = "", publicUrl = "")
+
+		assertEquals(damaged, resolver.preserveStoredRemoteIdentity(damaged))
+	}
+
+	@Test
+	fun `preserveStoredRemoteIdentity ignores rows that are not stored yet`() = runTest {
+		coEvery { mangaDao.find(42L) } returns null
+
+		val card = content(id = 42L, url = "", publicUrl = "")
+
+		assertEquals(card, resolver.preserveStoredRemoteIdentity(card))
+	}
+
 	private fun content(
 		id: Long,
 		url: String,

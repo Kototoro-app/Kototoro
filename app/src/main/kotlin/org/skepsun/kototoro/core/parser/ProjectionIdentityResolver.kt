@@ -33,6 +33,31 @@ class ProjectionIdentityResolver @Inject constructor(
         return content.copy(id = dao.nextImportedMangaId())
     }
 
+    /**
+     * Keeps the remote identity already stored for this row when [content] carries none.
+     *
+     * Display stubs (feed and favourites cards, reader session snapshots) are built without urls on
+     * purpose, and persisting one over an existing record used to blank `url`/`publicUrl`. Parser
+     * sources address their content by exactly that value, so erasing it permanently breaks every
+     * later details load — Komiic sends it as the GraphQL comic id, so an empty value queries
+     * `comicById("")` and the details screen dies with a parser error.
+     *
+     * Content that has its own identity is returned untouched, so a real refresh still wins.
+     */
+    suspend fun preserveStoredRemoteIdentity(content: Content): Content {
+        if (content.isLocal || content.hasRemoteIdentityKey()) {
+            return content
+        }
+        val existing = db.getMangaDao().find(content.id)?.manga ?: return content
+        if (existing.url.isBlank() && existing.publicUrl.isBlank()) {
+            return content
+        }
+        return content.copy(
+            url = existing.url.ifBlank { content.url },
+            publicUrl = existing.publicUrl.ifBlank { content.publicUrl },
+        )
+    }
+
     private suspend fun MangaDao.findBySameRemoteIdentity(content: Content): MangaWithTags? {
         if (content.url.isNotBlank()) {
             findBySourceAndUrl(content.source.name, content.url)?.let { return it }

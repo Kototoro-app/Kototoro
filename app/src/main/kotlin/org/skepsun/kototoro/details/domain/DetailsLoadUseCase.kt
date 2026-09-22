@@ -26,6 +26,7 @@ import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.CachingContentRepository
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.ui.model.ContentOverride
 import org.skepsun.kototoro.core.util.ext.sanitize
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
@@ -47,6 +48,12 @@ internal fun Content.hasCompleteDetailsSnapshot(): Boolean {
 
 private const val DETAILS_TRACE_TAG = "DetailsTrace"
 
+/** Komiic keeps its GraphQL comic id in `Content.url`; see [DetailsLoadUseCase.repairLostKomiicIdentity]. */
+private const val KOMIIC_SOURCE_NAME = "KOMIIC"
+
+private val Content.isKomiic: Boolean
+    get() = source.name.equals(KOMIIC_SOURCE_NAME, ignoreCase = true)
+
 private fun Content.traceSummary(): String {
     return "id=$id source=${source.name} locale=${source.locale} chapters=${chapters?.size ?: 0}"
 }
@@ -65,11 +72,12 @@ class DetailsLoadUseCase @Inject constructor(
         val intentManga = requireNotNull(mangaDataRepository.resolveIntent(intent, withChapters = true)) {
             "Cannot resolve intent $intent"
         }
-        val manga = mangaDataRepository.resolveStoredProjection(intentManga)
+        val repairedManga = repairLostKomiicIdentity(intentManga)
+        val manga = repairedManga ?: mangaDataRepository.resolveStoredProjection(intentManga)
         android.util.Log.i(
             DETAILS_TRACE_TAG,
             "load.invoke intentId=${intent.mangaId} force=$force intentManga=${intentManga.traceSummary()} " +
-                "resolvedManga=${manga.traceSummary()}",
+                "repaired=${repairedManga?.traceSummary()} resolvedManga=${manga.traceSummary()}",
         )
         val override = mangaDataRepository.getOverride(manga.id)
         emit(
@@ -342,6 +350,62 @@ class DetailsLoadUseCase @Inject constructor(
         } else {
             null
         }
+    }
+
+    /**
+     * Restores the remote identity of a Komiic record that lost part of it.
+     *
+     * Komiic chapters keep their comic id in `ContentChapter.branch` (so image requests can restore
+     * the Referer) while `url` carries that same id for the GraphQL queries. A record whose url was
+     * blanked by an old url-less snapshot write can therefore still be rebuilt from its own stored
+     * chapter rows, and the recovered id is written back onto the anchored row. Records whose url
+     * survived but never stored a public url (older imports) get that url back, which is what the
+     * "open in browser" action and the public-url identity match rely on.
+     *
+     * The stored chapter rows are the only trusted source for the id: chapters attached to the
+     * navigation payload are display data and may belong to another work. The repair also refuses to
+     * guess when the stored chapters name more than one comic id, and never builds a url from a value
+     * that is not a Komiic comic id.
+     */
+    private suspend fun repairLostKomiicIdentity(content: Content): Content? {
+        if (content.id == 0L || content.isLocal || !content.isKomiic) {
+            return null
+        }
+        val needsComicId = content.url.isBlank()
+        if (!needsComicId && content.publicUrl.isNotBlank()) {
+            return null
+        }
+        val comicId = if (needsComicId) {
+            recoverKomiicComicId(content) ?: return null
+        } else {
+            content.url.trim()
+        }
+        if (comicId.isEmpty() || !comicId.all(Char::isDigit)) {
+            return null
+        }
+        val repository = runCatchingCancellable { mangaRepositoryFactory.create(content.source) }.getOrNull()
+        val parserRepository = repository as? ParserContentRepository ?: return null
+        val repaired = content.copy(
+            url = comicId,
+            // Same shape KomiicParser builds for a comic: "/comic/$id".toAbsoluteUrl(domain).
+            publicUrl = "https://${parserRepository.domain}/comic/$comicId",
+        )
+        android.util.Log.w(
+            DETAILS_TRACE_TAG,
+            "load.repair restored Komiic identity for mangaId=${content.id}: comicId=$comicId",
+        )
+        return runCatchingCancellable {
+            mangaDataRepository.updateProjectionSnapshotAtAnchor(repaired, content.id)
+        }.getOrNull()
+    }
+
+    /** The stored chapters must unanimously name one comic id; a payload-supplied list is never used. */
+    private suspend fun recoverKomiicComicId(content: Content): String? {
+        return mangaDataRepository.findContentById(content.id, withChapters = true)
+            ?.chapters
+            ?.mapNotNull { it.branch?.trim()?.takeIf(String::isNotEmpty) }
+            ?.distinct()
+            ?.singleOrNull()
     }
 
     private suspend fun Content.withFirstPageCoverFallback(repository: ContentRepository? = null): Content {

@@ -6,6 +6,8 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
@@ -16,6 +18,7 @@ import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.os.NetworkState
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentRepository
+import org.skepsun.kototoro.core.parser.ParserContentRepository
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.details.data.ContentDetails
 import org.skepsun.kototoro.explore.domain.RecoverContentUseCase
@@ -178,6 +181,123 @@ class DetailsLoadUseCaseTest {
 		coVerify(exactly = 0) { repository.getDetails(any()) }
 		coVerify(exactly = 1) { dataRepository.updateProjectionSnapshot(any()) }
 	}
+
+    @Test
+    fun `damaged Komiic identity is repaired before the reader receives cached chapters`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
+            it.copy(url = "", publicUrl = "", chapters = it.chapters?.map { chapter -> chapter.copy(branch = "12345") })
+        }
+        val repaired = damaged.copy(url = "12345", publicUrl = "https://komiic.cc/comic/12345")
+        val parserRepository = mockk<ParserContentRepository> {
+            every { domain } returns "komiic.cc"
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
+        coEvery { dataRepository.resolveStoredProjection(any()) } answers { firstArg() }
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+        every { repositoryFactory.create(KomiicSource) } returns parserRepository
+        coEvery { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) } returns repaired
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        val first = useCase(ContentIntent.of(damaged.id), force = false).first().toContent()
+
+        assertEquals(repaired, first)
+        coVerify(exactly = 1) { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) }
+        coVerify(exactly = 0) { dataRepository.resolveStoredProjection(any()) }
+    }
+
+    @Test
+    fun `Komiic repair does not guess between different saved comic ids`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
+            val chapter = it.chapters!!.single()
+            it.copy(
+                url = "",
+                publicUrl = "",
+                chapters = listOf(chapter.copy(branch = "12345"), chapter.copy(id = 421L, branch = "67890")),
+            )
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
+        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
+        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+    }
+
+    @Test
+    fun `Komiic repair never trusts chapter ids supplied only by the navigation payload`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
+            it.copy(url = "", publicUrl = "", chapters = it.chapters?.map { chapter -> chapter.copy(branch = "12345") })
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged.copy(chapters = null)
+        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        assertEquals(damaged, useCase(ContentIntent.of(damaged), force = false).first().toContent())
+        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+    }
+
+    @Test
+    fun `Komiic public url is restored when only the comic id survived`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
+            it.copy(url = "12345", publicUrl = "")
+        }
+        val repaired = damaged.copy(publicUrl = "https://komiic.cc/comic/12345")
+        val parserRepository = mockk<ParserContentRepository> {
+            every { domain } returns "komiic.cc"
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
+        coEvery { dataRepository.resolveStoredProjection(any()) } answers { firstArg() }
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+        every { repositoryFactory.create(KomiicSource) } returns parserRepository
+        coEvery { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) } returns repaired
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        val first = useCase(ContentIntent.of(damaged.id), force = false).first().toContent()
+
+        assertEquals(repaired, first)
+        coVerify(exactly = 1) { dataRepository.updateProjectionSnapshotAtAnchor(repaired, damaged.id) }
+    }
+
+    @Test
+    fun `Komiic repair never builds a public url from a value that is not a comic id`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
+            it.copy(url = "/comic/12345", publicUrl = "")
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
+        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+    }
+
+    @Test
+    fun `Komiic repair leaves other sources alone`() = runTest {
+        val damaged = content(id = 42L, title = "Saved comic", source = TestMangaSource).let {
+            it.copy(url = "", publicUrl = "")
+        }
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
+        coEvery { dataRepository.getOverride(damaged.id) } returns null
+        coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
+
+        assertEquals(damaged, useCase(ContentIntent.of(damaged.id), force = false).first().toContent())
+        coVerify(exactly = 0) { dataRepository.updateProjectionSnapshotAtAnchor(any(), any()) }
+    }
+
+    private data object KomiicSource : ContentSource {
+        override val name = "KOMIIC"
+        override val locale = "zh"
+        override val contentType = ContentType.MANGA
+    }
 
 	private fun content(
 		id: Long,
