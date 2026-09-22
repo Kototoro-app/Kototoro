@@ -319,6 +319,10 @@ data class ReaderSettings(
             AppSettings.KEY_READER_REDUCE_PRELOAD,
             AppSettings.KEY_READER_EXPERIMENTAL_SCENE_ENGINE,
             AppSettings.KEY_READER_EXPERIMENTAL_PAGED_SCENE_ENGINE,
+            // The continuous-horizontal direction switch: without this key the producer never
+            // re-publishes when the user flips it, and the horizontal scene reader keeps the
+            // direction captured when the reader was opened.
+            AppSettings.KEY_READER_CONTINUOUS_HORIZONTAL_REVERSED,
             AppSettings.KEY_CF_CONTRAST,
             AppSettings.KEY_CF_BRIGHTNESS,
             AppSettings.KEY_CF_INVERTED,
