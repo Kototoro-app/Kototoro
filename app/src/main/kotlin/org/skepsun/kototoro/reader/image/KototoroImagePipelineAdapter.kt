@@ -14,7 +14,9 @@ import coil3.request.CachePolicy
 import coil3.request.ErrorResult
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
+import coil3.request.maxBitmapSize
 import coil3.request.transformations
+import coil3.size.Size
 import coil3.toBitmap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -141,6 +143,18 @@ class KototoroImagePipelineAdapter(
     fun setRendererCapabilities(capabilities: RendererCapabilities) {
         rendererCapabilities = capabilities
     }
+
+    /**
+     * Largest bitmap a decode may allocate, taken from the same source of truth [DecodePlanner]
+     * validated the plan against: the renderer's measured limits, or the policy's safety limit while
+     * the renderer has not reported them. It exists because the loader has a ceiling of its own
+     * (Coil: 4096x4096) and silently applies it *on top of* the requested size.
+     */
+    private val rendererBitmapLimitPx: IntSize
+        get() = rendererCapabilities.effectiveLimits(
+            safetyLimitPx = decodePlanner.tilePolicy.safetyDimensionLimitPx,
+            fallbackDefaultPx = decodePlanner.tilePolicy.safetyDimensionLimitPx,
+        )
 
     /** Last zoom target width requested per page, so a repeated settle is not decoded again. */
     private val zoomReacquireTargets = ConcurrentHashMap<PageId, Int>()
@@ -453,6 +467,19 @@ class KototoroImagePipelineAdapter(
                             }
                             transformations(ComposeReaderPageTransformation(isCropEnabled, page.split))
                         }
+                        // Coil's own ceiling defaults to 4096x4096 and is applied *in addition to* the
+                        // requested size (DecodeUtils.computeDstSize(..., maxSize)), so a 720x7768 page
+                        // the planner had just resolved as a full-resolution Single arrived as
+                        // 380x4096 and the renderer stretched it 3.4x: the blur in issue #539, and it
+                        // only showed on long-strip pages, whose tiled/full-page plans are the ones
+                        // whose decoded height exceeds 4096. The pipeline's ceiling is the only one
+                        // allowed to decide this - the plan was validated against exactly this limit.
+                        .maxBitmapSize(
+                            Size(
+                                rendererBitmapLimitPx.width,
+                                rendererBitmapLimitPx.height,
+                            ),
+                        )
                         .build()
                     val result = imageLoader.execute(request)
                     if (result is SuccessResult) {
