@@ -33,8 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -250,6 +252,11 @@ fun ComposeSceneWebtoonReader(
     var webtoonNavigationJob by remember { mutableStateOf<Job?>(null) }
     var wasZoomEnabled by remember { mutableStateOf(isZoomEnabled) }
 
+    // Chapter-wide ratio of the decoded pages: sizes the still-loading placeholders so they
+    // match the real image size once the chapter's ratio has converged. Keyed by chapter so
+    // boundary-loading window expansions keep the converged estimate.
+    val ratioEstimator = remember(pages.firstOrNull()?.chapterId) { ReaderChapterRatioEstimator() }
+
     val activeScene = scene
 
     // Unified resource window update used by both initial prime, scroll events, and asset resolution
@@ -303,7 +310,7 @@ fun ComposeSceneWebtoonReader(
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
             )
-            val newHints = createInitialScenePageHints(pages, adapter)
+            val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratioEstimator.convergedRatio)
             val compensation = scene.updatePages(newHints, currentVp)
             if (viewportHeightPx > 0f) {
                 scrollState.maxScrollY = (scene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
@@ -320,6 +327,26 @@ fun ComposeSceneWebtoonReader(
             }
             updateResourceWindow(scene, scrollState.scrollY, currentMotion)
         }
+    }
+
+    /**
+     * Applies a chapter-average aspect ratio to the still-unknown pages: their placeholder
+     * geometry then matches the real image size, and [VerticalReaderScene.updatePages] keeps
+     * the exact geometries and the active page's visual anchor stable.
+     */
+    fun applyRatioRelayout(ratio: Float) {
+        val currentScene = activeScene ?: return
+        if (viewportWidthPx <= 0f || viewportHeightPx <= 0f || !hasAppliedInitialPosition) return
+        val currentVp = ReaderViewport(
+            FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
+        )
+        val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratio)
+        val compensation = currentScene.updatePages(newHints, currentVp)
+        scrollState.maxScrollY = (currentScene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
+        if (compensation != null && compensation.deltaY != 0f) {
+            scrollState.snapBy(compensation.deltaY)
+        }
+        updateResourceWindow(currentScene, scrollState.scrollY, currentMotion)
     }
 
     fun dispatchWebtoonScroll(deltaPx: Float) {
@@ -627,6 +654,9 @@ fun ComposeSceneWebtoonReader(
                     if (compensation != null && compensation.deltaY != 0f) {
                         scrollState.snapBy(compensation.deltaY)
                     }
+                    // Let the chapter-average ratio converge the still-loading placeholders
+                    // toward their real size.
+                    ratioEstimator.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
                     // Immediately refresh resource window so newly visible pages from contraction are acquired
                     updateResourceWindow(activeScene, scrollState.scrollY, currentMotion)
                 }
@@ -889,59 +919,82 @@ fun ComposeSceneWebtoonReader(
                     onReleaseOverScroll = ::handleReleaseOverScroll,
                     modifier = Modifier.fillMaxSize(),
                 )
-                val webtoonLoadingItems = remember(
+                val webtoonLoadingOverlays = remember(
                     activeScene,
-                    scrollState.scrollY,
+                    lastReportedPages,
                     viewportWidthPx,
                     viewportHeightPx,
                     retainedAssets,
                 ) {
                     if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) {
-                        emptyList()
+                        AnchoredLoadingOverlays(0f, emptyList())
                     } else {
-                        val vp = ReaderViewport(FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx))
+                        // Anchor snapshot taken WITHOUT observing the scroll offset: composition
+                        // stays unsubscribed from per-frame scroll (the renderer scrolls in the
+                        // draw phase); the overlays track it at the layer phase instead, and the
+                        // anchor is re-taken when the settled window or retained assets change.
+                        val anchorY = Snapshot.withoutReadObservation { scrollState.scrollY }
+                        val vWidth = viewportWidthPx
+                        val vHeight = viewportHeightPx
+                        // Resolve with leading/trailing margin so pages scrolled into view
+                        // mid-flight already carry an anchored overlay that stays glued to
+                        // their placeholder rect.
+                        val margin = vHeight * LOADING_OVERLAY_MARGIN_VIEWPORTS
+                        val vp = ReaderViewport(
+                            FloatRect.fromLtwh(0f, anchorY - margin, vWidth, vHeight + margin * 2f),
+                        )
                         val frame = activeScene.resolve(vp)
                         val items = mutableListOf<Triple<PageId, Float, Float>>()
                         for (node in frame.visibleNodes) {
                             if (retainedAssets[node.pageId] == null) {
-                                val screenTop = node.sceneBounds.top - scrollState.scrollY
-                                val screenBottom = node.sceneBounds.bottom - scrollState.scrollY
+                                val screenTop = node.sceneBounds.top - anchorY
+                                val screenBottom = node.sceneBounds.bottom - anchorY
                                 val screenLeft = node.sceneBounds.left
                                 val screenRight = node.sceneBounds.right
                                 val visibleTop = maxOf(screenTop, 0f)
-                                val visibleBottom = minOf(screenBottom, viewportHeightPx)
+                                val visibleBottom = minOf(screenBottom, vHeight)
                                 val visibleLeft = maxOf(screenLeft, 0f)
-                                val visibleRight = minOf(screenRight, viewportWidthPx)
-                                if (visibleBottom > visibleTop && visibleRight > visibleLeft) {
-                                    items.add(
-                                        Triple(
-                                            node.pageId,
-                                            (visibleLeft + visibleRight) / 2f,
-                                            (visibleTop + visibleBottom) / 2f,
-                                        )
-                                    )
+                                val visibleRight = minOf(screenRight, vWidth)
+                                val (cx, cy) = if (visibleBottom > visibleTop && visibleRight > visibleLeft) {
+                                    (visibleLeft + visibleRight) / 2f to (visibleTop + visibleBottom) / 2f
+                                } else {
+                                    // Page within the margin but off-screen: anchor at the
+                                    // page's own center; the overlay glides in glued to the
+                                    // placeholder when the page scrolls into view.
+                                    (screenLeft + screenRight) / 2f to (screenTop + screenBottom) / 2f
                                 }
+                                items.add(Triple(node.pageId, cx, cy))
                             }
                         }
-                        items
+                        AnchoredLoadingOverlays(anchorY, items)
                     }
                 }
 
-                for ((pageId, centerX, centerY) in webtoonLoadingItems) {
-                    key(pageId) {
-                        CenteredOverlay(
-                            centerX = centerX,
-                            centerY = centerY,
-                        ) {
-                            SceneReaderPageLoadOverlay(
-                                pipeline = adapter,
-                                pageId = pageId,
-                                page = pageLookup(pageId),
-                                onRetryError = onRetryError,
-                                onShowErrorDetails = onShowErrorDetails,
-                                resolveErrorStringId = resolveErrorStringId,
-                                onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
-                            )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clipToBounds(),
+                ) {
+                    for ((pageId, centerX, centerY) in webtoonLoadingOverlays.items) {
+                        key(pageId) {
+                            CenteredOverlay(
+                                centerX = centerX,
+                                centerY = centerY,
+                                modifier = Modifier.loadingOverlayVerticalAnchor(
+                                    webtoonLoadingOverlays.anchorScroll,
+                                    scrollState,
+                                ),
+                            ) {
+                                SceneReaderPageLoadOverlay(
+                                    pipeline = adapter,
+                                    pageId = pageId,
+                                    page = pageLookup(pageId),
+                                    onRetryError = onRetryError,
+                                    onShowErrorDetails = onShowErrorDetails,
+                                    resolveErrorStringId = resolveErrorStringId,
+                                    onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                                )
+                            }
                         }
                     }
                 }
@@ -964,12 +1017,18 @@ internal fun createInitialScenePageHints(
     pages: List<ReaderPage>,
     adapter: KototoroImagePipelineAdapter? = null,
     defaultRatio: Float = 1.0f,
+    unknownPageRatio: Float? = null,
 ): List<Pair<PageId, PageGeometryHint>> {
     return pages.map { page ->
         val pageId = PageId(page.readerKey)
         val cachedDims = adapter?.probeCachedDimensions(pageId)
         val hint = if (cachedDims != null) {
             PageGeometryHint.Exact(cachedDims.width, cachedDims.height)
+        } else if (unknownPageRatio != null && unknownPageRatio > 0f && unknownPageRatio.isFinite()) {
+            // Chapter-average ratio of the already decoded pages: the placeholder matches the
+            // real image size as soon as the chapter's ratio has converged (see
+            // [ReaderChapterRatioEstimator]).
+            PageGeometryHint.AspectRatio(unknownPageRatio)
         } else {
             PageGeometryHint.Estimated(ratio = defaultRatio)
         }

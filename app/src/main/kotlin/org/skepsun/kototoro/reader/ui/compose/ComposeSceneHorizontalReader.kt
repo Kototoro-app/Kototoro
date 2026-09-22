@@ -30,8 +30,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -252,6 +254,11 @@ fun ComposeSceneHorizontalReader(
     var zoomAnimationJob by remember { mutableStateOf<Job?>(null) }
     var zoomFlingJob by remember { mutableStateOf<Job?>(null) }
 
+    // Chapter-wide ratio of the decoded pages: sizes the still-loading placeholders so they
+    // match the real image size once the chapter's ratio has converged. Keyed by chapter so
+    // boundary-loading window expansions keep the converged estimate.
+    val ratioEstimator = remember(pages.firstOrNull()?.chapterId) { ReaderChapterRatioEstimator() }
+
     val activeScene = scene
 
     fun updateResourceWindow(
@@ -300,7 +307,7 @@ fun ComposeSceneHorizontalReader(
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
             )
-            val newHints = createInitialScenePageHints(pages, adapter)
+            val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratioEstimator.convergedRatio)
             val compensation = scene.updatePages(newHints, currentVp)
             if (viewportWidthPx > 0f) {
                 scrollState.maxOffset = (scene.totalSceneWidth - viewportWidthPx).coerceAtLeast(0f)
@@ -321,6 +328,26 @@ fun ComposeSceneHorizontalReader(
             }
             updateResourceWindow(scene, scrollState.offset, currentMotion)
         }
+    }
+
+    /**
+     * Applies a chapter-average aspect ratio to the still-unknown pages: their placeholder
+     * geometry then matches the real image size, and [HorizontalReaderScene.updatePages] keeps
+     * the exact geometries and the active page's visual anchor stable.
+     */
+    fun applyRatioRelayout(ratio: Float) {
+        val currentScene = activeScene ?: return
+        if (viewportWidthPx <= 0f || viewportHeightPx <= 0f || !hasAppliedInitialPosition) return
+        val currentVp = ReaderViewport(
+            FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
+        )
+        val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratio)
+        val compensation = currentScene.updatePages(newHints, currentVp)
+        scrollState.maxOffset = (currentScene.totalSceneWidth - viewportWidthPx).coerceAtLeast(0f)
+        if (compensation != null && compensation.deltaX != 0f) {
+            scrollState.snapBy(compensation.deltaX)
+        }
+        updateResourceWindow(currentScene, scrollState.offset, currentMotion)
     }
 
     fun dispatchHorizontalScroll(deltaPx: Float) {
@@ -531,6 +558,9 @@ fun ComposeSceneHorizontalReader(
                     if (compensation != null && compensation.deltaX != 0f) {
                         scrollState.snapBy(compensation.deltaX)
                     }
+                    // Let the chapter-average ratio converge the still-loading placeholders
+                    // toward their real size.
+                    ratioEstimator.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
                     updateResourceWindow(activeScene, scrollState.offset, currentMotion)
                 }
             }
@@ -788,65 +818,88 @@ fun ComposeSceneHorizontalReader(
                     onReleaseOverScroll = ::handleReleaseOverScroll,
                     modifier = Modifier.fillMaxSize(),
                 )
-                val horizontalLoadingItems = remember(
+                val horizontalLoadingOverlays = remember(
                     activeScene,
-                    scrollState.offset,
+                    lastReportedPages,
                     viewportWidthPx,
                     viewportHeightPx,
                     retainedAssets,
                 ) {
                     if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) {
-                        emptyList()
+                        AnchoredLoadingOverlays(0f, emptyList())
                     } else {
-                        val currentX = scrollState.offset
+                        // Anchor snapshot taken WITHOUT observing the scroll offset: composition
+                        // stays unsubscribed from per-frame scroll (the renderer scrolls in the
+                        // draw phase); the overlays track it at the layer phase instead, and the
+                        // anchor is re-taken when the settled window or retained assets change.
+                        val anchorX = Snapshot.withoutReadObservation { scrollState.offset }
                         val vWidth = viewportWidthPx
                         val vHeight = viewportHeightPx
                         val verticalOffset = ((vHeight - activeScene.availableHeight) / 2f).coerceAtLeast(0f)
+                        // Resolve with leading/trailing margin so pages scrolled into view
+                        // mid-flight already carry an anchored overlay that stays glued to
+                        // their placeholder rect.
+                        val margin = vWidth * LOADING_OVERLAY_MARGIN_VIEWPORTS
                         val viewport = ReaderViewport(
-                            bounds = FloatRect.fromLtwh(currentX, 0f, vWidth, activeScene.availableHeight.toFloat()),
+                            bounds = FloatRect.fromLtwh(
+                                anchorX - margin,
+                                0f,
+                                vWidth + margin * 2f,
+                                activeScene.availableHeight.toFloat(),
+                            ),
                         )
                         val frame = activeScene.resolve(viewport)
                         val items = mutableListOf<Triple<PageId, Float, Float>>()
                         for (node in frame.visibleNodes) {
                             if (retainedAssets[node.pageId] == null) {
-                                val screenLeft = node.sceneBounds.left - currentX
-                                val screenRight = node.sceneBounds.right - currentX
+                                val screenLeft = node.sceneBounds.left - anchorX
+                                val screenRight = node.sceneBounds.right - anchorX
                                 val screenTop = verticalOffset + node.sceneBounds.top
                                 val screenBottom = verticalOffset + node.sceneBounds.bottom
                                 val visibleLeft = maxOf(screenLeft, 0f)
                                 val visibleRight = minOf(screenRight, vWidth)
                                 val visibleTop = maxOf(screenTop, 0f)
                                 val visibleBottom = minOf(screenBottom, vHeight)
-                                if (visibleRight > visibleLeft && visibleBottom > visibleTop) {
-                                    items.add(
-                                        Triple(
-                                            node.pageId,
-                                            (visibleLeft + visibleRight) / 2f,
-                                            (visibleTop + visibleBottom) / 2f,
-                                        )
-                                    )
+                                val (cx, cy) = if (visibleRight > visibleLeft && visibleBottom > visibleTop) {
+                                    (visibleLeft + visibleRight) / 2f to (visibleTop + visibleBottom) / 2f
+                                } else {
+                                    // Page within the margin but off-screen: anchor at the
+                                    // page's own center; the overlay glides in glued to the
+                                    // placeholder when the page scrolls into view.
+                                    (screenLeft + screenRight) / 2f to (screenTop + screenBottom) / 2f
                                 }
+                                items.add(Triple(node.pageId, cx, cy))
                             }
                         }
-                        items
+                        AnchoredLoadingOverlays(anchorX, items)
                     }
                 }
 
-                for ((pageId, centerX, centerY) in horizontalLoadingItems) {
-                    key(pageId) {
-                        CenteredOverlay(
-                            centerX = centerX,
-                            centerY = centerY,
-                        ) {
-                            SceneReaderPageLoadOverlay(
-                                pipeline = adapter,
-                                pageId = pageId,
-                                page = pageLookup(pageId),
-                                onRetryError = onRetryError,
-                                onShowErrorDetails = onShowErrorDetails,
-                                resolveErrorStringId = resolveErrorStringId,
-                                onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
-                            )
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clipToBounds(),
+                ) {
+                    for ((pageId, centerX, centerY) in horizontalLoadingOverlays.items) {
+                        key(pageId) {
+                            CenteredOverlay(
+                                centerX = centerX,
+                                centerY = centerY,
+                                modifier = Modifier.loadingOverlayHorizontalAnchor(
+                                    horizontalLoadingOverlays.anchorScroll,
+                                    scrollState,
+                                ),
+                            ) {
+                                SceneReaderPageLoadOverlay(
+                                    pipeline = adapter,
+                                    pageId = pageId,
+                                    page = pageLookup(pageId),
+                                    onRetryError = onRetryError,
+                                    onShowErrorDetails = onShowErrorDetails,
+                                    resolveErrorStringId = resolveErrorStringId,
+                                    onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                                )
+                            }
                         }
                     }
                 }

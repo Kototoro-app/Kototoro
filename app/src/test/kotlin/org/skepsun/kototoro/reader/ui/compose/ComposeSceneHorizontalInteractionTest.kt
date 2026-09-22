@@ -201,6 +201,38 @@ class ComposeSceneHorizontalInteractionTest {
     }
 
     @Test
+    fun `updatePages adopts chapter ratio for unknown pages while keeping exact geometries`() {
+        val scene = HorizontalReaderScene(
+            availableHeight = 2000,
+            defaultViewportWidth = 1000,
+            initialPages = listOf(
+                PageId(1L) to PageGeometryHint.Exact(700, 1000), // fit-height width 1400 -> [0..1400]
+                PageId(2L) to PageGeometryHint.Estimated(ratio = 1f), // width = 1000 -> [1400..2400]
+            ),
+            readingDirection = SceneReadingDirection.LEFT_TO_RIGHT,
+            pageSpacingPx = 0,
+        )
+
+        // Chapter-average ratio converged from the decoded pages: still-unknown pages adopt it
+        // so their loading placeholder matches the real image size (fit-height width = 2000 * 0.7).
+        val relayoutHints = listOf(
+            PageId(1L) to PageGeometryHint.Exact(700, 1000),
+            PageId(2L) to PageGeometryHint.AspectRatio(0.7f),
+        )
+        val vp = ReaderViewport(FloatRect.fromLtwh(0f, 0f, 1000f, 2000f))
+        val comp = scene.updatePages(relayoutHints, vp)
+
+        // The exact geometry of page 1 is preserved and the viewport stays anchored on it.
+        assertNotNull(comp)
+        assertEquals(0f, comp!!.deltaX)
+        assertEquals(2800f, scene.totalSceneWidth)
+        val frame = scene.resolve(ReaderViewport(FloatRect.fromLtwh(2000f, 0f, 1000f, 2000f)))
+        val page2 = frame.visibleNodes.first { it.pageId == PageId(2L) }
+        assertEquals(1400f, page2.sceneBounds.left)
+        assertEquals(2800f, page2.sceneBounds.right)
+    }
+
+    @Test
     fun `SceneAxisProjection maps physical drag velocities to forward reading velocity`() {
         // In LTR: dragging finger left (deltaX > 0) -> velocityX is positive -> forward velocity is positive
         val motionLtrForward = ViewportMotion(velocityX = 1500f, velocityY = 0f)
