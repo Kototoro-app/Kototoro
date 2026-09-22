@@ -53,7 +53,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.ImageLoader
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.exceptions.resolve.ExceptionResolver
@@ -379,6 +381,23 @@ fun ComposeSceneHorizontalReader(
         canvasOffsetY = bounded.y
     }
 
+    suspend fun animateHorizontalScaleTo(
+        targetScale: Float,
+        focus: Offset = Offset(viewportWidthPx / 2f, viewportHeightPx / 2f),
+    ) {
+        if (!isAnimationEnabled) {
+            applyCanvasScaleAtFocus(targetScale, focus)
+            return
+        }
+        animate(
+            initialValue = canvasScale,
+            targetValue = targetScale,
+            animationSpec = tween(ZOOM_ANIMATION_DURATION_MS),
+        ) { value, _ ->
+            applyCanvasScaleAtFocus(value, focus)
+        }
+    }
+
     suspend fun flingCanvas(velocity: Velocity) {
         if (canvasScale <= 1f || maxOf(kotlin.math.abs(velocity.x), kotlin.math.abs(velocity.y)) < 50f) return
         coroutineScope {
@@ -444,6 +463,20 @@ fun ComposeSceneHorizontalReader(
             if (targetPage != null) {
                 navigateToPagePosition(requestedPage!!, smooth = requestedPageSmooth)
             }
+        }
+    }
+
+    // Programmatic zoom (the reader chrome's zoom in/out controls).
+    LaunchedEffect(zoomCommand, isAnimationEnabled) {
+        val command = zoomCommand ?: return@LaunchedEffect
+        val animationJob = currentCoroutineContext().job
+        zoomAnimationJob = animationJob
+        try {
+            animateHorizontalScaleTo(
+                (canvasScale * command.factor).coerceIn(0.5f, READER_WEBTOON_MAX_ZOOM_SCALE),
+            )
+        } finally {
+            if (zoomAnimationJob === animationJob) zoomAnimationJob = null
         }
     }
 
@@ -637,6 +670,73 @@ fun ComposeSceneHorizontalReader(
                             zoomFlingJob = zoomAnimationScope.launch {
                                 flingCanvas(velocityTracker.calculateVelocity())
                             }
+                        }
+                    }
+                }
+            }
+            .pointerInput(isZoomEnabled, defaultScale) {
+                if (isZoomEnabled) {
+                    var lastTapUpAt = 0L
+                    var lastTapPosition: Offset? = null
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial,
+                        )
+                        val isDoubleTapCandidate = isTapGridDoubleTapCandidate(
+                            previousPosition = lastTapPosition,
+                            previousTapAt = lastTapUpAt,
+                            position = down.position,
+                            now = down.uptimeMillis,
+                            minTimeMillis = viewConfiguration.doubleTapMinTimeMillis,
+                            timeoutMillis = viewConfiguration.doubleTapTimeoutMillis,
+                            doubleTapSlop = doubleTapSlop,
+                        )
+                        if (isDoubleTapCandidate) down.consume()
+                        var moved = false
+                        var eventTime = down.uptimeMillis
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.changes.any { it.isConsumed }) {
+                                moved = true
+                            }
+                            event.changes.maxByOrNull { it.uptimeMillis }?.let { eventTime = it.uptimeMillis }
+                            if (event.changes.count { it.pressed } >= 2) {
+                                moved = true
+                            } else if (event.changes.any { it.pressed }) {
+                                val currentPosition = event.changes.firstOrNull { it.pressed }?.position
+                                if (currentPosition != null &&
+                                    hasExceededWebtoonTapSlop(
+                                        start = down.position,
+                                        current = currentPosition,
+                                        touchSlop = viewConfiguration.touchSlop,
+                                    )
+                                ) {
+                                    moved = true
+                                }
+                            }
+                        } while (event.changes.any { it.pressed })
+
+                        val heldTooLong =
+                            eventTime - down.uptimeMillis >= viewConfiguration.longPressTimeoutMillis
+                        if (moved || heldTooLong) {
+                            lastTapPosition = null
+                            return@awaitEachGesture
+                        }
+                        if (isDoubleTapCandidate) {
+                            lastTapPosition = null
+                            val targetScale = if (kotlin.math.abs(canvasScale - defaultScale) > 0.001f) {
+                                defaultScale.coerceIn(0.5f, 1f)
+                            } else {
+                                2f
+                            }
+                            zoomAnimationJob?.cancel()
+                            zoomAnimationJob = zoomAnimationScope.launch {
+                                animateHorizontalScaleTo(targetScale, focus = down.position)
+                            }
+                        } else {
+                            lastTapPosition = down.position
+                            lastTapUpAt = eventTime
                         }
                     }
                 }
