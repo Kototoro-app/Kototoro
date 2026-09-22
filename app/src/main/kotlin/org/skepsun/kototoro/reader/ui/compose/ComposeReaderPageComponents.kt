@@ -372,9 +372,10 @@ internal fun SceneReaderPageLoadOverlay(
 	val state = states[pageId]
 	when (resolveSceneReaderPageOverlay(state, assets.containsKey(pageId))) {
 		SceneReaderPageOverlay.NONE -> Unit
-		SceneReaderPageOverlay.LOADING -> Box(modifier) {
-			ReaderPageLoading((state as? ReaderImageLoadState.Loading)?.progress)
-		}
+		// The placeholder geometry already communicates the loading state; a centered
+		// spinner on top of it added churn (and drifted during scroll) without adding
+		// information, so loading pages render nothing.
+		SceneReaderPageOverlay.LOADING -> Unit
 		SceneReaderPageOverlay.ERROR -> {
 			// Guarded by resolveSceneReaderPageOverlay above.
 			val failure = state as ReaderImageLoadState.Failed
