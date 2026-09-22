@@ -113,15 +113,16 @@ class SceneImagePresentationCoordinatorTest {
 
     /** Pure-JVM recording double: proves the coordinator only needs the pipeline CONTRACT. */
     private class RecordingPipeline(
-        private val retained: Map<PageId, ReaderImageAsset> = emptyMap(),
+        private val published: Map<PageId, ReaderImageAsset> = emptyMap(),
+        private val cached: Map<PageId, ReaderImageAsset> = published,
     ) : ReaderImagePipeline {
         val tileRequests = mutableListOf<Pair<PageId, IntRect>>()
 
         override val assets: StateFlow<Map<PageId, ReaderImageAsset>> =
-            MutableStateFlow(retained)
+            MutableStateFlow(published)
         override val loadStates: StateFlow<Map<PageId, ReaderImageLoadState>> =
             MutableStateFlow(emptyMap())
-        override fun getCachedAsset(pageId: PageId): ReaderImageAsset? = retained[pageId]
+        override fun getCachedAsset(pageId: PageId): ReaderImageAsset? = cached[pageId]
         override fun updateResourceWindow(window: ReaderResourceWindow) = Unit
         override fun observeAsset(pageId: PageId): Flow<ReaderImageAsset?> = emptyFlow()
         override suspend fun retryAsset(pageId: PageId): ReaderImageAsset? = null
@@ -161,11 +162,33 @@ class SceneImagePresentationCoordinatorTest {
             sceneBounds = FloatRect(0f, 0f, 1000f, 1500f),
             visibleRegion = FloatRect(0f, 0f, 1000f, 1500f),
         )
-        val pipeline = RecordingPipeline()
+        val pipeline = RecordingPipeline(published = mapOf(PageId(1L) to asset))
 
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
             frame = frameOf(node),
-            retainedAssets = mapOf(PageId(1L) to asset),
+            pipeline = pipeline,
+        )
+
+        assertEquals(listOf(PageId(1L) to IntRect(0, 0, 2000, 3000)), pipeline.tileRequests)
+    }
+
+    @Test
+    fun `coordinateVisibleTiles requests the lattice for a page decoded but not yet published`() {
+        // The pipeline notifies the host that a page finished decoding *before* it publishes the
+        // presentation (the host applies the decoded dimensions first). A caller-held snapshot is
+        // therefore exactly one state behind at that moment, and a page that arrives while the reader
+        // is idle never gets its lattice requested: it keeps painting the coarse overview until the
+        // next scroll tick (issue #539). The coordinator has to ask the pipeline for its own state.
+        val asset = tiledAsset(PageId(1L))
+        val node = VisibleNode(
+            pageId = PageId(1L),
+            sceneBounds = FloatRect(0f, 0f, 1000f, 1500f),
+            visibleRegion = FloatRect(0f, 0f, 1000f, 1500f),
+        )
+        val pipeline = RecordingPipeline(published = emptyMap(), cached = mapOf(PageId(1L) to asset))
+
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(
+            frame = frameOf(node),
             pipeline = pipeline,
         )
 
@@ -180,11 +203,10 @@ class SceneImagePresentationCoordinatorTest {
             sceneBounds = FloatRect(0f, 0f, 1000f, 1500f),
             visibleRegion = FloatRect(0f, 0f, 1000f, 1500f),
         )
-        val pipeline = RecordingPipeline()
+        val pipeline = RecordingPipeline(published = mapOf(PageId(2L) to asset))
 
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
             frame = frameOf(node),
-            retainedAssets = mapOf(PageId(2L) to asset),
             pipeline = pipeline,
         )
 
@@ -203,12 +225,10 @@ class SceneImagePresentationCoordinatorTest {
             sceneBounds = FloatRect(0f, 0f, 1000f, 1500f),
             visibleRegion = FloatRect(0f, 0f, 1000f, 1500f),
         )
-        val pipeline = RecordingPipeline()
-        val retained = mapOf(PageId(1L) to tiledAsset(PageId(1L)))
+        val pipeline = RecordingPipeline(published = mapOf(PageId(1L) to tiledAsset(PageId(1L))))
 
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
             frame = frameOf(zeroSize, unretained),
-            retainedAssets = retained,
             pipeline = pipeline,
         )
 

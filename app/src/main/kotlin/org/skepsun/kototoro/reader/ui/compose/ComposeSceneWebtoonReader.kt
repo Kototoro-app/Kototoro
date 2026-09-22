@@ -301,7 +301,7 @@ fun ComposeSceneWebtoonReader(
         }
 
         // 3. For visible Tiled pages, request intersecting lattice tiles
-        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, adapter)
     }
 
     // Preserve visual reading anchor and exact geometry hints across cross-chapter window expansions

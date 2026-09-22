@@ -566,7 +566,7 @@ fun ComposeScenePagedReader(
                 )
             }
         SceneImagePresentationCoordinator.coordinateVisibleTiles(
-            frame.copy(visibleNodes = contentNodes), retainedAssets, adapter,
+            frame.copy(visibleNodes = contentNodes), adapter,
         )
     }
 
@@ -643,7 +643,7 @@ fun ComposeScenePagedReader(
                             offsetY = canvasOffsetY,
                         ),
                     ),
-                    retainedAssets, adapter,
+                    adapter,
                 )
             }
     }

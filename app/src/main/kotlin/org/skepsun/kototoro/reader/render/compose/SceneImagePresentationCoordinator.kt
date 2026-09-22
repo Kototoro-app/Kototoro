@@ -24,14 +24,23 @@ object SceneImagePresentationCoordinator {
 
     /**
      * Inspects visible nodes in [frame] and requests intersecting lattice tiles for any [ReaderImageAsset.Tiled] asset.
+     *
+     * The asset is taken from the pipeline itself - its published state first, then its authoritative
+     * cache - and never from a caller-held snapshot. A caller-held snapshot is a Compose
+     * `collectAsState` value, which lags the pipeline by a recomposition and, worse, is exactly one
+     * state behind at the moment the host is told a page finished decoding (the pipeline notifies the
+     * host before it publishes the presentation). A page whose Tiled asset arrives while the reader is
+     * idle then had no lattice requested at all and kept painting its coarse overview until the next
+     * scroll tick: on a 720x8389 strip that is a 360x4195 overview stretched 3.6x, which is the blur
+     * reported in issue #539.
      */
     fun coordinateVisibleTiles(
         frame: ReaderFrame,
-        retainedAssets: Map<PageId, ReaderImageAsset>,
         pipeline: ReaderImagePipeline,
     ) {
+        val published = pipeline.assets.value
         for (node in frame.visibleNodes) {
-            val asset = retainedAssets[node.pageId]
+            val asset = published[node.pageId] ?: pipeline.getCachedAsset(node.pageId)
             if (asset is ReaderImageAsset.Tiled && node.sceneBounds.width > 0f && node.sceneBounds.height > 0f) {
                 val visibleLogical = computeVisibleLogicalRect(
                     nodeSceneBounds = node.sceneBounds,

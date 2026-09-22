@@ -299,7 +299,7 @@ fun ComposeSceneHorizontalReader(
             adapter.updateResourceWindow(it)
         }
 
-        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, retainedAssets, adapter)
+        SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, adapter)
     }
 
     LaunchedEffect(pages, scene) {

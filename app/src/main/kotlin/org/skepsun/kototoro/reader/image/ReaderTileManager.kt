@@ -328,6 +328,15 @@ class ReaderTileManager(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
+            // A tile that fails to decode used to disappear silently: the caller sees a missing tile
+            // and the frame falls back to the coarse overview, which reads as a quality bug rather
+            // than a decode failure.
+            android.util.Log.w(
+                "ReaderTile",
+                "tile decode failed kind=${spec.key.kind} sampleSize=${spec.key.sampleSize} " +
+                    "logical=${spec.logicalRect} decodeRegion=${spec.decodeRegion}",
+                error,
+            )
             notifyTileFailed(spec.key.pageId, spec.key, error)
             return
         }
