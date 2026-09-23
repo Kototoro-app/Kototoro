@@ -53,13 +53,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
+import org.skepsun.kototoro.core.ui.compose.CompactContentCoverCornerRadius
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverShape
+import org.skepsun.kototoro.core.ui.compose.ContentCoverCornerRadius
 import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -426,6 +434,13 @@ private fun HomeListRailRowItem(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
+        val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+        val coverShape = if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape
+        val coverRadius = if (listMode == ListMode.DETAILED_LIST) ContentCoverCornerRadius else CompactContentCoverCornerRadius
+        val hasProgressBar = item.progress?.let { it.isValid() && it.percent > 0f } == true
+        val bottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
+        val badgePadding = 3.dp
+
         Box(
             modifier = Modifier
                 .width(coverSize.width)
@@ -443,8 +458,13 @@ private fun HomeListRailRowItem(
                         }
                     } else Modifier
                 )
-                .clip(if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .clip(coverShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = 0.5.dp,
+                    color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                    shape = coverShape,
+                ),
         ) {
             if (imageRequest != null) {
                 AsyncImage(
@@ -481,49 +501,68 @@ private fun HomeListRailRowItem(
                 badges = cardUiPrefs.badgesTopLeft,
                 item = badgeModel,
                 corner = Alignment.TopStart,
-                cardRadius = 8.dp,
+                cardRadius = coverRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopStart),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = badgePadding, top = badgePadding),
             )
             ContentCardCornerBadges(
                 badges = effectiveTopRightBadges,
                 item = badgeModel,
                 corner = Alignment.TopEnd,
-                cardRadius = 8.dp,
+                cardRadius = coverRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = badgePadding, top = badgePadding),
             )
             ContentCardCornerBadges(
                 badges = cardUiPrefs.badgesBottomLeft,
                 item = badgeModel,
                 corner = Alignment.BottomStart,
-                cardRadius = 8.dp,
+                cardRadius = coverRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomStart),
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = badgePadding, bottom = badgePadding + bottomBadgeOffset),
             )
             ContentCardCornerBadges(
                 badges = cardUiPrefs.badgesBottomRight,
                 item = badgeModel,
                 corner = Alignment.BottomEnd,
-                cardRadius = 8.dp,
+                cardRadius = coverRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = badgePadding, bottom = badgePadding + bottomBadgeOffset),
             )
-            ContentCardCoverProgressIndicator(
-                progress = item.progress,
-                bottomRightBadges = cardUiPrefs.badgesBottomRight,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
+            if (item.progress != null) {
+                ContentCardBottomProgressBar(
+                    progress = item.progress,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
 
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(if (listMode == ListMode.DETAILED_LIST) 4.dp else 3.dp),
+            verticalArrangement = Arrangement.spacedBy(if (listMode == ListMode.DETAILED_LIST) 4.dp else 2.dp),
         ) {
             Text(
                 text = content.title,
-                style = if (listMode == ListMode.DETAILED_LIST) MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodyLarge,
+                style = if (listMode == ListMode.DETAILED_LIST) {
+                    MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 18.sp,
+                    )
+                } else {
+                    MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.5.sp,
+                        lineHeight = 18.sp,
+                    )
+                },
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = if (listMode == ListMode.DETAILED_LIST) 2 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -532,8 +571,10 @@ private fun HomeListRailRowItem(
                 item.supportingText != null -> {
                     Text(
                         text = item.supportingText.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
                         maxLines = if (listMode == ListMode.DETAILED_LIST) 2 else 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -547,8 +588,10 @@ private fun HomeListRailRowItem(
                     detailText?.let { text ->
                         Text(
                             text = text,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 11.5.sp,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )

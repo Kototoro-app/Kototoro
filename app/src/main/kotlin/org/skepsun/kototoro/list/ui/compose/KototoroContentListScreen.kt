@@ -114,7 +114,7 @@ private const val GridColumnMinFitRatio = 0.94f
 private val QuickFilterChipHeight = 32.dp
 private val QuickFilterChipIconSize = 16.dp
 internal val GridHorizontalPadding = AppLayoutTokens.compactItemHorizontalPadding
-internal val GridSpacing = 6.dp
+internal val GridSpacing = 8.dp
 
 private data class ContentListScreenPrefs(
     val showSourceOnCards: Boolean,

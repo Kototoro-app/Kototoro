@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -32,14 +34,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -311,11 +317,11 @@ fun KototoroContentCardGrid(
     }
     val coverBounds = rememberDeferredContentCoverBounds()
     val badgeMetrics = remember(posterStyle.itemWidth) { contentCardBadgeMetricsFor(posterStyle.itemWidth) }
-    val compactTitleHeight = remember(posterStyle.itemWidth) {
-        (posterStyle.itemWidth.value * 0.48f).dp.coerceIn(50.dp, 66.dp)
+    val compactTitleHeight = remember(posterStyle.posterHeight) {
+        (posterStyle.posterHeight.value * 0.38f).dp.coerceIn(46.dp, 64.dp)
     }
-    val compactTitleTextClearance = remember(posterStyle.itemWidth) {
-        (posterStyle.itemWidth.value * 0.34f).dp.coerceIn(36.dp, 48.dp)
+    val compactTitleTextClearance = remember(posterStyle.posterHeight) {
+        (posterStyle.posterHeight.value * 0.28f).dp.coerceIn(32.dp, 44.dp)
     }
     val titleFontSize = resolveGridTitleFontSize(gridScale)
     val bottomBadgeLift = if (compactOverlay) compactTitleTextClearance else 0.dp
@@ -325,6 +331,7 @@ fun KototoroContentCardGrid(
         contentListSharedElementKey(item, sharedElementInstanceKey)
     }
 
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
     val cardRadius = posterStyle.cornerRadius
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
@@ -380,6 +387,11 @@ fun KototoroContentCardGrid(
                 )
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = 0.5.dp,
+                    color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                    shape = cardShape,
+                )
         ) {
             ContentCardCoverImage(
                 coverRequest = coverRequest,
@@ -398,6 +410,7 @@ fun KototoroContentCardGrid(
                 )
             }
 
+            val badgeCornerPadding = 5.dp
             // Top Left Badges
             ContentCardCornerBadges(
                 badges = resolvedUiPrefs.badgesTopLeft,
@@ -406,7 +419,9 @@ fun KototoroContentCardGrid(
                 corner = Alignment.TopStart,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopStart),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = badgeCornerPadding, top = badgeCornerPadding),
             )
 
             // Top Right Badges (includes counter if not handled by badges)
@@ -432,14 +447,16 @@ fun KototoroContentCardGrid(
                 corner = Alignment.TopEnd,
                 cardRadius = cardRadius,
                 metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopEnd),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = badgeCornerPadding, top = badgeCornerPadding),
             )
 
             val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
                 "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
             }
-            val bottomBadgeHeight = with(density) { badgeMetrics.textSize.toDp() } +
-                (badgeMetrics.containerVerticalPadding * 2)
+            val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+            val bottomBadgeOffset = if (!compactOverlay && hasProgressBar) 3.dp else 0.dp
 
             // Bottom Left Badges
             ContentCardCornerBadges(
@@ -452,14 +469,12 @@ fun KototoroContentCardGrid(
                 attachedToTitleEdge = compactOverlay,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(bottom = bottomBadgeLift),
+                    .padding(
+                        start = badgeCornerPadding,
+                        bottom = bottomBadgeLift + badgeCornerPadding + bottomBadgeOffset,
+                    ),
             )
 
-            val badgeReservedHeight = if (showBottomRightBadge) {
-                bottomBadgeHeight + badgeMetrics.progressSpacing
-            } else {
-                0.dp
-            }
             if (showBottomRightBadge) {
                 ContentCardCornerBadges(
                     badges = resolvedUiPrefs.badgesBottomRight,
@@ -472,24 +487,11 @@ fun KototoroContentCardGrid(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(
-                            end = badgeMetrics.badgeEdgePadding,
-                            bottom = bottomBadgeLift + badgeMetrics.badgeEdgePadding,
+                            end = badgeCornerPadding,
+                            bottom = bottomBadgeLift + badgeCornerPadding + bottomBadgeOffset,
                         ),
                 )
             }
-            if (renderModel.progress != null) {
-                ContentCardReadingProgressIndicator(
-                    progress = renderModel.progress,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(
-                            end = badgeMetrics.progressAnchorInset,
-                            bottom = badgeMetrics.progressAnchorInset + badgeReservedHeight + bottomBadgeLift,
-                        )
-                        .size(badgeMetrics.progressSize),
-                )
-            }
-
             if (compactOverlay) {
                 CompactGridTitleOverlay(
                     title = renderModel.title,
@@ -498,21 +500,30 @@ fun KototoroContentCardGrid(
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
+
+            if (renderModel.progress != null) {
+                ContentCardBottomProgressBar(
+                    progress = renderModel.progress,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
 
         if (!compactOverlay) {
             Text(
                 text = renderModel.title,
-                style = MaterialTheme.typography.labelMedium.copy(
+                style = MaterialTheme.typography.labelLarge.copy(
                     fontSize = titleFontSize,
-                    lineHeight = (titleFontSize.value + 3f).sp,
+                    lineHeight = (titleFontSize.value + 4f).sp,
+                    fontWeight = FontWeight.SemiBold,
                 ),
                 color = MaterialTheme.colorScheme.onSurface,
+                minLines = 2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = 8.dp),
             )
         }
         if (!compactOverlay && resolvedUiPrefs.showExtraInfo) {
@@ -525,34 +536,39 @@ fun KototoroContentCardGrid(
             ) {
                 item.buildInfoText(context)
             }
-            infoText?.takeIf { it.isNotBlank() }?.let { info ->
-            Text(
-                text = info,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-            )
-        }
-
-        if (!renderModel.subtitle.isNullOrBlank()) {
-            Text(
-                text = renderModel.subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp)
-            )
-        }
+            val metadataText = remember(infoText, renderModel.subtitle) {
+                listOfNotNull(
+                    infoText?.takeIf { it.isNotBlank() },
+                    renderModel.subtitle?.takeIf { it.isNotBlank() },
+                ).joinToString(separator = " · ")
+            }
+            if (metadataText.isNotBlank()) {
+                Text(
+                    text = metadataText,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 3.dp),
+                )
+            }
         }
     }
 }
+
+private val CompactGridScrimStops = arrayOf(
+    0.0f to Color.Transparent,
+    0.20f to Color.Black.copy(alpha = 0.05f),
+    0.40f to Color.Black.copy(alpha = 0.16f),
+    0.60f to Color.Black.copy(alpha = 0.34f),
+    0.80f to Color.Black.copy(alpha = 0.54f),
+    1.0f to Color.Black.copy(alpha = 0.72f),
+)
 
 @Composable
 private fun CompactGridTitleOverlay(
@@ -562,18 +578,14 @@ private fun CompactGridTitleOverlay(
     modifier: Modifier = Modifier,
 ) {
     val overlayBrush = remember {
-        Brush.verticalGradient(
-            0f to Color.Transparent,
-            0.4f to Color.Black.copy(alpha = 0.48f),
-            1f to Color.Black.copy(alpha = 0.84f),
-        )
+        Brush.verticalGradient(colorStops = CompactGridScrimStops)
     }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
             .background(overlayBrush)
-            .padding(horizontal = 8.dp, vertical = 7.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         contentAlignment = Alignment.BottomStart,
     ) {
         Text(
@@ -581,12 +593,56 @@ private fun CompactGridTitleOverlay(
             text = title,
             style = MaterialTheme.typography.labelMedium.copy(
                 fontSize = fontSize,
-                lineHeight = (fontSize.value + 3f).sp,
+                lineHeight = (fontSize.value + 3.5f).sp,
+                fontWeight = FontWeight.SemiBold,
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    offset = Offset(0f, 1.5f),
+                    blurRadius = 5f,
+                ),
             ),
             color = Color.White,
             softWrap = true,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+fun ContentCardBottomProgressBar(
+    progress: ReadingProgress,
+    modifier: Modifier = Modifier,
+) {
+    if (!progress.isValid() || progress.percent <= 0f) return
+    val percent = progress.percent.coerceIn(0f, 1f)
+    val completed = progress.isCompleted()
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val strokeColor = when {
+        completed -> Color(0xFF34C759)
+        isIosStyle -> Color(0xFF007AFF)
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val trackColor = Color.Black.copy(alpha = 0.45f)
+    val displayPercent = percent.coerceIn(0.04f, 1f)
+    val barHeight = 4.dp
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(barHeight)
+            .background(trackColor),
+    ) {
+        val fillShape = if (displayPercent < 0.98f) {
+            RoundedCornerShape(topEnd = 2.dp, bottomEnd = 2.dp)
+        } else {
+            androidx.compose.ui.graphics.RectangleShape
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(displayPercent)
+                .fillMaxHeight()
+                .background(strokeColor, fillShape),
         )
     }
 }
@@ -722,142 +778,178 @@ fun KototoroContentCardList(
             }
         }
     }
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = when {
-                    isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                    isHighlighted -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.24f)
-                    else -> Color.Transparent
-                },
-                shape = cardShape,
-            )
-            .then(
-                if (isHighlighted) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, cardShape)
-                } else {
-                    Modifier
-                },
-            )
-            .then(tvFocusModifier)
-            .combinedClickable(
-                onClick = { onClick(coverBounds.currentBounds()) },
-                onLongClick = onLongClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp, 72.dp)
-                .then(
-                    if (sharedTransitionEnabled) {
-                        Modifier.onGloballyPositioned { coordinates ->
-                            coverBounds.updateCoordinates(coordinates)
-                        }
-                    } else Modifier,
-                )
-                .then(
-                    if (sharedTransitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(
-                                    key = sharedKey,
-                                ),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                            )
-                        }
-                    } else Modifier,
-                )
-                .clip(CompactContentCoverShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            ContentCardCoverImage(
-                coverRequest = coverRequest,
-                contentDescription = renderModel.title,
-                sharedKey = sharedKey,
-                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesTopLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopStart,
-                cardRadius = CompactContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopStart),
-            )
-            ContentCardCornerBadges(
-                badges = effectiveTopRightBadges,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopEnd,
-                cardRadius = CompactContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopEnd),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesBottomLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.BottomStart,
-                cardRadius = CompactContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomStart),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesBottomRight,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.BottomEnd,
-                cardRadius = CompactContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
-            ContentCardCoverProgressIndicator(
-                progress = renderModel.progress,
-                bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
-        }
+    val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+    val listBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
 
-        Column(
+    Column(
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .padding(start = 16.dp)
+                .fillMaxWidth()
+                .background(
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        isHighlighted -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.24f)
+                        else -> Color.Transparent
+                    },
+                    shape = cardShape,
+                )
+                .then(
+                    if (isHighlighted) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, cardShape)
+                    } else {
+                        Modifier
+                    },
+                )
+                .then(tvFocusModifier)
+                .combinedClickable(
+                    onClick = { onClick(coverBounds.currentBounds()) },
+                    onLongClick = onLongClick,
+                )
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = renderModel.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!renderModel.subtitle.isNullOrBlank()) {
-                Text(
-                    text = renderModel.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+            Box(
+                modifier = Modifier
+                    .size(48.dp, 72.dp)
+                    .then(
+                        if (sharedTransitionEnabled) {
+                            Modifier.onGloballyPositioned { coordinates ->
+                                coverBounds.updateCoordinates(coordinates)
+                            }
+                        } else Modifier,
+                    )
+                    .then(
+                        if (sharedTransitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(
+                                        key = sharedKey,
+                                    ),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                )
+                            }
+                        } else Modifier,
+                    )
+                    .clip(CompactContentCoverShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        width = 0.5.dp,
+                        color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                        shape = CompactContentCoverShape,
+                    )
+            ) {
+                ContentCardCoverImage(
+                    coverRequest = coverRequest,
+                    contentDescription = renderModel.title,
+                    sharedKey = sharedKey,
+                    retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
                 )
+                val listBadgePadding = 2.dp
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesTopLeft,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.TopStart,
+                    cardRadius = CompactContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = listBadgePadding, top = listBadgePadding),
+                )
+                ContentCardCornerBadges(
+                    badges = effectiveTopRightBadges,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.TopEnd,
+                    cardRadius = CompactContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = listBadgePadding, top = listBadgePadding),
+                )
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesBottomLeft,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.BottomStart,
+                    cardRadius = CompactContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = listBadgePadding, bottom = listBadgePadding + listBottomBadgeOffset),
+                )
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesBottomRight,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.BottomEnd,
+                    cardRadius = CompactContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = listBadgePadding, bottom = listBadgePadding + listBottomBadgeOffset),
+                )
+                if (renderModel.progress != null) {
+                    ContentCardBottomProgressBar(
+                        progress = renderModel.progress,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
-            if (!renderModel.supportingText.isNullOrBlank()) {
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 14.dp)
+            ) {
                 Text(
-                    text = renderModel.supportingText.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = renderModel.title,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
+                if (!renderModel.subtitle.isNullOrBlank()) {
+                    Text(
+                        text = renderModel.subtitle,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+                if (!renderModel.supportingText.isNullOrBlank()) {
+                    Text(
+                        text = renderModel.supportingText.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 78.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+        )
     }
 }
 
@@ -942,38 +1034,47 @@ private fun ContentCardCornerBadges(
         return
     }
 
-    val shape = if (attachedToTitleEdge) {
-        when (corner) {
-            Alignment.BottomStart -> RoundedCornerShape(
-                topEnd = metrics.innerCornerRadius,
-                bottomEnd = metrics.innerCornerRadius,
-            )
-            Alignment.BottomEnd -> RoundedCornerShape(
-                topStart = metrics.innerCornerRadius,
-                bottomStart = metrics.innerCornerRadius,
-            )
-            else -> RoundedCornerShape(metrics.innerCornerRadius)
-        }
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val badgeShape = RoundedCornerShape(percent = 50)
+    val hasCounterOnly = showCounter &&
+        !showTracker &&
+        !showFavorite &&
+        !showSaved &&
+        !showSource &&
+        !showLanguage &&
+        !showProjectionCount &&
+        !showScore &&
+        !showNsfw &&
+        !showPin
+    val badgeBackgroundColor = when {
+        showOnlyNsfw && isIosStyle -> MaterialTheme.colorScheme.error.copy(alpha = 0.90f)
+        showOnlyNsfw -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f)
+        hasCounterOnly && isIosStyle -> Color(0xFFFF3B30).copy(alpha = 0.92f)
+        hasCounterOnly -> MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+        isIosStyle -> Color.Black.copy(alpha = 0.60f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.88f)
+    }
+    val badgeBorderModifier = if (isIosStyle && !hasCounterOnly && !showOnlyNsfw) {
+        Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), badgeShape)
     } else {
-        when (corner) {
-            Alignment.TopStart -> RoundedCornerShape(topStart = cardRadius, bottomEnd = metrics.innerCornerRadius)
-            Alignment.TopEnd -> RoundedCornerShape(topEnd = cardRadius, bottomStart = metrics.innerCornerRadius)
-            Alignment.BottomStart -> RoundedCornerShape(bottomStart = cardRadius, topEnd = metrics.innerCornerRadius)
-            Alignment.BottomEnd -> RoundedCornerShape(bottomEnd = cardRadius, topStart = metrics.innerCornerRadius)
-            else -> RoundedCornerShape(metrics.innerCornerRadius)
-        }
+        Modifier
+    }
+
+    val badgeTextColor = when {
+        showOnlyNsfw && isIosStyle -> Color.White
+        showOnlyNsfw -> MaterialTheme.colorScheme.onErrorContainer
+        hasCounterOnly -> if (isIosStyle) Color.White else MaterialTheme.colorScheme.onPrimary
+        isIosStyle -> Color.White
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Row(
         modifier = modifier
             .background(
-                color = if (showOnlyNsfw) {
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.96f)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                },
-                shape = shape,
+                color = badgeBackgroundColor,
+                shape = badgeShape,
             )
+            .then(badgeBorderModifier)
             .padding(
                 horizontal = metrics.containerHorizontalPadding,
                 vertical = metrics.containerVerticalPadding,
@@ -998,7 +1099,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_heart_outline),
                             contentDescription = "Favourite",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isIosStyle) Color(0xFFFF375F) else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1008,7 +1109,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_storage),
                             contentDescription = "Local/Saved",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1026,7 +1127,7 @@ private fun ContentCardCornerBadges(
                     if (!langText.isNullOrBlank()) {
                         Text(
                             text = langText,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = badgeTextColor,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = metrics.textSize,
                                 lineHeight = metrics.textSize,
@@ -1039,7 +1140,7 @@ private fun ContentCardCornerBadges(
                     if (item.counter > 0) {
                         Text(
                             text = item.counter.toString(),
-                            color = if (showOnlyNsfw) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
+                            color = badgeTextColor,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = metrics.textSize,
                                 lineHeight = metrics.textSize,
@@ -1052,8 +1153,12 @@ private fun ContentCardCornerBadges(
                     if (item.projectionCount > 1) {
                         Text(
                             text = "x${item.projectionCount}",
-                            color = if (showOnlyNsfw) {
-                                MaterialTheme.colorScheme.onError
+                            color = if (showOnlyNsfw && isIosStyle) {
+                                Color.White
+                            } else if (showOnlyNsfw) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else if (isIosStyle) {
+                                Color.White
                             } else {
                                 MaterialTheme.colorScheme.primary
                             },
@@ -1069,7 +1174,7 @@ private fun ContentCardCornerBadges(
                     item.scoreText?.takeIf { it.isNotBlank() }?.let { scoreText ->
                         Text(
                             text = scoreText,
-                            color = if (showOnlyNsfw) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
+                            color = badgeTextColor,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = metrics.textSize,
                                 lineHeight = metrics.textSize,
@@ -1082,7 +1187,7 @@ private fun ContentCardCornerBadges(
                     if (item.isNsfw) {
                         Text(
                             text = stringResource(R.string.badge_nsfw),
-                            color = MaterialTheme.colorScheme.onError,
+                            color = if (isIosStyle) Color.White else if (showOnlyNsfw) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onError,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = metrics.textSize,
                                 lineHeight = metrics.textSize,
@@ -1096,7 +1201,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_pin),
                             contentDescription = stringResource(R.string.pin),
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1160,163 +1265,204 @@ fun KototoroContentCardDetailedList(
             }
         }
     }
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                color = when {
-                    isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                    isHighlighted -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.24f)
-                    else -> Color.Transparent
-                },
-                shape = cardShape,
-            )
-            .then(
-                if (isHighlighted) {
-                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, cardShape)
-                } else {
-                    Modifier
-                },
-            )
-            .then(tvFocusModifier)
-            .combinedClickable(
-                onClick = { onClick(coverBounds.currentBounds()) },
-                onLongClick = onLongClick,
-            )
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+    val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+    val detailedBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .size(80.dp, 120.dp)
-                .then(
-                    if (sharedTransitionEnabled) {
-                        Modifier.onGloballyPositioned { coordinates ->
-                            coverBounds.updateCoordinates(coordinates)
-                        }
-                    } else Modifier,
+                .fillMaxWidth()
+                .background(
+                    color = when {
+                        isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        isHighlighted -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.24f)
+                        else -> Color.Transparent
+                    },
+                    shape = cardShape,
                 )
                 .then(
-                    if (sharedTransitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(
-                                    key = sharedKey,
-                                ),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                            )
-                        }
-                    } else Modifier,
+                    if (isHighlighted) {
+                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, cardShape)
+                    } else {
+                        Modifier
+                    },
                 )
-                .clip(ContentCoverShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            ContentCardCoverImage(
-                coverRequest = coverRequest,
-                contentDescription = renderModel.title,
-                sharedKey = sharedKey,
-                retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesTopLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopStart,
-                cardRadius = ContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopStart),
-            )
-            ContentCardCornerBadges(
-                badges = effectiveTopRightBadges,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.TopEnd,
-                cardRadius = ContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.TopEnd),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesBottomLeft,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.BottomStart,
-                cardRadius = ContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomStart),
-            )
-            ContentCardCornerBadges(
-                badges = resolvedUiPrefs.badgesBottomRight,
-                item = renderModel,
-                sourceMetadata = sourceMetadata,
-                corner = Alignment.BottomEnd,
-                cardRadius = ContentCoverCornerRadius,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
-            ContentCardCoverProgressIndicator(
-                progress = renderModel.progress,
-                bottomRightBadges = resolvedUiPrefs.badgesBottomRight,
-                metrics = badgeMetrics,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 16.dp)
-        ) {
-            Text(
-                text = renderModel.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (!renderModel.subtitle.isNullOrBlank()) {
-                Text(
-                    text = renderModel.subtitle.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+                .then(tvFocusModifier)
+                .combinedClickable(
+                    onClick = { onClick(coverBounds.currentBounds()) },
+                    onLongClick = onLongClick,
                 )
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp, 120.dp)
+                    .then(
+                        if (sharedTransitionEnabled) {
+                            Modifier.onGloballyPositioned { coordinates ->
+                                coverBounds.updateCoordinates(coordinates)
+                            }
+                        } else Modifier,
+                    )
+                    .then(
+                        if (sharedTransitionEnabled && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(
+                                        key = sharedKey,
+                                    ),
+                                    animatedVisibilityScope = animatedVisibilityScope,
+                                )
+                            }
+                        } else Modifier,
+                    )
+                    .clip(ContentCoverShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        width = 0.5.dp,
+                        color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                        shape = ContentCoverShape,
+                    )
+            ) {
+                ContentCardCoverImage(
+                    coverRequest = coverRequest,
+                    contentDescription = renderModel.title,
+                    sharedKey = sharedKey,
+                    retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
+                )
+                val detailedBadgePadding = 4.dp
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesTopLeft,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.TopStart,
+                    cardRadius = ContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = detailedBadgePadding, top = detailedBadgePadding),
+                )
+                ContentCardCornerBadges(
+                    badges = effectiveTopRightBadges,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.TopEnd,
+                    cardRadius = ContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(end = detailedBadgePadding, top = detailedBadgePadding),
+                )
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesBottomLeft,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.BottomStart,
+                    cardRadius = ContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = detailedBadgePadding, bottom = detailedBadgePadding + detailedBottomBadgeOffset),
+                )
+                ContentCardCornerBadges(
+                    badges = resolvedUiPrefs.badgesBottomRight,
+                    item = renderModel,
+                    sourceMetadata = sourceMetadata,
+                    corner = Alignment.BottomEnd,
+                    cardRadius = ContentCoverCornerRadius,
+                    metrics = badgeMetrics,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = detailedBadgePadding, bottom = detailedBadgePadding + detailedBottomBadgeOffset),
+                )
+                if (renderModel.progress != null) {
+                    ContentCardBottomProgressBar(
+                        progress = renderModel.progress,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
             }
-            if (!renderModel.supportingText.isNullOrBlank()) {
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 16.dp)
+            ) {
                 Text(
-                    text = renderModel.supportingText.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = renderModel.title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 22.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-            if (renderModel.authorText.isNotBlank()) {
-                Text(
-                    text = renderModel.authorText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
 
-            if (renderModel.tagsText.isNotBlank()) {
-                Text(
-                    text = renderModel.tagsText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                if (!renderModel.subtitle.isNullOrBlank()) {
+                    Text(
+                        text = renderModel.subtitle.orEmpty(),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                if (!renderModel.supportingText.isNullOrBlank()) {
+                    Text(
+                        text = renderModel.supportingText.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+                if (renderModel.authorText.isNotBlank()) {
+                    Text(
+                        text = renderModel.authorText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp)
+                    )
+                }
+
+                if (renderModel.tagsText.isNotBlank()) {
+                    Text(
+                        text = renderModel.tagsText,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp,
+                            lineHeight = 15.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.70f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             }
         }
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 112.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f),
+        )
     }
 }
 
@@ -1373,12 +1519,15 @@ fun ContentCardNsfwBadge(
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
     modifier: Modifier = Modifier,
 ) {
+    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
+    val shape = RoundedCornerShape(percent = 50)
     Box(
         modifier = modifier
             .background(
-                color = MaterialTheme.colorScheme.error.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(metrics.innerCornerRadius),
+                color = if (isIosStyle) MaterialTheme.colorScheme.error.copy(alpha = 0.90f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.95f),
+                shape = shape,
             )
+            .then(if (isIosStyle) Modifier.border(0.5.dp, Color.White.copy(alpha = 0.18f), shape) else Modifier)
             .padding(
                 horizontal = metrics.containerHorizontalPadding,
                 vertical = metrics.containerVerticalPadding,
@@ -1392,7 +1541,7 @@ fun ContentCardNsfwBadge(
                 lineHeight = metrics.textSize,
                 fontWeight = FontWeight.Bold,
             ),
-            color = MaterialTheme.colorScheme.onError,
+            color = if (isIosStyle) Color.White else MaterialTheme.colorScheme.onErrorContainer,
         )
     }
 }
