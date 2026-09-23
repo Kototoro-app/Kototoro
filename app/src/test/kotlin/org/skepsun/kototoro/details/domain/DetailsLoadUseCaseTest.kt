@@ -207,6 +207,28 @@ class DetailsLoadUseCaseTest {
     }
 
     @Test
+    fun `blank remote identity is recovered before details receives the damaged seed`() = runTest {
+        val damaged = content(id = 43L, title = "Recoverable", source = TestMangaSource)
+            .copy(url = "", publicUrl = "")
+        val recovered = damaged.copy(
+            url = "/works/43",
+            publicUrl = "https://example.org/works/43",
+        )
+        coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { recoverUseCase(damaged) } returns recovered
+        coEvery { dataRepository.getOverride(recovered.id) } returns null
+        coEvery { localContentRepository.findSavedContent(recovered, withDetails = true) } coAnswers {
+            awaitCancellation()
+        }
+
+        val first = useCase(ContentIntent.of(damaged.id), force = false).first().toContent()
+
+        assertEquals(recovered, first)
+        coVerify(exactly = 1) { recoverUseCase(damaged) }
+        coVerify(exactly = 0) { dataRepository.resolveStoredProjection(any()) }
+    }
+
+    @Test
     fun `Komiic repair does not guess between different saved comic ids`() = runTest {
         val damaged = content(id = 42L, title = "Saved comic", source = KomiicSource).let {
             val chapter = it.chapters!!.single()
@@ -218,6 +240,7 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged
+        coEvery { recoverUseCase(damaged) } returns null
         coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
 
@@ -234,6 +257,7 @@ class DetailsLoadUseCaseTest {
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
         coEvery { dataRepository.findContentById(damaged.id, withChapters = true) } returns damaged.copy(chapters = null)
+        coEvery { recoverUseCase(damaged) } returns null
         coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
@@ -271,6 +295,7 @@ class DetailsLoadUseCaseTest {
             it.copy(url = "/comic/12345", publicUrl = "")
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { recoverUseCase(damaged) } returns null
         coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }
@@ -285,6 +310,7 @@ class DetailsLoadUseCaseTest {
             it.copy(url = "", publicUrl = "")
         }
         coEvery { dataRepository.resolveIntent(any(), withChapters = true) } returns damaged
+        coEvery { recoverUseCase(damaged) } returns null
         coEvery { dataRepository.resolveStoredProjection(damaged) } returns damaged
         coEvery { dataRepository.getOverride(damaged.id) } returns null
         coEvery { localContentRepository.findSavedContent(any(), withDetails = true) } coAnswers { awaitCancellation() }

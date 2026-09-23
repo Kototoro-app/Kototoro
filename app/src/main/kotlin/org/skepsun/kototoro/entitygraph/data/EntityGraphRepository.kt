@@ -1271,6 +1271,7 @@ class EntityGraphRepository @Inject constructor(
         sourceEntityIds: Collection<Long>,
         preferredLocalMangaId: Long? = null,
         allowCompatibleContentTypes: Boolean = false,
+        compatibleContentTypeFallback: ContentType? = null,
     ): Long? = withContext(Dispatchers.Default) {
         val distinctSourceIds = sourceEntityIds
             .asSequence()
@@ -1285,18 +1286,25 @@ class EntityGraphRepository @Inject constructor(
             val now = System.currentTimeMillis()
             val allIds = (distinctSourceIds + targetEntityId).distinct()
             val records = dao.findEntitiesByIds(allIds).associateBy { it.id }.toMutableMap()
-            var mergedRecord = records[targetEntityId] ?: return@withTransaction null
+            val recordsForMerge = if (allowCompatibleContentTypes) {
+                records.mapValues { (_, record) ->
+                    record.withInferredContentType(dao, fallback = compatibleContentTypeFallback)
+                }
+            } else {
+                records
+            }
+            var mergedRecord = recordsForMerge[targetEntityId] ?: return@withTransaction null
             if (preferredLocalMangaId != null) {
                 val preferredOwner = findEntityByLocalMangaId(preferredLocalMangaId)?.entityId
                 if (preferredOwner !in allIds) {
                     return@withTransaction null
                 }
             }
-            if (!records.values.canMergeWorkContentTypes(allowCompatibleContentTypes)) {
+            if (!recordsForMerge.values.canMergeWorkContentTypes(allowCompatibleContentTypes)) {
                 Log.w(TAG, "mergeEntities: refusing content-type conflict for entityIds=$allIds")
                 return@withTransaction null
             }
-            distinctSourceIds.mapNotNull { records[it] }.forEach { record ->
+            distinctSourceIds.mapNotNull { recordsForMerge[it] }.forEach { record ->
                 mergedRecord = mergeEntityRecord(
                     record = mergedRecord,
                     primaryName = record.primaryName,
@@ -1342,7 +1350,6 @@ class EntityGraphRepository @Inject constructor(
                 Log.e(TAG, "mergeEntities: too many name_hash conflicts, giving up")
                 return@withTransaction null
             }
-            dao.updateEntity(mergedRecord)
             distinctSourceIds.forEach { sourceEntityId ->
                 remapWorkOwnedState(
                     sourceEntityId = sourceEntityId,
@@ -1357,6 +1364,10 @@ class EntityGraphRepository @Inject constructor(
             )
             // FK constraints (CASCADE) handle deletions automatically on source entities
             dao.deleteEntitiesByIds(distinctSourceIds)
+            // A source entity may currently own the target's inferred (type, name_hash,
+            // content_type) key. Delete merged sources before updating the target so the unique
+            // identity index never observes both records with the same key.
+            dao.updateEntity(mergedRecord)
             if (preferredLocalMangaId != null) {
                 setPreferredLocalProjectionInTransaction(
                     dao = dao,
@@ -2126,21 +2137,28 @@ class EntityGraphRepository @Inject constructor(
         entityIds: Collection<Long>? = null,
     ): Int = withContext(Dispatchers.Default) {
         val dao = db.getEntityGraphDao()
+        val explicitlyRequestedEntityIds = when {
+            entityIds != null -> entityIds.toSet()
+            entityId != null -> setOf(entityId)
+            else -> null
+        }
+        val danglingBindingsRepaired = pruneDanglingLocalProjectionBindings(explicitlyRequestedEntityIds)
+        val crossEntityMergeTargets = mergeCrossEntityDuplicateLocalProjections(explicitlyRequestedEntityIds)
         val targetEntityIds = when {
-            entityIds != null -> entityIds.distinct()
-            entityId != null -> listOf(entityId)
+            explicitlyRequestedEntityIds != null -> (
+                explicitlyRequestedEntityIds.filter { dao.findEntity(it) != null } + crossEntityMergeTargets
+                ).distinct()
             else -> {
                 val report = inspectRepairIssues()
-                report.issues
+                (report.issues
                     .asSequence()
                     .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
                     .map { it.entityId }
-                    .distinct()
-                    .toList()
+                    .toList() + crossEntityMergeTargets).distinct()
             }
         }
         if (targetEntityIds.isEmpty()) {
-            return@withContext 0
+            return@withContext danglingBindingsRepaired
         }
         var totalRepaired = 0
         val now = System.currentTimeMillis()
@@ -2155,28 +2173,31 @@ class EntityGraphRepository @Inject constructor(
                 val favouriteAnchorId = db.getWorkFavouritesDao().findActiveForEntity(targetId)?.anchorMangaId
                 val historyAnchorId = db.getWorkHistoryDao().find(targetId)?.anchorMangaId
 
-                val groups = localBindings.mapNotNull { binding ->
+                val itemsByMangaId = localBindings.mapNotNull { binding ->
                     val mId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
                     val manga = mangaById[mId] ?: return@mapNotNull null
                     Triple(binding, mId, manga)
-                }.groupBy { (_, _, manga) ->
-                    val key = ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
-                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
-                }
+                }.associateBy { it.second }
+                val groups = buildEquivalentProjectionGroups(itemsByMangaId.keys, mangaById)
+                    .map { group -> group.mangaIds.mapNotNull(itemsByMangaId::get) }
 
-                groups.values.filter { it.size > 1 }.forEach { group ->
-                    val canonicalTriple = group.firstOrNull { it.second == preferredId }
-                        ?: group.firstOrNull { it.second == favouriteAnchorId }
-                        ?: group.firstOrNull { it.second == historyAnchorId }
-                        ?: group.minByOrNull { it.second }
-                        ?: return@forEach
-
-                    val canonicalMangaId = canonicalTriple.second
+                groups.filter { it.size > 1 }.forEach { group ->
+                    val canonicalMangaId = selectCanonicalProjectionMangaId(
+                        mangaIds = group.map { it.second },
+                        mangaById = mangaById,
+                        priorityScore = { mangaId ->
+                            when (mangaId) {
+                                preferredId -> 3L
+                                favouriteAnchorId -> 2L
+                                historyAnchorId -> 1L
+                                else -> 0L
+                            }
+                        },
+                    ) ?: return@forEach
                     val redundant = group.filterNot { it.second == canonicalMangaId }
 
-                    redundant.forEach { (binding, redundantMangaId, _) ->
-                        dao.deleteBindingBySource(binding.source, binding.externalId)
-                        dao.deleteBindingBySource("0", binding.externalId)
+                    redundant.forEach { (_, redundantMangaId, _) ->
+                        deleteLocalProjectionBindings(dao, redundantMangaId)
                         db.getWorkFavouritesDao().replaceAnchorMangaId(
                             entityId = targetId,
                             oldAnchorMangaId = redundantMangaId,
@@ -2204,7 +2225,156 @@ class EntityGraphRepository @Inject constructor(
                 db.getMangaDao().cleanupSyncResidue()
             }
         }
-        totalRepaired
+        danglingBindingsRepaired + totalRepaired
+    }
+
+    private suspend fun pruneDanglingLocalProjectionBindings(requestedEntityIds: Set<Long>?): Int {
+        val dao = db.getEntityGraphDao()
+        val localBindings = dao.dumpBindings()
+            .filter { binding ->
+                binding.isActiveBinding() &&
+                    binding.isLocalReadingSource() &&
+                    (requestedEntityIds == null || binding.entityId in requestedEntityIds)
+            }
+        val mangaIds = localBindings.mapNotNull { it.externalId.toLongOrNull() }.distinct()
+        val existingMangaIds = db.getMangaDao().findEntitiesByIds(mangaIds).mapTo(HashSet()) { it.id }
+        val danglingMangaIds = localBindings
+            .mapNotNull { it.externalId.toLongOrNull() }
+            .filterNot(existingMangaIds::contains)
+            .distinct()
+        if (danglingMangaIds.isEmpty()) {
+            return 0
+        }
+        db.withTransaction {
+            danglingMangaIds.forEach { mangaId -> deleteLocalReadingBinding(dao, mangaId.toString()) }
+        }
+        return danglingMangaIds.size
+    }
+
+    private suspend fun mergeCrossEntityDuplicateLocalProjections(
+        requestedEntityIds: Set<Long>?,
+    ): Set<Long> {
+        val dao = db.getEntityGraphDao()
+        val localBindings = dao.dumpBindings().filter { it.isActiveBinding() && it.isLocalReadingSource() }
+        val bindingByMangaId = localBindings.mapNotNull { binding ->
+            val mangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+            mangaId to binding
+        }.toMap()
+        val mangaById = db.getMangaDao().findEntitiesByIds(bindingByMangaId.keys).associateBy { it.id }
+        val mergeTargets = LinkedHashSet<Long>()
+        val entityIdByMangaId = bindingByMangaId.mapValues { (_, binding) -> binding.entityId }
+        buildCrossEntityProjectionMergePlans(
+            groups = buildEquivalentProjectionGroups(bindingByMangaId.keys, mangaById),
+            entityIdByMangaId = entityIdByMangaId,
+            mangaById = mangaById,
+            requestedEntityIds = requestedEntityIds,
+        ).forEach { plan ->
+            val compatibleContentTypeFallback = ContentSource(plan.group.source)
+                .resolvedContentTypeForSnapshot()
+                ?: ContentType.OTHER
+            var currentEntityIdByMangaId = mangaById.keys.mapNotNull { mangaId ->
+                findEntityByLocalMangaId(mangaId)?.entityId?.let { entityId -> mangaId to entityId }
+            }.toMap()
+            findDuplicateProjectionIdsWithSameSourceConflict(
+                group = plan.group,
+                entityIdByMangaId = currentEntityIdByMangaId,
+                mangaById = mangaById,
+            ).forEach { localMangaId ->
+                splitLocalWorkProjection(localMangaId)
+            }
+            currentEntityIdByMangaId = mangaById.keys.mapNotNull { mangaId ->
+                findEntityByLocalMangaId(mangaId)?.entityId?.let { entityId -> mangaId to entityId }
+            }.toMap()
+            var currentOwnerEntityIds = plan.group.mangaIds
+                .mapNotNull(currentEntityIdByMangaId::get)
+                .distinct()
+            if (currentOwnerEntityIds.size <= 1) {
+                return@forEach
+            }
+            if (!canMergeCompatibleWorkEntities(currentOwnerEntityIds, compatibleContentTypeFallback)) {
+                val projectionIdsToDetach = findDuplicateProjectionIdsToDetach(
+                    group = plan.group,
+                    entityIdByMangaId = currentEntityIdByMangaId,
+                )
+                if (projectionIdsToDetach.isEmpty()) {
+                    return@forEach
+                }
+                projectionIdsToDetach.forEach { localMangaId ->
+                    splitLocalWorkProjection(localMangaId)
+                }
+                currentEntityIdByMangaId = mangaById.keys.mapNotNull { mangaId ->
+                    findEntityByLocalMangaId(mangaId)?.entityId?.let { entityId -> mangaId to entityId }
+                }.toMap()
+                currentOwnerEntityIds = plan.group.mangaIds
+                    .mapNotNull(currentEntityIdByMangaId::get)
+                    .distinct()
+                if (
+                    currentOwnerEntityIds.size <= 1 ||
+                    !canMergeCompatibleWorkEntities(currentOwnerEntityIds, compatibleContentTypeFallback)
+                ) {
+                    return@forEach
+                }
+            }
+            val targetEntityId = findEntityByLocalMangaId(plan.canonicalMangaId)?.entityId
+                ?: return@forEach
+            val mergedEntityId = mergeEntities(
+                targetEntityId = targetEntityId,
+                sourceEntityIds = currentOwnerEntityIds.filterNot { it == targetEntityId },
+                preferredLocalMangaId = plan.canonicalMangaId,
+                allowCompatibleContentTypes = true,
+                compatibleContentTypeFallback = compatibleContentTypeFallback,
+            ) ?: return@forEach
+            mergeTargets += mergedEntityId
+        }
+        return mergeTargets
+    }
+
+    private suspend fun canMergeCompatibleWorkEntities(
+        entityIds: Collection<Long>,
+        fallback: ContentType,
+    ): Boolean {
+        val dao = db.getEntityGraphDao()
+        val distinctEntityIds = entityIds.distinct()
+        val records = dao.findEntitiesByIds(distinctEntityIds).associateBy { it.id }
+        if (records.size != distinctEntityIds.size) {
+            return false
+        }
+        return distinctEntityIds
+            .mapNotNull(records::get)
+            .map { record -> record.withInferredContentType(dao, fallback = fallback) }
+            .canMergeWorkContentTypes(allowCompatibleContentTypes = true)
+    }
+
+    /**
+     * Splits distinct remote works from the same source that ended up under one Work entity.
+     *
+     * A Work may legitimately contain projections from several sources, but one source must not
+     * contribute several non-equivalent remote identities. Duplicate rows are collapsed first so
+     * each remaining split represents one remote work rather than one database row.
+     */
+    suspend fun repairConflictingSourceProjections(
+        entityId: Long? = null,
+    ): Int = withContext(Dispatchers.Default) {
+        val initialReport = inspectRepairIssues()
+        val targetEntityIds = initialReport.issues
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS }
+            .filter { entityId == null || it.entityId == entityId }
+            .map { it.entityId }
+            .distinct()
+            .toList()
+        if (targetEntityIds.isEmpty()) {
+            return@withContext 0
+        }
+        repairDuplicateLocalProjections(entityIds = targetEntityIds)
+        val splitMangaIds = inspectRepairIssues().issues
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS }
+            .filter { it.entityId in targetEntityIds }
+            .mapNotNull { it.localMangaId }
+            .distinct()
+            .toList()
+        splitMangaIds.count { localMangaId -> splitLocalWorkProjection(localMangaId) != null }
     }
 
     suspend fun inspectRepairIssues(limit: Int = Int.MAX_VALUE): EntityGraphRepairReport = withContext(Dispatchers.Default) {
@@ -2427,6 +2597,47 @@ class EntityGraphRepository @Inject constructor(
             .distinct()
         val activeLocalMangaById = db.getMangaDao().findEntitiesByIds(allActiveLocalMangaIds)
             .associateBy { it.id }
+        val activeLocalBindingByMangaId = activeBindings
+            .asSequence()
+            .filter { it.isLocalReadingSource() }
+            .mapNotNull { binding ->
+                val mangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+                mangaId to binding
+            }
+            .toMap()
+        activeLocalBindingByMangaId.forEach { (mangaId, binding) ->
+            if (mangaId !in activeLocalMangaById) {
+                issues += EntityGraphRepairIssue(
+                    kind = EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING,
+                    entityId = binding.entityId,
+                    source = binding.source,
+                    externalId = binding.externalId,
+                    localMangaId = mangaId,
+                )
+            }
+        }
+        val crossEntityDuplicateMangaIds = LinkedHashSet<Long>()
+        buildEquivalentProjectionGroups(allActiveLocalMangaIds, activeLocalMangaById)
+            .filter { group -> group.mangaIds.size > 1 }
+            .forEach { group ->
+                val ownerEntityIds = group.mangaIds
+                    .mapNotNull { mangaId -> activeLocalBindingByMangaId[mangaId]?.entityId }
+                    .distinct()
+                if (ownerEntityIds.size <= 1) {
+                    return@forEach
+                }
+                crossEntityDuplicateMangaIds += group.mangaIds
+                val representativeId = selectCanonicalProjectionMangaId(group.mangaIds, activeLocalMangaById)
+                    ?: return@forEach
+                issues += EntityGraphRepairIssue(
+                    kind = EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS,
+                    entityId = activeLocalBindingByMangaId[representativeId]?.entityId ?: ownerEntityIds.first(),
+                    source = group.source,
+                    externalId = representativeId.toString(),
+                    localMangaId = representativeId,
+                    count = group.mangaIds.size - 1,
+                )
+            }
 
         activeBindingsByEntity.forEach { (entityId, entityBindings) ->
             val localBindings = entityBindings.filter { it.isLocalReadingSource() }
@@ -2442,23 +2653,50 @@ class EntityGraphRepository @Inject constructor(
                     val manga = activeLocalMangaById[localMangaId] ?: return@mapNotNull null
                     Triple(binding, localMangaId, manga)
                 }
-                val duplicateGroups = mangaItems.groupBy { (_, _, manga) ->
-                    val key = ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
-                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
-                }.filterValues { it.size > 1 }
+                val mangaItemsById = mangaItems.associateBy { it.second }
+                val projectionGroups = buildEquivalentProjectionGroups(
+                    mangaIds = mangaItemsById.keys,
+                    mangaById = activeLocalMangaById,
+                )
+                val duplicateGroups = projectionGroups.filter { group ->
+                    group.mangaIds.size > 1 && group.mangaIds.none(crossEntityDuplicateMangaIds::contains)
+                }
 
-                duplicateGroups.forEach { (_, groupItems) ->
-                    val redundantCount = groupItems.size - 1
-                    groupItems.drop(1).forEach { (binding, localMangaId, _) ->
-                        issues += EntityGraphRepairIssue(
-                            kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
-                            entityId = entityId,
-                            source = binding.source,
-                            externalId = binding.externalId,
-                            localMangaId = localMangaId,
-                            count = redundantCount,
-                        )
+                duplicateGroups.forEach { group ->
+                    val redundantId = group.mangaIds.drop(1).firstOrNull() ?: return@forEach
+                    issues += EntityGraphRepairIssue(
+                        kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+                        entityId = entityId,
+                        source = "local_manga",
+                        externalId = redundantId.toString(),
+                        localMangaId = redundantId,
+                        count = group.mangaIds.size - 1,
+                    )
+                }
+
+                val entityNameKeys = entity.strictRepairNameKeys()
+                val entityNameMatchingMangaIds = projectionGroups
+                    .flatMap(EquivalentProjectionGroup::mangaIds)
+                    .filterTo(LinkedHashSet()) { mangaId ->
+                        activeLocalMangaById[mangaId]
+                            ?.title
+                            ?.let(::normalizeRepairName)
+                            .orEmpty() in entityNameKeys
                     }
+                findConflictingSourceProjectionGroups(
+                    groups = projectionGroups,
+                    preferredMangaId = dao.findEntityPrefs(entityId)?.preferredLocalMangaId,
+                    entityNameMatchingMangaIds = entityNameMatchingMangaIds,
+                ).forEach { conflictingGroup ->
+                    val representativeId = conflictingGroup.mangaIds.firstOrNull() ?: return@forEach
+                    issues += EntityGraphRepairIssue(
+                        kind = EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS,
+                        entityId = entityId,
+                        source = conflictingGroup.source,
+                        externalId = representativeId.toString(),
+                        localMangaId = representativeId,
+                        count = conflictingGroup.mangaIds.size,
+                    )
                 }
             }
 
@@ -4098,11 +4336,7 @@ class EntityGraphRepository @Inject constructor(
                     ?: ContentSource(manga.source).resolvedContentTypeForSnapshot()
             }
             .toMutableSet()
-        fallback?.let(knownTypes::add)
-        val inferredType = knownTypes.firstOrNull()?.takeIf { first ->
-            knownTypes.all { first.isWorkContentTypeCompatibleWith(it) }
-        }
-        return inferredType?.name?.let { copy(contentType = it) } ?: this
+        return withInferredContentType(knownTypes = knownTypes, fallback = fallback)
     }
 
     private suspend fun updateEntityResolvingNameHashConflict(
@@ -4437,6 +4671,7 @@ class EntityGraphRepository @Inject constructor(
 
             val now = System.currentTimeMillis()
             val entityIdByMangaId = LinkedHashMap<Long, Long>()
+            val canonicalMangaIdByMangaId = LinkedHashMap<Long, Long>()
             var rebuiltEntities = 0
             var duplicateProjectionGroups = 0
             groups.forEach { group ->
@@ -4454,21 +4689,25 @@ class EntityGraphRepository @Inject constructor(
                 if (group.mangaIds.size > 1) {
                     duplicateProjectionGroups++
                 }
+                // Bind only the selected row. Every historical anchor in this duplicate group is
+                // remapped below, so rebuilding identities also removes the duplicate projections
+                // instead of recreating them under the rebuilt entity.
+                dao.upsertBinding(
+                    EntityBindingRecord(
+                        entityId = entityId,
+                        source = LOCAL_MANGA_BINDING_SOURCE,
+                        externalId = group.canonicalMangaId.toString(),
+                        confidence = 1f,
+                        isPrimary = true,
+                        sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
+                        state = EntityBindingState.CONFIRMED.name,
+                        createdBy = EntityBindingCreatedBy.MIGRATION.name,
+                        updatedAt = now,
+                    ),
+                )
                 group.mangaIds.forEach { mangaId ->
-                    dao.upsertBinding(
-                        EntityBindingRecord(
-                            entityId = entityId,
-                            source = LOCAL_MANGA_BINDING_SOURCE,
-                            externalId = mangaId.toString(),
-                            confidence = 1f,
-                            isPrimary = mangaId == group.canonicalMangaId,
-                            sourceKind = EntityBindingSourceKind.READING_SOURCE.name,
-                            state = EntityBindingState.CONFIRMED.name,
-                            createdBy = EntityBindingCreatedBy.MIGRATION.name,
-                            updatedAt = now,
-                        ),
-                    )
                     entityIdByMangaId[mangaId] = entityId
+                    canonicalMangaIdByMangaId[mangaId] = group.canonicalMangaId
                 }
                 buildResetProjectionBindingKeys(group, mangaById).forEach { binding ->
                     dao.upsertBinding(
@@ -4503,9 +4742,22 @@ class EntityGraphRepository @Inject constructor(
                 )
             }
 
-            val restoredHistory = restoreResetWorkHistory(workHistorySnapshot, entityIdByMangaId)
-            val restoredFavourites = restoreResetWorkFavourites(workFavouriteSnapshot, entityIdByMangaId)
-            val restoredStats = restoreResetWorkStats(workStatsSnapshot, entityIdByMangaId)
+            val restoredHistory = restoreResetWorkHistory(
+                workHistorySnapshot,
+                entityIdByMangaId,
+                canonicalMangaIdByMangaId,
+            )
+            val restoredFavourites = restoreResetWorkFavourites(
+                workFavouriteSnapshot,
+                entityIdByMangaId,
+                canonicalMangaIdByMangaId,
+            )
+            val restoredStats = restoreResetWorkStats(
+                workStatsSnapshot,
+                entityIdByMangaId,
+                canonicalMangaIdByMangaId,
+            )
+            db.getMangaDao().cleanupSyncResidue()
             val favouriteActiveRowsAfter = db.getWorkFavouritesDao().countActive()
             val favouriteActiveWorksAfter = db.getWorkFavouritesDao().countActiveWorks()
             settings.isWorkMigrationSyncWriteBlocked = true
@@ -4578,11 +4830,15 @@ class EntityGraphRepository @Inject constructor(
     private suspend fun restoreResetWorkHistory(
         snapshot: List<WorkHistoryEntity>,
         entityIdByMangaId: Map<Long, Long>,
+        canonicalMangaIdByMangaId: Map<Long, Long>,
     ): Int {
         val mergedByEntityId = LinkedHashMap<Long, WorkHistoryEntity>()
         snapshot.forEach { entry ->
             val entityId = entityIdByMangaId[entry.anchorMangaId] ?: return@forEach
-            val moved = entry.copy(entityId = entityId)
+            val moved = entry.copy(
+                entityId = entityId,
+                anchorMangaId = canonicalMangaIdByMangaId[entry.anchorMangaId] ?: entry.anchorMangaId,
+            )
             val existing = mergedByEntityId[entityId]
             mergedByEntityId[entityId] = if (existing == null) {
                 moved
@@ -4597,12 +4853,16 @@ class EntityGraphRepository @Inject constructor(
     private suspend fun restoreResetWorkFavourites(
         snapshot: List<WorkFavouriteEntity>,
         entityIdByMangaId: Map<Long, Long>,
+        canonicalMangaIdByMangaId: Map<Long, Long>,
     ): Int {
         val mergedByKey = LinkedHashMap<Pair<Long, Long>, WorkFavouriteEntity>()
         snapshot.forEach { entry ->
             val anchorMangaId = entry.anchorMangaId ?: return@forEach
             val entityId = entityIdByMangaId[anchorMangaId] ?: return@forEach
-            val moved = entry.copy(entityId = entityId)
+            val moved = entry.copy(
+                entityId = entityId,
+                anchorMangaId = canonicalMangaIdByMangaId[anchorMangaId] ?: anchorMangaId,
+            )
             val key = entityId to entry.categoryId
             val existing = mergedByKey[key]
             mergedByKey[key] = if (existing == null) {
@@ -4618,11 +4878,15 @@ class EntityGraphRepository @Inject constructor(
     private suspend fun restoreResetWorkStats(
         snapshot: List<WorkStatsEntity>,
         entityIdByMangaId: Map<Long, Long>,
+        canonicalMangaIdByMangaId: Map<Long, Long>,
     ): Int {
         val mergedByKey = LinkedHashMap<Pair<Long, Long>, WorkStatsEntity>()
         snapshot.forEach { entry ->
             val entityId = entityIdByMangaId[entry.anchorMangaId] ?: return@forEach
-            val moved = entry.copy(entityId = entityId)
+            val moved = entry.copy(
+                entityId = entityId,
+                anchorMangaId = canonicalMangaIdByMangaId[entry.anchorMangaId] ?: entry.anchorMangaId,
+            )
             val key = entityId to entry.startedAt
             val existing = mergedByKey[key]
             mergedByKey[key] = if (existing == null) {

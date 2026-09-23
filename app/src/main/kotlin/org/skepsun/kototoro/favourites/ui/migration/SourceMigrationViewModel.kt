@@ -1194,22 +1194,42 @@ class SourceMigrationViewModel @Inject constructor(
             stageFeedbacks = state.stageFeedbacks.without(EntityOrganizeStage.MERGE),
         )
         viewModelScope.launch(Dispatchers.IO) {
-            val repaired = entityGraphRepository.repairDuplicateLocalProjections(entityId = entityId)
-            loadSourcesNow()
-            refreshRepairReportNow()
-            val current = _uiState.value
-            _uiState.value = current.copy(
-                isExecuting = false,
-                isFinished = true,
-                stageFeedbacks = current.stageFeedbacks.withFeedback(
-                    stage = EntityOrganizeStage.MERGE,
-                    kind = EntityOrganizeFeedbackKind.EXECUTE,
-                    message = appContext.getString(
-                        R.string.entity_organize_repair_duplicate_projections_feedback,
-                        repaired,
+            try {
+                val split = entityGraphRepository.repairConflictingSourceProjections(entityId = entityId)
+                val repaired = entityGraphRepository.repairDuplicateLocalProjections(entityId = entityId)
+                loadSourcesNow()
+                refreshRepairReportNow()
+                val current = _uiState.value
+                _uiState.value = current.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    stageFeedbacks = current.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.MERGE,
+                        kind = EntityOrganizeFeedbackKind.EXECUTE,
+                        message = appContext.getString(
+                            R.string.entity_organize_repair_duplicate_projections_feedback,
+                            repaired,
+                            split,
+                        ),
                     ),
-                ),
-            )
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.e(TAG, "Duplicate projection repair failed", e)
+                runCatching { refreshRepairReportNow() }
+                    .onFailure { refreshError -> Log.e(TAG, "Repair report refresh failed", refreshError) }
+                val current = _uiState.value
+                _uiState.value = current.copy(
+                    isExecuting = false,
+                    isFinished = true,
+                    stageFeedbacks = current.stageFeedbacks.withFeedback(
+                        stage = EntityOrganizeStage.MERGE,
+                        kind = EntityOrganizeFeedbackKind.EXECUTE,
+                        message = appContext.getString(R.string.entity_organize_repair_action_failed),
+                    ),
+                )
+            }
         }
     }
 
@@ -2587,4 +2607,3 @@ internal fun <T> clearSelectionIds(
 ): Set<T> {
     return current - idsToClear
 }
-

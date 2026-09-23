@@ -29,11 +29,42 @@ class EntityContentTypeTest {
 		assertFalse(records.canMergeWorkContentTypes(allowCompatibleContentTypes = true))
 	}
 
-	private fun entity(id: Long, contentType: ContentType): EntityRecord {
+	@Test
+	fun `legacy unresolved work type is inferred before compatible duplicate merge`() {
+		val inferred = entity(1L, contentType = null).withInferredContentType(
+			knownTypes = listOf(ContentType.MANGA, ContentType.HENTAI_MANGA),
+		)
+		val records = listOf(inferred, entity(2L, ContentType.HENTAI_MANGA))
+
+		assertTrue(records.canMergeWorkContentTypes(allowCompatibleContentTypes = true))
+	}
+
+	@Test
+	fun `legacy unresolved work type stays unresolved when projections cross media families`() {
+		val inferred = entity(1L, contentType = null).withInferredContentType(
+			knownTypes = listOf(ContentType.MANGA, ContentType.VIDEO),
+		)
+
+		assertFalse(listOf(inferred, entity(2L, ContentType.MANGA))
+			.canMergeWorkContentTypes(allowCompatibleContentTypes = true))
+	}
+
+	@Test
+	fun `unresolved duplicate source can use an explicit repair fallback`() {
+		val inferred = entity(1L, contentType = null).withInferredContentType(
+			knownTypes = emptyList(),
+			fallback = ContentType.OTHER,
+		)
+
+		assertTrue(listOf(inferred, entity(2L, ContentType.OTHER))
+			.canMergeWorkContentTypes(allowCompatibleContentTypes = true))
+	}
+
+	private fun entity(id: Long, contentType: ContentType?): EntityRecord {
 		return EntityRecord(
 			id = id,
 			type = EntityType.WORK.name,
-			contentType = contentType.name,
+			contentType = contentType?.name,
 			primaryName = "Work $id",
 			aliases = null,
 			createdAt = 1L,

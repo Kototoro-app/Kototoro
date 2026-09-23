@@ -17,11 +17,11 @@ import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.nav.AppRouter
 import org.skepsun.kototoro.core.nav.ContentIntent
 import org.skepsun.kototoro.core.parser.ContentDataRepository
-import org.skepsun.kototoro.core.parser.ContentRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.util.ext.call
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.require
+import org.skepsun.kototoro.details.domain.RelatedContentUseCase
 import org.skepsun.kototoro.list.domain.ContentListMapper
 import org.skepsun.kototoro.list.ui.ContentListViewModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
@@ -35,7 +35,7 @@ import javax.inject.Inject
 @HiltViewModel
 class RelatedListViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val mangaRepositoryFactory: ContentRepository.Factory,
+    private val relatedContentUseCase: RelatedContentUseCase,
     settings: AppSettings,
     private val mangaListMapper: ContentListMapper,
     private val mangaDataRepository: ContentDataRepository,
@@ -85,10 +85,9 @@ class RelatedListViewModel @Inject constructor(
             try {
                 listError.value = null
                 val content = currentContent.value ?: resolveCurrentContent()
-                                ?: throw IllegalStateException("Unable to resolve related content context")
+                    ?: throw IllegalStateException("Unable to resolve related content context")
                 currentContent.value = content
-                val repository = mangaRepositoryFactory.create(content.source)
-                mangaList.value = repository.getRelated(content)
+                mangaList.value = relatedContentUseCase.getOrThrow(content)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

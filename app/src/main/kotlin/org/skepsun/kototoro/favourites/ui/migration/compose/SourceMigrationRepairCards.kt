@@ -155,8 +155,8 @@ internal fun DuplicateProjectionsRepairCard(
     uiState: MigrationUiState,
     onRepairClick: () -> Unit,
 ) {
-    val entityCount = uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0
-    val projectionCount = uiState.repairReport?.duplicateLocalProjectionsCount ?: 0
+    val groupCount = uiState.repairReport?.localProjectionRepairGroupCount ?: 0
+    val projectionCount = uiState.repairReport?.localProjectionRepairCount ?: 0
     OutlinedCard(
         shape = RoundedCornerShape(20.dp),
         modifier = Modifier.fillMaxWidth(),
@@ -191,7 +191,7 @@ internal fun DuplicateProjectionsRepairCard(
                     Text(
                         text = stringResource(
                             R.string.entity_organize_repair_duplicate_projections_summary,
-                            entityCount,
+                            groupCount,
                             projectionCount,
                         ),
                         style = MaterialTheme.typography.bodySmall,
@@ -432,4 +432,3 @@ internal fun EntityIdentityResetCard(
         }
     }
 }
-

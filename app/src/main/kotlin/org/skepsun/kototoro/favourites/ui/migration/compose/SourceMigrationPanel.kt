@@ -287,7 +287,7 @@ fun SourceMigrationPanel(
         }
     }
     val totalRepairs = (uiState.repairReport?.mixedWorkContentTypeEntityCount ?: 0) +
-        (uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) +
+        (uiState.repairReport?.localProjectionRepairGroupCount ?: 0) +
         (uiState.repairReport?.danglingWorkProjectionAnchorCount ?: 0) +
         (uiState.repairReport?.workEntityMissingSyncIdCount ?: 0)
     Surface(
@@ -462,7 +462,10 @@ fun SourceMigrationPanel(
                     }
                 }
 
-                if ((uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) > 0) {
+                if (
+                    (uiState.repairReport?.duplicateLocalProjectionsEntityCount ?: 0) > 0 ||
+                    (uiState.repairReport?.conflictingSourceProjectionsEntityCount ?: 0) > 0
+                ) {
                     item {
                         DuplicateProjectionsRepairCard(
                             uiState = uiState,
@@ -553,4 +556,3 @@ fun SourceMigrationPanel(
         )
     }
 }
-

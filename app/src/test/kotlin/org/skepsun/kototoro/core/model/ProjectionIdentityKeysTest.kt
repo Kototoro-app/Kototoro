@@ -36,6 +36,17 @@ class ProjectionIdentityKeysTest {
 	}
 
 	@Test
+	fun `bindingKeys retains url and public url aliases`() {
+		assertEquals(
+			setOf("url:/work", "public_url:https://example.test/work"),
+			ProjectionIdentityKeys.bindingKeys(
+				url = " /work ",
+				publicUrl = " https://example.test/work ",
+			),
+		)
+	}
+
+	@Test
 	fun `contentCompactKey uses projection key before legacy id fallback`() {
 		assertEquals(
 			"projection:source:url:/work",

@@ -3,6 +3,7 @@ package org.skepsun.kototoro.favourites.domain
 import dagger.Reusable
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.buildEquivalentProjectionGroups
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
 import org.skepsun.kototoro.entitygraph.domain.EntityType
@@ -90,18 +91,21 @@ class EntityOrganizeRepository @Inject constructor(
             val entity = entitiesById[entityId] ?: return@mapNotNull null
             val preferredMangaId = prefsByEntityId[entityId]?.preferredLocalMangaId
             val favouriteAnchorIds = scope.favouriteAnchorMangaIdsByEntityId[entityId].orEmpty()
-            val projections = scope.bindingsByEntityId[entityId]
+            val projectionItemsById = scope.bindingsByEntityId[entityId]
                 .orEmpty()
                 .mapNotNull { binding ->
                     val mangaId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
                     val content = contentById[mangaId] ?: return@mapNotNull null
                     Triple(binding, mangaId, content.manga)
                 }
-                .groupBy { (_, _, manga) ->
-                    val key = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(manga.url, manga.publicUrl)
-                    if (key != null) "${manga.source}|$key" else "${manga.source}|title:${manga.title.trim().lowercase()}"
-                }
-                .mapNotNull { (_, group) ->
+                .associateBy { it.second }
+            val projectionMangaById = projectionItemsById.mapValues { (_, item) -> item.third }
+            val projections = buildEquivalentProjectionGroups(
+                mangaIds = projectionItemsById.keys,
+                mangaById = projectionMangaById,
+            )
+                .mapNotNull { equivalentGroup ->
+                    val group = equivalentGroup.mangaIds.mapNotNull(projectionItemsById::get)
                     val canonical = group.firstOrNull { it.second == preferredMangaId }
                         ?: group.firstOrNull { it.second in favouriteAnchorIds }
                         ?: group.minByOrNull { it.second }

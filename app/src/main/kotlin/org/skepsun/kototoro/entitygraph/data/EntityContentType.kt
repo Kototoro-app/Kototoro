@@ -35,6 +35,21 @@ internal fun EntityRecord.withContentType(contentType: ContentType?): EntityReco
     }
 }
 
+internal fun EntityRecord.withInferredContentType(
+    knownTypes: Collection<ContentType>,
+    fallback: ContentType? = null,
+): EntityRecord {
+    if (contentType != null || type != EntityType.WORK.name) {
+        return this
+    }
+    val candidates = knownTypes.toMutableSet()
+    fallback?.let(candidates::add)
+    val inferredType = candidates.firstOrNull()?.takeIf { first ->
+        candidates.all { first.isWorkContentTypeCompatibleWith(it) }
+    }
+    return inferredType?.name?.let { copy(contentType = it) } ?: this
+}
+
 internal fun Collection<EntityRecord>.canMergeWorkContentTypes(
     allowCompatibleContentTypes: Boolean = false,
 ): Boolean {

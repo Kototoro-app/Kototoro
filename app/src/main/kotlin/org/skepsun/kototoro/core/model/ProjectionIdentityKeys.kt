@@ -2,10 +2,15 @@ package org.skepsun.kototoro.core.model
 
 object ProjectionIdentityKeys {
 
+    fun bindingKeys(url: String, publicUrl: String): Set<String> {
+        return buildSet {
+            url.trim().takeIf { it.isNotEmpty() }?.let { add("url:$it") }
+            publicUrl.trim().takeIf { it.isNotEmpty() }?.let { add("public_url:$it") }
+        }
+    }
+
     fun bindingKey(url: String, publicUrl: String): String? {
-        url.trim().takeIf { it.isNotEmpty() }?.let { return "url:$it" }
-        publicUrl.trim().takeIf { it.isNotEmpty() }?.let { return "public_url:$it" }
-        return null
+        return bindingKeys(url, publicUrl).firstOrNull()
     }
 
     fun contentCompactKey(

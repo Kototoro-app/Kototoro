@@ -1686,10 +1686,10 @@
     <string name="entity_organize_repair_mixed_work_content_types_title">Repair mixed content-type works</string>
     <string name="entity_organize_repair_mixed_work_content_types_summary">%1$d work entities contain %2$d local projections from different content types. Split the projections into independent work entities to restore type isolation.</string>
     <string name="entity_organize_repair_mixed_work_content_types_action">Split mixed works</string>
-    <string name="entity_organize_repair_duplicate_projections_title">Prune duplicate local projections</string>
-    <string name="entity_organize_repair_duplicate_projections_summary">%1$d work entities contain %2$d duplicate local projections for the same reading source. This can cause UI lag and database bloat. The repair will preserve favorite/history anchors and prune redundant bindings.</string>
-    <string name="entity_organize_repair_duplicate_projections_action">Prune duplicate projections</string>
-    <string name="entity_organize_repair_duplicate_projections_feedback">Pruned %1$d duplicate local projections.</string>
+    <string name="entity_organize_repair_duplicate_projections_title">Repair duplicate and conflicting projections</string>
+    <string name="entity_organize_repair_duplicate_projections_summary">Detected %1$d work groups with %2$d duplicate or conflicting projections from the same source. Repair recognizes mirror domains and cross-entity duplicates, preserves favorite/history anchors, removes duplicates, and splits different works back into independent entities.</string>
+    <string name="entity_organize_repair_duplicate_projections_action">Repair projections</string>
+    <string name="entity_organize_repair_duplicate_projections_feedback">Pruned %1$d duplicate projections and split %2$d mismerged works.</string>
     <string name="entity_organize_duplicate_projections_badge">Duplicates ×%1$d</string>
     <string name="entity_organize_clean_duplicate_projections_action">Clean</string>
     <string name="entity_organize_repair_confirm">Confirm</string>

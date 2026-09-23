@@ -7,6 +7,86 @@ import org.junit.jupiter.api.Test
 class EntityGraphModelsTest {
 
 	@Test
+	fun `repair report counts conflicting source projections`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS,
+					entityId = 1L,
+					localMangaId = 11L,
+				),
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS,
+					entityId = 1L,
+					localMangaId = 12L,
+				),
+			),
+		)
+
+		assertEquals(1, report.conflictingSourceProjectionsEntityCount)
+		assertEquals(2, report.conflictingSourceProjectionsCount)
+	}
+
+	@Test
+	fun `combined projection repair count does not count the same entity twice`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS,
+					entityId = 1L,
+					count = 2,
+				),
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS,
+					entityId = 1L,
+				),
+			),
+		)
+
+		assertEquals(1, report.localProjectionRepairEntityCount)
+		assertEquals(3, report.localProjectionRepairCount)
+		assertEquals(2, report.localProjectionRepairGroupCount)
+	}
+
+	@Test
+	fun `cross entity duplicate contributes to duplicate repair counts`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS,
+					entityId = 9L,
+					count = 2,
+				),
+			),
+		)
+
+		assertEquals(1, report.duplicateLocalProjectionsEntityCount)
+		assertEquals(2, report.duplicateLocalProjectionsCount)
+		assertEquals(1, report.localProjectionRepairEntityCount)
+		assertEquals(2, report.localProjectionRepairCount)
+		assertEquals(1, report.localProjectionRepairGroupCount)
+	}
+
+	@Test
+	fun `dangling local projection binding contributes to projection repair counts`() {
+		val report = EntityGraphRepairReport(
+			issues = listOf(
+				EntityGraphRepairIssue(
+					kind = EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING,
+					entityId = 9L,
+					localMangaId = 101L,
+				),
+			),
+		)
+
+		assertEquals(1, report.duplicateLocalProjectionsEntityCount)
+		assertEquals(1, report.duplicateLocalProjectionsCount)
+		assertEquals(1, report.localProjectionRepairEntityCount)
+		assertEquals(1, report.localProjectionRepairCount)
+		assertEquals(1, report.localProjectionRepairGroupCount)
+	}
+
+	@Test
 	fun `repair report counts mixed content type entities once`() {
 		val report = EntityGraphRepairReport(
 			issues = listOf(

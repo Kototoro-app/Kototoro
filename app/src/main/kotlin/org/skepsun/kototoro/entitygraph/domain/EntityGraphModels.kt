@@ -164,6 +164,9 @@ enum class EntityGraphRepairIssueKind {
     WORK_ENTITY_MISSING_SYNC_ID,
     MIXED_WORK_CONTENT_TYPES,
     DUPLICATE_LOCAL_PROJECTIONS,
+    CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS,
+    DANGLING_LOCAL_PROJECTION_BINDING,
+    CONFLICTING_SOURCE_PROJECTIONS,
 }
 
 data class EntityGraphRepairIssue(
@@ -217,15 +220,53 @@ data class EntityGraphRepairReport(
     val duplicateLocalProjectionsEntityCount: Int
         get() = issues
             .asSequence()
-            .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
+            .filter {
+                it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING
+            }
             .map { it.entityId }
             .distinct()
             .count()
     val duplicateLocalProjectionsCount: Int
         get() = issues
             .asSequence()
-            .filter { it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS }
+            .filter {
+                it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING
+            }
             .sumOf { it.count }
+    val conflictingSourceProjectionsEntityCount: Int
+        get() = issues
+            .asSequence()
+            .filter { it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS }
+            .map { it.entityId }
+            .distinct()
+            .count()
+    val conflictingSourceProjectionsCount: Int
+        get() = issues.count { it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS }
+    val localProjectionRepairEntityCount: Int
+        get() = issues
+            .asSequence()
+            .filter {
+                it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS ||
+                    it.kind == EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING ||
+                    it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS
+            }
+            .map { it.entityId }
+            .distinct()
+            .count()
+    val localProjectionRepairCount: Int
+        get() = duplicateLocalProjectionsCount + conflictingSourceProjectionsCount
+    val localProjectionRepairGroupCount: Int
+        get() = issues.count {
+            it.kind == EntityGraphRepairIssueKind.DUPLICATE_LOCAL_PROJECTIONS ||
+                it.kind == EntityGraphRepairIssueKind.CROSS_ENTITY_DUPLICATE_LOCAL_PROJECTIONS ||
+                it.kind == EntityGraphRepairIssueKind.DANGLING_LOCAL_PROJECTION_BINDING ||
+                it.kind == EntityGraphRepairIssueKind.CONFLICTING_SOURCE_PROJECTIONS
+        }
     val hasIssues: Boolean
         get() = issues.isNotEmpty()
 }

@@ -73,6 +73,7 @@ class DetailsLoadUseCase @Inject constructor(
             "Cannot resolve intent $intent"
         }
         val repairedManga = repairLostKomiicIdentity(intentManga)
+            ?: repairLostRemoteIdentity(intentManga)
         val manga = repairedManga ?: mangaDataRepository.resolveStoredProjection(intentManga)
         android.util.Log.i(
             DETAILS_TRACE_TAG,
@@ -397,6 +398,28 @@ class DetailsLoadUseCase @Inject constructor(
         return runCatchingCancellable {
             mangaDataRepository.updateProjectionSnapshotAtAnchor(repaired, content.id)
         }.getOrNull()
+    }
+
+    /**
+     * Recovers historical rows whose generic remote identity was completely erased.
+     *
+     * Most parsers fail before producing [NotFoundException] when handed an empty content key, so
+     * the normal error recovery in [getDetails] is never reached. Search the original source by the
+     * persisted title first and let [RecoverContentUseCase] write the resolved identity back onto
+     * the same local row.
+     */
+    private suspend fun repairLostRemoteIdentity(content: Content): Content? {
+        if (
+            content.id == 0L ||
+            content.isLocal ||
+            content.url.isNotBlank() ||
+            content.publicUrl.isNotBlank()
+        ) {
+            return null
+        }
+        return recoverUseCase(content)?.takeIf { recovered ->
+            recovered.url.isNotBlank() || recovered.publicUrl.isNotBlank()
+        }
     }
 
     /** The stored chapters must unanimously name one comic id; a payload-supplied list is never used. */
