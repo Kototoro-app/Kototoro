@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -335,6 +337,7 @@ fun KototoroContentCardGrid(
     val cardShape = RoundedCornerShape(posterStyle.cornerRadius)
     val cardRadius = posterStyle.cornerRadius
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
 
     Column(
         modifier = modifier
@@ -385,11 +388,16 @@ fun KototoroContentCardGrid(
                         }
                     } else Modifier,
                 )
+                .shadow(
+                    elevation = 2.dp,
+                    shape = cardShape,
+                    clip = false,
+                )
                 .clip(cardShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
                     width = 0.5.dp,
-                    color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                    brush = rimBorderBrush,
                     shape = cardShape,
                 )
         ) {
@@ -398,6 +406,11 @@ fun KototoroContentCardGrid(
                 contentDescription = renderModel.title,
                 sharedKey = sharedKey,
                 retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
+            )
+
+            ContentCardBookSpine(
+                modifier = Modifier.align(Alignment.CenterStart),
+                width = 3.5.dp,
             )
 
             if (isSelected) {
@@ -647,6 +660,63 @@ fun ContentCardBottomProgressBar(
     }
 }
 
+/**
+ * Subtle physical book spine & crease effect on the inner start edge of manga covers.
+ * Simulates the lighting and hinge groove of a tankōbon / physical book spine.
+ */
+private val BookSpineBrush = Brush.horizontalGradient(
+    0.00f to Color.White.copy(alpha = 0.14f),
+    0.28f to Color.Black.copy(alpha = 0.18f),
+    0.70f to Color.Black.copy(alpha = 0.06f),
+    1.00f to Color.Transparent,
+)
+
+@Composable
+fun ContentCardBookSpine(
+    modifier: Modifier = Modifier,
+    width: androidx.compose.ui.unit.Dp = 3.5.dp,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .width(width)
+            .background(BookSpineBrush),
+    )
+}
+
+/**
+ * Top rim-light bevel border brush for manga cover cards.
+ * Replaces flat monochrome card borders with a subtle directional gradient:
+ * a crisp specular rim highlight on the top edge fading to a delicate ambient tone at the bottom.
+ */
+@Composable
+fun rememberCoverRimBorderBrush(isIosStyle: Boolean): Brush {
+    val isDark = isSystemInDarkTheme()
+    val outlineVariant = MaterialTheme.colorScheme.outlineVariant
+    return remember(isIosStyle, isDark, outlineVariant) {
+        val topColor = if (isIosStyle) {
+            if (isDark) Color.White.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.14f)
+        } else {
+            if (isDark) Color.White.copy(alpha = 0.22f) else outlineVariant.copy(alpha = 0.45f)
+        }
+        val midColor = if (isIosStyle) {
+            if (isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.07f)
+        } else {
+            if (isDark) Color.White.copy(alpha = 0.08f) else outlineVariant.copy(alpha = 0.22f)
+        }
+        val bottomColor = if (isIosStyle) {
+            if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.04f)
+        } else {
+            if (isDark) Color.White.copy(alpha = 0.04f) else outlineVariant.copy(alpha = 0.10f)
+        }
+        Brush.verticalGradient(
+            0.0f to topColor,
+            0.4f to midColor,
+            1.0f to bottomColor,
+        )
+    }
+}
+
 internal fun resolveGridTitleFontSize(gridScale: Float): TextUnit {
     val normalized = ((gridScale.coerceIn(0.5f, 1.5f) - 0.5f) / 1f).coerceIn(0f, 1f)
     return (12f + 4f * normalized).sp
@@ -781,6 +851,7 @@ fun KototoroContentCardList(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
     val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
     val listBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
 
@@ -835,11 +906,16 @@ fun KototoroContentCardList(
                             }
                         } else Modifier,
                     )
+                    .shadow(
+                        elevation = 2.dp,
+                        shape = CompactContentCoverShape,
+                        clip = false,
+                    )
                     .clip(CompactContentCoverShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(
                         width = 0.5.dp,
-                        color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                        brush = rimBorderBrush,
                         shape = CompactContentCoverShape,
                     )
             ) {
@@ -848,6 +924,10 @@ fun KototoroContentCardList(
                     contentDescription = renderModel.title,
                     sharedKey = sharedKey,
                     retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
+                )
+                ContentCardBookSpine(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    width = 2.5.dp,
                 )
                 val listBadgePadding = 2.dp
                 ContentCardCornerBadges(
@@ -1268,6 +1348,7 @@ fun KototoroContentCardDetailedList(
     val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
+    val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
     val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
     val detailedBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
 
@@ -1321,11 +1402,16 @@ fun KototoroContentCardDetailedList(
                             }
                         } else Modifier,
                     )
+                    .shadow(
+                        elevation = 2.dp,
+                        shape = ContentCoverShape,
+                        clip = false,
+                    )
                     .clip(ContentCoverShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(
                         width = 0.5.dp,
-                        color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                        brush = rimBorderBrush,
                         shape = ContentCoverShape,
                     )
             ) {
@@ -1334,6 +1420,10 @@ fun KototoroContentCardDetailedList(
                     contentDescription = renderModel.title,
                     sharedKey = sharedKey,
                     retainSnapshot = shouldRetainContentCoverSnapshot(sharedTransitionEnabled),
+                )
+                ContentCardBookSpine(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    width = 3.5.dp,
                 )
                 val detailedBadgePadding = 4.dp
                 ContentCardCornerBadges(

@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -67,7 +68,9 @@ import org.skepsun.kototoro.core.ui.compose.ContentCoverShape
 import org.skepsun.kototoro.core.ui.compose.rememberResolvedSourceTitle
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.list.ui.compose.ContentCardBookSpine
 import org.skepsun.kototoro.list.ui.compose.ContentCardBottomProgressBar
+import org.skepsun.kototoro.list.ui.compose.rememberCoverRimBorderBrush
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
@@ -437,6 +440,7 @@ private fun HomeListRailRowItem(
         val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
         val coverShape = if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape
         val coverRadius = if (listMode == ListMode.DETAILED_LIST) ContentCoverCornerRadius else CompactContentCoverCornerRadius
+        val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
         val hasProgressBar = item.progress?.let { it.isValid() && it.percent > 0f } == true
         val bottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
         val badgePadding = 3.dp
@@ -458,11 +462,16 @@ private fun HomeListRailRowItem(
                         }
                     } else Modifier
                 )
+                .shadow(
+                    elevation = 2.dp,
+                    shape = coverShape,
+                    clip = false,
+                )
                 .clip(coverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
                     width = 0.5.dp,
-                    color = if (isIosStyle) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.32f),
+                    brush = rimBorderBrush,
                     shape = coverShape,
                 ),
         ) {
@@ -475,6 +484,10 @@ private fun HomeListRailRowItem(
                     onSuccess = onImageSuccess,
                 )
             }
+            ContentCardBookSpine(
+                modifier = Modifier.align(Alignment.CenterStart),
+                width = if (listMode == ListMode.DETAILED_LIST) 3.5.dp else 2.5.dp,
+            )
             val badgeModel = remember(content, item.counter, item.progress) {
                 ContentGridModel(
                     manga = content,
