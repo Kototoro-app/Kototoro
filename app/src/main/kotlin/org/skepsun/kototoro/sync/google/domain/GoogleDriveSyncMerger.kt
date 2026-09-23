@@ -1,6 +1,8 @@
 package org.skepsun.kototoro.sync.google.domain
 
 import org.skepsun.kototoro.core.model.ProjectionIdentityKeys
+import org.skepsun.kototoro.entitygraph.data.buildEquivalentProjectionGroups
+import org.skepsun.kototoro.entitygraph.data.selectCanonicalProjectionMangaId
 import org.skepsun.kototoro.sync.google.data.model.GoogleDriveSyncSnapshot
 import org.skepsun.kototoro.sync.google.data.model.SyncConfig
 import org.skepsun.kototoro.sync.google.data.model.SyncContent
@@ -84,17 +86,43 @@ object GoogleDriveSyncMerger {
     }
 
     private fun compactSnapshot(snapshot: GoogleDriveSyncSnapshot): GoogleDriveSyncSnapshot {
-        val contentIdMap = LinkedHashMap<Long, Long>()
-        val compactContent = snapshot.content
+        val initialContentIdMap = LinkedHashMap<Long, Long>()
+        val initialCompactContent = snapshot.content
             .groupBy(::contentKey)
             .values
             .map { items ->
                 val canonical = items.minBy { it.id }
-                items.forEach { contentIdMap[it.id] = canonical.id }
+                items.forEach { initialContentIdMap[it.id] = canonical.id }
                 canonical
             }
             .sortedBy { it.id }
-        val entityGroups = buildEntityGroups(snapshot)
+
+        val contentIdMap = LinkedHashMap<Long, Long>(initialContentIdMap)
+        val mangaById = initialCompactContent.associate { it.id to it.toEntity() }
+        val withRemoteIdentity = initialCompactContent.filter { it.url.isNotBlank() || it.publicUrl.isNotBlank() }
+        val canonicalIdByEquivalentId = LinkedHashMap<Long, Long>()
+        if (withRemoteIdentity.size > 1) {
+            val equivalentGroups = buildEquivalentProjectionGroups(withRemoteIdentity.map { it.id }, mangaById)
+            equivalentGroups.forEach { group ->
+                if (group.mangaIds.size > 1) {
+                    val canonicalId = selectCanonicalProjectionMangaId(
+                        mangaIds = group.mangaIds,
+                        mangaById = mangaById,
+                        priorityScore = { id -> if (id > 0L) 1000L else 0L },
+                    ) ?: group.mangaIds.firstOrNull() ?: return@forEach
+                    group.mangaIds.forEach { id ->
+                        canonicalIdByEquivalentId[id] = canonicalId
+                    }
+                }
+            }
+        }
+        initialContentIdMap.forEach { (originalId, intermediateId) ->
+            contentIdMap[originalId] = canonicalIdByEquivalentId[intermediateId] ?: intermediateId
+        }
+        val compactContent = initialCompactContent
+            .filter { it.id == (canonicalIdByEquivalentId[it.id] ?: it.id) }
+            .sortedBy { it.id }
+        val entityGroups = buildEntityGroups(snapshot, contentIdMap)
         val entityIdMap = LinkedHashMap<Long, Long>()
         val compactEntities = snapshot.entityGraph.entities
             .groupBy { entity -> entityGroups.find(entity.id) }
@@ -324,10 +352,11 @@ object GoogleDriveSyncMerger {
     }
 
     private fun mergeEntities(items: List<SyncEntityRecord>): SyncEntityRecord {
-        return items.reduce { left, right ->
+        val canonicalId = items.firstOrNull { it.id > 0L }?.id ?: items.minOf { it.id }
+        val merged = items.reduce { left, right ->
             val newer = if (right.lastAccessed > left.lastAccessed) right else left
             SyncEntityRecord(
-                id = left.id,
+                id = canonicalId,
                 syncId = left.syncId.ifBlank { right.syncId },
                 type = left.type,
                 contentType = left.contentType ?: right.contentType,
@@ -339,6 +368,7 @@ object GoogleDriveSyncMerger {
                 accessCount = maxOf(left.accessCount, right.accessCount),
             )
         }
+        return if (merged.id == canonicalId) merged else merged.copyWithId(canonicalId)
     }
 
     private fun mergeBindings(items: List<SyncEntityBindingRecord>): SyncEntityBindingRecord {
@@ -744,8 +774,39 @@ object GoogleDriveSyncMerger {
         return source == LOCAL_MANGA_SOURCE || source == LEGACY_LOCAL_MANGA_SOURCE
     }
 
-    private fun buildEntityGroups(snapshot: GoogleDriveSyncSnapshot): EntityDisjointSet {
-        return EntityDisjointSet(snapshot.entityGraph.entities.map { it.id })
+    private fun buildEntityGroups(
+        snapshot: GoogleDriveSyncSnapshot,
+        contentIdMap: Map<Long, Long>,
+    ): EntityDisjointSet {
+        val disjointSet = EntityDisjointSet(snapshot.entityGraph.entities.map { it.id })
+        snapshot.entityGraph.entities
+            .filter { it.syncId.isNotBlank() }
+            .groupBy { it.type to it.syncId }
+            .values
+            .forEach { entitiesWithSameSyncId ->
+                disjointSet.unionAll(entitiesWithSameSyncId.map { it.id })
+            }
+
+        val entityTypeById = snapshot.entityGraph.entities.associate { it.id to it.type }
+        snapshot.entityGraph.bindings
+            .filter { it.isLocalContentBinding() }
+            .mapNotNull { binding ->
+                val originalId = binding.externalId.toLongOrNull() ?: return@mapNotNull null
+                val canonicalContentId = contentIdMap[originalId] ?: originalId
+                val entityType = entityTypeById[binding.entityId]
+                if (entityType != null) {
+                    (entityType to canonicalContentId) to binding.entityId
+                } else {
+                    null
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+            .values
+            .forEach { entityIdsSharingContent ->
+                disjointSet.unionAll(entityIdsSharingContent)
+            }
+
+        return disjointSet
     }
 
     private fun buildAuthoritativeContentIds(

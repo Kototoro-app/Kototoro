@@ -233,6 +233,211 @@ class GoogleDriveSyncMergerTest {
 		assertEquals(listOf(2L), compact.work.history.map { it.anchorMangaId })
 	}
 
+	@Test
+	fun `compact merges mirror url projections across distinct entities`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(10L, "Mirror A"), entity(20L, "Mirror B")),
+				bindings = listOf(
+					localBinding(entityId = 10L, mangaId = 1L),
+					localBinding(entityId = 20L, mangaId = 2L),
+				),
+			),
+			content = listOf(
+				SyncContent(
+					id = 1L,
+					title = "Solo Leveling",
+					url = "https://mirror-a.test/comic/42",
+					publicUrl = "https://mirror-a.test/comic/42",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://mirror-a.test/cover.jpg",
+					source = "mangadex",
+				),
+				SyncContent(
+					id = 2L,
+					title = "Solo Leveling",
+					url = "http://mirror-b.test/comic/42",
+					publicUrl = "http://mirror-b.test/comic/42",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://mirror-b.test/cover.jpg",
+					source = "mangadex",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					history(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L),
+					history(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+				favourites = listOf(
+					favourite(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L),
+					favourite(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(1L), compact.content.map { it.id })
+		assertEquals(listOf(10L), compact.entityGraph.entities.map { it.id })
+		assertEquals(listOf(1L), compact.entityGraph.bindings.mapNotNull { it.externalId.toLongOrNull() }.distinct())
+		assertEquals(listOf(1L), compact.work.history.map { it.anchorMangaId })
+		assertEquals(listOf(10L), compact.work.history.map { it.entityId })
+		assertEquals(listOf(1L), compact.work.favourites.map { it.anchorMangaId })
+		assertEquals(listOf(10L), compact.work.favourites.map { it.entityId })
+	}
+
+	@Test
+	fun `compact merges url and publicUrl cross match across distinct entities`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(10L, "First"), entity(20L, "Second")),
+				bindings = listOf(
+					localBinding(entityId = 10L, mangaId = 1L),
+					localBinding(entityId = 20L, mangaId = 2L),
+				),
+			),
+			content = listOf(
+				SyncContent(
+					id = 1L,
+					title = "One Piece",
+					url = "https://example.test/manga/one-piece",
+					publicUrl = "",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://example.test/cover.jpg",
+					source = "mangadex",
+				),
+				SyncContent(
+					id = 2L,
+					title = "One Piece",
+					url = "",
+					publicUrl = "https://example.test/manga/one-piece",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://example.test/cover.jpg",
+					source = "mangadex",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					history(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L),
+					history(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(1L), compact.content.map { it.id })
+		assertEquals(listOf(10L), compact.entityGraph.entities.map { it.id })
+		assertEquals(listOf(1L), compact.work.history.map { it.anchorMangaId })
+		assertEquals(listOf(10L), compact.work.history.map { it.entityId })
+	}
+
+	@Test
+	fun `compact unifies entities with same non-blank syncId`() {
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(
+					entity(10L, "Entity A", syncId = "work-sync-123"),
+					entity(20L, "Entity B", syncId = "work-sync-123"),
+				),
+				bindings = listOf(
+					localBinding(entityId = 10L, mangaId = 1L),
+					localBinding(entityId = 20L, mangaId = 2L),
+				),
+			),
+			content = listOf(content(1L), content(2L)),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					history(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L),
+					history(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L),
+				),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(10L), compact.entityGraph.entities.map { it.id })
+		assertEquals("work-sync-123", compact.entityGraph.entities.single().syncId)
+		assertEquals(listOf(10L), compact.work.history.map { it.entityId })
+	}
+
+	@Test
+	fun `mergeSnapshots resolves cross-entity duplicate local projections between local and remote`() {
+		val local = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(10L, "Local Work")),
+				bindings = listOf(localBinding(entityId = 10L, mangaId = 1L)),
+			),
+			content = listOf(
+				SyncContent(
+					id = 1L,
+					title = "Naruto",
+					url = "https://mangadex.org/title/123",
+					publicUrl = "https://mangadex.org/title/123",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://cover.test/1.jpg",
+					source = "mangadex",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(history(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L)),
+				favourites = listOf(favourite(entityId = 10L, anchorMangaId = 1L, updatedAt = 10L)),
+			),
+		)
+
+		val remote = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			entityGraph = SyncEntityGraph(
+				entities = listOf(entity(20L, "Remote Work")),
+				bindings = listOf(localBinding(entityId = 20L, mangaId = 2L)),
+			),
+			content = listOf(
+				SyncContent(
+					id = 2L,
+					title = "Naruto",
+					url = "http://mangadex.org/title/123",
+					publicUrl = "http://mangadex.org/title/123",
+					rating = 0f,
+					isNsfw = false,
+					coverUrl = "https://cover.test/2.jpg",
+					source = "mangadex",
+				),
+			),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(history(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L)),
+				favourites = listOf(favourite(entityId = 20L, anchorMangaId = 2L, updatedAt = 20L)),
+			),
+		)
+
+		val merged = GoogleDriveSyncMerger.mergeSnapshots(local, remote)
+
+		assertEquals(listOf(1L), merged.content.map { it.id })
+		assertEquals(listOf(10L), merged.entityGraph.entities.map { it.id })
+		assertEquals(listOf(1L), merged.work.history.map { it.anchorMangaId })
+		assertEquals(listOf(10L), merged.work.history.map { it.entityId })
+		assertEquals(listOf(1L), merged.work.favourites.map { it.anchorMangaId })
+		assertEquals(listOf(10L), merged.work.favourites.map { it.entityId })
+	}
+
 	private fun content(
 		id: Long,
 		title: String = "Title $id",
@@ -252,9 +457,10 @@ class GoogleDriveSyncMergerTest {
 		)
 	}
 
-	private fun entity(id: Long, name: String): SyncEntityRecord {
+	private fun entity(id: Long, name: String, syncId: String = ""): SyncEntityRecord {
 		return SyncEntityRecord(
 			id = id,
+			syncId = syncId,
 			type = "WORK",
 			primaryName = name,
 			nameHash = id,

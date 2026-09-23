@@ -54,8 +54,10 @@ import org.skepsun.kototoro.sync.google.data.model.SyncWorkHistory
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkState
 import org.skepsun.kototoro.sync.google.data.model.SyncWorkStats
 import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
+import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import org.skepsun.kototoro.entitygraph.data.EntityPrefsRecord
 import org.skepsun.kototoro.entitygraph.data.EntityRecord
+import org.skepsun.kototoro.entitygraph.data.buildEquivalentProjectionGroups
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingCreatedBy
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingSourceKind
 import org.skepsun.kototoro.entitygraph.domain.EntityBindingState
@@ -104,6 +106,7 @@ class GoogleDriveSyncRepository @Inject constructor(
     private val ireaderExtensionManager: Lazy<IReaderExtensionManager>,
     private val tsundokuExtensionManager: Lazy<TsundokuExtensionManager>,
     private val cloudstreamRuntimeManager: Lazy<CloudstreamRuntimeManager>,
+    private val entityGraphRepository: Lazy<EntityGraphRepository>,
 ) {
 
     val isSyncing = MutableStateFlow(false)
@@ -277,6 +280,9 @@ class GoogleDriveSyncRepository @Inject constructor(
             runSyncStep("apply database") {
                 applyToDatabase(merged)
             }
+            runSyncStep("repair after sync") {
+                repairAfterSync()
+            }
             val applied = runSyncStep("build upload snapshot") {
                 buildLocalSnapshot()
             }
@@ -328,6 +334,9 @@ class GoogleDriveSyncRepository @Inject constructor(
         runSyncStep("apply legacy remote snapshot") {
             applyToDatabase(remote)
         }
+        runSyncStep("repair after sync") {
+            repairAfterSync()
+        }
         normalizeLocalWorkStateForSync()
         val upload = runSyncStep("build current snapshot after legacy import") {
             GoogleDriveSyncMerger.mergeSnapshots(buildLocalSnapshot(), null)
@@ -348,6 +357,9 @@ class GoogleDriveSyncRepository @Inject constructor(
     }
 
     private suspend fun normalizeLocalWorkStateForSync() {
+        runSyncStep("repair local projections") {
+            repairAfterSync()
+        }
         val favouritesNormalized = runSyncStep("normalize favourites") {
             favouritesRepository.normalizeWorkFavouritesForSync()
         }
@@ -365,6 +377,12 @@ class GoogleDriveSyncRepository @Inject constructor(
         if (!normalized || appSettings.isWorkMigrationSyncWriteBlocked) {
             throw GoogleDriveSyncWriteBlockedException()
         }
+    }
+
+    private suspend fun repairAfterSync() {
+        entityGraphRepository.get().repairDuplicateLocalProjections()
+        entityGraphRepository.get().repairConflictingSourceProjections()
+        database.pruneLocalSyncResidue()
     }
 
     private suspend fun <T> runSyncStep(name: String, block: suspend () -> T): T {
@@ -633,10 +651,10 @@ class GoogleDriveSyncRepository @Inject constructor(
                 remote.externalId
             }
             val existing = getEntityGraphDao().findBinding(remote.source, localExternalId)
-            if (remote.isLocalContentBinding() && existing != null && existing.entityId != localEntityId) {
+            if (existing != null && existing.entityId != localEntityId) {
                 Log.d(
                     TAG,
-                    "sync skipped conflicting local content binding: source=${remote.source} " +
+                    "sync skipped conflicting binding: source=${remote.source} " +
                         "externalId=$localExternalId localEntity=${existing.entityId} remoteEntity=$localEntityId",
                 )
                 return@forEach
@@ -729,6 +747,9 @@ class GoogleDriveSyncRepository @Inject constructor(
         snapshot.work.stats.forEach { mapByAnchor(it.entityId, it.anchorMangaId) }
         snapshot.feed.tracks.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
         snapshot.feed.logs.forEach { mapByAnchor(it.entityId ?: return@forEach, it.mangaId) }
+        snapshot.entityGraph.bindings
+            .filter { it.isLocalContentBinding() }
+            .forEach { mapByAnchor(it.entityId, it.externalId.toLongOrNull()) }
         val remoteEntitiesById = snapshot.entityGraph.entities.associateBy { it.id }
         val remoteReadingBindingsByEntityId = snapshot.entityGraph.bindings
             .filter { it.isAuthoritativeProjectionBindingForSync() }
@@ -1030,9 +1051,28 @@ class GoogleDriveSyncRepository @Inject constructor(
     private suspend fun SyncContent.findLocalProjection(database: MangaDatabase): MangaEntity? {
         if (url.isNotBlank()) {
             database.getMangaDao().findBySourceAndUrl(source, url)?.manga?.let { return it }
+            database.getMangaDao().findBySourceAndPublicUrl(source, url)?.manga?.let { return it }
         }
         if (publicUrl.isNotBlank()) {
             database.getMangaDao().findBySourceAndPublicUrl(source, publicUrl)?.manga?.let { return it }
+            database.getMangaDao().findBySourceAndUrl(source, publicUrl)?.manga?.let { return it }
+        }
+        if (url.isNotBlank() || publicUrl.isNotBlank()) {
+            val candidates = database.getMangaDao().findAllBySource(source).map { it.manga }
+            if (candidates.isNotEmpty()) {
+                val dummyId = minOf(candidates.minOfOrNull { it.id } ?: 0L, 0L) - 1L
+                val dummyRemoteManga = toEntity(localId = dummyId)
+                val candidateMap = candidates.associateBy { it.id }.toMutableMap()
+                candidateMap[dummyId] = dummyRemoteManga
+                val groups = buildEquivalentProjectionGroups(candidateMap.keys, candidateMap)
+                val matchingGroup = groups.firstOrNull { dummyId in it.mangaIds && it.mangaIds.size > 1 }
+                if (matchingGroup != null) {
+                    val matchingId = matchingGroup.mangaIds.firstOrNull { it != dummyId }
+                    if (matchingId != null) {
+                        return candidateMap[matchingId]
+                    }
+                }
+            }
         }
         return null
     }
