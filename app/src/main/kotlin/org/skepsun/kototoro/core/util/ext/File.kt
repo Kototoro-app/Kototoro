@@ -73,14 +73,16 @@ fun ContentResolver.resolveName(uri: Uri): String? {
     if (uri.scheme != "content") {
         return fallback
     }
-    query(uri, null, null, null, null)?.use {
-        if (it.moveToFirst()) {
-            it.getStringOrNull(it.getColumnIndex(OpenableColumns.DISPLAY_NAME))?.let { name ->
-                return name
+    return runCatching {
+        query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) cursor.getStringOrNull(index) else null
+            } else {
+                null
             }
         }
-    }
-    return fallback
+    }.getOrNull() ?: fallback
 }
 
 suspend fun File.computeSize(): Long = runInterruptible(Dispatchers.IO) {

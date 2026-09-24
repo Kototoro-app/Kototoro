@@ -23,11 +23,14 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.discover.ui.compose.DiscoverScreen
 import org.skepsun.kototoro.list.ui.compose.ContentCardUiPrefs
+import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentListModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.LoadingState
+import androidx.compose.ui.platform.LocalContext
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import java.time.Instant
 import java.time.ZoneId
@@ -53,14 +56,10 @@ fun DiscoverCategoryScreen(
     Column(
         modifier = modifier.background(MaterialTheme.colorScheme.surface),
     ) {
-        val cardUiPrefs = remember {
-            ContentCardUiPrefs(
-                badgesTopLeft = setOf("tracker"),
-                badgesTopRight = setOf("score"),
-                badgesBottomLeft = emptySet(),
-                badgesBottomRight = setOf("nsfw"),
-            )
-        }
+        val context = LocalContext.current
+        val cardUiPrefs = rememberContentCardUiPrefs(
+            remember(context.applicationContext) { AppSettings(context.applicationContext) },
+        )
         if (isDateDriven) {
             DiscoverCategoryCalendarBar(
                 selectedCalendarDateMillis = selectedCalendarDateMillis,

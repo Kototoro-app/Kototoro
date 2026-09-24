@@ -316,6 +316,7 @@ fun KototoroContentListScreen(
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
         AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
+        AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         ContentListScreenPrefs(
             showSourceOnCards = isShowSourceOnCards,
@@ -325,6 +326,7 @@ fun KototoroContentListScreen(
                 badgesBottomLeft = badgesBottomLeft,
                 badgesBottomRight = badgesBottomRight,
                 showExtraInfo = showExtraInfoOnCards,
+                cardProgressStyle = cardProgressStyle,
             ),
         )
     }.value

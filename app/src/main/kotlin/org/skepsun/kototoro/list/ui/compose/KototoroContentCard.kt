@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import org.skepsun.kototoro.core.prefs.CardProgressStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import androidx.compose.ui.res.painterResource
@@ -176,6 +177,7 @@ data class ContentCardUiPrefs(
     val badgesBottomLeft: Set<String>,
     val badgesBottomRight: Set<String>,
     val showExtraInfo: Boolean = false,
+    val cardProgressStyle: CardProgressStyle = CardProgressStyle.BOTTOM_BAR,
 ) {
     fun requiresSourceMetadata(): Boolean =
         "source" in badgesTopLeft || "language" in badgesTopLeft ||
@@ -194,6 +196,7 @@ fun rememberContentCardUiPrefs(
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
         AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
+        AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         ContentCardUiPrefs(
             badgesTopLeft = badgesTopLeft,
@@ -201,6 +204,7 @@ fun rememberContentCardUiPrefs(
             badgesBottomLeft = badgesBottomLeft,
             badgesBottomRight = badgesBottomRight,
             showExtraInfo = showExtraInfoOnCards,
+            cardProgressStyle = cardProgressStyle,
         )
     }
     return prefs
@@ -468,7 +472,8 @@ fun KototoroContentCardGrid(
             val showBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel.isNsfw) {
                 "nsfw" in resolvedUiPrefs.badgesBottomRight && renderModel.isNsfw
             }
-            val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+            val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+                (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
             val bottomBadgeOffset = if (!compactOverlay && hasProgressBar) 3.dp else 0.dp
 
             // Bottom Left Badges
@@ -514,11 +519,25 @@ fun KototoroContentCardGrid(
                 )
             }
 
-            if (renderModel.progress != null) {
-                ContentCardBottomProgressBar(
-                    progress = renderModel.progress,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+            when (resolvedUiPrefs.cardProgressStyle) {
+                CardProgressStyle.BOTTOM_BAR -> {
+                    if (renderModel.progress != null) {
+                        ContentCardBottomProgressBar(
+                            progress = renderModel.progress,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                    }
+                }
+                CardProgressStyle.CIRCULAR_BADGE -> {
+                    ContentCardCoverProgressIndicator(
+                        progress = renderModel.progress,
+                        hasBottomRightBadge = showBottomRightBadge,
+                        metrics = badgeMetrics,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .then(if (bottomBadgeLift > 0.dp) Modifier.padding(bottom = bottomBadgeLift) else Modifier),
+                    )
+                }
             }
         }
 
@@ -630,10 +649,8 @@ fun ContentCardBottomProgressBar(
     if (!progress.isValid() || progress.percent <= 0f) return
     val percent = progress.percent.coerceIn(0f, 1f)
     val completed = progress.isCompleted()
-    val isIosStyle = LocalInterfaceStyle.current == InterfaceStyle.IOS
     val strokeColor = when {
         completed -> Color(0xFF34C759)
-        isIosStyle -> Color(0xFF007AFF)
         else -> MaterialTheme.colorScheme.primary
     }
     val trackColor = Color.Black.copy(alpha = 0.45f)
@@ -852,7 +869,8 @@ fun KototoroContentCardList(
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
-    val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+    val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+        (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
     val listBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
 
     Column(
@@ -974,11 +992,26 @@ fun KototoroContentCardList(
                         .align(Alignment.BottomEnd)
                         .padding(end = listBadgePadding, bottom = listBadgePadding + listBottomBadgeOffset),
                 )
-                if (renderModel.progress != null) {
-                    ContentCardBottomProgressBar(
-                        progress = renderModel.progress,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
+                when (resolvedUiPrefs.cardProgressStyle) {
+                    CardProgressStyle.BOTTOM_BAR -> {
+                        if (renderModel.progress != null) {
+                            ContentCardBottomProgressBar(
+                                progress = renderModel.progress,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
+                        }
+                    }
+                    CardProgressStyle.CIRCULAR_BADGE -> {
+                        val hasBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata) {
+                            hasVisibleCardBadges(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata)
+                        }
+                        ContentCardCoverProgressIndicator(
+                            progress = renderModel.progress,
+                            hasBottomRightBadge = hasBottomRightBadge,
+                            metrics = badgeMetrics,
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                        )
+                    }
                 }
             }
 
@@ -1179,7 +1212,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_heart_outline),
                             contentDescription = "Favourite",
-                            tint = if (isIosStyle) Color(0xFFFF375F) else MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1233,12 +1266,8 @@ private fun ContentCardCornerBadges(
                     if (item.projectionCount > 1) {
                         Text(
                             text = "x${item.projectionCount}",
-                            color = if (showOnlyNsfw && isIosStyle) {
-                                Color.White
-                            } else if (showOnlyNsfw) {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            } else if (isIosStyle) {
-                                Color.White
+                            color = if (showOnlyNsfw) {
+                                if (isIosStyle) Color.White else MaterialTheme.colorScheme.onErrorContainer
                             } else {
                                 MaterialTheme.colorScheme.primary
                             },
@@ -1281,7 +1310,7 @@ private fun ContentCardCornerBadges(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_pin),
                             contentDescription = stringResource(R.string.pin),
-                            tint = if (isIosStyle) Color.White else MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(metrics.iconSize),
                         )
                     }
@@ -1349,7 +1378,8 @@ fun KototoroContentCardDetailedList(
     val cardShape = RoundedCornerShape(16.dp)
     val tvFocusModifier = rememberTvContentCardFocusModifier(cardShape, focusRequester, onFocused)
     val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
-    val hasProgressBar = renderModel.progress?.let { it.isValid() && it.percent > 0f } == true
+    val hasProgressBar = resolvedUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+        (renderModel.progress?.let { it.isValid() && it.percent > 0f } == true)
     val detailedBottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
 
     Column(
@@ -1470,11 +1500,26 @@ fun KototoroContentCardDetailedList(
                         .align(Alignment.BottomEnd)
                         .padding(end = detailedBadgePadding, bottom = detailedBadgePadding + detailedBottomBadgeOffset),
                 )
-                if (renderModel.progress != null) {
-                    ContentCardBottomProgressBar(
-                        progress = renderModel.progress,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
+                when (resolvedUiPrefs.cardProgressStyle) {
+                    CardProgressStyle.BOTTOM_BAR -> {
+                        if (renderModel.progress != null) {
+                            ContentCardBottomProgressBar(
+                                progress = renderModel.progress,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
+                        }
+                    }
+                    CardProgressStyle.CIRCULAR_BADGE -> {
+                        val hasBottomRightBadge = remember(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata) {
+                            hasVisibleCardBadges(resolvedUiPrefs.badgesBottomRight, renderModel, sourceMetadata)
+                        }
+                        ContentCardCoverProgressIndicator(
+                            progress = renderModel.progress,
+                            hasBottomRightBadge = hasBottomRightBadge,
+                            metrics = badgeMetrics,
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                        )
+                    }
                 }
             }
 
@@ -1578,15 +1623,41 @@ fun ContentListModel.asBadgeModel(
     scoreText = scoreText,
 )
 
+fun hasVisibleCardBadges(
+    badges: Set<String>,
+    item: ContentCardRenderModel,
+    sourceMetadata: ContentCardSourceMetadata? = null,
+): Boolean {
+    if (badges.isEmpty()) return false
+    val resolvedSource = sourceMetadata?.resolvedSource
+    val langText = sourceMetadata?.languageText
+    return ("tracker" in badges && item.metadataTrackingService != null) ||
+        ("favorite" in badges && item.isFavorite) ||
+        ("saved" in badges && item.isSaved) ||
+        ("source" in badges && resolvedSource != null) ||
+        ("language" in badges && !langText.isNullOrBlank()) ||
+        ("counter" in badges && item.counter > 0) ||
+        ("projection_count" in badges && item.projectionCount > 1) ||
+        ("score" in badges && !item.scoreText.isNullOrBlank()) ||
+        ("pin" in badges && item.isPinned) ||
+        ("nsfw" in badges && item.isNsfw)
+}
+
+fun hasVisibleCardBadges(
+    badges: Set<String>,
+    item: ContentListModel,
+    sourceMetadata: ContentCardSourceMetadata? = null,
+): Boolean = hasVisibleCardBadges(badges, item.toContentCardRenderModel(), sourceMetadata)
+
 @Composable
 fun ContentCardCoverProgressIndicator(
     progress: ReadingProgress?,
-    bottomRightBadges: Set<String>,
+    hasBottomRightBadge: Boolean,
     metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
     modifier: Modifier = Modifier,
 ) {
     progress ?: return
-    val badgeReservedHeight = if (bottomRightBadges.isNotEmpty()) {
+    val badgeReservedHeight = if (hasBottomRightBadge) {
         with(androidx.compose.ui.platform.LocalDensity.current) { metrics.textSize.toDp() } +
             (metrics.containerVerticalPadding * 2) +
             metrics.progressSpacing
@@ -1603,6 +1674,19 @@ fun ContentCardCoverProgressIndicator(
             .size(metrics.progressSize),
     )
 }
+
+@Composable
+fun ContentCardCoverProgressIndicator(
+    progress: ReadingProgress?,
+    bottomRightBadges: Set<String>,
+    metrics: ContentCardBadgeMetrics = ContentCardBadgeMetrics(),
+    modifier: Modifier = Modifier,
+) = ContentCardCoverProgressIndicator(
+    progress = progress,
+    hasBottomRightBadge = bottomRightBadges.isNotEmpty(),
+    metrics = metrics,
+    modifier = modifier,
+)
 
 @Composable
 fun ContentCardNsfwBadge(

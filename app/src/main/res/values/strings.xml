@@ -552,6 +552,9 @@
     <string name="browse_display_options_summary">This option has moved to Browse page search bar > More > Display options.</string>
     <string name="show_extra_info_on_cards">Show extra info on cards</string>
     <string name="show_extra_info_on_cards_summary">Display rating, status, chapter count and tags on content cards</string>
+    <string name="card_progress_style">Card progress style</string>
+    <string name="card_progress_style_bottom_bar">Bottom progress bar</string>
+    <string name="card_progress_style_circular_badge">Corner circular badge</string>
     <string name="text_suggestion_holder">Start reading manga and you will get personalized suggestions</string>
     <string name="exclude_nsfw_from_suggestions">Do not suggest NSFW manga</string>
     <string name="video_aspect_ratio">Aspect Ratio</string>

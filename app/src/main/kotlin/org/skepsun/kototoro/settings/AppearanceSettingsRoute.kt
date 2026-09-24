@@ -42,6 +42,7 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.prefs.NavItem
+import org.skepsun.kototoro.core.prefs.CardProgressStyle
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
@@ -173,6 +174,7 @@ fun AppearanceSettingsRoute(
         AppSettings.KEY_TABLET_LIST_FILTER_PANEL_DEFAULT,
     ) { isTabletListFilterPanelDefaultOpen }.value
     val progressIndicatorMode = settings.observeAsState(AppSettings.KEY_PROGRESS_INDICATORS) { progressIndicatorMode }.value
+    val cardProgressStyle = settings.observeAsState(AppSettings.KEY_CARD_PROGRESS_STYLE) { cardProgressStyle }.value
     val mangaListBadges = settings.observeAsState(AppSettings.KEY_MANGA_LIST_BADGES) { mangaListBadges }.value
     val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
     val isPanoramaCoverEnabled = settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }.value
@@ -317,7 +319,7 @@ fun AppearanceSettingsRoute(
     } ?: BackgroundArtworkSource.LAST_READ
     val customBackgroundImageName = remember(backgroundArtworkUri) {
         backgroundArtworkUri?.let { uri ->
-            context.contentResolver.resolveName(uri)?.takeIf { it.isNotBlank() }
+            runCatching { context.contentResolver.resolveName(uri) }.getOrNull()?.takeIf { it.isNotBlank() }
         }
     }
     val selectBackgroundArtworkImage = rememberLauncherForActivityResult(
@@ -352,6 +354,7 @@ fun AppearanceSettingsRoute(
         homeHeroContentLayouts = coordinator.buildHomeHeroContentLayoutOptions(),
         listModes = coordinator.buildListModeOptions(),
         progressIndicatorModes = coordinator.buildProgressIndicatorModeOptions(),
+        cardProgressStyles = coordinator.buildCardProgressStyleOptions(),
         badgeOptions = coordinator.buildBadgeOptions(),
         bottomRightBadgeOptions = coordinator.buildBottomRightBadgeOptions(),
         mangaListBadges = coordinator.buildMangaListBadgeOptions(),
@@ -403,6 +406,7 @@ fun AppearanceSettingsRoute(
         tabletListPreviewMode = tabletListPreviewMode,
         isTabletListFilterPanelDefaultOpen = isTabletListFilterPanelDefaultOpen,
         progressIndicatorMode = progressIndicatorMode,
+        cardProgressStyle = cardProgressStyle,
         badgesTopLeft = settings.observeAsState(AppSettings.KEY_BADGES_TOP_LEFT) { badgesTopLeft }.value,
         badgesTopRight = settings.observeAsState(AppSettings.KEY_BADGES_TOP_RIGHT) { badgesTopRight }.value,
         badgesBottomLeft = settings.observeAsState(AppSettings.KEY_BADGES_BOTTOM_LEFT) { badgesBottomLeft }.value,
@@ -495,6 +499,7 @@ fun AppearanceSettingsRoute(
         onTabletListPreviewModeChange = { settings.tabletListPreviewMode = it },
         onTabletListFilterPanelDefaultChange = { settings.isTabletListFilterPanelDefaultOpen = it },
         onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
+        onCardProgressStyleChange = { settings.cardProgressStyle = it },
         onBadgesTopLeftChange = { settings.badgesTopLeft = it },
         onBadgesTopRightChange = { settings.badgesTopRight = it },
         onBadgesBottomLeftChange = { settings.badgesBottomLeft = it },
@@ -842,6 +847,16 @@ private class AppearanceSettingsCoordinator(
         val labels = context.resources.getStringArray(R.array.progress_indicators)
         return ProgressIndicatorMode.entries.mapIndexed { index, value ->
             SettingsChoiceOption(value = value, label = labels[index])
+        }
+    }
+
+    fun buildCardProgressStyleOptions(): List<SettingsChoiceOption<CardProgressStyle>> {
+        return CardProgressStyle.entries.map { style ->
+            val labelRes = when (style) {
+                CardProgressStyle.BOTTOM_BAR -> R.string.card_progress_style_bottom_bar
+                CardProgressStyle.CIRCULAR_BADGE -> R.string.card_progress_style_circular_badge
+            }
+            SettingsChoiceOption(value = style, label = context.getString(labelRes))
         }
     }
 

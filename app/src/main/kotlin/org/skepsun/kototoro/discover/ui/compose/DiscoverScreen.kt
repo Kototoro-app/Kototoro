@@ -140,7 +140,8 @@ fun DiscoverScreen(
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
-            AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
+        AppSettings.KEY_SHOW_EXTRA_INFO_ON_CARDS,
+        AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         DiscoverScreenPrefs(
             gridScale = gridSize / 100f,
@@ -148,8 +149,9 @@ fun DiscoverScreen(
                 badgesTopLeft = badgesTopLeft,
                 badgesTopRight = badgesTopRight,
                 badgesBottomLeft = badgesBottomLeft,
-                    showExtraInfo = showExtraInfoOnCards,
+                showExtraInfo = showExtraInfoOnCards,
                 badgesBottomRight = badgesBottomRight,
+                cardProgressStyle = cardProgressStyle,
             ),
         )
     }

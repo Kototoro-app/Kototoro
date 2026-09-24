@@ -2654,6 +2654,10 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = sanitizeBadgeValues(prefs.getStringSet(KEY_MANGA_LIST_BADGES, null))
         set(value) = prefs.edit { putStringSet(KEY_MANGA_LIST_BADGES, sanitizeBadgeValues(value)) }
 
+    var cardProgressStyle: CardProgressStyle
+        get() = prefs.getEnumValue(KEY_CARD_PROGRESS_STYLE, CardProgressStyle.BOTTOM_BAR)
+        set(value) = prefs.edit { putEnumValue(KEY_CARD_PROGRESS_STYLE, value) }
+
     fun subscribe(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
     }
@@ -3394,6 +3398,7 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
 
         const val KEY_BACKUP_WEBDAV_POLICY_NOTE = "backup_periodic_webdav_policy_note"
         const val KEY_MANGA_LIST_BADGES = "manga_list_badges"
+        const val KEY_CARD_PROGRESS_STYLE = "card_progress_style"
         const val KEY_BADGES_TOP_LEFT = "badges_top_left"
         const val KEY_BADGES_TOP_RIGHT = "badges_top_right"
         const val KEY_BADGES_BOTTOM_LEFT = "badges_bottom_left"

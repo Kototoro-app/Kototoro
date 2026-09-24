@@ -196,6 +196,7 @@ fun SearchResultsRoute(
         AppSettings.KEY_BADGES_TOP_RIGHT,
         AppSettings.KEY_BADGES_BOTTOM_LEFT,
         AppSettings.KEY_BADGES_BOTTOM_RIGHT,
+        AppSettings.KEY_CARD_PROGRESS_STYLE,
     ) {
         SearchResultsScreenPrefs(
             cardUiPrefs = ContentCardUiPrefs(
@@ -203,6 +204,7 @@ fun SearchResultsRoute(
                 badgesTopRight = badgesTopRight,
                 badgesBottomLeft = badgesBottomLeft,
                 badgesBottomRight = badgesBottomRight,
+                cardProgressStyle = cardProgressStyle,
             ),
         )
     }

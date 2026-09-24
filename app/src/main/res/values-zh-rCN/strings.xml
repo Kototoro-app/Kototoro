@@ -3986,4 +3986,7 @@ SHA-256 指纹:
     <string name="settings_source_cleared">已清理</string>
     <string name="settings_source_runtime_dir_title">使用 runtime 目录解析</string>
     <string name="settings_source_runtime_dir_summary">切换 Legado 目录/详情链路的 standalone runtime 调试开关。</string>
+    <string name="card_progress_style">卡片进度样式</string>
+    <string name="card_progress_style_bottom_bar">底端进度条</string>
+    <string name="card_progress_style_circular_badge">角落环形角标</string>
 </resources>

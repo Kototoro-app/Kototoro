@@ -36,6 +36,7 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
+import org.skepsun.kototoro.core.prefs.CardProgressStyle
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
@@ -79,6 +80,7 @@ data class AppearanceSettingsUiState(
     val tabletListPreviewMode: TabletListPreviewMode,
     val isTabletListFilterPanelDefaultOpen: Boolean,
     val progressIndicatorMode: ProgressIndicatorMode,
+    val cardProgressStyle: CardProgressStyle,
     val badgesTopLeft: Set<String>,
     val badgesTopRight: Set<String>,
     val badgesBottomLeft: Set<String>,
@@ -141,6 +143,7 @@ data class AppearanceSettingsOptions(
     val homeHeroContentLayouts: List<SettingsChoiceOption<HomeHeroContentLayout>>,
     val listModes: List<SettingsChoiceOption<ListMode>>,
     val progressIndicatorModes: List<SettingsChoiceOption<ProgressIndicatorMode>>,
+    val cardProgressStyles: List<SettingsChoiceOption<CardProgressStyle>>,
     val badgeOptions: List<SettingsChoiceOption<String>>,
     val bottomRightBadgeOptions: List<SettingsChoiceOption<String>>,
     val mangaListBadges: List<SettingsChoiceOption<String>>,
@@ -199,6 +202,7 @@ fun AppearanceSettingsScreen(
     onTabletListPreviewModeChange: (TabletListPreviewMode) -> Unit,
     onTabletListFilterPanelDefaultChange: (Boolean) -> Unit,
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
+    onCardProgressStyleChange: (CardProgressStyle) -> Unit,
     onBadgesTopLeftChange: (Set<String>) -> Unit,
     onBadgesTopRightChange: (Set<String>) -> Unit,
     onBadgesBottomLeftChange: (Set<String>) -> Unit,
@@ -619,6 +623,15 @@ fun AppearanceSettingsScreen(
                         value = state.progressIndicatorMode,
                         options = options.progressIndicatorModes,
                         onValueChange = onProgressIndicatorModeChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.card_progress_style),
+                        iconRes = R.drawable.ic_progress_marker,
+                        value = state.cardProgressStyle,
+                        options = options.cardProgressStyles,
+                        onValueChange = onCardProgressStyleChange,
                     )
                 }
                 item {

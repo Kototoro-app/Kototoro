@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.CardProgressStyle
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.CompactContentCoverCornerRadius
@@ -88,6 +89,7 @@ import org.skepsun.kototoro.list.ui.compose.ContentCardCornerBadges
 import org.skepsun.kototoro.list.ui.compose.ContentCardCoverProgressIndicator
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCardGrid
 import org.skepsun.kototoro.list.ui.compose.contentCardBadgeMetricsFor
+import org.skepsun.kototoro.list.ui.compose.hasVisibleCardBadges
 import org.skepsun.kototoro.list.ui.compose.rememberContentCardUiPrefs
 import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.parsers.model.Content
@@ -441,7 +443,8 @@ private fun HomeListRailRowItem(
         val coverShape = if (listMode == ListMode.DETAILED_LIST) ContentCoverShape else CompactContentCoverShape
         val coverRadius = if (listMode == ListMode.DETAILED_LIST) ContentCoverCornerRadius else CompactContentCoverCornerRadius
         val rimBorderBrush = rememberCoverRimBorderBrush(isIosStyle)
-        val hasProgressBar = item.progress?.let { it.isValid() && it.percent > 0f } == true
+        val hasProgressBar = cardUiPrefs.cardProgressStyle == CardProgressStyle.BOTTOM_BAR &&
+            (item.progress?.let { it.isValid() && it.percent > 0f } == true)
         val bottomBadgeOffset = if (hasProgressBar) 2.dp else 0.dp
         val badgePadding = 3.dp
 
@@ -550,11 +553,26 @@ private fun HomeListRailRowItem(
                     .align(Alignment.BottomEnd)
                     .padding(end = badgePadding, bottom = badgePadding + bottomBadgeOffset),
             )
-            if (item.progress != null) {
-                ContentCardBottomProgressBar(
-                    progress = item.progress,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+            when (cardUiPrefs.cardProgressStyle) {
+                CardProgressStyle.BOTTOM_BAR -> {
+                    if (item.progress != null) {
+                        ContentCardBottomProgressBar(
+                            progress = item.progress,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        )
+                    }
+                }
+                CardProgressStyle.CIRCULAR_BADGE -> {
+                    val hasBottomRightBadge = remember(cardUiPrefs.badgesBottomRight, badgeModel) {
+                        hasVisibleCardBadges(cardUiPrefs.badgesBottomRight, badgeModel, null)
+                    }
+                    ContentCardCoverProgressIndicator(
+                        progress = item.progress,
+                        hasBottomRightBadge = hasBottomRightBadge,
+                        metrics = badgeMetrics,
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    )
+                }
             }
         }
 
