@@ -30,7 +30,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.ListMode
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.explore.ui.compose.ExploreSelectionTopBar
 import org.skepsun.kototoro.explore.ui.compose.ExploreSourceSelectionTopBarState
@@ -115,6 +117,8 @@ internal fun BoxScope.MainTopChrome(
     selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
     onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
     displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
+    topBarStyle: TopBarStyle = TopBarStyle.EXPANDED_SEARCH,
+    favoritesTabsPosition: FavoritesTabsPosition = FavoritesTabsPosition.BOTTOM_RAIL,
 ) {
     val topChromeModifier = Modifier
         .align(if (isLandscapeNavigation) Alignment.TopStart else Alignment.TopCenter)
@@ -188,11 +192,15 @@ internal fun BoxScope.MainTopChrome(
                 sortOrders = sortOrders,
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
+                topBarStyle = topBarStyle,
+                favoritesTabsPosition = favoritesTabsPosition,
                 displayOptionsExtraContent = displayOptionsExtraContent,
                 modifier = contentModifier,
             )
         }
-        if (reserveCompactTabsRail || topTabsOverrideState != null) {
+        val shouldShowBottomTabsRail = (reserveCompactTabsRail || topTabsOverrideState != null) &&
+            favoritesTabsPosition == FavoritesTabsPosition.BOTTOM_RAIL
+        if (shouldShowBottomTabsRail) {
             val tokens = LocalInterfaceStyleTokens.current
             val rowHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding() +
                 tokens.mainTopBarHeight

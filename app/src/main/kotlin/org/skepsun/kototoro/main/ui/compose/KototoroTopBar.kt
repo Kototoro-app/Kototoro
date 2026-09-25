@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -77,12 +78,16 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
+import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
@@ -221,6 +226,8 @@ fun KototoroTopBar(
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
     displayOptionsExtraContent: (@Composable (() -> Unit) -> Unit)? = null,
+    topBarStyle: TopBarStyle = TopBarStyle.EXPANDED_SEARCH,
+    favoritesTabsPosition: FavoritesTabsPosition = FavoritesTabsPosition.BOTTOM_RAIL,
     modifier: Modifier = Modifier,
 ) {
     var isMoreMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -245,6 +252,15 @@ fun KototoroTopBar(
     )
     val showMoreActions = true
     val topBarTitle = titleText ?: titleRes?.let { stringResource(it) }
+    var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
+    val isInlineTabs = compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.INLINE_RAIL
+    val hidePrimaryControlsForTabs = isInlineTabs && areCompactTabsExpanded
+
+    LaunchedEffect(compactTabsState, favoritesTabsPosition) {
+        if (!isInlineTabs) {
+            areCompactTabsExpanded = false
+        }
+    }
 
     Column(
         modifier = modifier
@@ -260,74 +276,185 @@ fun KototoroTopBar(
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!topBarTitle.isNullOrBlank()) {
-                val maxWidth = 120.dp
-                if (compactTabsState != null) {
-                    CompactCategoryTitle(
-                        title = topBarTitle,
-                        state = compactTabsState,
-                        modifier = Modifier.widthIn(max = maxWidth),
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier.widthIn(max = maxWidth),
-                        verticalArrangement = Arrangement.Center,
+            if (isInlineTabs) {
+                AnimatedVisibility(
+                    visible = !hidePrimaryControlsForTabs,
+                    enter = fadeIn() + expandHorizontally(),
+                    exit = shrinkHorizontally() + fadeOut(),
+                ) {
+                    TopBarControlSurface(
+                        modifier = Modifier.size(topBarControlHeight),
                     ) {
-                        Text(
-                            text = topBarTitle,
-                            style = if (subtitleText.isNullOrBlank()) {
-                                MaterialTheme.typography.titleLarge
-                            } else {
-                                MaterialTheme.typography.titleMedium
-                            },
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (!subtitleText.isNullOrBlank()) {
-                            Text(
-                                text = subtitleText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                        IconButton(
+                            onClick = onSearchClick,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        ) {
+                            Icon(
+                                Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.search),
+                                modifier = Modifier.size(topBarIconSize),
                             )
                         }
                     }
                 }
-            }
-            TopBarControlSurface(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(topBarControlHeight)
-                    .clip(CompactTopBarPillShape)
-                    .clickable(onClick = onSearchClick),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = stringResource(R.string.search),
-                        modifier = Modifier.size(topBarIconSize),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
                     Text(
-                        text = query.ifBlank { stringResource(R.string.search_bar_placeholder) },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        text = topBarTitle,
+                        modifier = Modifier.widthIn(max = 72.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
+                InlineCompactTopBarTabsRail(
+                    state = compactTabsState,
+                    modifier = Modifier
+                        .weight(1f, fill = true)
+                        .widthIn(max = if (hidePrimaryControlsForTabs) Dp.Unspecified else 196.dp),
+                    onExpandedChange = { areCompactTabsExpanded = it },
+                )
+            } else if (topBarStyle == TopBarStyle.COMPACT) {
+                TopBarControlSurface(
+                    modifier = Modifier.size(topBarControlHeight),
+                ) {
+                    IconButton(
+                        onClick = onSearchClick,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    ) {
+                        Icon(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search),
+                            modifier = Modifier.size(topBarIconSize),
+                        )
+                    }
+                }
+                if (!topBarTitle.isNullOrBlank()) {
+                    if (compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.TITLE_DROPDOWN) {
+                        CompactCategoryTitle(
+                            title = topBarTitle,
+                            state = compactTabsState,
+                            modifier = Modifier.widthIn(max = 140.dp),
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.widthIn(max = 160.dp),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = topBarTitle,
+                                style = if (subtitleText.isNullOrBlank()) {
+                                    MaterialTheme.typography.titleLarge
+                                } else {
+                                    MaterialTheme.typography.titleMedium
+                                },
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (!subtitleText.isNullOrBlank()) {
+                                Text(
+                                    text = subtitleText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
+            } else {
+                if (!topBarTitle.isNullOrBlank()) {
+                    val maxWidth = 120.dp
+                    if (compactTabsState != null && favoritesTabsPosition == FavoritesTabsPosition.TITLE_DROPDOWN) {
+                        CompactCategoryTitle(
+                            title = topBarTitle,
+                            state = compactTabsState,
+                            modifier = Modifier.widthIn(max = maxWidth),
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier.widthIn(max = maxWidth),
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = topBarTitle,
+                                style = if (subtitleText.isNullOrBlank()) {
+                                    MaterialTheme.typography.titleLarge
+                                } else {
+                                    MaterialTheme.typography.titleMedium
+                                },
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (!subtitleText.isNullOrBlank()) {
+                                Text(
+                                    text = subtitleText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+                TopBarControlSurface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(topBarControlHeight),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .tvFocusable(shape = Capsule(), addFocusTarget = false)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                role = Role.Button,
+                                onClickLabel = stringResource(R.string.search),
+                                onClick = onSearchClick,
+                            )
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.Search,
+                            contentDescription = stringResource(R.string.search),
+                            modifier = Modifier.size(topBarIconSize),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = query.ifBlank { stringResource(R.string.search_bar_placeholder) },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
             AnimatedVisibility(
-                visible = true,
+                visible = !hidePrimaryControlsForTabs,
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
@@ -961,6 +1088,114 @@ private fun CompactCategoryTitle(
                         }
                     },
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InlineCompactTopBarTabsRail(
+    state: CompactTabsTopBarOverrideState,
+    modifier: Modifier = Modifier,
+    onExpandedChange: (Boolean) -> Unit = {},
+) {
+    val tokens = LocalInterfaceStyleTokens.current
+    val density = LocalDensity.current
+    val listState = rememberLazyListState()
+    var restoreRequest by remember { mutableIntStateOf(0) }
+    var previousSelectedItemId by remember { mutableStateOf<Long?>(null) }
+    val selectedIndex = state.items.indexOfFirst { it.id == state.selectedItemId }
+    EnsureItemFullyVisible(listState = listState, targetIndex = selectedIndex)
+    val isScrollInProgress = listState.isScrollInProgress
+    LaunchedEffect(isScrollInProgress) {
+        if (isScrollInProgress) {
+            onExpandedChange(true)
+        } else {
+            delay(900)
+            onExpandedChange(false)
+        }
+    }
+    LaunchedEffect(restoreRequest) {
+        if (restoreRequest <= 0) {
+            return@LaunchedEffect
+        }
+        onExpandedChange(true)
+        delay(1600)
+        if (!listState.isScrollInProgress) {
+            onExpandedChange(false)
+        }
+    }
+    LaunchedEffect(state.selectedItemId, selectedIndex) {
+        val previous = previousSelectedItemId
+        previousSelectedItemId = state.selectedItemId
+        if (previous == null || previous == state.selectedItemId) {
+            return@LaunchedEffect
+        }
+        if (selectedIndex < 0) {
+            return@LaunchedEffect
+        }
+        if (state.autoExpandOnSelection) {
+            onExpandedChange(true)
+        }
+        listState.animateScrollToItem(index = selectedIndex, scrollOffset = -with(density) { 24.dp.roundToPx() })
+        if (state.autoExpandOnSelection) {
+            delay(1600)
+            if (!listState.isScrollInProgress) {
+                onExpandedChange(false)
+            }
+        }
+    }
+    Box(
+        modifier = modifier.height(tokens.minimumTouchTarget),
+    ) {
+        TopBarControlSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(tokens.topBarButtonSize)
+                .align(Alignment.Center),
+        ) {}
+        LazyRow(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(tokens.minimumTouchTarget)
+                .compactRailEdgeFade(
+                    fadeStart = listState.canScrollBackward,
+                    fadeEnd = listState.canScrollForward,
+                )
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(horizontal = 1.dp),
+        ) {
+            items(items = state.items, key = { it.id }) { item ->
+                val selected = item.id == state.selectedItemId
+                Box(
+                    modifier = Modifier
+                        .height(tokens.minimumTouchTarget)
+                        .clickable {
+                            restoreRequest += 1
+                            state.onItemSelected(item.id)
+                        }
+                        .padding(horizontal = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        maxLines = 1,
+                        fontWeight = if (selected) {
+                            androidx.compose.ui.text.font.FontWeight.SemiBold
+                        } else {
+                            androidx.compose.ui.text.font.FontWeight.Normal
+                        },
+                    )
+                }
             }
         }
     }

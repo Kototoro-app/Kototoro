@@ -3,10 +3,12 @@ package org.skepsun.kototoro.main.ui.compose
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import org.skepsun.kototoro.core.prefs.AppSettings
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.ListToDetailsTransition
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.SpaceSwitcherPosition
 import org.skepsun.kototoro.core.prefs.TabletUiMode
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.ui.widgets.resolveNavBarHeight
 import org.skepsun.kototoro.list.domain.ListSortOrder
@@ -34,6 +36,8 @@ internal class KototoroAppPrefs internal constructor(
     val showAllUpdates: State<Boolean>,
     val feedLimit: State<Int>,
     val exitConfirmationEnabled: State<Boolean>,
+    val topBarStyle: State<TopBarStyle>,
+    val favoritesTabsPosition: State<FavoritesTabsPosition>,
 )
 
 @Composable
@@ -118,6 +122,12 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
     val exitConfirmationEnabled = appSettings.observeAsState(
         AppSettings.KEY_EXIT_CONFIRM,
     ) { isExitConfirmationEnabled }
+    val topBarStyle = appSettings.observeAsState(
+        AppSettings.KEY_TOP_BAR_STYLE,
+    ) { topBarStyle }
+    val favoritesTabsPosition = appSettings.observeAsState(
+        AppSettings.KEY_FAVORITES_TABS_POSITION,
+    ) { favoritesTabsPosition }
     return KototoroAppPrefs(
         navigationPrefs = navigationPrefs,
         displayPrefs = displayPrefs,
@@ -134,5 +144,7 @@ internal fun rememberKototoroAppPrefs(appSettings: AppSettings): KototoroAppPref
         showAllUpdates = showAllUpdates,
         feedLimit = feedLimit,
         exitConfirmationEnabled = exitConfirmationEnabled,
+        topBarStyle = topBarStyle,
+        favoritesTabsPosition = favoritesTabsPosition,
     )
 }

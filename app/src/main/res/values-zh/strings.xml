@@ -3375,4 +3375,11 @@ SHA-256 指纹:
     <string name="card_progress_style">卡片进度样式</string>
     <string name="card_progress_style_bottom_bar">底端进度条</string>
     <string name="card_progress_style_circular_badge">角落环形角标</string>
+    <string name="top_bar_style">顶栏样式</string>
+    <string name="top_bar_style_expanded_search">展开搜索栏（现代）</string>
+    <string name="top_bar_style_compact">紧凑图标（经典）</string>
+    <string name="favorites_tabs_position">收藏分组位置</string>
+    <string name="favorites_tabs_position_bottom_rail">顶栏下方（独立滑动栏）</string>
+    <string name="favorites_tabs_position_title_dropdown">标题下拉菜单</string>
+    <string name="favorites_tabs_position_inline_rail">顶栏内联滑动栏</string>
 </resources>

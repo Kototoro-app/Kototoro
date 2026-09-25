@@ -43,7 +43,9 @@ import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.prefs.NavItem
 import org.skepsun.kototoro.core.prefs.CardProgressStyle
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletListPreviewMode
@@ -175,6 +177,8 @@ fun AppearanceSettingsRoute(
     ) { isTabletListFilterPanelDefaultOpen }.value
     val progressIndicatorMode = settings.observeAsState(AppSettings.KEY_PROGRESS_INDICATORS) { progressIndicatorMode }.value
     val cardProgressStyle = settings.observeAsState(AppSettings.KEY_CARD_PROGRESS_STYLE) { cardProgressStyle }.value
+    val topBarStyle = settings.observeAsState(AppSettings.KEY_TOP_BAR_STYLE) { topBarStyle }.value
+    val favoritesTabsPosition = settings.observeAsState(AppSettings.KEY_FAVORITES_TABS_POSITION) { favoritesTabsPosition }.value
     val mangaListBadges = settings.observeAsState(AppSettings.KEY_MANGA_LIST_BADGES) { mangaListBadges }.value
     val isDescriptionExpanded = settings.observeAsState(AppSettings.KEY_COLLAPSE_DESCRIPTION) { isDescriptionExpanded }.value
     val isPanoramaCoverEnabled = settings.observeAsState(AppSettings.KEY_PANORAMA_ENABLED) { isPanoramaCoverEnabled }.value
@@ -355,6 +359,8 @@ fun AppearanceSettingsRoute(
         listModes = coordinator.buildListModeOptions(),
         progressIndicatorModes = coordinator.buildProgressIndicatorModeOptions(),
         cardProgressStyles = coordinator.buildCardProgressStyleOptions(),
+        topBarStyles = coordinator.buildTopBarStyleOptions(),
+        favoritesTabsPositions = coordinator.buildFavoritesTabsPositionOptions(),
         badgeOptions = coordinator.buildBadgeOptions(),
         bottomRightBadgeOptions = coordinator.buildBottomRightBadgeOptions(),
         mangaListBadges = coordinator.buildMangaListBadgeOptions(),
@@ -407,6 +413,8 @@ fun AppearanceSettingsRoute(
         isTabletListFilterPanelDefaultOpen = isTabletListFilterPanelDefaultOpen,
         progressIndicatorMode = progressIndicatorMode,
         cardProgressStyle = cardProgressStyle,
+        topBarStyle = topBarStyle,
+        favoritesTabsPosition = favoritesTabsPosition,
         badgesTopLeft = settings.observeAsState(AppSettings.KEY_BADGES_TOP_LEFT) { badgesTopLeft }.value,
         badgesTopRight = settings.observeAsState(AppSettings.KEY_BADGES_TOP_RIGHT) { badgesTopRight }.value,
         badgesBottomLeft = settings.observeAsState(AppSettings.KEY_BADGES_BOTTOM_LEFT) { badgesBottomLeft }.value,
@@ -500,6 +508,8 @@ fun AppearanceSettingsRoute(
         onTabletListFilterPanelDefaultChange = { settings.isTabletListFilterPanelDefaultOpen = it },
         onProgressIndicatorModeChange = { settings.progressIndicatorMode = it },
         onCardProgressStyleChange = { settings.cardProgressStyle = it },
+        onTopBarStyleChange = { settings.topBarStyle = it },
+        onFavoritesTabsPositionChange = { settings.favoritesTabsPosition = it },
         onBadgesTopLeftChange = { settings.badgesTopLeft = it },
         onBadgesTopRightChange = { settings.badgesTopRight = it },
         onBadgesBottomLeftChange = { settings.badgesBottomLeft = it },
@@ -857,6 +867,27 @@ private class AppearanceSettingsCoordinator(
                 CardProgressStyle.CIRCULAR_BADGE -> R.string.card_progress_style_circular_badge
             }
             SettingsChoiceOption(value = style, label = context.getString(labelRes))
+        }
+    }
+
+    fun buildTopBarStyleOptions(): List<SettingsChoiceOption<TopBarStyle>> {
+        return TopBarStyle.entries.map { style ->
+            val labelRes = when (style) {
+                TopBarStyle.EXPANDED_SEARCH -> R.string.top_bar_style_expanded_search
+                TopBarStyle.COMPACT -> R.string.top_bar_style_compact
+            }
+            SettingsChoiceOption(value = style, label = context.getString(labelRes))
+        }
+    }
+
+    fun buildFavoritesTabsPositionOptions(): List<SettingsChoiceOption<FavoritesTabsPosition>> {
+        return FavoritesTabsPosition.entries.map { position ->
+            val labelRes = when (position) {
+                FavoritesTabsPosition.BOTTOM_RAIL -> R.string.favorites_tabs_position_bottom_rail
+                FavoritesTabsPosition.TITLE_DROPDOWN -> R.string.favorites_tabs_position_title_dropdown
+                FavoritesTabsPosition.INLINE_RAIL -> R.string.favorites_tabs_position_inline_rail
+            }
+            SettingsChoiceOption(value = position, label = context.getString(labelRes))
         }
     }
 

@@ -37,7 +37,9 @@ import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.prefs.NavIndicatorStyle
 import org.skepsun.kototoro.core.ui.theme.tokens
 import org.skepsun.kototoro.core.prefs.CardProgressStyle
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
 import org.skepsun.kototoro.core.prefs.ProgressIndicatorMode
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.prefs.ScreenshotsPolicy
 import org.skepsun.kototoro.core.prefs.SearchSuggestionType
 import org.skepsun.kototoro.core.prefs.TabletListPreviewMode
@@ -81,6 +83,8 @@ data class AppearanceSettingsUiState(
     val isTabletListFilterPanelDefaultOpen: Boolean,
     val progressIndicatorMode: ProgressIndicatorMode,
     val cardProgressStyle: CardProgressStyle,
+    val topBarStyle: TopBarStyle,
+    val favoritesTabsPosition: FavoritesTabsPosition,
     val badgesTopLeft: Set<String>,
     val badgesTopRight: Set<String>,
     val badgesBottomLeft: Set<String>,
@@ -144,6 +148,8 @@ data class AppearanceSettingsOptions(
     val listModes: List<SettingsChoiceOption<ListMode>>,
     val progressIndicatorModes: List<SettingsChoiceOption<ProgressIndicatorMode>>,
     val cardProgressStyles: List<SettingsChoiceOption<CardProgressStyle>>,
+    val topBarStyles: List<SettingsChoiceOption<TopBarStyle>>,
+    val favoritesTabsPositions: List<SettingsChoiceOption<FavoritesTabsPosition>>,
     val badgeOptions: List<SettingsChoiceOption<String>>,
     val bottomRightBadgeOptions: List<SettingsChoiceOption<String>>,
     val mangaListBadges: List<SettingsChoiceOption<String>>,
@@ -203,6 +209,8 @@ fun AppearanceSettingsScreen(
     onTabletListFilterPanelDefaultChange: (Boolean) -> Unit,
     onProgressIndicatorModeChange: (ProgressIndicatorMode) -> Unit,
     onCardProgressStyleChange: (CardProgressStyle) -> Unit,
+    onTopBarStyleChange: (TopBarStyle) -> Unit,
+    onFavoritesTabsPositionChange: (FavoritesTabsPosition) -> Unit,
     onBadgesTopLeftChange: (Set<String>) -> Unit,
     onBadgesTopRightChange: (Set<String>) -> Unit,
     onBadgesBottomLeftChange: (Set<String>) -> Unit,
@@ -879,6 +887,24 @@ fun AppearanceSettingsScreen(
                             "${state.interfaceStyle.tokens().groupCornerRadius.value.toInt()}dp",
                         ),
                         onValueChange = onPopupRadiusChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.top_bar_style),
+                        iconRes = R.drawable.ic_search,
+                        value = state.topBarStyle,
+                        options = options.topBarStyles,
+                        onValueChange = onTopBarStyleChange,
+                    )
+                }
+                item {
+                    SettingsChoicePreference(
+                        title = stringResource(R.string.favorites_tabs_position),
+                        iconRes = R.drawable.ic_bookmark,
+                        value = state.favoritesTabsPosition,
+                        options = options.favoritesTabsPositions,
+                        onValueChange = onFavoritesTabsPositionChange,
                     )
                 }
             }

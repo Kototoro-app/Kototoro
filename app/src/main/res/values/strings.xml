@@ -555,6 +555,13 @@
     <string name="card_progress_style">Card progress style</string>
     <string name="card_progress_style_bottom_bar">Bottom progress bar</string>
     <string name="card_progress_style_circular_badge">Corner circular badge</string>
+    <string name="top_bar_style">Top bar style</string>
+    <string name="top_bar_style_expanded_search">Expanded search bar</string>
+    <string name="top_bar_style_compact">Compact icon</string>
+    <string name="favorites_tabs_position">Favorites categories position</string>
+    <string name="favorites_tabs_position_bottom_rail">Below top bar (tabs rail)</string>
+    <string name="favorites_tabs_position_title_dropdown">Title dropdown menu</string>
+    <string name="favorites_tabs_position_inline_rail">Inline tabs rail</string>
     <string name="text_suggestion_holder">Start reading manga and you will get personalized suggestions</string>
     <string name="exclude_nsfw_from_suggestions">Do not suggest NSFW manga</string>
     <string name="video_aspect_ratio">Aspect Ratio</string>

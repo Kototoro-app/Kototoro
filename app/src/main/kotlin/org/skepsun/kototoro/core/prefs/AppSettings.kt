@@ -2658,6 +2658,14 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getEnumValue(KEY_CARD_PROGRESS_STYLE, CardProgressStyle.BOTTOM_BAR)
         set(value) = prefs.edit { putEnumValue(KEY_CARD_PROGRESS_STYLE, value) }
 
+    var topBarStyle: TopBarStyle
+        get() = prefs.getEnumValue(KEY_TOP_BAR_STYLE, TopBarStyle.EXPANDED_SEARCH)
+        set(value) = prefs.edit { putEnumValue(KEY_TOP_BAR_STYLE, value) }
+
+    var favoritesTabsPosition: FavoritesTabsPosition
+        get() = prefs.getEnumValue(KEY_FAVORITES_TABS_POSITION, FavoritesTabsPosition.BOTTOM_RAIL)
+        set(value) = prefs.edit { putEnumValue(KEY_FAVORITES_TABS_POSITION, value) }
+
     fun subscribe(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
         prefs.registerOnSharedPreferenceChangeListener(listener)
     }
@@ -3399,6 +3407,8 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_BACKUP_WEBDAV_POLICY_NOTE = "backup_periodic_webdav_policy_note"
         const val KEY_MANGA_LIST_BADGES = "manga_list_badges"
         const val KEY_CARD_PROGRESS_STYLE = "card_progress_style"
+        const val KEY_TOP_BAR_STYLE = "top_bar_style"
+        const val KEY_FAVORITES_TABS_POSITION = "favorites_tabs_position"
         const val KEY_BADGES_TOP_LEFT = "badges_top_left"
         const val KEY_BADGES_TOP_RIGHT = "badges_top_right"
         const val KEY_BADGES_BOTTOM_LEFT = "badges_bottom_left"

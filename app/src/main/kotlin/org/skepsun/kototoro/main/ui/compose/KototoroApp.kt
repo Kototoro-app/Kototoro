@@ -101,6 +101,8 @@ import org.skepsun.kototoro.space.ui.SpaceSwitcherRailButton
 import org.skepsun.kototoro.space.ui.SpaceUiState
 import org.skepsun.kototoro.search.domain.LocalEntitySuggestion
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
+import org.skepsun.kototoro.core.prefs.FavoritesTabsPosition
+import org.skepsun.kototoro.core.prefs.TopBarStyle
 import org.skepsun.kototoro.core.prefs.observeAsState
 import org.skepsun.kototoro.core.util.FoldableUtils
 import org.skepsun.kototoro.core.jsonsource.SourceType
@@ -462,6 +464,8 @@ fun KototoroApp(
     val showAllUpdates by prefs.showAllUpdates
     val feedLimit by prefs.feedLimit
     val exitConfirmationEnabled by prefs.exitConfirmationEnabled
+    val topBarStyle by prefs.topBarStyle
+    val favoritesTabsPosition by prefs.favoritesTabsPosition
     val suppressSpaceContentMotion = spaceTransitionState.phase == SpaceTransitionPhase.COVERED ||
         spaceTransitionState.phase == SpaceTransitionPhase.REVEALING
     // Keep the shared transition scope STABLE across a space switch: the
@@ -1178,9 +1182,11 @@ fun KototoroApp(
                         activeLanguagePresetId = activeSourcePresetId,
                         onLanguagePresetSelected = onLanguagePresetSelected,
                         onManageLanguagePresets = onManageLanguagePresets,
-                        reserveCompactTabsRail = isFavoritesRoute,
+                        reserveCompactTabsRail = isFavoritesRoute && favoritesTabsPosition == FavoritesTabsPosition.BOTTOM_RAIL,
                         topTabsOverrideState = topTabsOverrideState,
                         topFilterRailOverrideState = topFilterRailOverrideState,
+                        topBarStyle = topBarStyle,
+                        favoritesTabsPosition = favoritesTabsPosition,
                         selectedContentType = selectedContentType,
                         enabledContentTypes = enabledContentTypes,
                         isContentTypeFilterVisible = effectiveContentTypeFilterVisible,
