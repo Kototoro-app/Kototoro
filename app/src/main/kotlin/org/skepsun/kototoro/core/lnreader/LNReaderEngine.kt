@@ -23,7 +23,7 @@ import javax.crypto.spec.SecretKeySpec
  * JsContentRepository and TVBoxQuickJsSpiderRuntime in this project.
  */
 class LNReaderEngine(
-    private val context: Context,
+    private val context: Context? = null,
     private val fetchBridge: LNReaderFetchBridge
 ) {
     companion object {
@@ -638,6 +638,15 @@ class LNReaderEngine(
         val parsedElements = mutableMapOf<Int, org.jsoup.nodes.Element>()
         var cheerioIdCounter = 0
 
+        fun parseNodes(htmlOrText: String): List<org.jsoup.nodes.Node> {
+            if (htmlOrText.isEmpty()) return emptyList()
+            return if (htmlOrText.contains("<") && htmlOrText.contains(">")) {
+                Jsoup.parseBodyFragment(htmlOrText).body().childNodesCopy()
+            } else {
+                listOf(org.jsoup.nodes.TextNode(htmlOrText))
+            }
+        }
+
         qjs.defineBinding("__nativeCheerio", FunctionBinding<String> { args ->
             val type = args.getOrNull(0) as? String ?: return@FunctionBinding "{}"
 
@@ -651,6 +660,97 @@ class LNReaderEngine(
                     Log.e(TAG, "Cheerio parse error: ${e.message}")
                     return@FunctionBinding "-1"
                 }
+            } else if (type == "mutate") {
+                val targetIdStr = args.getOrNull(1)?.toString() ?: "-1"
+                val targetId = targetIdStr.toIntOrNull() ?: -1
+                val action = args.getOrNull(2) as? String ?: ""
+                val value = args.getOrNull(3) as? String ?: ""
+                val extra = args.getOrNull(4) as? String
+
+                val element = parsedElements[targetId] ?: return@FunctionBinding "false"
+
+                try {
+                    when (action) {
+                        "replaceWith" -> {
+                            if (element.parent() == null) return@FunctionBinding "false"
+                            val nodes = parseNodes(value)
+                            if (nodes.isEmpty()) {
+                                element.remove()
+                            } else {
+                                for (node in nodes) {
+                                    element.before(node)
+                                }
+                                element.remove()
+                            }
+                        }
+                        "before" -> {
+                            if (element.parent() == null) return@FunctionBinding "false"
+                            val nodes = parseNodes(value)
+                            for (node in nodes) {
+                                element.before(node)
+                            }
+                        }
+                        "after" -> {
+                            if (element.parent() == null) return@FunctionBinding "false"
+                            val nodes = parseNodes(value)
+                            for (node in nodes.asReversed()) {
+                                element.after(node)
+                            }
+                        }
+                        "append" -> {
+                            val nodes = parseNodes(value)
+                            for (node in nodes) {
+                                element.appendChild(node)
+                            }
+                        }
+                        "prepend" -> {
+                            val nodes = parseNodes(value)
+                            for (node in nodes.asReversed()) {
+                                element.prependChild(node)
+                            }
+                        }
+                        "empty" -> {
+                            element.empty()
+                        }
+                        "remove" -> {
+                            element.remove()
+                        }
+                        "removeAttr" -> {
+                            element.removeAttr(value)
+                        }
+                        "addClass" -> {
+                            element.addClass(value)
+                        }
+                        "removeClass" -> {
+                            element.removeClass(value)
+                        }
+                        "toggleClass" -> {
+                            element.toggleClass(value)
+                        }
+                        "wrap" -> {
+                            if (value.isNotEmpty()) {
+                                element.wrap(value)
+                            }
+                        }
+                        "unwrap" -> {
+                            element.unwrap()
+                        }
+                        "setText" -> {
+                            element.text(value)
+                        }
+                        "setHtml" -> {
+                            element.html(value)
+                        }
+                        "setAttr" -> {
+                            element.attr(value, extra ?: "")
+                        }
+                        else -> return@FunctionBinding "false"
+                    }
+                    return@FunctionBinding "true"
+                } catch (e: Exception) {
+                    Log.e(TAG, "Cheerio mutate error: ${e.message}")
+                    return@FunctionBinding "false"
+                }
             } else if (type == "query") {
                 val parentIdStr = args.getOrNull(1)?.toString() ?: "-1"
                 val parentId = parentIdStr.toIntOrNull() ?: -1
@@ -663,10 +763,11 @@ class LNReaderEngine(
                         val sel = selector.substringAfter("__is__:")
                         return@FunctionBinding if (parent.`is`(sel)) "true" else "false"
                     }
-                    if (selector == "__root_text__") {
-                        return@FunctionBinding parent.text()
+                    if (selector == "__root_text__" || selector == "__text__") {
+                        val wt = parent.wholeText()
+                        return@FunctionBinding if (wt.contains("\n")) wt else parent.text()
                     }
-                    if (selector == "__root_html__") {
+                    if (selector == "__root_html__" || selector == "__html__") {
                         return@FunctionBinding parent.html()
                     }
                     if (selector == "__remove__") {
@@ -675,17 +776,59 @@ class LNReaderEngine(
                     }
 
                     val selection = when {
-                        selector == "__parent__" -> org.jsoup.select.Elements(parent.parent() ?: parent)
-                        selector == "__next__" -> parent.nextElementSibling()
-                            ?.let { org.jsoup.select.Elements(it) }
-                            ?: org.jsoup.select.Elements()
-                        selector == "__prev__" -> parent.previousElementSibling()
-                            ?.let { org.jsoup.select.Elements(it) }
-                            ?: org.jsoup.select.Elements()
+                        selector.startsWith("__parent__") -> {
+                            val subSel = selector.substringAfter("__parent__").removePrefix(":")
+                            val p = parent.parent()
+                            if (p == null) org.jsoup.select.Elements()
+                            else if (subSel.isNotEmpty() && !p.`is`(subSel)) org.jsoup.select.Elements()
+                            else org.jsoup.select.Elements(p)
+                        }
+                        selector.startsWith("__parents__") -> {
+                            val subSel = selector.substringAfter("__parents__").removePrefix(":")
+                            val parents = parent.parents()
+                            if (subSel.isNotEmpty()) parents.select(subSel) else parents
+                        }
+                        selector.startsWith("__next__") -> {
+                            val subSel = selector.substringAfter("__next__").removePrefix(":")
+                            val next = parent.nextElementSibling()
+                            if (next == null) org.jsoup.select.Elements()
+                            else if (subSel.isNotEmpty() && !next.`is`(subSel)) org.jsoup.select.Elements()
+                            else org.jsoup.select.Elements(next)
+                        }
+                        selector.startsWith("__prev__") -> {
+                            val subSel = selector.substringAfter("__prev__").removePrefix(":")
+                            val prev = parent.previousElementSibling()
+                            if (prev == null) org.jsoup.select.Elements()
+                            else if (subSel.isNotEmpty() && !prev.`is`(subSel)) org.jsoup.select.Elements()
+                            else org.jsoup.select.Elements(prev)
+                        }
+                        selector.startsWith("__nextAll__") -> {
+                            val subSel = selector.substringAfter("__nextAll__").removePrefix(":")
+                            val allSibs = parent.parent()?.children() ?: org.jsoup.select.Elements()
+                            val idx = parent.elementSiblingIndex()
+                            val nextAll = org.jsoup.select.Elements(allSibs.filter { it.elementSiblingIndex() > idx })
+                            if (subSel.isNotEmpty()) nextAll.select(subSel) else nextAll
+                        }
+                        selector.startsWith("__prevAll__") -> {
+                            val subSel = selector.substringAfter("__prevAll__").removePrefix(":")
+                            val allSibs = parent.parent()?.children() ?: org.jsoup.select.Elements()
+                            val idx = parent.elementSiblingIndex()
+                            val prevAll = org.jsoup.select.Elements(allSibs.filter { it.elementSiblingIndex() < idx }.reversed())
+                            if (subSel.isNotEmpty()) prevAll.select(subSel) else prevAll
+                        }
+                        selector.startsWith("__siblings__") -> {
+                            val subSel = selector.substringAfter("__siblings__").removePrefix(":")
+                            val sibs = parent.siblingElements()
+                            if (subSel.isNotEmpty()) sibs.select(subSel) else sibs
+                        }
                         selector.startsWith("__closest__:") -> parent.closest(selector.substringAfter("__closest__:"))
                             ?.let { org.jsoup.select.Elements(it) }
                             ?: org.jsoup.select.Elements()
-                        selector == "__children__" -> parent.children()
+                        selector.startsWith("__children__") -> {
+                            val subSel = selector.substringAfter("__children__").removePrefix(":")
+                            val children = parent.children()
+                            if (subSel.isNotEmpty()) children.select(subSel) else children
+                        }
                         selector.isNotEmpty() -> parent.select(selector)
                         else -> org.jsoup.select.Elements()
                     }
@@ -699,12 +842,20 @@ class LNReaderEngine(
                             }
                         }
 
+                        val elText = if (element.wholeText().contains("\n")) {
+                            element.wholeText()
+                        } else {
+                            element.text()
+                        }
+
                         val itemData = mapOf(
                             "id" to elId.toString(),
-                            "text" to element.text(),
+                            "text" to elText,
                             "html" to element.html(),
                             "tagName" to element.tagName(),
-                            "attrs" to attrs
+                            "name" to element.tagName().lowercase(),
+                            "attrs" to attrs,
+                            "attribs" to attrs
                         )
                         // Convert map to Json string manually
                         resultItems.add(json.encodeToString(
@@ -716,9 +867,18 @@ class LNReaderEngine(
                         ))
                     }
 
+                    val selText = if (selection.size == 1) {
+                        val el = selection.first()!!
+                        val wt = el.wholeText()
+                        if (wt.contains("\n")) wt else el.text()
+                    } else {
+                        val wt = selection.joinToString("") { it.wholeText() }
+                        if (wt.contains("\n")) wt else selection.text()
+                    }
+
                     val resultJson = """
 						{
-							"text": ${json.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(selection.text()))},
+							"text": ${json.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(selText))},
 							"html": ${json.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(selection.html()))},
 							"attrs": {
 								"href": ${json.encodeToString(JsonPrimitive.serializer(), JsonPrimitive(selection.attr("href")))},
@@ -781,12 +941,177 @@ class LNReaderEngine(
 								attrs: items[0] ? (items[0].attrs || {}) : {}
 							});
 						}
-						return {
+
+						const sel = {
 							_parentId: parentId,
 							_result: result,
-							text: function() { return result.text || ''; },
-							attr: function(name) { return (result.attrs && result.attrs[name]) || ''; },
-							html: function() { return result.html || ''; },
+							text: function(val) {
+								if (val !== undefined) {
+									if (result.items) {
+										result.items.forEach(function(item) {
+											globalThis.__nativeCheerio('mutate', item.id, 'setText', String(val));
+										});
+									}
+									result.text = String(val);
+									return this;
+								}
+								if (result._mutated) {
+									if (result.items && result.items.length === 1) {
+										return globalThis.__nativeCheerio('query', result.items[0].id, '__text__') || '';
+									}
+									return globalThis.__nativeCheerio('query', parentId, '__text__') || '';
+								}
+								if (result.text !== undefined) return result.text;
+								if (result.items && result.items.length > 0) {
+									return result.items.map(function(item) { return item.text || ''; }).join('');
+								}
+								return '';
+							},
+							attr: function(name, val) {
+								if (val !== undefined) {
+									if (result.items) {
+										result.items.forEach(function(item) {
+											globalThis.__nativeCheerio('mutate', item.id, 'setAttr', name, String(val));
+										});
+									}
+									if (result.attrs) result.attrs[name] = String(val);
+									return this;
+								}
+								return (result.attrs && result.attrs[name]) || '';
+							},
+							removeAttr: function(name) {
+								if (result.items) {
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'removeAttr', String(name));
+									});
+								}
+								if (result.attrs) delete result.attrs[name];
+								return this;
+							},
+							val: function(v) {
+								if (v !== undefined) {
+									return this.attr('value', v);
+								}
+								return this.attr('value');
+							},
+							html: function(val) {
+								if (val !== undefined) {
+									if (result.items) {
+										result.items.forEach(function(item) {
+											globalThis.__nativeCheerio('mutate', item.id, 'setHtml', String(val));
+										});
+									}
+									result.html = String(val);
+									return this;
+								}
+								if (result.html !== undefined) return result.html;
+								if (result.items && result.items.length > 0) {
+									return result.items.map(function(item) { return item.html || ''; }).join('');
+								}
+								return '';
+							},
+							replaceWith: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = typeof content === 'function' ? '' : String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'replaceWith', valStr);
+									});
+								}
+								return this;
+							},
+							before: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'before', valStr);
+									});
+								}
+								return this;
+							},
+							after: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'after', valStr);
+									});
+								}
+								return this;
+							},
+							append: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'append', valStr);
+									});
+								}
+								return this;
+							},
+							prepend: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'prepend', valStr);
+									});
+								}
+								return this;
+							},
+							empty: function() {
+								if (result.items) {
+									result._mutated = true;
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'empty', '');
+									});
+								}
+								return this;
+							},
+							wrap: function(content) {
+								if (result.items) {
+									result._mutated = true;
+									const valStr = String(content !== undefined ? content : '');
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'wrap', valStr);
+									});
+								}
+								return this;
+							},
+							unwrap: function() {
+								if (result.items) {
+									result._mutated = true;
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'unwrap', '');
+									});
+								}
+								return this;
+							},
+							addClass: function(cls) {
+								if (result.items) {
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'addClass', String(cls));
+									});
+								}
+								return this;
+							},
+							removeClass: function(cls) {
+								if (result.items) {
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'removeClass', String(cls));
+									});
+								}
+								return this;
+							},
+							toggleClass: function(cls) {
+								if (result.items) {
+									result.items.forEach(function(item) {
+										globalThis.__nativeCheerio('mutate', item.id, 'toggleClass', String(cls));
+									});
+								}
+								return this;
+							},
 							find: function(subSelector) {
 								if (result.items && result.items.length > 0) {
 									let items = [];
@@ -810,6 +1135,33 @@ class LNReaderEngine(
 								const classes = (this.attr('class') || '').split(/\s+/);
 								return classes.indexOf(name) >= 0;
 							},
+							has: function(selector) {
+								if (!result.items) return createSelection(parentId, {items:[]});
+								const filtered = result.items.filter(function(item) {
+									const r = parseQuery(parseInt(item.id), selector || '');
+									return r.items && r.items.length > 0;
+								});
+								return selectionFromItems(filtered);
+							},
+							add: function(other) {
+								let otherItems = [];
+								if (typeof other === 'string') {
+									const r = parseQuery(docId, other);
+									otherItems = r.items || [];
+								} else if (other && other._result && other._result.items) {
+									otherItems = other._result.items;
+								} else if (other && other.items) {
+									otherItems = other.items;
+								}
+								const currentItems = (result.items || []).slice();
+								const existingIds = new Set(currentItems.map(function(it) { return it.id; }));
+								otherItems.forEach(function(it) {
+									if (!existingIds.has(it.id)) {
+										currentItems.push(it);
+									}
+								});
+								return selectionFromItems(currentItems);
+							},
 							prop: function(name) {
 								if (name === 'tagName' || name === 'nodeName') {
 									const item = result.items && result.items[0];
@@ -821,39 +1173,60 @@ class LNReaderEngine(
 								if (!name) return {};
 								return this.attr('data-' + name);
 							},
-							parent: function() {
+							parent: function(subSel) {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
-								const resultStr = globalThis.__nativeCheerio('query', result.items[0].id, '__parent__');
-								let r = {items:[]};
-								try { r = JSON.parse(resultStr); } catch (e) {}
-								return createSelection(docId, r); 
+								const q = subSel ? ('__parent__:' + subSel) : '__parent__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
 							},
-							next: function() {
+							parents: function(subSel) {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
-								return createSelection(docId, parseQuery(result.items[0].id, '__next__'));
+								const q = subSel ? ('__parents__:' + subSel) : '__parents__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
 							},
-							prev: function() {
+							next: function(subSel) {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
-								return createSelection(docId, parseQuery(result.items[0].id, '__prev__'));
+								const q = subSel ? ('__next__:' + subSel) : '__next__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
+							},
+							nextAll: function(subSel) {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								const q = subSel ? ('__nextAll__:' + subSel) : '__nextAll__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
+							},
+							prev: function(subSel) {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								const q = subSel ? ('__prev__:' + subSel) : '__prev__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
+							},
+							prevAll: function(subSel) {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								const q = subSel ? ('__prevAll__:' + subSel) : '__prevAll__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
+							},
+							siblings: function(subSel) {
+								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
+								const q = subSel ? ('__siblings__:' + subSel) : '__siblings__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
 							},
 							closest: function(sel) {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
 								return createSelection(docId, parseQuery(result.items[0].id, '__closest__:' + (sel || '')));
 							},
-							children: function() {
+							children: function(subSel) {
 								if (!result.items || result.items.length === 0) return createSelection(parentId, {items:[]});
-								const resultStr = globalThis.__nativeCheerio('query', result.items[0].id, '__children__');
-								let r = {items:[]};
-								try { r = JSON.parse(resultStr); } catch (e) {}
-								return createSelection(docId, r);
+								const q = subSel ? ('__children__:' + subSel) : '__children__';
+								return createSelection(docId, parseQuery(result.items[0].id, q));
 							},
 							contents: function() {
 								return this.children();
 							},
-							remove: function() {
+							remove: function(subSel) {
 								if (result.items) {
+									result._mutated = true;
 									result.items.forEach(function(item) {
-										globalThis.__nativeCheerio('query', item.id, '__remove__');
+										if (!subSel || globalThis.__nativeCheerio('query', item.id, '__is__:' + subSel) === 'true') {
+											globalThis.__nativeCheerio('mutate', item.id, 'remove', '');
+										}
 									});
 								}
 								return this;
@@ -881,8 +1254,11 @@ class LNReaderEngine(
 								return selectionFromItems([result.items[lastIdx]]);
 							},
 							eq: function(index) {
-								if (!result.items || !result.items[index]) return this;
-								return selectionFromItems([result.items[index]]);
+								if (!result.items) return createSelection(parentId, {items:[]});
+								let idx = index || 0;
+								if (idx < 0) idx = result.items.length + idx;
+								if (!result.items[idx]) return createSelection(parentId, {items:[]});
+								return selectionFromItems([result.items[idx]]);
 							},
 							each: function(callback) {
 								if (result.items) {
@@ -905,7 +1281,13 @@ class LNReaderEngine(
 											results.push(item);
 										}
 									});
-									return createSelection(parentId, {items: results});
+									return selectionFromItems(results);
+								} else if (typeof callback === 'string') {
+									const sel = callback;
+									const results = result.items.filter(function(item) {
+										return globalThis.__nativeCheerio('query', item.id, '__is__:' + sel) === 'true';
+									});
+									return selectionFromItems(results);
 								}
 								return this;
 							},
@@ -926,26 +1308,82 @@ class LNReaderEngine(
 							get: function(index) {
 								if (!result.items) return null;
 								if (index === undefined) return result.items;
-								return result.items[index] || null;
+								let idx = index;
+								if (idx < 0) idx = result.items.length + idx;
+								return result.items[idx] || null;
 							},
 							toArray: function() {
 								return result.items || [];
 							},
+							clone: function() {
+								return selectionFromItems(result.items ? result.items.slice() : []);
+							},
 							length: (result.items ? result.items.length : 0)
 						};
+
+						if (result.items) {
+							for (let i = 0; i < result.items.length; i++) {
+								sel[i] = result.items[i];
+							}
+						}
+
+						if (typeof Proxy !== 'undefined') {
+							return new Proxy(sel, {
+								get: function(target, prop, receiver) {
+									if (prop in target) {
+										return target[prop];
+									}
+									if (typeof prop === 'symbol' || prop === 'inspect' || prop === 'valueOf' || prop === 'toString') {
+										return target[prop];
+									}
+									if (prop === 'then' || prop === 'toJSON') {
+										return undefined;
+									}
+									if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+										return undefined;
+									}
+									return function() {
+										return receiver;
+									};
+								}
+							});
+						}
+
+						return sel;
 					}
 					
 					var ${'$'} = function(selector) {
-						if (typeof selector === 'object' && selector._parentId !== undefined) {
-							return selector;
+						if (typeof selector === 'object' && selector !== null) {
+							if (selector._parentId !== undefined) {
+								return selector;
+							}
+							if (selector.id !== undefined) {
+								return createSelection(docId, {
+									items: [selector],
+									text: selector.text || '',
+									html: selector.html || '',
+									attrs: selector.attrs || {}
+								});
+							}
+							if (Array.isArray(selector)) {
+								return createSelection(docId, {
+									items: selector,
+									text: selector.map(function(s) { return s.text || ''; }).join(' '),
+									html: selector.map(function(s) { return s.html || ''; }).join(''),
+									attrs: selector[0] ? (selector[0].attrs || {}) : {}
+								});
+							}
 						}
-						if (typeof selector === 'object' && selector.id !== undefined) {
-							return createSelection(docId, {
-								items: [selector],
-								text: selector.text || '',
-								html: selector.html || '',
-								attrs: selector.attrs || {}
-							});
+						if (typeof selector === 'string') {
+							const trimmed = selector.trim();
+							if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+								const fragDocIdStr = globalThis.__nativeCheerio('parse', trimmed);
+								const fragDocId = parseInt(fragDocIdStr);
+								const fragResStr = globalThis.__nativeCheerio('query', fragDocId, '*');
+								let fragRes = {items:[]};
+								try { fragRes = JSON.parse(fragResStr); } catch (e) {}
+								return createSelection(fragDocId, fragRes);
+							}
 						}
 						const resultStr = globalThis.__nativeCheerio('query', docId, selector || '');
 						let result = {items:[]};
@@ -955,15 +1393,20 @@ class LNReaderEngine(
 						
 						return createSelection(docId, result);
 					};
-					const rootSelection = createSelection(docId, {
-						items: [],
-						text: globalThis.__nativeCheerio('query', docId, '__root_text__') || '',
-						html: globalThis.__nativeCheerio('query', docId, '__root_html__') || '',
-						attrs: {}
-					});
-					${'$'}.text = function() { return rootSelection.text(); };
-					${'$'}.html = function() { return rootSelection.html(); };
-					${'$'}.root = function() { return rootSelection; };
+					${'$'}.text = function() {
+						return globalThis.__nativeCheerio('query', docId, '__root_text__') || '';
+					};
+					${'$'}.html = function() {
+						return globalThis.__nativeCheerio('query', docId, '__root_html__') || '';
+					};
+					${'$'}.root = function() {
+						return createSelection(docId, {
+							items: [{ id: String(docId), text: ${'$'}.text(), html: ${'$'}.html(), attrs: {}, tagName: 'root' }],
+							text: ${'$'}.text(),
+							html: ${'$'}.html(),
+							attrs: {}
+						});
+					};
 					return ${'$'};
 				}
 			}
