@@ -4188,4 +4188,28 @@
     <string name="settings_source_cleared">Cleared</string>
     <string name="settings_source_runtime_dir_title">Resolve through the runtime directory</string>
     <string name="settings_source_runtime_dir_summary">Toggles the standalone runtime debug path used for the Legado catalogue and detail flow.</string>
+    <!-- Top Area Beautification: Favorites, Updates, Suggestions -->
+    <string name="favourites_spotlight_title">Spotlight &amp; Reading</string>
+    <string name="favourites_shelf_summary">Total %1$d works</string>
+    <string name="favourites_shelf_updated">%1$d updated</string>
+    <string name="favourites_summary_subtitle">Pull down to check updates · Long press to manage</string>
+    <string name="updated_header_title">Updates Pulse</string>
+    <string name="updated_header_summary">%1$d works updated · %2$d new chapters</string>
+    <string name="updated_header_all_read">Mark all read</string>
+    <string name="updated_header_up_to_date">All caught up</string>
+    <string name="updated_header_up_to_date_subtitle">Pull down to check for latest chapters</string>
+    <string name="suggestions_header_title">Discover &amp; For You</string>
+    <string name="suggestions_header_subtitle">Curated recommendations based on reading taste</string>
+    <string name="suggestions_header_refresh">Refresh</string>
+    <string name="search_bar_placeholder">Search…</string>
+    <string name="home_greeting_morning">Good morning</string>
+    <string name="home_greeting_afternoon">Good afternoon</string>
+    <string name="home_greeting_evening">Good evening</string>
+    <string name="home_greeting_reading_prompt">Discover what to read today</string>
+    <string name="home_greeting_explore">Explore</string>
+    <string name="local_storage_header_title">Local Storage &amp; Offline</string>
+    <string name="local_storage_header_subtitle">Manage downloaded works and storage</string>
+    <string name="bookmarks_header_title">Bookmarks &amp; Highlights</string>
+    <string name="bookmarks_header_subtitle">Your collection of memorable moments and notes</string>
+    <string name="search_favourites">Search favorites…</string>
 </resources>

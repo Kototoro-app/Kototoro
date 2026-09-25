@@ -289,6 +289,13 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.height(heroHeightDp))
                         }
                     }
+                } else {
+                    item(key = "home_greeting") {
+                        org.skepsun.kototoro.home.ui.compose.sections.HomeGreetingHeaderCard(
+                            unreadUpdatesCount = state.unreadUpdatesCount,
+                            onExploreClick = actions.onViewAllRecommendationsClick,
+                        )
+                    }
                 }
                 item(key = "home_highlights") {
                     HomeHighlightsSections(

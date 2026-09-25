@@ -48,7 +48,7 @@ class FavouritesListHost internal constructor(
     private val quickFilter: FavoritesListQuickFilter,
 ) : ContentListHost, QuickFilterListener {
 
-    private val libraryState: StateFlow<FavouriteLibraryUiState> = container.libraryState
+    val libraryState: StateFlow<FavouriteLibraryUiState> get() = container.libraryState
 
     override val listMode: StateFlow<ListMode> = container.listMode
     override val gridScale: StateFlow<Float> = container.gridScale

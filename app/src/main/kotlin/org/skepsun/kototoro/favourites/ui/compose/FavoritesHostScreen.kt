@@ -196,7 +196,6 @@ fun KototoroFavoritesHostRoute(
     var lastActiveCategoryId by remember { mutableStateOf<Long?>(null) }
     val allFavouritesLabel = stringResource(R.string.all_favourites)
     val activePage = pagerState.settledPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
-    val selectedTabsPage = pagerState.targetPage.coerceIn(0, (displayCategories.size - 1).coerceAtLeast(0))
     val activeCategoryId = displayCategories.getOrNull(activePage)?.id
     val activeCategory = displayCategories.getOrNull(activePage)
     val selectedSortOrder = if (activeCategoryId == NO_ID) {
@@ -236,7 +235,7 @@ fun KototoroFavoritesHostRoute(
         childTopBarOverrideState = null
     }
 
-    val compactTabsState = remember(displayCategories, selectedTabsPage, allFavouritesLabel) {
+    val compactTabsState = remember(displayCategories, activePage, allFavouritesLabel) {
         CompactTabsTopBarOverrideState(
             items = displayCategories.map {
                 CompactTopBarTabItem(
@@ -244,14 +243,17 @@ fun KototoroFavoritesHostRoute(
                     title = if (it.id == NO_ID) allFavouritesLabel else (it.title ?: ""),
                 )
             },
-            selectedItemId = displayCategories.getOrNull(selectedTabsPage)?.id ?: NO_ID,
+            selectedItemId = displayCategories.getOrNull(activePage)?.id ?: NO_ID,
             onItemSelected = { categoryId ->
                 val targetPage = displayCategories.indexOfFirst { it.id == categoryId }
                 if (targetPage >= 0) {
                     coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
                 }
             },
-            autoExpandOnSelection = false,
+            pagePosition = {
+                (pagerState.currentPage + pagerState.currentPageOffsetFraction)
+                    .coerceIn(0f, (displayCategories.size - 1).coerceAtLeast(0).toFloat())
+            },
         )
     }
 

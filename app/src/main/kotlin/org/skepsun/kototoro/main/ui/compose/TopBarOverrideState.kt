@@ -15,7 +15,7 @@ data class CompactTabsTopBarOverrideState(
     val items: List<CompactTopBarTabItem>,
     val selectedItemId: Long,
     val onItemSelected: (Long) -> Unit,
-    val autoExpandOnSelection: Boolean = true,
+    val pagePosition: (() -> Float)? = null,
 ) : TopBarOverrideState
 
 data class CompactFilterRailItem(
@@ -99,8 +99,7 @@ internal fun overrideStateEquivalent(a: TopBarOverrideState?, b: TopBarOverrideS
 
         is CompactTabsTopBarOverrideState -> b is CompactTabsTopBarOverrideState &&
             a.items == b.items &&
-            a.selectedItemId == b.selectedItemId &&
-            a.autoExpandOnSelection == b.autoExpandOnSelection
+            a.selectedItemId == b.selectedItemId
 
         is CompactFilterRailOverrideState -> b is CompactFilterRailOverrideState &&
             filterRailItemsEquivalent(a.items, b.items)

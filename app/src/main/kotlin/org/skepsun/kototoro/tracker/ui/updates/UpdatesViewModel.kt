@@ -110,7 +110,7 @@ class UpdatesViewModel @Inject constructor(
      * removal/entity-navigation index, so the whole list is re-derived (never
      * re-queried) whenever a filter, the group tab or a tag changes.
      */
-    private val derivedGroups: StateFlow<List<org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow>> = combine(
+    val derivedGroups: StateFlow<List<org.skepsun.kototoro.tracker.domain.updates.UpdateGroupRow>> = combine(
         updatesSnapshot,
         quickFilter.appliedOptions,
         currentGroupTab,

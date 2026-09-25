@@ -4,14 +4,19 @@ package org.skepsun.kototoro.main.ui.compose
 import androidx.compose.animation.AnimatedVisibility
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -21,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import org.skepsun.kototoro.core.ui.compose.KototoroSlider
 import org.skepsun.kototoro.core.ui.glass.resolveFallbackShadowElevation
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import org.skepsun.kototoro.R
@@ -43,8 +49,9 @@ import org.skepsun.kototoro.main.ui.compose.LayeredTopBarOverrideState
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
+import org.skepsun.kototoro.core.ui.theme.LocalInterfaceStyleTokens
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun BoxScope.MainTopChrome(
     effectiveTopBarOverrideState: TopBarOverrideState?,
@@ -59,6 +66,8 @@ internal fun BoxScope.MainTopChrome(
     onTopBarHeightMeasured: (Int) -> Unit,
     query: String,
     titleRes: Int?,
+    titleText: String? = null,
+    subtitleText: String? = null,
     onSearchClick: () -> Unit,
     onOpenListOptions: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -75,6 +84,7 @@ internal fun BoxScope.MainTopChrome(
     activeLanguagePresetId: Long,
     onLanguagePresetSelected: (Long) -> Unit,
     onManageLanguagePresets: () -> Unit,
+    reserveCompactTabsRail: Boolean,
     topTabsOverrideState: CompactTabsTopBarOverrideState?,
     topFilterRailOverrideState: CompactFilterRailOverrideState?,
     selectedContentType: ContentType?,
@@ -101,8 +111,6 @@ internal fun BoxScope.MainTopChrome(
     showSourceSettingsEntry: Boolean,
     contextualMenuActions: List<KototoroTopBarMenuAction>,
     onDisplayOptionsClick: (() -> Unit)? = null,
-    forceCompactTabsExpanded: Boolean,
-    effectiveCompactTabsTopBarOffset: Float,
     sortOrders: List<org.skepsun.kototoro.list.domain.ListSortOrder> = emptyList(),
     selectedSortOrder: org.skepsun.kototoro.list.domain.ListSortOrder? = null,
     onSortOrderSelected: (org.skepsun.kototoro.list.domain.ListSortOrder) -> Unit = {},
@@ -129,16 +137,12 @@ internal fun BoxScope.MainTopChrome(
             modifier = topChromeModifier,
         )
     } else {
-        val compactTabsOffsetModifier = Modifier.offset {
-            androidx.compose.ui.unit.IntOffset(
-                0,
-                (effectiveCompactTabsTopBarOffset - effectiveTopBarOffset).toInt(),
-            )
-        }
-        val topContent: @Composable () -> Unit = {
+        val topContent: @Composable (Modifier) -> Unit = { contentModifier ->
             KototoroTopBar(
                 query = query,
                 titleRes = titleRes,
+                titleText = titleText,
+                subtitleText = subtitleText,
                 onSearchClick = onSearchClick,
                 onOpenListOptions = onOpenListOptions,
                 onSettingsClick = onSettingsClick,
@@ -181,40 +185,63 @@ internal fun BoxScope.MainTopChrome(
                 showSourceSettingsEntry = showSourceSettingsEntry,
                 contextualMenuActions = contextualMenuActions,
                 onDisplayOptionsClick = onDisplayOptionsClick,
-                forceCompactTabsExpanded = forceCompactTabsExpanded,
                 sortOrders = sortOrders,
                 selectedSortOrder = selectedSortOrder,
                 onSortOrderSelected = onSortOrderSelected,
                 displayOptionsExtraContent = displayOptionsExtraContent,
-                modifier = if (isLayeredSurface) {
-                    compactTabsOffsetModifier
-                } else {
-                    topChromeModifier.then(compactTabsOffsetModifier)
-                },
+                modifier = contentModifier,
             )
         }
-        if (isLayeredSurface) {
-            val layeredContainerColor = MaterialTheme.colorScheme.surfaceContainer
-            Surface(
-                shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
-                color = layeredContainerColor,
-                // Over artwork the container colour is translucent, and a surface
-                // shadow reads through a translucent fill as a dark rim hugging
-                // the inside of the shape. Drop the shadow in that case rather
-                // than drawing an edge the fill cannot hide.
-                shadowElevation = resolveFallbackShadowElevation(
-                    styleShadowElevation = 4.dp,
-                    containerAlpha = layeredContainerColor.alpha,
-                    flat = false,
-                ),
-                modifier = topChromeModifier,
-            ) {
-                topContent()
+        if (reserveCompactTabsRail || topTabsOverrideState != null) {
+            val tokens = LocalInterfaceStyleTokens.current
+            val rowHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding() +
+                tokens.mainTopBarHeight
+            val rowHeightPx = with(LocalDensity.current) { tokens.mainTopBarHeight.roundToPx() }
+            Box(modifier = topChromeModifier.height(rowHeight + tokens.minimumTouchTarget)) {
+                val rowModifier = Modifier.align(Alignment.TopCenter).fillMaxWidth()
+                if (isLayeredSurface) {
+                    LayeredTopBarContainer(modifier = rowModifier) { topContent(Modifier) }
+                } else {
+                    topContent(rowModifier)
+                }
+                if (topTabsOverrideState != null) {
+                    CompactTopBarTabsRail(
+                        state = topTabsOverrideState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .offset {
+                                androidx.compose.ui.unit.IntOffset(
+                                    0,
+                                    (-effectiveTopBarOffset.toInt() - rowHeightPx).coerceAtLeast(0),
+                                )
+                            },
+                    )
+                }
             }
+        } else if (isLayeredSurface) {
+            LayeredTopBarContainer(modifier = topChromeModifier) { topContent(Modifier) }
         } else {
-            topContent()
+            topContent(topChromeModifier)
         }
     }
+}
+
+@Composable
+private fun LayeredTopBarContainer(modifier: Modifier, content: @Composable () -> Unit) {
+    val containerColor = MaterialTheme.colorScheme.surfaceContainer
+    Surface(
+        shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+        color = containerColor,
+        // A translucent artwork container cannot hide its own shadow at the rounded edge.
+        shadowElevation = resolveFallbackShadowElevation(
+            styleShadowElevation = 4.dp,
+            containerAlpha = containerColor.alpha,
+            flat = false,
+        ),
+        modifier = modifier,
+        content = content,
+    )
 }
 
 @Composable

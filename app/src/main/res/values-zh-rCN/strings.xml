@@ -3989,4 +3989,28 @@ SHA-256 指纹:
     <string name="card_progress_style">卡片进度样式</string>
     <string name="card_progress_style_bottom_bar">底端进度条</string>
     <string name="card_progress_style_circular_badge">角落环形角标</string>
+    <!-- Top Area Beautification: Favorites, Updates, Suggestions -->
+    <string name="favourites_spotlight_title">常读与关注</string>
+    <string name="favourites_shelf_summary">共 %1$d 部作品</string>
+    <string name="favourites_shelf_updated">%1$d 部更新</string>
+    <string name="favourites_summary_subtitle">下拉可检查更新 · 长按卡片可批量整理</string>
+    <string name="updated_header_title">更新动态</string>
+    <string name="updated_header_summary">%1$d 部作品更新 · 累计 %2$d 话新内容</string>
+    <string name="updated_header_all_read">全部已读</string>
+    <string name="updated_header_up_to_date">所有订阅均已是最新</string>
+    <string name="updated_header_up_to_date_subtitle">下拉可检查最新章节更新</string>
+    <string name="suggestions_header_title">为你发现</string>
+    <string name="suggestions_header_subtitle">基于阅读偏好实时匹配 · 发现更多可能</string>
+    <string name="suggestions_header_refresh">换一批</string>
+    <string name="search_bar_placeholder">搜索漫画、小说、源…</string>
+    <string name="home_greeting_morning">早上好</string>
+    <string name="home_greeting_afternoon">下午好</string>
+    <string name="home_greeting_evening">晚上好</string>
+    <string name="home_greeting_reading_prompt">开启今日的阅读探索</string>
+    <string name="home_greeting_explore">发现好作</string>
+    <string name="local_storage_header_title">本地与离线存储</string>
+    <string name="local_storage_header_subtitle">查看已下载作品与存储空间管理</string>
+    <string name="bookmarks_header_title">书签与高光记录</string>
+    <string name="bookmarks_header_subtitle">记录阅读途中的精彩瞬间与笔记</string>
+    <string name="search_favourites">搜索收藏…</string>
 </resources>

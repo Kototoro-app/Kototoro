@@ -150,11 +150,7 @@ private fun MainRouteScene(
             .padding(start = landscapeStartPadding)
             .then(sourceModifier),
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            content()
-        }
+        content()
     }
 }
 
@@ -1123,6 +1119,7 @@ internal fun SuggestionsTopLevelRouteContent(
     navigateToDetailsWithContent: (Content, String?) -> Unit,
 ) {
     val viewModel = spaceBoundHiltViewModel<org.skepsun.kototoro.suggestions.ui.SuggestionsViewModel>("suggestions")
+    val context = LocalContext.current
     var suggestionsContextualTopBarOverride by remember { mutableStateOf<TopBarOverrideState?>(null) }
     var suggestionsFilterRailOverride by remember { mutableStateOf<CompactFilterRailOverrideState?>(null) }
 
@@ -1149,6 +1146,18 @@ internal fun SuggestionsTopLevelRouteContent(
             viewModel = viewModel,
             contentPadding = contentPadding,
             appRouter = appRouter,
+            listHeader = {
+                org.skepsun.kototoro.suggestions.ui.compose.SuggestionsHeaderCard(
+                    onRefresh = {
+                        viewModel.updateSuggestions()
+                        android.widget.Toast.makeText(
+                            context,
+                            org.skepsun.kototoro.R.string.suggestions_updating,
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    },
+                )
+            },
             onTopBarOverrideChanged = { suggestionsContextualTopBarOverride = it },
             showRemoveOption = false,
             showScrollbar = true,
@@ -1293,6 +1302,11 @@ internal fun UpdatedTopLevelRouteContent(
     // The updates page renders statically from the snapshot-derived content
     // (Phase U4); selection bookkeeping follows that list.
     val updatedContent by viewModel.content.collectAsStateWithLifecycle()
+    val derivedGroups by viewModel.derivedGroups.collectAsStateWithLifecycle()
+    val totalWorks = derivedGroups.size
+    val totalNewChapters = remember(derivedGroups) {
+        derivedGroups.sumOf { it.totalNewChapters }
+    }
     val updatedSnapshotItems = updatedContent
     val updatedSelectedItemIdsState = remember { mutableStateOf(emptySet<Long>()) }
     var updatedSelectedItemIds by updatedSelectedItemIdsState
@@ -1374,6 +1388,18 @@ internal fun UpdatedTopLevelRouteContent(
             viewModel = viewModel,
             contentPadding = contentPadding,
             appRouter = appRouter,
+            listHeader = {
+                org.skepsun.kototoro.tracker.ui.updates.compose.UpdatesHeaderCard(
+                    totalWorks = totalWorks,
+                    totalNewChapters = totalNewChapters,
+                    onMarkAllRead = {
+                        viewModel.remove(derivedGroups.mapTo(linkedSetOf()) { it.uiId })
+                    },
+                    onRefresh = {
+                        viewModel.onRefresh()
+                    },
+                )
+            },
             showRemoveOption = true,
             showScrollbar = true,
             // Selection is owned by the route and reported to the main chrome, so the

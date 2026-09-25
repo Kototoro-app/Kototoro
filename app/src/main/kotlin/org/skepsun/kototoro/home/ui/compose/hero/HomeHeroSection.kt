@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -141,9 +142,32 @@ internal fun HomeHeroSection(
             runCatching { heroFocusRequester.requestFocus() }
         }
     }
+    val activeContentId = entries.getOrNull(selectedIndex)?.content?.id ?: -1L
+    val isDarkTheme = isSystemInDarkTheme()
+    val activeTonalColor = remember(activeContentId, isDarkTheme) {
+        if (activeContentId != -1L) homeHeroTonalColor(activeContentId, isDarkTheme) else Color.Transparent
+    }
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
+            .drawBehind {
+                val auraColor = if (activeTonalColor != Color.Transparent) {
+                    activeTonalColor.copy(alpha = 0.22f)
+                } else {
+                    Color.Transparent
+                }
+                if (auraColor != Color.Transparent) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(auraColor, auraColor.copy(alpha = 0.06f), Color.Transparent),
+                            center = Offset(size.width * 0.5f, 0f),
+                            radius = size.width * 0.85f,
+                        ),
+                        center = Offset(size.width * 0.5f, 0f),
+                        radius = size.width * 0.85f,
+                    )
+                }
+            }
             .padding(top = topContentInset),
     ) {
         val edgePadding = CompactTopBarHorizontalPadding

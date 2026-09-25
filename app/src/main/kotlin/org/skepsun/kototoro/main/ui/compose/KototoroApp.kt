@@ -197,7 +197,6 @@ private class SpaceChromeScrollState {
     val topBarHeightPx = mutableIntStateOf(0)
     val bottomNavOffset = mutableFloatStateOf(0f)
     val totalContentScrollOffset = mutableFloatStateOf(0f)
-    val keepTabsExpandedByScrollDirection = mutableStateOf(false)
     val offsetDestinationRoute = mutableStateOf<String?>(null)
     val offsetDestinationOwnerKey = mutableStateOf<String?>(null)
 }
@@ -323,7 +322,7 @@ private fun TopLevelNavKey?.supportsGridSizeSlider(): Boolean = when (this) {
 private fun TopLevelNavKey?.titleRes(): Int? = when (this) {
     HomeNavKey -> R.string.home
     HistoryNavKey -> R.string.history
-    FavoritesNavKey -> null
+    FavoritesNavKey -> R.string.favourites
     ExploreNavKey -> R.string.explore
     DiscoverNavKey -> R.string.discover
     FeedNavKey -> R.string.feed
@@ -553,7 +552,6 @@ fun KototoroApp(
     val heroTransitionPhase by chromeState.heroTransitionPhase
     val chromeSharedTransitionScope by chromeState.chromeSharedTransitionScope
     var rootContentBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var keepTabsExpandedByScrollDirection by chromeScrollState.keepTabsExpandedByScrollDirection
     val routeTopBarOverrideStates = remember { mutableStateMapOf<String, TopBarOverrideState>() }
     val routeContextualMenuActions = remember { mutableStateMapOf<String, List<KototoroTopBarMenuAction>>() }
     var globalTopBarOverrideState by remember { mutableStateOf<TopBarOverrideState?>(null) }
@@ -600,7 +598,6 @@ fun KototoroApp(
                 }
                 val dy = available.y
                 if (!isNavBarPinned && dy != 0f) {
-                    keepTabsExpandedByScrollDirection = dy > 0f
                     bottomNavOffset = if (isLandscapeNavigation) {
                         0f
                     } else {
@@ -836,21 +833,14 @@ fun KototoroApp(
         else (1f + effectiveTopBarOffset / maxCollapse).coerceIn(0f, 1f)
     }
     val shouldKeepTabsExpandedWhenCollapsed = layeredTopBarOverrideState?.keepTabsExpandedWhenCollapsed == true
-    val shouldKeepTabsVisible = !isNavBarPinned &&
-        shouldKeepTabsExpandedWhenCollapsed &&
+    val shouldKeepTabsVisible = shouldKeepTabsExpandedWhenCollapsed &&
         !isDetailsChromeTransitionPending &&
         topTabsOverrideState != null &&
-        keepTabsExpandedByScrollDirection &&
-        scrollAlpha < 0.98f
+        isChromeVisible
     val effectiveChromeAlphaTarget = if (shouldKeepTabsVisible) {
         1f
     } else {
         scrollAlpha
-    }
-    val effectiveCompactTabsTopBarOffset = if (shouldKeepTabsVisible) {
-        0f
-    } else {
-        effectiveTopBarOffset
     }
     val animatedChromeAlpha by animateFloatAsState(
         targetValue = effectiveChromeAlphaTarget,
@@ -1133,6 +1123,17 @@ fun KototoroApp(
                         )
                     }
 
+                    if (shouldShowChrome && !isImmersiveRoute) {
+                        TopChromeGlow(
+                            route = chromeTopLevelKey,
+                            height = topImmersiveHeight + 136.dp,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .graphicsLayer { alpha = chromeAlpha },
+                        )
+                    }
+
                     MainTopChrome(
                         effectiveTopBarOverrideState = effectiveTopBarOverrideState,
                         isLandscapeNavigation = isLandscapeNavigation,
@@ -1151,6 +1152,10 @@ fun KototoroApp(
                         },
                         query = query,
                         titleRes = chromeTopLevelKey.titleRes(),
+                        subtitleText = when {
+                            isHomeRoute && spaceUiState.switcherEnabled -> spaceUiState.spaces.firstOrNull { it.id == navigationSpaceId }?.title?.takeIf { it.isNotBlank() }
+                            else -> null
+                        },
                         onSearchClick = {
                             chromeState.setSearchOverlayInitialQuery(query)
                             chromeState.setSearchOverlayQueryCommitted(false)
@@ -1173,6 +1178,7 @@ fun KototoroApp(
                         activeLanguagePresetId = activeSourcePresetId,
                         onLanguagePresetSelected = onLanguagePresetSelected,
                         onManageLanguagePresets = onManageLanguagePresets,
+                        reserveCompactTabsRail = isFavoritesRoute,
                         topTabsOverrideState = topTabsOverrideState,
                         topFilterRailOverrideState = topFilterRailOverrideState,
                         selectedContentType = selectedContentType,
@@ -1226,8 +1232,6 @@ fun KototoroApp(
                         },
                         showSourceSettingsEntry = showBrowseSourceSettingsEntry,
                         contextualMenuActions = contextualMenuActions,
-                        forceCompactTabsExpanded = shouldKeepTabsVisible,
-                        effectiveCompactTabsTopBarOffset = effectiveCompactTabsTopBarOffset,
                         sortOrders = sortOrders,
                         selectedSortOrder = selectedSortOrder,
                         onSortOrderSelected = onDisplaySortOrderSelected,
@@ -1797,7 +1801,6 @@ private fun KototoroAppChromeEffects(
     var topAppBarState = chromeScrollState.topAppBarState
     var topBarHeightPx by chromeScrollState.topBarHeightPx
     var bottomNavOffset by chromeScrollState.bottomNavOffset
-    var keepTabsExpandedByScrollDirection by chromeScrollState.keepTabsExpandedByScrollDirection
     var offsetDestinationRoute by chromeScrollState.offsetDestinationRoute
     var offsetDestinationOwnerKey by chromeScrollState.offsetDestinationOwnerKey
     val detailsBottomPanelExpansion by chromeState.detailsBottomPanelExpansion
@@ -1808,7 +1811,6 @@ private fun KototoroAppChromeEffects(
             topAppBarState.heightOffset = 0f
             bottomNavOffset = 0f
             chromeScrollState.totalContentScrollOffset.floatValue = 0f
-            keepTabsExpandedByScrollDirection = false
         }
     }
     LaunchedEffect(isLandscapeNavigation) {
@@ -1882,7 +1884,6 @@ private fun KototoroAppChromeEffects(
                 topAppBarState.heightOffset = 0f
                 bottomNavOffset = 0f
                 chromeScrollState.totalContentScrollOffset.floatValue = 0f
-                keepTabsExpandedByScrollDirection = false
             }
             offsetDestinationRoute = currentDestinationRoute
             offsetDestinationOwnerKey = currentTopBarOwnerKey

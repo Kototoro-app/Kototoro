@@ -3,6 +3,7 @@ package org.skepsun.kototoro.favourites.ui.compose
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,11 +43,55 @@ fun KototoroFavoritesListScreen(
     // The state holder is the favourites container, handed in as a per-category slice:
     // there is no page-level ViewModel and no space binding to do here (Phase 6).
     val quickFilter by listHost.topQuickFilter.collectAsStateWithLifecycle()
+    val library by listHost.libraryState.collectAsStateWithLifecycle()
+    val categoryRows = remember(library, categoryId) {
+        val ids = library.visibleIdsByCategory[categoryId].orEmpty()
+        val byId = library.rowsByEntityId
+        ids.mapNotNull { byId[it] }
+    }
+    val pinnedIds = remember(library, categoryId) {
+        library.pinnedIdsByCategory[categoryId].orEmpty()
+    }
+    val totalCount = categoryRows.size
+    val updatedCount = remember(categoryRows) {
+        categoryRows.count { it.newChapters > 0 }
+    }
+    val spotlightRows = remember(categoryRows, pinnedIds) {
+        if (categoryRows.isEmpty()) return@remember emptyList<org.skepsun.kototoro.favourites.domain.library.FavouriteCardRow>()
+        val pinned = categoryRows.filter { it.entityId in pinnedIds }
+        val withUpdates = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters > 0 }
+        val recentlyRead = categoryRows.filter { it.entityId !in pinnedIds && it.newChapters <= 0 && (it.lastReadAt ?: 0L) > 0L }
+            .sortedByDescending { it.lastReadAt }
+        (pinned + withUpdates + recentlyRead).take(6)
+    }
 
     AppContentListRoute(
         viewModel = listHost,
         contentPadding = contentPadding,
         appRouter = appRouter,
+        listHeader = {
+            FavoritesSpotlightHeader(
+                totalCount = totalCount,
+                updatedCount = updatedCount,
+                spotlightRows = spotlightRows,
+                onItemClick = { row ->
+                    val origin = DetailsOrigin.EntityGraph(
+                        entityId = row.entityId,
+                        preferredLocalMangaId = row.displayMangaId,
+                    )
+                    if (onNavigateToEntityDetails != null) {
+                        onNavigateToEntityDetails(origin, "fav_spotlight_${row.entityId}")
+                    } else {
+                        appRouter.openEntityDetails(
+                            entityId = row.entityId,
+                            preferredLocalMangaId = row.displayMangaId,
+                            sharedElementKey = "fav_spotlight_${row.entityId}",
+                        )
+                    }
+                },
+                onCheckForUpdates = { listHost.checkForUpdates() },
+            )
+        },
         showRemoveOption = true,
         preferredSelectionInlineActions = listOf(
             SelectionAction.PIN,

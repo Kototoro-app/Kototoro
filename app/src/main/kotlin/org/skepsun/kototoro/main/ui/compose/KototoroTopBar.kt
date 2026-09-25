@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -54,16 +55,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -78,7 +83,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import org.skepsun.kototoro.core.prefs.InterfaceStyle
 import org.skepsun.kototoro.core.ui.compose.LocalLiquidGlassBackdrop
-import kotlinx.coroutines.delay
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.prefs.ListMode
 import org.skepsun.kototoro.core.ui.compose.CompactTopBarHorizontalPadding
@@ -103,6 +107,9 @@ import org.skepsun.kototoro.parsers.model.ContentSource
 import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.search.ui.suggestion.model.SearchSuggestionItem
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlin.math.floor
 
 private val CompactTopTabsRailVisualHeight = 40.dp
 private val CompactTopFilterRailVisualHeight = 36.dp
@@ -158,6 +165,8 @@ private fun UpdateBadgeDot(modifier: Modifier = Modifier) {
 fun KototoroTopBar(
     query: String,
     titleRes: Int? = null,
+    titleText: String? = null,
+    subtitleText: String? = null,
     onSearchClick: () -> Unit = {},
     onOpenListOptions: () -> Unit = {},
     onSettingsClick: () -> Unit = {},
@@ -208,7 +217,6 @@ fun KototoroTopBar(
     isIncognitoModeEnabled: Boolean = false,
     onIncognitoToggle: () -> Unit = {},
     isCollapsedFullyTransparent: Boolean = false,
-    forceCompactTabsExpanded: Boolean = false,
     sortOrders: List<ListSortOrder> = emptyList(),
     selectedSortOrder: ListSortOrder? = null,
     onSortOrderSelected: (ListSortOrder) -> Unit = {},
@@ -219,7 +227,6 @@ fun KototoroTopBar(
     var isLanguagePresetMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var topBarMenuAnchorBounds by remember { mutableStateOf<Rect?>(null) }
     var showDisplayOptionsSheet by rememberSaveable { mutableStateOf(false) }
-    var areCompactTabsExpanded by rememberSaveable { mutableStateOf(false) }
     var pendingListMode by remember(showDisplayOptionsSheet) { mutableStateOf(currentListMode) }
     var pendingGridSize by remember(showDisplayOptionsSheet) { mutableIntStateOf(gridSize) }
 
@@ -237,15 +244,7 @@ fun KototoroTopBar(
         label = "top_bar_alpha",
     )
     val showMoreActions = true
-    val compactTabsExpanded = compactTabsState != null && (areCompactTabsExpanded || forceCompactTabsExpanded)
-    val hidePrimaryControlsForTabs = compactTabsExpanded
-    val topBarTitle = titleRes?.let { stringResource(it) }
-
-    LaunchedEffect(compactTabsState) {
-        if (compactTabsState == null) {
-            areCompactTabsExpanded = false
-        }
-    }
+    val topBarTitle = titleText ?: titleRes?.let { stringResource(it) }
 
     Column(
         modifier = modifier
@@ -261,57 +260,74 @@ fun KototoroTopBar(
             horizontalArrangement = Arrangement.spacedBy(CompactTopBarItemSpacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AnimatedVisibility(
-                visible = !hidePrimaryControlsForTabs,
-                enter = fadeIn() + expandHorizontally(),
-                exit = shrinkHorizontally() + fadeOut(),
-            ) {
-                TopBarControlSurface {
-                    IconButton(
-                        onClick = onSearchClick,
-                        modifier = Modifier
-                            .size(topBarControlHeight)
-                            .tvFocusable(shape = RoundedCornerShape(12.dp), addFocusTarget = false),
-                        // The expressive theme gives plain IconButtons a default filled
-                        // container (the "light octagon"). Make it transparent so the icon
-                        // sits directly on the chrome capsule like the bottom nav does.
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
+            if (!topBarTitle.isNullOrBlank()) {
+                val maxWidth = 120.dp
+                if (compactTabsState != null) {
+                    CompactCategoryTitle(
+                        title = topBarTitle,
+                        state = compactTabsState,
+                        modifier = Modifier.widthIn(max = maxWidth),
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier.widthIn(max = maxWidth),
+                        verticalArrangement = Arrangement.Center,
                     ) {
-                        Icon(
-                            Icons.Filled.Search,
-                            contentDescription = stringResource(R.string.search),
-                            modifier = Modifier.size(topBarIconSize),
+                        Text(
+                            text = topBarTitle,
+                            style = if (subtitleText.isNullOrBlank()) {
+                                MaterialTheme.typography.titleLarge
+                            } else {
+                                MaterialTheme.typography.titleMedium
+                            },
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
+                        if (!subtitleText.isNullOrBlank()) {
+                            Text(
+                                text = subtitleText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }
-            if (!topBarTitle.isNullOrBlank() && !hidePrimaryControlsForTabs) {
-                val maxWidth = if (compactTabsState != null) 72.dp else 128.dp
-                Text(
-                    text = topBarTitle,
-                    modifier = Modifier.widthIn(max = maxWidth),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (compactTabsState != null) {
-                InlineCompactTopBarTabsRail(
-                    state = compactTabsState,
+            TopBarControlSurface(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(topBarControlHeight)
+                    .clip(CompactTopBarPillShape)
+                    .clickable(onClick = onSearchClick),
+            ) {
+                Row(
                     modifier = Modifier
-                        .weight(1f, fill = true)
-                        .widthIn(max = if (hidePrimaryControlsForTabs) Dp.Unspecified else 196.dp),
-                    onExpandedChange = { areCompactTabsExpanded = it },
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.search),
+                        modifier = Modifier.size(topBarIconSize),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = query.ifBlank { stringResource(R.string.search_bar_placeholder) },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             AnimatedVisibility(
-                visible = !hidePrimaryControlsForTabs,
+                visible = true,
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = shrinkHorizontally(shrinkTowards = Alignment.End) + fadeOut(),
             ) {
@@ -779,9 +795,26 @@ fun CompactTopBarTabsRail(
 ) {
     val tokens = LocalInterfaceStyleTokens.current
     val listState = rememberLazyListState()
-    EnsureItemFullyVisible(listState = listState, targetIndex = state.items.indexOfFirst { it.id == state.selectedItemId })
+    val selectedIndex = state.items.indexOfFirst { it.id == state.selectedItemId }
+    val indicatorColor = MaterialTheme.colorScheme.primary
+
+    LaunchedEffect(state.selectedItemId, state.items) {
+        if (selectedIndex < 0) return@LaunchedEffect
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == selectedIndex }) {
+            listState.scrollToItem(selectedIndex)
+        }
+        val distance = snapshotFlow {
+            val layout = listState.layoutInfo
+            val item = layout.visibleItemsInfo.firstOrNull { it.index == selectedIndex }
+            if (item == null || layout.viewportSize.width == 0) null
+            else item.offset + item.size / 2f - layout.viewportSize.width / 2f
+        }.filterNotNull().first()
+        listState.animateScrollBy(distance)
+    }
     Box(
-        modifier = modifier.height(tokens.minimumTouchTarget),
+        modifier = modifier
+            .height(tokens.minimumTouchTarget)
+            .padding(horizontal = CompactTopBarHorizontalPadding),
     ) {
         TopBarControlSurface(
             modifier = Modifier
@@ -798,7 +831,31 @@ fun CompactTopBarTabsRail(
                     fadeStart = listState.canScrollBackward,
                     fadeEnd = listState.canScrollForward,
                 )
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 8.dp)
+                .drawWithContent {
+                    drawContent()
+                    val position = (state.pagePosition?.invoke() ?: selectedIndex.toFloat())
+                        .coerceIn(0f, (state.items.size - 1).coerceAtLeast(0).toFloat())
+                    val startIndex = floor(position).toInt()
+                    val endIndex = (startIndex + 1).coerceAtMost(state.items.lastIndex)
+                    val visible = listState.layoutInfo.visibleItemsInfo
+                    val startItem = visible.firstOrNull { it.index == startIndex }
+                    val endItem = visible.firstOrNull { it.index == endIndex }
+                    val first = startItem ?: endItem ?: return@drawWithContent
+                    val second = endItem ?: first
+                    val fraction = position - startIndex
+                    val center = (first.offset + first.size / 2f) * (1f - fraction) +
+                        (second.offset + second.size / 2f) * fraction
+                    val width = (first.size * (1f - fraction) + second.size * fraction) * 0.56f
+                    val y = size.height - 5.dp.toPx()
+                    drawLine(
+                        color = indicatorColor,
+                        start = Offset(center - width / 2f, y),
+                        end = Offset(center + width / 2f, y),
+                        strokeWidth = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                },
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically,
             contentPadding = PaddingValues(horizontal = 1.dp),
@@ -809,11 +866,12 @@ fun CompactTopBarTabsRail(
                     modifier = Modifier
                         .height(tokens.minimumTouchTarget)
                         .clickable { state.onItemSelected(item.id) }
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = item.title,
+                        modifier = Modifier.widthIn(max = 128.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = if (selected) {
                             MaterialTheme.colorScheme.primary
@@ -821,6 +879,7 @@ fun CompactTopBarTabsRail(
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         fontWeight = if (selected) {
                             androidx.compose.ui.text.font.FontWeight.SemiBold
                         } else {
@@ -834,108 +893,74 @@ fun CompactTopBarTabsRail(
 }
 
 @Composable
-private fun InlineCompactTopBarTabsRail(
+private fun CompactCategoryTitle(
+    title: String,
     state: CompactTabsTopBarOverrideState,
     modifier: Modifier = Modifier,
-    onExpandedChange: (Boolean) -> Unit = {},
 ) {
-    val tokens = LocalInterfaceStyleTokens.current
-    val density = LocalDensity.current
-    val listState = rememberLazyListState()
-    var restoreRequest by remember { mutableIntStateOf(0) }
-    var previousSelectedItemId by remember { mutableStateOf<Long?>(null) }
-    val selectedIndex = state.items.indexOfFirst { it.id == state.selectedItemId }
-    EnsureItemFullyVisible(listState = listState, targetIndex = selectedIndex)
-    val isScrollInProgress = listState.isScrollInProgress
-    LaunchedEffect(isScrollInProgress) {
-        if (isScrollInProgress) {
-            onExpandedChange(true)
-        } else {
-            delay(900)
-            onExpandedChange(false)
-        }
-    }
-    LaunchedEffect(restoreRequest) {
-        if (restoreRequest <= 0) {
-            return@LaunchedEffect
-        }
-        onExpandedChange(true)
-        delay(1600)
-        if (!listState.isScrollInProgress) {
-            onExpandedChange(false)
-        }
-    }
-    LaunchedEffect(state.selectedItemId, selectedIndex) {
-        val previous = previousSelectedItemId
-        previousSelectedItemId = state.selectedItemId
-        if (previous == null || previous == state.selectedItemId) {
-            return@LaunchedEffect
-        }
-        if (selectedIndex < 0) {
-            return@LaunchedEffect
-        }
-        if (state.autoExpandOnSelection) {
-            onExpandedChange(true)
-        }
-        listState.animateScrollToItem(index = selectedIndex, scrollOffset = -with(density) { 24.dp.roundToPx() })
-        if (state.autoExpandOnSelection) {
-            delay(1600)
-            if (!listState.isScrollInProgress) {
-                onExpandedChange(false)
+    val selectedTitle = state.items.firstOrNull { it.id == state.selectedItemId }?.title.orEmpty()
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var anchorBounds by remember { mutableStateOf<Rect?>(null) }
+
+    Box(modifier = modifier.onGloballyPositioned { anchorBounds = it.boundsInRoot() }) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 2.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = selectedTitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Icon(
+                    painter = painterResource(R.drawable.ic_expand_more),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
             }
         }
-    }
-    Box(
-        modifier = modifier.height(tokens.minimumTouchTarget),
-    ) {
-        TopBarControlSurface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(tokens.topBarButtonSize)
-                .align(Alignment.Center),
-        ) {}
-        LazyRow(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(tokens.minimumTouchTarget)
-                .compactRailEdgeFade(
-                    fadeStart = listState.canScrollBackward,
-                    fadeEnd = listState.canScrollForward,
-                )
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(1.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            contentPadding = PaddingValues(horizontal = 1.dp),
+        GlassDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            offset = DpOffset(x = 0.dp, y = 4.dp),
+            useRootOverlay = LocalInterfaceStyle.current == InterfaceStyle.IOS,
+            anchorTapThrough = true,
+            anchorBounds = anchorBounds,
+            style = GlassDefaults.subtleStyle(),
         ) {
-            items(items = state.items, key = { it.id }) { item ->
-                val selected = item.id == state.selectedItemId
-                Box(
-                    modifier = Modifier
-                        .height(tokens.minimumTouchTarget)
-                        .clickable {
-                            restoreRequest += 1
-                            state.onItemSelected(item.id)
+            state.items.forEach { item ->
+                CompactDropdownMenuItem(
+                    text = { CompactDropdownMenuText(item.title) },
+                    onClick = {
+                        expanded = false
+                        state.onItemSelected(item.id)
+                    },
+                    trailingIcon = {
+                        if (item.id == state.selectedItemId) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
                         }
-                        .padding(horizontal = 5.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = item.title,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        maxLines = 1,
-                        fontWeight = if (selected) {
-                            androidx.compose.ui.text.font.FontWeight.SemiBold
-                        } else {
-                            androidx.compose.ui.text.font.FontWeight.Normal
-                        },
-                    )
-                }
+                    },
+                )
             }
         }
     }
