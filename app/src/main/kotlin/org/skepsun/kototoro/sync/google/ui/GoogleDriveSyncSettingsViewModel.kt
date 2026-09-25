@@ -1,10 +1,12 @@
 package org.skepsun.kototoro.sync.google.ui
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import org.skepsun.kototoro.R
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncAuth
 import org.skepsun.kototoro.sync.google.data.GoogleDriveSyncSettings
 import org.skepsun.kototoro.sync.google.domain.GoogleDriveSyncAuthorizationException
@@ -38,6 +41,7 @@ data class GoogleDriveSyncUiState(
 
 @HiltViewModel
 class GoogleDriveSyncSettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val auth: GoogleDriveSyncAuth,
     private val settings: GoogleDriveSyncSettings,
     private val appSettings: AppSettings,
@@ -126,10 +130,10 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
                 if (pendingIntent != null) {
                     _authorizationRequests.tryEmit(pendingIntent)
                 } else {
-                    settings.lastSyncError = e.message
+                    settings.lastSyncError = normalizeGoogleDriveError(e.message)
                 }
             } catch (e: Exception) {
-                settings.lastSyncError = e.message ?: e.javaClass.simpleName
+                settings.lastSyncError = normalizeGoogleDriveError(e.message ?: e.javaClass.simpleName)
             }
             refresh()
         }
@@ -144,7 +148,7 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
                 settings.isSyncEnabled = true
                 scheduler.schedule()
             } catch (e: Exception) {
-                settings.lastSyncError = e.message ?: e.javaClass.simpleName
+                settings.lastSyncError = normalizeGoogleDriveError(e.message ?: e.javaClass.simpleName)
             }
             refresh()
         }
@@ -156,7 +160,7 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
                 try {
                     auth.authorizationFromIntent(data)
                 } catch (e: Exception) {
-                    settings.lastSyncError = e.message ?: e.javaClass.simpleName
+                    settings.lastSyncError = normalizeGoogleDriveError(e.message ?: e.javaClass.simpleName)
                     refresh()
                     return@launch
                 }
@@ -221,9 +225,20 @@ class GoogleDriveSyncSettingsViewModel @Inject constructor(
                     _authorizationRequests.tryEmit(pendingIntent)
                 }
             }
-            is GoogleDriveSyncResult.Error -> settings.lastSyncError = result.message
+            is GoogleDriveSyncResult.Error -> settings.lastSyncError = normalizeGoogleDriveError(result.message)
             is GoogleDriveSyncResult.Disabled -> Unit
         }
+    }
+
+    private fun normalizeGoogleDriveError(raw: String?): String? {
+        if (raw == null) return null
+        if (raw.contains("UNREGISTERED_ON_API_CONSOLE", ignoreCase = true) ||
+            raw.contains("DEVELOPER_ERROR", ignoreCase = true) ||
+            raw.contains(": 10", ignoreCase = true)
+        ) {
+            return context.getString(R.string.google_drive_sync_unregistered_build_error)
+        }
+        return raw
     }
 
     private fun setWebDavEnabled(value: Boolean) {

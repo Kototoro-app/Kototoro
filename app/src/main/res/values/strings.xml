@@ -2650,6 +2650,7 @@
     <string name="sync_backend_switch_webdav_confirm">Google Drive sync is currently enabled. Enabling WebDAV backup will turn off Google Drive sync while keeping your Google sign-in.</string>
     <string name="sync_sign_in">Prepare Google Drive sync</string>
     <string name="sync_sign_in_summary">Uses Google Drive app data with the minimum Drive appdata permission to sync subscriptions and update records. Kototoro cannot access your Drive files.</string>
+    <string name="google_drive_sync_unregistered_build_error">Google Drive sync is not supported in development/nightly builds. Please use official release builds or WebDAV sync.</string>
     <string name="sync_sign_out">Sign out</string>
     <string name="sync_account">Signed in</string>
     <string name="sync_now">Sync now</string>

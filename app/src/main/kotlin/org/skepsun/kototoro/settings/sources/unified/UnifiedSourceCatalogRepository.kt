@@ -6,6 +6,7 @@ import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
@@ -89,6 +90,9 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 packages = packages,
                 sources = sources,
             )
+        }.catch { e ->
+            Log.e("UnifiedSourceCatalog", "Error in observeState flow", e)
+            emit(UnifiedSourceCatalogState())
         }
     }
 
@@ -186,6 +190,9 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                 jsonSources.toJsonRepositoryItems()
 
             configured.distinctBy { it.id }.withPresetRepositories()
+        }.catch { e ->
+            Log.e("UnifiedSourceCatalog", "Error in observeRepositories flow", e)
+            emit(emptyList())
         }
     }
 
@@ -372,7 +379,10 @@ class UnifiedSourceCatalogRepository @Inject constructor(
 
         return combine(apkPackages, jarPackages, cloudstreamPackages, jsonPackages) { apk, jar, cloudstream, json ->
             (apk + jar + cloudstream + json).sortedWith(compareBy({ it.kind.ordinal }, { it.name.lowercase() }))
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(Dispatchers.Default).catch { e ->
+            Log.e("UnifiedSourceCatalog", "Error in observePackages flow", e)
+            emit(emptyList())
+        }
     }
 
     fun observeSources(): Flow<List<UnifiedSourceItem>> {
@@ -387,7 +397,12 @@ class UnifiedSourceCatalogRepository @Inject constructor(
             settings.observeAsFlow(AppSettings.KEY_SOURCE_SFW_OVERRIDES) { sourceSfwOverrides },
         ) { _, _ -> Unit }
         return combine(dbChanges, runtimeChanges, settingsChanges, nsfwOverrideChanges) { _, _, _, _ -> Unit }
-            .mapLatest { buildSourceItems() }
+            .mapLatest {
+                runCatching { buildSourceItems() }.getOrElse { e ->
+                    Log.e("UnifiedSourceCatalog", "Failed to buildSourceItems", e)
+                    emptyList()
+                }
+            }
             .flowOn(Dispatchers.Default)
             .combine(sourceAvailabilityRepository.observeAvailability()) { sources, availability ->
                 sources.map { source ->
@@ -395,6 +410,10 @@ class UnifiedSourceCatalogRepository @Inject constructor(
                         testAvailability = availability[source.id] ?: ContentSourceAvailability.UNKNOWN,
                     )
                 }
+            }
+            .catch { e ->
+                Log.e("UnifiedSourceCatalog", "Error in observeSources flow", e)
+                emit(emptyList())
             }
     }
 
@@ -432,11 +451,15 @@ class UnifiedSourceCatalogRepository @Inject constructor(
         jsonSummaries.forEach { sourceMap[it.id] = JsonSourceListSource(it) }
 
         val items = sourceMap.values
-            .map { source ->
-                val jsonSummary = jsonById[source.name]
-                val jsonEntity = jsonEntityById[source.name]
-                val sourceEntity = sourceEntities[source.name]
-                source.toUnifiedSourceItem(sourceEntity, jsonSummary, jsonEntity)
+            .mapNotNull { source ->
+                runCatching {
+                    val jsonSummary = jsonById[source.name]
+                    val jsonEntity = jsonEntityById[source.name]
+                    val sourceEntity = sourceEntities[source.name]
+                    source.toUnifiedSourceItem(sourceEntity, jsonSummary, jsonEntity)
+                }.onFailure { e ->
+                    Log.e("UnifiedSourceCatalog", "Failed to build UnifiedSourceItem for ${source.name}", e)
+                }.getOrNull()
             }
             .sortedWith(compareBy({ it.kind.ordinal }, { it.title.lowercase() }))
         Log.d(

@@ -152,9 +152,9 @@ internal fun UnifiedSourceItem.matchesRepositoryFilter(
 ): Boolean = repositoryId == null || effectiveRepositoryId(packagesById) == repositoryId
 
 data class UnifiedSourceCatalogState(
-    val repositories: List<UnifiedSourceRepositoryItem>,
-    val packages: List<UnifiedSourcePackageItem>,
-    val sources: List<UnifiedSourceItem>,
+    val repositories: List<UnifiedSourceRepositoryItem> = emptyList(),
+    val packages: List<UnifiedSourcePackageItem> = emptyList(),
+    val sources: List<UnifiedSourceItem> = emptyList(),
 )
 
 /**

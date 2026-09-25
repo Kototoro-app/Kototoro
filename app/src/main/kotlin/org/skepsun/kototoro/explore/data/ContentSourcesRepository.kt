@@ -704,6 +704,33 @@ class ContentSourcesRepository @Inject constructor(
         }.distinctUntilChanged().onStart { assimilateNewSources() }
     }
 
+    fun observeTotalSourcesCount(): Flow<Int> {
+        return combine(
+            observeJarParserSourceChanges(),
+            observeExternalExtensionChanges(),
+            cloudstreamRuntimeManager.sources,
+            jsonDao.observeAllSummaries(),
+        ) { _, _, cs, jsonSummaries ->
+            val set = HashSet<String>()
+            allContentSources.forEach { set.add(it.name) }
+            cs.forEach { set.add(it.name) }
+            jsonSummaries.forEach { set.add(it.id) }
+            mihonExtensionManager.installedExtensions.value.forEach { ext ->
+                ext.sources.forEach { set.add(it.name) }
+            }
+            aniyomiExtensionManager.installedExtensions.value.forEach { ext ->
+                ext.sources.forEach { set.add(it.name) }
+            }
+            ireaderExtensionManager.installedExtensions.value.forEach { ext ->
+                ext.sources.forEach { set.add(it.name) }
+            }
+            tsundokuExtensionManager.installedExtensions.value.forEach { ext ->
+                ext.sources.forEach { set.add(it.name) }
+            }
+            set.size
+        }.distinctUntilChanged().onStart { assimilateNewSources() }
+    }
+
     fun observeBuiltInSourcesCount(): Flow<Int> {
         return combine(
             observeIsNsfwDisabled(),

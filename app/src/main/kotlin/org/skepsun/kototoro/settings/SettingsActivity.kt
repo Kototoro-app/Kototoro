@@ -1552,6 +1552,7 @@ class SettingsActivity :
     @Composable
     private fun RenderSettingsRootContent(modifier: Modifier = Modifier) {
         val enabledSourcesCount by rootSettingsViewModel.enabledSourcesCount.collectAsStateWithLifecycle()
+        val totalSourcesCount by rootSettingsViewModel.totalSourcesCount.collectAsStateWithLifecycle()
         val searchResults by viewModel.content.collectAsStateWithLifecycle()
         val searchQuery by viewModel.queryText.collectAsStateWithLifecycle()
         val isSearchActive by viewModel.isSearchActive.collectAsStateWithLifecycle()
@@ -1581,7 +1582,7 @@ class SettingsActivity :
                 sections = buildSettingsRootSections(
                     context = this,
                     enabledSourcesCount = enabledSourcesCount,
-                    totalSourcesCount = rootSettingsViewModel.totalSourcesCount,
+                    totalSourcesCount = totalSourcesCount,
                     onOpenDestination = { composeDestination ->
                         openDestination(composeDestination, null, true)
                     },

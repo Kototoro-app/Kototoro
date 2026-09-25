@@ -2461,6 +2461,7 @@
     <string name="sync_backend_switch_webdav_confirm">当前已启用 Google Drive 同步。启用 WebDAV 备份会关闭 Google Drive 同步，但会保留你的 Google 登录状态。</string>
     <string name="sync_sign_in">准备 Google Drive 同步</string>
     <string name="sync_sign_in_summary">使用 Google Drive 应用数据空间和最小 drive.appdata 权限同步订阅与更新记录；Kototoro 无法访问你的网盘文件。</string>
+    <string name="google_drive_sync_unregistered_build_error">Google Drive 同步在开发版/Nightly 构建中不受支持。请使用正式发布版或 WebDAV 同步。</string>
     <string name="sync_sign_out">退出登录</string>
     <string name="sync_account">已登录</string>
     <string name="sync_now">立即同步</string>

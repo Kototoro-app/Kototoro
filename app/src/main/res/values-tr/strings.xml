@@ -887,4 +887,34 @@
     <string name="pinned_sources_only">Yalnızca sabitlenen kaynaklar</string>
     <string name="hide_empty_sources">Boş kaynakları gizle</string>
     <string name="auto_double_foldable">Otomatik İki Sayfa Katlanabilir</string>
+    <!-- Settings Sections -->
+    <string name="settings_section_reading_interface">Okuma ve arayüz</string>
+    <string name="settings_section_content_sources">İçerik ve kaynaklar</string>
+    <string name="settings_section_accounts_data">Hesaplar ve veriler</string>
+    <string name="settings_section_system_services">Sistem ve hizmetler</string>
+
+    <!-- Extensions and Sources -->
+    <string name="extension_management">Eklenti yönetimi</string>
+    <string name="extension_management_summary">Depoları, JSON kaynaklarını, APK eklentilerini ve JAR ayrıştırıcılarını yönetin</string>
+
+    <!-- Spaces -->
+    <string name="spaces">Alanlar</string>
+    <string name="spaces_settings_summary">Manga, roman ve animeleri bağımsız alanlara ayırın</string>
+
+    <!-- Playback -->
+    <string name="playback_settings">Oynatma</string>
+    <string name="video_decoder_mode">Video kod çözücü</string>
+    <string name="video_cache_size">Önbellek boyutu (MB)</string>
+
+    <!-- AI -->
+    <string name="ai_settings">Yapay Zeka</string>
+    <string name="ai_settings_entry_summary">Çeviri, görsel geliştirme, video iyileştirme ve yapay zeka özelliklerini yönetin</string>
+
+    <!-- Sync -->
+    <string name="google_drive_sync_unregistered_build_error">Google Drive senkronizasyonu geliştirici/nightly sürümlerinde desteklenmemektedir. Lütfen resmi kararlı sürümü veya WebDAV senkronizasyonunu kullanın.</string>
+
+    <!-- Card Progress Style -->
+    <string name="card_progress_style">Kart ilerleme stili</string>
+    <string name="card_progress_style_bottom_bar">Alt ilerleme çubuğu</string>
+    <string name="card_progress_style_circular_badge">Köşe dairesel rozet</string>
 </resources>

@@ -17,6 +17,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -181,7 +182,7 @@ class UnifiedSourcesViewModel @Inject constructor(
         // repository and the dropdown stayed hidden. Seed the available catalogs silently
         // once per ViewModel; a later manual refresh simply replaces the same state.
         if (availableExternalExtensions.value.isEmpty()) {
-            launchJob(Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO) {
                 runCatching {
                     withTimeoutOrNull(REFRESH_PACKAGES_TIMEOUT_MS) {
                         refreshAvailableExternalPackages()
@@ -224,7 +225,10 @@ class UnifiedSourcesViewModel @Inject constructor(
         availableExternalExtensions,
     ) { catalog, sourceOrigins, availableExtensions ->
         catalog.toFullCatalogData(sourceOrigins, availableExtensions)
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(Dispatchers.Default).catch { e ->
+        Log.e(TAG, "Error in fullCatalogState flow", e)
+        emit(FullCatalogData())
+    }
 
     private val baseSourcesUiState: Flow<UnifiedSourcesUiState.Ready> = combine(
         fullCatalogState,
@@ -250,7 +254,24 @@ class UnifiedSourcesViewModel @Inject constructor(
             missingSourcesWithoutMatch = catalogData.missingSourcesWithoutMatch,
             suggestedRepositoriesForMissing = catalogData.suggestedRepositoriesForMissing,
         )
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(Dispatchers.Default).catch { e ->
+        Log.e(TAG, "Error in baseSourcesUiState flow", e)
+        emit(
+            UnifiedSourcesUiState.Ready(
+                filters = filterState.value,
+                repositories = emptyList(),
+                packages = emptyList(),
+                sources = emptyList(),
+                allRepositories = emptyList(),
+                allPackages = emptyList(),
+                allSources = emptyList(),
+                availableKinds = emptyList(),
+                availableContentTypes = emptyList(),
+                availableLocationTypes = emptyList(),
+                availableLanguages = emptyList(),
+            )
+        )
+    }
 
     val uiState: StateFlow<UnifiedSourcesUiState> = combine(
         baseSourcesUiState,
@@ -1820,15 +1841,15 @@ class UnifiedSourcesViewModel @Inject constructor(
     }
 
     private data class FullCatalogData(
-        val repositories: List<UnifiedSourceRepositoryItem>,
-        val packages: List<UnifiedSourcePackageItem>,
-        val sources: List<UnifiedSourceItem>,
-        val repositoriesById: Map<String, UnifiedSourceRepositoryItem>,
-        val packagesById: Map<String, UnifiedSourcePackageItem>,
-        val availableKinds: List<UnifiedSourceKind>,
-        val availableContentTypes: List<ContentType>,
-        val availableLocationTypes: List<UnifiedRepositoryLocationType>,
-        val availableLanguages: List<String>,
+        val repositories: List<UnifiedSourceRepositoryItem> = emptyList(),
+        val packages: List<UnifiedSourcePackageItem> = emptyList(),
+        val sources: List<UnifiedSourceItem> = emptyList(),
+        val repositoriesById: Map<String, UnifiedSourceRepositoryItem> = emptyMap(),
+        val packagesById: Map<String, UnifiedSourcePackageItem> = emptyMap(),
+        val availableKinds: List<UnifiedSourceKind> = emptyList(),
+        val availableContentTypes: List<ContentType> = emptyList(),
+        val availableLocationTypes: List<UnifiedRepositoryLocationType> = emptyList(),
+        val availableLanguages: List<String> = emptyList(),
         val recommendedPackages: List<RecommendedPackageItem> = emptyList(),
         val missingSourcesWithoutMatch: List<MissingSourceHint> = emptyList(),
         val suggestedRepositoriesForMissing: List<UnifiedRecommendedRepository> = emptyList(),
