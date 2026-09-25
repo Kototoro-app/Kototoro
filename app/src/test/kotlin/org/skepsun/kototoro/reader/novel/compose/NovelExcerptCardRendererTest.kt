@@ -150,4 +150,60 @@ class NovelExcerptCardRendererTest {
         val pagesWithImage = NovelExcerptCardRenderer.calculateTotalPages(null, dataWithImage, org.skepsun.kototoro.reader.novel.NovelReaderFont.SYSTEM_SERIF)
         assertEquals(2, pagesWithImage) // 8 lines with 6 per page = 2 pages
     }
+
+    @Test
+    fun `computeLayout respects non-Chinese locale for date weekday and book title`() {
+        val originalLocale = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.ENGLISH)
+            val cal = Calendar.getInstance().apply {
+                set(2026, Calendar.SEPTEMBER, 23, 12, 0, 0)
+            }
+            val data = NovelExcerptData(
+                selectedText = "Test excerpt text",
+                bookTitle = "Pride and Prejudice",
+                chapterTitle = "Chapter 1",
+                createdAtMillis = cal.timeInMillis,
+            )
+            val layout = NovelExcerptCardRenderer.computeLayout(
+                context = null,
+                data = data,
+                configuration = NovelExcerptConfiguration(template = NovelExcerptTemplate.CALENDAR),
+            )
+            assertEquals("Wednesday", layout.weekday)
+            assertEquals("", layout.solarTerm)
+            assertEquals("Pride and Prejudice", layout.formattedBookTitle)
+            assertTrue(layout.dateMonthYear.contains("SEPTEMBER"))
+        } finally {
+            java.util.Locale.setDefault(originalLocale)
+        }
+    }
+
+    @Test
+    fun `computeLayout respects Chinese locale for date weekday solar term and book title`() {
+        val originalLocale = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.SIMPLIFIED_CHINESE)
+            val cal = Calendar.getInstance().apply {
+                set(2026, Calendar.SEPTEMBER, 23, 12, 0, 0)
+            }
+            val data = NovelExcerptData(
+                selectedText = "测试摘录内容",
+                bookTitle = "红楼梦",
+                chapterTitle = "第一回",
+                createdAtMillis = cal.timeInMillis,
+            )
+            val layout = NovelExcerptCardRenderer.computeLayout(
+                context = null,
+                data = data,
+                configuration = NovelExcerptConfiguration(template = NovelExcerptTemplate.CALENDAR),
+            )
+            assertEquals("星期三", layout.weekday)
+            assertEquals("秋分", layout.solarTerm)
+            assertEquals("《红楼梦》", layout.formattedBookTitle)
+        } finally {
+            java.util.Locale.setDefault(originalLocale)
+        }
+    }
 }
+

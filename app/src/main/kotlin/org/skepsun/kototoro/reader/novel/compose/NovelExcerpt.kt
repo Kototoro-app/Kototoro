@@ -461,6 +461,7 @@ internal data class ExcerptCardLayout(
     val footerTop: Float,
     val imageBitmap: Bitmap? = null,
     val imageRect: RectF? = null,
+    val formattedBookTitle: String = bookTitle,
 )
 
 internal object NovelExcerptDateHelper {
@@ -690,19 +691,27 @@ internal object NovelExcerptCardRenderer {
         val calcHeight = (footerTop + bottomPadding).toInt()
         val height = maxOf(minHeight, calcHeight)
 
+        val locale = context?.resources?.configuration?.locales?.get(0) ?: Locale.getDefault()
+        val isZh = locale.language.equals("zh", ignoreCase = true)
+
         val calendar = java.util.Calendar.getInstance().apply { timeInMillis = data.createdAtMillis }
         val dateDay = calendar.get(java.util.Calendar.DAY_OF_MONTH).toString()
-        val dateMonthYear = SimpleDateFormat("MMMM yyyy", Locale.US).format(Date(data.createdAtMillis)).uppercase()
-        val weekdayNames = arrayOf(
-            "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六",
-        )
-        val weekday = weekdayNames.getOrElse(calendar.get(java.util.Calendar.DAY_OF_WEEK) - 1) { "" }
+        val dateMonthYear = SimpleDateFormat("MMMM yyyy", locale).format(Date(data.createdAtMillis)).uppercase(locale)
+        val weekday = SimpleDateFormat("EEEE", locale).format(Date(data.createdAtMillis))
         val dateFullSlash = "${calendar.get(java.util.Calendar.YEAR)}/${calendar.get(java.util.Calendar.MONTH) + 1}/${calendar.get(java.util.Calendar.DAY_OF_MONTH)}"
-        val dateChinese = NovelExcerptDateHelper.formatChineseDate(data.createdAtMillis)
-        val solarTerm = NovelExcerptDateHelper.getSolarTerm(
-            calendar.get(java.util.Calendar.MONTH),
-            calendar.get(java.util.Calendar.DAY_OF_MONTH),
-        )
+        val dateChinese = if (isZh) {
+            NovelExcerptDateHelper.formatChineseDate(data.createdAtMillis)
+        } else {
+            SimpleDateFormat("yyyy · MM · dd", locale).format(Date(data.createdAtMillis))
+        }
+        val solarTerm = if (isZh) {
+            NovelExcerptDateHelper.getSolarTerm(
+                calendar.get(java.util.Calendar.MONTH),
+                calendar.get(java.util.Calendar.DAY_OF_MONTH),
+            )
+        } else {
+            ""
+        }
         val userNickname = data.userNickname.ifBlank {
             context?.getString(R.string.novel_excerpt_default_nickname).orEmpty()
         }
@@ -712,6 +721,8 @@ internal object NovelExcerptCardRenderer {
             R.string.novel_excerpt_label_excerpted_on_vertical,
             userNickname,
         ) ?: userNickname
+        val formattedBookTitle = context?.getString(R.string.book_notes_overview_book_title, data.bookTitle)
+            ?: if (isZh) "《${data.bookTitle}》" else data.bookTitle
 
         return ExcerptCardLayout(
             width = width,
@@ -749,6 +760,7 @@ internal object NovelExcerptCardRenderer {
             footerTop = footerTop,
             imageBitmap = data.imageBitmap,
             imageRect = imageRect,
+            formattedBookTitle = formattedBookTitle,
         )
     }
 
@@ -990,7 +1002,11 @@ internal object NovelExcerptCardRenderer {
                 paint.textSize = 26f
                 paint.typeface = layout.typeface
                 paint.color = android.graphics.Color.rgb(136, 136, 136)
-                val termStr = "${layout.weekday} · ${layout.solarTerm}"
+                val termStr = if (layout.solarTerm.isNotBlank()) {
+                    "${layout.weekday} · ${layout.solarTerm}"
+                } else {
+                    layout.weekday.uppercase()
+                }
                 val termWidth = paint.measureText(termStr)
                 canvas.drawText(termStr, (width - termWidth) / 2f, 315f, paint)
 
@@ -1167,7 +1183,7 @@ internal object NovelExcerptCardRenderer {
                 paint.color = layout.foregroundColor
                 paint.textSize = 32f
                 paint.typeface = layout.boldTypeface
-                val bookStr = "《${layout.bookTitle}》"
+                val bookStr = layout.formattedBookTitle
                 val bw = paint.measureText(bookStr)
                 canvas.drawText(bookStr, (width - bw) / 2f, footerTop + 40f, paint)
 
