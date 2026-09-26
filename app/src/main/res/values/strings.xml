@@ -2449,12 +2449,12 @@
     <string name="rating">Rating</string>
     <string name="source">Source</string>
     <string name="details_metadata_source">Metadata Source</string>
-    <string name="details_entity_metadata">Entity Metadata</string>
+    <string name="details_entity_metadata">Metadata source</string>
     <string name="details_entity_metadata_binding">Metadata binding</string>
     <string name="details_metadata_binding_unavailable">No metadata binding</string>
     <string name="details_reading_source">Reading Source</string>
     <string name="details_playback_source">Playback Source</string>
-    <string name="details_current_projection">Current Projection</string>
+    <string name="details_current_projection">Reading source</string>
     <string name="details_remove_projection">Split out projection</string>
     <string name="details_activate_projection">Formally activate</string>
     <string name="details_active_projection_badge">Active</string>
@@ -2491,8 +2491,8 @@
     <string name="details_reading_source_unavailable">Unavailable</string>
     <string name="details_temporary_read_only_notice">Temporary preview. Metadata source and reading source cannot be changed here.</string>
     <string name="details_metadata_source_login_hint">Search and local binding work without login. Sign in to auto-link online progress.</string>
-    <string name="details_entity_metadata_sheet_hint">The selected binding defines which metadata projection this entity prefers for title, summary, tags, and linked tracking sync.</string>
-    <string name="details_current_projection_sheet_hint">Select which local %1$s projection this entity should use right now. Search results attached later will appear here as additional projections.</string>
+    <string name="details_entity_metadata_sheet_hint">Choose where the title, summary and tags shown for this title come from. This only affects what is displayed.</string>
+    <string name="details_current_projection_sheet_hint">You are using this %1$s. To switch, search other sources below and migrate: history, favourites and progress move to the new source.</string>
     <string name="details_temporary_projection_sheet_hint">This only affects chapters and continue reading for this view.</string>
     <string name="details_additional_metadata">Additional metadata</string>
     <string name="details_related_works">Related works</string>

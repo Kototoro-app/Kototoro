@@ -119,10 +119,8 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
@@ -308,8 +306,6 @@ private fun DetailsScreenContent(
     val showMergeRepeatedChapters = chaptersPaneControlsUiState.showMergeRepeatedChapters
     val isDownloadedOnly = chaptersPaneControlsUiState.isDownloadedOnly
     val chapterEmptyReason = chaptersPaneControlsUiState.emptyReason
-    val activeLocalSourceOptions = sourceBindingUiState.activeLocalSourceOptions
-    val entityChapterSourceInfo = sourceBindingUiState.entityChapterSourceInfo
     val metadataSourceOptions = sourceBindingUiState.metadataSourceOptions
     val readingSourceOptions = sourceBindingUiState.readingSourceOptions
     val metadataChapterTabs = sourceBindingUiState.metadataChapterTabs
@@ -1264,8 +1260,6 @@ private fun DetailsScreenContent(
                                     trackingSuggestion = trackingSuggestion,
                                     metadataSourceOptions = metadataSourceOptions,
                                     readingSourceOptions = readingSourceOptions,
-                                    activeLocalSourceOptions = activeLocalSourceOptions,
-                                    entityChapterSourceInfo = entityChapterSourceInfo,
                                     relatedContent = relatedContent,
                                     supplementalMetadataProperties = supplementalMetadataProperties,
                                     supplementalSections = supplementalSections,
@@ -1361,9 +1355,8 @@ private fun DetailsScreenContent(
                                             ?: return@DetailsPaneContent
                                         viewModel.selectMetadataSource(matchingOption)
                                     },
-                                    onSelectReadingChapterTab = { tab ->
-                                        tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                                    },
+                                    // A single reading source: its chapter tab has nothing to switch to.
+                                    onSelectReadingChapterTab = {},
                                     selectedTabId = sheetTabSelection,
                                     availableTabIds = availableTabIds,
                                     isSheetFullyExpanded = false,
@@ -1449,8 +1442,6 @@ private fun DetailsScreenContent(
                                 trackingSuggestion = trackingSuggestion,
                                 metadataSourceOptions = metadataSourceOptions,
                                 readingSourceOptions = readingSourceOptions,
-                                activeLocalSourceOptions = activeLocalSourceOptions,
-                                entityChapterSourceInfo = entityChapterSourceInfo,
                                 relatedContent = relatedContent,
                                 supplementalMetadataProperties = supplementalMetadataProperties,
                                 supplementalSections = supplementalSections,
@@ -1541,9 +1532,8 @@ private fun DetailsScreenContent(
                                 val matchingOption = metadataSourceOptions.firstOrNull { option -> option.key == tab.key } ?: return@DetailsPaneContent
                                 viewModel.selectMetadataSource(matchingOption)
                             },
-                            onSelectReadingChapterTab = { tab ->
-                                tab.targetMangaId?.let(viewModel::selectActiveLocalSource)
-                            },
+                            // A single reading source: its chapter tab has nothing to switch to.
+                            onSelectReadingChapterTab = {},
                             selectedTabId = sheetTabSelection,
                             availableTabIds = availableTabIds,
                             isSheetFullyExpanded = isCompactPaneFullyExpanded,
@@ -1820,9 +1810,7 @@ private fun DetailsScreenContent(
                     languagePresets = languagePresets,
                     activeLanguagePresetId = activeLanguagePresetId,
                     currentContent = content,
-                    entityChapterSourceInfo = entityChapterSourceInfo,
                     unavailableText = stringResource(R.string.details_reading_source_unavailable),
-                    onSelectOption = { option -> option.targetMangaId?.let(viewModel::selectActiveLocalSource) },
                     onSearchQueryChange = viewModel::updateReadingSearchQuery,
                     onSearch = viewModel::searchReadingBindings,
                     onLanguagePresetSelected = viewModel::setActiveLanguagePreset,
@@ -1835,15 +1823,9 @@ private fun DetailsScreenContent(
                         appRouter.openTemporaryDetails(candidate)
                     },
                     onMigrateResult = { candidate ->
-                        viewModel.bindReadingCandidateToTracking(candidate) {
+                        viewModel.switchReadingSource(candidate) {
                             detailsScreenState.setShowReadingSourceDialog(false)
                         }
-                    },
-                    onDeleteProjection = { option ->
-                        option.targetMangaId?.let(viewModel::removeActiveLocalSource)
-                    },
-                    onActivateProjection = { option ->
-                        option.targetMangaId?.let(viewModel::selectActiveLocalSource)
                     },
                     onDismissRequest = { detailsScreenState.setShowReadingSourceDialog(false) },
                 )

@@ -115,10 +115,8 @@ import org.skepsun.kototoro.core.util.ext.mangaExtra
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
 import org.skepsun.kototoro.details.ui.DetailsViewModel
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSupplementAction
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.HistoryInfo
 import org.skepsun.kototoro.details.ui.compose.pane.DetailsPaneHost
 import org.skepsun.kototoro.details.ui.compose.state.CompactDetailsPaneAnchor
@@ -161,8 +159,6 @@ internal fun DetailsScrollableContent(
     trackingSuggestion: org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult?,
     metadataSourceOptions: List<DetailsSourceOption>,
     readingSourceOptions: List<DetailsSourceOption>,
-    activeLocalSourceOptions: List<ActiveLocalSourceOption>,
-    entityChapterSourceInfo: EntityChapterSourceInfo?,
     relatedContent: List<ContentListModel>,
     supplementalMetadataProperties: List<Pair<String, String>>,
     supplementalSections: List<EntityRelationSection>,

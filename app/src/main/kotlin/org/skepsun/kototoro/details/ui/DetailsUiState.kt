@@ -1,8 +1,6 @@
 package org.skepsun.kototoro.details.ui
 
 
-import org.skepsun.kototoro.details.ui.model.ActiveLocalSourceOption
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.core.jsonsource.SourceType
@@ -119,8 +117,6 @@ data class ReadingSearchScopeFilterUiState(
 }
 
 data class SourceBindingUiState(
-    val activeLocalSourceOptions: List<ActiveLocalSourceOption> = emptyList(),
-    val entityChapterSourceInfo: EntityChapterSourceInfo? = null,
     val metadataSourceOptions: List<DetailsSourceOption> = emptyList(),
     val readingSourceOptions: List<DetailsSourceOption> = emptyList(),
     val metadataChapterTabs: List<DetailsChapterSourceTab> = emptyList(),

@@ -79,7 +79,6 @@ import org.skepsun.kototoro.core.ui.glass.rememberGlassSurfaceColors
 import org.skepsun.kototoro.core.ui.theme.LocalMaterialExpressiveComponentsEnabled
 import org.skepsun.kototoro.core.util.ext.mangaSourceExtra
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import kotlin.math.roundToInt
@@ -885,73 +884,6 @@ private fun Content.readingSearchLatestChapterInfo(): ReadingSearchLatestChapter
         chapter.title?.takeIf { it.isNotBlank() }
     } ?: return null
     return ReadingSearchLatestChapterInfo.Titled(titledChapter)
-}
-
-@Composable
-private fun EntityChapterSourceCard(
-    info: EntityChapterSourceInfo,
-) {
-    val chapterSourceTitle = info.projectionTitle?.takeIf { it.isNotBlank() }
-        ?: stringResource(R.string.entity_graph_chapter_source_unavailable)
-    val supportingText = if (info.source != null) {
-        buildString {
-            append(stringResource(R.string.entity_graph_chapter_source_selected_hint))
-            if (info.projectionCount > 1) {
-                append(' ')
-                append(stringResource(R.string.entity_graph_chapter_source_projection_count, info.projectionCount))
-            }
-        }
-    } else {
-        stringResource(R.string.entity_graph_chapter_source_unavailable_hint)
-    }
-    GlassSurface(
-        modifier = Modifier.fillMaxWidth(),
-        style = GlassDefaults.subtleStyle(),
-        shape = RoundedRectangle(24.dp),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_book_page),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.entity_graph_chapter_source),
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = chapterSourceTitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = supportingText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        }
-    }
 }
 
 private fun Modifier.offsetX(

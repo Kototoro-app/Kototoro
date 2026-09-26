@@ -53,12 +53,10 @@ import org.skepsun.kototoro.core.model.titleResId
 import org.skepsun.kototoro.core.model.ContentSourceInfo
 import org.skepsun.kototoro.main.ui.compose.GlassDropdownMenu
 import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuItem
-import org.skepsun.kototoro.main.ui.compose.CompactDropdownMenuDivider
 import org.skepsun.kototoro.explore.data.SourcePreset
 import org.skepsun.kototoro.details.ui.model.DetailsSourceOption
 import org.skepsun.kototoro.details.ui.model.DetailsSourceDisplayStrings
 import org.skepsun.kototoro.details.ui.model.DetailsSourceRole
-import org.skepsun.kototoro.details.ui.model.EntityChapterSourceInfo
 import org.skepsun.kototoro.details.ui.model.LinkedTrackingItemUiModel
 import org.skepsun.kototoro.main.ui.compose.SearchFilterSheet
 import org.skepsun.kototoro.parsers.model.Content
@@ -293,11 +291,9 @@ fun ReadingSourceSheet(
     languagePresets: List<SourcePreset>,
     activeLanguagePresetId: Long,
     currentContent: Content?,
-    entityChapterSourceInfo: EntityChapterSourceInfo?,
     unavailableText: String,
     label: String,
     onDismissRequest: () -> Unit,
-    onSelectOption: (DetailsSourceOption) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
     onLanguagePresetSelected: (Long) -> Unit,
@@ -308,8 +304,6 @@ fun ReadingSourceSheet(
     onHideEmptyChange: (Boolean) -> Unit,
     onTemporaryOpenResult: (Content) -> Unit,
     onMigrateResult: (Content) -> Unit,
-    onDeleteProjection: (DetailsSourceOption) -> Unit,
-    onActivateProjection: (DetailsSourceOption) -> Unit,
 ) {
     val context = LocalContext.current
     var pendingMigrationTarget by remember { mutableStateOf<Content?>(null) }
@@ -369,33 +363,12 @@ fun ReadingSourceSheet(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.details_current_projection),
+                        text = label,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = buildString {
-                            append(stringResource(R.string.details_current_projection_sheet_hint, label))
-                            entityChapterSourceInfo
-                                ?.projectionCount
-                                ?.takeIf { it > 0 }
-                                ?.let { count ->
-                                    append(' ')
-                                    append(
-                                        stringResource(
-                                            R.string.entity_graph_chapter_source_projection_count,
-                                            count,
-                                        ),
-                                    )
-                                }
-                            if (
-                                entityChapterSourceInfo?.currentReadingProjectionMangaId != null &&
-                                entityChapterSourceInfo.currentReadingProjectionMangaId != entityChapterSourceInfo.activeProjectionMangaId
-                            ) {
-                                append(' ')
-                                append(stringResource(R.string.details_temporary_projection_sheet_hint))
-                            }
-                        },
+                        text = stringResource(R.string.details_current_projection_sheet_hint, label),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -405,76 +378,24 @@ fun ReadingSourceSheet(
                             items = currentOptions,
                             key = { index, option -> "${option.key}:$index" },
                         ) { _, option ->
-                            val isTemporaryProjection =
-                                option.targetMangaId != null &&
-                                    entityChapterSourceInfo?.currentReadingProjectionMangaId == option.targetMangaId &&
-                                    entityChapterSourceInfo.activeProjectionMangaId != option.targetMangaId
-                            val isActiveProjection =
-                                option.targetMangaId != null &&
-                                    entityChapterSourceInfo?.activeProjectionMangaId == option.targetMangaId
-                            var showMenu by remember(option.key) { mutableStateOf(false) }
-                            var menuAnchorBounds by remember(option.key) { mutableStateOf<Rect?>(null) }
-                            Box(
-                                modifier = Modifier.onGloballyPositioned { menuAnchorBounds = it.boundsInRoot() },
-                            ) {
-                                SourceOptionCard(
-                                    displayModel = option.resolveDisplayModel(
-                                        role = DetailsSourceRole.READING_PROJECTION,
-                                        currentContent = currentContent,
-                                        linkedTrackingItem = null,
-                                        strings = DetailsSourceDisplayStrings(
-                                            unavailableText = unavailableText,
-                                            metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
-                                            currentProjectionLabel = label,
-                                            switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
-                                        ),
-                                        isSelected = option == selectedOption || option.isSelected,
-                                    ).copy(
-                                        badgeText = when {
-                                            isActiveProjection -> stringResource(R.string.details_active_projection_badge)
-                                            isTemporaryProjection -> stringResource(R.string.details_temporary_projection_badge)
-                                            else -> null
-                                        },
-                                        isActiveProjection = isActiveProjection,
+                            SourceOptionCard(
+                                displayModel = option.resolveDisplayModel(
+                                    role = DetailsSourceRole.READING_PROJECTION,
+                                    currentContent = currentContent,
+                                    linkedTrackingItem = null,
+                                    strings = DetailsSourceDisplayStrings(
+                                        unavailableText = unavailableText,
+                                        metadataBindingLabel = stringResource(R.string.details_entity_metadata_binding),
+                                        currentProjectionLabel = label,
+                                        switchableProjectionLabel = stringResource(R.string.details_switchable_projection),
                                     ),
-                                    scrobblingStatuses = emptyArray(),
-                                    onClick = {
-                                        onDismissRequest()
-                                        onSelectOption(option)
-                                        },
-                                    onLongClick = {
-                                        if (option.targetMangaId != null) {
-                                            showMenu = true
-                                        }
-                                    },
-                                )
-                                GlassDropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false },
-                                    // ReadingSourceSheet is rendered in its own Dialog window. The
-                                    // app-level root overlay would be behind that window.
-                                    useRootOverlay = false,
-                                    anchorBounds = menuAnchorBounds,
-                                ) {
-                                    CompactDropdownMenuItem(
-                                        text = { Text(stringResource(R.string.details_remove_projection)) },
-                                        onClick = {
-                                            showMenu = false
-                                            onDeleteProjection(option)
-                                        },
-                                    )
-                                    CompactDropdownMenuDivider()
-                                    CompactDropdownMenuItem(
-                                        text = { Text(stringResource(R.string.details_activate_projection)) },
-                                        onClick = {
-                                            showMenu = false
-                                            onActivateProjection(option)
-                                            onDismissRequest()
-                                        },
-                                    )
-                                }
-                            }
-                            }
+                                    isSelected = option == selectedOption || option.isSelected,
+                                ),
+                                scrobblingStatuses = emptyArray(),
+                                onClick = onDismissRequest,
+                                onLongClick = {},
+                            )
+                        }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
