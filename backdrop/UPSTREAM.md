@@ -47,3 +47,16 @@ implementations were inserted with only the `actual` keyword stripped off.
    Measured on a Redmi K70 (e2ed20be), untouched history screen: this write was 35% of all
    snapshot writes and is now zero. The screen still redraws for unrelated reasons (the lazy
    grid re-measures every frame), so this is a real reduction, not a settled page.
+
+2. `com/kyant/backdrop/DrawBackdropModifier.kt`, `com/kyant/backdrop/BackdropEffectScope.kt` --
+   when a surface has a render effect (blur/lens), `DrawBackdropNode` records its backdrop layer
+   at 1/2 resolution and scales it back up (`BackdropResolutionScale`). The backdrop is
+   re-rendered every frame while content scrolls underneath, and on the iOS-style glass chrome
+   that was the dominant RenderThread/GPU cost (Perfetto: `flush layers` 1.5-1.7 ms per frame,
+   3-5 ms in the slowest frames). `BackdropEffectScopeImpl.update` takes the scale and hands
+   effects a matching density and size, so dp-based parameters (blur radius, lens height,
+   corner radii) keep their visual size; the backdrop itself is still positioned with the real
+   density so `layerBlock` inverse transforms stay correct. Surfaces without a render effect
+   are unchanged (scale 1).
+
+   Status: compiled, not yet measured or visually compared on device.
