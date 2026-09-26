@@ -1,6 +1,5 @@
 package org.skepsun.kototoro.backups.data
 
-import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -12,26 +11,21 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.skepsun.kototoro.backups.data.model.WorkFavouriteBackup
+import org.skepsun.kototoro.backups.data.model.WorkHistoryBackup
 import org.skepsun.kototoro.backups.domain.AppBackupAgent
-import org.skepsun.kototoro.backups.domain.ActiveWorkStateMissingEntityException
-import org.skepsun.kototoro.backups.domain.BackupOrphanInfo
-import org.skepsun.kototoro.backups.domain.BackupPayloadGuard
 import org.skepsun.kototoro.backups.domain.BackupSection
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.RestoreCheckpointEntity
 import org.skepsun.kototoro.core.model.TestContentSource
-import org.skepsun.kototoro.entitygraph.data.EntityBindingRecord
-import org.skepsun.kototoro.entitygraph.data.EntityRecord
-import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.history.data.HistoryRepository
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
 import org.skepsun.kototoro.list.domain.ListSortOrder
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
@@ -50,6 +44,8 @@ import javax.inject.Inject
  *   未处理节不会在恢复前被清空（旧的「整体先清库」会在崩溃时造成数据全失）。
  * - 相同 restore_id 重试可断点续传（已在 checkpoint 中完成的节跳过，映射快照恢复）。
  * - 成功后 checkpoint 被清理；mode/节集合不匹配的 checkpoint 视为全新恢复。
+ *
+ * 以及投影优先下对旧（v3 WORK_*）备份的兼容：状态按 anchor_manga_id 落到投影上。
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -72,6 +68,7 @@ class RestoreCheckpointTest {
 
 	private companion object {
 		const val CHECKPOINT_ID = "restore:test-session"
+		const val LEGACY_ENTITY_ID = 42L
 	}
 
 	private val json = Json { ignoreUnknownKeys = true }
@@ -154,30 +151,31 @@ class RestoreCheckpointTest {
 		}
 	}
 
-	private fun withPoisonedEntityEntities(backup: File): File {
-		// 用畸形 JSON 制造确定性中途失败：readJsonArray 惰性解码为数组时
-		// 在该节抛错（逃逸 restoreToDb 逐行吞错），顺序遍历恰好在
-		// ENTITY_GRAPH_ENTITIES 处中止，延迟节从未开始。
-		val poison = "[ {\"id\" : 1"
+	/** Copies [backup], replacing the payload of the given sections. */
+	private fun rewriteBackup(backup: File, replacements: Map<BackupSection, String>): File {
 		val context = InstrumentationRegistry.getInstrumentation().targetContext
-		val out = File.createTempFile("poisoned_backup_", ".zip", context.cacheDir)
+		val out = File.createTempFile("rewritten_backup_", ".zip", context.cacheDir)
+		val byEntryName = replacements.mapKeys { it.key.entryName }
 		ZipOutputStream(out.outputStream()).use { zos ->
 			ZipInputStream(backup.inputStream()).use { zis ->
 				var entry = zis.nextEntry
 				while (entry != null) {
 					val bytes = zis.readBytes()
 					zos.putNextEntry(ZipEntry(entry.name))
-					zos.write(if (entry.name == BackupSection.ENTITY_GRAPH_ENTITIES.entryName) {
-						poison.toByteArray()
-					} else {
-						bytes
-					})
+					zos.write(byEntryName[entry.name]?.toByteArray() ?: bytes)
 					zos.closeEntry()
 					entry = zis.nextEntry
 				}
 			}
 		}
 		return out
+	}
+
+	private fun withPoisonedScrobbling(backup: File): File {
+		// 用畸形 JSON 制造确定性中途失败：readJsonArray 惰性解码为数组时在该节抛错
+		// （逃逸 restoreToDb 逐行吞错）。SCROBBLING 不是延迟节且排在 SOURCES 之后，
+		// 所以 SOURCES 已完成、HISTORY 等延迟节从未开始。
+		return rewriteBackup(backup, mapOf(BackupSection.SCROBBLING to "[ {\"id\" : 1"))
 	}
 
 	private suspend fun seedBackupData(): Pair<Content, String> {
@@ -210,60 +208,39 @@ class RestoreCheckpointTest {
 		database.getRestoreCheckpointDao().clearAll()
 
 		// 预先存在的本地数据：恢复被中途打断时必须保留（逐节清空的关键安全属性）。
-		// 直接表级种子（WORK 实体 + work_history），绕开 repo 层对实体/绑定脚手架的依赖。
-		val preEntityId = 7_777_777L
-		database.getEntityGraphDao().upsertEntityRecord(
-			EntityRecord(
-				id = preEntityId,
-				type = EntityType.WORK.name,
-				contentType = "MANGA",
-				syncId = "pre-existing-sync",
-				primaryName = "PreExisting Work",
-				nameHash = 42L,
-				aliases = "[]",
-				createdAt = 0L,
-				lastAccessed = 0L,
-				accessCount = 1,
-			),
+		val preExisting = newContent("PreExisting Content")
+		historyRepository.addOrUpdate(
+			manga = preExisting,
+			chapterId = preExisting.chapters!!.first().id,
+			page = 1,
+			scroll = 0,
+			percent = 0.1f,
+			force = false,
 		)
-		database.getWorkHistoryDao().upsert(
-			WorkHistoryEntity(
-				entityId = preEntityId,
-				anchorMangaId = preEntityId,
-				createdAt = 0L,
-				updatedAt = 0L,
-				chapterId = 1L,
-				page = 1,
-				scroll = 0f,
-				percent = 0.1f,
-				deletedAt = 0L,
-				chaptersCount = 1,
-			),
-		)
-		assertNotNull(database.getWorkHistoryDao().find(preEntityId))
+		assertNotNull(historyRepository.getOne(preExisting))
 
 		val sections = restoreSections()
-		val poisoned = withPoisonedEntityEntities(backup)
+		val poisoned = withPoisonedScrobbling(backup)
 
-		// 毒化备份触发中途失败（ENTITY_GRAPH_ENTITIES 处抛错）。
+		// 毒化备份触发中途失败（SCROBBLING 处抛错）。
 		val failure = runCatching {
 			runRestore(poisoned, sections, BackupRepository.RestoreMode.SNAPSHOT_REPLACE, CHECKPOINT_ID)
 		}
-		assertTrue("restore must fail on poisoned entities", failure.isFailure)
+		assertTrue("restore must fail on poisoned scrobbling", failure.isFailure)
 
-		// 崩溃安全：HISTORY/WORK_HISTORY 是延迟节，从未开始 → 预置数据未被清空。
+		// 崩溃安全：HISTORY 是延迟节，从未开始 → 预置数据未被清空。
 		assertNotNull(
-			"pre-existing work history must survive interrupted snapshot restore",
-			database.getWorkHistoryDao().find(preEntityId),
+			"pre-existing history must survive interrupted snapshot restore",
+			historyRepository.getOne(preExisting),
 		)
 
-		// checkpoint 保留：已完成的节（含 SOURCES）记录在案，未完成的 HISTORY/实体未记录。
+		// checkpoint 保留：已完成的节（含 SOURCES）记录在案，未完成的 HISTORY / 失败节未记录。
 		val checkpoint = database.getRestoreCheckpointDao().findById(CHECKPOINT_ID)
 		assertNotNull("checkpoint must persist after failure", checkpoint)
 		val doneNames = json.decodeFromString<List<String>>(checkpoint!!.doneJson)
 		assertTrue(BackupSection.SOURCES.name in doneNames)
 		assertTrue(BackupSection.HISTORY.name !in doneNames)
-		assertTrue(BackupSection.ENTITY_GRAPH_ENTITIES.name !in doneNames)
+		assertTrue(BackupSection.SCROBBLING.name !in doneNames)
 
 		// 断点续传：同一 restore_id + 干净备份 → 跳过已完成节，补完剩余节。
 		val resumed = runRestore(backup, sections, BackupRepository.RestoreMode.SNAPSHOT_REPLACE, CHECKPOINT_ID)
@@ -274,25 +251,6 @@ class RestoreCheckpointTest {
 			"resume must be complete",
 			historyRepository.getOne(backupContent),
 		)
-		assertTrue(
-			"entity graph must be restored after resume",
-			database.getEntityGraphDao().dumpEntities().isNotEmpty(),
-		)
-		assertEquals(
-			"restored work history must not retain references to replaced entities",
-			0,
-			database.getWorkHistoryDao().countDanglingEntityRefs(),
-		)
-		assertEquals(
-			"restored work favourites must not retain references to replaced entities",
-			0,
-			database.getWorkFavouritesDao().countDanglingEntityRefs(),
-		)
-		assertEquals(
-			"restored work stats must not retain references to replaced entities",
-			0,
-			database.getWorkStatsDao().findDanglingEntityRefs().size,
-		)
 		val followUpBackup = agent.createBackupFile(context, backupRepository)
 		assertTrue("a successful restore must remain exportable", followUpBackup.length() > 0L)
 		assertTrue("follow-up backup cleanup", followUpBackup.delete())
@@ -300,6 +258,9 @@ class RestoreCheckpointTest {
 			"checkpoint must be deleted after successful restore",
 			database.getRestoreCheckpointDao().findById(CHECKPOINT_ID) == null,
 		)
+		// createBackupFile reuses one path, so the follow-up delete may already have removed it.
+		poisoned.delete()
+		backup.delete()
 	}
 
 	@Test
@@ -336,297 +297,6 @@ class RestoreCheckpointTest {
 	}
 
 	@Test
-	fun exportSkipsUnrecoverableDeletedWorkTombstones() = runTest {
-		val orphanEntityIds = listOf(1059L, 1020L, 887L, 868L, 847L, 846L, 841L, 682L)
-		orphanEntityIds.forEachIndexed { index, entityId ->
-			database.getEntityGraphDao().upsertEntityRecord(
-				EntityRecord(
-					id = entityId,
-					type = EntityType.WORK.name,
-					contentType = "MANGA",
-					syncId = "orphan-test-work-$entityId",
-					primaryName = "Orphan test work $entityId",
-					nameHash = entityId,
-					aliases = "[]",
-					createdAt = 0L,
-					lastAccessed = 0L,
-					accessCount = 1,
-				),
-			)
-			database.getWorkHistoryDao().upsert(
-				WorkHistoryEntity(
-					entityId = entityId,
-					anchorMangaId = 9_999_000L + index,
-					createdAt = 0L,
-					updatedAt = index.toLong() + 1L,
-					chapterId = 1L,
-					page = 0,
-					scroll = 0f,
-					percent = 1f,
-					deletedAt = 2L,
-					chaptersCount = 1,
-				),
-			)
-		}
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
-		database.getEntityGraphDao().deleteEntitiesByIds(orphanEntityIds)
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-		assertEquals(orphanEntityIds.size, database.getWorkHistoryDao().countDanglingEntityRefs())
-
-		val agent = AppBackupAgent()
-		val backup = agent.createBackupFile(
-			InstrumentationRegistry.getInstrumentation().targetContext,
-			backupRepository,
-		)
-		assertTrue("backup must recover from a deleted orphan tombstone", backup.length() > 0L)
-		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, "orphan tombstone test")
-		assertEquals(
-			"local sync tombstone must be retained",
-			orphanEntityIds.size,
-			database.getWorkHistoryDao().countDanglingEntityRefs(),
-		)
-		assertTrue("orphan test backup cleanup", backup.delete())
-	}
-
-	@Test
-	fun exportRepairsDanglingWorkHistoryUsingLocalBinding() = runTest {
-		val oldEntityId = 8_888_001L
-		val targetEntityId = 8_888_002L
-		val anchorMangaId = 9_999_101L
-		database.getMangaDao().upsert(
-			MangaEntity(
-				id = anchorMangaId,
-				title = "Recoverable work",
-				altTitles = null,
-				url = "/recoverable-work",
-				publicUrl = "https://test.example/recoverable-work",
-				rating = 0f,
-				isNsfw = false,
-				contentRating = null,
-				coverUrl = "",
-				largeCoverUrl = null,
-				state = null,
-				authors = null,
-				source = TestContentSource.name,
-				description = null,
-				contentType = "MANGA",
-				sourceData = null,
-			),
-		)
-		database.getEntityGraphDao().upsertEntityRecord(
-			EntityRecord(
-				id = oldEntityId,
-				type = EntityType.WORK.name,
-				contentType = "MANGA",
-				syncId = "orphan-old-work",
-				primaryName = "Old recoverable work",
-				nameHash = oldEntityId,
-				aliases = "[]",
-				createdAt = 0L,
-				lastAccessed = 0L,
-				accessCount = 1,
-			),
-		)
-		database.getEntityGraphDao().upsertEntityRecord(
-			EntityRecord(
-				id = targetEntityId,
-				type = EntityType.WORK.name,
-				contentType = "MANGA",
-				syncId = "orphan-target-work",
-				primaryName = "Target recoverable work",
-				nameHash = targetEntityId,
-				aliases = "[]",
-				createdAt = 0L,
-				lastAccessed = 0L,
-				accessCount = 1,
-			),
-		)
-		database.getEntityGraphDao().upsertBinding(
-			EntityBindingRecord(
-				entityId = targetEntityId,
-				source = "local_manga",
-				externalId = anchorMangaId.toString(),
-				confidence = 1f,
-				isPrimary = true,
-			),
-		)
-		database.getWorkHistoryDao().upsert(
-			WorkHistoryEntity(
-				entityId = oldEntityId,
-				anchorMangaId = anchorMangaId,
-				createdAt = 0L,
-				updatedAt = 1L,
-				chapterId = 1L,
-				page = 2,
-				scroll = 0f,
-				percent = 0.5f,
-				deletedAt = 0L,
-				chaptersCount = 2,
-			),
-		)
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
-		database.getEntityGraphDao().deleteEntitiesByIds(listOf(oldEntityId))
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-
-		val agent = AppBackupAgent()
-		val backup = agent.createBackupFile(
-			InstrumentationRegistry.getInstrumentation().targetContext,
-			backupRepository,
-		)
-		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, "recoverable orphan test")
-		assertEquals(0, database.getWorkHistoryDao().countDanglingEntityRefs())
-		assertNotNull(database.getWorkHistoryDao().find(targetEntityId))
-		assertTrue("recoverable orphan backup cleanup", backup.delete())
-	}
-
-	@Test
-	fun exportRefusesActiveDanglingWorkStateAndReportsWorkTitle() = runTest {
-		val entityId = 8_888_003L
-		val anchorMangaId = 9_999_103L
-		database.getMangaDao().upsert(
-			MangaEntity(
-				id = anchorMangaId,
-				title = "Readable orphan title",
-				altTitles = null,
-				url = "/readable-orphan-title",
-				publicUrl = "https://test.example/readable-orphan-title",
-				rating = 0f,
-				isNsfw = false,
-				contentRating = null,
-				coverUrl = "",
-				largeCoverUrl = null,
-				state = null,
-				authors = null,
-				source = TestContentSource.name,
-				description = null,
-				contentType = "MANGA",
-				sourceData = null,
-			),
-		)
-		database.getEntityGraphDao().upsertEntityRecord(
-			EntityRecord(
-				id = entityId,
-				type = EntityType.WORK.name,
-				contentType = "MANGA",
-				syncId = "active-orphan-work",
-				primaryName = "Active orphan work",
-				nameHash = entityId,
-				aliases = "[]",
-				createdAt = 0L,
-				lastAccessed = 0L,
-				accessCount = 1,
-			),
-		)
-		database.getWorkHistoryDao().upsert(
-			WorkHistoryEntity(
-				entityId = entityId,
-				anchorMangaId = anchorMangaId,
-				createdAt = 0L,
-				updatedAt = 1L,
-				chapterId = 1L,
-				page = 1,
-				scroll = 0f,
-				percent = 0.2f,
-				deletedAt = 0L,
-				chaptersCount = 1,
-			),
-		)
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
-		database.getEntityGraphDao().deleteEntitiesByIds(listOf(entityId))
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-
-		val context = InstrumentationRegistry.getInstrumentation().targetContext
-		val output = File.createTempFile("active_orphan_backup_", ".bk.zip", context.cacheDir)
-		val failure = runCatching {
-			ZipOutputStream(output.outputStream()).use { zip ->
-				backupRepository.createBackup(zip, null)
-			}
-		}.exceptionOrNull()
-		assertTrue(
-			"active orphan state must remain a hard export failure",
-			failure is ActiveWorkStateMissingEntityException,
-		)
-		val report = (failure as ActiveWorkStateMissingEntityException).report
-		assertEquals(1, report.totalCount)
-		assertEquals("Readable orphan title", report.items.single().title)
-		assertEquals(TestContentSource.name, report.items.single().source)
-		assertTrue(
-			"report must identify the missing work state",
-			report.items.single().stateKinds.contains(BackupOrphanInfo.StateKind.HISTORY),
-		)
-
-		val discardedOutput = File.createTempFile("active_orphan_discarded_", ".bk.zip", context.cacheDir)
-		ZipOutputStream(discardedOutput.outputStream()).use { zip ->
-			backupRepository.createBackup(
-				output = zip,
-				progress = null,
-				allowDiscardingActiveWorkState = true,
-			)
-		}
-		assertTrue("discarded orphan backup must be written", discardedOutput.length() > 0L)
-		BackupPayloadGuard.requireRestorableWorkSnapshot(
-			file = discardedOutput,
-			operation = "active orphan discard test",
-			allowIdentityOnlyWorkSnapshot = true,
-		)
-		assertTrue("discarded orphan backup cleanup", discardedOutput.delete())
-		assertTrue("active orphan backup cleanup", output.delete())
-	}
-
-	@Test
-	fun exportCanDiscardActiveOrphanWithMissingProjection() = runTest {
-		val entityId = 8_888_004L
-		database.getEntityGraphDao().upsertEntityRecord(
-			EntityRecord(
-				id = entityId,
-				type = EntityType.WORK.name,
-				contentType = "MANGA",
-				syncId = "active-orphan-without-projection",
-				primaryName = "Active orphan without projection",
-				nameHash = entityId,
-				aliases = "[]",
-				createdAt = 0L,
-				lastAccessed = 0L,
-				accessCount = 1,
-			),
-		)
-		database.getWorkHistoryDao().upsert(
-			WorkHistoryEntity(
-				entityId = entityId,
-				anchorMangaId = 9_999_104L,
-				createdAt = 0L,
-				updatedAt = 1L,
-				chapterId = 1L,
-				page = 1,
-				scroll = 0f,
-				percent = 0.2f,
-				deletedAt = 0L,
-				chaptersCount = 1,
-			),
-		)
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = OFF")
-		database.getEntityGraphDao().deleteEntitiesByIds(listOf(entityId))
-		database.openHelper.writableDatabase.execSQL("PRAGMA foreign_keys = ON")
-
-		val context = InstrumentationRegistry.getInstrumentation().targetContext
-		val output = File.createTempFile("active_orphan_without_projection_", ".bk.zip", context.cacheDir)
-		ZipOutputStream(output.outputStream()).use { zip ->
-			backupRepository.createBackup(
-				output = zip,
-				progress = null,
-				allowDiscardingActiveWorkState = true,
-			)
-		}
-		assertTrue("orphan without projection can be discarded", output.length() > 0L)
-		BackupPayloadGuard.requireRestorableWorkSnapshot(
-			file = output,
-			operation = "active orphan without projection test",
-			allowIdentityOnlyWorkSnapshot = true,
-		)
-		assertTrue("orphan without projection backup cleanup", output.delete())
-	}
-
-	@Test
 	fun snapshotReplaceRestoreKeepsFavouriteCategories() = runTest {
 		// Regression: §6.6 “逐节先清后写” 重构后，FAVOURITES（延迟节）在清表时
 		// 误删了 favourite_categories —— CATEGORIES 节先恢复的分组被随后（payload
@@ -647,10 +317,107 @@ class RestoreCheckpointTest {
 			categories.any { it.title == categoryTitle },
 		)
 		val restoredCategoryId = categories.first { it.title == categoryTitle }.categoryId.toLong()
-		val favs = database.getWorkFavouritesDao().findActive()
+		val favs = database.getFavouritesDao().findAllActiveEntries()
 		assertTrue(
 			"restored favourites must reference the restored category (got " + favs.map { it.categoryId } + ")",
 			favs.isNotEmpty() && favs.all { it.categoryId == restoredCategoryId },
 		)
 	}
+
+	@Test
+	fun legacyWorkSectionsRestoreOntoAnchorProjections() = runTest {
+		// v3 时代的备份把用户状态写在 WORK_* 节（按 entity 归属、带 anchor_manga_id）。
+		// 投影优先下这些行必须按 anchor 落到 history / favourites，entity_id 只是载荷。
+		val (content, categoryTitle) = seedBackupData()
+		val categoryId = database.getFavouriteCategoriesDao().findAll()
+			.first { it.title == categoryTitle }.categoryId.toLong()
+		val agent = AppBackupAgent()
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		val backup = agent.createBackupFile(context, backupRepository)
+		val legacy = rewriteBackup(
+			backup,
+			mapOf(
+				BackupSection.HISTORY to "[]",
+				BackupSection.FAVOURITES to "[]",
+				BackupSection.WORK_HISTORY to json.encodeToString(
+					listOf(workHistory(anchorMangaId = content.id, updatedAt = 5_000L, percent = 0.6f)),
+				),
+				BackupSection.WORK_FAVOURITES to json.encodeToString(
+					listOf(
+						WorkFavouriteBackup(
+							entityId = LEGACY_ENTITY_ID,
+							categoryId = categoryId,
+							anchorMangaId = content.id,
+							createdAt = 4_000L,
+							updatedAt = 4_000L,
+						),
+					),
+				),
+			),
+		)
+		database.clearAllTables()
+		database.getRestoreCheckpointDao().clearAll()
+
+		runRestore(legacy, restoreSections(), BackupRepository.RestoreMode.SNAPSHOT_REPLACE, null)
+
+		val history = historyRepository.getOne(content)
+		assertNotNull("legacy work history must land on its anchor projection", history)
+		assertEquals(0.6f, history!!.percent)
+		val favourites = database.getFavouritesDao().findAllActiveEntries()
+		assertEquals(listOf(content.id), favourites.map { it.mangaId })
+		assertTrue(legacy.delete())
+		assertTrue(backup.delete())
+	}
+
+	@Test
+	fun legacyWorkHistoryTombstoneDeletesOlderLocalHistoryOnMerge() = runTest {
+		// 旧备份的 WORK_HISTORY 会携带删除墓碑；MERGE 时较新的墓碑必须保持删除，
+		// 不能被“活跃写入”语义复活成正在阅读。
+		val (content, _) = seedBackupData()
+		val local = database.getHistoryDao().find(content.id)!!
+		val agent = AppBackupAgent()
+		val context = InstrumentationRegistry.getInstrumentation().targetContext
+		val backup = agent.createBackupFile(context, backupRepository)
+		val deletedAt = local.updatedAt + 1_000L
+		val legacy = rewriteBackup(
+			backup,
+			mapOf(
+				BackupSection.HISTORY to "[]",
+				BackupSection.WORK_HISTORY to json.encodeToString(
+					listOf(
+						workHistory(
+							anchorMangaId = content.id,
+							updatedAt = deletedAt,
+							percent = local.percent,
+							deletedAt = deletedAt,
+						),
+					),
+				),
+			),
+		)
+
+		runRestore(legacy, restoreSections(), BackupRepository.RestoreMode.MERGE, null)
+
+		assertNull("a newer legacy tombstone must win on merge", historyRepository.getOne(content))
+		assertTrue(legacy.delete())
+		assertTrue(backup.delete())
+	}
+
+	private fun workHistory(
+		anchorMangaId: Long,
+		updatedAt: Long,
+		percent: Float,
+		deletedAt: Long = 0L,
+	) = WorkHistoryBackup(
+		entityId = LEGACY_ENTITY_ID,
+		anchorMangaId = anchorMangaId,
+		createdAt = 1_000L,
+		updatedAt = updatedAt,
+		chapterId = 1L,
+		page = 0,
+		scroll = 0f,
+		percent = percent,
+		deletedAt = deletedAt,
+		chaptersCount = 1,
+	)
 }

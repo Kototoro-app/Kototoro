@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -22,8 +21,8 @@ import org.skepsun.kototoro.favourites.data.FavouriteLibrarySeed
 import javax.inject.Inject
 
 /**
- * Interface-level tests for [HistoryLibrarySnapshotStore]
- * (history-updates-feed komikku-alignment plan, Phase H2).
+ * Interface-level tests for [HistoryLibrarySnapshotStore]: one card per history row,
+ * owned by its `manga_id` (projection-first).
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -47,7 +46,6 @@ class HistoryLibrarySnapshotStoreTest {
             MangaDatabase::class.java,
         ).build()
         sql = db.openHelper.writableDatabase
-        sql.execSQL("PRAGMA foreign_keys = OFF")
         store = HistoryLibrarySnapshotStore(db, sourceGroupManager)
     }
 
@@ -56,19 +54,9 @@ class HistoryLibrarySnapshotStoreTest {
         db.close()
     }
 
-    private fun insertHistory(
-        entityId: Long,
-        anchorMangaId: Long,
-        percent: Float = 0.5f,
-        updatedAt: Long = 100L,
-        chapters: Int = 12,
-    ) {
-        // columns: entity_id, anchor_manga_id, created_at, updated_at,
-        // chapter_id, page, scroll, percent, deleted_at, chapters, parent_chapter_id
-        sql.execSQL(
-            "INSERT INTO work_history VALUES (?, ?, ?, ?, 0, 0, 0, ?, 0, ?, NULL)",
-            arrayOf<Any?>(entityId, anchorMangaId, updatedAt, updatedAt, percent, chapters),
-        )
+    private fun insertRead(mangaId: Long, title: String = "Manga $mangaId", percent: Float = 0.5f, chapters: Int = 12) {
+        FavouriteLibrarySeed.insertManga(sql, mangaId, title)
+        FavouriteLibrarySeed.insertHistory(sql, mangaId, percent = percent, updatedAt = 100L, chaptersCount = chapters)
     }
 
     private fun insertTag(mangaId: Long, tagId: Long, title: String, key: String) {
@@ -80,61 +68,37 @@ class HistoryLibrarySnapshotStoreTest {
     }
 
     @Test
-    fun oneRowPerActiveEntityWithDisplayProjection() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor title")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101, percent = 0.25f, chapters = 40)
+    fun oneRowPerActiveHistoryDisplayingItsManga() = runTest {
+        insertRead(101, "Read title", percent = 0.25f, chapters = 40)
 
         val snapshot = store.observe().first()
 
         assertEquals(1, snapshot.rows.size)
         val row = snapshot.rows.single()
-        assertEquals(10L, row.entityId)
+        assertEquals(101L, row.entityId)
         assertEquals(101L, row.displayMangaId)
-        assertEquals("Anchor title", row.title)
+        assertEquals(101L, row.preferredLocalMangaId)
+        assertEquals("Read title", row.title)
         assertEquals(0.25f, row.percent)
         assertEquals(40, row.chaptersCount)
+        assertEquals(listOf(101L), row.localMangaIds)
     }
 
     @Test
-    fun preferredProjectionWinsOverAnchor() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertManga(sql, 105, "Preferred")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        FavouriteLibrarySeed.insertBinding(sql, 10, 105)
-        FavouriteLibrarySeed.insertPrefs(sql, 10, preferredLocalMangaId = 105)
-        insertHistory(10, 101)
+    fun uiIdEncodesMangaAndContentType() = runTest {
+        insertRead(101)
 
         val row = store.observe().first().rows.single()
 
-        assertEquals(105L, row.displayMangaId)
-        assertEquals("Preferred", row.title)
-        assertEquals(105L, row.preferredLocalMangaId)
-    }
-
-    @Test
-    fun uiIdEncodesEntityAndContentType() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101)
-
-        val row = store.observe().first().rows.single()
-
-        assertEquals(-((10L shl 8) or (row.displayContentTypeOrdinal + 1).toLong()), row.uiId)
+        assertEquals(-((101L shl 8) or (row.displayContentTypeOrdinal + 1).toLong()), row.uiId)
     }
 
     @Test
     fun trackingSummaryAndMembershipFoldIntoTheRow() = runTest {
         FavouriteLibrarySeed.insertCategory(sql, 7, "Reading")
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        FavouriteLibrarySeed.insertFavourite(sql, 10, 7, anchorMangaId = 101, pinned = true)
-        FavouriteLibrarySeed.insertTrack(sql, 10, 101, newChapters = 4, lastChapterDate = 900L, lastCheckTime = 950L)
-        insertHistory(10, 101)
+        insertRead(101)
+        FavouriteLibrarySeed.insertFavourite(sql, 101, 7, pinned = true)
+        FavouriteLibrarySeed.insertTrack(sql, 101, newChapters = 4, lastChapterDate = 900L, lastCheckTime = 950L)
 
         val row = store.observe().first().rows.single()
 
@@ -146,11 +110,8 @@ class HistoryLibrarySnapshotStoreTest {
     }
 
     @Test
-    fun tagsFollowTheDisplayProjection() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101)
+    fun tagsFollowTheManga() = runTest {
+        insertRead(101)
         insertTag(101, 1, "Action", "action_1")
 
         val row = store.observe().first().rows.single()
@@ -159,63 +120,37 @@ class HistoryLibrarySnapshotStoreTest {
     }
 
     @Test
-    fun localBindingsFeedTheSpaceFilterData() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertManga(sql, 102, "Second")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        FavouriteLibrarySeed.insertBinding(sql, 10, 102)
-        insertHistory(10, 101)
-
-        val row = store.observe().first().rows.single()
-
-        assertEquals(listOf(101L, 102L), row.localMangaIds)
-        assertEquals(2, row.bindings.size)
-    }
-
-    @Test
     fun downloadedRowsFoldIntoTheRow() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101)
-        // a second entity without any local download stays unmarked
-        FavouriteLibrarySeed.insertEntity(sql, 20, "work-20")
-        FavouriteLibrarySeed.insertManga(sql, 201, "Other")
-        FavouriteLibrarySeed.insertBinding(sql, 20, 201)
-        insertHistory(20, 201)
-        sql.execSQL("INSERT INTO local_index (manga_id, path) VALUES (101, '/tmp/anchor')")
+        insertRead(101)
+        // a second history row without any local download stays unmarked
+        insertRead(201)
+        sql.execSQL("INSERT INTO local_index (manga_id, path) VALUES (101, '/tmp/item')")
 
         val rows = store.observe().first().rows.associateBy { it.entityId }
 
-        assertEquals(true, rows.getValue(10L).isDownloaded)
-        assertEquals(false, rows.getValue(20L).isDownloaded)
+        assertEquals(true, rows.getValue(101L).isDownloaded)
+        assertEquals(false, rows.getValue(201L).isDownloaded)
     }
 
     @Test
     fun deletedHistoryRowsDisappear() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101)
+        insertRead(101)
 
         assertEquals(1, store.observe().first().rows.size)
 
-        sql.execSQL("UPDATE work_history SET deleted_at = 1 WHERE entity_id = 10")
+        sql.execSQL("UPDATE history SET deleted_at = 1 WHERE manga_id = 101")
         assertTrue(store.observe().first().isEmpty)
     }
 
     @Test
     fun readPathNeverWrites() = runTest {
-        FavouriteLibrarySeed.insertEntity(sql, 10, "work-10")
-        FavouriteLibrarySeed.insertManga(sql, 101, "Anchor")
-        FavouriteLibrarySeed.insertBinding(sql, 10, 101)
-        insertHistory(10, 101, percent = 0.5f)
+        insertRead(101, percent = 0.5f)
 
         store.observe().first()
 
-        val history = db.getWorkHistoryDao().findAll(offset = 0, limit = 10)
+        val history = db.getHistoryDao().findAllEntriesIncludingDeleted()
         assertEquals(1, history.size)
-        assertFalse(history.single().deletedAt != 0L)
+        assertEquals(0L, history.single().deletedAt)
+        assertEquals(0.5f, history.single().percent)
     }
 }
