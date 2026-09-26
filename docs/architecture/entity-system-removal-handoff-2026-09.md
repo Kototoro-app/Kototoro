@@ -211,3 +211,24 @@ androidTest 需要设备：本机目前没有连接设备，也没有 AVD。
   - 设备验证：KOMIIC → 拷贝漫画 迁移后进度 2/17 跟随，旧历史写入墓碑。
 - 遗留（未处理，需产品决定）：旧备份 `ENTITY_GRAPH_PREFS` 中的元数据来源选择（该备份 10 条）恢复时被丢弃；
   DB 迁移（§6.1）会保留同类数据，两者不一致。
+
+### 6.7 备份导入导出简化（2026-09-26 第四轮）
+
+- **统一恢复入口**：设置里只剩一个“恢复备份”。`BackupPayloadGuard.detectRestoreFormat` 读 index 自动识别：
+  Kototoro 且 semantic ≥ 3 → `KOTOTORO_CURRENT`（默认替换）；其余（Kotatsu、旧版 Kototoro）→
+  `KOTATSU_OR_LEGACY_KOTOTORO`（默认合并，只允许库相关分段）。两种模式都可在对话框里切换。
+  没有 index 的文件才报 `UnexpectedBackupFormatException`。“从其他应用导入”只保留 Mihon / Aniyomi / Venera。
+- **删除旧版恢复后的同步写阻断**：`isWorkMigrationSyncWriteBlocked`、
+  `isBackupWebDavAutoUploadBlockedByLegacyRestore` 及“需要 Work 归一化”提示全部移除。
+  旧 WORK_* 在恢复时已直接落到 `anchor_manga_id`，不再有“待归一化”的中间态。
+- `ExternalBackupWorkState` → `ExternalBackupLibrary`，外部导出直接按 favourites 行取分类，
+  删除 `FavouriteCategoryMembership`。
+- **修复 Mihon/Aniyomi 导出分类串号**（以前就存在）：Mihon 按 `order` 关联分类，而 Kototoro 的
+  `sort_key` 可以重复（实测分类 1、2 都是 1），同时属于两个分类的漫画会被 `distinct()` 合并，
+  导入后会落进错误的分类。现在由 `MihonBackupExportMapper.assignCategoryOrders` 按 (sortKey, id)
+  分配连续的唯一 order。
+- 设备验证：用 `device-backup` 的 work_* 数据构造出 Kotatsu 结构的 `legacy-test.bk.zip`，清空后恢复，
+  被识别为兼容格式、默认合并、只列出 5 个分段；结果 history 1285、favourites 309、categories 25、
+  stats 5、FK 0，与源数据一致。Mihon 导出 29 部漫画、34 条分类引用（修复前是 33），可从“从其他应用导入”导回。
+- 已知限制（未改）：Kotatsu 导出只保留设备上已加载为 `KotatsuParserSource` 的源；未装 Kotatsu 解析器插件时，
+  导出只有分类。Mihon 历史依赖章节 URL，没抓过章节的漫画不会导出历史。
