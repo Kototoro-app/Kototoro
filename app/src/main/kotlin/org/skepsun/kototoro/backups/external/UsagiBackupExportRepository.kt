@@ -44,7 +44,7 @@ class UsagiBackupExportRepository @Inject constructor(
     ): UsagiBackupExportSummary {
         progress?.emit(Progress.INDETERMINATE)
 
-        val workState = database.readExternalBackupWorkState()
+        val library = database.readExternalBackupLibrary()
 
         // 1. Gather all candidate manga IDs from favourites, history, bookmarks, scrobblings, and stats
         val bookmarksDump = database.getBookmarksDao().dump().toList()
@@ -56,7 +56,7 @@ class UsagiBackupExportRepository @Inject constructor(
         val statMangaIds = statsDump.map { it.mangaId }
 
         val allCandidateIds = (
-            workState.candidateMangaIds +
+            library.candidateMangaIds +
                 bookmarkMangaIds +
                 scrobblingMangaIds +
                 statMangaIds
@@ -124,7 +124,7 @@ class UsagiBackupExportRepository @Inject constructor(
         }
 
         // 5. Favourites
-        val favouriteBackups = workState.favouriteEntries.mapNotNull { fav ->
+        val favouriteBackups = library.favouriteEntries.mapNotNull { fav ->
             val mangaBackup = usagiMangaMap[fav.mangaId] ?: return@mapNotNull null
             UsagiFavouriteBackup(
                 mangaId = fav.mangaId,
@@ -137,7 +137,7 @@ class UsagiBackupExportRepository @Inject constructor(
         }
 
         // 6. History
-        val historyBackups = workState.historyEntries.mapNotNull { hist ->
+        val historyBackups = library.historyEntries.mapNotNull { hist ->
             val mangaBackup = usagiMangaMap[hist.mangaId] ?: return@mapNotNull null
             UsagiHistoryBackup(
                 mangaId = hist.mangaId,

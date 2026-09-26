@@ -21,7 +21,6 @@ class BackupWebDavRestoreCoordinator @Inject constructor(
         val restoreKind: String,
         val semanticSchemaVersion: Int,
         val transportGeneration: Int,
-        val writeBlocked: Boolean,
     )
 
     fun commitAutoRestore(
@@ -39,7 +38,6 @@ class BackupWebDavRestoreCoordinator @Inject constructor(
             restoreKind = "auto",
             semanticSchemaVersion = state.semanticSchemaVersion,
             transportGeneration = state.transportGeneration,
-            writeBlocked = settings.isWorkMigrationSyncWriteBlocked,
         )
     }
 
@@ -56,7 +54,6 @@ class BackupWebDavRestoreCoordinator @Inject constructor(
             restoreKind = "manual",
             semanticSchemaVersion = state.semanticSchemaVersion,
             transportGeneration = state.transportGeneration,
-            writeBlocked = settings.isWorkMigrationSyncWriteBlocked,
         )
     }
 
@@ -78,12 +75,8 @@ class BackupWebDavRestoreCoordinator @Inject constructor(
             normalizedTransportGeneration,
         )
 
-        val isAuthoritativeWorkRestore = normalizedTransportGeneration >= 3 && normalizedSemanticVersion >= 3
-        if (isAuthoritativeWorkRestore) {
+        if (normalizedTransportGeneration >= 3 && normalizedSemanticVersion >= 3) {
             settings.backupWebDavLastAuthoritativeSemanticSchemaVersion = normalizedSemanticVersion
-            settings.isWorkMigrationSyncWriteBlocked = false
-        } else {
-            settings.isWorkMigrationSyncWriteBlocked = true
         }
     }
 }

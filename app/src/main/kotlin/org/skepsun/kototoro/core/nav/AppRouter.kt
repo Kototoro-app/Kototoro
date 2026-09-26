@@ -37,7 +37,6 @@ import org.skepsun.kototoro.BuildConfig
 import org.skepsun.kototoro.R
 import org.skepsun.kototoro.alternatives.ui.compose.AlternativesSheetRoute
 import org.skepsun.kototoro.backups.ui.restore.RestoreDialogRoute
-import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.browser.BrowserActivity
 import org.skepsun.kototoro.core.exceptions.CloudFlareProtectedException
 import org.skepsun.kototoro.core.image.CoilMemoryCacheKey
@@ -1070,15 +1069,11 @@ class AppRouter(
         )
     }
 
-    fun showBackupRestoreDialog(
-        fileUri: Uri,
-        restoreFormat: BackupRestoreFormat = BackupRestoreFormat.KOTOTORO_CURRENT,
-    ) {
+    fun showBackupRestoreDialog(fileUri: Uri) {
         val composeActivity = activity as? BaseComposeActivity ?: return
         composeActivity.showComposeModal {
             RestoreDialogRoute(
                 uri = fileUri,
-                restoreFormat = restoreFormat,
                 onRestoreStarted = {
                     closeWelcomeSheet()
                     composeActivity.dismissComposeModal()

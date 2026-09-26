@@ -93,8 +93,6 @@ class DataSyncManager @Inject constructor(
                 AppSettings.KEY_BACKUP_WEBDAV_URL,
                 AppSettings.KEY_BACKUP_WEBDAV_USERNAME,
                 AppSettings.KEY_BACKUP_WEBDAV_PASSWORD,
-                AppSettings.KEY_BACKUP_WEBDAV_BLOCK_AUTO_UPLOAD_AFTER_LEGACY_RESTORE,
-                AppSettings.KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED,
             ).collect { changedKey ->
                 syncObserverRegistration(trigger = changedKey ?: "initial")
             }

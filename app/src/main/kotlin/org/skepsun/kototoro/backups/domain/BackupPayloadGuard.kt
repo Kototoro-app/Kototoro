@@ -17,13 +17,8 @@ import java.util.zip.ZipInputStream
 
 object BackupPayloadGuard {
 
-    class UnexpectedBackupFormatException(
-        val expected: BackupRestoreFormat,
-        val actualAppId: String? = null,
-        val actualSemanticSchemaVersion: Int? = null,
-    ) : IllegalArgumentException(
-        "The selected backup does not match the requested restore format: expected=$expected, " +
-            "appId=$actualAppId, semanticSchemaVersion=$actualSemanticSchemaVersion",
+    class UnexpectedBackupFormatException : IllegalArgumentException(
+        "The selected file is not a Kototoro or Kotatsu backup: it has no readable backup index.",
     )
 
     class MissingProjectionAnchorsException(
@@ -84,24 +79,20 @@ object BackupPayloadGuard {
         }
     }
 
-    fun requireRestoreFormat(file: File, expected: BackupRestoreFormat): BackupIndex {
-        val index = readBackupIndex(file) ?: throw UnexpectedBackupFormatException(expected)
-        val matches = when (expected) {
-            BackupRestoreFormat.KOTOTORO_CURRENT ->
-                index.appId.isKototoroApplicationId() &&
-                    index.semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
-
-            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO ->
-                index.semanticSchemaVersion < BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
+    /**
+     * Detects which kind of backup [file] is. A file without a readable backup index is not a
+     * Kototoro/Kotatsu backup at all.
+     */
+    fun detectRestoreFormat(file: File): BackupRestoreFormat {
+        val index = readBackupIndex(file) ?: throw UnexpectedBackupFormatException()
+        return if (
+            index.appId.isKototoroApplicationId() &&
+            index.semanticSchemaVersion >= BackupIndex.LEGACY_SEMANTIC_SCHEMA_BOUNDARY
+        ) {
+            BackupRestoreFormat.KOTOTORO_CURRENT
+        } else {
+            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO
         }
-        if (!matches) {
-            throw UnexpectedBackupFormatException(
-                expected = expected,
-                actualAppId = index.appId,
-                actualSemanticSchemaVersion = index.semanticSchemaVersion,
-            )
-        }
-        return index
     }
 
     private fun String.isKototoroApplicationId(): Boolean {

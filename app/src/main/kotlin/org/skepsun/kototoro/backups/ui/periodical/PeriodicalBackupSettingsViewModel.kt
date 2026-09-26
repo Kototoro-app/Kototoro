@@ -311,11 +311,7 @@ class PeriodicalBackupSettingsViewModel @Inject constructor(
             Log.d(TAG, "restoreWebDavBackup: committed, done")
             onActionDone.call(
                 ReversibleAction(
-                    if (restoreContext.isLegacySemanticSchema && restoreResult.legacyJarReposImported) {
-                        R.string.webdav_restore_success_legacy_requires_normalization_with_jar_hint
-                    } else if (restoreContext.isLegacySemanticSchema) {
-                        R.string.webdav_restore_success_legacy_requires_normalization
-                    } else if (restoreResult.legacyJarReposImported) {
+                    if (restoreResult.legacyJarReposImported) {
                         R.string.webdav_restore_success_legacy_jar_hint
                     } else {
                         R.string.webdav_restore_success

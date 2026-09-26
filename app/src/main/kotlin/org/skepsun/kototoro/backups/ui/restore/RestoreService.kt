@@ -67,18 +67,9 @@ class RestoreService : BaseBackupRestoreService() {
         val source = intent.getStringExtra(AppRouter.KEY_DATA)?.toUriOrNull() ?: throw FileNotFoundException()
         val requestedSections =
             requireNotNull(intent.getSerializableExtraCompat<Array<BackupSection>>(AppRouter.KEY_ENTRIES)?.toSet())
-        val restoreFormat = intent.getStringExtra(EXTRA_RESTORE_FORMAT)
-            ?.let(BackupRestoreFormat::valueOf)
-            ?: throw IllegalArgumentException("Missing restore format")
         val requestedMode = intent.getStringExtra(EXTRA_RESTORE_MODE)
             ?.let(BackupRepository.RestoreMode::valueOf)
-        val sections = restoreFormat.sanitize(requestedSections)
-        val restoreMode = when (restoreFormat) {
-            BackupRestoreFormat.KOTOTORO_CURRENT ->
-                // User-selectable for current backups; legacy formats always merge.
-                requestedMode ?: BackupRepository.RestoreMode.SNAPSHOT_REPLACE
-            BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO -> BackupRepository.RestoreMode.MERGE
-        }
+        var sections: Set<BackupSection> = requestedSections
         powerManager.withPartialWakeLock(TAG) {
             val wasGoogleDriveSyncEnabled = googleDriveSyncSettings.isSignedIn && googleDriveSyncSettings.isSyncEnabled
             val progress = MutableStateFlow(Progress.INDETERMINATE)
@@ -100,7 +91,9 @@ class RestoreService : BaseBackupRestoreService() {
                     file = tempFile,
                     operation = "manual backup restore",
                 )
-                BackupPayloadGuard.requireRestoreFormat(tempFile, restoreFormat)
+                val restoreFormat = BackupPayloadGuard.detectRestoreFormat(tempFile)
+                val restoreMode = requestedMode ?: restoreFormat.defaultRestoreMode
+                sections = restoreFormat.sanitize(requestedSections)
                 ZipInputStream(FileInputStream(tempFile)).use { input ->
                     repository.restoreBackup(
                         input = input,
@@ -128,7 +121,6 @@ class RestoreService : BaseBackupRestoreService() {
                 source,
                 restoreResult.result,
                 showLegacyJarReposImportedHint = restoreResult.legacyJarReposImported,
-                showWorkMigrationNormalizationHint = restoreContext.isLegacySemanticSchema,
             )
             if (sections.contains(BackupSection.AUTH)) {
                 withContext(Dispatchers.Main) {
@@ -196,7 +188,6 @@ class RestoreService : BaseBackupRestoreService() {
 
         private const val TAG = "RESTORE"
         private const val FOREGROUND_NOTIFICATION_ID = 39
-        private const val EXTRA_RESTORE_FORMAT = "restore_format"
         private const val EXTRA_RESTORE_MODE = "restore_mode"
 
         @CheckResult
@@ -204,13 +195,11 @@ class RestoreService : BaseBackupRestoreService() {
             context: Context,
             uri: Uri,
             sections: Set<BackupSection>,
-            restoreFormat: BackupRestoreFormat,
             restoreMode: BackupRepository.RestoreMode? = null,
         ): Boolean = try {
             val intent = Intent(context, RestoreService::class.java)
             intent.putExtra(AppRouter.KEY_DATA, uri.toString())
             intent.putExtra(AppRouter.KEY_ENTRIES, sections.toTypedArray())
-            intent.putExtra(EXTRA_RESTORE_FORMAT, restoreFormat.name)
             if (restoreMode != null) {
                 intent.putExtra(EXTRA_RESTORE_MODE, restoreMode.name)
             }

@@ -75,7 +75,6 @@ fun BackupsSettingsScreen(
     onPeriodicalBackupCountChange: (Int) -> Unit,
     onCreateBackupClick: () -> Unit,
     onRestoreBackupClick: () -> Unit,
-    onImportKotatsuOrLegacyBackupClick: () -> Unit,
     onExportKotatsuBackupClick: () -> Unit,
     onExportMihonBackupClick: () -> Unit,
     onExportAniyomiBackupClick: () -> Unit,
@@ -398,8 +397,7 @@ fun BackupsSettingsScreen(
                                 text = stringResource(target.titleRes),
                                 onClick = {
                                     isImportTypeDialogVisible = false
-                                    target.externalApp?.let(onImportExternalBackupClick)
-                                        ?: onImportKotatsuOrLegacyBackupClick()
+                                    onImportExternalBackupClick(target.externalApp)
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -531,13 +529,8 @@ private enum class BackupExportTarget(
 private enum class BackupImportTarget(
     @StringRes val titleRes: Int,
     @StringRes val summaryRes: Int,
-    val externalApp: ExternalBackupApp?,
+    val externalApp: ExternalBackupApp,
 ) {
-    KOTATSU_LEGACY(
-        R.string.import_kotatsu_or_legacy_backup,
-        R.string.import_kotatsu_or_legacy_backup_summary,
-        null,
-    ),
     MIHON(
         R.string.import_backup_mihon_family,
         R.string.import_backup_mihon_family_summary,

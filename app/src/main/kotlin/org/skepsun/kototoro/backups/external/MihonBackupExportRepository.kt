@@ -10,7 +10,6 @@ import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
-import org.skepsun.kototoro.favourites.data.FavouriteCategoryMembership
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.core.util.progress.Progress
@@ -35,9 +34,9 @@ class MihonBackupExportRepository @Inject constructor(
     ): MihonBackupExportSummary {
         progress?.emit(Progress.INDETERMINATE)
 
-        val workState = database.readExternalBackupWorkState()
-        val favouriteEntries = workState.favouriteEntries
-        val candidateIds = workState.candidateMangaIds
+        val library = database.readExternalBackupLibrary()
+        val favouriteEntries = library.favouriteEntries
+        val candidateIds = library.candidateMangaIds
 
         val mangaById = database.getMangaDao().findEntitiesByIds(candidateIds).associateBy(MangaEntity::id)
         val exportedMangaIds = candidateIds.filter { mangaById[it]?.source.toMihonSourceIdOrNull() != null }
@@ -45,21 +44,20 @@ class MihonBackupExportRepository @Inject constructor(
             throw IllegalStateException(context.getString(R.string.export_mihon_backup_empty))
         }
 
-        val historyByMangaId = workState.historyByMangaId
+        val historyByMangaId = library.historyByMangaId
             .filterKeys { it in exportedMangaIds }
         val chaptersByMangaId = database.getChaptersDao()
             .findAllByMangaIds(exportedMangaIds)
             .groupBy(ChapterEntity::mangaId)
-        val favoriteEntriesByMangaId = workState.favouriteEntriesByMangaId
-        val categoryMembershipsByMangaId = workState.categoryMembershipsByMangaId
+        val favoriteEntriesByMangaId = library.favouriteEntriesByMangaId
             .filterKeys { it in exportedMangaIds }
         val categoriesById = database.getFavouriteCategoriesDao()
             .findAll()
             .associateBy { it.categoryId.toLong() }
         val categoryOrderById = categoriesById.mapValues { (_, category) -> category.sortKey.toLong() }
-        val exportedCategoryIds = categoryMembershipsByMangaId.values
+        val exportedCategoryIds = favoriteEntriesByMangaId.values
             .flatten()
-            .map(FavouriteCategoryMembership::categoryId)
+            .map(FavouriteEntity::categoryId)
             .distinct()
         val tagTitlesByMangaId = loadTagTitlesByMangaId(exportedMangaIds)
 
@@ -100,7 +98,7 @@ class MihonBackupExportRepository @Inject constructor(
                 favorite = isFavorite,
                 chapters = chapterBackups,
                 categories = MihonBackupExportMapper.mapCategoryOrders(
-                    categoryMemberships = categoryMembershipsByMangaId[mangaId].orEmpty(),
+                    categoryMemberships = favoriteEntriesByMangaId[mangaId].orEmpty(),
                     categoryOrderById = categoryOrderById,
                 ),
                 history = listOfNotNull(historyBackup),
@@ -184,7 +182,7 @@ internal object MihonBackupExportMapper {
     }
 
     fun mapCategoryOrders(
-        categoryMemberships: List<FavouriteCategoryMembership>,
+        categoryMemberships: List<FavouriteEntity>,
         categoryOrderById: Map<Long, Long>,
     ): List<Long> {
         return categoryMemberships.mapNotNull { membership ->

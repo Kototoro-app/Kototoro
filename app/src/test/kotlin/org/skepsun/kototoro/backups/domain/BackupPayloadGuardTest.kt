@@ -1,10 +1,12 @@
 package org.skepsun.kototoro.backups.domain
 
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.BuildConfig
+import org.skepsun.kototoro.backups.data.BackupRepository
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -12,69 +14,44 @@ import java.util.zip.ZipOutputStream
 class BackupPayloadGuardTest {
 
 	@Test
-	fun `current Kototoro restore accepts only current semantic schema`() {
-		val current = indexedBackup("org.skepsun.kototoro", semanticSchemaVersion = 3)
-		val nightly = indexedBackup("org.skepsun.kototoro.nightly", semanticSchemaVersion = 3)
-		val debug = indexedBackup("org.skepsun.kototoro.debug", semanticSchemaVersion = 3)
-		val legacy = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 2)
-
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(current, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(nightly, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(debug, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(legacy, BackupRestoreFormat.KOTOTORO_CURRENT)
+	fun `current Kototoro backups are detected by app id and semantic schema`() {
+		for (appId in listOf("org.skepsun.kototoro", "org.skepsun.kototoro.nightly", "org.skepsun.kototoro.debug")) {
+			for (schema in listOf(3, 4)) {
+				assertEquals(
+					BackupRestoreFormat.KOTOTORO_CURRENT,
+					BackupPayloadGuard.detectRestoreFormat(indexedBackup(appId, semanticSchemaVersion = schema)),
+				)
+			}
 		}
 	}
 
 	@Test
-	fun `compat restore accepts Kotatsu and legacy Kototoro but rejects current Kototoro`() {
-		val kotatsu = indexedBackup("io.github.kotatsuredo.kotatsu", semanticSchemaVersion = 1)
-		val legacyKototoro = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 1)
-		val currentKototoro = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 3)
-		val unrelatedCurrentFormat = indexedBackup("example.unrelated", semanticSchemaVersion = 3)
+	fun `Kotatsu, legacy Kototoro and other apps are detected as the compat format`() {
+		val compat = listOf(
+			indexedBackup("io.github.kotatsuredo.kotatsu", semanticSchemaVersion = 1),
+			indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 2),
+			indexedBackup("example.unrelated", semanticSchemaVersion = 3),
+		)
 
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(kotatsu, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+		compat.forEach { backup ->
+			assertEquals(BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO, BackupPayloadGuard.detectRestoreFormat(backup))
 		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(
-				legacyKototoro,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(
-				currentKototoro,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
-		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(
-				unrelatedCurrentFormat,
-				BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO,
-			)
-		}
+		assertEquals(
+			BackupRepository.RestoreMode.MERGE,
+			BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO.defaultRestoreMode,
+		)
+		assertEquals(
+			BackupRepository.RestoreMode.SNAPSHOT_REPLACE,
+			BackupRestoreFormat.KOTOTORO_CURRENT.defaultRestoreMode,
+		)
 	}
 
 	@Test
-	fun `schema 4 backup is accepted as current and rejected as legacy`() {
-		val schema4 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 4)
-		val schema3 = indexedBackup(BuildConfig.APPLICATION_ID, semanticSchemaVersion = 3)
+	fun `a file without a backup index is rejected`() {
+		val notABackup = backupFile(BackupSection.HISTORY to "[]")
 
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
-		assertDoesNotThrow {
-			BackupPayloadGuard.requireRestoreFormat(schema3, BackupRestoreFormat.KOTOTORO_CURRENT)
-		}
 		assertThrows(BackupPayloadGuard.UnexpectedBackupFormatException::class.java) {
-			BackupPayloadGuard.requireRestoreFormat(schema4, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
+			BackupPayloadGuard.detectRestoreFormat(notABackup)
 		}
 	}
 

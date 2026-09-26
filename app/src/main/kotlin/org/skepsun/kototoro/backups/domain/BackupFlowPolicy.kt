@@ -40,10 +40,6 @@ class BackupFlowPolicy @Inject constructor(
         return when {
             !settings.isBackupWebDavAutoSyncEnabled || !settings.isBackupWebDavUploadEnabled ->
                 FlowDecision(false, "feature_disabled")
-            settings.isBackupWebDavAutoUploadBlockedByLegacyRestore ->
-                FlowDecision(false, "legacy_restore_block")
-            settings.isWorkMigrationSyncWriteBlocked ->
-                FlowDecision(false, "work_migration_write_block")
             !hasCompleteWebDavConfig() -> FlowDecision(false, "incomplete_config")
             else -> FlowDecision(true)
         }

@@ -64,7 +64,6 @@ import org.skepsun.kototoro.backups.ui.backup.MihonBackupExportService
 import org.skepsun.kototoro.backups.ui.backup.UsagiBackupExportService
 import org.skepsun.kototoro.backups.ui.periodical.PeriodicalBackupSettingsViewModel
 import org.skepsun.kototoro.backups.ui.restore.ExternalBackupImportService
-import org.skepsun.kototoro.backups.domain.BackupRestoreFormat
 import org.skepsun.kototoro.core.model.ContentSource
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.nav.AppRouter
@@ -334,14 +333,6 @@ class SettingsActivity :
     ) { uri ->
         if (uri != null) {
             router.showBackupRestoreDialog(uri)
-        }
-    }
-
-    private val legacyBackupSelectCall = registerForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) {
-            router.showBackupRestoreDialog(uri, BackupRestoreFormat.KOTATSU_OR_LEGACY_KOTOTORO)
         }
     }
 
@@ -1255,11 +1246,6 @@ class SettingsActivity :
                     },
                     onRestoreBackupClick = {
                         if (!backupSelectCall.tryLaunch(arrayOf("*/*"))) {
-                            Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onImportKotatsuOrLegacyBackupClick = {
-                        if (!legacyBackupSelectCall.tryLaunch(arrayOf("*/*"))) {
                             Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
                         }
                     },

@@ -125,12 +125,11 @@ class WebDavAutoRestoreRunner @Inject constructor(
                 "version" to restoreResultCommit.restoredVersion,
                 "semanticSchemaVersion" to restoreResultCommit.semanticSchemaVersion,
                 "transportGeneration" to restoreResultCommit.transportGeneration,
-                "writeBlocked" to restoreResultCommit.writeBlocked,
                 "legacyJarReposImported" to restoreResult.legacyJarReposImported,
                 "legacyMigration" to false,
             )
 
-            if (restoreContext.isAuthoritativeSchema && !restoreResultCommit.writeBlocked) {
+            if (restoreContext.isAuthoritativeSchema) {
                 uploadMergedSnapshot(currentTime)
             } else {
                 logBackupFlow(
@@ -140,8 +139,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
                     reason = "non_authoritative_restore",
                     "semanticSchemaVersion" to restoreResultCommit.semanticSchemaVersion,
                     "transportGeneration" to restoreResultCommit.transportGeneration,
-                    "writeBlocked" to restoreResultCommit.writeBlocked,
-                )
+                    )
             }
             settings.hasCompletedBackupWebDavV2Migration = true
         } finally {

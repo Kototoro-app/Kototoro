@@ -20,8 +20,6 @@ class BackupWebDavRestoreCoordinatorTest {
         every { settings.backupWebDavLastImportedSemanticSchemaVersion = any() } returns Unit
         every { settings.backupWebDavWriterGeneration } returns 0
         every { settings.backupWebDavWriterGeneration = any() } returns Unit
-        every { settings.isWorkMigrationSyncWriteBlocked } returns false
-        every { settings.isWorkMigrationSyncWriteBlocked = any() } returns Unit
 
         val state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
             semanticSchemaVersion = 2,
@@ -39,7 +37,6 @@ class BackupWebDavRestoreCoordinatorTest {
         assertEquals("auto", result.restoreKind)
         assertEquals(2, result.semanticSchemaVersion)
         assertEquals(3, result.transportGeneration)
-        assertEquals(false, result.writeBlocked)
     }
 
     @Test
@@ -49,8 +46,6 @@ class BackupWebDavRestoreCoordinatorTest {
         every { settings.backupWebDavLastImportedSemanticSchemaVersion = any() } returns Unit
         every { settings.backupWebDavWriterGeneration } returns 0
         every { settings.backupWebDavWriterGeneration = any() } returns Unit
-        every { settings.isWorkMigrationSyncWriteBlocked } returns false
-        every { settings.isWorkMigrationSyncWriteBlocked = any() } returns Unit
 
         val state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
             semanticSchemaVersion = 1,
@@ -74,8 +69,6 @@ class BackupWebDavRestoreCoordinatorTest {
         every { settings.backupWebDavLastImportedSemanticSchemaVersion = any() } returns Unit
         every { settings.backupWebDavWriterGeneration } returns 0
         every { settings.backupWebDavWriterGeneration = any() } returns Unit
-        every { settings.isWorkMigrationSyncWriteBlocked } returns false
-        every { settings.isWorkMigrationSyncWriteBlocked = any() } returns Unit
 
         val state = BackupWebDavRestoreCoordinator.RestoreSemanticState(
             semanticSchemaVersion = 1,
