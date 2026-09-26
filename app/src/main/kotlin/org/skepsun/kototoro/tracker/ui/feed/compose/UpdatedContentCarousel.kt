@@ -23,6 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,7 +133,18 @@ fun UpdatedContentCarousel(
             val density = LocalDensity.current
             val featuredWidthPx = with(density) { featuredWidth.toPx() }
             val focusOffsetPx = with(density) { AppLayoutTokens.screenHorizontalPadding.toPx() }
-            val layoutInfo = listState.layoutInfo
+            // Only the offsets feed the tilt/width math. Reading layoutInfo itself in composition
+            // made every LazyRow measure (a fresh result object) recompose the row, which
+            // re-measured it again: a self-sustaining redraw loop while idle.
+            val railOffsets by remember(listState) {
+                derivedStateOf {
+                    val info = listState.layoutInfo
+                    FeedRailOffsets(
+                        viewportStartOffset = info.viewportStartOffset,
+                        itemOffsets = info.visibleItemsInfo.associate { it.index to it.offset },
+                    )
+                }
+            }
             val railAnimationFactor = rememberRailAnimationFactor()
 
             LazyRow(
@@ -148,10 +161,9 @@ fun UpdatedContentCarousel(
                     key = { _, item -> "updated_${item.groupKey}" },
                     contentType = { _, _ -> "updated_card" },
                 ) { index, headerItem ->
-                    val itemInfo = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
                     val position = feedUpdatedCardPosition(
-                        itemOffset = itemInfo?.offset,
-                        viewportStartOffset = layoutInfo.viewportStartOffset,
+                        itemOffset = railOffsets.itemOffsets[index],
+                        viewportStartOffset = railOffsets.viewportStartOffset,
                         focusOffsetPx = focusOffsetPx,
                         featuredWidthPx = featuredWidthPx,
                     )
@@ -470,3 +482,8 @@ private const val FEED_CAROUSEL_MAX_DISTANCE = 3f
 private const val FEED_CAROUSEL_MIN_WIDTH_FRACTION = 0.15f
 private const val FEED_CAROUSEL_WIDTH_DECAY = 0.50f
 private const val FEED_GRID_CARD_HEIGHT_RATIO = 136f / 96f
+
+private data class FeedRailOffsets(
+    val viewportStartOffset: Int,
+    val itemOffsets: Map<Int, Int>,
+)

@@ -86,6 +86,22 @@ map.put）。**这种"在场/缺席交替"是真变化，任何相等门都救�
 通用判定：列出"谁写 X、谁读 X"。shell 把路由报告存进 snapshot map，又在自己
 scope 里读这个 map 渲染顶栏 → 自持。哪怕写入值不变，map 的通知语义也够点火。
 
+### 模式 D：无限动画挂在玻璃外壳底下（2026-09-26 实证）
+`rememberInfiniteTransition` 只要有一个值在 draw 阶段被读（哪怕是 `graphicsLayer {}` 里
+几个像素的漂移），整个窗口就按面板刷新率重绘；玻璃顶栏/底栏会采样下层，代价更高。
+实例：`TopChromeGlow` 14s 漂移（`0bfb78dfa`）让所有一级页空闲 ~130fps、release 进程
+空闲 ~42% 单核，两张相隔 1s 的截图却逐像素相同。apply observer 里表现为
+**唯一一个 Float 状态每帧变**，写者栈落在 `InfiniteTransition.onFrame`。
+对策：环境装饰一律静态；确需动效时必须受设置/可见性门控（参照 `DiscoverHeroCarousel`
+的 `isPanoramaAnimationEnabled`）。排查时 grep `rememberInfiniteTransition` 最快。
+
+### 模式 E：组合阶段读 `LazyListState.layoutInfo`（2026-09-26 实证）
+每次测量都会产出新的 `LazyListMeasureResult` 对象，组合里直接读 `layoutInfo` 就会
+"测量 → 重组 → 子项新 lambda → 重测 → 新 layoutInfo" 自持。apply observer 里表现为
+`LazyListMeasureResult` 状态与某个 `…Kt$$ExternalSyntheticLambda` 状态每帧同步变化。
+实例：订阅页 `UpdatedContentCarousel` 按偏移算倾斜/宽度（`64dad203c`）。
+对策：用 `derivedStateOf` 只取需要的数值（偏移表等 data class），空闲时结构相等即不失效。
+
 ## 5. 探针工具箱（粘贴即用，用完删净）
 
 ### 计数器（树宽 compose/measure 频率）
@@ -163,6 +179,7 @@ AnimatedFaviconDrawable / AnimatedPlaceholderDrawable；RetainedPagingSnapshotCo
 （已修缓存但帧数不变）；LayerBackdropModifier 几何门控（改了更差，已回退）；
 主题/窗口/insets/系统栏/Application（IdleProbeActivity 0 帧）；外壳/导航/列表屏
 （feed 用同一 KototoroContentListScreen 为 0 帧）。
+注意：2026-09-26 起 feed 不再是恒 0 对照（见模式 E，已修）；对照页改用 `IdleProbeActivity`。
 
 其他坑：sed 按行号改码极易改出空实验，必须回显补丁内容确认；edit 工具遇
 "file changed since read" 就重读再改；先实测再改码——每一条推论都要有
