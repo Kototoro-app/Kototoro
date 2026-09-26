@@ -197,3 +197,17 @@ androidTest 需要设备：本机目前没有连接设备，也没有 AVD。
 - 真实用户库备份：`E:\kototoro_demo\debug-db-backup-20260926-1640\`（含 WAL）。
 - `MangaDatabaseTest` 中 `versions`（历史遗留 `Migration24To23` 导致不连续）与需要 1/65/74 等旧 schema JSON 的用例
   是既有失败，与本次改动无关；根因同 §6.3（schemas 目录未纳入版本控制）。
+
+### 6.6 旧备份恢复与详情页来源面板（2026-09-26 第三轮）
+- 用真实 v3 备份（`kototoro_20260914-1126.bk.zip`）在全新 debug 安装上走引导页“恢复备份”：
+  - 修复：`WORK_*` 恢复与 Drive v2 转换用 `anchor > 0` 判断，丢掉负 id（本地/导入漫画）与 id 为 0 的漫画
+    （该备份中 825 条历史、171 条收藏、全部统计）。改为“anchor 漫画存在才恢复”，同时消除 143 个悬空外键。
+  - 结果：历史 1298（有效 1285）、收藏 311（有效 309）、外键违规 0，与离线期望一致。
+- 详情页来源面板改为投影优先语义（`feat(details): switch reading source by migrating to the new manga`）：
+  - 元数据来源：功能不变（按 manga 存 `preferences.metadata_source_*`），只改文案。
+  - 阅读来源：只显示当前漫画自身来源（修复扩展未安装时的“不可用”）；搜索结果“换源”= `MigrateUseCase`
+    迁移收藏/历史/偏好/追踪后跳转；无本地漫画的追踪条目详情页则作为首次绑定。
+  - 删除多投影残留：`activeLocalSourceOptions`、`EntityChapterSourceInfo`、激活/删除投影菜单。
+  - 设备验证：KOMIIC → 拷贝漫画 迁移后进度 2/17 跟随，旧历史写入墓碑。
+- 遗留（未处理，需产品决定）：旧备份 `ENTITY_GRAPH_PREFS` 中的元数据来源选择（该备份 10 条）恢复时被丢弃；
+  DB 迁移（§6.1）会保留同类数据，两者不一致。
