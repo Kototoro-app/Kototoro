@@ -46,8 +46,6 @@ import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.list.ui.model.EmptyState
 import org.skepsun.kototoro.list.ui.model.ListHeader
 import org.skepsun.kototoro.list.ui.model.LoadingState
-import org.skepsun.kototoro.main.ui.MainActivity
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +63,6 @@ fun AppDownloadsRoute(
     val inSelectionMode = selectionIds.isNotEmpty()
     val hapticFeedback = LocalHapticFeedback.current
     val rootView = LocalView.current
-    val mainActivity = LocalContext.current as? MainActivity
 
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
 
@@ -261,17 +258,7 @@ fun AppDownloadsRoute(
                                     selectionIds = if (isSelected) selectionIds - item.id.mostSignificantBits else selectionIds + item.id.mostSignificantBits
                                 } else {
                                     if (item.displayManga != null) {
-                                        mainActivity?.resolveDetailsOriginForContent(item.displayManga) { origin ->
-                                            when (origin) {
-                                                is DetailsOrigin.EntityGraph -> {
-                                                    appRouter.openEntityDetails(
-                                                        entityId = origin.entityId,
-                                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                                    )
-                                                }
-                                                else -> appRouter.openResolvedDetails(item.displayManga, rootView)
-                                            }
-                                        } ?: appRouter.openResolvedDetails(item.displayManga, rootView)
+                                        appRouter.openResolvedDetails(item.displayManga, rootView)
                                     }
                                 }
                             },

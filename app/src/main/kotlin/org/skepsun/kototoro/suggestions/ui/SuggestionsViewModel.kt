@@ -74,12 +74,6 @@ class SuggestionsViewModel @Inject constructor(
     @Volatile
     private var groupedSuggestionIds: Map<Long, Set<Long>> = emptyMap()
 
-    @Volatile
-    private var groupedEntityIds: Map<Long, Long> = emptyMap()
-
-    @Volatile
-    private var groupedPreferredLocalIds: Map<Long, Long> = emptyMap()
-
     private val limit = MutableStateFlow(PAGE_SIZE)
     private val isPaginationReady = AtomicBoolean(false)
 
@@ -154,8 +148,6 @@ class SuggestionsViewModel @Inject constructor(
 
         if (visibleList.isEmpty()) {
             groupedSuggestionIds = emptyMap()
-            groupedEntityIds = emptyMap()
-            groupedPreferredLocalIds = emptyMap()
             if (filters.isEmpty() && groupTab == BrowseGroupTab.All && sourceTags.isEmpty()) {
                 resultList.add(
                     EmptyState(
@@ -179,12 +171,6 @@ class SuggestionsViewModel @Inject constructor(
         } else {
             val groupedList = visibleList.aggregateByEntity()
             groupedSuggestionIds = groupedList.associate { it.uiId to it.mangaIds }
-            groupedEntityIds = groupedList.mapNotNull { group ->
-                group.entityId?.let { group.uiId to it }
-            }.toMap()
-            groupedPreferredLocalIds = groupedList.mapNotNull { group ->
-                group.preferredLocalMangaId?.let { group.uiId to it }
-            }.toMap()
             quickFilter.filterItem(filters)?.let { resultList.add(it) }
             for (group in groupedList) {
                 val model = mangaListMapper.toListModel(group.representative, mode)
@@ -219,14 +205,6 @@ class SuggestionsViewModel @Inject constructor(
         if (isPaginationReady.compareAndSet(true, false)) {
             limit.value += PAGE_SIZE
         }
-    }
-
-    override fun resolveEntityIdForUiItemId(id: Long): Long? {
-        return groupedEntityIds[id]
-    }
-
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
-        return groupedPreferredLocalIds[id] ?: groupedSuggestionIds[id]?.firstOrNull()
     }
 
     /**

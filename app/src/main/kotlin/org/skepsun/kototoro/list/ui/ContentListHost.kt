@@ -58,13 +58,4 @@ interface ContentListHost {
     fun setSelectedSourceTags(tags: Set<SourceTag>) = Unit
 
     fun setSelectedGroupTab(tab: BrowseGroupTab) = Unit
-
-    /**
-     * Entity id behind a list-item id. Pages whose items are entity rows answer with the
-     * id itself so details navigation never resolves a manga that merely shares the id.
-     */
-    fun resolveEntityIdForUiItemId(id: Long): Long? = null
-
-    /** Display projection preferred by details routing for an item id, if any. */
-    fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? = null
 }

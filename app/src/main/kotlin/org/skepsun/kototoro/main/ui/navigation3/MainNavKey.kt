@@ -16,8 +16,8 @@ data class ContentListNavKey(
 
 @Serializable
 data class DetailsNavKey(
-    val entityId: Long? = null,
-    val requestedProjectionId: Long? = null,
+    /** Local manga the page shows; `null` for tracking-site details, which have none. */
+    val mangaId: Long? = null,
 ) : MainNavKey
 
 @Serializable

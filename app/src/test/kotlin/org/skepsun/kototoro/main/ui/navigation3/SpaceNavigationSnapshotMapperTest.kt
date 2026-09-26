@@ -14,7 +14,7 @@ class SpaceNavigationSnapshotMapperTest {
 		val state = mainNavState()
 		state.navigateTopLevel(HistoryNavKey)
 		state.push(ContentListNavKey("SOURCE"))
-		state.push(DetailsNavKey(entityId = 42L, requestedProjectionId = 7L))
+		state.push(DetailsNavKey(mangaId = 7L))
 
 		val snapshot = state.toSpaceSessionSnapshot(BuiltInSpaces.Novel, timestamp = 100L)
 
@@ -22,13 +22,13 @@ class SpaceNavigationSnapshotMapperTest {
 		snapshot.stacks.getValue("history") shouldBe listOf(
 			SpaceRouteSnapshot.TopLevel("history"),
 			SpaceRouteSnapshot.ContentList("SOURCE"),
-			SpaceRouteSnapshot.WorkDetails(42L, 7L),
+			SpaceRouteSnapshot.WorkDetails(7L, 7L),
 		)
-		snapshot.resumeRoute shouldBe SpaceRouteSnapshot.WorkDetails(42L, 7L)
+		snapshot.resumeRoute shouldBe SpaceRouteSnapshot.WorkDetails(7L, 7L)
 	}
 
 	@Test
-	fun `restore rebuilds selected top level and child stack`() {
+	fun `restore rebuilds selected top level and child stack from legacy work details`() {
 		val state = mainNavState()
 		val snapshot = SpaceSessionSnapshot(
 			spaceId = BuiltInSpaces.Anime,
@@ -49,14 +49,14 @@ class SpaceNavigationSnapshotMapperTest {
 		state.selectedTopLevel shouldBe FavoritesNavKey
 		state.currentStack().toList() shouldBe listOf(
 			FavoritesNavKey,
-			DetailsNavKey(entityId = 9L, requestedProjectionId = null),
+			DetailsNavKey(mangaId = 9L),
 		)
 	}
 
 	@Test
 	fun `unresolved details key truncates following routes when saving`() {
 		val state = mainNavState()
-		state.push(DetailsNavKey(requestedProjectionId = 5L))
+		state.push(DetailsNavKey())
 		state.push(ContentListNavKey("SOURCE"))
 
 		val snapshot = state.toSpaceSessionSnapshot(BuiltInSpaces.Manga, timestamp = 100L)

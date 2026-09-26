@@ -348,7 +348,7 @@ internal fun DetailsScrollableContent(
                     val service = item.trackingService
                     val remoteId = item.remoteId
                     when {
-                        item.entityId != null || item.type != null -> {
+                        item.type != null -> {
                             onEntityClick(item)
                         }
                         service != null && remoteId != null -> {

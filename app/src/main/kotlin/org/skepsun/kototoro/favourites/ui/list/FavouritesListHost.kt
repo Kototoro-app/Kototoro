@@ -126,13 +126,6 @@ class FavouritesListHost internal constructor(
 
     fun checkForUpdates() = container.checkForUpdates()
 
-    /** Cards are entity rows, so the list item id *is* the entity id. */
-    override fun resolveEntityIdForUiItemId(id: Long): Long? = id
-
-    /** Display projection of the entity, `null` for a row without one (entity organize). */
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? =
-        libraryState.value.rowsByEntityId[id]?.displayMangaId
-
     private fun buildCards(
         library: FavouriteLibraryUiState,
         mode: ListMode,

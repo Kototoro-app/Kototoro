@@ -643,7 +643,6 @@ fun KototoroApp(
     )
     val topLevelNavigator: MainNavigator = remember(mainNavState) {
         MainStateNavigator(
-            mainActivity = null,
             mainNavState = mainNavState,
         )
     }
@@ -661,7 +660,6 @@ fun KototoroApp(
             val topLevelKey = topLevelKeyForBottomNavItem(itemId)
             if (navigationState.mainNavState.selectedTopLevel != topLevelKey) {
                 MainStateNavigator(
-                    mainActivity = null,
                     mainNavState = navigationState.mainNavState,
                 ).openTopLevel(topLevelKey)
             }

@@ -3,7 +3,6 @@ package org.skepsun.kototoro.main.ui.navigation3
 import org.skepsun.kototoro.core.nav.PendingContentListNavigation
 import org.skepsun.kototoro.core.nav.PendingDetailsNavigation
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.main.ui.MainActivity
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentListFilter
 import org.skepsun.kototoro.parsers.model.ContentSource
@@ -21,7 +20,6 @@ import org.skepsun.kototoro.search.ui.compose.SearchNavigationRequest
  * just removes the current stack's top entry.
  */
 class MainStateNavigator(
-    private val mainActivity: MainActivity?,
     private val mainNavState: MainNavState,
     private val onDetailsTransitionRequested: () -> Unit = {},
 ) : MainNavigator {
@@ -45,13 +43,8 @@ class MainStateNavigator(
         sharedElementKey: String?,
     ) {
         onDetailsTransitionRequested()
-        mainActivity?.resolveDetailsOriginForContent(content) { origin ->
-            mainNavState.push(origin.toDetailsNavKey())
-            PendingDetailsNavigation.set(origin, sharedElementKey)
-        } ?: run {
-            mainNavState.push(DetailsNavKey(requestedProjectionId = content.id))
-            PendingDetailsNavigation.set(content, sharedElementKey)
-        }
+        mainNavState.push(DetailsNavKey(mangaId = content.id))
+        PendingDetailsNavigation.set(content, sharedElementKey)
     }
 
     override fun openDetails(
@@ -83,12 +76,8 @@ class MainStateNavigator(
 }
 
 private fun DetailsOrigin.toDetailsNavKey(): DetailsNavKey = when (this) {
-    is DetailsOrigin.EntityGraph -> DetailsNavKey(
-        entityId = entityId,
-        requestedProjectionId = initialProjectionLocalMangaId ?: preferredLocalMangaId,
-    )
-    is DetailsOrigin.LocalMangaId -> DetailsNavKey(requestedProjectionId = mangaId)
-    is DetailsOrigin.LocalMangaContent -> DetailsNavKey(requestedProjectionId = manga.id)
+    is DetailsOrigin.LocalMangaId -> DetailsNavKey(mangaId = mangaId)
+    is DetailsOrigin.LocalMangaContent -> DetailsNavKey(mangaId = manga.id)
     is DetailsOrigin.TrackingEntity,
     is DetailsOrigin.TrackingItem,
     -> DetailsNavKey()
@@ -105,12 +94,4 @@ private fun DetailsOrigin.toDetailsNavKey(): DetailsNavKey = when (this) {
  * fresh ViewModels are created. Tracking origins carry no navigable identity, so
  * they resolve to null (unrecoverable after the payload is lost).
  */
-internal fun DetailsNavKey.toDetailsOriginOrNull(): DetailsOrigin? = when {
-    entityId != null && requestedProjectionId != null -> DetailsOrigin.EntityGraph(
-        entityId = entityId,
-        initialProjectionLocalMangaId = requestedProjectionId,
-    )
-    entityId != null -> DetailsOrigin.EntityGraph(entityId = entityId)
-    requestedProjectionId != null -> DetailsOrigin.LocalMangaId(mangaId = requestedProjectionId)
-    else -> null
-}
+internal fun DetailsNavKey.toDetailsOriginOrNull(): DetailsOrigin? = mangaId?.let(DetailsOrigin::LocalMangaId)

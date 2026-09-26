@@ -207,9 +207,8 @@ fun MainShellScene(
     } else {
         0.dp
     }
-    val mainNavigator: MainNavigator = remember(mainActivity, mainNavState, onDetailsTransitionRequested) {
+    val mainNavigator: MainNavigator = remember(mainNavState, onDetailsTransitionRequested) {
         MainStateNavigator(
-            mainActivity = mainActivity,
             mainNavState = mainNavState,
             onDetailsTransitionRequested = onDetailsTransitionRequested,
         )
@@ -495,7 +494,7 @@ private fun MainShellTopLevelEntryContent(
             }
 
             RouteLiquidGlassBackdrop(
-                ownerKey = "details:${key.entityId}:${key.requestedProjectionId}",
+                ownerKey = "details:${key.mangaId}",
                 active = true,
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -910,18 +909,7 @@ internal fun FeedTopLevelRouteContent(
                         item.imageUrl.orEmpty(),
                         instanceKey = "feed_${item.id}",
                     )
-                    if (item.entityId != null) {
-                        navigateToDetailsWithOrigin(
-                            org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                entityId = item.entityId,
-                                preferredLocalMangaId = item.preferredLocalMangaId ?: content.id,
-                                initialProjectionLocalMangaId = content.id,
-                            ),
-                            sharedElementKey,
-                        )
-                    } else {
-                        navigateToDetailsWithContent(content, sharedElementKey)
-                    }
+                    navigateToDetailsWithContent(content, sharedElementKey)
                 }
             },
             onFeedItemLongClick = { item ->
@@ -942,17 +930,7 @@ internal fun FeedTopLevelRouteContent(
                     contentItem.model.coverUrl.orEmpty(),
                     instanceKey = "feed_updated_${contentItem.groupKey}",
                 )
-                when {
-                    contentItem.entityId != null -> navigateToDetailsWithOrigin(
-                        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                            entityId = contentItem.entityId,
-                            preferredLocalMangaId = contentItem.preferredLocalMangaId ?: content.id,
-                            initialProjectionLocalMangaId = content.id,
-                        ),
-                        sharedElementKey,
-                    )
-                    else -> navigateToDetailsWithContent(content, sharedElementKey)
-                }
+                navigateToDetailsWithContent(content, sharedElementKey)
             },
             onUpdatedContentMoreClick = {
                 mainNavigator.openTopLevel(UpdatedNavKey)
@@ -1270,23 +1248,6 @@ internal fun BookmarksTopLevelRouteContent(
     )
 }
 
-internal fun navigateUpdatedEntityDetails(
-    entityId: Long,
-    preferredLocalMangaId: Long?,
-    initialProjectionLocalMangaId: Long,
-    sharedElementKey: String?,
-    navigateToDetailsWithOrigin: (org.skepsun.kototoro.details.ui.model.DetailsOrigin, String?) -> Unit,
-) {
-    navigateToDetailsWithOrigin(
-        org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-            entityId = entityId,
-            preferredLocalMangaId = preferredLocalMangaId ?: initialProjectionLocalMangaId,
-            initialProjectionLocalMangaId = initialProjectionLocalMangaId,
-        ),
-        sharedElementKey,
-    )
-}
-
 @Composable
 internal fun UpdatedTopLevelRouteContent(
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
@@ -1415,15 +1376,6 @@ internal fun UpdatedTopLevelRouteContent(
             onRemoveSelection = { ids -> viewModel.remove(ids) },
             onNavigateToDetails = { _, content, sharedKey ->
                 navigateToDetailsWithContent(content, sharedKey)
-            },
-            onNavigateToEntityDetails = { _, content, entityId, preferredLocalMangaId, sharedKey ->
-                navigateUpdatedEntityDetails(
-                    entityId = entityId,
-                    preferredLocalMangaId = preferredLocalMangaId,
-                    initialProjectionLocalMangaId = content.id,
-                    sharedElementKey = sharedKey,
-                    navigateToDetailsWithOrigin = navigateToDetailsWithOrigin,
-                )
             },
             onFilterRailOverrideChanged = {},
             onAddMenuProvider = { _, _, _ ->
@@ -1656,20 +1608,7 @@ internal fun HistoryTopLevelRouteContent(
                     // Must mirror the grid card registration (contentListSharedElementKey with
                     // the screen's instance key, null here) or the hero transition never fires.
                     val sharedKey = contentListSharedElementKey(item, null)
-                    val entityId = viewModel.resolveEntityIdForUiItemId(item.id)
-                    val preferredLocalMangaId = viewModel.resolvePreferredLocalMangaIdForUiItemId(item.id)
-                    if (entityId != null) {
-                        navigateToDetailsWithOrigin(
-                            org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph(
-                                entityId = entityId,
-                                preferredLocalMangaId = preferredLocalMangaId ?: content.id,
-                                initialProjectionLocalMangaId = content.id,
-                            ),
-                            sharedKey,
-                        )
-                    } else {
-                        navigateToDetailsWithContent(content, sharedKey)
-                    }
+                    navigateToDetailsWithContent(content, sharedKey)
                 }
             },
             onItemLongClick = { item ->
@@ -2052,7 +1991,7 @@ internal fun FavoritesTopLevelRouteContent(
             onNavigateToDetails = { content, sharedKey ->
                 navigateToDetailsWithContent(content, sharedKey)
             },
-            onNavigateToEntityDetails = { origin, sharedKey ->
+            onNavigateToDetailsOrigin = { origin, sharedKey ->
                 navigateToDetailsWithOrigin(origin, sharedKey)
             },
             registerFilterCallback = false,

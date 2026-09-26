@@ -837,14 +837,6 @@ private fun DetailsScreenContent(
         val service = item.trackingService
         val remoteId = item.remoteId
         when {
-            entityType == org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK && item.entityId != null -> {
-                appRouter.openEntityDetails(
-                    entityId = item.entityId,
-                    service = service,
-                    remoteId = remoteId,
-                    url = item.url,
-                )
-            }
             entityType != null &&
                 entityType != org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK &&
                 service != null &&
@@ -860,14 +852,6 @@ private fun DetailsScreenContent(
             }
             service != null && remoteId != null -> {
                 handleActionClick(DetailsAction.OpenTrackingDetails(service, remoteId, item.url))
-            }
-            item.entityId != null -> {
-                appRouter.openEntityDetails(
-                    entityId = item.entityId,
-                    service = service,
-                    remoteId = remoteId,
-                    url = item.url,
-                )
             }
             !item.url.isNullOrBlank() -> {
                 handleActionClick(DetailsAction.OpenWebUrl(item.url))

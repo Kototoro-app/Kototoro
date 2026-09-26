@@ -36,7 +36,8 @@ fun MainNavState.restoreFromSpaceSession(snapshot: SpaceSessionSnapshot) {
 private fun MainNavKey.toSpaceRouteSnapshot(): SpaceRouteSnapshot? = when (this) {
     is TopLevelNavKey -> SpaceRouteSnapshot.TopLevel(encodeTopLevelNavKey(this))
     is ContentListNavKey -> SpaceRouteSnapshot.ContentList(sourceName)
-    is DetailsNavKey -> entityId?.let { SpaceRouteSnapshot.WorkDetails(it, requestedProjectionId) }
+    // The persisted WorkDetails shape predates projection-first ids; both fields now carry the manga id.
+    is DetailsNavKey -> mangaId?.let { SpaceRouteSnapshot.WorkDetails(entityId = it, requestedProjectionId = it) }
     is SearchNavKey -> SpaceRouteSnapshot.Search(
         query = query,
         kind = kind,
@@ -53,7 +54,7 @@ private fun MainNavKey.toSpaceRouteSnapshot(): SpaceRouteSnapshot? = when (this)
 private fun SpaceRouteSnapshot.toMainNavKey(): MainNavKey? = when (this) {
     is SpaceRouteSnapshot.TopLevel -> decodeTopLevelNavKey(key)
     is SpaceRouteSnapshot.ContentList -> ContentListNavKey(sourceName)
-    is SpaceRouteSnapshot.WorkDetails -> DetailsNavKey(entityId, requestedProjectionId)
+    is SpaceRouteSnapshot.WorkDetails -> DetailsNavKey(mangaId = requestedProjectionId ?: entityId)
     is SpaceRouteSnapshot.Search -> SearchNavKey(
         query = query,
         kind = kind,

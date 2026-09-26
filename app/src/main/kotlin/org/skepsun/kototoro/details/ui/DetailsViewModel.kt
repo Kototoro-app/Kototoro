@@ -152,7 +152,6 @@ import java.io.File
 import java.util.Locale
 
 
-private const val SYNTHETIC_ENTITY_GRAPH_SOURCE = "Entity Graph"
 private const val DETAILS_TRACE_TAG = "DetailsTrace"
 
 private fun Content?.detailsTraceSummary(): String {
@@ -163,8 +162,6 @@ private fun Content?.detailsTraceSummary(): String {
 
 private fun DetailsOrigin?.detailsTraceSummary(): String = when (this) {
     null -> "null"
-    is DetailsOrigin.EntityGraph ->
-        "EntityGraph(entityId=$entityId, preferred=$preferredLocalMangaId, initial=$initialProjectionLocalMangaId)"
     is DetailsOrigin.LocalMangaId -> "LocalMangaId(mangaId=$mangaId)"
     is DetailsOrigin.LocalMangaContent -> "LocalMangaContent(${manga.detailsTraceSummary()})"
     is DetailsOrigin.TrackingEntity -> "TrackingEntity(service=$serviceId, type=$entityTypeName, remote=$remoteId)"
@@ -177,7 +174,6 @@ internal fun List<EntityRelationSection>.deduplicateRelationItems(): List<Entity
     }
 
 internal fun DetailsOrigin.initialProjectionLocalMangaIdOrNull(): Long? = when (this) {
-    is DetailsOrigin.EntityGraph -> initialProjectionLocalMangaId
     is DetailsOrigin.LocalMangaId -> mangaId
     is DetailsOrigin.LocalMangaContent -> manga.id
     is DetailsOrigin.TrackingEntity,
@@ -189,8 +185,6 @@ internal fun DetailsOrigin.initialProjectionIntentOrNull(): ContentIntent? = whe
     is DetailsOrigin.LocalMangaContent -> ContentIntent.of(manga)
     else -> initialProjectionLocalMangaIdOrNull()?.let(ContentIntent::of)
 }
-
-internal fun Content.isSyntheticEntityGraphContent(): Boolean = source.name == SYNTHETIC_ENTITY_GRAPH_SOURCE
 
 private const val ENTITY_RELATION_SECTIONS_DEBOUNCE_MS = 120L
 private const val TRACKING_SUGGESTION_THRESHOLD = 0.9f
@@ -234,12 +228,6 @@ private inline fun <T> flowOrFallback(
 ): Flow<T> = runCatching {
     block()
 }.getOrNull().orEmptyFlow(fallback)
-
-private data class EntityTrackingOrigin(
-    val service: ScrobblerService,
-    val remoteId: Long,
-    val url: String? = null,
-)
 
 private data class WorkProjectionContext(
     val entityId: Long?,
@@ -1305,14 +1293,7 @@ class DetailsViewModel @Inject constructor(
             }
         }
 
-        if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
-            val targetMangaId = activeExternalOrigin.initialProjectionLocalMangaId
-                ?: activeExternalOrigin.preferredLocalMangaId
-                ?: activeExternalOrigin.entityId
-            activeMangaIdFlow.value = targetMangaId
-            currentLoadIntentOverride = ContentIntent.of(targetMangaId)
-            loadingJob = doLoad(force = false)
-        } else if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
+        if (activeExternalOrigin is org.skepsun.kototoro.details.ui.model.DetailsOrigin.TrackingEntity) {
             launchJob(Dispatchers.IO) {
                 val service = ScrobblerService.entries.firstOrNull {
                     it.id == activeExternalOrigin.serviceId.toIntOrNull()
@@ -1452,22 +1433,6 @@ class DetailsViewModel @Inject constructor(
     private fun currentTrackingMetadataDetails(): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
         val selection = selectedMetadataSource.safeValueOrNull() as? MetadataSourceSelection.Tracking ?: return null
         return cachedTrackingDetails[trackingMetadataKey(selection.service, selection.remoteId)]
-    }
-
-    private fun currentEntityTrackingOrigin(): EntityTrackingOrigin? {
-        val origin = activeExternalOrigin as? org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph
-        val service = origin?.serviceId
-            ?.toIntOrNull()
-            ?.let { serviceId -> ScrobblerService.entries.firstOrNull { it.id == serviceId } }
-        val remoteId = origin?.remoteId
-        if (service != null && remoteId != null && remoteId > 0L) {
-            return EntityTrackingOrigin(
-                service = service,
-                remoteId = remoteId,
-                url = origin.url,
-            )
-        }
-        return null
     }
 
     private fun currentSupplementalTrackingDetails(): org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItemDetails? {
@@ -1794,9 +1759,7 @@ class DetailsViewModel @Inject constructor(
         maybeAutoSearchReadingSourcesForTrackingWork()
         updateSupplementalDetailsState(supplementalTrackingDetails)
         refreshResolvedPresentationState()
-        if (activeExternalOrigin !is org.skepsun.kototoro.details.ui.model.DetailsOrigin.EntityGraph) {
-            refreshContextualEntityRelations()
-        }
+        refreshContextualEntityRelations()
     }
 
     private fun currentObservedLocalMangaIdSnapshot(): Long? {
@@ -2548,7 +2511,7 @@ class DetailsViewModel @Inject constructor(
     }.mapLatest { (localMangaId, details) ->
         val seed = localMangaId
             ?.let { db.getMangaDao().find(it)?.toContent() }
-            ?: details?.toContent()?.takeUnless { it.isSyntheticEntityGraphContent() }
+            ?: details?.toContent()
         if (seed != null && settings.isRelatedContentEnabled) {
             val related = relatedContentUseCase(seed).orEmpty()
                 .distinctBy { "${it.source.name}:${it.id}:${it.url}" }

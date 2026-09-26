@@ -33,7 +33,6 @@ import org.skepsun.kototoro.backups.domain.BackupStartupCoordinator
 import org.skepsun.kototoro.browser.AdListUpdateWorker
 import org.skepsun.kototoro.core.nav.router
 import org.skepsun.kototoro.core.nav.SystemInstallLauncherHost
-import org.skepsun.kototoro.core.model.parcelable.ParcelableContent
 import org.skepsun.kototoro.core.os.VoiceInputContract
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.parser.ContentLinkResolver
@@ -46,7 +45,6 @@ import org.skepsun.kototoro.core.util.ext.animatorDurationScale
 import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.service.ContentPrefetchService
-import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
@@ -305,35 +303,10 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
                         {}
                     },
                     onContentSuggestionClick = { content ->
-                        resolveDetailsOriginForContent(content) { origin ->
-                            when (origin) {
-                                is DetailsOrigin.EntityGraph -> {
-                                    router.openEntityDetails(
-                                        entityId = origin.entityId,
-                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                    )
-                                }
-                                else -> router.openResolvedDetails(content)
-                            }
-                        }
+                        router.openResolvedDetails(content)
                     },
                     onLocalEntitySuggestionClick = { suggestion ->
-                        suggestion.entityId?.let { entityId ->
-                            openEntityDetailsWithPreferredProjection(
-                                entityId = entityId,
-                                fallbackLocalMangaId = suggestion.representative.id,
-                            )
-                        } ?: resolveDetailsOriginForContent(suggestion.representative) { origin ->
-                            when (origin) {
-                                is DetailsOrigin.EntityGraph -> {
-                                    router.openEntityDetails(
-                                        entityId = origin.entityId,
-                                        initialProjectionLocalMangaId = origin.initialProjectionLocalMangaId,
-                                    )
-                                }
-                                else -> router.openResolvedDetails(suggestion.representative)
-                            }
-                        }
+                        router.openResolvedDetails(suggestion.representative)
                     },
                     onTrackingEntitySuggestionClick = { entity ->
                         when (entity.entityType) {
@@ -587,18 +560,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
             animated = !settings.isReducedVisualEffectsEnabled && animatorDurationScale > 0f,
             showOnTarget = showOnTarget,
         )
-    }
-
-    private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {
-        val targetMangaId = fallbackLocalMangaId.takeIf { it != 0L } ?: entityId
-        router.openDetails(targetMangaId)
-    }
-
-    fun resolveDetailsOriginForContent(
-        content: Content,
-        onResolved: (DetailsOrigin) -> Unit,
-    ) {
-        onResolved(DetailsOrigin.LocalMangaContent(ParcelableContent(content)))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

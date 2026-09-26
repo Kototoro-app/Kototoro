@@ -232,3 +232,18 @@ androidTest 需要设备：本机目前没有连接设备，也没有 AVD。
   stats 5、FK 0，与源数据一致。Mihon 导出 29 部漫画、34 条分类引用（修复前是 33），可从“从其他应用导入”导回。
 - 已知限制（未改）：Kotatsu 导出只保留设备上已加载为 `KotatsuParserSource` 的源；未装 Kotatsu 解析器插件时，
   导出只有分类。Mihon 历史依赖章节 URL，没抓过章节的漫画不会导出历史。
+
+### 6.8 详情页导航去实体化（2026-09-26 第五轮）
+
+- 删除 `DetailsOrigin.EntityGraph`、`AppRouter.openEntityDetails`、`ContentListHost.resolveEntityIdForUiItemId` /
+  `resolvePreferredLocalMangaIdForUiItemId`、列表的 `onNavigateToEntityDetails` 回调，以及两处恒返回
+  `LocalMangaContent` 的 `resolveDetailsOriginForContent`。
+- 依据：收藏 / 历史 / 更新卡片的 content id 本来就是 `displayMangaId ?: anchor`，推荐的 entityId 恒为 null，
+  所以 entity 路径最后打开的一直都是 content.id。现在所有入口统一走 content（或 `LocalMangaId`）。
+- `DetailsNavKey` 只剩 `mangaId`。空间会话快照的持久化格式 `WorkDetails(entityId, requestedProjectionId)`
+  保持不变：写入时两个字段都填 mangaId，读出时取 `requestedProjectionId ?: entityId`。
+- 同时删除的死代码：从未被调用的 `EntityTrackingOrigin`、合成的 "Entity Graph" 内容判断、
+  `EntityRelationItem.entityId`（没有任何生产者），以及 EntityGraph 打开时的二次 `doLoad`。
+- 行为变化：从列表进入详情时也会刷新 related sections，与 `LocalMangaId` 入口一致。
+- 设备验证：收藏网格、收藏 spotlight（`LocalMangaId`）、历史、首页历史行都能进入详情，返回正常，无崩溃。
+- 仍保留（命名残留，低优先级）：feed / 列表模型里的 `entityId` / `preferredLocalMangaId` 字段，已不再参与导航。

@@ -296,19 +296,6 @@ class AppRouter(
         )
     }
 
-    fun openEntityDetails(
-        entityId: Long,
-        preferredLocalMangaId: Long? = null,
-        initialProjectionLocalMangaId: Long? = null,
-        service: ScrobblerService? = null,
-        remoteId: Long? = null,
-        url: String? = null,
-        sharedElementKey: String? = null,
-    ) {
-        val targetMangaId = initialProjectionLocalMangaId ?: preferredLocalMangaId ?: entityId
-        openDetails(targetMangaId)
-    }
-
     fun openTrackingEntityDetails(
         service: ScrobblerService,
         entityType: EntityType,
@@ -1294,10 +1281,6 @@ class AppRouter(
 
     private fun getContentType(source: ContentSource): ContentType {
         return source.getContentType()
-    }
-
-    private suspend fun resolveDetailsOriginForContent(content: Content): DetailsOrigin {
-        return DetailsOrigin.LocalMangaContent(ParcelableContent(content))
     }
 
     /** Private utils **/

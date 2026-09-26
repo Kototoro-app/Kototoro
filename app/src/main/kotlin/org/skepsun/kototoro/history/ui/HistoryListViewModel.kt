@@ -139,7 +139,6 @@ class HistoryListViewModel @Inject constructor(
     override val isFilterBarVisible = MutableStateFlow(true)
     private val activeSpaceScope = spaceBinding.spaceId
 
-
     override val currentGroupTab = globalFavoritesState.selectedGroupTab.scopedToSpace(
         spaceGroupTab = spaceBinding.groupTab,
         coroutineScope = viewModelScope + Dispatchers.Default,
@@ -369,18 +368,8 @@ class HistoryListViewModel @Inject constructor(
         }
     }
 
-
     fun requestMoreItems() {
         // The static list has no prefetch: the whole snapshot is already loaded.
-    }
-
-    override fun resolveEntityIdForUiItemId(id: Long): Long? {
-        return rowsByUiId[id]?.entityId
-    }
-
-    override fun resolvePreferredLocalMangaIdForUiItemId(id: Long): Long? {
-        val row = rowsByUiId[id] ?: return null
-        return row.displayMangaId ?: row.anchorMangaId
     }
 
     /**

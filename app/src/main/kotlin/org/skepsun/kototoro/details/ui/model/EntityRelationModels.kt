@@ -14,7 +14,6 @@ data class EntityRelationItem(
     val stableKey: String,
     val name: String,
     val coverUrl: String?,
-    val entityId: Long? = null,
     val type: EntityType? = null,
     val subtitle: String? = null,
     val supportingText: String? = null,
