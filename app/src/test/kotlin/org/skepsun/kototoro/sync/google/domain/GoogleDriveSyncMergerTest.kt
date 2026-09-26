@@ -62,6 +62,30 @@ class GoogleDriveSyncMergerTest {
 	}
 
 	@Test
+	fun `legacy work state keeps zero and negative anchor ids`() {
+		// Local and imported manga use negative ids and 0 is a valid id too; only a missing
+		// (null) favourite anchor means there is nothing to land on.
+		val snapshot = GoogleDriveSyncSnapshot(
+			namespace = GoogleDriveSyncSnapshot.NAMESPACE_WORK_V2,
+			semanticSchemaVersion = GoogleDriveSyncSnapshot.SEMANTIC_SCHEMA_VERSION,
+			content = listOf(content(-7L), content(0L)),
+			work = SyncWorkState(
+				categories = listOf(category(1L)),
+				history = listOf(
+					workHistory(entityId = 20L, anchorMangaId = -7L, updatedAt = 20L),
+					workHistory(entityId = 30L, anchorMangaId = 0L, updatedAt = 10L),
+				),
+				favourites = listOf(workFavourite(entityId = 20L, anchorMangaId = -7L)),
+			),
+		)
+
+		val compact = GoogleDriveSyncMerger.combine(listOf(snapshot))!!
+
+		assertEquals(listOf(-7L, 0L), compact.history.map { it.mangaId })
+		assertEquals(listOf(-7L), compact.favourites.map { it.mangaId })
+	}
+
+	@Test
 	fun `compact does not merge projections by weak title and cover fallback`() {
 		val snapshot = snapshot(
 			content = listOf(

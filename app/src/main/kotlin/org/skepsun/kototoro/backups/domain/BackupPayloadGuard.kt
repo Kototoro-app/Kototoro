@@ -197,14 +197,14 @@ object BackupPayloadGuard {
 
     private fun JsonArray?.ids(name: String): Set<Long> {
         if (this == null) return emptySet()
-        return mapNotNullTo(LinkedHashSet()) { it.longOrNull(name)?.takeIf { id -> id > 0L } }
+        return mapNotNullTo(LinkedHashSet()) { it.longOrNull(name)?.takeIf { id -> id != 0L } }
     }
 
     private fun JsonArray?.activeIds(name: String): Set<Long> {
         if (this == null) return emptySet()
         return mapNotNullTo(LinkedHashSet()) { item ->
             item.longOrNull(name)
-                ?.takeIf { id -> id > 0L && item.long("deleted_at") == 0L }
+                ?.takeIf { id -> id != 0L && item.long("deleted_at") == 0L }
         }
     }
 

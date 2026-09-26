@@ -44,27 +44,27 @@ class GoogleDriveSyncSnapshot(
         }
         val normalizedCategories = if (categories.isNotEmpty()) categories else work.categories
         val normalizedHistory = if (history.isNotEmpty()) history else {
-            work.history.mapNotNull {
-                if (it.anchorMangaId > 0) {
-                    SyncHistory(
-                        mangaId = it.anchorMangaId,
-                        createdAt = it.createdAt,
-                        updatedAt = it.updatedAt,
-                        chapterId = it.chapterId,
-                        page = it.page,
-                        scroll = it.scroll,
-                        percent = it.percent,
-                        chaptersCount = it.chaptersCount,
-                        parentChapterId = it.parentChapterId,
-                        deletedAt = it.deletedAt,
-                    )
-                } else null
+            // Any anchor id (0 and negatives included) may be a real manga; the apply step
+            // skips anchors that do not exist locally.
+            work.history.map {
+                SyncHistory(
+                    mangaId = it.anchorMangaId,
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt,
+                    chapterId = it.chapterId,
+                    page = it.page,
+                    scroll = it.scroll,
+                    percent = it.percent,
+                    chaptersCount = it.chaptersCount,
+                    parentChapterId = it.parentChapterId,
+                    deletedAt = it.deletedAt,
+                )
             }
         }
         val normalizedFavourites = if (favourites.isNotEmpty()) favourites else {
             work.favourites.mapNotNull {
                 val anchorId = it.anchorMangaId
-                if (anchorId != null && anchorId > 0) {
+                if (anchorId != null) {
                     SyncFavourite(
                         mangaId = anchorId,
                         categoryId = it.categoryId,
@@ -78,15 +78,13 @@ class GoogleDriveSyncSnapshot(
             }
         }
         val normalizedStats = if (stats.isNotEmpty()) stats else {
-            work.stats.mapNotNull {
-                if (it.anchorMangaId > 0) {
-                    SyncStats(
-                        mangaId = it.anchorMangaId,
-                        startedAt = it.startedAt,
-                        duration = it.duration,
-                        pages = it.pages,
-                    )
-                } else null
+            work.stats.map {
+                SyncStats(
+                    mangaId = it.anchorMangaId,
+                    startedAt = it.startedAt,
+                    duration = it.duration,
+                    pages = it.pages,
+                )
             }
         }
         return GoogleDriveSyncSnapshot(

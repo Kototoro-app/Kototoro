@@ -649,8 +649,11 @@ class BackupRepository @Inject constructor(
                         getStatsDao().upsert(it.toEntity())
                     }
 
+                    // Legacy WORK_* rows land on their anchor projection. PROJECTIONS is restored first,
+                    // so a missing anchor means the row has nothing to attach to: skip it rather than
+                    // leave a dangling foreign key. (0 and negative ids are valid manga ids.)
                     BackupSection.WORK_HISTORY -> sectionInput.readJsonArray<WorkHistoryBackup>(serializer()).restoreToDb("WORK_HISTORY") {
-                        if (it.anchorMangaId > 0) {
+                        if (it.anchorMangaId in getMangaDao()) {
                             // upsertSync keeps the row's deleted_at: legacy snapshots carry
                             // tombstones, which a plain upsert would resurrect as active history.
                             val history = it.toHistoryEntity()
@@ -667,7 +670,7 @@ class BackupRepository @Inject constructor(
 
                     BackupSection.WORK_FAVOURITES -> sectionInput.readJsonArray<WorkFavouriteBackup>(serializer()).restoreToDb("WORK_FAVOURITES") {
                         val anchorMangaId = it.anchorMangaId
-                        if (anchorMangaId != null && anchorMangaId > 0) {
+                        if (anchorMangaId != null && anchorMangaId in getMangaDao()) {
                             val targetCategoryId = legacyCategoryIdMapping[it.categoryId] ?: it.categoryId
                             val fav = it.toFavouriteEntity(targetMangaId = anchorMangaId, targetCategoryId = targetCategoryId)
                             if (restoreMode == RestoreMode.MERGE) {
@@ -685,7 +688,7 @@ class BackupRepository @Inject constructor(
                     }
 
                     BackupSection.WORK_STATS -> sectionInput.readJsonArray<WorkStatisticBackup>(serializer()).restoreToDb("WORK_STATS") {
-                        if (it.anchorMangaId > 0) {
+                        if (it.anchorMangaId in getMangaDao()) {
                             getStatsDao().upsert(it.toStatsEntity())
                         }
                     }
