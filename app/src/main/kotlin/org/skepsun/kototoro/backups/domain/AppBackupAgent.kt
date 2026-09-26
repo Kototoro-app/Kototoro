@@ -146,7 +146,6 @@ class AppBackupAgent : BackupAgent() {
                 savedFiltersRepository = SavedFiltersRepository(
                     context = applicationContext,
                 ),
-                workResolver = entryPoint.workResolver(),
             ),
         )
         try {
@@ -270,7 +269,6 @@ class AppBackupAgent : BackupAgent() {
                     savedFiltersRepository = SavedFiltersRepository(
                         context = applicationContext,
                     ),
-                    workResolver = entryPoint.workResolver(),
                 ),
             )
             destination.delete()

@@ -82,10 +82,8 @@ class BackupWebDavRestoreCoordinator @Inject constructor(
         if (isAuthoritativeWorkRestore) {
             settings.backupWebDavLastAuthoritativeSemanticSchemaVersion = normalizedSemanticVersion
             settings.isWorkMigrationSyncWriteBlocked = false
-            settings.requiresWorkMigrationNormalization = false
         } else {
             settings.isWorkMigrationSyncWriteBlocked = true
-            settings.requiresWorkMigrationNormalization = true
         }
     }
 }

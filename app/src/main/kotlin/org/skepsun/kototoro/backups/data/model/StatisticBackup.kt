@@ -3,7 +3,6 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.stats.data.StatsEntity
-import org.skepsun.kototoro.stats.data.WorkStatsEntity
 
 @Serializable
 class StatisticBackup(
@@ -15,13 +14,6 @@ class StatisticBackup(
 
     constructor(entity: StatsEntity) : this(
         mangaId = entity.mangaId,
-        startedAt = entity.startedAt,
-        duration = entity.duration,
-        pages = entity.pages,
-    )
-
-    constructor(entity: WorkStatsEntity) : this(
-        mangaId = entity.anchorMangaId,
         startedAt = entity.startedAt,
         duration = entity.duration,
         pages = entity.pages,

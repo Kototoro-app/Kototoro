@@ -98,11 +98,7 @@ import org.skepsun.kototoro.core.util.ext.textAndVisible
 import org.skepsun.kototoro.core.util.ext.tryLaunch
 import org.skepsun.kototoro.download.ui.worker.DownloadWorker
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
-import org.skepsun.kototoro.favourites.ui.migration.compose.EntityOrganizePageIntroCard
-import org.skepsun.kototoro.favourites.ui.migration.compose.SourceMigrationPanel
 import org.skepsun.kototoro.local.data.LocalStorageManager
-import org.skepsun.kototoro.main.ui.compose.encodeEntityOrganizeSelection
-import org.skepsun.kototoro.main.ui.compose.parseEntityOrganizeSelection
 import org.skepsun.kototoro.parsers.util.await
 import org.skepsun.kototoro.reader.translate.data.OnnxModelManager
 import org.skepsun.kototoro.scrobbling.common.ui.ScrobblerAuthHelper
@@ -190,10 +186,6 @@ class SettingsActivity :
                     Toast.LENGTH_SHORT,
                 ).show()
             }
-    }
-
-    private val initialEntityOrganizeSelection: Set<Long> by lazy(LazyThreadSafetyMode.NONE) {
-        parseEntityOrganizeSelection(intent?.getStringExtra(EXTRA_ENTITY_ORGANIZE_SELECTION).orEmpty())
     }
 
     @Inject
@@ -615,9 +607,6 @@ class SettingsActivity :
                 SettingsDestination.BackupsSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_BACKUPS_SETTINGS)
                 }
-                SettingsDestination.EntityOrganizeSettings -> {
-                    outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_ENTITY_ORGANIZE_SETTINGS)
-                }
                 SettingsDestination.TranslationSettings -> {
                     outState.putString(STATE_COMPOSE_DESTINATION, COMPOSE_DESTINATION_TRANSLATION_SETTINGS)
                 }
@@ -759,7 +748,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings,
             SettingsDestination.SyncSettings,
             SettingsDestination.BackupsSettings,
-            SettingsDestination.EntityOrganizeSettings,
             SettingsDestination.TranslationSettings,
             SettingsDestination.TranslationApiSettings,
             SettingsDestination.TranslationE2EApiSettings,
@@ -805,7 +793,6 @@ class SettingsActivity :
             AppRouter.ACTION_PROXY -> SettingsDestination.ProxySettings
             AppRouter.ACTION_READER -> SettingsDestination.ReaderSettings
             AppRouter.ACTION_SOURCES -> SettingsDestination.SourcesSettings
-            AppRouter.ACTION_ENTITY_ORGANIZE -> SettingsDestination.EntityOrganizeSettings
             AppRouter.ACTION_MANAGE_DOWNLOADS -> SettingsDestination.DownloadsSettings
             AppRouter.ACTION_MANAGE_SOURCES -> null
             AppRouter.ACTION_SOURCE -> intent.getStringExtra(AppRouter.KEY_SOURCE)
@@ -927,7 +914,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings -> COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS
             SettingsDestination.SyncSettings -> COMPOSE_DESTINATION_SYNC_SETTINGS
             SettingsDestination.BackupsSettings -> COMPOSE_DESTINATION_BACKUPS_SETTINGS
-            SettingsDestination.EntityOrganizeSettings -> COMPOSE_DESTINATION_ENTITY_ORGANIZE_SETTINGS
             SettingsDestination.TranslationSettings -> COMPOSE_DESTINATION_TRANSLATION_SETTINGS
             SettingsDestination.TranslationApiSettings -> COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS
             SettingsDestination.TranslationE2EApiSettings -> COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS
@@ -976,7 +962,6 @@ class SettingsActivity :
             SettingsDestination.SuggestionsSettings -> getString(R.string.suggestions)
             SettingsDestination.SyncSettings -> getString(R.string.sync_settings)
             SettingsDestination.BackupsSettings -> getString(R.string.backup_restore)
-            SettingsDestination.EntityOrganizeSettings -> getString(R.string.entity_organize_title)
             SettingsDestination.TranslationSettings -> getString(R.string.translation_settings)
             SettingsDestination.TranslationApiSettings -> getString(R.string.ai_api_settings)
             SettingsDestination.TranslationE2EApiSettings -> getString(R.string.reader_translation_e2e_api_settings_title)
@@ -1215,9 +1200,6 @@ class SettingsActivity :
                     onClearSearchHistory = ::confirmClearSearchHistory,
                     onClearCookies = ::confirmClearCookies,
                     onDeleteReadChapters = ::confirmCleanupChapters,
-                    onOpenEntityOrganize = {
-                        openDestination(SettingsDestination.EntityOrganizeSettings, null, false)
-                    },
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -1288,16 +1270,6 @@ class SettingsActivity :
                             Toast.makeText(this, R.string.operation_not_supported, Toast.LENGTH_SHORT).show()
                         }
                     },
-                )
-            }
-            SettingsDestination.EntityOrganizeSettings -> RenderComposeSection(
-                title = getString(R.string.entity_organize_title),
-            ) {
-                SourceMigrationPanel(
-                    initialSelectedContentIds = initialEntityOrganizeSelection,
-                    onDismiss = ::handleComposeNavigateUp,
-                    contentPadding = PaddingValues(top = settingsContentTopInset()),
-                    showHeader = false,
                 )
             }
             SettingsDestination.TranslationSettings -> RenderComposeSection(
@@ -2219,7 +2191,6 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS = "suggestions_settings"
         private const val COMPOSE_DESTINATION_SYNC_SETTINGS = "sync_settings"
         private const val COMPOSE_DESTINATION_BACKUPS_SETTINGS = "backups_settings"
-        private const val COMPOSE_DESTINATION_ENTITY_ORGANIZE_SETTINGS = "entity_organize_settings"
         private const val COMPOSE_DESTINATION_TRANSLATION_SETTINGS = "translation_settings"
         private const val COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS = "translation_api_settings"
         private const val COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS = "translation_e2e_api_settings"
@@ -2237,7 +2208,6 @@ class SettingsActivity :
         private const val COMPOSE_DESTINATION_ABOUT_SETTINGS = "about_settings"
         private const val COMPOSE_DESTINATION_SOURCE_SETTINGS = "source_settings"
         private const val COMPOSE_DESTINATION_UNIFIED_SOURCES = "unified_sources"
-        private const val EXTRA_ENTITY_ORGANIZE_SELECTION = "entity_organize_selection"
 
         fun newUnifiedSourcesIntent(
             context: Context,
@@ -2254,18 +2224,6 @@ class SettingsActivity :
                         putExtra(EXTRA_UNIFIED_SOURCES_URL, initialRepositoryUrl)
                     }
                 }
-        }
-
-        fun newEntityOrganizeIntent(
-            context: Context,
-            selectedContentIds: Set<Long> = emptySet(),
-        ): Intent {
-            return Intent(context, SettingsActivity::class.java)
-                .setAction(AppRouter.ACTION_ENTITY_ORGANIZE)
-                .putExtra(
-                    EXTRA_ENTITY_ORGANIZE_SELECTION,
-                    encodeEntityOrganizeSelection(selectedContentIds),
-                )
         }
     }
 
@@ -2309,7 +2267,6 @@ class SettingsActivity :
             COMPOSE_DESTINATION_SUGGESTIONS_SETTINGS -> SettingsDestination.SuggestionsSettings
             COMPOSE_DESTINATION_SYNC_SETTINGS -> SettingsDestination.SyncSettings
             COMPOSE_DESTINATION_BACKUPS_SETTINGS -> SettingsDestination.BackupsSettings
-            COMPOSE_DESTINATION_ENTITY_ORGANIZE_SETTINGS -> SettingsDestination.EntityOrganizeSettings
             COMPOSE_DESTINATION_TRANSLATION_SETTINGS -> SettingsDestination.TranslationSettings
             COMPOSE_DESTINATION_TRANSLATION_API_SETTINGS -> SettingsDestination.TranslationApiSettings
             COMPOSE_DESTINATION_TRANSLATION_E2E_API_SETTINGS -> SettingsDestination.TranslationE2EApiSettings

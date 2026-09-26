@@ -41,10 +41,9 @@ import org.skepsun.kototoro.core.LocalizedAppContext
 import org.skepsun.kototoro.favourites.domain.FavouritesRepository
 import org.skepsun.kototoro.core.model.getTitle
 import org.skepsun.kototoro.core.model.getOriginLabel
-import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.rebindScrobblingToManga
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @HiltViewModel
@@ -57,7 +56,6 @@ class ScrobblerConfigViewModel @Inject constructor(
     private val mangaRepositoryFactory: ContentRepository.Factory,
     private val favouritesRepository: FavouritesRepository,
     private val trackingSiteMatcher: TrackingSiteMatcher,
-    private val workResolver: WorkResolver,
     @LocalizedAppContext private val context: Context,
 ) : BaseViewModel() {
 
@@ -138,23 +136,20 @@ class ScrobblerConfigViewModel @Inject constructor(
             android.util.Log.d("ScrobblerConfigVM", "bindContent: stored manga, mangaId=$mangaId")
 
             // 2. Re-link the tracker
-            val currentEntity = db.findScrobblingByWorkOrManga(
+            val currentEntity = db.findScrobblingByManga(
                 scrobbler = scrobbler.scrobblerService.id,
                 mangaId = info.mangaId,
-                workResolver = workResolver,
             )
             android.util.Log.d("ScrobblerConfigVM", "bindContent: currentEntity=$currentEntity")
             val reboundEntity = db.rebindScrobblingToManga(
                 scrobbler = scrobbler.scrobblerService.id,
                 sourceMangaId = info.mangaId,
                 targetMangaId = mangaId,
-                workResolver = workResolver,
             ) {
                 ScrobblingEntity(
                     scrobbler = scrobbler.scrobblerService.id,
                     id = info.targetId.toInt(),
                     targetId = info.targetId,
-                    entityId = null,
                     mangaId = mangaId,
                     status = info.status?.name,
                     chapter = info.chapter,

@@ -276,7 +276,6 @@ private fun ScrobblerConfigScreenPreview() {
                 ScrobblingStatus.READING,
                 ScrobblingInfo(
                     scrobbler = ScrobblerService.ANILIST,
-                    entityId = null,
                     preferredLocalMangaId = null,
                     mangaId = 1,
                     targetId = 2,

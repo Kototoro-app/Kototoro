@@ -49,11 +49,11 @@ class UsagiBackupExportRepository @Inject constructor(
         // 1. Gather all candidate manga IDs from favourites, history, bookmarks, scrobblings, and stats
         val bookmarksDump = database.getBookmarksDao().dump().toList()
         val scrobblingsDump = database.getScrobblingDao().dumpEnabled().toList()
-        val statsDump = database.getWorkStatsDao().dumpEnabled().toList()
+        val statsDump = database.getStatsDao().dumpEnabled().toList()
 
         val bookmarkMangaIds = bookmarksDump.map { it.first.manga.id }
         val scrobblingMangaIds = scrobblingsDump.map { it.mangaId }
-        val statMangaIds = statsDump.map { it.anchorMangaId }
+        val statMangaIds = statsDump.map { it.mangaId }
 
         val allCandidateIds = (
             workState.candidateMangaIds +
@@ -203,9 +203,9 @@ class UsagiBackupExportRepository @Inject constructor(
 
         // 10. Statistics
         val statisticBackups = statsDump.mapNotNull { stat ->
-            if (stat.anchorMangaId !in validMangaIds) return@mapNotNull null
+            if (stat.mangaId !in validMangaIds) return@mapNotNull null
             UsagiStatisticBackup(
-                mangaId = stat.anchorMangaId,
+                mangaId = stat.mangaId,
                 startedAt = stat.startedAt,
                 duration = stat.duration,
                 pages = stat.pages,

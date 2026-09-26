@@ -12,7 +12,7 @@ const val TRACK_LOG_RETAINED_SIZE = 120
 @Entity(
     tableName = "track_logs",
     indices = [
-        Index(value = ["entity_id"]),
+        Index(value = ["manga_id"]),
     ],
     foreignKeys = [
         ForeignKey(
@@ -26,10 +26,11 @@ const val TRACK_LOG_RETAINED_SIZE = 120
 class TrackLogEntity(
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "id") val id: Long = 0L,
-    @ColumnInfo(name = "owner_id", index = true) val ownerId: Long,
-    @ColumnInfo(name = "manga_id", index = true) val mangaId: Long,
-    @ColumnInfo(name = "entity_id") val entityId: Long? = null,
+    @ColumnInfo(name = "manga_id") val mangaId: Long,
     @ColumnInfo(name = "chapters") val chapters: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "unread") val isUnread: Boolean,
-)
+) {
+    val ownerId: Long get() = mangaId
+    val entityId: Long? get() = null
+}

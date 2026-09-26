@@ -81,9 +81,16 @@ data class TrackingSiteItem(
     val totalEpisodes: Int? = null,
 )
 
+enum class EntityType {
+    WORK,
+    CHARACTER,
+    PERSON,
+    ORGANIZATION,
+}
+
 data class TrackingEntitySearchResult(
     val service: ScrobblerService,
-    val entityType: org.skepsun.kototoro.entitygraph.domain.EntityType,
+    val entityType: EntityType,
     val remoteId: Long,
     val name: String,
     val altName: String? = null,

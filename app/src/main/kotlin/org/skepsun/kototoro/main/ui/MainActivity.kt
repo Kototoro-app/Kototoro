@@ -47,8 +47,7 @@ import org.skepsun.kototoro.core.util.ext.observe
 import org.skepsun.kototoro.core.util.ext.observeEvent
 import org.skepsun.kototoro.details.service.ContentPrefetchService
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.entitygraph.domain.EntityType
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import org.skepsun.kototoro.explore.data.SourcePresetsRepository
 import org.skepsun.kototoro.explore.ui.model.BrowseGroupTab
 import org.skepsun.kototoro.explore.ui.model.SourceTag
@@ -83,7 +82,6 @@ import org.skepsun.kototoro.space.domain.SpaceRepository
 import org.skepsun.kototoro.space.data.SpaceRoutePreferencesController
 import org.skepsun.kototoro.space.data.SpaceSourcePresetController
 import org.skepsun.kototoro.tracker.work.TrackWorker
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -147,13 +145,6 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
 
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
-
-    @Inject
-    lateinit var entityGraphRepository: EntityGraphRepository
-
-    @Inject
-    lateinit var workResolver: WorkResolver
-
 
     private val spaceViewModel by viewModels<SpaceViewModel>()
     private val spaceNavigationSessionViewModel by viewModels<SpaceNavigationSessionViewModel>()
@@ -599,51 +590,15 @@ class MainActivity : BaseComposeActivity(), SystemInstallLauncherHost {
     }
 
     private fun openEntityDetailsWithPreferredProjection(entityId: Long, fallbackLocalMangaId: Long) {
-        lifecycleScope.launch {
-            val preferredLocalMangaId = withContext(Dispatchers.IO) {
-                workResolver.selectPreferredProjection(entityId)
-            }
-            router.openEntityDetails(
-                entityId = entityId,
-                preferredLocalMangaId = preferredLocalMangaId ?: fallbackLocalMangaId,
-            )
-        }
+        val targetMangaId = fallbackLocalMangaId.takeIf { it != 0L } ?: entityId
+        router.openDetails(targetMangaId)
     }
 
     fun resolveDetailsOriginForContent(
         content: Content,
         onResolved: (DetailsOrigin) -> Unit,
     ) {
-        lifecycleScope.launch {
-            val origin = withContext(Dispatchers.IO) {
-                val entityId = workResolver.resolveByMangaId(content.id).entityId
-                val cachedProjection = entityId?.let {
-                    contentDataRepository.findContentById(content.id, withChapters = false)
-                }
-                val canResolveProjection = entityId != null && cachedProjection != null
-                android.util.Log.i(
-                    "DetailsTrace",
-                    "origin.resolve inputId=${content.id} inputSource=${content.source.name} " +
-                        "inputLocale=${content.source.locale} entityId=$entityId " +
-                        "cached=${cachedProjection != null} cachedSource=${cachedProjection?.source?.name} " +
-                        "cachedLocale=${cachedProjection?.source?.locale}",
-                )
-                if (entityId != null && canResolveProjection) {
-                    android.util.Log.i(
-                        "DetailsTrace",
-                        "origin.entityGraph entityId=$entityId initialProjectionId=${content.id}",
-                    )
-                    DetailsOrigin.EntityGraph(
-                        entityId = entityId,
-                        initialProjectionLocalMangaId = content.id,
-                    )
-                } else {
-                    android.util.Log.i("DetailsTrace", "origin.localContent id=${content.id}")
-                    DetailsOrigin.LocalMangaContent(ParcelableContent(content))
-                }
-            }
-            onResolved(origin)
-        }
+        onResolved(DetailsOrigin.LocalMangaContent(ParcelableContent(content)))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

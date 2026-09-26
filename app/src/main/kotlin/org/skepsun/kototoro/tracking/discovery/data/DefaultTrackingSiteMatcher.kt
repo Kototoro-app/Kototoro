@@ -3,19 +3,10 @@ package org.skepsun.kototoro.tracking.discovery.data
 import androidx.room.withTransaction
 import dagger.Reusable
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity
 import org.skepsun.kototoro.core.db.entity.toContent
-import org.skepsun.kototoro.entitygraph.data.attachEntityOwnership
-import org.skepsun.kototoro.entitygraph.data.deleteTrackingLinksByWorkOrMangaCandidates
-import org.skepsun.kototoro.entitygraph.data.findLinksByWorkOrMangaCandidates
-import org.skepsun.kototoro.entitygraph.domain.normalizeStrictTitleKey
-import org.skepsun.kototoro.entitygraph.domain.titleSimilarityScore
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
@@ -25,7 +16,8 @@ import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteDiscoveryServi
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteItem
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatchResult
 import org.skepsun.kototoro.tracking.discovery.domain.TrackingSiteMatcher
-import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.tracking.discovery.domain.normalizeStrictTitleKey
+import org.skepsun.kototoro.tracking.discovery.domain.titleSimilarityScore
 import javax.inject.Inject
 
 private const val AUTO_MATCH_THRESHOLD = 0.82f
@@ -36,7 +28,6 @@ class DefaultTrackingSiteMatcher @Inject constructor(
     private val db: MangaDatabase,
     private val discoveryService: TrackingSiteDiscoveryService,
     private val animeOfflineRepository: AnimeOfflineRepository,
-    private val workResolver: WorkResolver,
 ) : TrackingSiteMatcher {
 
     override suspend fun matchLocalContent(
@@ -49,13 +40,8 @@ class DefaultTrackingSiteMatcher @Inject constructor(
             return@withContext emptyList()
         }
         val dao = db.getTrackingSiteDao()
-        val anchor = resolveTrackingAnchor(content.id)
-        val existing = dao.findLinksByWorkOrMangaCandidates(
-            service = service.id,
-            entityId = anchor.entityId,
-            mangaIds = anchor.candidateMangaIds,
-        )
-        val linked = selectTrackingLink(anchor, existing)
+        val existing = dao.findLinksByManga(service.id, content.id)
+        val linked = existing.firstOrNull()
         if (linked != null) {
             return@withContext listOf(linked.toMatchResult(content))
         }
@@ -104,14 +90,14 @@ class DefaultTrackingSiteMatcher @Inject constructor(
             )
             .take(resultLimit)
             .map {
-                    TrackingSiteMatchResult(
-                        service = service,
-                        remoteId = it.remoteId,
-                        localContent = content,
-                        contentType = content.source.contentType,
-                        confidence = it.confidence,
-                        title = it.title,
-                        url = it.url,
+                TrackingSiteMatchResult(
+                    service = service,
+                    remoteId = it.remoteId,
+                    localContent = content,
+                    contentType = content.source.contentType,
+                    confidence = it.confidence,
+                    title = it.title,
+                    url = it.url,
                     reason = it.reason,
                     isLinked = false,
                     isManual = false,
@@ -121,21 +107,17 @@ class DefaultTrackingSiteMatcher @Inject constructor(
         val best = ranked.firstOrNull()
         if (persistAutoMatch && best != null && best.confidence >= AUTO_MATCH_THRESHOLD) {
             db.withTransaction {
-                db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
+                dao.deleteLinksByManga(service.id, content.id)
                 dao.upsertLink(
-                    db.attachEntityOwnership(
-                        TrackingSiteLinkEntity(
-                            service = service.id,
-                            remoteId = best.remoteId,
-                            entityId = anchor.entityId,
-                            mangaId = anchor.anchorMangaId,
-                            sourceName = content.source.name,
-                            confidence = best.confidence,
-                            isManual = false,
-                            createdAt = System.currentTimeMillis(),
-                            updatedAt = System.currentTimeMillis(),
-                        ),
-                        workResolver,
+                    TrackingSiteLinkEntity(
+                        service = service.id,
+                        remoteId = best.remoteId,
+                        mangaId = content.id,
+                        sourceName = content.source.name,
+                        confidence = best.confidence,
+                        isManual = false,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
                     ),
                 )
             }
@@ -149,36 +131,31 @@ class DefaultTrackingSiteMatcher @Inject constructor(
         remoteId: Long,
     ): TrackingSiteMatchResult = withContext(Dispatchers.Default) {
         val content = db.getMangaDao().find(contentId)?.toContent() ?: error("Missing local content $contentId")
-        val anchor = resolveTrackingAnchor(contentId)
         val title = db.getTrackingSiteDao().findItem(service.id, remoteId)?.title ?: remoteId.toString()
         db.withTransaction {
             val dao = db.getTrackingSiteDao()
-            db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
+            dao.deleteLinksByManga(service.id, contentId)
             dao.upsertLink(
-                db.attachEntityOwnership(
-                    TrackingSiteLinkEntity(
-                        service = service.id,
-                        remoteId = remoteId,
-                        entityId = anchor.entityId,
-                        mangaId = anchor.anchorMangaId,
-                        sourceName = content.source.name,
-                        confidence = 1f,
-                        isManual = true,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                    ),
-                    workResolver,
+                TrackingSiteLinkEntity(
+                    service = service.id,
+                    remoteId = remoteId,
+                    mangaId = contentId,
+                    sourceName = content.source.name,
+                    confidence = 1f,
+                    isManual = true,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
                 ),
             )
         }
-            TrackingSiteMatchResult(
-                service = service,
-                remoteId = remoteId,
-                localContent = content,
-                contentType = content.source.contentType,
-                confidence = 1f,
-                title = title,
-                url = db.getTrackingSiteDao().findItem(service.id, remoteId)?.siteUrl,
+        TrackingSiteMatchResult(
+            service = service,
+            remoteId = remoteId,
+            localContent = content,
+            contentType = content.source.contentType,
+            confidence = 1f,
+            title = title,
+            url = db.getTrackingSiteDao().findItem(service.id, remoteId)?.siteUrl,
             reason = "manual",
             isLinked = true,
             isManual = true,
@@ -189,46 +166,7 @@ class DefaultTrackingSiteMatcher @Inject constructor(
         service: ScrobblerService,
         contentId: Long,
     ) {
-        val anchor = resolveTrackingAnchor(contentId)
-        db.deleteTrackingLinksByWorkOrMangaCandidates(service.id, anchor.candidateMangaIds, workResolver)
-    }
-
-    private suspend fun resolveTrackingAnchor(mangaId: Long): TrackingAnchor {
-        val identity = workResolver.resolveByMangaId(mangaId)
-        val entityId = identity.entityId
-        if (entityId == null) {
-            return TrackingAnchor(
-                entityId = null,
-                requestedMangaId = mangaId,
-                anchorMangaId = mangaId,
-                candidateMangaIds = listOf(mangaId),
-            )
-        }
-        val localMangaIds = identity.localMangaIds.toList()
-        val preferredLocalMangaId = identity.preferredMangaId
-        return TrackingAnchor(
-            entityId = entityId,
-            requestedMangaId = mangaId,
-            anchorMangaId = preferredLocalMangaId ?: mangaId,
-            candidateMangaIds = buildList {
-                add(mangaId)
-                preferredLocalMangaId?.let(::add)
-                addAll(localMangaIds)
-            }.distinct().ifEmpty { listOf(mangaId) },
-        )
-    }
-
-    private fun selectTrackingLink(
-        anchor: TrackingAnchor,
-        links: List<TrackingSiteLinkEntity>,
-    ): TrackingSiteLinkEntity? {
-        return links.sortedWith(
-            compareByDescending<TrackingSiteLinkEntity> { it.mangaId == anchor.requestedMangaId }
-                .thenByDescending { it.mangaId == anchor.anchorMangaId }
-                .thenByDescending { it.isManual }
-                .thenByDescending { it.confidence }
-                .thenByDescending { it.updatedAt },
-        ).firstOrNull()
+        db.getTrackingSiteDao().deleteLinksByManga(service.id, contentId)
     }
 
     private fun buildCandidateQueries(content: Content): List<String> {
@@ -250,31 +188,24 @@ class DefaultTrackingSiteMatcher @Inject constructor(
             item.primaryTitle?.let { add(it) }
             item.secondaryTitle?.let { add(it) }
         }.filter { it.isNotBlank() }
-        if (localTitles.isEmpty() || remoteTitles.isEmpty()) {
-            return 0f
-        }
-        var best = 0f
-        for (localTitle in localTitles) {
-            val normalizedLocal = normalizeTitle(localTitle)
-            for (candidateTitle in remoteTitles) {
-                val normalizedRemote = normalizeTitle(candidateTitle)
-                if (normalizedLocal.isEmpty() || normalizedRemote.isEmpty()) {
-                    continue
-                }
-                val similarity = titleSimilarityScore(normalizedLocal, normalizedRemote)
-                if (similarity > best) {
-                    best = similarity
+
+        var maxScore = 0f
+        for (local in localTitles) {
+            for (remote in remoteTitles) {
+                val score = titleSimilarityScore(local, remote)
+                if (score > maxScore) {
+                    maxScore = score
                 }
             }
         }
-        return best.coerceIn(0f, 1f)
+        return maxScore
     }
 
-    private fun normalizeTitle(title: String): String {
-        return normalizeStrictTitleKey(title)
+    private fun normalizeTitle(value: String): String {
+        return normalizeStrictTitleKey(value)
     }
 
-    private suspend fun org.skepsun.kototoro.core.db.entity.TrackingSiteLinkEntity.toMatchResult(content: Content): TrackingSiteMatchResult {
+    private suspend fun TrackingSiteLinkEntity.toMatchResult(content: Content): TrackingSiteMatchResult {
         return TrackingSiteMatchResult(
             service = ScrobblerService.entries.first { it.id == this.service },
             remoteId = remoteId,
@@ -295,12 +226,5 @@ class DefaultTrackingSiteMatcher @Inject constructor(
         val url: String?,
         val confidence: Float,
         val reason: String,
-    )
-
-    private data class TrackingAnchor(
-        val entityId: Long?,
-        val requestedMangaId: Long,
-        val anchorMangaId: Long,
-        val candidateMangaIds: List<Long>,
     )
 }

@@ -8,156 +8,131 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.model.isNsfw
+import org.skepsun.kototoro.core.db.entity.MangaEntity
+import org.skepsun.kototoro.core.db.entity.TagEntity
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentRating
-import org.skepsun.kototoro.parsers.model.ContentSource
-import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentType
-import org.skepsun.kototoro.parsers.model.RATING_UNKNOWN
 import org.skepsun.kototoro.scrobbling.common.domain.Scrobbler
 import org.skepsun.kototoro.space.domain.BuiltInSpaces
 import org.skepsun.kototoro.space.domain.SpaceContentPolicy
 import org.skepsun.kototoro.tracker.domain.CheckNewChaptersUseCase
 import org.skepsun.kototoro.tracker.domain.SourceTrackerEventBus
-import org.skepsun.kototoro.work.domain.WorkAggregate
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
-import org.skepsun.kototoro.work.domain.WorkIdentity
-import org.skepsun.kototoro.work.domain.WorkMigrationState
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Provider
 
 class HistoryRepositoryResumeFilterTest {
 
-	private val workAggregateRepository = mockk<WorkAggregateRepository>()
+	private val historyDao = mockk<HistoryDao>()
 	private val spaceContentPolicy = mockk<SpaceContentPolicy>()
 	private val repository = HistoryRepository(
-		db = mockk<MangaDatabase>(relaxed = true),
+		db = mockk<MangaDatabase>(relaxed = true) {
+			every { getHistoryDao() } returns historyDao
+		},
 		settings = mockk<AppSettings>(relaxed = true),
 		scrobblers = emptySet<Scrobbler>(),
 		mangaRepository = mockk<ContentDataRepository>(relaxed = true),
 		localObserver = mockk<HistoryLocalObserver>(relaxed = true),
 		newChaptersUseCaseProvider = mockk<Provider<CheckNewChaptersUseCase>>(relaxed = true),
-		entityGraphRepository = mockk<EntityGraphRepository>(relaxed = true),
-		workResolver = mockk<WorkResolver>(relaxed = true),
-		workAggregateRepository = workAggregateRepository,
 		spaceContentPolicy = spaceContentPolicy,
 		sourceTrackerEvents = SourceTrackerEventBus,
 	)
 
 	@Test
 	fun `adult history is skipped when selecting resume content`() = runTest {
-		val adult = content(1L, ContentRating.ADULT)
-		val safe = content(2L, ContentRating.SAFE)
-		coEvery {
-			workAggregateRepository.findRecentHistoryAggregates(any(), null, null)
-		} answers {
-			listOf(aggregate(adult), aggregate(safe)).take(firstArg())
-		}
+		val rows = listOf(row(1L, ContentRating.ADULT), row(2L, ContentRating.SAFE))
+		coEvery { historyDao.findRecent(any()) } answers { rows.take(firstArg()) }
 
-		assertEquals(safe, repository.getLastOrNull(excludeNsfw = true))
-		assertEquals(adult, repository.getLastOrNull(excludeNsfw = false))
+		assertEquals(2L, repository.getLastOrNull(excludeNsfw = true)?.id)
+		assertEquals(1L, repository.getLastOrNull(excludeNsfw = false)?.id)
 	}
 
 	@Test
 	fun `resume search continues past a full adult batch`() = runTest {
-		val safe = content(100L, ContentRating.SAFE)
-		val history = List(32) { index -> aggregate(content(index.toLong(), ContentRating.ADULT)) } + aggregate(safe)
-		coEvery {
-			workAggregateRepository.findRecentHistoryAggregates(any(), null, null)
-		} answers {
-			history.take(firstArg())
-		}
+		val rows = List(32) { index -> row(index.toLong(), ContentRating.ADULT) } + row(100L, ContentRating.SAFE)
+		coEvery { historyDao.findRecent(any()) } answers { rows.take(firstArg()) }
 
-		assertEquals(safe, repository.getLastOrNull(excludeNsfw = true))
-		coVerify(exactly = 1) {
-			workAggregateRepository.findRecentHistoryAggregates(32, null, null)
-		}
-		coVerify(exactly = 1) {
-			workAggregateRepository.findRecentHistoryAggregates(64, null, null)
-		}
+		assertEquals(100L, repository.getLastOrNull(excludeNsfw = true)?.id)
+		coVerify(exactly = 1) { historyDao.findRecent(32) }
+		coVerify(exactly = 1) { historyDao.findRecent(64) }
 	}
 
 	@Test
-	fun `space resume applies adult filtering inside the selected space`() = runTest {
-		val safeAnime = content(2L, ContentRating.SAFE, ContentType.VIDEO)
+	fun `space resume filters by space content types and adult rating`() = runTest {
 		every { spaceContentPolicy.allowedSourceNames(BuiltInSpaces.Anime) } returns null
+		every { spaceContentPolicy.allowedTypes(BuiltInSpaces.Anime) } returns setOf(ContentType.VIDEO)
 		coEvery {
-			workAggregateRepository.findRecentHistoryAggregates(any(), BuiltInSpaces.Anime, null)
+			historyDao.findRecentForSpace(listOf(ContentType.VIDEO.name), any())
 		} returns listOf(
-			aggregate(content(1L, ContentRating.ADULT, ContentType.HENTAI_VIDEO)),
-			aggregate(safeAnime),
+			row(1L, ContentRating.ADULT, ContentType.VIDEO),
+			row(2L, ContentRating.SAFE, ContentType.VIDEO),
 		)
 
 		assertEquals(
-			safeAnime,
-			repository.getLastOrNull(spaceId = BuiltInSpaces.Anime, excludeNsfw = true),
+			2L,
+			repository.getLastOrNull(spaceId = BuiltInSpaces.Anime, excludeNsfw = true)?.id,
 		)
 	}
 
 	@Test
 	fun `popular filter options reuse one history load`() = runTest {
-		val alphaSource = TestContentSource(ContentType.MANGA, "alpha")
-		val betaSource = TestContentSource(ContentType.MANGA, "beta")
-		val action = ContentTag("Action", "action", alphaSource)
-		val drama = ContentTag("Drama", "drama", alphaSource)
-		coEvery {
-			workAggregateRepository.findRecentHistoryAggregates(Int.MAX_VALUE, null, null)
-		} returns listOf(
-			aggregate(content(1L, ContentRating.SAFE, tags = setOf(action, drama), source = alphaSource)),
-			aggregate(content(2L, ContentRating.SAFE, tags = setOf(action), source = betaSource)),
-			aggregate(content(3L, ContentRating.SAFE, tags = setOf(action), source = alphaSource)),
+		val action = tag(1L, "Action", "alpha")
+		val drama = tag(2L, "Drama", "alpha")
+		coEvery { historyDao.findRecent(Int.MAX_VALUE) } returns listOf(
+			row(1L, ContentRating.SAFE, tags = listOf(action, drama), source = "alpha"),
+			row(2L, ContentRating.SAFE, tags = listOf(action), source = "beta"),
+			row(3L, ContentRating.SAFE, tags = listOf(action), source = "alpha"),
 		)
 
 		val options = repository.getPopularFilterOptions(tagLimit = 1, sourceLimit = 1)
 
-		assertEquals(listOf(action), options.tags)
+		assertEquals(listOf("Action"), options.tags.map { it.title })
 		assertEquals(listOf("alpha"), options.sources.map { it.name })
-		coVerify(exactly = 1) {
-			workAggregateRepository.findRecentHistoryAggregates(Int.MAX_VALUE, null, null)
-		}
+		coVerify(exactly = 1) { historyDao.findRecent(Int.MAX_VALUE) }
 	}
 
-	private fun aggregate(content: Content) = WorkAggregate(
-		identity = WorkIdentity(
-			entityId = null,
-			requestedMangaId = content.id,
-			preferredMangaId = content.id,
-			localMangaIds = setOf(content.id),
-			migrationState = WorkMigrationState.VALID,
-		),
-		displayProjection = content,
-		projections = listOf(content),
+	private fun tag(id: Long, title: String, source: String) = TagEntity(
+		id = id,
+		title = title,
+		key = title.lowercase(),
+		source = source,
+		isPinned = false,
 	)
 
-	private fun content(
+	private fun row(
 		id: Long,
 		contentRating: ContentRating,
 		contentType: ContentType = ContentType.MANGA,
-		tags: Set<ContentTag> = emptySet(),
-		source: ContentSource = TestContentSource(contentType),
-	) = Content(
-		id = id,
-		title = "Work $id",
-		altTitles = emptySet(),
-		url = "/$id",
-		publicUrl = "https://example.org/$id",
-		rating = RATING_UNKNOWN,
-		contentRating = contentRating,
-		coverUrl = null,
+		tags: List<TagEntity> = emptyList(),
+		source: String = "test",
+	) = HistoryWithContent(
+		history = HistoryEntity(
+			mangaId = id,
+			createdAt = id,
+			updatedAt = id,
+			chapterId = 0L,
+			page = 0,
+			scroll = 0f,
+			percent = 0f,
+			deletedAt = 0L,
+			chaptersCount = 0,
+		),
+		manga = MangaEntity(
+			id = id,
+			title = "Work $id",
+			altTitles = null,
+			url = "/$id",
+			publicUrl = "https://example.org/$id",
+			rating = -1f,
+			isNsfw = contentRating == ContentRating.ADULT,
+			contentRating = contentRating.name,
+			coverUrl = "",
+			largeCoverUrl = null,
+			state = null,
+			authors = null,
+			source = source,
+			contentType = contentType.name,
+		),
 		tags = tags,
-		state = null,
-		authors = emptySet(),
-		source = source,
-	).also { check(it.isNsfw() == (contentRating == ContentRating.ADULT)) }
-
-	private data class TestContentSource(
-		override val contentType: ContentType,
-		override val name: String = "test-$contentType",
-	) : ContentSource {
-		override val locale = ""
-	}
+	)
 }

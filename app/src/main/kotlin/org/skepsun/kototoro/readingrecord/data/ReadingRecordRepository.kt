@@ -7,15 +7,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapLatest
 import org.skepsun.kototoro.core.db.MangaDatabase
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_GRAPH_BINDING
-import org.skepsun.kototoro.core.db.TABLE_ENTITY_PREFERENCES
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.parser.ContentDataRepository
 import org.skepsun.kototoro.core.prefs.AppSettings
 import org.skepsun.kototoro.core.db.entity.toContent
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.reader.ui.ReaderState
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 data class ReadingRecordSummary(
@@ -35,36 +32,27 @@ class ReadingRecordRepository @Inject constructor(
     private val db: MangaDatabase,
     private val settings: AppSettings,
     private val mangaRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
 ) {
 
     fun observeSnapshot(mangaId: Long): Flow<ReadingRecordSnapshot> {
-        return db.invalidationTracker.createFlow(
-            tables = arrayOf(
-                TABLE_ENTITY_GRAPH_BINDING,
-                TABLE_ENTITY_PREFERENCES,
-            ),
-            emitInitialState = true,
-        ).mapLatest {
-            resolveReadingRecordReadIds(mangaId)
-        }.distinctUntilChanged().flatMapLatest { anchorIds ->
-            val dao = db.getReadingRecordDao()
-            val summaryFlow = combine(
-                dao.observeTotalDuration(anchorIds),
-                dao.observeReadingDays(anchorIds),
-                dao.observeLastReadAt(anchorIds),
-            ) { totalDuration, readingDays, lastReadAt ->
-                ReadingRecordSummary(
-                    totalDuration = totalDuration,
-                    readingDays = readingDays,
-                    lastReadAt = lastReadAt,
-                )
-            }
-            combine(
-                summaryFlow,
-                dao.observeSessions(anchorIds),
-                dao.observeChapterAggregates(anchorIds),
-                dao.observeJumpPoints(anchorIds, DEFAULT_JUMP_LIMIT),
+        val anchorIds = listOf(mangaId)
+        val dao = db.getReadingRecordDao()
+        val summaryFlow = combine(
+            dao.observeTotalDuration(anchorIds),
+            dao.observeReadingDays(anchorIds),
+            dao.observeLastReadAt(anchorIds),
+        ) { totalDuration, readingDays, lastReadAt ->
+            ReadingRecordSummary(
+                totalDuration = totalDuration,
+                readingDays = readingDays,
+                lastReadAt = lastReadAt,
+            )
+        }
+        return combine(
+            summaryFlow,
+            dao.observeSessions(anchorIds),
+            dao.observeChapterAggregates(anchorIds),
+            dao.observeJumpPoints(anchorIds, DEFAULT_JUMP_LIMIT),
             ) { summary, sessions, chapters, jumpPoints ->
                 val effectiveSummary = summary.copy(
                     totalDuration = summary.totalDuration.takeIf { it > 0L }
@@ -80,7 +68,6 @@ class ReadingRecordRepository @Inject constructor(
                     jumpPoints = jumpPoints,
                 )
             }
-        }
     }
 
     suspend fun recordSession(
@@ -165,23 +152,12 @@ class ReadingRecordRepository @Inject constructor(
 
     fun shouldSkip(manga: Content): Boolean = settings.isIncognitoModeEnabled(manga.isNsfw())
 
-    private suspend fun resolveReadingRecordReadIds(mangaId: Long): List<Long> {
-        // Reading records stay physically keyed by local manga ids, but reads aggregate across
-        // every local projection in the same work so source switching keeps one logical timeline.
-        return workResolver.resolveByMangaId(mangaId)
-            .localMangaIds
-            .ifEmpty { setOf(mangaId) }
-            .toList()
+    private fun resolveReadingRecordReadIds(mangaId: Long): List<Long> {
+        return listOf(mangaId)
     }
 
-    private suspend fun resolveReadingRecordAnchorContent(manga: Content): Content {
-        // Writes land on the preferred local projection for the owning work. If no work exists yet,
-        // the current projection remains the anchor for compatibility with legacy storage.
-        val anchorId = workResolver.resolveByMangaId(manga.id).preferredMangaId ?: manga.id
-        if (anchorId == manga.id) {
-            return manga
-        }
-        return db.getMangaDao().find(anchorId)?.toContent() ?: manga
+    private fun resolveReadingRecordAnchorContent(manga: Content): Content {
+        return manga
     }
 
     private companion object {

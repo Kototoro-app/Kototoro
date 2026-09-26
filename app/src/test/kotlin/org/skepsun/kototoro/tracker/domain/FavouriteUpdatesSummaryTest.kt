@@ -47,9 +47,7 @@ class FavouriteUpdatesSummaryTest : StringSpec({
 })
 
 private fun track(newChapters: Int) = TrackEntity(
-    ownerId = 1L,
     mangaId = 1L,
-    entityId = 1L,
     lastChapterId = 0L,
     newChapters = newChapters,
     lastCheckTime = 0L,

@@ -46,7 +46,6 @@ import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.tracker.domain.TrackingRepository
 import org.skepsun.kototoro.tracker.work.TrackWorker
 import org.skepsun.kototoro.tracker.work.UpdateCheckRequest
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FavouritesContainerViewModelTest {
@@ -135,7 +134,6 @@ class FavouritesContainerViewModelTest {
             favouriteLibrarySnapshotStore = snapshotStore,
             spaceContentPolicy = mockk<SpaceContentPolicy>(relaxed = true),
             sourcePresetsRepository = mockk<SourcePresetsRepository>(relaxed = true),
-            workAggregateRepository = mockk<WorkAggregateRepository>(relaxed = true),
             cardMapper = mockk<FavouritesCardMapper>(relaxed = true),
             contentResolver = mockk<FavouriteContentResolver>(relaxed = true),
             quickFilterFactory = mockk<FavoritesListQuickFilter.Factory>(relaxed = true),

@@ -3,8 +3,8 @@ package org.skepsun.kototoro.details.ui
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
 
 class EntityRelationSectionDeduplicationTest {
 

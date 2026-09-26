@@ -66,7 +66,6 @@ import org.skepsun.kototoro.parsers.model.SortOrder
 import org.skepsun.kototoro.reader.ui.PageSaveHelper
 import org.skepsun.kototoro.remotelist.ui.RemoteListViewModel
 import org.skepsun.kototoro.search.ui.compose.AppSearchContentListRoute
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -82,9 +81,6 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
 
     @Inject
     lateinit var contentDataRepository: ContentDataRepository
-
-    @Inject
-    lateinit var workResolver: WorkResolver
 
     private lateinit var pageSaveHelper: PageSaveHelper
 
@@ -277,25 +273,11 @@ class ContentListActivity : BaseComposeActivity(), FilterCoordinator.Owner {
         sharedElementKey: String?,
         onOpened: (DetailsOrigin) -> Unit,
     ) {
-        lifecycleScope.launch {
-            val origin = withContext(Dispatchers.IO) {
-                val entityId = workResolver.resolveByMangaId(content.id).entityId
-                val canResolveProjection = entityId != null &&
-                    contentDataRepository.findContentById(content.id, withChapters = false) != null
-                if (entityId != null && canResolveProjection) {
-                    DetailsOrigin.EntityGraph(
-                        entityId = entityId,
-                        initialProjectionLocalMangaId = content.id,
-                    )
-                } else {
-                    DetailsOrigin.LocalMangaContent(
-                        org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
-                    )
-                }
-            }
-            PendingDetailsNavigation.set(origin, sharedElementKey)
-            onOpened(origin)
-        }
+        val origin = DetailsOrigin.LocalMangaContent(
+            org.skepsun.kototoro.core.model.parcelable.ParcelableContent(content),
+        )
+        PendingDetailsNavigation.set(origin, sharedElementKey)
+        onOpened(origin)
     }
 }
 

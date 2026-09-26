@@ -49,26 +49,14 @@ abstract class TrackingSiteDao {
     @Query("SELECT * FROM tracking_site_links WHERE service = :service AND remote_id = :remoteId LIMIT 1")
     abstract suspend fun findLink(service: Int, remoteId: Long): TrackingSiteLinkEntity?
 
-    @Query("SELECT * FROM tracking_site_links WHERE service = :service AND entity_id = :entityId")
-    abstract suspend fun findLinksByEntity(service: Int, entityId: Long): List<TrackingSiteLinkEntity>
-
     @Query("SELECT * FROM tracking_site_links WHERE service = :service AND manga_id = :mangaId")
     abstract suspend fun findLinksByManga(service: Int, mangaId: Long): List<TrackingSiteLinkEntity>
-
-    @Query("SELECT * FROM tracking_site_links WHERE service = :service AND entity_id IN (:entityIds)")
-    abstract suspend fun findLinksByEntityIds(service: Int, entityIds: List<Long>): List<TrackingSiteLinkEntity>
 
     @Query("SELECT * FROM tracking_site_links WHERE service = :service AND manga_id IN (:mangaIds)")
     abstract suspend fun findLinksByMangaIds(service: Int, mangaIds: List<Long>): List<TrackingSiteLinkEntity>
 
-    @Query("SELECT * FROM tracking_site_links WHERE entity_id = :entityId")
-    abstract suspend fun findLinksByEntity(entityId: Long): List<TrackingSiteLinkEntity>
-
     @Query("SELECT * FROM tracking_site_links WHERE manga_id = :mangaId")
     abstract suspend fun findLinksByManga(mangaId: Long): List<TrackingSiteLinkEntity>
-
-    @Query("SELECT * FROM tracking_site_links WHERE entity_id IN (:entityIds)")
-    abstract suspend fun findLinksByEntityIds(entityIds: List<Long>): List<TrackingSiteLinkEntity>
 
     @Query("SELECT * FROM tracking_site_links WHERE manga_id IN (:mangaIds)")
     abstract suspend fun findLinksByMangaIds(mangaIds: List<Long>): List<TrackingSiteLinkEntity>
@@ -82,14 +70,8 @@ abstract class TrackingSiteDao {
     @Query("SELECT * FROM tracking_site_links WHERE service = :service AND remote_id = :remoteId")
     abstract fun observeLinks(service: Int, remoteId: Long): Flow<List<TrackingSiteLinkEntity>>
 
-    @Query("SELECT * FROM tracking_site_links WHERE entity_id = :entityId")
-    abstract fun observeLinksByEntity(entityId: Long): Flow<List<TrackingSiteLinkEntity>>
-
     @Query("SELECT * FROM tracking_site_links WHERE manga_id = :mangaId")
     abstract fun observeLinksByManga(mangaId: Long): Flow<List<TrackingSiteLinkEntity>>
-
-    @Query("SELECT * FROM tracking_site_links WHERE entity_id IN (:entityIds)")
-    abstract fun observeLinksByEntityIds(entityIds: List<Long>): Flow<List<TrackingSiteLinkEntity>>
 
     @Query("SELECT * FROM tracking_site_links WHERE manga_id IN (:mangaIds)")
     abstract fun observeLinksByMangaIds(mangaIds: List<Long>): Flow<List<TrackingSiteLinkEntity>>
@@ -103,14 +85,8 @@ abstract class TrackingSiteDao {
     @Query("DELETE FROM tracking_site_links WHERE service = :service AND remote_id = :remoteId AND manga_id = :mangaId")
     abstract suspend fun deleteLink(service: Int, remoteId: Long, mangaId: Long)
 
-    @Query("DELETE FROM tracking_site_links WHERE service = :service AND entity_id = :entityId")
-    abstract suspend fun deleteLinksByEntity(service: Int, entityId: Long)
-
     @Query("DELETE FROM tracking_site_links WHERE service = :service AND manga_id = :mangaId")
     abstract suspend fun deleteLinksByManga(service: Int, mangaId: Long)
-
-    @Query("DELETE FROM tracking_site_links WHERE service = :service AND entity_id IN (:entityIds)")
-    abstract suspend fun deleteLinksByEntityIds(service: Int, entityIds: List<Long>)
 
     @Query("DELETE FROM tracking_site_links")
     abstract suspend fun deleteAllLinks()
@@ -120,4 +96,28 @@ abstract class TrackingSiteDao {
 
     @Query("DELETE FROM tracking_site_links WHERE service = :service")
     abstract suspend fun deleteLinksByService(service: Int)
+
+    suspend fun findLinksByEntity(service: Int, entityId: Long): List<TrackingSiteLinkEntity> =
+        findLinksByManga(service, entityId)
+
+    suspend fun findLinksByEntityIds(service: Int, entityIds: List<Long>): List<TrackingSiteLinkEntity> =
+        findLinksByMangaIds(service, entityIds)
+
+    suspend fun findLinksByEntity(entityId: Long): List<TrackingSiteLinkEntity> =
+        findLinksByManga(entityId)
+
+    suspend fun findLinksByEntityIds(entityIds: List<Long>): List<TrackingSiteLinkEntity> =
+        findLinksByMangaIds(entityIds)
+
+    fun observeLinksByEntity(entityId: Long): Flow<List<TrackingSiteLinkEntity>> =
+        observeLinksByManga(entityId)
+
+    fun observeLinksByEntityIds(entityIds: List<Long>): Flow<List<TrackingSiteLinkEntity>> =
+        observeLinksByMangaIds(entityIds)
+
+    suspend fun deleteLinksByEntity(service: Int, entityId: Long) =
+        deleteLinksByManga(service, entityId)
+
+    suspend fun deleteLinksByEntityIds(service: Int, entityIds: List<Long>) =
+        deleteLinksByMangaIds(service, entityIds)
 }

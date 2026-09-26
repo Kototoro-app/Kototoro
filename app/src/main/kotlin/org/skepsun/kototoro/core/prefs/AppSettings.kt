@@ -466,18 +466,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_LABELS_ALWAYS_VISIBLE, value) }
 
-    var isEntityGraphMigrated: Boolean
-        get() = prefs.getBoolean(KEY_ENTITY_GRAPH_MIGRATED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ENTITY_GRAPH_MIGRATED, value) }
-
-    var isLegacyFavouriteProjectionMigrationCompleted: Boolean
-        get() = prefs.getBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, false)
-        set(value) = prefs.edit { putBoolean(KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED, value) }
-
-    var isLegacyEntityNameCollisionRepairCompleted: Boolean
-        get() = prefs.getBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, false)
-        set(value) = prefs.edit { putBoolean(KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED, value) }
-
     var isNavBarPinned: Boolean
         get() = prefs.getBoolean(KEY_NAV_PINNED, true)
         set(value) = prefs.edit { putBoolean(KEY_NAV_PINNED, value) }
@@ -2571,10 +2559,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         get() = prefs.getBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, false)
         set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED, value) }
 
-    var requiresWorkMigrationNormalization: Boolean
-        get() = prefs.getBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, false)
-        set(value) = prefs.edit { putBoolean(KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION, value) }
-
     var isReadingTimeEstimationEnabled: Boolean
         get() = prefs.getBoolean(KEY_READING_TIME, true)
         set(value) = prefs.edit { putBoolean(KEY_READING_TIME, value) }
@@ -3395,8 +3379,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
             "backup_periodic_webdav_last_authoritative_semantic_schema_version"
         const val KEY_WORK_MIGRATION_SYNC_WRITE_BLOCKED =
             "work_migration_sync_write_blocked"
-        const val KEY_WORK_MIGRATION_REQUIRES_NORMALIZATION =
-            "work_migration_requires_normalization"
         const val KEY_BACKUP_WEBDAV_LAST_ACTIONS = "backup_periodic_webdav_last_actions"
 
         // WebDAV 自动同步与数据版本
@@ -3423,11 +3405,6 @@ class AppSettings @Inject constructor(@ApplicationContext private val context: C
         const val KEY_SELECTED_SOURCE_FILTER = "selected_source_filter"
         const val KEY_SELECTED_SOURCE_TAGS = "selected_source_tags"
         const val KEY_SELECTED_ADULT_FILTER = "selected_adult_filter"
-        const val KEY_ENTITY_GRAPH_MIGRATED = "entity_graph_migrated"
-        const val KEY_LEGACY_FAVOURITE_PROJECTION_MIGRATION_COMPLETED =
-            "legacy_favourite_projection_migration_completed"
-        const val KEY_LEGACY_ENTITY_NAME_COLLISION_REPAIR_COMPLETED =
-            "legacy_entity_name_collision_repair_completed"
 
         // keys for non-persistent preferences
         const val KEY_APP_VERSION = "app_version"

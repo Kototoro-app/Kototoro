@@ -29,7 +29,6 @@ import org.skepsun.kototoro.core.util.ext.toBitmapOrNull
 import org.skepsun.kototoro.details.ui.model.DetailsOrigin
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.parsers.model.ContentChapter
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 
 class TrackerNotificationHelper @Inject constructor(
@@ -37,7 +36,6 @@ class TrackerNotificationHelper @Inject constructor(
     private val settings: AppSettings,
     private val coil: ImageLoader,
     private val contentDataRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
 ) {
 
     fun getAreNotificationsEnabled(): Boolean {
@@ -160,14 +158,9 @@ class TrackerNotificationHelper @Inject constructor(
         return builder.build()
     }
 
-    private suspend fun resolveDetailsIntent(content: Content) = AppRouter.detailsIntent(
+    private fun resolveDetailsIntent(content: Content) = AppRouter.detailsIntent(
         applicationContext,
-        workResolver.resolveByMangaId(content.id).entityId?.let { entityId ->
-            DetailsOrigin.EntityGraph(
-                entityId = entityId,
-                initialProjectionLocalMangaId = content.id,
-            )
-        } ?: DetailsOrigin.LocalMangaContent(ParcelableContent(content)),
+        DetailsOrigin.LocalMangaContent(ParcelableContent(content)),
     )
 
     fun updateChannels() {

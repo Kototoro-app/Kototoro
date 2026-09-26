@@ -26,20 +26,6 @@ object AppRouteNames {
  */
 internal const val MAIN_SHELL_BACKDROP_OWNER_PREFIX = "main_shell"
 
-fun encodeEntityOrganizeSelection(ids: Set<Long>): String {
-    return ids.sorted().joinToString(separator = ",")
-}
-
-fun parseEntityOrganizeSelection(value: String): Set<Long> {
-    return value
-        .split(',')
-        .asSequence()
-        .map(String::trim)
-        .filter(String::isNotEmpty)
-        .mapNotNull(String::toLongOrNull)
-        .toSet()
-}
-
 fun topLevelKeyForBottomNavItem(@IdRes itemId: Int): TopLevelNavKey = when (itemId) {
     R.id.nav_home -> HomeNavKey
     R.id.nav_history -> HistoryNavKey

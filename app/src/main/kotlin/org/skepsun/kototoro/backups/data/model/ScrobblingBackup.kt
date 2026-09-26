@@ -3,8 +3,12 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.resolveScrobblingOwnerId
 
+/**
+ * Wire format of one scrobbling row. `owner_id` / `entity_id` are kept as payload fields
+ * so backups written by the entity-era app still deserialize, but they no longer carry
+ * identity: a scrobbling is owned by its `manga_id` projection.
+ */
 @Serializable
 class ScrobblingBackup(
     @SerialName("scrobbler") val scrobbler: Int,
@@ -43,8 +47,6 @@ class ScrobblingBackup(
     fun toEntity() = ScrobblingEntity(
         scrobbler = scrobbler,
         id = id,
-        ownerId = ownerId ?: resolveScrobblingOwnerId(entityId, mangaId),
-        entityId = entityId,
         mangaId = mangaId,
         targetId = targetId,
         status = status,

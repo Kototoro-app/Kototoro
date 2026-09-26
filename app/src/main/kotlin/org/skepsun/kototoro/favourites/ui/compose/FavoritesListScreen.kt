@@ -29,7 +29,6 @@ fun KototoroFavoritesListScreen(
     contentPadding: PaddingValues,
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
     onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
-    onEntityOrganizeSelection: ((Set<Long>) -> Unit)? = null,
     sharedTransitionEnabled: Boolean = true,
     isActivePage: Boolean = true,
     sortOrders: List<ListSortOrder> = emptyList(),
@@ -148,10 +147,6 @@ fun KototoroFavoritesListScreen(
         onPinSelection = { ids -> listHost.togglePinned(ids) },
         onMarkAsCompletedSelection = { items -> listHost.markAsRead(items.map { it.id }) },
         onResolveSelectionContents = { ids -> listHost.resolveSelectedContents(ids) },
-        onFixSelection = { ids ->
-            onEntityOrganizeSelection?.invoke(listHost.resolveSelectionToMangaIds(ids))
-        },
-        fixSelectionActionTitleRes = R.string.entity_organize_title,
         showQuickFilterInline = true,
         quickFilterLeadingContent = if (sortOrders.isNotEmpty()) {
             {

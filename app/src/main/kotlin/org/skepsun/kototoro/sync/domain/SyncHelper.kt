@@ -42,8 +42,8 @@ import org.skepsun.kototoro.core.util.ext.buildContentValues
 import org.skepsun.kototoro.core.util.ext.map
 import org.skepsun.kototoro.core.util.ext.mapToSet
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.sync.data.SyncAuthApi
 import org.skepsun.kototoro.sync.data.SyncAuthenticator
 import org.skepsun.kototoro.sync.data.SyncInterceptor
@@ -54,7 +54,6 @@ import org.skepsun.kototoro.sync.data.model.HistorySyncDto
 import org.skepsun.kototoro.sync.data.model.ContentSyncDto
 import org.skepsun.kototoro.sync.data.model.ContentTagSyncDto
 import org.skepsun.kototoro.sync.data.model.SyncDto
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.net.HttpURLConnection
 import java.util.concurrent.TimeUnit
 
@@ -65,7 +64,6 @@ class SyncHelper @AssistedInject constructor(
     @Assisted private val provider: ContentProviderClient,
     private val settings: SyncSettings,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) {
 
     private val authorityHistory = context.getString(R.string.sync_authority_history)
@@ -152,7 +150,7 @@ class SyncHelper @AssistedInject constructor(
         }
         val result = if (operations.isEmpty()) emptyArray() else provider.applyBatch(operations)
         history.forEach { dto ->
-            upsertWorkHistory(dto)
+            upsertHistoryEntry(dto)
         }
         return result
     }
@@ -175,7 +173,7 @@ class SyncHelper @AssistedInject constructor(
         }
         val result = if (operations.isEmpty()) emptyArray() else provider.applyBatch(operations)
         favourites.forEach { dto ->
-            upsertWorkFavourite(dto)
+            upsertFavouriteEntry(dto)
         }
         return result
     }
@@ -205,13 +203,11 @@ class SyncHelper @AssistedInject constructor(
     }
 
     private fun getHistory(): List<HistorySyncDto> {
-        val workHistory = runBlocking { db.getWorkHistoryDao().dump().toList() }
-        return workHistory.mapNotNull { entry: WorkHistoryEntity ->
-            val mangaId = resolveSyncMangaIdForEntity(entry.entityId, entry.anchorMangaId) ?: return@mapNotNull null
+        // Tombstones matter for sync, so deleted rows are exported too.
+        val entries = runBlocking { db.getHistoryDao().findAllEntriesIncludingDeleted() }
+        return entries.map { entry ->
             HistorySyncDto(
-                entityId = entry.entityId,
-                anchorMangaId = entry.anchorMangaId,
-                mangaId = mangaId,
+                mangaId = entry.mangaId,
                 createdAt = entry.createdAt,
                 updatedAt = entry.updatedAt,
                 chapterId = entry.chapterId,
@@ -220,19 +216,18 @@ class SyncHelper @AssistedInject constructor(
                 percent = entry.percent,
                 deletedAt = entry.deletedAt,
                 chaptersCount = entry.chaptersCount,
-                manga = getContent(authorityHistory, mangaId),
+                manga = getContent(authorityHistory, entry.mangaId),
             )
         }
     }
 
     private fun getFavourites(): List<FavouriteSyncDto> {
-        val workFavourites = runBlocking { db.getWorkFavouritesDao().dump().toList() }
-        return workFavourites.mapNotNull { entry: WorkFavouriteEntity ->
-            val mangaId = resolveSyncMangaIdForEntity(entry.entityId) ?: return@mapNotNull null
+        // Tombstones matter for sync, so deleted rows are exported too.
+        val entries = runBlocking { db.getFavouritesDao().findAllEntriesIncludingDeleted() }
+        return entries.map { entry ->
             FavouriteSyncDto(
-                entityId = entry.entityId,
-                mangaId = mangaId,
-                manga = getContent(authorityFavourites, mangaId),
+                mangaId = entry.mangaId,
+                manga = getContent(authorityFavourites, entry.mangaId),
                 categoryId = entry.categoryId.toInt(),
                 sortKey = entry.sortKey,
                 pinned = entry.isPinned,
@@ -243,16 +238,12 @@ class SyncHelper @AssistedInject constructor(
         }
     }
 
-    private fun upsertWorkHistory(dto: HistorySyncDto) {
-        val entityId = resolveSyncEntityId(dto.entityId, dto.mangaId) ?: return
-        val anchorMangaId = dto.anchorMangaId?.takeIf(::mangaExists)
-            ?: resolveExistingLocalProjectionForEntity(entityId)
-            ?: dto.mangaId
+    private fun upsertHistoryEntry(dto: HistorySyncDto) {
+        val mangaId = dto.mangaId.takeIf(::mangaExists) ?: return
         runBlocking {
-            db.getWorkHistoryDao().upsert(
-                WorkHistoryEntity(
-                    entityId = entityId,
-                    anchorMangaId = anchorMangaId,
+            db.getHistoryDao().upsertSync(
+                HistoryEntity(
+                    mangaId = mangaId,
                     createdAt = dto.createdAt,
                     updatedAt = dto.updatedAt,
                     chapterId = dto.chapterId,
@@ -267,14 +258,13 @@ class SyncHelper @AssistedInject constructor(
         }
     }
 
-    private fun upsertWorkFavourite(dto: FavouriteSyncDto) {
-        val entityId = resolveSyncEntityId(dto.entityId, dto.mangaId) ?: return
+    private fun upsertFavouriteEntry(dto: FavouriteSyncDto) {
+        val mangaId = dto.mangaId.takeIf(::mangaExists) ?: return
         runBlocking {
-            db.getWorkFavouritesDao().upsert(
-                WorkFavouriteEntity(
-                    entityId = entityId,
+            db.getFavouritesDao().upsert(
+                FavouriteEntity(
+                    mangaId = mangaId,
                     categoryId = dto.categoryId.toLong(),
-                    anchorMangaId = dto.mangaId,
                     sortKey = dto.sortKey,
                     isPinned = dto.pinned,
                     createdAt = dto.createdAt,
@@ -285,35 +275,9 @@ class SyncHelper @AssistedInject constructor(
         }
     }
 
-    private fun resolveSyncEntityId(remoteEntityId: Long?, mangaId: Long): Long? {
-        resolveWorkEntityIdForLocalManga(mangaId)?.let { return it }
-        if (remoteEntityId != null && remoteEntityId > 0L) {
-            val identity = runBlocking { workResolver.resolveByEntityId(remoteEntityId) }
-            return identity?.entityId?.takeIf { mangaId in identity.localMangaIds }
-        }
-        return null
-    }
-
-    private fun resolveSyncMangaIdForEntity(entityId: Long, fallbackMangaId: Long? = null): Long? {
-        return resolveExistingLocalProjectionForEntity(entityId)
-            ?: fallbackMangaId?.takeIf(::mangaExists)
-    }
-
-    private fun resolveExistingLocalProjectionForEntity(entityId: Long): Long? {
-        val identity = runBlocking { workResolver.resolveByEntityId(entityId) } ?: return null
-        return identity.preferredMangaId?.takeIf(::mangaExists)
-            ?: identity.localMangaIds.firstOrNull(::mangaExists)
-    }
-
     private fun mangaExists(mangaId: Long): Boolean {
         return runBlocking {
             db.getMangaDao().contains(mangaId)
-        }
-    }
-
-    private fun resolveWorkEntityIdForLocalManga(mangaId: Long): Long? {
-        return runBlocking {
-            workResolver.resolveByMangaId(mangaId).entityId
         }
     }
 

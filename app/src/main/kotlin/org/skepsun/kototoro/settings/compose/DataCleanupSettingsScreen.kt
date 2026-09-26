@@ -70,7 +70,6 @@ fun DataCleanupSettingsScreen(
     onClearCookies: () -> Unit,
     onClearBrowserData: () -> Unit,
     onDeleteReadChapters: () -> Unit,
-    onOpenEntityOrganize: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -254,14 +253,6 @@ fun DataCleanupSettingsScreen(
                 onCheckedChange = { checked ->
                     settings.prefs.edit().putBoolean(AppSettings.KEY_CHAPTERS_CLEAR_AUTO, checked).apply()
                 },
-            ) }
-        }
-        SettingsPreferenceGroup(title = stringResource(R.string.entity_reset_title)) {
-            item { SettingsActionPreference(
-                title = stringResource(R.string.entity_reset),
-                iconRes = R.drawable.ic_delete_all,
-                summary = stringResource(R.string.entity_reset_description),
-                onClick = onOpenEntityOrganize,
             ) }
         }
     }

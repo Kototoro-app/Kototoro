@@ -7,7 +7,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.simkl.data.SimklRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,8 +15,7 @@ class SimklScrobbler @Inject constructor(
     private val repository: SimklRepository,
     db: MangaDatabase,
     mangaRepositoryFactory: ContentRepository.Factory,
-    workResolver: WorkResolver,
-) : Scrobbler(db, ScrobblerService.SIMKL, repository, mangaRepositoryFactory, workResolver) {
+) : Scrobbler(db, ScrobblerService.SIMKL, repository, mangaRepositoryFactory) {
 
     init {
         statuses[ScrobblingStatus.PLANNED] = "plantowatch"

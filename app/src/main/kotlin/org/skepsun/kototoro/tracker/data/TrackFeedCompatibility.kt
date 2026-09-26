@@ -23,7 +23,6 @@ fun TrackEntity.canBeClearedBy(log: TrackLogEntity): Boolean {
 
 suspend fun MangaDatabase.normalizeTrackFeedState() {
     withTransaction {
-        getTrackLogsDao().repairWorkIdentities()
         getTrackLogsDao().deleteOrphans()
         getTrackLogsDao().ensureUnreadUpdateLogs()
         getTracksDao().insertTracksFromUnreadLogs()

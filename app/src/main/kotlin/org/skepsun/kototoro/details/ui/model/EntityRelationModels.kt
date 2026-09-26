@@ -1,8 +1,8 @@
-package org.skepsun.kototoro.entitygraph.ui.details
+package org.skepsun.kototoro.details.ui.model
 
 import androidx.annotation.StringRes
-import org.skepsun.kototoro.entitygraph.domain.EntityType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerService
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 
 data class EntityRelationSection(
     @StringRes val titleRes: Int? = null,

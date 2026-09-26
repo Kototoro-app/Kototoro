@@ -29,9 +29,8 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
-import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredMangaMappingByTargetId
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingEntity
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
@@ -44,8 +43,7 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
 import org.skepsun.kototoro.scrobbling.kitsu.data.KitsuInterceptor.Companion.VND_JSON
-import org.skepsun.kototoro.entitygraph.domain.EntityType
-import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -60,7 +58,6 @@ class KitsuRepository(
     private val okHttp: OkHttpClient,
     private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     // not in use yet
@@ -147,7 +144,7 @@ class KitsuRepository(
     }
 
     override suspend fun unregister(mangaId: Long) {
-        return db.deleteScrobblingByWorkOrManga(ScrobblerService.KITSU.id, mangaId, workResolver)
+        return db.deleteScrobblingByManga(ScrobblerService.KITSU.id, mangaId)
     }
 
     override suspend fun findContent(query: String, offset: Int, isAnime: Boolean): List<ScrobblerContent> {
@@ -1054,7 +1051,7 @@ class KitsuRepository(
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.KITSU.id)
             synced.forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         return synced.size
@@ -1243,7 +1240,7 @@ class KitsuRepository(
 
     private suspend fun saveRate(json: JSONObject, mangaId: Long, typeKey: String) {
         val attrs = json.getJSONObject("attributes")
-        val existingEntity = db.findScrobblingByWorkOrManga(ScrobblerService.KITSU.id, mangaId, workResolver)
+        val existingEntity = db.findScrobblingByManga(ScrobblerService.KITSU.id, mangaId)
         val mediaId = existingEntity?.targetId ?: json.optJSONObject("relationships")
             ?.optJSONObject(typeKey)
             ?.optJSONObject("data")
@@ -1268,7 +1265,7 @@ class KitsuRepository(
             remoteCoverUrl = preview?.remoteCoverUrl,
             remoteUrl = preview?.remoteUrl,
         )
-        db.upsertScrobblingForManga(entity, workResolver, mangaId = mangaId)
+        db.upsertScrobblingForManga(entity, mangaId = mangaId)
     }
 
     private suspend fun findPreviewInfo(mediaId: Long, typeKey: String): ScrobblingEntity? {
@@ -1335,7 +1332,6 @@ class KitsuRepository(
             }
             db.upsertScrobblingPreview(
                 entity = entity,
-                workResolver = workResolver,
                 title = normalizedTitle ?: entity.remoteTitle,
                 coverUrl = normalizedCover ?: entity.remoteCoverUrl,
                 url = normalizedUrl ?: entity.remoteUrl,

@@ -29,7 +29,6 @@ import org.skepsun.kototoro.core.util.ext.powerManager
 import org.skepsun.kototoro.core.util.ext.printStackTraceDebug
 import org.skepsun.kototoro.core.util.ext.toUriOrNull
 import org.skepsun.kototoro.core.util.ext.withPartialWakeLock
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
 import java.io.FileNotFoundException
 import javax.inject.Inject
 import androidx.appcompat.R as appcompatR
@@ -46,9 +45,6 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
 
     @Inject
     lateinit var repository: ExternalBackupRepository
-
-    @Inject
-    lateinit var entityGraphRepository: EntityGraphRepository
 
     @Inject
     lateinit var settings: AppSettings
@@ -68,19 +64,7 @@ class ExternalBackupImportService : BaseBackupRestoreService() {
             val result = runCatching {
                 val payload = withContext(Dispatchers.IO) { decoder.decode(source, app) }
                 val summary = repository.import(payload)
-                // Phase 2: consolidate provisional import entities (merge duplicate works
-                // across sources) before reporting completion, so the reported state is final.
-                val consolidation = runCatching { entityGraphRepository.consolidateImportProvisionalEntities() }
-                val consolidationPending = consolidation.isFailure
-                consolidation.onFailure { e ->
-                        // 不能只 printStackTraceDebug：合并没跑完，库里就长期留着同一部作品的多个
-                        // WORK 实体，用户在收藏/分类里看到的是重复项（issue #510）。
-                        // 记成待办交给下次启动维护重试，并让导入结果明确不报「全部成功」。
-                        Log.e(TAG, "Provisional entity consolidation failed; duplicate works may remain", e)
-                        settings.isEntityConsolidationPending = true
-                    }
-                consolidation.onSuccess { settings.isEntityConsolidationPending = false }
-                summary.copy(consolidationPending = consolidationPending)
+                summary.copy(consolidationPending = false)
             }
             result.fold(
                 onSuccess = { summary ->

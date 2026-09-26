@@ -12,27 +12,20 @@ import org.skepsun.kototoro.core.db.dao.MangaDao
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.parser.ProjectionIdentityResolver
 import org.skepsun.kototoro.core.prefs.AppSettings
-import org.skepsun.kototoro.entitygraph.data.EntityGraphRepository
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.favourites.data.WorkFavouritesDao
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.favourites.data.FavouritesDao
 import org.skepsun.kototoro.tracker.domain.SourceTrackerEventEmitter
-import org.skepsun.kototoro.work.domain.WorkAggregateRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 
 class FavouritesFeedCategoryIdsTest {
 
-    private val favouritesDao = mockk<WorkFavouritesDao>()
+    private val favouritesDao = mockk<FavouritesDao>()
     private val mangaDao = mockk<MangaDao>()
-    private val workResolver = mockk<WorkResolver>()
     private val db = mockk<MangaDatabase> {
-        every { getWorkFavouritesDao() } returns favouritesDao
+        every { getFavouritesDao() } returns favouritesDao
         every { getMangaDao() } returns mangaDao
     }
     private val repository = FavouritesRepository(
         db = db,
-        workResolver = workResolver,
-        entityGraphRepository = mockk<EntityGraphRepository>(relaxed = true),
-        workAggregateRepository = mockk<WorkAggregateRepository>(relaxed = true),
         settings = mockk<AppSettings>(relaxed = true),
         sourceTrackerEvents = mockk<SourceTrackerEventEmitter>(relaxed = true),
         projectionIdentityResolver = mockk<ProjectionIdentityResolver>(relaxed = true),
@@ -41,10 +34,9 @@ class FavouritesFeedCategoryIdsTest {
     @Test
     fun `feed category index batch loads manga for a large library`() = runTest {
         val entries = (1L..2_000L).map { id ->
-            WorkFavouriteEntity(
-                entityId = id,
+            FavouriteEntity(
+                mangaId = id,
                 categoryId = if (id % 2L == 0L) 2L else 1L,
-                anchorMangaId = id,
                 sortKey = 0,
                 isPinned = false,
                 createdAt = id,
@@ -52,20 +44,18 @@ class FavouritesFeedCategoryIdsTest {
                 updatedAt = id,
             )
         }
-        coEvery { favouritesDao.findActive() } returns entries
+        coEvery { favouritesDao.findAllActiveEntries() } returns entries
         coEvery { mangaDao.findEntitiesByIds(any()) } answers {
             firstArg<Collection<Long>>().map(::manga)
         }
 
-        val result = repository.buildWorkFavouriteCategoryIdsByFeedKey()
+        val result = repository.buildFavouriteCategoryIdsByFeedKey()
 
         assertEquals(setOf(1L), result["source|/1"])
         assertEquals(setOf(2L), result["source|/2000"])
-        assertEquals(setOf(1L), result["entity:1"])
         assertEquals(setOf(1L), result["manga:1"])
-        assertEquals(6_000, result.size)
+        assertEquals(4_000, result.size)
         coVerify(exactly = 1) { mangaDao.findEntitiesByIds(any()) }
-        coVerify(exactly = 0) { workResolver.resolveManyByEntityIds(any()) }
     }
 
     private fun manga(id: Long) = MangaEntity(

@@ -25,9 +25,8 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
-import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetId
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingForManga
@@ -45,8 +44,7 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.model.ContentTagGroup
 import org.skepsun.kototoro.parsers.model.ContentType
 import org.skepsun.kototoro.parsers.model.SortOrder
-import org.skepsun.kototoro.entitygraph.domain.EntityType
-import org.skepsun.kototoro.work.domain.WorkResolver
+import org.skepsun.kototoro.tracking.discovery.domain.EntityType
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
@@ -70,7 +68,6 @@ class BangumiRepository @Inject constructor(
     @ScrobblerType(ScrobblerService.BANGUMI) private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
     private val settings: AppSettings,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     private val clientId = context.getString(R.string.bangumi_clientId)
@@ -158,7 +155,7 @@ class BangumiRepository @Inject constructor(
         get() = storage.user
 
     override suspend fun unregister(mangaId: Long) {
-        db.deleteScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId, workResolver)
+        db.deleteScrobblingByManga(ScrobblerService.BANGUMI.id, mangaId)
     }
 
     override fun logout() {
@@ -484,7 +481,6 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
                 comment = "",
                 rating = 0f,
             ),
-            workResolver,
         )
         findExistingCollection(scrobblerContentId)?.let {
             saveCollection(it, mangaId)
@@ -495,18 +491,18 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
             saveCollection(it, mangaId)
             return
         }
-        db.deleteScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId, workResolver)
+        db.deleteScrobblingByManga(ScrobblerService.BANGUMI.id, mangaId)
         throw IOException("Bangumi collection for subject $scrobblerContentId was not created remotely")
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, chapter: Int) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId, workResolver) ?: return
+        val entity = db.findScrobblingByManga(ScrobblerService.BANGUMI.id, mangaId) ?: return
         updateCollection(entity.targetId, null, null, null, chapter)
-        db.upsertScrobblingForManga(entity.copy(chapter = chapter), workResolver, mangaId = mangaId)
+        db.upsertScrobblingForManga(entity.copy(chapter = chapter), mangaId = mangaId)
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, rating: Float, status: String?, comment: String?) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.BANGUMI.id, mangaId, workResolver) ?: return
+        val entity = db.findScrobblingByManga(ScrobblerService.BANGUMI.id, mangaId) ?: return
         val bgmStatus = when (status) {
             "wish" -> 1
             "collect" -> 2
@@ -523,7 +519,6 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
                 rating = rating,
                 comment = comment ?: entity.comment,
             ),
-            workResolver,
             mangaId = mangaId,
         )
     }
@@ -1458,7 +1453,7 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
         db.withTransaction {
             db.getScrobblingDao().deleteByScrobbler(ScrobblerService.BANGUMI.id)
             (hydrated + preservedLocal).forEach { entity ->
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         return hydrated.size
@@ -1494,7 +1489,6 @@ private suspend fun loadBrowserFilters(category: String): BangumiBrowserFilters 
                 comment = json.optString("comment", ""),
                 rating = json.toBangumiCollectionRating(),
             ),
-            workResolver,
         )
     }
 

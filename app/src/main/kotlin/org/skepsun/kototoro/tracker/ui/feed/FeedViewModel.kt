@@ -70,7 +70,6 @@ import org.skepsun.kototoro.history.data.HistoryRepository
 import org.skepsun.kototoro.local.data.LocalMangaRepository
 import org.skepsun.kototoro.parsers.model.Content
 import org.skepsun.kototoro.core.parser.ContentDataRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
@@ -118,7 +117,6 @@ class FeedViewModel @Inject constructor(
     private val globalFavoritesState: GlobalFavoritesState,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
     private val dataRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
     private val feedSnapshotStore: org.skepsun.kototoro.tracker.domain.feed.FeedSnapshotStore,
     private val feedCardMapper: org.skepsun.kototoro.tracker.domain.feed.FeedCardMapper,
     private val updatesSnapshotStore: org.skepsun.kototoro.tracker.domain.updates.UpdatesSnapshotStore,
@@ -564,8 +562,12 @@ class FeedViewModel @Inject constructor(
             return emptyList()
         }
         val resolvedEntityIds = mapNotNull(ContentTracking::entityId).distinct()
-        val preferredLocalIdsByEntity = resolvePreferredLocalIdsByEntity(resolvedEntityIds)
-        val metadataSelectionsByEntity = dataRepository.getEntityMetadataSourceSelections(resolvedEntityIds)
+        // Projection-first: an entity id IS a manga id, so the preferred projection of an
+        // identity is that identity itself. Metadata authority lives on the manga
+        // projection, so it is looked up by every manga id in the feed.
+        val preferredLocalIdsByEntity: Map<Long, Long?> = resolvedEntityIds.associateWith { it }
+        val resolvedMangaIds = map { it.manga.id }.distinct()
+        val metadataSelectionsByMangaId = dataRepository.getMetadataSourceSelections(resolvedMangaIds)
         val grouped = LinkedHashMap<Long, MutableList<ContentTracking>>()
         for (item in this) {
             val contentTypeOrdinal = item.manga.source.getContentType().ordinal
@@ -591,14 +593,9 @@ class FeedViewModel @Inject constructor(
                 totalNewChapters = groupItems.sumOf { it.newChapters },
                 entityId = entityId,
                 preferredLocalMangaId = preferredLocalId ?: representative.manga.id,
-                metadataSourceSelection = entityId?.let(metadataSelectionsByEntity::get),
+                metadataSourceSelection = metadataSelectionsByMangaId[representative.manga.id],
             )
         }
-    }
-
-    private suspend fun resolvePreferredLocalIdsByEntity(entityIds: Collection<Long>): Map<Long, Long?> {
-        return workResolver.resolveManyByEntityIds(entityIds)
-            .mapValues { (_, identity) -> identity.preferredMangaId }
     }
 
     private fun Long.toFeedGroupKey(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())

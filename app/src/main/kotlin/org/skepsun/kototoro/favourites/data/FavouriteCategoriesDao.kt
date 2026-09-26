@@ -74,21 +74,10 @@ abstract class FavouriteCategoriesDao {
 					FROM tracks
 					WHERE EXISTS (
 						SELECT 1
-						FROM work_favourites wf
-						WHERE wf.entity_id = COALESCE(
-								tracks.entity_id,
-								(
-									SELECT entity_id
-									FROM entity_binding
-									WHERE source IN ('local_manga', '0')
-										AND external_id = CAST(tracks.manga_id AS TEXT)
-										AND state IN ('MANUAL', 'CONFIRMED', 'LEGACY')
-									LIMIT 1
-								)
-							)
-							AND wf.category_id = favourite_categories.category_id
-							AND wf.anchor_manga_id IS NOT NULL
-							AND wf.deleted_at = 0
+						FROM favourites f
+						WHERE f.manga_id = tracks.manga_id
+							AND f.category_id = favourite_categories.category_id
+							AND f.deleted_at = 0
 					)
 				), 0)
 			) AS new_chapters

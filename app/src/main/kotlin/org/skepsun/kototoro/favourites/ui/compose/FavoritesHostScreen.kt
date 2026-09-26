@@ -78,12 +78,10 @@ fun KototoroFavoritesHostRoute(
     contentPadding: PaddingValues,
     initialCategoryId: Long = NO_ID,
     initialCategoryTitle: String? = null,
-    onOpenEntityOrganize: (Set<Long>) -> Unit = {},
     onNavigateToDetails: ((Content, String?) -> Unit)? = null,
     onNavigateToEntityDetails: ((DetailsOrigin, String?) -> Unit)? = null,
     registerFilterCallback: Boolean = true,
     refreshGeneration: Int = 0,
-    consumeOrganizeMessages: Boolean = true,
     onTopBarOverrideChanged: (TopBarOverrideState?) -> Unit = {},
     viewModel: FavouritesContainerViewModel = hiltViewModel(),
     /**
@@ -298,18 +296,6 @@ fun KototoroFavoritesHostRoute(
         onDispose { onTopBarOverrideChanged(null) }
     }
 
-    if (consumeOrganizeMessages) {
-        LaunchedEffect(viewModel.organizeMessages) {
-            viewModel.organizeMessages.collect { event ->
-                event?.consume(
-                    FlowCollector { message ->
-                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-                    },
-                )
-            }
-        }
-    }
-
     if (uiState.isLoading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -375,7 +361,6 @@ fun KototoroFavoritesHostRoute(
                         contentPadding = innerPadding,
                         onNavigateToDetails = onNavigateToDetails,
                         onNavigateToEntityDetails = onNavigateToEntityDetails,
-                        onEntityOrganizeSelection = onOpenEntityOrganize,
                         sharedTransitionEnabled = enabled,
                         isActivePage = enabled,
                         sortOrders = ListSortOrder.FAVORITES.sortedBy { it.ordinal },

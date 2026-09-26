@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.tracker.domain
 
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
-import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 import org.skepsun.kototoro.tracker.domain.model.ContentTracking
 import org.skepsun.kototoro.tracker.domain.model.TrackingLogItem
 import java.time.Instant
@@ -33,7 +32,7 @@ object TrackingLogItemMapper {
                 chapters = chapterTitles,
                 createdAt = track.lastChapterDate ?: track.lastCheck ?: Instant.EPOCH,
                 isNew = if (unreadOwnerIds != null) {
-                    track.newChapters > 0 && resolveTrackOwnerId(track.entityId, track.manga.id) in unreadOwnerIds
+                    track.newChapters > 0 && track.manga.id in unreadOwnerIds
                 } else {
                     track.newChapters > 0
                 },

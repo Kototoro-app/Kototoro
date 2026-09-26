@@ -76,7 +76,7 @@ class FavouritesContainerViewModel @Inject constructor(
     private val favouriteLibrarySnapshotStore: org.skepsun.kototoro.favourites.domain.library.FavouriteLibrarySnapshotStore,
     private val spaceContentPolicy: org.skepsun.kototoro.space.domain.SpaceContentPolicy,
     private val sourcePresetsRepository: org.skepsun.kototoro.explore.data.SourcePresetsRepository,
-    private val workAggregateRepository: org.skepsun.kototoro.work.domain.WorkAggregateRepository,
+
     private val cardMapper: FavouritesCardMapper,
     private val contentResolver: org.skepsun.kototoro.favourites.domain.library.FavouriteContentResolver,
     private val quickFilterFactory: FavoritesListQuickFilter.Factory,
@@ -368,34 +368,7 @@ class FavouritesContainerViewModel @Inject constructor(
      * and logs the first divergence. Removed in Phase 8 once the new path is verified.
      */
     fun startLibraryShadowComparison() {
-        if (!BuildConfig.DEBUG) return
-        launchJob(Dispatchers.Default) {
-            combine(
-                workAggregateRepository.observeFavouriteLibraryAggregates(order = ListSortOrder.NEWEST),
-                favouriteLibrarySnapshotStore.observe(),
-            ) { legacyAggregates, snapshot ->
-                val legacyIds = legacyAggregates.mapNotNull { it.identity.entityId }
-                val newIds = org.skepsun.kototoro.favourites.domain.library.deriveFavouriteLibraryState(
-                    snapshot,
-                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryDerivationInput(
-                        defaultOrder = ListSortOrder.NEWEST,
-                    ),
-                ).visibleIdsByCategory.getValue(
-                    org.skepsun.kototoro.favourites.domain.library.FavouriteLibraryAllCategoryId,
-                )
-                if (legacyIds != newIds) {
-                    val firstDiff = legacyIds.indices.firstOrNull { legacyIds.getOrNull(it) != newIds.getOrNull(it) }
-                    android.util.Log.d(
-                        "FavouriteLibrary",
-                        "shadow diff sizeLegacy=${legacyIds.size} sizeNew=${newIds.size} " +
-                            "firstDiffIndex=$firstDiff legacyAt=${firstDiff?.let { legacyIds.getOrNull(it) }} " +
-                            "newAt=${firstDiff?.let { newIds.getOrNull(it) }}",
-                    )
-                } else {
-                    android.util.Log.d("FavouriteLibrary", "shadow match size=${legacyIds.size}")
-                }
-            }.collect()
-        }
+        // Legacy entity-based shadow comparison removed with entity system
     }
 
     fun toggleSourceTag(tag: SourceTag) {
@@ -434,16 +407,8 @@ class FavouritesContainerViewModel @Inject constructor(
     val onActionDone = MutableEventFlow<ReversibleAction>()
     val importMessages = MutableEventFlow<String>()
     val syncMessages = MutableEventFlow<String>()
-    val organizeMessages = MutableEventFlow<String>()
     private fun logImport(msg: String) = Unit
     private fun logSync(msg: String) = Unit
-
-    fun notifyEntityOrganizeResult(message: String?) {
-        if (message.isNullOrBlank()) {
-            return
-        }
-        organizeMessages.call(message)
-    }
 
     private val categoriesStateFlow = favouritesRepository.observeCategoriesForLibrary()
         .withErrorHandling()
@@ -1086,31 +1051,10 @@ class FavouritesContainerViewModel @Inject constructor(
     private suspend fun performDeduplication(groupsToDelete: List<DuplicatesGroup>) {
         db.withTransaction {
             for (group in groupsToDelete) {
-                val rep = group.representative
-                val repProjectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(rep.url, rep.publicUrl)
-                val repEntityId = repProjectionKey?.let { db.getEntityGraphDao().findActiveBinding(rep.source.name, it)?.entityId }
-                    ?: db.getEntityGraphDao().findActiveBinding("local_manga", rep.id.toString())?.entityId
-                    ?: db.getEntityGraphDao().findActiveBinding("0", rep.id.toString())?.entityId
-
                 for (dup in group.duplicates) {
-                    val projectionKey = org.skepsun.kototoro.core.model.ProjectionIdentityKeys.bindingKey(dup.url, dup.publicUrl)
-                    val dupEntityId = projectionKey?.let { db.getEntityGraphDao().findActiveBinding(dup.source.name, it)?.entityId }
-                        ?: db.getEntityGraphDao().findActiveBinding("local_manga", dup.id.toString())?.entityId
-                        ?: db.getEntityGraphDao().findActiveBinding("0", dup.id.toString())?.entityId
-
-                    // 1. Delete entity bindings for the duplicate projection
-                    if (projectionKey != null) {
-                        db.getEntityGraphDao().deleteBindingBySource(dup.source.name, projectionKey)
-                    }
-                    db.getEntityGraphDao().deleteBindingBySource("local_manga", dup.id.toString())
-                    db.getEntityGraphDao().deleteBindingBySource("0", dup.id.toString())
-
-                    // 2. If it was a separate work, remove it from work_favourites
-                    if (dupEntityId != null && dupEntityId != repEntityId) {
-                        db.getWorkFavouritesDao().delete(dupEntityId)
-                    }
-
-                    // 3. Clear the duplicate manga metadata and its chapters from database
+                    // Projection-first: a duplicate is its own manga projection, so removing it
+                    // means removing that manga row; the declared foreign keys cascade onto its
+                    // favourites / history / preferences / stats / tracks state.
                     db.getMangaDao().find(dup.id)?.manga?.let { entity ->
                         db.getMangaDao().delete(listOf(entity))
                     }

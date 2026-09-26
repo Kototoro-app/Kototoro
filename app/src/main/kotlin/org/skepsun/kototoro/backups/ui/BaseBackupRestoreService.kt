@@ -116,7 +116,6 @@ abstract class BaseBackupRestoreService : CoroutineIntentService() {
                 0,
                 when (result.failures.firstOrNull()) {
                     is BackupPayloadGuard.MissingProjectionAnchorsException,
-                    is BackupPayloadGuard.WorkEntityMissingSyncIdException,
                         -> AppRouter.entityOrganizeSettingsIntent(applicationContext)
 
                     else -> AppRouter.homeIntent(this@BaseBackupRestoreService)

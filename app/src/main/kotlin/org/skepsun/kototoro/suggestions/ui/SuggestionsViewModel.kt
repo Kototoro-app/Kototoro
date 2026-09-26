@@ -45,7 +45,6 @@ import org.skepsun.kototoro.list.ui.model.ContentGridModel
 import org.skepsun.kototoro.list.ui.model.ListModel
 import org.skepsun.kototoro.core.model.isNsfw
 import org.skepsun.kototoro.core.model.GlobalTagBlacklist
-import org.skepsun.kototoro.work.domain.WorkResolver
 import java.util.concurrent.atomic.AtomicBoolean
 import org.skepsun.kototoro.space.ui.SpaceBrowseScope
 import org.skepsun.kototoro.space.ui.SpaceBindableViewModel
@@ -62,7 +61,6 @@ class SuggestionsViewModel @Inject constructor(
     private val suggestionsScheduler: SuggestionsWorker.Scheduler,
     private val sourceGroupManager: SourceGroupManager,
     private val sourcePresetsRepository: SourcePresetsRepository,
-    private val workResolver: WorkResolver,
     private val dataRepository: ContentDataRepository,
     @LocalStorageChanges localStorageChanges: SharedFlow<LocalContent?>,
     private val globalFavoritesState: org.skepsun.kototoro.favourites.domain.GlobalFavoritesState,
@@ -231,43 +229,22 @@ class SuggestionsViewModel @Inject constructor(
         return groupedPreferredLocalIds[id] ?: groupedSuggestionIds[id]?.firstOrNull()
     }
 
+    /**
+     * Projection-first 分组：每条 content 自成一个分组，不再解析跨来源实体身份，
+     * 因此 projectionCount 恒为 1，entityId 恒为 null。
+     */
     private suspend fun List<Content>.aggregateByEntity(): List<SuggestionGroup> {
         if (isEmpty()) {
             return emptyList()
         }
-        val identitiesByMangaId = workResolver.resolveManyByMangaIds(map { it.id })
-        val resolvedEntityIdsByMangaId = identitiesByMangaId.mapValues { it.value.entityId }.filterValues { it != null }
-            .mapValues { requireNotNull(it.value) }
-        val preferredLocalIdsByEntity = identitiesByMangaId.values
-            .mapNotNull { identity -> identity.entityId?.let { it to identity.preferredMangaId } }
-            .toMap()
-        val displayTypeOrdinalByEntity = this
-            .groupBy { resolvedEntityIdsByMangaId[it.id] }
-            .mapNotNull { (entityId, items) ->
-                entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
-            }
-            .toMap()
-        val grouped = LinkedHashMap<SuggestionGroupKey, MutableList<Content>>(size)
-        for (item in this) {
-            val entityId = resolvedEntityIdsByMangaId[item.id]
-            val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: item.source.contentType.ordinal
-            val key = SuggestionGroupKey(
-                uiId = entityId?.toUiGroupId(contentTypeOrdinal) ?: item.id,
-                contentTypeOrdinal = contentTypeOrdinal,
-            )
-            grouped.getOrPut(key) { ArrayList(1) }.add(item)
-        }
-        return grouped.map { (key, items) ->
-            val entityId = resolvedEntityIdsByMangaId[items.first().id]
-            val preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get)
-            val representative = items.firstOrNull { it.id == preferredLocalMangaId } ?: items.first()
+        return map { item ->
             SuggestionGroup(
-                uiId = key.uiId,
-                representative = representative,
-                mangaIds = items.mapTo(LinkedHashSet(items.size)) { it.id },
-                projectionCount = items.size,
-                entityId = entityId,
-                preferredLocalMangaId = preferredLocalMangaId ?: representative.id,
+                uiId = item.id,
+                representative = item,
+                mangaIds = setOf(item.id),
+                entityId = null,
+                preferredLocalMangaId = item.id,
+                projectionCount = 1,
             )
         }
     }
@@ -315,16 +292,4 @@ class SuggestionsViewModel @Inject constructor(
         val preferredLocalMangaId: Long?,
         val projectionCount: Int,
     )
-
-    private data class SuggestionGroupKey(
-        val uiId: Long,
-        val contentTypeOrdinal: Int,
-    )
-
-    private fun Long.toUiGroupId(contentTypeOrdinal: Int): Long = -((this shl 8) or (contentTypeOrdinal + 1).toLong())
-
-    private fun List<Content>.resolveDisplayContentTypeOrdinal(): Int {
-        return firstOrNull { !it.source.name.startsWith("TRACKING_") }?.source?.contentType?.ordinal
-            ?: first().source.contentType.ordinal
-    }
 }

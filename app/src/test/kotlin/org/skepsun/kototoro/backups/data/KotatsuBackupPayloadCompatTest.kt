@@ -12,9 +12,11 @@ import org.skepsun.kototoro.backups.data.model.HistoryBackup
 import org.skepsun.kototoro.backups.data.model.StatisticBackup
 import org.skepsun.kototoro.core.db.entity.MangaEntity
 import org.skepsun.kototoro.core.db.entity.MangaWithTags
-import org.skepsun.kototoro.favourites.data.WorkFavouriteEntity
-import org.skepsun.kototoro.history.data.WorkHistoryEntity
-import org.skepsun.kototoro.stats.data.WorkStatsEntity
+import org.skepsun.kototoro.favourites.data.FavouriteContent
+import org.skepsun.kototoro.favourites.data.FavouriteEntity
+import org.skepsun.kototoro.history.data.HistoryEntity
+import org.skepsun.kototoro.history.data.HistoryWithContent
+import org.skepsun.kototoro.stats.data.StatsEntity
 
 class KotatsuBackupPayloadCompatTest {
 
@@ -37,40 +39,44 @@ class KotatsuBackupPayloadCompatTest {
     }
 
     @Test
-    fun `work state projections remain decodable by Kotatsu backup models`() {
+    fun `projection state remains decodable by Kotatsu backup models`() {
         val manga = testManga(id = 42L)
         val history = HistoryBackup(
-            entity = WorkHistoryEntity(
-                entityId = 7L,
-                anchorMangaId = manga.manga.id,
-                createdAt = 10L,
-                updatedAt = 20L,
-                chapterId = 30L,
-                page = 4,
-                scroll = 0.25f,
-                percent = 0.5f,
-                deletedAt = 0L,
-                chaptersCount = 12,
+            HistoryWithContent(
+                history = HistoryEntity(
+                    mangaId = manga.manga.id,
+                    createdAt = 10L,
+                    updatedAt = 20L,
+                    chapterId = 30L,
+                    page = 4,
+                    scroll = 0.25f,
+                    percent = 0.5f,
+                    deletedAt = 0L,
+                    chaptersCount = 12,
+                ),
+                manga = manga.manga,
+                tags = manga.tags,
             ),
-            manga = manga,
         )
         val favourite = FavouriteBackup(
-            entity = WorkFavouriteEntity(
-                entityId = 7L,
-                categoryId = 3L,
-                anchorMangaId = manga.manga.id,
-                sortKey = 2,
-                isPinned = true,
-                createdAt = 11L,
-                deletedAt = 0L,
-                updatedAt = 21L,
+            FavouriteContent(
+                favourite = FavouriteEntity(
+                    mangaId = manga.manga.id,
+                    categoryId = 3L,
+                    sortKey = 2,
+                    isPinned = true,
+                    createdAt = 11L,
+                    deletedAt = 0L,
+                    updatedAt = 21L,
+                ),
+                manga = manga.manga,
+                categories = emptyList(),
+                tags = manga.tags,
             ),
-            manga = manga,
         )
         val statistic = StatisticBackup(
-            WorkStatsEntity(
-                entityId = 7L,
-                anchorMangaId = manga.manga.id,
+            StatsEntity(
+                mangaId = manga.manga.id,
                 startedAt = 15L,
                 duration = 600L,
                 pages = 8,

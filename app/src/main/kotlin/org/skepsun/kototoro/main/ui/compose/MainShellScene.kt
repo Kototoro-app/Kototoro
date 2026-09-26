@@ -1954,12 +1954,6 @@ internal fun FavoritesTopLevelRouteContent(
                         appRouter.openFavoriteCategories()
                     },
                     KototoroTopBarMenuAction(
-                        org.skepsun.kototoro.R.string.entity_organize_title,
-                        org.skepsun.kototoro.R.drawable.ic_select_group,
-                    ) {
-                        appRouter.openEntityOrganizeSettings()
-                    },
-                    KototoroTopBarMenuAction(
                         org.skepsun.kototoro.R.string.import_favourites,
                         org.skepsun.kototoro.R.drawable.ic_import,
                     ) {
@@ -2000,14 +1994,6 @@ internal fun FavoritesTopLevelRouteContent(
 
     LaunchedEffect(viewModel.syncMessages) {
         viewModel.syncMessages.collect { event ->
-            event?.consume(eventCollector { message ->
-                showToast(message)
-            })
-        }
-    }
-
-    LaunchedEffect(viewModel.organizeMessages) {
-        viewModel.organizeMessages.collect { event ->
             event?.consume(eventCollector { message ->
                 showToast(message)
             })
@@ -2063,10 +2049,6 @@ internal fun FavoritesTopLevelRouteContent(
             appRouter = appRouter,
             contentPadding = contentPadding,
             refreshGeneration = 0,
-            consumeOrganizeMessages = false,
-            onOpenEntityOrganize = { selectedIds ->
-                appRouter.openEntityOrganizeSettings(selectedIds)
-            },
             onNavigateToDetails = { content, sharedKey ->
                 navigateToDetailsWithContent(content, sharedKey)
             },

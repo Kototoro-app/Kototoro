@@ -130,7 +130,7 @@ class WebDavAutoRestoreRunner @Inject constructor(
                 "legacyMigration" to false,
             )
 
-            if (restoreContext.isAuthoritativeWorkSchema && !restoreResultCommit.writeBlocked) {
+            if (restoreContext.isAuthoritativeSchema && !restoreResultCommit.writeBlocked) {
                 uploadMergedSnapshot(currentTime)
             } else {
                 logBackupFlow(

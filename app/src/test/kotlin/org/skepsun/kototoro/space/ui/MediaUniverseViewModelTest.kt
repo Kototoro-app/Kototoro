@@ -5,16 +5,13 @@ import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.skepsun.kototoro.core.model.TestContentSource
 import org.skepsun.kototoro.parsers.model.Content
-import org.skepsun.kototoro.work.domain.WorkAggregate
-import org.skepsun.kototoro.work.domain.WorkIdentity
-import org.skepsun.kototoro.work.domain.WorkMigrationState
 
 class MediaUniverseViewModelTest {
 
 	@Test
-	fun `same entity is merged across history and favorites`() {
-		val history = aggregate(entityId = 42L, contentId = 1L)
-		val favorite = aggregate(entityId = 42L, contentId = 2L)
+	fun `same projection is merged across history and favorites`() {
+		val history = content(contentId = 1L)
+		val favorite = content(contentId = 1L)
 
 		val result = mergeMediaUniverseItems(listOf(history), listOf(favorite))
 
@@ -25,43 +22,32 @@ class MediaUniverseViewModelTest {
 	}
 
 	@Test
-	fun `unbound content is isolated by content id`() {
-		val first = aggregate(entityId = null, contentId = 1L)
-		val duplicate = aggregate(entityId = null, contentId = 1L)
-		val second = aggregate(entityId = null, contentId = 2L)
+	fun `distinct projections stay isolated by content id`() {
+		val first = content(contentId = 1L)
+		val duplicate = content(contentId = 1L)
+		val second = content(contentId = 2L)
 
 		val result = mergeMediaUniverseItems(listOf(first), listOf(duplicate, second))
 
 		result shouldHaveSize 2
 		result.first().inHistory shouldBe true
 		result.first().inFavorites shouldBe true
+		result.last().inHistory shouldBe false
+		result.last().inFavorites shouldBe true
 	}
 
-	private fun aggregate(entityId: Long?, contentId: Long): WorkAggregate {
-		val content = Content(
-			id = contentId,
-			title = "Content $contentId",
-			altTitles = emptySet(),
-			url = "/$contentId",
-			publicUrl = "https://example.invalid/$contentId",
-			rating = 0f,
-			contentRating = null,
-			coverUrl = null,
-			tags = emptySet(),
-			state = null,
-			authors = emptySet(),
-			source = TestContentSource,
-		)
-		return WorkAggregate(
-			identity = WorkIdentity(
-				entityId = entityId,
-				requestedMangaId = contentId,
-				preferredMangaId = contentId,
-				localMangaIds = setOf(contentId),
-				migrationState = WorkMigrationState.VALID,
-			),
-			displayProjection = content,
-			projections = listOf(content),
-		)
-	}
+	private fun content(contentId: Long): Content = Content(
+		id = contentId,
+		title = "Content $contentId",
+		altTitles = emptySet(),
+		url = "/$contentId",
+		publicUrl = "https://example.invalid/$contentId",
+		rating = 0f,
+		contentRating = null,
+		coverUrl = null,
+		tags = emptySet(),
+		state = null,
+		authors = emptySet(),
+		source = TestContentSource,
+	)
 }

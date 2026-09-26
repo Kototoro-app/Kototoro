@@ -45,8 +45,8 @@ import org.skepsun.kototoro.core.ui.compose.rememberSafePainter
 import org.skepsun.kototoro.core.ui.adaptive.LocalUiPresentationConfig
 import org.skepsun.kototoro.core.ui.adaptive.tvFocusable
 import org.skepsun.kototoro.core.util.ext.takeIfUsableImageUri
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationSection
-import org.skepsun.kototoro.entitygraph.ui.details.EntityRelationItem
+import org.skepsun.kototoro.details.ui.model.EntityRelationSection
+import org.skepsun.kototoro.details.ui.model.EntityRelationItem
 import org.skepsun.kototoro.list.ui.compose.KototoroContentCard
 import androidx.compose.ui.tooling.preview.Preview
 import org.skepsun.kototoro.core.ui.theme.KototoroTheme
@@ -438,18 +438,18 @@ private fun entityRelationSectionIconRes(titleRes: Int): Int = when (titleRes) {
     else -> R.drawable.ic_select_group
 }
 
-private fun entityRelationTypeLabelRes(type: org.skepsun.kototoro.entitygraph.domain.EntityType): Int = when (type) {
-    org.skepsun.kototoro.entitygraph.domain.EntityType.WORK -> R.string.entity_graph_type_work
-    org.skepsun.kototoro.entitygraph.domain.EntityType.CHARACTER -> R.string.entity_graph_type_character
-    org.skepsun.kototoro.entitygraph.domain.EntityType.PERSON -> R.string.entity_graph_type_person
-    org.skepsun.kototoro.entitygraph.domain.EntityType.ORGANIZATION -> R.string.entity_graph_type_organization
+private fun entityRelationTypeLabelRes(type: org.skepsun.kototoro.tracking.discovery.domain.EntityType): Int = when (type) {
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK -> R.string.entity_graph_type_work
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.CHARACTER -> R.string.entity_graph_type_character
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.PERSON -> R.string.entity_graph_type_person
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.ORGANIZATION -> R.string.entity_graph_type_organization
 }
 
-private fun entityRelationTypeIconRes(type: org.skepsun.kototoro.entitygraph.domain.EntityType): Int = when (type) {
-    org.skepsun.kototoro.entitygraph.domain.EntityType.WORK -> R.drawable.ic_content_manga
-    org.skepsun.kototoro.entitygraph.domain.EntityType.CHARACTER -> R.drawable.ic_user
-    org.skepsun.kototoro.entitygraph.domain.EntityType.PERSON -> R.drawable.ic_user
-    org.skepsun.kototoro.entitygraph.domain.EntityType.ORGANIZATION -> R.drawable.ic_select_group
+private fun entityRelationTypeIconRes(type: org.skepsun.kototoro.tracking.discovery.domain.EntityType): Int = when (type) {
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK -> R.drawable.ic_content_manga
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.CHARACTER -> R.drawable.ic_user
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.PERSON -> R.drawable.ic_user
+    org.skepsun.kototoro.tracking.discovery.domain.EntityType.ORGANIZATION -> R.drawable.ic_select_group
 }
 
 @Preview(showBackground = true)
@@ -461,7 +461,7 @@ private fun EntityRelationCardPreview() {
                 stableKey = "preview-1",
                 name = "Kototoro",
                 coverUrl = null,
-                type = org.skepsun.kototoro.entitygraph.domain.EntityType.WORK,
+                type = org.skepsun.kototoro.tracking.discovery.domain.EntityType.WORK,
                 subtitle = "Independent reader/player",
                 supportingText = "Manga · Ongoing",
             ),

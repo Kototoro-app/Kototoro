@@ -22,7 +22,6 @@ fun DataCleanupSettingsRoute(
     onClearSearchHistory: () -> Unit,
     onClearCookies: () -> Unit,
     onDeleteReadChapters: () -> Unit,
-    onOpenEntityOrganize: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -198,7 +197,6 @@ fun DataCleanupSettingsRoute(
         onClearCookies = onClearCookies,
         onClearBrowserData = viewModel::clearBrowserData,
         onDeleteReadChapters = onDeleteReadChapters,
-        onOpenEntityOrganize = onOpenEntityOrganize,
         modifier = modifier,
     )
 }

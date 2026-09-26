@@ -8,7 +8,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingInfo
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblingStatus
 import org.skepsun.kototoro.scrobbling.mangaupdates.data.MangaUpdatesRepository
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,8 +16,7 @@ class MangaUpdatesScrobbler @Inject constructor(
     private val repository: MangaUpdatesRepository,
     db: MangaDatabase,
     mangaRepositoryFactory: ContentRepository.Factory,
-    workResolver: WorkResolver,
-) : Scrobbler(db, ScrobblerService.MANGAUPDATES, repository, mangaRepositoryFactory, workResolver) {
+) : Scrobbler(db, ScrobblerService.MANGAUPDATES, repository, mangaRepositoryFactory) {
 
     init {
         statuses[ScrobblingStatus.READING] = "0"

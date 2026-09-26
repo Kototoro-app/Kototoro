@@ -11,7 +11,6 @@ abstract class ScrobblingDao {
 
     private companion object {
         const val PREFERRED_ORDER = """
-			CASE WHEN entity_id IS NOT NULL THEN 0 ELSE 1 END,
 			CASE WHEN manga_id != 0 THEN 0 ELSE 1 END,
 			CASE WHEN rating > 0 THEN 0 ELSE 1 END,
 			CASE WHEN comment IS NOT NULL AND comment != '' THEN 0 ELSE 1 END,
@@ -34,7 +33,7 @@ abstract class ScrobblingDao {
     @Query(
         """
 		SELECT * FROM scrobblings
-		WHERE scrobbler = :scrobbler AND entity_id = :entityId
+		WHERE scrobbler = :scrobbler AND manga_id = :entityId
 		ORDER BY $PREFERRED_ORDER
 		LIMIT 1
         """,
@@ -47,7 +46,7 @@ abstract class ScrobblingDao {
     @Query(
         """
 		SELECT * FROM scrobblings
-		WHERE scrobbler = :scrobbler AND entity_id = :entityId
+		WHERE scrobbler = :scrobbler AND manga_id = :entityId
 		ORDER BY $PREFERRED_ORDER
 		LIMIT 1
         """,
@@ -58,7 +57,7 @@ abstract class ScrobblingDao {
         """
 		SELECT * FROM scrobblings
 		WHERE scrobbler = :scrobbler
-			AND entity_id = :entityId
+			AND manga_id = :entityId
 			AND target_id = :targetId
 			AND media_type = :mediaType
 		ORDER BY $PREFERRED_ORDER
@@ -76,7 +75,7 @@ abstract class ScrobblingDao {
         """
 		SELECT * FROM scrobblings
 		WHERE scrobbler = :scrobbler
-			AND entity_id = :entityId
+			AND manga_id = :entityId
 			AND target_id = :targetId
 			AND media_type = :mediaType
 		ORDER BY $PREFERRED_ORDER
@@ -102,7 +101,7 @@ abstract class ScrobblingDao {
     @Query(
         """
 		SELECT * FROM scrobblings
-		WHERE scrobbler = :scrobbler AND entity_id IN (:entityIds)
+		WHERE scrobbler = :scrobbler AND manga_id IN (:entityIds)
 		ORDER BY $PREFERRED_ORDER
         """,
     )
@@ -120,7 +119,7 @@ abstract class ScrobblingDao {
     @Query(
         """
 		SELECT * FROM scrobblings
-		WHERE scrobbler = :scrobbler AND entity_id IN (:entityIds)
+		WHERE scrobbler = :scrobbler AND manga_id IN (:entityIds)
 		ORDER BY $PREFERRED_ORDER
         """,
     )
@@ -207,7 +206,7 @@ abstract class ScrobblingDao {
     @Query("DELETE FROM scrobblings WHERE scrobbler = :scrobbler AND manga_id = :mangaId")
     abstract suspend fun deleteByLocalManga(scrobbler: Int, mangaId: Long)
 
-    @Query("DELETE FROM scrobblings WHERE scrobbler = :scrobbler AND entity_id = :entityId")
+    @Query("DELETE FROM scrobblings WHERE scrobbler = :scrobbler AND manga_id = :entityId")
     abstract suspend fun deleteByEntity(scrobbler: Int, entityId: Long)
 
     @Delete

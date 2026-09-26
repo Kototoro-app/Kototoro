@@ -22,9 +22,8 @@ import org.skepsun.kototoro.scrobbling.common.data.ScrobblerRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerStorage
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblerUserProfileRepository
 import org.skepsun.kototoro.scrobbling.common.data.ScrobblingEntity
-import org.skepsun.kototoro.scrobbling.common.data.attachEntityOwnership
-import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByWorkOrManga
-import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByWorkOrManga
+import org.skepsun.kototoro.scrobbling.common.data.deleteScrobblingByManga
+import org.skepsun.kototoro.scrobbling.common.data.findScrobblingByManga
 import org.skepsun.kototoro.scrobbling.common.data.preferredScrobblingByTargetId
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobbling
 import org.skepsun.kototoro.scrobbling.common.data.upsertScrobblingForManga
@@ -35,7 +34,6 @@ import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerType
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUser
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserProfile
 import org.skepsun.kototoro.scrobbling.common.domain.model.ScrobblerUserStats
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
@@ -288,7 +286,6 @@ class SimklRepository @Inject constructor(
     @ScrobblerType(ScrobblerService.SIMKL) private val okHttp: OkHttpClient,
     @ScrobblerType(ScrobblerService.SIMKL) private val storage: ScrobblerStorage,
     private val db: MangaDatabase,
-    private val workResolver: WorkResolver,
 ) : ScrobblerRepository, ScrobblerUserProfileRepository {
 
     private val clientId = context.getString(R.string.simkl_clientId)
@@ -366,7 +363,7 @@ class SimklRepository @Inject constructor(
     }
 
     override suspend fun unregister(mangaId: Long) {
-        db.deleteScrobblingByWorkOrManga(ScrobblerService.SIMKL.id, mangaId, workResolver)
+        db.deleteScrobblingByManga(ScrobblerService.SIMKL.id, mangaId)
     }
 
     suspend fun getDiscoveryItems(
@@ -440,7 +437,7 @@ class SimklRepository @Inject constructor(
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, chapter: Int) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.SIMKL.id, mangaId, workResolver)
+        val entity = db.findScrobblingByManga(ScrobblerService.SIMKL.id, mangaId)
         requireNotNull(entity) { "Scrobbling info for manga $mangaId not found" }
         val endpoint = contentTypeHints[entity.targetId] ?: resolveEndpoint(entity.targetId)
         if (endpoint == SimklEndpoint.MOVIES) {
@@ -479,7 +476,7 @@ class SimklRepository @Inject constructor(
     }
 
     override suspend fun updateRate(rateId: Int, mangaId: Long, rating: Float, status: String?, comment: String?) {
-        val entity = db.findScrobblingByWorkOrManga(ScrobblerService.SIMKL.id, mangaId, workResolver)
+        val entity = db.findScrobblingByManga(ScrobblerService.SIMKL.id, mangaId)
         requireNotNull(entity) { "Scrobbling info for manga $mangaId not found" }
         val endpoint = contentTypeHints[entity.targetId] ?: resolveEndpoint(entity.targetId)
         val resolvedStatus = status ?: entity.status
@@ -936,7 +933,7 @@ class SimklRepository @Inject constructor(
         db.withTransaction {
             dao.deleteByScrobbler(ScrobblerService.SIMKL.id)
             for (entity in synced) {
-                db.upsertScrobbling(entity, workResolver)
+                db.upsertScrobbling(entity)
             }
         }
         return synced.size
@@ -953,7 +950,7 @@ class SimklRepository @Inject constructor(
         db.withTransaction {
             val dao = db.getScrobblingDao()
             for (entity in updates) {
-                val normalized = db.upsertScrobbling(entity, workResolver)
+                val normalized = db.upsertScrobbling(entity)
                 existingByTargetId[entity.targetId] = normalized
             }
         }
@@ -973,7 +970,7 @@ class SimklRepository @Inject constructor(
         db.withTransaction {
             val dao = db.getScrobblingDao()
             for (entity in updates) {
-                val normalized = db.upsertScrobbling(entity, workResolver)
+                val normalized = db.upsertScrobbling(entity)
                 existingByTargetId[entity.targetId] = normalized
             }
         }
@@ -1259,7 +1256,6 @@ class SimklRepository @Inject constructor(
                 comment = comment,
                 rating = rating.coerceIn(0f, 1f),
             ),
-            workResolver,
             mangaId = mangaId,
         )
     }

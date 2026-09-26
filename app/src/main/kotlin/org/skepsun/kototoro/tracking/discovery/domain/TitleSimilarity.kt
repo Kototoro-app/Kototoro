@@ -1,4 +1,4 @@
-package org.skepsun.kototoro.entitygraph.domain
+package org.skepsun.kototoro.tracking.discovery.domain
 
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import java.text.Normalizer
@@ -57,6 +57,45 @@ private val TRADITIONAL_TO_SIMPLIFIED_TITLE_CHARS = mapOf(
     '噹' to '当',
     '達' to '达',
 )
+
+public fun normalizeStrictTitleKey(value: String): String {
+    return value.trim()
+        .lowercase()
+        .replace(Regex("[\\p{P}\\p{S}]+"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+}
+
+/**
+ * Normalise a title after dropping a trailing `(Source Name)` suffix that merely
+ * repeats one of [sourceNames] — e.g. `Title (Kototoro)` vs `Title`.
+ */
+public fun normalizeStrictTitleKey(value: String, sourceNames: Iterable<String>): String {
+    return normalizeStrictTitleKey(stripTrailingSourceTitleSuffix(value, sourceNames))
+}
+
+/**
+ * Removes a trailing bracketed suffix when it matches one of [sourceNames]
+ * (compared through [normalizeStrictTitleKey]).
+ */
+public fun stripTrailingSourceTitleSuffix(value: String, sourceNames: Iterable<String>): String {
+    val title = value.trim()
+    val match = TRAILING_SOURCE_TITLE_SUFFIX_REGEX.matchEntire(title) ?: return title
+    val suffixKey = normalizeStrictTitleKey(match.groupValues[2])
+    if (suffixKey.isBlank()) {
+        return title
+    }
+    val sourceKeys = sourceNames
+        .mapTo(LinkedHashSet()) { normalizeStrictTitleKey(it) }
+        .filterTo(LinkedHashSet()) { it.isNotBlank() }
+    return if (suffixKey in sourceKeys) {
+        match.groupValues[1].trim()
+    } else {
+        title
+    }
+}
+
+private val TRAILING_SOURCE_TITLE_SUFFIX_REGEX = Regex("""^(.+?)\s*[\(（]([^\(\)（）]+)[\)）]\s*$""")
 
 fun titleSimilarityScore(left: String, right: String): Float {
     if (left == right) return 1f

@@ -35,7 +35,6 @@ import org.skepsun.kototoro.parsers.model.ContentTag
 import org.skepsun.kototoro.parsers.util.levenshteinDistance
 import org.skepsun.kototoro.parsers.util.mapToSet
 import org.skepsun.kototoro.search.ui.ContentSuggestionsProvider
-import org.skepsun.kototoro.work.domain.WorkResolver
 import javax.inject.Inject
 import kotlin.math.abs
 
@@ -54,7 +53,6 @@ class ContentSearchRepository @Inject constructor(
     private val recentSuggestions: SearchRecentSuggestions,
     private val settings: AppSettings,
     private val dataRepository: ContentDataRepository,
-    private val workResolver: WorkResolver,
 ) {
 
     suspend fun getContentSuggestion(query: String, limit: Int, source: ContentSource?): List<LocalEntitySuggestion> = when {
@@ -97,49 +95,25 @@ class ContentSearchRepository @Inject constructor(
         }.orEmpty()
     }
 
+    /**
+     * Projection-first 聚合：每条已持久化的 content 独立成立，跨来源不再存在实体身份（entity identity），
+     * 因此不解析 entityId、不跨条目合并，仅按 limit 截断。
+     */
     private suspend fun List<Content>.aggregateByEntity(limit: Int): List<LocalEntitySuggestion> {
         if (isEmpty()) {
             return emptyList()
         }
-        val identitiesByMangaId = workResolver.resolveManyByMangaIds(map { it.id })
-        val resolvedEntityIdsByMangaId = identitiesByMangaId.mapValues { it.value.entityId }.filterValues { it != null }
-            .mapValues { requireNotNull(it.value) }
-        val preferredLocalIdsByEntity = identitiesByMangaId.values
-            .mapNotNull { identity -> identity.entityId?.let { it to identity.preferredMangaId } }
-            .toMap()
-        val displayTypeOrdinalByEntity = this
-            .groupBy { resolvedEntityIdsByMangaId[it.id] }
-            .mapNotNull { (entityId, items) ->
-                entityId?.let { it to items.resolveDisplayContentTypeOrdinal() }
-            }
-            .toMap()
-        val grouped = LinkedHashMap<String, MutableList<Content>>(size)
-        val entityIdsByKey = HashMap<String, Long?>()
-        forEach { content ->
-            val entityId = resolvedEntityIdsByMangaId[content.id]
-            val contentTypeOrdinal = entityId?.let(displayTypeOrdinalByEntity::get) ?: content.source.contentType.ordinal
-            val key = entityId?.let { "entity:$it:type:$contentTypeOrdinal" } ?: "content:${content.id}"
-            grouped.getOrPut(key) { ArrayList(1) } += content
-            entityIdsByKey.putIfAbsent(key, entityId)
-        }
-        return grouped.asSequence()
-            .map { (key, items) ->
-                val entityId = entityIdsByKey[key]
-                val preferredLocalMangaId = entityId?.let(preferredLocalIdsByEntity::get)
+        return asSequence()
+            .map { content ->
                 LocalEntitySuggestion(
-                    entityId = entityId,
-                    representative = items.firstOrNull { it.id == preferredLocalMangaId } ?: items.first(),
-                    projectionCount = items.size,
-                    sourceCount = items.mapTo(mutableSetOf()) { it.source.name }.size,
+                    entityId = null,
+                    representative = content,
+                    projectionCount = 1,
+                    sourceCount = 1,
                 )
             }
             .take(limit)
             .toList()
-    }
-
-    private fun List<Content>.resolveDisplayContentTypeOrdinal(): Int {
-        return firstOrNull { !it.source.name.startsWith("TRACKING_") }?.source?.contentType?.ordinal
-            ?: first().source.contentType.ordinal
     }
 
     fun observeRecentQueries(limit: Int): Flow<List<String>> = callbackFlow {

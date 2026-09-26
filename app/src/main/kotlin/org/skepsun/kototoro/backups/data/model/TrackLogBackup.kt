@@ -3,8 +3,12 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.tracker.data.TrackLogEntity
-import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 
+/**
+ * Wire format of a tracker feed log row. `owner_id` / `entity_id` are kept as payload
+ * fields so backups written by the entity-era app still deserialize, but they no longer
+ * carry identity: a log is owned by its `manga_id` projection.
+ */
 @Serializable
 class TrackLogBackup(
     @SerialName("owner_id") val ownerId: Long,
@@ -24,15 +28,10 @@ class TrackLogBackup(
         isUnread = entity.isUnread,
     )
 
-    fun toEntity(entityIdMapping: Map<Long, Long> = emptyMap()): TrackLogEntity {
-        val localEntityId = entityId?.let { entityIdMapping[it] ?: it }
-        return TrackLogEntity(
-            ownerId = resolveTrackOwnerId(localEntityId, mangaId).takeIf { it != 0L } ?: ownerId,
-            mangaId = mangaId,
-            entityId = localEntityId,
-            chapters = chapters,
-            createdAt = createdAt.coerceAtLeast(0L),
-            isUnread = isUnread,
-        )
-    }
+    fun toEntity(): TrackLogEntity = TrackLogEntity(
+        mangaId = mangaId,
+        chapters = chapters,
+        createdAt = createdAt.coerceAtLeast(0L),
+        isUnread = isUnread,
+    )
 }

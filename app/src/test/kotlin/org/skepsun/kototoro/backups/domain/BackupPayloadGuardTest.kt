@@ -1,7 +1,6 @@
 package org.skepsun.kototoro.backups.domain
 
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -157,7 +156,8 @@ class BackupPayloadGuardTest {
 	}
 
 	@Test
-	fun `missing work entity ids include the projection title when available`() {
+	fun `legacy work state with a missing entity is still restorable onto its anchor`() {
+		// Projection-first restore only needs anchor_manga_id; entity ids are payload.
 		val backup = backupFile(
 			BackupSection.PROJECTIONS to """[{"id":42,"title":"Readable title","source":"test-source"}]""",
 			BackupSection.ENTITY_GRAPH_ENTITIES to "[]",
@@ -165,13 +165,7 @@ class BackupPayloadGuardTest {
 			BackupSection.WORK_HISTORY to """[{"entity_id":99,"anchor_manga_id":42,"deleted_at":0}]""",
 		)
 
-		val error = assertThrows(ActiveWorkStateMissingEntityException::class.java) {
-			BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
-		}
-
-		assertEquals(1, error.report.totalCount)
-		assertEquals("Readable title", error.report.items.single().title)
-		assertEquals("test-source", error.report.items.single().source)
+		BackupPayloadGuard.requireRestorableWorkSnapshot(backup, operation = "manual backup creation")
 	}
 
 	private fun backupFile(vararg sections: Pair<BackupSection, String>): File {

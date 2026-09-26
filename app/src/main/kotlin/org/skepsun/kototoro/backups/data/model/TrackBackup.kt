@@ -3,8 +3,12 @@ package org.skepsun.kototoro.backups.data.model
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.skepsun.kototoro.tracker.data.TrackEntity
-import org.skepsun.kototoro.tracker.data.resolveTrackOwnerId
 
+/**
+ * Wire format of a tracked content row. `owner_id` / `entity_id` are kept as payload
+ * fields so backups written by the entity-era app still deserialize, but they no longer
+ * carry identity: a track is owned by its `manga_id` projection.
+ */
 @Serializable
 class TrackBackup(
     @SerialName("owner_id") val ownerId: Long,
@@ -30,18 +34,13 @@ class TrackBackup(
         lastError = entity.lastError,
     )
 
-    fun toEntity(entityIdMapping: Map<Long, Long> = emptyMap()): TrackEntity {
-        val localEntityId = entityId?.let { entityIdMapping[it] ?: it }
-        return TrackEntity(
-            ownerId = resolveTrackOwnerId(localEntityId, mangaId).takeIf { it != 0L } ?: ownerId,
-            mangaId = mangaId,
-            entityId = localEntityId,
-            lastChapterId = lastChapterId,
-            newChapters = newChapters.coerceAtLeast(0),
-            lastCheckTime = lastCheckTime.coerceAtLeast(0L),
-            lastChapterDate = lastChapterDate.coerceAtLeast(0L),
-            lastResult = lastResult,
-            lastError = lastError,
-        )
-    }
+    fun toEntity(): TrackEntity = TrackEntity(
+        mangaId = mangaId,
+        lastChapterId = lastChapterId,
+        newChapters = newChapters.coerceAtLeast(0),
+        lastCheckTime = lastCheckTime.coerceAtLeast(0L),
+        lastChapterDate = lastChapterDate.coerceAtLeast(0L),
+        lastResult = lastResult,
+        lastError = lastError,
+    )
 }
