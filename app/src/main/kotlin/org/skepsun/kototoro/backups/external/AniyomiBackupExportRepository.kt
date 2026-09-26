@@ -9,7 +9,6 @@ import org.skepsun.kototoro.R
 import org.skepsun.kototoro.core.db.MangaDatabase
 import org.skepsun.kototoro.core.db.entity.ChapterEntity
 import org.skepsun.kototoro.core.db.entity.MangaEntity
-import org.skepsun.kototoro.favourites.data.FavouriteCategoryEntity
 import org.skepsun.kototoro.favourites.data.FavouriteEntity
 import org.skepsun.kototoro.history.data.HistoryEntity
 import org.skepsun.kototoro.core.util.progress.Progress
@@ -50,11 +49,12 @@ class AniyomiBackupExportRepository @Inject constructor(
         val categoriesById = database.getFavouriteCategoriesDao()
             .findAll()
             .associateBy { it.categoryId.toLong() }
-        val categoryOrderById = categoriesById.mapValues { (_, category) -> category.sortKey.toLong() }
-        val exportedCategoryIds = favoriteEntriesByMangaId.values
+        val exportedCategories = favoriteEntriesByMangaId.values
             .flatten()
             .map(FavouriteEntity::categoryId)
             .distinct()
+            .mapNotNull(categoriesById::get)
+        val categoryOrderById = MihonBackupExportMapper.assignCategoryOrders(exportedCategories)
         val tagTitlesByMangaId = loadTagTitlesByMangaId(exportedIds)
 
         val total = exportedIds.size
@@ -162,15 +162,15 @@ class AniyomiBackupExportRepository @Inject constructor(
 
         val backup = AniyomiBackup(
             backupManga = backupManga,
-            backupCategories = exportedCategoryIds.mapNotNull(categoriesById::get)
-                .sortedBy(FavouriteCategoryEntity::sortKey)
+            backupCategories = exportedCategories
                 .map { category ->
                     MihonBackupCategory(
                         name = category.title,
-                        order = category.sortKey.toLong(),
+                        order = categoryOrderById.getValue(category.categoryId.toLong()),
                         id = category.categoryId.toLong(),
                     )
-                },
+                }
+                .sortedBy(MihonBackupCategory::order),
             backupAnime = backupAnime,
         )
         GZIPOutputStream(output).use { gzip ->

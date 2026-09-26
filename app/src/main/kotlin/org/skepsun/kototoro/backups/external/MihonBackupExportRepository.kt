@@ -54,11 +54,12 @@ class MihonBackupExportRepository @Inject constructor(
         val categoriesById = database.getFavouriteCategoriesDao()
             .findAll()
             .associateBy { it.categoryId.toLong() }
-        val categoryOrderById = categoriesById.mapValues { (_, category) -> category.sortKey.toLong() }
-        val exportedCategoryIds = favoriteEntriesByMangaId.values
+        val exportedCategories = favoriteEntriesByMangaId.values
             .flatten()
             .map(FavouriteEntity::categoryId)
             .distinct()
+            .mapNotNull(categoriesById::get)
+        val categoryOrderById = MihonBackupExportMapper.assignCategoryOrders(exportedCategories)
         val tagTitlesByMangaId = loadTagTitlesByMangaId(exportedMangaIds)
 
         val total = exportedMangaIds.size
@@ -114,15 +115,15 @@ class MihonBackupExportRepository @Inject constructor(
 
         val backup = MihonBackup(
             backupManga = exportedManga,
-            backupCategories = exportedCategoryIds.mapNotNull(categoriesById::get)
-                .sortedBy(FavouriteCategoryEntity::sortKey)
+            backupCategories = exportedCategories
                 .map { category ->
                     MihonBackupCategory(
                         name = category.title,
-                        order = category.sortKey.toLong(),
+                        order = categoryOrderById.getValue(category.categoryId.toLong()),
                         id = category.categoryId.toLong(),
                     )
-                },
+                }
+                .sortedBy(MihonBackupCategory::order),
         )
         GZIPOutputStream(output).use { gzip ->
             gzip.write(ProtoBuf.encodeToByteArray(MihonBackup.serializer(), backup))
@@ -179,6 +180,17 @@ internal object MihonBackupExportMapper {
             url = chapter.url,
             lastRead = history.updatedAt.takeIf { it > 0L } ?: history.createdAt,
         )
+    }
+
+    /**
+     * Mihon links a manga to its categories by order, so every exported category needs a
+     * distinct one; Kototoro sort keys may repeat.
+     */
+    fun assignCategoryOrders(categories: Collection<FavouriteCategoryEntity>): Map<Long, Long> {
+        return categories
+            .sortedWith(compareBy(FavouriteCategoryEntity::sortKey, FavouriteCategoryEntity::categoryId))
+            .withIndex()
+            .associate { (index, category) -> category.categoryId.toLong() to index.toLong() }
     }
 
     fun mapCategoryOrders(
