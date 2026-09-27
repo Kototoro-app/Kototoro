@@ -1,5 +1,9 @@
 # 实体中心 Work 化改造执行计划（2026-06）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 这份文档不是再讨论“目标架构是否正确”，而是把当前 Kototoro 的实体治理、ownership 上移、历史兼容收敛，整理成一份真正可执行的改造路线。

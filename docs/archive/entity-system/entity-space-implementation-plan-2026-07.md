@@ -1,5 +1,9 @@
 # Entity Space 实施计划（2026-07）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档把 Kototoro 的 Entity Space 产品设想收敛为一份可执行的 Android 架构、数据、导航和 UI 迁移计划。

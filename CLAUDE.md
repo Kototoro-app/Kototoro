@@ -10,7 +10,6 @@ Kototoro 是一个开源的 Android 应用，将漫画、小说和视频整合�
 - 多平台进度追踪（MAL、Kitsu、AniList、Bangumi 等）
 - 广泛的图源支持：Mihon、Aniyomi、IReader、Legado、TVBox、Cloudstream3、Tsuki 扩展 + 动态解析器
 - 自定义媒体空间（Spaces）：内置漫画/小说/动漫空间，支持按内容类型、语言与来源自定义浏览范围
-- 实体体系与实体整理（entity graph / work 迁移账本）
 - 动态 UI 插件系统（通过外部 classloader）
 - 纯 Kotlin 实现的 OTA 增量更新（bspatch）
 - WebDAV 多设备同步
@@ -176,9 +175,7 @@ npm run docs:build
 - `suggestions/` - 推荐/建议
 - `filter/` - 内容筛选
 - `list/` - 列表视图
-- `entitygraph/` - 实体关系图谱（统一管理漫画/小说/视频之间的关联）
 - `space/` - 自定义媒体空间（内置 Manga/Novel/Anime + 用户自定义空间，含会话、路由、目录与内容策略）
-- `work/` - Work→实体迁移账本与解析器（WorkMigrationLedger）
 - `stats/` - 阅读统计
 - `readingrecord/` - 阅读记录与阅读时长（ReadingRecord / 阅读跳转点）
 
@@ -215,9 +212,10 @@ npm run docs:build
 - 自动回退到完整 APK 下载
 
 **数据库**：
-- Room 数据库（`MangaDatabase`），DATABASE_VERSION = 77，schema 位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`
-- 迁移文件 `core/db/migrations/Migration1To2.kt` 到 `Migration76To77.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `MangaDatabase` 的迁移列表中）
-- 实体含实体/绑定/关系表、WorkMigrationLedger、ReadingRecord/ReadingJumpPoint、RestoreCheckpoint、Space*（会话/导航/路由偏好/空间定义）等
+- Room 数据库（`MangaDatabase`），DATABASE_VERSION = 84，schema 位于 `app/schemas/org.skepsun.kototoro.core.db.MangaDatabase/`
+- 迁移文件 `core/db/migrations/Migration1To2.kt` 到 `Migration83To84.kt`（另含历史遗留的降级迁移 `Migration24To23.kt`，仍保留在 `MangaDatabase` 的迁移列表中）
+- 用户状态（收藏/历史/统计/偏好/追踪）直接挂在 `manga` 行上；实体图谱与 work 表已在 v84 移除（`Migration83To84` → `ProjectionOwnershipMigrationResolver`）
+- 实体含 ReadingRecord/ReadingJumpPoint、RestoreCheckpoint、Space*（会话/导航/路由偏好/空间定义）等
 - 使用 KSP 生成 Kotlin 代码
 
 **依赖注入**：
@@ -286,10 +284,8 @@ RELEASE_KEY_PASSWORD=***
 - `docs/architecture/external-extension-integration-guide.md` - 外部扩展集成详解
 - `docs/architecture/incremental-updates.md` - 增量更新机制
 - `docs/architecture/dynamic_plugin_system.md` - 动态 UI 插件系统
-- `docs/architecture/entity-graph-implementation-plan.md` - 实体关系图谱实现计划
 - `docs/architecture/custom-spaces.md` - 自定义媒体空间架构
-- `docs/architecture/entity-space-implementation-plan-2026-07.md` - 实体空间实现计划
-- `docs/architecture/work-migration-status-audit-2026-06.md` - work 迁移状态审计（及相关 work-* 文档）
+- `docs/architecture/entity-system-removal-handoff-2026-09.md` - 实体/work 体系移除与数据迁移交接（旧实体文档已归档到 `docs/archive/entity-system/`）
 - `docs/architecture/large-library-performance-handoff-2026-08.md` - 大型本地库分页性能交接
 - `docs/architecture/cloudflare-resolver-improvement-plan.md` - Cloudflare 解析器改进计划
 - `docs/architecture/media3-video-player-migration-plan-2026-08.md` - media3 视频播放器迁移计划

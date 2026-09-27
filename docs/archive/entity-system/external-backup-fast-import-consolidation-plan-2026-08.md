@@ -1,5 +1,9 @@
 # 外部备份快速导入与延迟实体整理方案（2026-08）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 背景
 
 外部备份（Mihon / TachiyomiSY / Aniyomi 等）导入走 `ExternalBackupImportService` →

@@ -14,6 +14,7 @@ export default defineConfig({
   ignoreDeadLinks: [
     /app\/src\//,
     /\/build\.gradle/,
+    /(\.\.\/)+scripts\//,
     /^\/Users\//,
     /(\.\.\/)+komikku\//,
   ],
@@ -48,7 +49,6 @@ export default defineConfig({
         items: [
           { text: "Getting Started", link: "/getting-started" },
           { text: "Reader Features", link: "/reader-features" },
-          { text: "Entity System", link: "/entity-system" },
           { text: "Automatic Translation", link: "/automatic-translation" },
           { text: "Source Integrations", link: "/source-integrations" },
           { text: "WebDAV Sync", link: "/webdav-sync" },
@@ -64,13 +64,6 @@ export default defineConfig({
           { text: "Reader Scene Closure Plan (2026-09)", link: "/architecture/reader-scene-closure-plan-2026-09" },
           { text: "Favourites Library Plan", link: "/architecture/favourites-komikku-alignment-implementation-plan-2026-09" },
           { text: "Unified Cloudflare Solver", link: "/architecture/unified-cloudflare-solver-plan-2026-08" },
-          { text: "Entity Graph Plan", link: "/architecture/entity-graph-implementation-plan" },
-          { text: "Entity Identity Migration", link: "/architecture/entity-identity-migration-consolidation-plan-2026-06" },
-          { text: "Entity Space Plan", link: "/architecture/entity-space-implementation-plan-2026-07" },
-          { text: "Entity Source Governance", link: "/architecture/entity-source-governance-plan" },
-          { text: "Entity Source Boundary Audit", link: "/architecture/entity-graph-source-boundary-audit-2026-06" },
-          { text: "Entity Content-Type Merge Bug", link: "/architecture/entity-content-type-merge-bug-analysis-2026-07" },
-          { text: "Work Migration Status Audit", link: "/architecture/work-migration-status-audit-2026-06" },
           { text: "OCR Architecture Review", link: "/architecture/ocr-architecture-review" },
           { text: "OCR Pipeline", link: "/architecture/ocr-pipeline-v2" },
           { text: "UI Improvement", link: "/architecture/ui_improvement" },
@@ -95,6 +88,7 @@ export default defineConfig({
         items: [
           { text: "Archive Overview", link: "/archive/" },
           { text: "OCR Roadmap Review (2026-03)", link: "/archive/ocr-roadmap-review-2026-03" },
+          { text: "Entity System (removed 2026-09)", link: "/archive/entity-system/" },
           { text: "Archived Mihon Notes (ZH)", link: "/archive/zh/mihon-compatibility" },
         ],
       },

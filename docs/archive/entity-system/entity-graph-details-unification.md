@@ -1,5 +1,9 @@
 # Entity Graph — DetailsScreen Unification Progress
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## Overview
 
 This document tracks the progress of unifying the Kototoro detail page architecture.

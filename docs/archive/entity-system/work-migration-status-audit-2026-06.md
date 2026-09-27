@@ -1,5 +1,9 @@
 # Work 化迁移当前状态审计（2026-06）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档用于沉淀 Kototoro 当前工作树里已经完成的 Work 化主链收口，以及仍然明确存在的命名、结构和兼容债务。

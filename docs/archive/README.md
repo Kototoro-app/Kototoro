@@ -14,4 +14,9 @@ Current archived OCR and translation materials:
 - [OCR Architecture Review](./ocr-architecture-review.md)
 - [OCR Roadmap Review, March 2026](./ocr-roadmap-review-2026-03.md)
 
+Removed entity graph and work ownership model (September 2026):
+
+- [Entity System (Archived)](./entity-system/index.md) — the organize guide and every entity / work
+  design, migration, and audit document
+
 Archived files may be outdated and should not be treated as the current source of truth.

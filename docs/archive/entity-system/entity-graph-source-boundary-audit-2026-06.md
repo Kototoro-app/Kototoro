@@ -1,5 +1,9 @@
 # Entity Graph Source Boundary Audit (2026-06)
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## Purpose
 
 This note records the current boundary problems between entity identity, local reading projections, tracking bindings, and metadata source selections.

@@ -1,5 +1,9 @@
 # Work Sync Schema And Restore Isolation Spec（2026-06）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档定义 Kototoro 在 Work 化迁移期间的同步协议分代、restore 隔离和 auto-upload 禁写闸门。

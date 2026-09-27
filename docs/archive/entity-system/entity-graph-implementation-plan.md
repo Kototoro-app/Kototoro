@@ -1,5 +1,9 @@
 # Entity Graph Implementation Plan
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## Purpose
 
 This document turns the entity-graph discussion into an execution plan for Kototoro.

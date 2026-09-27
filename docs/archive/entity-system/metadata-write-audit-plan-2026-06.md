@@ -1,5 +1,9 @@
 # Metadata Write Audit Plan（2026-06）
 
+> [!WARNING]
+> Archived: the entity graph and work ownership model was removed in September 2026, so this page
+> does not describe the current app. See [Entity System (Archived)](./index.md).
+
 ## 目的
 
 本文档用于审计 Kototoro 当前所有关键 metadata 写入路径，并定义收敛策略。
