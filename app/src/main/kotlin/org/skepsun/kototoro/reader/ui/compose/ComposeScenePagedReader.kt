@@ -1518,7 +1518,7 @@ fun ComposeScenePagedReader(
                                             seamPolicy = PageSeamPolicy.Zero,
                                             viewportScrollX = if (readingDirection == SceneReadingDirection.LEFT_TO_RIGHT) currentOffset else 0f,
                                             viewportScrollY = if (readingDirection.isVertical) currentOffset else 0f,
-                                            placeholderColor = Color.DarkGray,
+                                            placeholderColor = Color(slotColor),
                                             imageColorFilter = imageColorFilter,
                                             readerAssetProvider = { id: PageId -> retainedAssets[id] },
                                             animatedBridge = animatedBridge,

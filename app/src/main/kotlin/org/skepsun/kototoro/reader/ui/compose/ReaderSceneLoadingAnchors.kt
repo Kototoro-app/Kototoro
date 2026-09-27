@@ -61,7 +61,18 @@ internal const val LOADING_OVERLAY_MARGIN_VIEWPORTS = 3f
  */
 internal data class AnchoredLoadingOverlays(
     val anchorScroll: Float,
-    val items: List<Triple<PageId, Float, Float>>,
+    val items: List<AnchoredLoadingOverlay>,
+)
+
+/**
+ * One loading/error overlay of [pageId]; a page longer than the viewport carries one per viewport
+ * extent (see resolvePlaceholderIndicatorCenters), told apart by [slot].
+ */
+internal data class AnchoredLoadingOverlay(
+    val pageId: PageId,
+    val slot: Int,
+    val centerX: Float,
+    val centerY: Float,
 )
 
 /**

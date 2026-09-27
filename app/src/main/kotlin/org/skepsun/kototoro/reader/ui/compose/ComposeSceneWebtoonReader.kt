@@ -83,6 +83,7 @@ import org.skepsun.kototoro.reader.image.ReaderImageLoadState
 import org.skepsun.kototoro.reader.image.ReaderImagePipeline
 import org.skepsun.kototoro.reader.render.arr.AdaptiveRefreshRateHelper
 import org.skepsun.kototoro.reader.render.compose.ComposeSceneRenderer
+import org.skepsun.kototoro.reader.render.compose.resolvePlaceholderIndicatorCenters
 import org.skepsun.kototoro.reader.render.compose.SceneImagePresentationCoordinator
 import org.skepsun.kototoro.reader.render.compose.rememberComposeSceneScrollState
 import org.skepsun.kototoro.reader.ui.pager.ReaderPage
@@ -898,33 +899,6 @@ fun ComposeSceneWebtoonReader(
                 },
         ) {
             if (activeScene != null) {
-                val pageLabelFormat = stringResource(R.string.reader_page_label)
-                ComposeSceneRenderer(
-                    scene = activeScene,
-                    scrollState = scrollState,
-                    placeholderColor = Color.DarkGray,
-                    pageLabelProvider = { pageId ->
-                        pageLookup(pageId)?.index?.let { pageLabelFormat.format(it + 1) } ?: ""
-                    },
-                    imageColorFilter = imageColorFilter,
-                    readerAssetProvider = { id ->
-                        retainedAssets[id]
-                    },
-                    tileStore = adapter.tileStore,
-                    onScrollProgressChanged = { currentY, _ ->
-                        updateResourceWindow(activeScene, currentY, currentMotion)
-                    },
-                    onMotionChanged = { motion ->
-                        currentMotion = motion
-                        AdaptiveRefreshRateHelper.applyPreference(view, motion)
-                        if (motion.isIdle) {
-                            updateResourceWindow(activeScene, scrollState.scrollY, motion)
-                        }
-                    },
-                    onOverScroll = ::handleOverScroll,
-                    onReleaseOverScroll = ::handleReleaseOverScroll,
-                    modifier = Modifier.fillMaxSize(),
-                )
                 val webtoonLoadingOverlays = remember(
                     activeScene,
                     lastReportedPages,
@@ -950,56 +924,76 @@ fun ComposeSceneWebtoonReader(
                             FloatRect.fromLtwh(0f, anchorY - margin, vWidth, vHeight + margin * 2f),
                         )
                         val frame = activeScene.resolve(vp)
-                        val items = mutableListOf<Triple<PageId, Float, Float>>()
+                        val items = mutableListOf<AnchoredLoadingOverlay>()
                         for (node in frame.visibleNodes) {
                             if (retainedAssets[node.pageId] == null) {
-                                val screenTop = node.sceneBounds.top - anchorY
-                                val screenBottom = node.sceneBounds.bottom - anchorY
-                                val screenLeft = node.sceneBounds.left
-                                val screenRight = node.sceneBounds.right
-                                val visibleTop = maxOf(screenTop, 0f)
-                                val visibleBottom = minOf(screenBottom, vHeight)
-                                val visibleLeft = maxOf(screenLeft, 0f)
-                                val visibleRight = minOf(screenRight, vWidth)
-                                val (cx, cy) = if (visibleBottom > visibleTop && visibleRight > visibleLeft) {
-                                    (visibleLeft + visibleRight) / 2f to (visibleTop + visibleBottom) / 2f
-                                } else {
-                                    // Page within the margin but off-screen: anchor at the
-                                    // page's own center; the overlay glides in glued to the
-                                    // placeholder when the page scrolls into view.
-                                    (screenLeft + screenRight) / 2f to (screenTop + screenBottom) / 2f
+                                // Fixed to the page, not to its visible slice, so a re-anchor
+                                // never moves an overlay and a long page always shows one.
+                                val cx = (node.sceneBounds.left + node.sceneBounds.right) / 2f
+                                resolvePlaceholderIndicatorCenters(
+                                    pageStart = node.sceneBounds.top - anchorY,
+                                    pageExtent = node.sceneBounds.height,
+                                    viewportExtent = vHeight,
+                                ).forEachIndexed { slot, cy ->
+                                    if (cy in -margin..(vHeight + margin)) {
+                                        items.add(AnchoredLoadingOverlay(node.pageId, slot, cx, cy))
+                                    }
                                 }
-                                items.add(Triple(node.pageId, cx, cy))
                             }
                         }
                         AnchoredLoadingOverlays(anchorY, items)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clipToBounds(),
+                ComposeSceneRenderer(
+                    scene = activeScene,
+                    scrollState = scrollState,
+                    placeholderColor = Color(readerBackgroundColor),
+                    imageColorFilter = imageColorFilter,
+                    readerAssetProvider = { id ->
+                        retainedAssets[id]
+                    },
+                    tileStore = adapter.tileStore,
+                    onScrollProgressChanged = { currentY, _ ->
+                        updateResourceWindow(activeScene, currentY, currentMotion)
+                    },
+                    onMotionChanged = { motion ->
+                        currentMotion = motion
+                        AdaptiveRefreshRateHelper.applyPreference(view, motion)
+                        if (motion.isIdle) {
+                            updateResourceWindow(activeScene, scrollState.scrollY, motion)
+                        }
+                    },
+                    onOverScroll = ::handleOverScroll,
+                    onReleaseOverScroll = ::handleReleaseOverScroll,
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    for ((pageId, centerX, centerY) in webtoonLoadingOverlays.items) {
-                        key(pageId) {
-                            CenteredOverlay(
-                                centerX = centerX,
-                                centerY = centerY,
-                                modifier = Modifier.loadingOverlayVerticalAnchor(
-                                    webtoonLoadingOverlays.anchorScroll,
-                                    scrollState,
-                                ),
-                            ) {
-                                SceneReaderPageLoadOverlay(
-                                    pipeline = adapter,
-                                    pageId = pageId,
-                                    page = pageLookup(pageId),
-                                    onRetryError = onRetryError,
-                                    onShowErrorDetails = onShowErrorDetails,
-                                    resolveErrorStringId = resolveErrorStringId,
-                                    onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
-                                )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clipToBounds(),
+                    ) {
+                        for ((pageId, slot, centerX, centerY) in webtoonLoadingOverlays.items) {
+                            key(pageId, slot) {
+                                CenteredOverlay(
+                                    centerX = centerX,
+                                    centerY = centerY,
+                                    modifier = Modifier.loadingOverlayVerticalAnchor(
+                                        webtoonLoadingOverlays.anchorScroll,
+                                        scrollState,
+                                    ),
+                                ) {
+                                    SceneReaderPageLoadOverlay(
+                                        pipeline = adapter,
+                                        pageId = pageId,
+                                        page = pageLookup(pageId),
+                                        onRetryError = onRetryError,
+                                        onShowErrorDetails = onShowErrorDetails,
+                                        resolveErrorStringId = resolveErrorStringId,
+                                        onRetry = { coroutineScope.launch { adapter.retryAsset(pageId) } },
+                                        unresolvedIsLoading = true,
+                                    )
+                                }
                             }
                         }
                     }

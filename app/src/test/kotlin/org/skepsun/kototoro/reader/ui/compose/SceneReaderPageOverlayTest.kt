@@ -36,6 +36,24 @@ class SceneReaderPageOverlayTest {
 	}
 
 	@Test
+	fun `a continuous host shows the spinner on any page it cannot draw yet`() {
+		// Like the legacy webtoon reader, whose pages start in LoadingOriginal: a page on screen with
+		// nothing to draw is loading as far as the reader can tell, whatever the pipeline recorded.
+		assertEquals(
+			SceneReaderPageOverlay.LOADING,
+			resolveSceneReaderPageOverlay(state = null, hasRenderableAsset = false, unresolvedIsLoading = true),
+		)
+		assertEquals(
+			SceneReaderPageOverlay.NONE,
+			resolveSceneReaderPageOverlay(state = null, hasRenderableAsset = true, unresolvedIsLoading = true),
+		)
+		assertEquals(
+			SceneReaderPageOverlay.NONE,
+			resolveSceneReaderPageOverlay(ReaderImageLoadState.Ready, hasRenderableAsset = false, unresolvedIsLoading = true),
+		)
+	}
+
+	@Test
 	fun `a loading page with nothing to draw shows the spinner`() {
 		assertEquals(
 			SceneReaderPageOverlay.LOADING,

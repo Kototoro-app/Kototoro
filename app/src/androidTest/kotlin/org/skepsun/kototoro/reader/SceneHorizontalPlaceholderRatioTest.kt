@@ -36,7 +36,6 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Chapter-ratio convergence of the loading placeholder geometry in the horizontal continuous
@@ -46,7 +45,8 @@ import kotlin.math.min
  * their aspect ratio closely: once two sibling pages have decoded, the still-loading page's
  * placeholder must adopt the chapter-average ratio (fit-height width = viewport height / 4 for
  * the 1:4 fixture) instead of the fallback viewport-width square. The fixture snaps to the
- * never-loading third page, so its placeholder width is directly measurable on screen.
+ * never-loading third page; a placeholder is painted with the reader background, so its width is
+ * measured as the background run between it and the decoded fourth page.
  */
 @RunWith(AndroidJUnit4::class)
 @HiltAndroidTest
@@ -61,17 +61,22 @@ class SceneHorizontalPlaceholderRatioTest {
         val context = instrumentation.targetContext
         val greenBmp = Bitmap.createBitmap(100, 400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.GREEN) }
         val cyanBmp = Bitmap.createBitmap(100, 400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.CYAN) }
+        val magentaBmp = Bitmap.createBitmap(100, 400, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.MAGENTA) }
         val greenFile = File(context.cacheDir, "scene-placeholder-ratio-green.png")
         val cyanFile = File(context.cacheDir, "scene-placeholder-ratio-cyan.png")
+        val magentaFile = File(context.cacheDir, "scene-placeholder-ratio-magenta.png")
         greenFile.outputStream().use { greenBmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         cyanFile.outputStream().use { cyanBmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        magentaFile.outputStream().use { magentaBmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         greenBmp.recycle()
         cyanBmp.recycle()
+        magentaBmp.recycle()
 
         val pages = listOf(
             ReaderPage(1L, greenFile.toURI().toString(), null, null, 1, 0, LocalMangaSource),
             ReaderPage(2L, cyanFile.toURI().toString(), null, null, 1, 1, LocalMangaSource),
             ReaderPage(3L, "about:blank", null, null, 1, 2, LocalMangaSource),
+            ReaderPage(4L, magentaFile.toURI().toString(), null, null, 1, 3, LocalMangaSource),
         )
         val pipeline = object : ComposeReaderImagePipeline {
             override fun observe(page: ReaderPage, force: Boolean) = if (page.index == 2) {
@@ -79,7 +84,13 @@ class SceneHorizontalPlaceholderRatioTest {
             } else {
                 flowOf(
                     ComposeReaderImageState.OriginalReady(
-                        Uri.fromFile(if (page.index == 0) greenFile else cyanFile),
+                        Uri.fromFile(
+                            when (page.index) {
+                                0 -> greenFile
+                                1 -> cyanFile
+                                else -> magentaFile
+                            },
+                        ),
                     ),
                 )
             }
@@ -114,7 +125,7 @@ class SceneHorizontalPlaceholderRatioTest {
                     }
                 }
 
-                // Wait until both visible pages have decoded: no placeholder gray remains.
+                // Wait until both visible pages have decoded: no placeholder remains on screen.
                 waitUntil {
                     val area = bounds.get() ?: return@waitUntil false
                     measureWidestPlaceholderRun(instrumentation, area) == 0f
@@ -144,10 +155,9 @@ class SceneHorizontalPlaceholderRatioTest {
     }
 
     /**
-     * Widest contiguous run of placeholder-gray pixels across a row above the center (clear of
-     * the spinner and the page label badge, both centered). The never-loading page's placeholder
-     * is the only gray surface: decoded pages are green/cyan and the reader background is much
-     * darker than the DarkGray placeholder.
+     * Widest contiguous run of reader-background (black) pixels across a row above the center, clear
+     * of the centered loading indicator. Decoded pages are green/cyan/magenta, so a black run is a
+     * placeholder, bounded by decoded pages on both sides once the fixture has settled.
      */
     private fun measureWidestPlaceholderRun(
         instrumentation: android.app.Instrumentation,
@@ -162,9 +172,8 @@ class SceneHorizontalPlaceholderRatioTest {
             val r = Color.red(pixel)
             val g = Color.green(pixel)
             val b = Color.blue(pixel)
-            val isPlaceholderGray = r in 40..110 && g in 40..110 && b in 40..110 &&
-                max(r, max(g, b)) - min(r, min(g, b)) < 25
-            if (isPlaceholderGray) {
+            val isPlaceholder = max(r, max(g, b)) < 24
+            if (isPlaceholder) {
                 current++
                 if (current > widest) widest = current
             } else {
