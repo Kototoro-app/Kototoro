@@ -11,6 +11,10 @@ data class PageThumbnail(
     val number
         get() = page.index + 1
 
+    // Page ids are not unique: sources reuse the same image (and so the same id) across chapters.
+    val listKey: String
+        get() = "page_${page.chapterId}_${page.index}"
+
     override fun areItemsTheSame(other: ListModel): Boolean {
         return other is PageThumbnail && page == other.page
     }
