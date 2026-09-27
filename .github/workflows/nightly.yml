@@ -87,12 +87,15 @@ jobs:
           echo "tag=nightly-${date_utc}" >> "$GITHUB_OUTPUT"
           find release -type f -maxdepth 1 -print
 
+      # Branch builds are for device testing: ship the arm64-v8a APK only, not every ABI.
       - name: Upload branch build
         if: env.PUBLISH_NIGHTLY != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.assets.outputs.artifact_name }}
-          path: release/*.apk
+          path: release/*-arm64-v8a-nightly.apk
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
       - name: Publish Nightly Release
