@@ -256,6 +256,10 @@ fun ComposeSceneWebtoonReader(
     // match the real image size once the chapter's ratio has converged. Keyed by chapter so
     // boundary-loading window expansions keep the converged estimate.
     val ratioEstimator = remember(pages.firstOrNull()?.chapterId) { ReaderChapterRatioEstimator() }
+    // The asset callback outlives window expansions: it must relay out the current window with the
+    // current estimator, or a relayout rebuilds the scene from the launch chapter alone.
+    val currentPages = rememberUpdatedState(pages)
+    val currentRatioEstimator = rememberUpdatedState(ratioEstimator)
 
     val activeScene = scene
 
@@ -304,8 +308,10 @@ fun ComposeSceneWebtoonReader(
         SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, adapter)
     }
 
-    // Preserve visual reading anchor and exact geometry hints across cross-chapter window expansions
-    LaunchedEffect(pages, scene) {
+    // Preserve visual reading anchor and exact geometry hints across cross-chapter window expansions.
+    // Keyed on the launch position too: an expansion that lands after the scene is built but before
+    // the first full viewport is otherwise skipped for good, clamping the reader to the launch chapter.
+    LaunchedEffect(pages, scene, hasAppliedInitialPosition) {
         if (scene != null && hasAppliedInitialPosition) {
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
@@ -340,7 +346,7 @@ fun ComposeSceneWebtoonReader(
         val currentVp = ReaderViewport(
             FloatRect.fromLtwh(0f, scrollState.scrollY, viewportWidthPx, viewportHeightPx),
         )
-        val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratio)
+        val newHints = createInitialScenePageHints(currentPages.value, adapter, unknownPageRatio = ratio)
         val compensation = currentScene.updatePages(newHints, currentVp)
         scrollState.maxScrollY = (currentScene.totalSceneHeight - viewportHeightPx).coerceAtLeast(0f)
         if (compensation != null && compensation.deltaY != 0f) {
@@ -656,7 +662,7 @@ fun ComposeSceneWebtoonReader(
                     }
                     // Let the chapter-average ratio converge the still-loading placeholders
                     // toward their real size.
-                    ratioEstimator.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
+                    currentRatioEstimator.value.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
                     // Immediately refresh resource window so newly visible pages from contraction are acquired
                     updateResourceWindow(activeScene, scrollState.scrollY, currentMotion)
                 }

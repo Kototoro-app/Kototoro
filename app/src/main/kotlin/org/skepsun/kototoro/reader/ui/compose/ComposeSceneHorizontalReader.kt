@@ -258,6 +258,10 @@ fun ComposeSceneHorizontalReader(
     // match the real image size once the chapter's ratio has converged. Keyed by chapter so
     // boundary-loading window expansions keep the converged estimate.
     val ratioEstimator = remember(pages.firstOrNull()?.chapterId) { ReaderChapterRatioEstimator() }
+    // The asset callback outlives window expansions: it must relay out the current window with the
+    // current estimator, or a relayout rebuilds the scene from the launch chapter alone.
+    val currentPages = rememberUpdatedState(pages)
+    val currentRatioEstimator = rememberUpdatedState(ratioEstimator)
 
     val activeScene = scene
 
@@ -302,7 +306,8 @@ fun ComposeSceneHorizontalReader(
         SceneImagePresentationCoordinator.coordinateVisibleTiles(frame, adapter)
     }
 
-    LaunchedEffect(pages, scene) {
+    // Keyed on the launch position too: a window expansion landing before it is applied must replay.
+    LaunchedEffect(pages, scene, hasAppliedInitialPosition) {
         if (scene != null && hasAppliedInitialPosition) {
             val currentVp = ReaderViewport(
                 FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
@@ -341,7 +346,7 @@ fun ComposeSceneHorizontalReader(
         val currentVp = ReaderViewport(
             FloatRect.fromLtwh(scrollState.offset, 0f, viewportWidthPx, viewportHeightPx),
         )
-        val newHints = createInitialScenePageHints(pages, adapter, unknownPageRatio = ratio)
+        val newHints = createInitialScenePageHints(currentPages.value, adapter, unknownPageRatio = ratio)
         val compensation = currentScene.updatePages(newHints, currentVp)
         scrollState.maxOffset = (currentScene.totalSceneWidth - viewportWidthPx).coerceAtLeast(0f)
         if (compensation != null && compensation.deltaX != 0f) {
@@ -560,7 +565,7 @@ fun ComposeSceneHorizontalReader(
                     }
                     // Let the chapter-average ratio converge the still-loading placeholders
                     // toward their real size.
-                    ratioEstimator.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
+                    currentRatioEstimator.value.onDecoded(exactSize.width, exactSize.height)?.let(::applyRatioRelayout)
                     updateResourceWindow(activeScene, scrollState.offset, currentMotion)
                 }
             }

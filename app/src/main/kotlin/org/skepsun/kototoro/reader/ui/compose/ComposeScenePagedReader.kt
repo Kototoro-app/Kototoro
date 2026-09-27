@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -747,14 +748,18 @@ fun ComposeScenePagedReader(
         }
     }
 
-    // Page updates
-    LaunchedEffect(pages, scene) {
+    // Page updates. The update window is measured against the scene the anchor belongs to; after a
+    // resize the anchoring effect above runs first and this must not snap back to the launch page.
+    // Keyed on the anchor too: a window expansion landing before the first anchor must replay.
+    val isAnchored by remember {
+        derivedStateOf {
+            lastAnchoredSlot >= 0 &&
+                anchoredViewportWidthPx == viewportWidthPx &&
+                anchoredViewportHeightPx == viewportHeightPx
+        }
+    }
+    LaunchedEffect(pages, scene, isAnchored) {
         val currentScene = scene
-        // The update window is measured against the scene the anchor belongs to; after a resize the
-        // anchoring effect above runs first and this must not snap back to the launch page.
-        val isAnchored = lastAnchoredSlot >= 0 &&
-            anchoredViewportWidthPx == viewportWidthPx &&
-            anchoredViewportHeightPx == viewportHeightPx
         if (currentScene != null && isAnchored) {
             val pe = if (readingDirection.isHorizontal) viewportWidthPx else viewportHeightPx
             val currentVp = if (readingDirection.isHorizontal) {
